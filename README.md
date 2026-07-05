@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
+
 # Seal
 
 **Seal is a proven checkpoint for AI agents.**
