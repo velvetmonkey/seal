@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seal — a proven checkpoint for AI agents</title>
+<meta name="description" content="Seal is a proven checkpoint for AI agents: no exact human approval, no action, with a record you can check yourself.">
+<style>
+  :root { --bg:#0d0d12; --panel:#15151d; --ink:#e8e8ef; --dim:#9aa0ad; --line:#26263340; --accent:#a855f7; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:64px 22px 96px; }
+  header h1 { font-size:2rem; margin:0 0 6px; letter-spacing:-.02em; }
+  .tag { color:var(--accent); font-weight:600; }
+  .lede { color:var(--dim); max-width:60ch; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .meta { color:var(--dim); font-size:.9rem; margin-top:10px; }
+  .context { margin:26px 0 8px; padding:18px 0 2px; color:var(--dim); max-width:72ch; }
+  .context p { margin:0 0 12px; }
+  .featured { display:block; margin:28px 0 8px; padding:16px 18px; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; }
+  .featured b { color:var(--ink); }
+  h2 { font-size:1.05rem; margin:40px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line);
+    text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  ul { list-style:none; margin:0; padding:0; }
+  li { padding:9px 0; border-bottom:1px solid var(--line); }
+  li .name { font-weight:600; }
+  li .desc { color:var(--dim); }
+  footer { margin-top:56px; color:var(--dim); font-size:.9rem; }
+  code { background:#ffffff10; padding:1px 5px; border-radius:4px; font-size:.85em; }
+  .thesis { color:var(--ink); max-width:64ch; font-size:1.08rem; margin:0 0 8px; }
+  .receipt { display:block; color:var(--dim); margin-top:2px; }
+  .path { color:var(--dim); }
+  .nonclaims { margin:0; padding:0; color:var(--dim); white-space:pre-wrap;
+    font:inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Seal</h1>
+    <p class="thesis">A proven checkpoint for AI agents: no exact human approval, no action — with a record you can check yourself.</p>
+    <p class="lede">Seal sits at the MCP tool boundary, where model output becomes a real external effect.
+      It mediates the action, records the decision, and leaves a receipt a skeptic can rerun.</p>
+    <p class="meta">by <a href="https://github.com/velvetmonkey">velvetmonkey</a> ·
+      private product-family hub · claims need receipts.</p>
+  </header>
+
+  <section class="context" aria-label="The problem">
+    <p>AI agents are crossing the line from suggestion into action. They can send money,
+      delete data, update tickets, call vendors, and trigger production systems through
+      MCP tools.</p>
+    <p>That power is useful. It is also where a hallucination, prompt injection, stale
+      approval, or confused workflow becomes a real-world effect. Seal answers at the
+      point of effect: did a human approve this exact request?</p>
+  </section>
+
+  <a class="featured" href="https://github.com/velvetmonkey/seal-live-demo">
+    Start with the demo &nbsp;·&nbsp; <b>watch an unapproved database delete get blocked</b>
+    &nbsp;<span style="color:var(--dim)">then verify the receipt →</span></a>
+
+  <h2>How it works</h2>
+  <ul>
+    <li><span class="name">Mediate every guarded action.</span> <span class="desc">A guarded MCP tool call forwards only when its target commitment has a live human approval.</span></li>
+    <li><span class="name">Record every decision.</span> <span class="desc">Allowed and blocked decisions produce receipts and tamper-evident record-chain evidence.</span></li>
+    <li><span class="name">Prove the rulebook.</span> <span class="desc">The kernel rules are machine-checked theorems in Lean 4.</span></li>
+    <li><span class="name">Check every body that runs it.</span> <span class="desc">The Rust host, browser wasm, and JavaScript checkers are byte-conformance-tested against the proven rulebook over a corpus; they are not themselves proved bug-free.</span></li>
+  </ul>
+
+  <h2>The family</h2>
+  <ul>
+    <li><a class="name" href="https://github.com/velvetmonkey/mcp-seal-dev">mcp-seal-dev</a> — <span class="desc">The rulebook, proven.</span>
+      <span class="receipt">Receipt: the Lean kernel plus the theorem sources for the approval automaton.</span></li>
+    <li><a class="name" href="https://github.com/velvetmonkey/seal-host">seal-host</a> — <span class="desc">The guard at the door.</span>
+      <span class="receipt">Receipt: the deployed Rust mediator, FFI surface, record chain, and conformance bridge.</span></li>
+    <li><a class="name" href="https://github.com/velvetmonkey/seal-check">seal-check</a> — <span class="desc">Don't trust. Verify.</span>
+      <span class="receipt">Receipt: a browser/WASM checker that re-runs the decision and compares emitted bytes.</span></li>
+    <li><a class="name" href="https://github.com/velvetmonkey/seal-live-demo">seal-live-demo</a> — <span class="desc">Watch it work.</span>
+      <span class="receipt">Receipt: a replayed live-agent attack that is blocked with Seal on and executes with Seal removed.</span></li>
+    <li><a class="name" href="https://github.com/velvetmonkey/seal-assurance-kit">seal-assurance-kit</a> — <span class="desc">Check your own boundary.</span>
+      <span class="receipt">Receipt: an enterprise CLI for receipts, conformance traces, policy coverage, and finite monitor adequacy.</span></li>
+  </ul>
+
+  <h2>Choose your path</h2>
+  <ul>
+    <li><span class="name">Buyer or evaluator</span> — <span class="path">start with <a href="https://github.com/velvetmonkey/seal-live-demo">seal-live-demo</a>, then open the receipt in <a href="https://github.com/velvetmonkey/seal-check">seal-check</a>.</span></li>
+    <li><span class="name">Engineer</span> — <span class="path">start with <a href="https://github.com/velvetmonkey/seal-host">seal-host</a>, read the architecture docs, then run the conformance bridge.</span></li>
+    <li><span class="name">Auditor</span> — <span class="path">start with <a href="https://github.com/velvetmonkey/seal-check">seal-check</a> and <a href="https://github.com/velvetmonkey/seal-assurance-kit">seal-assurance-kit</a>, then inspect the proof reference.</span></li>
+    <li><span class="name">Researcher</span> — <span class="path">start with <a href="https://github.com/velvetmonkey/mcp-seal-dev">mcp-seal-dev</a> for the kernel and <a href="https://github.com/velvetmonkey/seal-host">seal-host</a> for record, capability, non-interference, and replay properties.</span></li>
+  </ul>
+
+  <h2>What's proven</h2>
+  <ul>
+    <li><span class="name">Four-gate non-bypass.</span> <span class="desc">A guarded call that reaches the deployed step core cannot route forward without satisfying the mediation gates.</span></li>
+    <li><span class="name">Append-only, tamper-evident record.</span> <span class="desc">Decision logs are modeled as hash chains whose heads change on append and expose tampering under the stated hash-step assumptions.</span></li>
+    <li><span class="name">Unconditional capability adequacy.</span> <span class="desc">A held approval authorizes only its exact target for all runtime inputs, modulo the named SHA-256 collision-resistance assumption A-CR.</span></li>
+    <li><span class="name">Single-request non-interference.</span> <span class="desc">For one request, the observable decision and record depend on the relevant authorization view, not unrelated protected state.</span></li>
+    <li><span class="name">Cross-session replay isolation.</span> <span class="desc">Replay state is scoped so one session's replay bookkeeping does not silently authorize another session.</span></li>
+  </ul>
+
+  <section class="context" aria-label="How to verify">
+    <p>Axiom footprint: <code>{propext, Classical.choice, Quot.sound}</code>. How to cash the receipt:
+      run <code>lake build</code> and <code>lake exe axiom_check</code> in the Lean repos, then run the
+      conformance bridge in <code>seal-host</code>. The bridge checks
+      <span class="tag">model == native == wasm == deployed == JS</span> over the corpus.</p>
+  </section>
+
+  <h2>Honest boundaries</h2>
+  <pre class="nonclaims">- Seal proves properties of the mediation KERNEL, not of the whole deployed system.
+- Seal does NOT prove SHA-256 collision resistance in Lean; it is a named, scoped cryptographic assumption (A-CR).
+- The deployed Rust / wasm / JS are NOT proven bug-free; they are tied to the proof by byte-exact conformance testing over a corpus, not for every possible input.
+- Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal will execute it.
+- Seal does NOT prevent compromise of hosts, browsers, build systems, keys, operators, or downstream tools.
+- Seal's audit chain is tamper-EVIDENT, not tamper-IMPOSSIBLE.
+- Seal does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
+- Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.</pre>
+
+  <footer>
+    The rulebook is proven. Every body is checked against it.<br>
+    <a href="https://github.com/velvetmonkey">github.com/velvetmonkey</a>
+  </footer>
+</div>
+</body>
+</html>
