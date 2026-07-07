@@ -52,7 +52,10 @@ This split is the point. The theorem is not a blanket claim about browsers, Rust
 
 **Start with [EVALUATOR-START.md](EVALUATOR-START.md)**: the proved-vs-deployed map (which profile runs, which approval channel, which receipt schema, what stays in the TCB).
 
-> **Profile & channel disclosure.** `seal-host` deploys the `compatible` mediation profile; strict `canonical-l0` is proof-layer unless explicitly enabled. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple. Current receipt schema is v1; `seal-live-demo` still emits legacy v0.
+> **Runtime profile: `compatible`.** Strict `canonical-l0` is proved and modelled, not the deployed route yet.
+> **Claim:** policy-covered request-effects recognised by the compatible MCP boundary require a matching live human approval and an allowing Lean kernel verdict; seam failures block; every decision emits replayable evidence.
+> **Non-claim:** the deployed host is not proved end to end, and canonical parser rejection is not currently the runtime gate. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple, and `seal-live-demo` still emits legacy v0 receipts.
+> Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md).
 
 Mandatory non-claims:
 
