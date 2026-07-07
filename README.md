@@ -50,6 +50,10 @@ This split is the point. The theorem is not a blanket claim about browsers, Rust
 
 ## For evaluators and auditors
 
+**Start with [EVALUATOR-START.md](EVALUATOR-START.md)**: the proved-vs-deployed map (which profile runs, which approval channel, which receipt schema, what stays in the TCB).
+
+> **Profile & channel disclosure.** `seal-host` deploys the `compatible` mediation profile; strict `canonical-l0` is proof-layer unless explicitly enabled. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple. Current receipt schema is v1; `seal-live-demo` still emits legacy v0.
+
 Mandatory non-claims:
 
 - Seal proves properties of the mediation KERNEL, not of the whole deployed system.
