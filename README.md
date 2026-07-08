@@ -33,6 +33,8 @@ This split is the point. The theorem is not a blanket claim about browsers, Rust
 
 ## The family
 
+_All Seal-family repositories are currently private; these links resolve only for authorised evaluators._
+
 | Repository | Role | Start here when... |
 |---|---|---|
 | [mcp-seal-dev](https://github.com/velvetmonkey/mcp-seal-dev) | The rulebook, proven. | You want the Lean kernel and core safety theorems. |
@@ -44,7 +46,7 @@ This split is the point. The theorem is not a blanket claim about browsers, Rust
 ## Choose your path
 
 - **Buyer or evaluator:** start with `seal-live-demo`, then open the receipt in `seal-check`.
-- **Engineer:** start with `seal-host`, read `docs/ARCHITECTURE.md`, then run the conformance bridge.
+- **Engineer:** start with `seal-host`, read `seal-host/docs/ARCHITECTURE.md`, then run the conformance bridge.
 - **Auditor:** start with `seal-check` and `seal-assurance-kit`, then read `seal-host/docs/PROOF-REFERENCE.md`.
 - **Researcher:** start with `mcp-seal-dev` for the kernel and `seal-host` for the model properties around records, capability adequacy, non-interference, and replay isolation.
 
@@ -55,9 +57,9 @@ This split is the point. The theorem is not a blanket claim about browsers, Rust
 > **Runtime profile: `compatible`.** Strict `canonical-l0` is proved and modelled, not the deployed route yet.
 > **Claim:** policy-covered request-effects recognised by the compatible MCP boundary require a matching live human approval and an allowing Lean kernel verdict; seam failures block; every decision emits replayable evidence.
 > **Non-claim:** the deployed host is not proved end to end, and canonical parser rejection is not currently the runtime gate. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple, and `seal-live-demo` still emits legacy v0 receipts.
-> Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md).
+> Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md) — private repo; the link resolves only for authorised evaluators.
 
-Mandatory non-claims:
+Mandatory non-claims (canonical copy: [docs/LIMITATIONS.md](docs/LIMITATIONS.md)):
 
 - Seal proves properties of the mediation KERNEL, not of the whole deployed system.
 - Seal does NOT prove SHA-256 collision resistance in Lean; it is a named, scoped cryptographic assumption (A-CR).

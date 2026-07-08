@@ -78,10 +78,11 @@ tamper-**impossible**.
 ## 8. Exact commands to reproduce
 
 - **Receipts / CLI evidence:** `cd seal-assurance-kit && npm test`
-  (runs verify + bypass + format + adequacy).
+  (runs verify + fixture-drift + bypass + format + adequacy; leaves the tree untouched).
 - **Host conformance bridge:** `cd seal-host && node scripts/conformance_bridge.mjs`.
-- **Kernel + axioms:** build `mcp-seal-dev` with Lake and `#print axioms` on the
-  theorems in §1 to confirm the footprint.
+- **Kernel + axioms:** build `mcp-seal-dev` with Lake and run the axiom gates
+  (`lake exe axiom_check`, `lake exe v2_m4_axiom_check`, `lake exe v2_m6_axiom_check`)
+  or `#print axioms` on the theorems in §1 to confirm the footprint.
 - **Browser replay:** open a receipt in `seal-check` and check the emitted bytes.
 
 Each repo README carries its own quickstart; this file is the map, not a
