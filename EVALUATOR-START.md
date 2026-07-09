@@ -52,11 +52,16 @@ channels are freshness-scoped and process-local.
 
 ## 5. Which receipt schema is current
 
-Current = **v1**, with a hard split between `kernel_identity` (kernel hash,
-self-verified flag) and `asserted_provenance` (toolchain, axioms). The v1
-validator rejects a `kernel_identity` that carries toolchain/axioms. The
-`seal-live-demo` bundle still emits legacy **v0** (`seal_live_receipt: "v0"`), a
-tolerated legacy dialect, not the current schema.
+Current = **v2** (`seal_receipt: "v2"`; normative spec:
+`seal-host/docs/DECISION-RECEIPT-SCHEMA.md` §11, frozen on merge). v2 keeps
+v1's hard split between `kernel_identity` (kernel hash, self-verified flag)
+and `asserted_provenance` (toolchain, axioms) — the validator rejects a
+`kernel_identity` that carries toolchain/axioms — and adds derived SHA-256
+hashes (`args_hash`, `policy_hash`) that verifiers recompute and reject on
+mismatch. Unknown fields are absent, never fabricated. The acceptance ladder
+is v2-current / v1-legacy / v0-live-grandfathered. The `seal-live-demo`
+bundle emits **v2** (asserted per phase in its CI gate); its legacy v0
+dialect is retired.
 
 ## 6. Which conformance corpus was run
 

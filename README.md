@@ -2,7 +2,7 @@
 
 # Seal
 
-**Seal is a proven checkpoint for AI agents.**
+**Seal is the approval gateway for agentic tool use: it lets agents read and reason, but forces every protected external effect through an exact, recorded, checkable approval boundary.**
 
 AI agents are crossing the line from suggestion into action. They can send money, delete data, update tickets, call vendors, and trigger production systems through MCP tools. That power is useful. It is also where a hallucination, prompt injection, stale approval, or confused workflow becomes a real-world effect.
 
@@ -43,21 +43,37 @@ _All Seal-family repositories are currently private; these links resolve only fo
 | [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) | Watch it work. | You want to see a live-agent attack blocked, then succeed when Seal is removed. |
 | [seal-assurance-kit](https://github.com/velvetmonkey/seal-assurance-kit) | Check your own boundary. | You want CLI evidence for receipts, coverage, conformance, and finite monitor adequacy. |
 
+## The five-minute path
+
+One demo, one command, real containers, deterministic outcome:
+
+```
+git clone https://github.com/velvetmonkey/seal-live-demo && cd seal-live-demo
+bash scripts/run_local.sh        # needs Docker + Node; ends with "ASSERT OK: 15/15"
+```
+
+You will watch an agent's unapproved destructive call get **blocked** by Seal, the identical
+bytes **destroy** the database once Seal is bypassed, and every decision land as a signed
+receipt you can re-verify yourself (`seal-check` in the browser, or `seal verify` from
+`seal-assurance-kit`).
+
 ## Choose your path
 
-- **Buyer or evaluator:** start with `seal-live-demo`, then open the receipt in `seal-check`.
-- **Engineer:** start with `seal-host`, read `seal-host/docs/ARCHITECTURE.md`, then run the conformance bridge.
-- **Auditor:** start with `seal-check` and `seal-assurance-kit`, then read `seal-host/docs/PROOF-REFERENCE.md`.
+- **Buyer or evaluator:** run the five-minute path above, then open the receipt in `seal-check`.
+- **Engineer:** start with `seal-host`, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (family map) and `seal-host/docs/ARCHITECTURE.md` (host detail), then run the conformance bridge. Deployment: `seal-assurance-kit/docs/DEPLOYMENT.md`.
+- **Auditor:** start with the [claims matrix](docs/CLAIMS-MATRIX.md) and [what Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md), then `seal-check` and `seal-assurance-kit`, then `seal-host/docs/PROOF-REFERENCE.md`.
 - **Researcher:** start with `mcp-seal-dev` for the kernel and `seal-host` for the model properties around records, capability adequacy, non-interference, and replay isolation.
 
 ## For evaluators and auditors
 
 **Start with [EVALUATOR-START.md](EVALUATOR-START.md)**: the proved-vs-deployed map (which profile runs, which approval channel, which receipt schema, what stays in the TCB).
 
+**Then the one-table view: [docs/CLAIMS-MATRIX.md](docs/CLAIMS-MATRIX.md)** — every load-bearing claim, marked proven / tested / assumed / not claimed, with the theorem or CI gate that checks it. The honesty boundary itself: [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md) — read it first.
+
 <!-- truthbox:begin -->
 > **Runtime profile: `compatible`.** Strict `canonical-l0` is proved and modelled, not the deployed route yet.
 > **Claim:** policy-covered request-effects recognised by the compatible MCP boundary require a matching live human approval and an allowing Lean kernel verdict; seam failures block; every decision emits replayable evidence.
-> **Non-claim:** the deployed host is not proved end to end, and canonical parser rejection is not currently the runtime gate. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple, and `seal-live-demo` still emits legacy v0 receipts.
+> **Non-claim:** the deployed host is not proved end to end, and canonical parser rejection is not currently the runtime gate. Host `ApprovalRecord` tokens are a separate signed channel from the v2 canonical approval tuple.
 <!-- truthbox:end -->
 > Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md) — private repo; the link resolves only for authorised evaluators.
 
