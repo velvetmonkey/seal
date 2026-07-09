@@ -54,6 +54,10 @@ _All Seal-family repositories are currently private; these links resolve only fo
 | What changed between two receipts — does it touch what is **authorized**? | `seal receipt-diff` (seal-assurance-kit) |
 | Gate receipts in CI | `seal-verify-action` — runs `seal verify` in GitHub Actions and fails the build on an unverifiable receipt (the sufficiency and diff checks are local tools today) |
 
+One concept, two surfaces: the kit's `seal adequacy` command answers the same **sufficiency**
+question witness-check analyses — whether the supplied evidence separates the labels/effects it
+claims to — over a finite sample at the CLI. Do not read them as two different ideas.
+
 ## The five-minute path
 
 One demo, one command, real containers, deterministic outcome:

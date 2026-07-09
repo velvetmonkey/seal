@@ -109,6 +109,38 @@ updates in 8 repos. Four genuine items flagged below.
   public "Related repositories" lists only public repos ✓ — clean as a public mirror.
   **No edits made.**
 
+## Review follow-up (2026-07-09, second pass on the same branches)
+
+Disposition of the four flags after the cold review:
+
+1. **Ladder honesty — CONFIRMED-OK.** Audited every ladder site (umbrella README + index.html
+   roster, kit, witness-check, seal-verify-action, and the six roster rows). No repo ever
+   carried the "gate all of the above in CI" overclaim in live copy — the phrase existed only
+   in the review brief itself and in this report's flag text quoting it. Every action row
+   reads "runs `seal verify` in GitHub Actions… (the sufficiency and diff checks are local
+   tools today)". Nothing to fix.
+2. **Public-flip exposure — FIXED + CHECKLISTED.** seal-verify-action `VENDORED.md` scrubbed
+   ("private during build phase" dropped; the pin retained — it is provenance and resolves
+   post-flip; the CI sha256 guard checks only the hash lines and re-verified green) and
+   `PR-DESCRIPTION.md` scrubbed (private-status + shared-authorship assertions → generic
+   first-party wording). `NOTICE` deliberately untouched — the real-name identity decision is
+   Ben's, now item 1 of the new durable [PUBLIC-FLIP-CHECKLIST.md](PUBLIC-FLIP-CHECKLIST.md),
+   which also carries the partial-flip disclaimer re-scope, the witness-check stays-private
+   check, the Emscripten NOTICE gap, and the leak-sweep greps.
+3. **mcp-seal-dev — FIXED (sentence) + CONFIRMED-OK (truth-box), with a scope note.** The
+   Seal paragraph now leads with the family sentence, kernel framing intact. Every truth-box
+   line was verified against this repo before keeping it: all three are true family-scoped
+   statements — this repo supplies the kernel-verdict half of the Claim line and the v2
+   canonical approval tuple named in the Non-claim line; canonical-l0's grammar lives here
+   while its reject-strict profile lives in seal-host; nothing here deploys it. The one real
+   misread risk (taking "the compatible MCP boundary" to mean this repo's demo-only v1
+   sidecar) is closed by a non-guarded scope note under the Map line. The guarded block is
+   byte-untouched; six-way uniformity holds.
+4. **adequacy vs sufficiency — FIXED.** One explicit sentence added directly under the ladder
+   in both places it lives (umbrella README, kit README): `seal adequacy` answers the same
+   sufficiency question witness-check analyses — one concept, two surfaces. The
+   mcp-seal/mcp-seal-dev naming/rename stays untouched (gated; on the flip checklist).
+
 ## Gates after this sweep
 
 claims-drift green in seal, seal-host, seal-check, seal-assurance-kit, seal-live-demo,
