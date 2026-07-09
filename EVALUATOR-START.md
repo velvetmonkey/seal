@@ -83,7 +83,10 @@ tamper-**impossible**.
 ## 8. Exact commands to reproduce
 
 - **Receipts / CLI evidence:** `cd seal-assurance-kit && npm test`
-  (runs verify + fixture-drift + bypass + format + adequacy; leaves the tree untouched).
+  (runs verify + fixture-drift + bypass + format + adequacy + receipt-diff; leaves the tree untouched).
+- **Receipt drift:** `node bin/seal receipt-diff <A.json> <B.json>` in seal-assurance-kit —
+  authorization-surface vs minor classification. In CI, `seal-verify-action` runs the same
+  pinned verify closure on every push.
 - **Host conformance bridge:** `cd seal-host && node scripts/conformance_bridge.mjs`.
 - **Kernel + axioms:** build `mcp-seal-dev` with Lake and run the axiom gates
   (`lake exe axiom_check`, `lake exe v2_m4_axiom_check`, `lake exe v2_m6_axiom_check`)

@@ -42,6 +42,17 @@ _All Seal-family repositories are currently private; these links resolve only fo
 | [seal-check](https://github.com/velvetmonkey/seal-check) | Don't trust. Verify. | You want to replay a receipt in a browser and check the emitted bytes. |
 | [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) | Watch it work. | You want to see a live-agent attack blocked, then succeed when Seal is removed. |
 | [seal-assurance-kit](https://github.com/velvetmonkey/seal-assurance-kit) | Check your own boundary. | You want CLI evidence for receipts, coverage, conformance, and finite monitor adequacy. |
+| [witness-check](https://github.com/velvetmonkey/witness-check) | The sufficiency analyzer. (private/proprietary) | You want to know whether a field set carries **enough** information to justify a claim — a found collision indicts the field set itself. |
+| [seal-verify-action](https://github.com/velvetmonkey/seal-verify-action) | Gate receipts in CI. | You want `seal verify` running in GitHub Actions, failing the build on an unverifiable receipt. |
+
+## The receipt toolset — one question each
+
+| question | tool |
+|---|---|
+| Is this receipt well-formed, canonical, and re-derivable? | `seal verify` (seal-assurance-kit) |
+| Does the field set carry **enough** to justify the claim? | `witness-check` — the sufficiency analyzer (private) |
+| What changed between two receipts — does it touch what is **authorized**? | `seal receipt-diff` (seal-assurance-kit) |
+| Gate receipts in CI | `seal-verify-action` — runs `seal verify` in GitHub Actions and fails the build on an unverifiable receipt (the sufficiency and diff checks are local tools today) |
 
 ## The five-minute path
 

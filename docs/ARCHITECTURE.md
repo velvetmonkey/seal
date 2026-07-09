@@ -28,6 +28,8 @@ flowchart LR
     gw --> receipt
     receipt -.-> verify["seal verify — CLI\n(seal-assurance-kit)"]
     receipt -.-> browser["seal-check\nbrowser wasm verifier"]
+    receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
+    verify -.-> action["seal-verify-action:\nthe same verify closure\nas a CI gate"]
 
     conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven kernel"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw
@@ -51,6 +53,12 @@ flowchart LR
   Evidence, not a universal theorem.
 - **Coverage** (`seal scan`) — audits a policy against a tool inventory: uncovered tools,
   redundant rules, calls the policy cannot distinguish.
+- **Drift** (`seal receipt-diff`) — field-level diff between two receipts, every difference
+  classified authorization-surface vs minor, integrity-checked against each receipt's own
+  hashes before diffing. Reports change; it does not re-verify a seal.
+- **CI gate** (`seal-verify-action`) — the `seal verify` closure vendored byte-identical and
+  sha256-pinned into a GitHub Action: receipts are re-verified on every push and an
+  unverifiable receipt fails the build. Packaging, not new verification logic.
 - **Sufficiency** (`seal adequacy`) — the prior question: do the committed fields carry enough
   information to identify the effect they authorize? A found collision indicts the field set
   itself — no implementation reading those fields can fix it. This check caught Seal's own
