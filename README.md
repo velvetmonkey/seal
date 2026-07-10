@@ -2,34 +2,28 @@
 
 # Seal
 
-**Seal is the approval gateway for agentic tool use: it lets agents read and reason, but forces every protected external effect through an exact, recorded, checkable approval boundary.**
+**An AI agent tries to delete your production database. Seal stops it, because no human approved that exact action. Bypass Seal, and the identical request wipes the data.**
 
-AI agents are crossing the line from suggestion into action. They can send money, delete data, update tickets, call vendors, and trigger production systems through MCP tools. That power is useful. It is also where a hallucination, prompt injection, stale approval, or confused workflow becomes a real-world effect.
+Agents have crossed from suggestion into action. Through their tools they can send money, delete records, update tickets, and trigger production systems. That is useful, and it is exactly where one hallucination, prompt injection, or stale approval becomes a real-world effect.
 
-Seal puts a checkpoint at that boundary. When an AI agent tries to use a real tool over MCP, Seal asks one question: did a human explicitly approve *this exact request*? No matching approval, no action. Every decision is written into a tamper-evident record you can check yourself.
+Seal puts one checkpoint at that boundary. When an agent tries to use a real tool, Seal asks a single question: did a human explicitly approve *this exact request*? No matching approval, no action. Every decision lands as a tamper-evident receipt you can re-check yourself.
 
-What makes Seal different from ordinary guardrails is the rulebook. The core mediation rules are machine-checked theorems in Lean 4. The same decision logic is then run in the Rust host, browser wasm, and JavaScript checkers, with byte-exact conformance tests tying those bodies back to the proven rulebook over a shared corpus. The honest frame is simple: prove the rulebook, check every body that runs it.
+## What it does
 
-## The problem
+Two jobs, no more:
 
-MCP makes agents concrete. A model no longer just writes text; it asks tools to mutate state. Prompt filters and tests can reduce risk, but they do not give an auditor a crisp answer to the question that matters after an incident: was this external effect explicitly authorized?
+1. **Mediate.** Forward a guarded tool call only when the exact target has a live human approval. Otherwise it stops before the tool ever sees it.
+2. **Record.** Emit a receipt and a record-chain for every decision, so anyone can replay "was this effect authorized?" long after the incident.
 
-Seal answers at the point of effect. It does not need the model to understand why a request is dangerous. It checks whether the exact target commitment has a live human approval. If not, the call stops before the downstream tool sees it.
+It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
 
-## The answer
+## Why you can believe it
 
-Seal has two jobs:
+Every guardrail on the market claims it works. Most ask you to trust a model's judgment or a pile of tests. Seal asks you to trust one small, checkable thing.
 
-1. **Mediate** guarded MCP tool calls: forward only when the exact target has a live approval.
-2. **Record** the decision: emit receipts and record-chain evidence that can be rechecked later.
+The core question is narrow enough to *prove*: a guarded action must not pass unless the approval state authorizes that exact target. That rulebook is a machine-checked theorem in Lean 4, not a policy doc and not a vibe. Then the checkers that actually ship, Rust, wasm, JavaScript, are tied back to that proven rulebook by byte-exact conformance tests over a shared corpus.
 
-That gives buyers a clear operational story, engineers a deployable host, auditors a verifier, and researchers a compact proof surface.
-
-## Why proof matters
-
-Tests are still necessary. Seal uses them heavily. But the core question is small enough to prove: a guarded action must not pass unless the approval state authorizes that exact target. Lean checks that rulebook directly. Conformance testing then checks that the deployed bodies used by the product family match that rulebook over the corpus.
-
-This split is the point. The theorem is not a blanket claim about browsers, Rust, wasm, operators, or toolchains. It is a precise kernel claim, connected to deployed artifacts by evidence an evaluator can rerun.
+So the honest claim is precise, and that precision is the point. Seal does not claim your browser, your operators, or your toolchain are safe. It proves the kernel, and hands an evaluator the evidence to rerun the connection between the theorem and the bytes that run in production. Prove the rulebook. Check every body that runs it.
 
 ## The family
 
