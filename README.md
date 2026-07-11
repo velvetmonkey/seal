@@ -2,13 +2,31 @@
 
 # Seal
 
-**An AI agent tries to delete your production database. Seal stops it, because no human approved that exact action. Bypass Seal, and the identical request wipes the data.**
+**The obvious "shared DB + dedupe" design for approvals across a fleet is provably unable to stop cross-replica double-spend of a one-shot ticket. Seal proves the lower bound — and proves which architectures actually work.**
 
-Agents have crossed from suggestion into action. Through their tools they can send money, delete records, update tickets, and trigger production systems. That is useful, and it is exactly where one hallucination, prompt injection, or stale approval becomes a real-world effect.
+An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no human ever approved that exact action.
 
-Seal puts one checkpoint at that boundary. When an agent tries to use a real tool, Seal asks a single question: did a human explicitly approve *this exact request*? No matching approval, no action. Every decision lands as a tamper-evident receipt you can re-check yourself.
+Bypass the boundary and the identical request wipes your data. Agents now act on the real world through tools. One bad call, one hallucination, one prompt injection — and real money moves, real records vanish.
 
-**Why that beats a heuristic guard** — machine-checked default-deny vs fail-open judgment, in one page: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
+Seal is the hard stop at that seam. It asks one question and only one: *did a human explicitly approve this exact request?* No ticket, no action. Every decision is emitted as a tamper-evident receipt anyone can re-derive in a browser or CLI.
+
+**Fleet headliner (new, axiom-pinned):** over a shared replay-store, two replicas can both honour the same approval (`sealv2_shared_not_sealed_senders`). Single-delivery and mesh-coordinated shapes *are* Safe (`sealv2_partitioned_safe`, `sealv2_mesh_safe`). The obvious design fails; Seal tells you why and what works. (See [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) and the claims matrix.)
+
+This is default-deny you can watch work in three minutes. The proof story (Lean kernel, conformance, TCB) comes after you have seen it stop the attack.
+
+**Luxury 3-minute showcase (one local command)**
+
+From inside the seal/ checkout:
+
+```bash
+bash scripts/showcase.sh
+```
+
+Delegates to sibling live-demo run (or PWA/evidence). Shows blocked vs bypass, same bytes, ASSERT style. Terminal output.
+
+**Why a proof, not a prompt** — machine-checked default-deny vs fail-open judgment: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
+
+See the four explicit Trust boundaries (Byzantine replica, egress P6, model-vs-binary, partition liveness) and how each closes: [docs/LIMITATIONS.md#trust-boundaries](docs/LIMITATIONS.md).
 
 ## What it does
 

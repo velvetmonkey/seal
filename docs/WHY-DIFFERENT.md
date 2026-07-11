@@ -19,6 +19,17 @@ anyone can re-derive.
 | **Failure direction** | Fails open on the novel attack | Default-deny: fails closed (`default_deny_never_allowed`) |
 | **Evidence left behind** | Logs, if any | Tamper-evident receipt, re-derivable by anyone |
 
+**The fleet-scale headliner (new since last pass, axiom-pinned):** the obvious developer design — "put approvals in a shared DB and dedupe on replay" — is *provably unable* to stop cross-replica double-spend of a one-shot approval. Seal proves the lower bound (`sealv2_shared_not_sealed_senders` in Host/AuthorityFrontierBridge.lean): over a shared replay-store, two replicas can both honour the same approval. It also proves the shapes that *do* work:
+
+- Single-delivery: deliver each approval to exactly one replica (`sealv2_partitioned_safe`).
+- Mesh-coordinated over shared store: sealv2_mesh_safe (Safe by composition given the mesh's SealedSenders); concrete outright-Safe witness sealv2_token_mesh_safe, holder-live via mesh_holder_live_at_init.
+
+This is what nobody else in agent authorization ships: a machine-checked answer to "which fleet architectures actually enforce single-use?"
+
+**Honest boundary for these results:** these are proofs about a model tightly bound to the real SealV2 consume seam (`validateAndConsumeWithStore`), within the approval's TTL, for one approval per instance, hypothesis-form validation. Not a line-by-line proof of the whole deployed Rust/wasm/JS binary or end-to-end system. The shipped bodies are tied by conformance testing over a corpus.
+
+See the four explicit Trust boundaries (Byzantine / non-participating replica, Egress after allow (P6), Model vs compiled binary, Partition liveness) with their "Closes via" mechanisms in [docs/LIMITATIONS.md#trust-boundaries](docs/LIMITATIONS.md).
+
 What this does **not** mean — the boundary, stated up front: the theorems cover the
 mediation kernel, not the whole deployed system. The shipped Rust/wasm/JS bodies are
 tied to the proof by byte-exact conformance testing over a corpus, not proven bug-free,
