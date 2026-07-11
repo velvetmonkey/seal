@@ -28,7 +28,7 @@ This is what nobody else in agent authorization ships: a machine-checked answer 
 
 **Honest boundary for these results:** these are proofs about a model tightly bound to the real SealV2 consume seam (`validateAndConsumeWithStore`), within the approval's TTL, for one approval per instance, hypothesis-form validation. Not a line-by-line proof of the whole deployed Rust/wasm/JS binary or end-to-end system. The shipped bodies are tied by conformance testing over a corpus.
 
-See the four explicit Trust boundaries (Byzantine / non-participating replica, Egress after allow (P6), Model vs compiled binary, Partition liveness) with their "Closes via" mechanisms in [docs/LIMITATIONS.md#trust-boundaries](docs/LIMITATIONS.md).
+See the four explicit Trust boundaries (Byzantine / non-participating replica, Egress after allow (P6), Model vs compiled binary, Partition liveness) with their "Closes via" mechanisms in [docs/LIMITATIONS.md#trust-boundaries](LIMITATIONS.md).
 
 What this does **not** mean — the boundary, stated up front: the theorems cover the
 mediation kernel, not the whole deployed system. The shipped Rust/wasm/JS bodies are

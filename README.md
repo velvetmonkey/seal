@@ -22,7 +22,17 @@ From inside the seal/ checkout:
 bash scripts/showcase.sh
 ```
 
-Delegates to sibling live-demo run (or PWA/evidence). Shows blocked vs bypass, same bytes, ASSERT style. Terminal output.
+Delegates to the sibling live-demo replay (block vs bypass, same bytes, ASSERT style) when the family is checked out together. On a solo clone it does **not** dead-end — it prints the two real next steps (the 60-second receipt below, or cloning the live demo) and exits clean.
+
+> **First receipt in 60 seconds — zero dependencies (no Docker, no Lean toolchain):**
+>
+> ```bash
+> git clone https://github.com/velvetmonkey/seal-assurance-kit
+> cd seal-assurance-kit
+> node bin/seal verify fixtures/receipt-block.json   # -> PASS VERIFIED (exit 0)
+> ```
+>
+> That is the whole trick, standalone: a real Seal decision receipt, re-derived through the pinned kernel to `PASS VERIFIED`, before you install or build anything. Flip a field and it FAILs.
 
 **Why a proof, not a prompt** — machine-checked default-deny vs fail-open judgment: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
 
