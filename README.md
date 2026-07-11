@@ -8,6 +8,8 @@ Agents have crossed from suggestion into action. Through their tools they can se
 
 Seal puts one checkpoint at that boundary. When an agent tries to use a real tool, Seal asks a single question: did a human explicitly approve *this exact request*? No matching approval, no action. Every decision lands as a tamper-evident receipt you can re-check yourself.
 
+**Why that beats a heuristic guard** — machine-checked default-deny vs fail-open judgment, in one page: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
+
 ## What it does
 
 Two jobs, no more:
@@ -17,7 +19,7 @@ Two jobs, no more:
 
 It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
 
-**Running a fleet?** Seal's guarantees extend to distributed deployments. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
+**Distributed by proof.** Seal's guarantees extend to fleets. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
 
 ## Why you can believe it
 
@@ -34,6 +36,7 @@ _All Seal-family repositories are currently private; these links resolve only fo
 | Repository | Role | Start here when... |
 |---|---|---|
 | [mcp-seal-dev](https://github.com/velvetmonkey/mcp-seal-dev) | The rulebook, proven. | You want the Lean kernel and core safety theorems. |
+| [crdt-lean](https://github.com/velvetmonkey/crdt-lean) | The distributed spine, proven. | You want the coordination-free no-double-spend theorems under the [authorization mesh](docs/AUTHORIZATION-MESH.md). |
 | [seal-host](https://github.com/velvetmonkey/seal-host) | The guard at the door. | You want the deployable MCP host, Rust transport, records, and conformance bridge. |
 | [seal-check](https://github.com/velvetmonkey/seal-check) | Don't trust. Verify. | You want to replay a receipt in a browser and check the emitted bytes. |
 | [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) | Watch it work. | You want to see a live-agent attack blocked, then succeed when Seal is removed. |

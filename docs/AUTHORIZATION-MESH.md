@@ -13,7 +13,7 @@ Seal is a machine-checked authorization gate for AI agents. This is the **mesh l
 | 1 | **Receipt non-interference** | The audit log is not a covert channel: it reveals nothing about internal policy or other tenants beyond the one authorized bit, single request and across a session. | `observe_noninterference`, `stateful_noninterference_trace` |
 | 2 | **Authority-frontier necessity** | Over freely-replicable state, staying single-use *forces* at most one node able to consume at any consistent cut. Drop coordination and there is a witnessed double-spend. | `authority_frontier_card_le_one`, `double_consume_countermodel` |
 | 3 | **Sealed-handoff sufficiency** | The handoff pattern that keeps a fleet safe (seal your own consume before enabling the next node). A third safe shape (consume-sequencing) was found and recorded. | `sealed_handoff_safe`, `wSeq_safe` |
-| 4 | **Applicability bridge** | The abstract impossibility, applied to SealV2's *real* nonce model (`validateAndConsumeWithStore`, the deployed FFI store). The whiteboard theorem now speaks about the deployed gate. | `sealv2_frontier_card_le_one`, `sealv2_no_disconnected_double_availability` |
+| 4 | **Applicability bridge** | The abstract impossibility, applied to SealV2's *real* nonce model (`validateAndConsumeWithStore`, the deployed FFI store). The whiteboard theorem now speaks about a Lean model of the deployed gate's real consume seam. | `sealv2_frontier_card_le_one`, `sealv2_no_disconnected_double_availability` |
 
 All four carry the axiom footprint `{propext, Classical.choice, Quot.sound}`, zero `sorry`, no `native_decide`, compile-time pinned.
 

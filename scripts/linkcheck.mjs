@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Internal-link integrity check for the Seal landing repo: every relative
 // link/src in the docs must resolve to a file. Run: node scripts/linkcheck.mjs
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const files = ["README.md", "index.html", "EVALUATOR-START.md"];
+const files = [
+  "README.md", "index.html", "EVALUATOR-START.md",
+  ...readdirSync(resolve(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`),
+];
 let bad = 0, checked = 0;
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {
