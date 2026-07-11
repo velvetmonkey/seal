@@ -106,6 +106,7 @@
     <li><span class="name">Unconditional capability adequacy.</span> <span class="desc">A held approval authorizes only its exact target for all runtime inputs, modulo the named SHA-256 collision-resistance assumption A-CR.</span></li>
     <li><span class="name">Single-request non-interference.</span> <span class="desc">For one request, the observable decision and record depend on the relevant authorization view, not unrelated protected state.</span></li>
     <li><span class="name">Cross-session replay isolation.</span> <span class="desc">Replay state is scoped so one session's replay bookkeeping does not silently authorize another session.</span></li>
+    <li><span class="name">Coordination-free single-use across a fleet.</span> <span class="desc">Across a network partition, a one-shot approval cannot be double-spent without a causal handoff; proven for an abstract authority system and transferred to the SealV2 gate model, scoped to within the approval's TTL, per concurrent replica. See the <a href="docs/AUTHORIZATION-MESH.md">authorization mesh</a>.</span></li>
   </ul>
 
   <section class="context" aria-label="How to verify">
