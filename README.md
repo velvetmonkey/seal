@@ -17,6 +17,8 @@ Two jobs, no more:
 
 It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
 
+**Running a fleet?** Seal's guarantees extend to distributed deployments. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
+
 ## Why you can believe it
 
 Every guardrail on the market claims it works. Most ask you to trust a model's judgment or a pile of tests. Seal asks you to trust one small, checkable thing.
@@ -69,7 +71,7 @@ receipt you can re-verify yourself (`seal-check` in the browser, or `seal verify
 ## Choose your path
 
 - **Buyer or evaluator:** run the five-minute path above, then open the receipt in `seal-check`.
-- **Engineer:** start with `seal-host`, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (family map) and `seal-host/docs/ARCHITECTURE.md` (host detail), then run the conformance bridge. Deployment: `seal-assurance-kit/docs/DEPLOYMENT.md`.
+- **Engineer:** to stand the gate up in front of your own agent, follow [seal-host/docs/DEPLOY.md](https://github.com/velvetmonkey/seal-host/blob/main/docs/DEPLOY.md) (build → sign config → run in front of your MCP server → first gated call → receipt). Policy/config field reference: [mcp-seal-dev/docs/POLICY.md](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/docs/POLICY.md). For the design, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (family map) and `seal-host/docs/ARCHITECTURE.md` (host detail); to gate receipts in CI use `seal-assurance-kit` / `seal-verify-action`.
 - **Auditor:** start with the [claims matrix](docs/CLAIMS-MATRIX.md) and [what Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md), then `seal-check` and `seal-assurance-kit`, then `seal-host/docs/PROOF-REFERENCE.md`.
 - **Researcher:** start with `mcp-seal-dev` for the kernel and `seal-host` for the model properties around records, capability adequacy, non-interference, and replay isolation.
 
