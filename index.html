@@ -77,6 +77,8 @@
   <ul>
     <li><a class="name" href="https://github.com/velvetmonkey/mcp-seal-dev">mcp-seal-dev</a>: <span class="desc">The rulebook, proven.</span>
       <span class="receipt">Receipt: the Lean kernel plus the theorem sources for the approval automaton.</span></li>
+    <li><a class="name" href="https://github.com/velvetmonkey/crdt-lean">crdt-lean</a>: <span class="desc">The distributed spine, proven.</span>
+      <span class="receipt">Receipt: the coordination-free no-double-spend theorems under the <a href="docs/AUTHORIZATION-MESH.md">authorization mesh</a>.</span></li>
     <li><a class="name" href="https://github.com/velvetmonkey/seal-host">seal-host</a>: <span class="desc">The guard at the door.</span>
       <span class="receipt">Receipt: the deployed Rust mediator, FFI surface, record chain, and conformance bridge.</span></li>
     <li><a class="name" href="https://github.com/velvetmonkey/seal-check">seal-check</a>: <span class="desc">Don't trust. Verify.</span>
@@ -93,6 +95,7 @@
 
   <h2>Choose your path</h2>
   <ul>
+    <li><span class="name">Skeptic</span>: <span class="path">read <a href="docs/WHY-DIFFERENT.md">why a proof, not a prompt</a> — machine-checked default-deny vs the fail-open heuristic guard, one page.</span></li>
     <li><span class="name">Buyer or evaluator</span>: <span class="path">start with <a href="https://github.com/velvetmonkey/seal-live-demo">seal-live-demo</a>, then open the receipt in <a href="https://github.com/velvetmonkey/seal-check">seal-check</a>.</span></li>
     <li><span class="name">Engineer</span>: <span class="path">start with <a href="https://github.com/velvetmonkey/seal-host">seal-host</a>, read the <a href="docs/ARCHITECTURE.md">family architecture map</a> and the host architecture docs, then run the conformance bridge.</span></li>
     <li><span class="name">Auditor</span>: <span class="path">read the proved-vs-deployed map in <a href="EVALUATOR-START.md">EVALUATOR-START.md</a> and the one-table <a href="docs/CLAIMS-MATRIX.md">claims matrix</a> first, then start with <a href="https://github.com/velvetmonkey/seal-check">seal-check</a> and <a href="https://github.com/velvetmonkey/seal-assurance-kit">seal-assurance-kit</a>, then inspect the proof reference.</span></li>
