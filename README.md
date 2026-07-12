@@ -2,17 +2,23 @@
 
 # Seal
 
-**The obvious "shared DB + dedupe" design for approvals across a fleet is provably unable to stop cross-replica double-spend of a one-shot ticket. Seal proves the lower bound — and proves which architectures actually work.**
-
-An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no human ever approved that exact action.
+**An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no human ever approved that exact action.**
 
 Bypass the boundary and the identical request wipes your data. Agents now act on the real world through tools. One bad call, one hallucination, one prompt injection — and real money moves, real records vanish.
 
 Seal is the hard stop at that seam. It asks one question and only one: *did a human explicitly approve this exact request?* No ticket, no action. Every decision is emitted as a tamper-evident receipt anyone can re-derive in a browser or CLI.
 
-**Fleet headliner (new, axiom-pinned):** over a shared replay-store, two replicas can both honour the same approval (`sealv2_shared_not_sealed_senders`). Single-delivery and mesh-coordinated shapes *are* Safe (`sealv2_partitioned_safe`, `sealv2_mesh_safe`). The obvious design fails; Seal tells you why and what works. (See [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) and the claims matrix.)
-
 This is default-deny you can watch work in three minutes. The proof story (Lean kernel, conformance, TCB) comes after you have seen it stop the attack.
+
+## First receipt in 60 seconds — zero dependencies (no Docker, no Lean toolchain)
+
+```bash
+git clone https://github.com/velvetmonkey/seal-assurance-kit
+cd seal-assurance-kit
+node bin/seal verify fixtures/receipt-block.json   # -> PASS VERIFIED (exit 0)
+```
+
+That is the whole trick, standalone: a real Seal decision receipt, re-derived through the pinned kernel to `PASS VERIFIED`, before you install or build anything. Flip a field and it FAILs.
 
 **Luxury 3-minute showcase (one local command)**
 
@@ -22,17 +28,7 @@ From inside the seal/ checkout:
 bash scripts/showcase.sh
 ```
 
-Delegates to the sibling live-demo replay (block vs bypass, same bytes, ASSERT style) when the family is checked out together. On a solo clone it does **not** dead-end — it prints the two real next steps (the 60-second receipt below, or cloning the live demo) and exits clean.
-
-> **First receipt in 60 seconds — zero dependencies (no Docker, no Lean toolchain):**
->
-> ```bash
-> git clone https://github.com/velvetmonkey/seal-assurance-kit
-> cd seal-assurance-kit
-> node bin/seal verify fixtures/receipt-block.json   # -> PASS VERIFIED (exit 0)
-> ```
->
-> That is the whole trick, standalone: a real Seal decision receipt, re-derived through the pinned kernel to `PASS VERIFIED`, before you install or build anything. Flip a field and it FAILs.
+Delegates to the sibling live-demo replay (block vs bypass, same bytes, ASSERT style) when the family is checked out together. On a solo clone it does **not** dead-end — it prints the two real next steps (the 60-second receipt above, or cloning the live demo) and exits clean.
 
 **Why a proof, not a prompt** — machine-checked default-deny vs fail-open judgment: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
 
@@ -50,6 +46,10 @@ It does not need the model to understand *why* a request is dangerous. It checks
 **Distributed by proof.** Seal's guarantees extend to fleets. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
 
 ## Why you can believe it
+
+**The obvious "shared DB + dedupe" design for approvals across a fleet is provably unable to stop cross-replica double-spend of a one-shot ticket. Seal proves the lower bound — and proves which architectures actually work.**
+
+**Fleet headliner (new, axiom-pinned):** over a shared replay-store, two replicas can both honour the same approval (`sealv2_shared_not_sealed_senders`). Single-delivery and mesh-coordinated shapes *are* Safe (`sealv2_partitioned_safe`, `sealv2_mesh_safe`). The obvious design fails; Seal tells you why and what works. (See [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) and the claims matrix.)
 
 Every guardrail on the market claims it works. Most ask you to trust a model's judgment or a pile of tests. Seal asks you to trust one small, checkable thing.
 
