@@ -20,15 +20,18 @@ node bin/seal verify fixtures/receipt-block.json   # -> PASS VERIFIED (exit 0)
 
 That is the whole trick, standalone: a real Seal decision receipt, re-derived through the pinned kernel to `PASS VERIFIED`, before you install or build anything. Flip a field and it FAILs.
 
-**Luxury 3-minute showcase (one local command)**
+**Full attack replay (3 minutes, requires Docker)**
 
-From inside the seal/ checkout:
+A separate step. Clone the core and the demo side by side, then run one command:
 
 ```bash
+git clone https://github.com/velvetmonkey/seal
+git clone https://github.com/velvetmonkey/seal-live-demo
+cd seal
 bash scripts/showcase.sh
 ```
 
-Delegates to the sibling live-demo replay (block vs bypass, same bytes, ASSERT style) when the family is checked out together. On a solo clone it does **not** dead-end — it prints the two real next steps (the 60-second receipt above, or cloning the live demo) and exits clean.
+It spins the live agent, gateway, kernel, and DB, then walks three steps: a staging insert is ALLOWed, the tricked prod-delete is BLOCKed (rows unchanged), and the identical bytes with Seal removed destroy the table. Real row counts and re-verifiable receipts land in your terminal. Run without the sibling `seal-live-demo` and it prints the next real step instead of dead-ending.
 
 **Why a proof, not a prompt** — machine-checked default-deny vs fail-open judgment: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
 
