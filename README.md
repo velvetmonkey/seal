@@ -2,6 +2,8 @@
 
 # Seal
 
+[![CI](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+
 **An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no human ever approved that exact action.**
 
 Bypass the boundary and the identical request wipes your data. Agents now act on the real world through tools. One bad call, one hallucination, one prompt injection — and real money moves, real records vanish.
