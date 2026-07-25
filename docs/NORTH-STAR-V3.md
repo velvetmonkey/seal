@@ -120,9 +120,23 @@ Success criteria, all four, and the fourth is the one that matters:
 1. The agent holds no DSN and no password. Verified by inspecting its environment.
 2. The effect fires only on a capability bound to the approved request digest.
 3. The receipt records what the human was SHOWN, not merely that a click happened.
-   (See `COMPREHENSION-CHECK.md`. Note the prompt currently shows a **16-hex-char
-   truncated** digest, `rust/src/providers.rs:540`, not 64, and truncation
-   reintroduces collisions.)
+   See `COMPREHENSION-CHECK.md`.
+
+   **Correction, 2026-07-25 20:45.** An earlier revision of this file stated that
+   the approval prompt shows a 16-hex-char TRUNCATED digest. **That is false and
+   was never checked.** It came from a council seat, was accepted without a frisk,
+   and propagated into this document and into an external review brief.
+
+   What is actually on disk: the interactive prompt at `rust/src/providers.rs:540`
+   prints `{target}` in full, and a target is constrained to a lowercase 64-hex
+   SHA-256 by `is_target_hex` (`providers.rs:16-18`, `s.len() == 64`). The 16-char
+   truncation at `providers.rs:105` is `redacted_record_id`, whose only caller is
+   `ApprovalDropWarning` (`providers.rs:72`), a diagnostic warning record. It never
+   touches the human approval path.
+
+   So the digest shown to the human is NOT truncated, and "fix the truncated
+   digest" is not a real task. The comprehension problem stands unchanged and is
+   the harder one: 64 hex characters convey no more meaning to a human than 16.
 4. **Negative control**: an agent with full shell inside that container attempts a
    direct connection and cannot make one, because there is no credential to make
    it with. Observed failing, recorded verbatim.
