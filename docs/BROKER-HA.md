@@ -135,15 +135,47 @@ Replicate a broker three ways for durability and the credential now sits on thre
 machines instead of one. **Redundancy and secret hygiene pull in opposite
 directions**, and this is the harder of the two problems.
 
-The resolution is to never hold the whole secret anywhere.
+**CORRECTED 2026-07-25, same day, before this design was built on.** The first
+version of this section proposed Shamir secret sharing of the sink credential. That
+is wrong, and the refutation is decisive. Kimi K3, in the topology-C council:
 
-- **Shamir secret sharing** for a static credential: split into n pieces such that
-  any m reconstruct it and any m-1 yield *no information whatsoever*. Not "cut the
-  password into thirds", which would leak two thirds. Points on a polynomial: fewer
-  than m points are consistent with infinitely many polynomials.
-- **Threshold signatures** for a signing key, which is strictly better: holders
-  produce partial signatures that combine into a valid one, and the full key never
-  exists anywhere at any instant, not even transiently in memory.
+> You cannot threshold-*present* a password. SCRAM requires the secret on the client
+> side at authentication. m-of-n over a sink password means reconstituting it into
+> broker memory at the moment of use, which means the broker holds the credential at
+> exactly the moment that matters. Threshold cryptography protects *signing*, not
+> *possession-and-presentation*.
+
+DeepSeek reached the same place independently: "if your broker is compromised,
+splitting the key doesn't help when the secret must be reassembled in memory to talk
+to Postgres; a sophisticated attacker extracts the reassembled secret from the
+replica that is currently live."
+
+So splitting a sink password buys nothing against the attacker who matters. It
+protects the secret at rest, which was never the exposure.
+
+**The correct answer, four seats across two benches converging:**
+
+- **Lease, do not guard.** Per-request ephemeral database users, Vault-style dynamic
+  secrets, RDS IAM. On approval, mint a role scoped to exactly the approved effect
+  with a TTL of seconds. Compromising a replica yields credentials that expire before
+  they are useful. This eliminates the standing secret rather than defending it, and
+  it uses the database's own authentication instead of a bespoke shim.
+- **Threshold belongs on seal's OWN signing key** (FROST), so no single replica can
+  mint capabilities unilaterally. That is signing, which is what threshold
+  cryptography is actually for.
+- **Shamir only where leasing is impossible**, on un-leaseable legacy sinks, with
+  named human shareholders and an explicitly labelled risk tier.
+
+Two honest costs of leasing, not to be glossed: the **provisioner credential is still
+standing and high-value**, so the exposure is moved rather than removed; and
+per-request `CREATE ROLE` / `DROP ROLE` is cluster-global catalog churn, so leasing
+covers the human-approved path well and a high-QPS auto-approved path badly.
+
+**Consequence for the wedge.** Under leasing the agent DOES briefly hold a credential,
+so "the agent holds no credential" stops being literally true. It becomes "the agent
+holds a credential that is cryptographically narrow and expires in seconds". DeepSeek's
+verdict on defending the absolute: "dismissing this because it violates the wedge is
+green-measuring form over function."
 
 ## The fork this design cannot be finished without
 
