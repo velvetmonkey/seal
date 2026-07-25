@@ -119,6 +119,69 @@ Genuinely open, not rhetorical.
 
 That last one may be the most valuable idea on this page.
 
+## Residual attacks, from three seats asked to break their own designs
+
+Council 2026-07-25, metered seats DeepSeek v4-pro, GLM 5.2, Qwen 3.7. Kimi K3
+failed to return (see the seat-routing note; its verdict is NOT included).
+
+The brief withheld the terminal-injection analysis above to see whether it would
+be found independently. All three found it: ANSI escapes, bidi overrides,
+homoglyphs, control characters. That is confirmation rather than agreement,
+since none of them were shown it.
+
+More useful is what they could NOT kill.
+
+**1. Homoglyphs survive, and all three said so independently.** Escaping control
+characters does nothing about printable Unicode that merely LOOKS like something
+else: Cyrillic `а` for Latin `a`. DeepSeek is explicit that killing it needs an
+allowlist or a disambiguation display, which is policy knowledge the rendering
+does not have. **This is the hard residual.**
+
+**2. A correct kernel rendering does not save you from the host that prints it.**
+GLM and Qwen both landed here. Lean computes `R`, hands `(digest, R)` to the
+unverified Rust host, and the host prints it. A host bug or compromise prints
+`R'` while the signature still covers `digest`. The human authorises what they
+did not see.
+
+This refines the earlier argument above, and corrects it. Computing `R` in the
+kernel is NECESSARY but NOT SUFFICIENT. The display path remains unverified
+Rust, so the trusted computing base for consent includes the printer. That must
+be stated in `TCB.md` rather than glossed.
+
+**3. Truncation reintroduces collisions.** Qwen: if the rendering falls back to
+showing only a digest above some size, two different requests can be shown
+identically wherever a SHA-256 collision is achievable. Any truncation rule is
+therefore a security parameter, not a formatting preference.
+
+**4. Type coercion mismatch.** Qwen: if the canonical parse coerces a type (an
+array read as a string, say) but the rendering shows the original JSON type, the
+human sees a different request from the one that executes. Directly checkable
+against our parser, and worth checking before anything is built.
+
+**5. Terminal emulator bugs.** Escaping protects against the emulator behaving
+CORRECTLY on hostile input. It does not protect against an emulator with a
+defect in its escape handler. Outside our boundary, but it belongs in the
+threat model rather than nowhere.
+
+**6. Click fatigue.** GLM: an agent can trigger many guarded calls until the
+human is trained to press `y`. GLM's own verdict is that no deterministic
+rendering fixes this. Correct, and it is the honest ceiling on the whole
+approach: comprehension can be OFFERED and cannot be COMPELLED.
+
+### One attack they raised that we have already closed
+
+Qwen's duplicate-JSON-key case (canonical parse takes last-wins while the
+rendering shows first or all, so the human reads a different request from the
+one that executes) does not apply here. Duplicate object keys are refused at the
+wire before the parse, in both hosts, as of 2026-07-24 and 2026-07-25.
+
+Worth recording because it is the first time this project has been AHEAD of a
+red-team finding rather than behind one.
+
 ## Status
 
 Design only. No implementation yet. Nothing here is proven.
+
+Next: decide the truncation rule (item 3 makes it load-bearing), check the type
+coercion question (item 4) against the actual parser, and write the display path
+into `TCB.md` as trusted (item 2).
