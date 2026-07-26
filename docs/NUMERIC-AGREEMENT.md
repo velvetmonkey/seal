@@ -91,18 +91,60 @@ inserts a transformation between the approved artifact and the forwarded one,
 which must then itself be proved semantics-preserving. That trades a measurable
 gap for an unproven one.
 
-## 4. Option B, agreement-safe numeric restriction: RECOMMENDED
+## 4. Option B, agreement-safe numeric restriction: ACCEPTED, with a rule defect
 
-Refuse, before signing, any request containing an unquoted numeric literal whose
-exact value is not preserved by an IEEE-754 double round trip.
+The accepted principle was to refuse, before signing, any request containing an
+unquoted numeric literal whose exact value is not preserved by an IEEE-754
+double round trip. The kernel at `mcp-seal-dev` `b83fdff` does not implement that
+single predicate for integer syntax.
 
-**Predicate.** A JSON number literal is *agreement-safe* iff
-`decimal -> double -> decimal` is the identity on its exact mathematical value.
-In practice:
+**Implemented predicate.** For integer syntax, the kernel first normalizes the
+literal by stripping leading zeroes and moving trailing zeroes into a decimal
+exponent. It then accepts only when both of these conjuncts hold:
 
-- integers: `|n| <= 2^53 - 1`
-- non-integers: the shortest round-trip decimal of the parsed double equals the
-  literal's exact value
+1. the absolute, trailing-zero-stripped coefficient is at most
+   `9007199254740991`; and
+2. the exponent-applied value is exactly representable in binary64.
+
+The coefficient bound therefore runs *after* normalization. It is not a bound
+on the magnitude of the integer denoted by the literal. For syntax carrying a
+decimal point or exponent marker, the other branch accepts exactly when the
+normalized mathematical value is the shortest decimal that round-trips through
+binary64.
+
+The measured consequences are:
+
+| integer literal | normalized coefficient and exponent | verdict | reason |
+|---|---|---|---|
+| `100000000000000000` | `1 * 10^17` | ACCEPT | coefficient passes; value is exactly binary64 |
+| `9007199254740992` | `9007199254740992 * 10^0` | REFUSE | coefficient fails, although the value is exactly binary64 |
+| `9007199254740991` | `9007199254740991 * 10^0` | ACCEPT | both conjuncts pass |
+| `90071992547409910` | `9007199254740991 * 10^1` | REFUSE | coefficient passes; exponent-applied value is not exactly binary64 |
+
+**This is a rule, not a principle.** `100000000000000000` and
+`9007199254740992` are both integer syntax, both above the safe-integer bound,
+and Node and Python agree on the mathematical value of both. The kernel accepts
+the first and refuses the second. The operative difference is that the first
+literal has trailing zeroes for normalization to move into the exponent. That
+is an artifact of normalization, not an agreement principle.
+
+**How the green check preserved the defect.** The Monkey froze the six known
+over-refusals as a constraint on the fix, including the requirement that
+`9007199254740992` remain refused, while repairing the accepted integer literals
+whose exponent-applied values disagreed. The repair therefore kept the
+coefficient conjunct and added the exponent-applied exactness conjunct. That
+correctly refuses `90071992547409910` while continuing to accept
+`100000000000000000`; the 43-literal corpus went green with
+`UNDER_REFUSALS=[]` and the six-item over-refusal set unchanged. The corpus went
+green; the principle did not. The check measured preservation of the frozen
+verdicts, not whether those verdicts came from one coherent principle.
+
+**Open decision — Ben's call.** A principled alternative is to drop the
+coefficient conjunct and accept integer syntax exactly when the exponent-applied
+value is representable in binary64. That would accept `9007199254740992` and
+shrink the measured over-refusal set. It would also change behaviour in a signed
+shape. This document records the alternative and its cost; it does not choose
+it.
 
 **Properties that make this the right shape for this project:**
 
@@ -112,14 +154,18 @@ In practice:
   of the boxpol size bound: hard error naming the cause, never silent coercion.
 - **Non-growth.** It removes accepted inputs. It never adds an accepted input,
   which is the direction this project's constitutional posture allows.
-- **It makes the claim true rather than louder.** After it, "an approved request
-  means every conforming parser reads the same arguments" is a statement we can
-  defend for numbers.
+- **It refuses every measured Node/Python disagreement.** The 43-literal probe
+  reports `UNDER_REFUSALS=[]`; that is the reproduced claim, rather than a
+  universal claim about unmeasured readers or literals.
 
-**What it costs.** Integers above 2^53 and reals outside double range become
-refusals. That is a real narrowing. It is also, for MCP tool calls, close to
-free: an argument that cannot survive JSON's own universal reading was never
-going to be transmitted faithfully to a tool.
+**What it costs, in both directions.** The same 43-literal probe reports exactly
+six over-refusals: `9007199254740992`, `1e-400`,
+`1.7976931348623158e308`, `0.1000000000000000055511151231257827`,
+`1e-324`, and `0.10000000000000001`. Node and Python agree on each value,
+but the kernel refuses it. The gate does not broadly refuse ordinary JSON
+numbers: the same probe accepts `0.1` and `1.5e3`, with the readers agreeing.
+The cost is therefore neither zero nor a blanket rejection of ordinary
+numbers; it is the measured six-item over-refusal set.
 
 **Keep `wireNumbersSafe` unchanged** as the DoS bound. The two gates measure
 different things and both are wanted. Adding the agreement gate does not license
@@ -142,8 +188,11 @@ Not "the code looks right". Each of these observed, verbatim:
 2. **A negative control.** `1e308`, which round-trips exactly, is still accepted
    and still forwarded, with the downstream observer reading the same value the
    kernel signed. A gate that refuses everything is not a fix.
-3. **The boundary is tested on both sides.** `2^53 - 1` accepted, `2^53 + 1`
-   refused, both observed.
+3. **The named boundary observations are tested on both sides.** `2^53 - 1`
+   accepted and `2^53 + 1` refused, both re-observed. These two verdicts remain
+   true, but they do not characterize the implemented integer rule:
+   `2^53` is refused while `10^17` in integer syntax is accepted, as Section 4
+   records.
 4. **The disagreement experiment re-run.** `v31run` over the vectors that remain
    reachable, showing agreement or a new disagreement. The stop-at-first rule
    left **13 of 18 untested**; shipping a fix without running them substitutes a
