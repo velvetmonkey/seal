@@ -1201,10 +1201,13 @@ because it names a location, and was not counted.**
 - **§4.4's 2^20 cell bound has an unowned knob.** The bound is a real number and
   the refusal is genuinely specified (compute the count before walking, print the
   per-attribute factors, hard error naming the largest factor's attribute, never
-  sample). But "default 2^20" implies a knob and the spec never says where it
-  lives or who may turn it, while "the bound only moves down" binds only the
+  sample). But "default 2^20" implied a knob and the spec never said where it
+  lived or who may turn it, while "the bound only moves down" bound only the
   default. An operator-raisable bound is a quiet hole in the constitutional
-  posture of §7. **Open for Ben.**
+  posture of §7. **CLOSED 2026-07-26: Ben ruled it a compile-time constant.**
+  The word "default" is gone from §4.4, there is no runtime override and no
+  configuration key, and §4.4 now records the reasoning. Lowering it is an
+  ordinary source change; raising it is a change to the signed shape.
 
 **One internal inconsistency**: the §2 EBNF requires
 `lens … "provides" ident ("," ident)*`, while the §2.1 example writes the provides
