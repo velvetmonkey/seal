@@ -54,6 +54,43 @@ Consequences that bind the rest of this document:
 
 Four things, plus one admitted by ruling. Nothing else is on the roadmap.
 
+### Status at a glance
+
+Added 2026-07-26. Before this, answering "how far along are we" meant reading the
+whole file and then digging on disk. **Keep this current or delete it**, because a
+status board that lags is the same defect as a stale `PINS.md` row.
+
+| item | status | the honest one-liner |
+|---|---|---|
+| V3.1 proofs-to-bytes | **PARTIAL** | the gap is now MEASURED, not theorised, and one class of it is being closed |
+| V3.2 unbrokered reachability | **NOT STARTED** | the novel contribution; nothing exists |
+| V3.3 one sink end to end | **NOT STARTED** | |
+| V3.4 the write-up | **NOT STARTED** | |
+| boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
+
+**What V3.1 PARTIAL means**, because a colour is not evidence:
+
+- **Done.** The live Lean/Rust encoder differential is un-ignored and passing
+  13/13 over the shared corpus, with a byte-level ablation proving it can fail.
+- **Done, and it is the substantive result.** `v31run` measured a real
+  cross-parser disagreement: the kernel signed
+  `external.json_corpus([-10^9999])` while a real downstream MCP server extracted
+  `external.json_corpus([-Infinity])` from the same approved bytes. So approval
+  under the kernel's `CanonicalAction` does NOT by itself establish downstream
+  agreement about the forwarded effect. NOT a demonstrated unsafe act: the
+  application rejected those arguments afterwards for unrelated reasons.
+- **In flight.** `NUMERIC-AGREEMENT.md` Option B, accepted 2026-07-26. Predicate
+  implemented in the kernel; the seal-host repin and host-side wiring are running.
+- **NOT done, and this is the stated V3.1 scope.** A verified JSON parser in Lean,
+  or proven serialization invariants with executable checks that the host upholds
+  them. Neither exists.
+- **NOT done.** 13 of 18 divergent vectors untested; the run halted at the first
+  disagreement by design. Four of five configured observers never ran.
+
+**The trap:** the encoder twin passing is about WRITING agreement. The measured
+defect is about READING agreement. Conflating the two is how this gap stayed open,
+and a green twin must never be cited as progress on the parser question.
+
 **Ruled in by Ben 2026-07-26 01:32: boxpol enters the roadmap.** `POLICY-LANGUAGE.md`
 specifies it and deliberately refused to add itself, on the grounds that admitting a
 fifth item must be a visible decision rather than a drift. This is that decision,
