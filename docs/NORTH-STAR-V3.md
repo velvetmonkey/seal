@@ -52,7 +52,22 @@ Consequences that bind the rest of this document:
 
 ## 3. The build, in order
 
-Four things. Nothing else is on the roadmap.
+Four things, plus one admitted by ruling. Nothing else is on the roadmap.
+
+**Ruled in by Ben 2026-07-26 01:32: boxpol enters the roadmap.** `POLICY-LANGUAGE.md`
+specifies it and deliberately refused to add itself, on the grounds that admitting a
+fifth item must be a visible decision rather than a drift. This is that decision,
+recorded here so it is visible. Two constraints travel with the admission and are
+part of the ruling, not commentary:
+
+- **It is not a fifth item in the ORDER.** It is the policy layer that V3.3 signs
+  against. The analyzer build starts **after V3.1 or not at all**; V3.1 remains the
+  single highest-value item and boxpol does not displace it.
+- **Non-growth is constitutional.** Analyzer-undecidable constructs are parse errors,
+  permanently. The named failure mode is expressiveness creep reintroducing
+  rubber-stamping in formal clothes, and `POLICY-LANGUAGE.md` §8 instruments it: the
+  first UNKNOWN whose cause is a policy CONSTRUCT rather than a lens or world gap is
+  to be treated as an incident, not a line item.
 
 ### V3.1 Close the gap between the proofs and the bytes
 
