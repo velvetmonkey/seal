@@ -1,7 +1,15 @@
 # Numeric agreement: remediation spec for the V3.1 parser disagreement
 
-Status: **PROPOSED**, awaiting ruling. Written 2026-07-26 after `v31run` measured
-the first cross-parser disagreement on an approved request.
+Status: **ACCEPTED**. Ben ruled Option B on 2026-07-26 19:46. Written earlier the
+same day after `v31run` measured the first cross-parser disagreement on an
+approved request.
+
+Implementation note added on acceptance: the gate this replaces lives in the
+KERNEL, not the host. `Seal/JsonUtil.wireNumbersSafe` is called from
+`SealV2/ClassifyTransport.lean` at three sites, and the Rust host has no numeric
+gate of its own. So Option B is a change to `mcp-seal-dev` followed by a repin of
+`seal-host`, which puts it under the repin razor. It is a kernel change to a
+signed shape and is off the clock.
 
 ## 1. The defect, stated exactly
 
