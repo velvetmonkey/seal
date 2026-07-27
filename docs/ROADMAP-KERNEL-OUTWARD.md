@@ -112,30 +112,54 @@ payload byte, and see the affected object fail. That walkthrough must exercise
 the same verifier the compulsory gate consumes.
 **Serves: FLOOR, V3.4, VERIFY. Status: UNVERIFIED.**
 
-### Phase 1 — fold the blind-test survivors before the freeze
+### Phase 1 — fold the blind-test survivors; freeze ordering is a fork for Ben
 
-The round-10 register labelled every Tier-1 row FRISKING / NOT ACCEPTED. No
-acceptance evidence was present in the required sources. They are now working
-roadmap items rather than stranded leads, but they remain **UNFRISKED**. First
-reproduce or reject each on disk; only a survivor earns a fix.
+**MEASURED:** the round-10 register labelled every Tier-1 row FRISKING / NOT
+ACCEPTED; the current frisk state is now recorded per row. **INFERRED working
+rule:** only a surviving implementation finding earns an implementation fix.
 
-1.1 **T1.1 — present-but-wrong namespace lookup: OPEN, UNFRISKED.**
-`admission_key` is derived from the EXTRACTED parser's
-`kernel_tool_namespace`, while the kernel decides on its own internal parse.
-This is a present check over potentially wrong bytes, not a missing check.
-If the two parses diverge, a path classified `none` can skip the durability
-floor and durable consumed-set precondition and still reach `AUTHORIZED(0)`.
-Frisk the exact path. If it survives, either make the kernel's namespace
-available for a real comparison or change the admission binding so the wrong
-parser cannot select the class.
+**MEASURED — sequencing evidence:** the T1.1 identifiers `admission_key` and
+`kernel_tool_namespace` occur in g9 but not in current implementation source,
+and the g9 verifier and its five typed outcomes are not implemented.
+**INFERRED — structural consequence:** both Tier-1 items previously treated as
+gating the freeze bear on spec-only machinery. They therefore cannot gate an
+implementation freeze; they gate the spec. **FORK FOR BEN:** the council ranked
+T1.1 first on the belief that it was a live code defect. Ben must decide whether
+to re-prioritise the implementation work or retain spec closure first. No phase
+is re-ordered here pending that ruling.
+
+1.1 **T1.1 — present-but-wrong namespace lookup: FRISKED; SPEC-SIDE; OPEN,
+CENTRAL DUAL-PARSE QUESTION UNVERIFIED.** **MEASURED:** `admission_key` and
+`kernel_tool_namespace` occur in the g9 specification and not in current repo
+implementation source. The implemented classifier is
+`mcp-seal-dev/Seal/Classify.lean:110` `classifyToolCall`; it resolves to
+`.benign` at line 107, `.guarded target` at line 104, or `.defaultDeny` at
+lines 100 and 108. **INFERRED:** the alleged path is a finding against g9's
+specified machinery, not a reproduced defect in the present implementation.
+**UNVERIFIED:** whether the classifying parse and deciding parse are independent
+parses of the same bytes. That central question remains open; this item is not
+closed.
 **Serves: FLOOR, V3.1, VERIFY.**
 
-1.2 **T1.2 — `AUTHORIZED` claim mislabel: OPEN, UNFRISKED.** The blind-test
-lead says the spine establishes decision-procedure consistency and that an
-always-ALLOW kernel can satisfy it because the Safety kernel's actual predicate
-over `judged_request_bytes` is not stated. Frisk the exact verifier and consumer
-path. If it survives, name the predicate the kernel actually checks and rename
-the green result so it cannot claim more than that result establishes.
+1.2 **T1.2 — `AUTHORIZED` claim mislabel: FRISKED; UNREACHABLE IN THE
+IMPLEMENTATION; SPEC LABEL OPEN.** **MEASURED:** no g9 verifier or occurrence
+of its five outcomes (`AUTHORIZED(0)`, `UNPINNED-AUDIT(10)`,
+`STALE-UNKNOWN(11)`, `UNVERIFIABLE(20)`, `REFUTED(30)`) exists under
+`seal-host/rust/src/`. **INFERRED:** there is therefore no executable point at
+which the allegation can be reproduced or refuted against the implementation.
+**MEASURED:** the unmerged `frisk/t12-authorized-label` test at
+`rust/tests/topology_matrix.rs:590`, commit `b58ed1c`, exercised a real request
+through `seal-host-rs` with the widest expressible allow shape and observed
+exit 0, record type `seal.authorization-decision`, verdict `ALLOW`,
+authorization `explicit_policy_allow`, and no g9 status emission.
+**MEASURED — partial rejection:** Safety's predicate is stated at
+`mcp-seal-dev/Seal/Classify.lean:27-123` and `CONFIG.md:55-100`; the narrower
+surviving claim is that g9's artifact contract does not state or bind it.
+**MEASURED — prior live-surface rejection:** `7c83191` already replaced the
+RECORDED-adjacent live name with `record_type:
+"seal.authorization-decision"`; only stale g9 text still calls B a “Decision
+Receipt.” **INFERRED — candidate, not applied:** `DECISION-CONSISTENT` is a
+possible green-status name, but that naming decision is Ben's.
 **Serves: FLOOR, VERIFY.**
 
 1.3 **T1.3 — decision is not execution: OPEN; implementation UNFRISKED.** Four
@@ -248,9 +272,10 @@ rounding UNKNOWN to covered.
 **Serves: V3.2. Status: V0 MERGED; V3.2 NOT COMPLETE.** Established by
 `b800096` being an ancestor of `seal-host` main and the signed payload on disk.
 
-Phase 2 is complete only when the Tier-1 survivors are dispositioned, the
-binary/conformance fork is ruled, the selected floor has executable negative
-controls, and the evidence gate measures that selected floor.
+Phase 2 is complete only when the Tier-1 items Ben keeps on the implementation
+path are dispositioned, the binary/conformance fork is ruled, the selected
+floor has executable negative controls, and the evidence gate measures that
+selected floor.
 
 ### Phase 3 — pivot to the compulsory verify moment
 
@@ -390,8 +415,8 @@ evidence is UNVERIFIED rather than confidently coloured.
 | V3.1 numeric subwork | **DONE AND PUSHED** | `mcp-seal-dev` local `main` and `origin/main` both resolve to `6c23b5c`, after the agreement guard and coefficient-conjunct demotion |
 | V3.1 configured divergence set | **18/18 VECTORS, 5/5 OBSERVERS CHARACTERISED** | `ba4e21d` is an ancestor of `seal-host` main; the merged report records 90/90 definite cells |
 | V3.1 as a whole | **PARTIAL / OPEN** | the same merged report records nine forwarded surrogate disagreements; neither required source nor this check establishes a verified parser or complete proven host invariant |
-| blind T1.1 | **OPEN, UNFRISKED** | round-10 register says FRISKING / NOT ACCEPTED; no completed on-disk frisk was supplied or found in the required sources |
-| blind T1.2 | **OPEN, UNFRISKED** | round-10 register says FRISKING / NOT ACCEPTED; no completed on-disk frisk was supplied or found in the required sources |
+| blind T1.1 | **FRISKED; SPEC-SIDE; OPEN / DUAL-PARSE UNVERIFIED** | **MEASURED:** the two alleged identifiers occur in g9, not current implementation source; the live classifier is `classifyToolCall`. **UNVERIFIED:** whether classification and decision independently parse the same bytes |
+| blind T1.2 | **FRISKED; UNREACHABLE IN IMPLEMENTATION; SPEC LABEL OPEN** | **MEASURED:** the g9 verifier/outcome ABI is absent; RUN `t12-always-allow` reached the live child with an `ALLOW` authorization decision and emitted no g9 status; the over-broad predicate and live B-naming claims are partly rejected |
 | blind T1.3 / compulsory verify moment | **DIRECTION SETTLED; IMPLEMENTATION UNFRISKED/OPEN** | Ben's 2026-07-24 ruling selects the mandatory inline gate; the blind lead's current code diagnosis was not independently established here |
 | V3.2 reachability | **V0 EXISTS AND IS MERGED; NOT COMPLETE** | `b800096` is an ancestor of `seal-host` main; signed payload on disk contains `denominator.sound = false` and `coverage_percent = null` |
 | V3.3 one sink end to end | **UNVERIFIED AS A WHOLE** | no run satisfying all four V3.3 success criteria was checked in this graft |
@@ -418,6 +443,12 @@ evidence is UNVERIFIED rather than confidently coloured.
 - The object is an authorization decision, not an effect receipt. JUDGED,
   AUTHORIZED, DISPATCH ATTEMPTED and ACKNOWLEDGED must not collapse into one
   green fact.
+- **MEASURED:** T1.1 and T1.2 entered this roadmap as unfrisked
+  implementation-freeze gates. Their completed frisks instead located T1.1's
+  named machinery only in g9 and found T1.2's g9 verifier absent, while the
+  deployed path used a distinct authorization-decision surface. **INFERRED:**
+  that reverses the factual basis for the council's ordering, but does not
+  itself reverse the order; the sequencing fork remains Ben's.
 - The digest shown to the human is the full 64-hex target, not a 16-character
   truncation. The comprehension defect is that a digest is not meaningful, not
   that this path truncates it.
