@@ -185,3 +185,374 @@ Design only. No implementation yet. Nothing here is proven.
 Next: decide the truncation rule (item 3 makes it load-bearing), check the type
 coercion question (item 4) against the actual parser, and write the display path
 into `TCB.md` as trusted (item 2).
+
+## Decision: `R`, version 1
+
+This section answers the four questions above. It is a design, not an
+implementation or a claim that the theorems already exist.
+
+### Function and domain
+
+The renderer identity is `seal.renderR/v1`. Let `P` be the kernel's one
+canonical parse operation over an exact, finite request frame `b`. `P` must
+return a lossless, coupled outcome:
+
+```
+Accepted {
+  wireBytes, wireScope, wireSha256,
+  canonicalAction,
+  targetPreimage, targetDigest,
+  proof that canonicalAction and targetPreimage came from this parse of wireBytes
+}
+
+Refused {
+  wireBytes, wireScope, wireSha256,
+  reasonCode
+}
+```
+
+`wireBytes` is a byte array, not a Lean `String`. `wireScope` is the fixed
+`mcp-jsonrpc-request-frame-including-delimiter` scope specified by
+`AUTHORIZATION-RECORD.md` section 2.2. `P`'s `reasonCode` is exactly
+`CANONICAL_PARSE_REFUSED` or `UNREPRESENTABLE_UNICODE_SCALAR`. `R`'s displayed
+reason domain adds `APPROVAL_DISPLAY_LIMIT` and
+`APPROVAL_CHANNEL_UNAVAILABLE`; it is never parser text containing attacker
+input.
+`targetPreimage` is the exact byte string to which the approval target's hash is
+applied. Its construction from `canonicalAction` is part of `P`, not a second
+serializer owned by the display path.
+
+The function is:
+
+```
+R : ApprovalSurfaceState -> ParseOutcome -> {
+  rendererIdentity,
+  approvalSurfaceIdentity,
+  disposition : APPROVAL_AVAILABLE | APPROVAL_REFUSED,
+  displayBytes : UTF8
+}
+```
+
+`ApprovalSurfaceState` is either `Dedicated(surfaceIdentity,
+capabilityProof)` or `Unavailable`. It is supplied by the trusted mediator, not
+the agent. The proof means the agent, child and shared chat/stdin/stdout paths
+have no capability for that surface. The surface identity, or the literal
+`NOT AVAILABLE`, is included in `displayBytes`.
+
+Operationally the composition is `b -> P(b) -> R(surface, P(b))`, with exactly
+one call to `P`; the surface state is an independent trusted input. The output
+is an immutable byte tuple. The renderer, surface identity, disposition,
+display length and SHA-256 of the exact `displayBytes` are the comprehension
+fields item 8 puts in the signed payload. The host must write those same bytes,
+not reconstruct them. `AUTHORIZATION-RECORD.md` section 2.4 separately requires
+the bytes actually delivered to the approval surface to be retained and bound
+by `ApprovalRecord` v2.
+
+An `APPROVAL_AVAILABLE` display has this fixed order:
+
+1. renderer identity and literal `APPROVAL AVAILABLE`;
+2. exact target digest and target-preimage length;
+3. the canonical tool and arguments as the explicitly typed tree in
+   `canonicalAction`;
+4. the complete `targetPreimage` as lowercase hex with fixed renderer-authored
+   line breaks;
+5. exact wire scope, wire length and wire SHA-256;
+6. the complete `wireBytes` as lowercase hex with fixed renderer-authored line
+   breaks; and
+7. a final renderer-authored question that repeats the canonical tool, target
+   digest and literal `approve exactly the typed action and byte subjects
+   above?`.
+
+Each hex body consists of two lowercase digits per source byte, with no omitted
+bytes and no separators inside the body. `R` places 32 source bytes on each row
+except the last and prefixes each row with its eight-digit lowercase byte
+offset. This row syntax is renderer structure, not attacker data.
+
+The typed tree labels every value `object`, `array`, `string`, `integer`,
+`binary64-decimal`, `boolean`, or `null`; objects are shown in the canonical
+action's order and every container states its element count. Original JSON
+spelling appears only in the separately labelled wire-byte hex, never in a
+semantic value slot.
+
+### Obligation 1: derivation
+
+`R` does not parse wire bytes, stringify a host value, or accept a tool,
+argument, digest, description or display fragment from the agent or host. It
+projects the typed action and exact target preimage from the one `Accepted`
+value produced by `P`. The kernel must make it impossible to construct an
+`Accepted` value whose action, preimage, digest and wire witness came from
+different requests.
+
+The derivation theorem is therefore about the coupled result, not two calls
+which happen to use the same parser:
+
+```
+P(b) = Accepted(o)
+  -> o.canonicalAction = canonicalParse(b)
+  /\ o.targetDigest = sha256(o.targetPreimage)
+  /\ R(s, o).semanticTree = renderTyped(o.canonicalAction)
+  /\ R(s, o).hexTargetPreimage = hex(o.targetPreimage)
+```
+
+This also fixes renderer drift: the signed renderer identity selects this exact
+grammar and escaping table. A renderer change is a new identity, not an
+in-place presentation change.
+
+### Obligation 2: agreement
+
+Agreement is **full on the approval domain, with no semantic or Unicode
+equivalence quotient**. Equality means byte-for-byte equality of
+`displayBytes` under the same renderer identity, not “looks similar in a
+particular font.”
+
+The full digest-agreement theorem is:
+
+```
+P(b1) = Accepted(o1)
+/\ P(b2) = Accepted(o2)
+/\ R(s1, o1).displayBytes = R(s2, o2).displayBytes
+  -> o1.targetDigest = o2.targetDigest
+```
+
+Every display produced from an accepted parse, including a length refusal,
+contains the target digest, so this implication is a projection theorem. On
+the approval-available subdomain the required stronger theorem is:
+
+```
+R(s1, o1).disposition = APPROVAL_AVAILABLE
+/\ R(s2, o2).disposition = APPROVAL_AVAILABLE
+/\ R(s1, o1).displayBytes = R(s2, o2).displayBytes
+  -> o1.targetPreimage = o2.targetPreimage
+```
+
+This follows because an available display contains the entire,
+length-delimited target preimage in an injective lowercase-hex encoding. Digest
+equality then also follows by congruence, without assuming SHA-256 is
+collision-free. The complete wire-byte field gives the stronger analogous
+result for the framed request subject.
+
+Every refusal display contains its exact wire digest, so identical refusal
+displays imply identical wire digests. Oversize refusals deliberately do not
+claim byte identity: they cannot be approved or dispatched. No equivalence is
+being hidden here; the approval theorem has exact equality, while a refusal has
+no approval target and no effect-authorising transition.
+
+The sentence above that calls “different effects must never look the same” a
+contrapositive is too strong. The actual contrapositive is “different target
+digests cannot have identical render bytes.” Effect equality is not defined by
+that theorem, and visually confusable but byte-different ASCII remains possible.
+The byte-injectivity result for `APPROVAL_AVAILABLE` is the stronger property
+needed here.
+
+### Obligation 3: totality and parse refusal
+
+`R` is total for every pair of `ApprovalSurfaceState` and `ParseOutcome`, and
+`P` must return `Refused` rather than fail to construct an outcome for every
+finite byte frame. An internal inability to obtain a `ParseOutcome` is a kernel
+failure and must terminate mediation; it must never fall through to the host's
+ordinary prompt.
+
+For `Refused`, `R` always emits a bounded, ASCII-only display containing:
+
+```
+seal.renderR/v1
+APPROVAL REFUSED -- NO APPROVAL INPUT WILL BE READ
+reason: <closed reason code>
+wire-scope: <fixed scope name>
+wire-length: <decimal byte count>
+wire-sha256: <64 lowercase hex digits>
+target-sha256: <64 lowercase hex digits, or NOT AVAILABLE after parse refusal>
+wire-bytes: <complete lowercase hex, only when within the display bounds>
+request was not authorized and must not be dispatched
+```
+
+There is no `[y/N]`, button, token-consumption path or other approval affordance.
+For a syntactically malformed but in-bound request, this is a successful
+rendering of a refused request. It distinguishes refusal to parse from failure
+to render.
+
+### Escaping discipline
+
+All renderer output is the ASCII subset of UTF-8. Structural line feeds are
+inserted only by `R`; byte `0x0d` is never emitted. In the typed tree, only ASCII
+letters, digits, space, `.`, `_`, `/` and `-` may be copied as glyphs. Every
+other Unicode scalar is printed as an uppercase `\u{HEX}` token with its scalar
+width made explicit by the value's scalar count. Raw bytes are shown only as
+lowercase hex. These are security rules, not styling choices:
+
+- **ANSI escapes:** ESC and every other control byte occur only as hex or a
+  `\u{HEX}` token. No attacker-controlled terminal control byte is emitted.
+- **Newlines:** an input LF is data (`0a` in the byte view and `\u{A}` in a
+  scalar value). Only fixed renderer-authored LFs can create display lines.
+- **Carriage returns:** input CR is `0d` or `\u{D}`; `R` emits no CR byte.
+- **Bidirectional overrides:** all non-ASCII scalars, including U+202A through
+  U+202E and U+2066 through U+2069, are numeric tokens, so they never enter the
+  terminal's bidi algorithm as controls.
+- **Homoglyphs:** non-ASCII letters are numeric tokens, so a Cyrillic `е` cannot
+  be displayed as a Latin `e`. The scalar count, explicit string type and full
+  byte view prevent it being silently fused with an adjacent field. ASCII
+  lookalikes such as `I`, `l` and `1` remain a human/display-font residual; no
+  Unicode normalization or confusable folding is an allowed equivalence.
+- **Length:** the exact bounds and refusal below prevent attacker data from
+  scrolling an approval's named action away and forbid fold/collapse UI.
+
+The printer and approval surface must reproduce the bytes faithfully in a
+pinned monospace presentation with wrapping disabled except at `R`'s line
+breaks. Terminal-emulator defects and a lying printer remain in the consent TCB;
+this function cannot prove them away.
+
+### Truncation and length refusal
+
+The v1 security parameters are:
+
+```
+MAX_APPROVABLE_WIRE_BYTES    = 4096
+MAX_APPROVABLE_DISPLAY_BYTES = 16384
+```
+
+Both bounds are inclusive. A 4096-byte wire subject may be approved only if its
+complete rendered display is at most 16384 bytes. At 4097 wire bytes, or when
+the complete display would be 16385 bytes, `R` emits
+`APPROVAL_REFUSED` with reason `APPROVAL_DISPLAY_LIMIT`; mediation reads no
+approval and performs no dispatch. The refusal includes length and digest but
+omits the oversize byte body.
+
+There is no truncation, ellipsis, prefix/suffix summary, scrollable collapse or
+digest-only fallback on an approval path. The bounds are security parameters:
+raising either enlarges the length/scroll attack surface; permitting a
+digest-only approval above either bound would replace byte-injectivity with a
+SHA-256 collision assumption. A future bound change therefore requires a new
+renderer identity and the same review as any other signed-shape change.
+
+### Type coercion and numbers
+
+The semantic panel is rendered only from `canonicalAction`, and execution must
+consume that same typed value. If the canonical parser turns an input into a
+string, the panel says `string`; if it produces an array, the panel says
+`array`. `R` never infers a type from the original literal and never asks
+JavaScript, Rust or a GUI toolkit to parse or stringify a number. The original
+literal remains visible only as labelled wire bytes. Thus a coercion cannot
+make the semantic display retain the pre-coercion type.
+
+For an accepted number, the typed tree prints the exact mathematical integer or
+the admitted shortest round-tripping decimal from the canonical action. The
+measured `1234567890123456789` case must refuse before `R`; it must never reach
+a JavaScript `number`. `OPEN-FINDINGS.md` row 40 records the concrete failure:
+JavaScript renders that literal as `1234567890123456800` through
+`JSON.stringify` and `1234567890123456768` through `toFixed(0)`, while Python
+retains the literal. `docs/NUMERIC-AGREEMENT.md` section 4 and
+`OPEN-FINDINGS.md` rows 35 and 40 establish on disk that the recorded kernel rule
+accepts integer syntax only when the exponent-applied value is exactly
+representable in binary64 (with an additional coefficient restriction), and
+accepts decimal/exponent syntax only for the shortest round-tripping decimal.
+Those admission properties are sufficient for `R`, although the extra integer
+over-refusal is not required by this design.
+
+`R` may rely on that guard only as an explicit proposition carried by
+`Accepted`; it must not duplicate the numeric check. The named
+`fix/coefficient-conjunct-demoted` branch and its exact rule are not present in
+this repository and are **UNVERIFIED HERE**. Removing the coefficient conjunct
+is compatible with this design only if exact binary64 representability remains
+proved for every newly accepted integer.
+
+This closes the parser-to-display coercion question. It does not establish that
+an arbitrary downstream executor assigns the same semantics to the unchanged
+wire bytes. That cross-parser property remains outside `R`.
+
+### Bytes the kernel value type cannot represent
+
+Wire validation must detect an unpaired UTF-16 surrogate escape before
+constructing a Lean `String` and return
+`Refused(reasonCode = UNREPRESENTABLE_UNICODE_SCALAR)` while retaining the
+original byte array. `R` then shows the standard refusal. Within the bounds it
+also shows every original byte as hex: for example the ASCII wire bytes for
+`\ud800` appear as `5c7564383030`. No replacement character is shown as though
+it were the parsed value, and no Unicode scalar is invented.
+
+The same byte path handles invalid UTF-8 and any other input the kernel value
+types cannot denote. Above the bound it shows the refusal reason, exact byte
+length and wire digest, but no body and no approval affordance. This is not
+better parsing; it is total rendering of a byte-preserving refusal.
+
+`OPEN-FINDINGS.md` rows 36 and 37 support the Lean type limitation and the
+independently reproduced Lean/Node/Python shape. The reported complete
+five-observer, nine-vector matrix remains **UNVERIFIED INDEPENDENTLY**, as the
+finding itself says.
+
+### Q1: approval channel
+
+The rendering and approval input go to a dedicated out-of-band approval surface
+whose write and input capabilities are owned only by seal's approval component.
+Agent output, child stdout/stderr, tool results and chat content must have no
+route to it. The surface must identify itself independently of agent-authored
+content and must atomically bind its input to the exact displayed tuple.
+
+If that capability separation or surface identity cannot be established, the
+result is `APPROVAL_REFUSED` with reason `APPROVAL_CHANNEL_UNAVAILABLE`; seal
+does not fall back to chat, shared stdout or shared stdin. Escaping makes hostile
+request data inert, but it cannot give a shared channel trustworthy provenance.
+The host printer and channel implementation remain trusted and must be named in
+`TCB.md`.
+
+The current live channel routing cannot be checked from this repository and is
+**UNVERIFIED HERE**.
+
+### Q2: canonical-parse refusal
+
+Answered by the total refusal display above. A refusal is shown, but approval is
+not offered. In-bound unrepresentable bytes are displayed completely as hex;
+oversize bytes are represented by reason, scope, exact length and digest because
+the only permitted next state is refusal. A renderer failure is not converted
+to this display: it terminates mediation without approval.
+
+### Q3: equivalence
+
+Full agreement, not agreement modulo JSON spelling, Unicode normalization,
+numeric value, font appearance or any other equivalence. The theorem compares
+exact display bytes under the exact renderer identity and concludes exact target
+preimage and digest equality on the approval domain. Distinct wire spellings
+may produce distinct displays even when they denote the same canonical action.
+
+### Q4: record of what was shown -- closed
+
+Landed as a specification in `AUTHORIZATION-RECORD.md` section 2.4, confirmed on
+disk. Its AUTHORIZED leg requires the exact displayed-byte tuple and renderer
+identity, and `ApprovalRecord` v2 retains the original signed token bytes
+(`AUTHORIZATION-RECORD.md:230-309`). The file records Ben's Option D ruling at
+08:34 (`AUTHORIZATION-RECORD.md:5-12`). This is specified, not implemented.
+
+## Disagreements and limits
+
+1. The earlier absolute sentence “Nothing the agent authors may reach the
+   human's screen through seal” cannot coexist with a comprehension display of
+   attacker-influenced tool names and arguments. The enforceable rule is:
+   nothing agent-authored reaches the surface except as a bound,
+   kernel-derived, inert rendering inside `R`.
+2. The earlier definition `digest = sha256(bytes)` is not precise enough for
+   the approval target. `OPEN-FINDINGS.md` row 24 says the target is computed by
+   Lean from `argsJson`, while raw `request_sha256` is a separate retained
+   digest. This design therefore names `targetPreimage`, `targetDigest`,
+   `wireBytes` and `wireSha256` separately. Item 8 must pin their exact scopes;
+   it must not call both values “the digest.”
+3. Computing `R` in the kernel is necessary but does not prove that the host
+   wrote `displayBytes`, that a terminal rendered them faithfully, that the
+   human understood them, or that the downstream executor parsed the wire like
+   the kernel. Those are separate TCB, human-factors and cross-parser
+   obligations.
+4. No implementation or proof of `P`, `R`, derivation, agreement, channel
+   separation or renderer totality exists in this repository. The two numeric
+   admission properties above are recorded evidence, not an imported theorem
+   available to `R`.
+5. The 4096/16384 bounds are new normative design choices. No on-disk
+   measurement establishes that they fit every supported approval surface.
+   Raising them is forbidden without a renderer-version change; lowering them
+   is fail-closed but still changes the signed presentation contract.
+
+## Specification evidence
+
+Checked on `main` against `ROADMAP-KERNEL-OUTWARD.md` item 6-10,
+`AUTHORIZATION-RECORD.md` section 2.4, `NUMERIC-AGREEMENT.md` section 4, and
+`OPEN-FINDINGS.md` rows 24, 35-37 and 40. The unavailable implementation
+repositories and worktrees were not entered.
+
+Evidence: RUN renderR-spec-2026-07-27
