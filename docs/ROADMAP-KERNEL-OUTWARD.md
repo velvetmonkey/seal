@@ -40,10 +40,16 @@ change.
 1. **`release-evidence` CI gate.** CI can currently pass while skipping the Lean
    build, axiom checks, host tests, conformance and the three-way differential.
    Until a missing secret turns CI red, every green below is unfalsifiable.
-   IN PROGRESS.
+   **LANDED.** Verified 2026-07-27 11:44: `ci/release-evidence` (`f198642`) is an
+   ancestor of `seal-host` main, which carries `scripts/release_evidence_gate.py`
+   and the workflow wiring. **Phase 1 is therefore unblocked.**
 2. **`differential.rs` and `parser_boundary.rs` 0/1 classify contract.** Both
    assert a two-outcome contract that the duplicate-key and digit guards
    superseded. Fix with negative controls, not relaxed assertions.
+   **PARTLY LANDED.** Verified 2026-07-27: `differential.rs:279` and
+   `host_path.rs:1254` assert `matches!(.., 1 | 2)`, an enumerated fail-closed
+   set rather than a relaxed `assert_ne!`. `parser_boundary.rs` NOT verified;
+   treat that half as open.
 3. **Interior NUL test.** A claimed hardening property in `TCB.md` whose only
    corpus entry uses a JSON escape rather than a literal `0x00` byte. Found from
    outside, and small.
