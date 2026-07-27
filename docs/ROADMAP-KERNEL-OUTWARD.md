@@ -188,6 +188,15 @@ appear here.
 
 ### Phase 2 — finish-to-pure and settle the boundary
 
+**MEASURED:** the Phase-2 audit found six already-complete rows (2.2, 2.5,
+2.6, 2.7, 2.8 and 2.13), four partly complete rows (2.9–2.12), and no
+whole item with no implementation at all. It also found that 2.10 and 2.11
+lack their named machinery, 2.9's remaining corpus choice waits on 2.1, and
+2.12's delegation-membership leg was deliberately stripped. **INFERRED —
+honest shape:** Phase 2 is not a queue of work. It is **one machinery gap
+(2.10 plus 2.11), one fork waiting on Ben (2.1, which also unblocks 2.9), and
+one deliberate omission (2.12's delegation leg).**
+
 2.1 **Choose the byte-boundary strategy: FORK FOR BEN.** g9's Phase-1 floor
 selects tested conformance: pinned formulae, adversarial divergence vectors and
 an independent second implementation, with nonconformance failing closed.
@@ -209,12 +218,18 @@ the scope and branch:
 Do not combine the names and pretend the tradeoff disappeared.
 **Serves: FLOOR, V3.1. Status: OPEN; fork for Ben.**
 
-2.2 **`release-evidence` CI gate** *(former roadmap item 1)*. Missing private
-evidence must make the release verdict red, and every required Lean, Rust,
-conformance, security and golden-path result must be observed.
-**Serves: FLOOR, V3.1. Status: LANDED.** Established by
-`f198642` being an ancestor of `seal-host` main and by the gate script and
-workflow wiring present there.
+2.2 **`release-evidence` CI gate: CLOSED; ALREADY-DONE** *(former roadmap item
+1)*. Missing private evidence must make the release verdict red, and every
+required Lean, Rust, conformance, security and golden-path result must be
+observed. **MEASURED:** the gate rejects malformed input, every non-`success`
+result, and tokenless apparent success for the private Lean/Rust jobs
+(`seal-host/scripts/release_evidence_gate.py:15-65`). The workflow runs it
+under `always()` after five named prerequisite jobs
+(`seal-host/.github/workflows/ci.yml:225-242`), and negative and green pins
+exercise it (`seal-host/test/test_release_evidence_gate.py:37-95`). Commit
+`f198642` is an ancestor of `seal-host` main. **INFERRED:** this satisfies the
+numbered item; it is not merely a roadmap assertion.
+**Serves: FLOOR, V3.1. Status: CLOSED; ALREADY-DONE.**
 
 2.3 **Repair `differential.rs` and `parser_boundary.rs` outcome contracts:
 CLOSED; ALREADY-TIGHT** *(former item 2)*. Keep enumerated fail-closed outcomes
@@ -249,69 +264,147 @@ three known environmental failures; it also retained the historical failing
 ablation. No code was written because the requested boundary coverage already
 existed.
 
-2.5 **Make `RepinStep2Guards` a real lakefile target** *(former item 4)*, then
-ablate the NFD comparison and record the red result.
-**Serves: FLOOR, V3.1. Status: OPEN; implementation UNVERIFIED.**
+2.5 **Make `RepinStep2Guards` a real lakefile target: CLOSED; ALREADY-DONE**
+*(former item 4)*, then ablate the NFD comparison and record the red result.
+**MEASURED:** `repin_step2_guards` is a named `lean_exe`
+(`seal-host/lakefile.toml:106-111`) and is listed in `defaultTargets`
+(`seal-host/lakefile.toml:9`). Its canonical-equivalent-key assertion is live
+(`seal-host/Test/RepinStep2Guards.lean:18-33`). Commit
+`38a2ff1a83304bb8ede9ec92aa96cacd6e98b763`, “wire the raw-wire guard matrix
+into the build, and ablate it”, records the NFD ablation red. The lakefile's own
+comment records why it had been inert: Lake knew the module existed, but it was
+never a default target and therefore had never been built
+(`seal-host/lakefile.toml:3-8`). **Written, correct, and inert.**
+**INFERRED:** both requested halves are complete.
+**Serves: FLOOR, V3.1. Status: CLOSED; ALREADY-DONE.**
 
-2.6 **Emscripten toolchain availability** *(former item 5)*. This is a
-prerequisite for rebuilding and testing the browser artifact, not an end in
-itself.
-**Serves: V3.1. Status: UNVERIFIED.**
+2.6 **Emscripten toolchain availability: CLOSED; ALREADY-DONE** *(former item
+5)*. This is a prerequisite for rebuilding and testing the browser artifact,
+not an end in itself. **MEASURED:** the emsdk is on disk at
+`seal-host/wasm-spike/emsdk/upstream/emscripten`. After its environment is
+sourced, `emcc` resolves there and reports Emscripten 6.0.0. The intended
+hookup is recorded at `seal-host/wasm-spike/env.sh:1-3` and
+`seal-host/wasm-spike/build_wasm.sh:10-29`; version/provenance is pinned at
+`seal-host/wasm-spike/verified/PROVENANCE.txt:17-23`, with the prior
+availability record at `seal-host/TEST-BASELINE.md:28-32`. **INFERRED:** the
+availability prerequisite is satisfied on this machine.
+**Serves: V3.1. Status: CLOSED; ALREADY-DONE.**
 
-2.7 **Keep the completed numeric work complete, without calling V3.1 done.**
-The semantic response to the parser finding moved from Option B to C at 08:01
-and then to Option D at 08:34: record four separate facts, leave executor
-acknowledgment UNKNOWN without cooperation, and never fuse authorization with
-execution. The numeric agreement implementation itself is done and pushed.
-**Serves: V3.1. Status: DONE AND PUSHED for the numeric subwork.** Established
-by `mcp-seal-dev` `main` and `origin/main` both at `6c23b5c`, whose history
-contains the agreement guard and the later coefficient-conjunct demotion.
+2.7 **Keep the completed numeric work complete: CLOSED; ALREADY-DONE, without
+calling V3.1 done.** **MEASURED:** exact binary64 agreement decides accepted
+integers; the coefficient-length check is only a pre-conversion resource bound
+(`mcp-seal-dev/Seal/JsonUtil.lean:336-367,381-418`). The raw-wire classifier
+refuses agreement-unsafe numbers
+(`mcp-seal-dev/SealV2/ClassifyTransport.lean:161-176`). Fixed safe/unsafe
+boundary cases and a named Lake executable exist
+(`mcp-seal-dev/Test/NumericAgreementShow.lean:21-58`;
+`mcp-seal-dev/lakefile.toml:166-168`). `mcp-seal-dev` `main` and `origin/main`
+both resolve to `6c23b5cc5c32f16d8593edc4bdfbb904c40dda17`, with `b467c7d` as
+an ancestor. **INFERRED:** the numeric subwork, exactly as scoped here, is
+complete; this does not close V3.1 or claim the final kernel head is repinned.
+**Serves: V3.1. Status: CLOSED; ALREADY-DONE FOR THE NUMERIC SUBWORK.**
 
 2.8 **Keep the complete parser-divergence characterization in required
-evidence.** All 18 configured divergence vectors and all five observers have
-definite outcomes; this closes the stale “13 untested” statement, not the
-underlying correspondence gap. Nine forwarded surrogate vectors disagreed.
-**Serves: V3.1. Status: CHARACTERISED, GAP OPEN.** Established by
-`ba4e21d` being an ancestor of `seal-host` main and
-`docs/V31-DOWNSTREAM-PARSER-AGREEMENT.md` recording 18/18, 5/5 and 90/90.
+evidence: CLOSED; ALREADY-DONE.** **MEASURED:** the recursive harness names all
+18 vectors, one negative control and five concrete observers, and records a
+definite per-cell outcome
+(`seal-host/scripts/downstream_parser_agreement.py:3-18,40-74,99-130,448-536`).
+The production oracle is named at
+`seal-host/Test/DownstreamParserOracle.lean:7-27` and
+`seal-host/lakefile.toml:113-117`. The tracked report preserves every vector,
+observer and the 90-cell summary
+(`seal-host/docs/V31-DOWNSTREAM-PARSER-AGREEMENT.md:13-22,24-45,72-108,131-168`).
+Commit `ba4e21d` is an ancestor of `seal-host` main. **INFERRED:** the
+characterization itself is complete. The separate parser-correspondence gap
+remains open, but is not missing characterization work.
+**Serves: V3.1. Status: CLOSED; ALREADY-DONE FOR CHARACTERIZATION.**
 
-2.9 **External oracles in required CI** *(former item 15)*. Keep JSONTestSuite
-and Wycheproof, add any boundary corpus selected by the Phase-2 fork, and prove
-each control can fail.
-**Serves: FLOOR, V3.1. Status: PARTIAL/UNVERIFIED as a complete required-CI
-set.** Individual artifacts exist; the complete current required-CI claim was
-not established in this graft.
+2.9 **External oracles in required CI: OPEN; PARTLY; BLOCKED ON 2.1** *(former
+item 15)*. **MEASURED:** JSONTestSuite and Wycheproof are vendored, hash-pinned,
+and exercised by Rust integration tests that assert corpus floors/digests and
+semantic outcomes
+(`seal-host/rust/tests/external_json_corpus.rs:19-22,211-319`;
+`seal-host/rust/tests/corpora/JSONTestSuite/PROVENANCE.md:3-17`;
+`seal-host/rust/tests/wycheproof_ed25519.rs:15-19,97-188`;
+`seal-host/rust/tests/corpora/Wycheproof/PROVENANCE.md:3-15`). The generic
+required Cargo job reaches them, and `release-evidence` requires that job
+(`seal-host/.github/workflows/ci.yml:63,111-119,225-242`). Commits `47b7e9d`
+and `7a0235f` record the JSONTestSuite and Wycheproof red controls.
+**MEASURED:** no boundary corpus has been selected by 2.1. **INFERRED:** the
+only incomplete leg is the boundary corpus that cannot be selected until Ben
+rules 2.1; this row is blocked on that fork, not on effort.
+**Serves: FLOOR, V3.1. Status: OPEN; PARTLY; BLOCKED ON 2.1.**
 
-2.10 **Implement or explicitly supersede the Decision Bundle and CFG.** This is
-the implementation consequence of Phase 0.1 and the artifact fork. No successor
+2.10 **Implement the named successor to the Decision Bundle and CFG: OPEN;
+PARTLY.** **MEASURED:** authorization-decision v2 already persists substantial
+successor material: the exact request hash, signed config, approvals, verdict
+and certificates, emitted bytes, and pinned kernel identity before ALLOW is
+forwarded
+(`seal-host/rust/src/authorization_decision.rs:2-7,45-57,291-335,368-418`).
+There is no tracked `DecisionBundle` or role-split `TrustContext`
+implementation, nor `admission_paths` or `admission_key` implementation
+(`seal-host/PINS.md:52-59`). Authorization-decision v2 is not documented as the
+successor that maps every obligation. `docs/ARTIFACT-INHERITANCE.md:49-82`
+instead names ADEP-v1 for exactly that purpose, declares it not built, and
+`docs/ARTIFACT-INHERITANCE.md:104-141` maps the obligations as UNVERIFIED.
+**INFERRED:** authorization-decision v2 is substantial successor material, not
+the Decision Bundle/CFG machinery or its implemented successor. No successor
 may lose request/approval/decision separation, out-of-band trust, byte
 re-derivation or the honest event ceiling.
-**Serves: FLOOR, V3.1, VERIFY. Status: OPEN after Ben's fork.**
+**Serves: FLOOR, V3.1, VERIFY. Status: OPEN; PARTLY.**
 
-2.11 **Implement the verifier consumed by the future inline gate.** Carry
-fail-closed typed outcomes, trust-context binding, exact-byte references,
-context and identity pinning, kernel pinning, limitations and negative controls.
-**Serves: FLOOR, V3.1, VERIFY. Status: OPEN after Ben's fork.**
+2.11 **Implement the verifier consumed by the future inline gate: OPEN;
+PARTLY.** **MEASURED:** a pinned post-hoc authorization-decision verifier body
+and existing verifier surfaces are real
+(`seal-host/receipt-verifier/README.md:1-13`;
+`seal-host/rust/src/authorization_decision.rs:16-29,331-335,398-418`). The
+in-repo surface has none of g9's five typed outcomes and no role-split
+`TrustContext`; it is not a receiver-side inline gate. The current layer is
+explicitly post-hoc with **no veto over the kernel**
+(`seal-host/rust/src/authorization_decision.rs:269-272`). **INFERRED:** the
+real pieces do not implement the requested typed, fail-closed verifier/gate
+contract. Together, 2.10 and 2.11 are the one genuine machinery gap left in
+Phase 2.
+**Serves: FLOOR, V3.1, VERIFY. Status: OPEN; PARTLY.**
 
-2.12 **Harvest `feat/field-warrant`** *(former item 14)* for expiry,
-issued-at freshness, policy-version and delegation gates, but only after
-checking those gates against the artifact selected above.
-**Serves: FLOOR, V3.1, V3.3. Status: OPEN; branch and current applicability
-UNVERIFIED.**
+2.12 **Field warrant: OPEN; PARTLY; DELEGATION LEG DELIBERATELY STRIPPED**
+*(former item 14)*. **MEASURED:** expiry, issued-at freshness and policy-version
+gates are landed as conjuncts of `effectStep`, with fail-closed theorems
+(`mcp-seal-dev/SealV2/EffectEnvelope.lean:728-817,981-1102`). Envelope
+completeness pins nine gated fields and one explicit exemption
+(`mcp-seal-dev/SealV2/EnvelopeCompleteness.lean:9-45,93-100`), and the
+field-warrant and mutation controls are present
+(`mcp-seal-dev/Test/FieldWarrant.lean:205-227,269-320`;
+`mcp-seal-dev/Test/FieldWarrantMutation.lean:8-35,131-235`). **MEASURED:** the
+delegation-membership leg was **deliberately stripped**, not forgotten:
+`parent_capability_ref` and `audience` were killed as uninterpreted seats
+(`mcp-seal-dev/SealV2/EffectEnvelope.lean:18-26`). The source records the
+reasoning: mandatory per-verifier session binding mitigates audience
+redirection only under a named deployment invariant, while the clean future
+shape is host `selfId` plus `audienceGate`
+(`mcp-seal-dev/SealV2/EffectEnvelope.lean:36-53`). **INFERRED:** the three gate
+families are complete; delegation membership remains a deliberate omission,
+not forgotten debt or a softened todo.
+**Serves: FLOOR, V3.1, V3.3. Status: OPEN; PARTLY; DELIBERATE OMISSION.**
 
-2.13 **Accept the reachability v0 baseline without laundering its denominator.**
-The signed report exists and is merged. It says
-`denominator.sound = false`, emits no coverage percentage, and carries UNKNOWN
-sentinels because declared inventory is not total reachability. The next V3.2
-work is to decide what evidence can soundly improve that denominator without
-rounding UNKNOWN to covered.
-**Serves: V3.2. Status: V0 MERGED; V3.2 NOT COMPLETE.** Established by
-`b800096` being an ancestor of `seal-host` main and the signed payload on disk.
+2.13 **Accept the reachability v0 baseline without laundering its denominator:
+CLOSED; ALREADY-DONE.** **MEASURED:** the builder always emits `sound: false`
+and no coverage percentage; incomplete categories become named UNKNOWN
+records, and verification rejects a v0 payload claiming a sound denominator or
+percentage (`seal-host/rust/src/reachability.rs:321-399,432-470,506-509`).
+Tests pin UNKNOWN behavior, the direct-handle negative control and payload
+tamper rejection (`seal-host/rust/src/reachability.rs:624-661`). Signed captured
+evidence and the human contract are present
+(`seal-host/evidence/reachability-v0/RUN.md:45-85`;
+`seal-host/docs/REACHABILITY-REPORT-V0.md:5-13,65-75`). Commit `b800096` is an
+ancestor of `seal-host` main. **INFERRED:** the honest v0 baseline satisfies
+this item; improving the denominator is later V3.2 work, not a v0 defect.
+**Serves: V3.2. Status: CLOSED; ALREADY-DONE FOR V0; V3.2 NOT COMPLETE.**
 
-Phase 2 is complete only when the Tier-1 items Ben keeps on the implementation
-path are dispositioned, the binary/conformance fork is ruled, the selected
-floor has executable negative controls, and the evidence gate measures that
-selected floor.
+**INFERRED:** Phase 2 closes when Ben rules the 2.1 fork (thereby selecting or
+disposing 2.9's remaining corpus leg) and the single 2.10/2.11 machinery gap is
+closed. The 2.12 delegation leg remains recorded as a deliberate omission
+unless a later ruling changes that disposition.
 
 ### Phase 3 — pivot to the compulsory verify moment
 
