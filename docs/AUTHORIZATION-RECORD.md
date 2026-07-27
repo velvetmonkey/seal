@@ -4,77 +4,92 @@ Status: **SPECIFIED, NOT IMPLEMENTED**.
 
 Ben ruled Option D on 2026-07-27 at 08:34: keep **JUDGED**,
 **AUTHORIZED**, **DISPATCHED**, and **ACKNOWLEDGED** separate, and print
-ACKNOWLEDGED as **UNKNOWN** until an executor supplies evidence. This supersedes
+ACKNOWLEDGED as **UNKNOWN** until an executor supplies evidence. This superseded
 Option C, ruled at 08:01, and Option B, ruled on 2026-07-26.
+
+Ben revised D on 2026-07-27 at 11:11: leg three is **DISPATCH ATTEMPTED**,
+not DISPATCHED. The record is persisted before `write_child` runs. The ordering
+is deliberate. This revision narrows the claim instead of moving the emit.
+
+This document specifies the unsigned, buildable v3 profile. Authenticated record
+assembly, a richer kernel interpretation claim, completed dispatch, and
+executor acknowledgment are explicit future upgrades, not facts smuggled into
+v3.
 
 ## 1. The claim, before the shape
 
 This object is an **AUTHORIZATION DECISION**. It is not an effect receipt.
 
-A valid record may establish that a kernel judged bytes, a human authorized
-bytes, and seal dispatched bytes. It does not thereby establish that an
-executor accepted the frame, extracted any particular value, invoked a tool,
-made a syscall, changed external state, or succeeded. ACKNOWLEDGED, when it
-eventually exists, will establish only what an executor says it extracted. Even
-then it will not prove an effect occurred.
+A valid v3 record can establish, at most and subject to its evidence:
 
-Any API, CLI, report, or UI that labels this record `executed`, `effected`,
-`succeeded`, or equivalent is non-conforming. Any effect claim requires a
-different artifact with its own evidence boundary.
+- what decision the host recorded from its kernel-facing audit;
+- whether exact request and display bytes were covered by an upgraded human
+  approval, were not required by explicit policy, were not reached, or remain
+  unproven because only a legacy approval was retained;
+- that seal reached its final pre-write boundary with named bytes and committed
+  to call `write_child` next; and
+- that executor acknowledgment is unavailable, unless a later protocol supplies
+  authenticated executor evidence.
+
+It does **not** establish that `write_child` was entered, that any byte was
+emitted or received, that an executor parsed a frame, that a tool was invoked,
+that a syscall occurred, that external state changed, or that anything
+succeeded. A standalone v3 object also does not establish who assembled it,
+because v3 is unsigned.
+
+Any API, CLI, report, or UI that labels this record `dispatched`, `executed`,
+`effected`, `succeeded`, or equivalent is non-conforming. Any completed-dispatch
+or effect claim requires a separate, authenticated artifact with its own
+evidence boundary.
 
 The separation is substantive:
 
-- The kernel reads JSON numbers as exact arithmetic. `OPEN-FINDINGS.md` finding
-  34 records `RUN v31run-2026-07-26`: the kernel signed
-  `external.json_corpus([-10^9999])`, while Node extracted
+- `OPEN-FINDINGS.md` finding 34 records `RUN v31run-2026-07-26`: the kernel
+  signed `external.json_corpus([-10^9999])`, while Node extracted
   `external.json_corpus([-Infinity])` from the same frame.
-- Lean cannot represent a lone UTF-16 surrogate as a `Char` or in a `String`.
-  Findings 36 and 37 record replacement-character readings in Lean, retained
-  surrogate code units in Node and Python, and an independently unverified
-  five-observer acceptance matrix. This is a value-domain limit, not a parser
-  bug that a better Lean parser can remove.
-- `COMPREHENSION-CHECK.md` shows why the human-facing value is a separate fact.
-  A JavaScript renderer may round an integer above `2^53`; the authorization
-  leg must preserve what was actually shown rather than substitute the
-  kernel's reading after the event.
+- Findings 36 and 37 record that Lean cannot represent a lone UTF-16 surrogate
+  as a `Char` or in a `String`. The complete five-observer matrix remains
+  **UNVERIFIED INDEPENDENTLY** there.
+- Finding 40 records why the human-facing presentation is separate. A
+  JavaScript renderer can show a different integer from the wire bytes.
 
 No field named `value`, `action`, or `agreement` may stand above the four legs.
 There is no privileged fused value.
 
-## 2. Signed envelope and required shape
+## 2. v3 envelope, discriminator, and required shape
 
-The record is a signed envelope:
+The v3 record is this strict unsigned envelope:
 
 ```json
 {
-  "domain": "seal.authorization-record/v1",
+  "domain": "seal.authorization-record/v3",
   "payload_encoding": "seal.authorization-record-canonical-json/v1",
-  "payload": {},
-  "signer_key_id": "<key identifier>",
-  "signature_algorithm": "<registered algorithm>",
-  "signature": "<encoded signature>"
+  "integrity": "UNSIGNED",
+  "payload_sha256": "<64 lowercase hex>",
+  "payload": {}
 }
 ```
 
-| field | what it asserts | who can verify it | what it does **not** assert |
-|---|---|---|---|
-| `domain` | the signature is for this record protocol and version | the signature verifier | any leg's truth |
-| `payload_encoding` | the deterministic byte encoding covered by the signature | any conforming encoder/verifier | that a generic JSON re-encoding is equivalent |
-| `payload` | the complete four-leg claim set | the outer-signature verifier plus each leg verifier | that assembling evidence made it true |
-| `signer_key_id` | which configured record-assembly key is claimed | the configured trust store | a human or executor identity |
-| `signature_algorithm` | the registered verification algorithm | a conforming cryptographic verifier | semantic correctness |
-| `signature` | the assembly key signed `domain` and the canonical payload bytes | anyone with the trusted public key | validity of nested human, kernel, dispatch, or executor evidence |
+The envelope and every nested object reject duplicate and unknown fields. An
+absent required field is malformed. In v3, fields named `signer_key_id`,
+`signature_algorithm`, or `signature` are also unknown and must be rejected;
+their presence must not make an unsigned record look authenticated.
 
-Its payload has these required top-level fields:
+`payload_sha256` is a deterministic checksum, not a signature. It is
+`SHA-256(ASCII("seal.authorization-record/v3") || 0x00 ||
+canonical_payload_bytes)`. Without a separately trusted copy of that digest, an
+attacker can change the payload and recompute it.
+
+The payload has these required top-level fields:
 
 ```json
 {
   "record_type": "seal.authorization-decision",
-  "record_version": 1,
+  "record_version": 3,
   "claim": "AUTHORIZATION_DECISION_NOT_EFFECT_RECEIPT",
   "judged": {},
   "authorized": {},
-  "dispatched": {},
+  "dispatch_attempted": {},
   "acknowledged": {},
   "completeness": {
     "all_legs_observed": false,
@@ -83,30 +98,66 @@ Its payload has these required top-level fields:
 }
 ```
 
-All fields shown in the payload, including `completeness`, are inside the
-signature. The canonical encoding and signature domain are fixed by
-`record_version`; they must not be inferred from a generic JSON serializer.
-The canonical encoding named above is new machinery and must be specified with
-test vectors before implementation.
+`record_version: 3` is intentionally non-colliding. The repository documents
+legacy authorization-decision v1 and a current v2 decision receipt. A consumer
+first requires the exact pair
+`("record_type", "seal.authorization-decision")` and
+`("record_version", 3)`, then validates the complete v3 shape. A legacy
+`seal_receipt` discriminator, version 1, version 2, a missing version, or a
+mixed-version field set is not v3 and must be sent to a separately selected
+legacy validator, never guessed into v3.
 
-The payload fields mean:
+None of the four leg objects is optional. `completeness.all_legs_observed` is
+always `false` in v3: a NOT_REQUIRED or NOT_REACHED slot is accounted for but
+not observed, ATTEMPTED is not completed dispatch, and an attempted path has
+ACKNOWLEDGED UNKNOWN. `unknown_legs` is derived from leg statuses and contains
+uppercase leg names in leg order; for the cases in this version it is either
+`[]`, `["AUTHORIZED"]`, `["ACKNOWLEDGED"]`, or
+`["AUTHORIZED","ACKNOWLEDGED"]`.
 
-| field | assertion |
-|---|---|
-| `record_type` | this is a four-leg seal authorization-decision payload |
-| `record_version` | the field set, validation rules, signature domain, and canonical encoding are version 1 |
-| `claim` | consumers are explicitly forbidden to promote the object to an effect receipt |
-| `judged`, `authorized`, `dispatched`, `acknowledged` | the four independent claims defined below |
-| `completeness` | which leg observations are present; today it must name ACKNOWLEDGED as unknown and set `all_legs_observed` false |
+### 2.1 Canonical payload encoding
 
-None of the four leg objects is optional. An absent leg is a malformed record,
-not an old spelling of UNKNOWN. Unknown fields are rejected unless a later
-record version defines them, so a consumer cannot accidentally validate a
-partial projection as the whole record.
+`seal.authorization-record-canonical-json/v1` is defined here rather than
+delegated to a generic serializer:
 
-### 2.1 The byte subject
+1. The input is the parsed v3 `payload` object, after strict duplicate-field,
+   unknown-field, type, enum, and range validation. The envelope is not part of
+   these bytes.
+2. Output is UTF-8, with no BOM, whitespace, or trailing newline.
+3. The only values are objects, arrays, Unicode-scalar strings, unsigned
+   integers, booleans, and null. JSON fractions, exponents, negative integers,
+   integers above `9007199254740991`, unpaired surrogates, and non-scalar strings
+   are rejected. Semantic numeric projections, if a future version adds them,
+   must be tagged strings rather than JSON numbers outside this range.
+4. Object member names are unique and sorted by the lexicographic order of
+   their UTF-8 byte sequences. Arrays retain input order.
+5. Strings use `\"` for quotation mark, `\\` for reverse solidus, and a
+   lowercase four-hex-digit `\u00xx` escape for every U+0000 through U+001F.
+   Every other Unicode scalar is emitted as its shortest UTF-8 sequence.
+   Solidus is not escaped. No Unicode normalization is performed.
+6. Integers use base-ten ASCII with no sign and no leading zero except the
+   value zero itself. Booleans and null are the lowercase JSON tokens.
 
-Each of JUDGED, AUTHORIZED, and DISPATCHED carries its own required `subject`:
+Normative positive vectors:
+
+| input value | canonical UTF-8 text | canonical hex | domain-separated SHA-256 |
+|---|---|---|---|
+| `{}` | `{}` | `7b7d` | `062e3561c19c0bb9b03c84f35cab515f05dc0b5d165d7d87a9b151e0460c73f1` |
+| `{"z":0,"a":"x\n","list":[true,null],"é":"£"}` | `{"a":"x\u000a","list":[true,null],"z":0,"é":"£"}` | `7b2261223a22785c7530303061222c226c697374223a5b747275652c6e756c6c5d2c227a223a302c22c3a9223a22c2a3227d` | `035e1581bded3df835a38acf572a76dbbe33e44967f9fef805371a3ebe3a6803` |
+| the three-field object `claim`, `record_type`, `record_version` in any input order | `{"claim":"AUTHORIZATION_DECISION_NOT_EFFECT_RECEIPT","record_type":"seal.authorization-decision","record_version":3}` | `7b22636c61696d223a22415554484f52495a4154494f4e5f4445434953494f4e5f4e4f545f4546464543545f52454345495054222c227265636f72645f74797065223a227365616c2e617574686f72697a6174696f6e2d6465636973696f6e222c227265636f72645f76657273696f6e223a337d` | `5c8080c490b502162902667634c28346fe6acff76ae982231b1067a14ea53214` |
+
+For the first vector, the complete hash preimage in hex is
+`7365616c2e617574686f72697a6174696f6e2d7265636f72642f7633007b7d`.
+This pins the domain separator and rules out hashing the displayed envelope.
+
+Normative rejection vectors are duplicate `{"a":1,"a":2}`, `-1`, `1.0`,
+`1e0`, `9007199254740992`, a string containing an unpaired U+D800, invalid
+UTF-8, and any object with an unknown v3 field. A conforming implementation must
+reject each before hashing.
+
+### 2.2 Byte subject
+
+Every leg carries either this `subject` or an explicitly null subject:
 
 ```json
 {
@@ -117,113 +168,213 @@ Each of JUDGED, AUTHORIZED, and DISPATCHED carries its own required `subject`:
 }
 ```
 
-ACKNOWLEDGED carries the same shape as `expected_subject`; its
-`observed_subject` is null while UNKNOWN.
+`length` is an unsigned integer in the canonical range. `encoding: "bytes"`
+forbids normalization or parse-and-print before hashing. A different framing
+boundary is a different scope. Equality of subject tuples is evidence only of
+byte identity at the named boundaries, not equal readings.
 
-`scope` removes an ambiguity already visible in finding 34, which distinguishes
-the corpus vector, JSON-RPC payload, and LF-terminated frame hashes. A different
-framing boundary is a different scope and therefore not silently comparable.
-`length` prevents a truncation or extension from being described by a digest
-alone. `encoding: "bytes"` forbids Unicode normalization, parse-and-print, or
-any other semantic transformation before hashing.
+The exact byte artifact must be retained inline outside this record or in a
+content-addressed sidecar. v3 does not claim that the unauthenticated envelope
+proves sidecar availability.
 
-The exact byte artifact must be available inline or by a content-addressed
-sidecar whose digest and length equal every leg that claims those bytes. Sharing
-one immutable byte artifact is permitted. Sharing one semantic value is not.
+### 2.3 JUDGED: reduced to current audit evidence
 
-Equality of the three subject tuples is evidence of byte identity across the
-named boundaries. It is not evidence of equal readings.
+v3 deliberately does **not** require the unproducible interpretation manifest,
+consulted set, typed projection, policy identity, or kernel signature from the
+previous draft. Those are deferred to a future authenticated profile because
+the implementation report found no such fields in the current audit.
 
-### 2.2 JUDGED
+The required shape is:
 
-Required fields:
+```json
+{
+  "status": "RECORDED_ALLOW",
+  "subject": {},
+  "evidence_kind": "seal.host-audit/v1",
+  "audit_sha256": "<digest of retained audit bytes>",
+  "audit": {
+    "verdict": "allow",
+    "tool": "<retained audit tool>",
+    "epoch": 1,
+    "request_sha256": "<retained audit request digest>",
+    "certs": [
+      {
+        "kernel": "<kernel name>",
+        "verdict": "allow",
+        "reason": "<reason>",
+        "certHash": "<certificate hash as emitted by the audit>"
+      }
+    ]
+  }
+}
+```
 
-| field | what it asserts | who can verify it | what it does **not** assert |
-|---|---|---|---|
-| `status` | `JUDGED` means the named kernel produced a decision and projection; `REFUSED` means it refused before authorization | anyone replaying the exact bytes with the identified interpretation and policy | that any other parser agrees |
-| `subject` | the exact framed bytes supplied to the judging boundary | anyone holding the byte artifact | what a human saw or an executor received |
-| `interpretation` | the named, versioned reading rules used by the kernel | anyone resolving and hashing the immutable interpretation manifest | that these rules match JavaScript, Python, Rust, or an executor |
-| `kernel_artifact_sha256` | the identity of the implementation that made this judgment | an auditor holding the kernel artifact and replay apparatus | that artifact identity alone specifies semantics |
-| `policy` | the policy name, version, canonical digest, and entry point applied | an auditor holding the signed policy artifact | that the policy describes the human's intent |
-| `consulted` | the statically computed policy dependency set and its digest | the policy compiler/checker and an independent recomputation | that an unlisted value was semantically parsed |
-| `projection` | a list of separately tagged `DENOTED` or `BYTES_ONLY` field readings | replay under the interpretation manifest | a single denotation for the whole request |
-| `decision` | the kernel's authorization-relevant result and reason under that policy | kernel replay | human authorization, dispatch, acknowledgment, or effect |
-| `kernel_evidence` | the kernel signature or independently checkable proof binding the preceding fields | a verifier with the pinned key or proof checker | honesty of the host display or executor |
+`status` is exactly `RECORDED_ALLOW` or `RECORDED_BLOCK`. The record validator
+requires `audit.request_sha256 == subject.sha256`, maps only audit verdict
+`allow` to `RECORDED_ALLOW`, and maps only audit verdict `deny` to
+`RECORDED_BLOCK`; any other verdict is not representable in v3. `tool` and every
+certificate string are retained verbatim as Unicode-scalar strings, `epoch` is
+an unsigned integer in the canonical range, and `certs` preserves audit order.
+Every certificate has exactly the four fields shown. `audit_sha256` covers the
+exact retained audit bytes before parsing; it is not the v3 canonical
+re-encoding of the nested object unless the audit protocol itself says so.
 
-Every projection item has:
+This leg asserts only that the v3 assembler retained a host audit with that
+decision and byte digest. Because the envelope is unsigned, it does not
+authenticate the assembler or upgrade the audit into a kernel attestation. It
+does not assert a particular interpretation, policy dependency set, semantic
+projection, human authorization, dispatch, acknowledgment, or effect. The
+English leg name JUDGED is historical; the status prefix `RECORDED_` is
+mandatory and must not be shortened in presentation.
 
-- a lossless locator: byte start, byte end, and structural path derived without
-  normalizing the literal;
-- `consulted: true` or `consulted: false`;
-- `mode: "DENOTED"` with the interpretation's typed canonical value, or
-  `mode: "BYTES_ONLY"` with the literal span digest and length;
-- a reason code when `BYTES_ONLY`.
+### 2.4 AUTHORIZED and `ApprovalRecord` v2
 
-`BYTES_ONLY` is not a placeholder value. In particular, a lone surrogate must
-not be printed as `U+FFFD` in that slot: doing so would turn inability to denote
-the wire literal into a false denotation.
+AUTHORIZED has four statuses:
 
-### 2.3 AUTHORIZED
+- `AUTHORIZED`: a retained ApprovalRecord v2 token signature covers the exact
+  request subject, exact presentation, and approval context;
+- `EVIDENCE_UNAVAILABLE`: the host accepted a legacy approval, but the retained
+  data cannot prove exact-byte or shown-byte authorization;
+- `NOT_REQUIRED`: explicit policy allowed the request without human approval;
+  and
+- `NOT_REACHED`: JUDGED recorded BLOCK, so approval was not consumed.
 
-Required fields:
+For `AUTHORIZED`, the required fields are `subject`, `shown`, `approver`,
+`authorized_at`, `session`, `nonce`, `expiry`,
+`authorization_signature_algorithm`, `authorization_signer_key_id`,
+`authorization_domain`, and `authorization_token`. `reason` is null. Times are
+unsigned Unix milliseconds in the canonical range; session, nonce, approver and
+key ID are non-empty Unicode-scalar strings.
 
-| field | what it asserts | who can verify it | what it does **not** assert |
-|---|---|---|---|
-| `status` | a human authorization statement was accepted | a verifier of the human authorization signature and its validity rules | comprehension, wisdom, or intent match |
-| `subject` | the exact bytes bound by that human statement | anyone with the bytes and signed authorization statement | that the human saw the kernel's reading |
-| `shown` | the exact presentation delivered to the approval surface: bytes, length, digest, media type, character encoding, and renderer interpretation | a verifier holding the presentation artifact and renderer manifest | that the presentation equals JUDGED or ACKNOWLEDGED |
-| `approver` | the principal/key identifier carried by the authorization statement | the configured trust root and signature verifier | real-world identity beyond that trust configuration |
-| `authorized_at`, `session`, `nonce`, `expiry` | the authorization context and validity interval | the authorization verifier | dispatch within the interval unless DISPATCHED separately says so |
-| `authorization_signature` | the human key signed the authorization domain, `subject`, the complete `shown` tuple, and the context fields | anyone with the trusted public key | that a click caused an effect |
+`shown` is:
 
-`shown` belongs only to AUTHORIZED. It must record the actual output delivered,
-not a later re-render and not JUDGED copied into the slot. If a JavaScript
-approval surface displays `1234567890123456768` for wire bytes and a kernel
-reading ending in `...789`, both facts remain visible and the record stays
-valid. A consumer may report the disagreement; it may not repair either leg.
+```json
+{
+  "sha256": "<digest of exact displayed bytes>",
+  "length": 123,
+  "media_type": "text/plain",
+  "character_encoding": "utf-8",
+  "renderer": {
+    "name": "<renderer name>",
+    "version": "<renderer version>",
+    "manifest_sha256": "<renderer manifest digest>"
+  }
+}
+```
 
-The authorization signature covers the shown artifact itself or its full
-digest-and-length tuple. `ROADMAP-KERNEL-OUTWARD.md` records that the existing
-signed message does not cover the rendering and that recording what was shown
-is a signed-shape change. Therefore the conforming AUTHORIZED leg needs new
-machinery even though an approval signature and target exist today. The new
-machinery must additionally demonstrate that the target binds the exact
-framed-byte `subject`; this spec does not infer that mapping from the target's
-name.
+The exact presentation bytes are retained alongside the token. `shown` records
+what was actually delivered to the approval surface, not a later render and not
+a copy of JUDGED.
 
-### 2.4 DISPATCHED
+To produce `AUTHORIZED`, the host `ApprovalRecord` must grow from its reported
+legacy target/time/nonce retention to an **ApprovalRecord v2** carrying:
 
-Required fields:
+1. `approval_record_version: 2`;
+2. the existing target, issued/authorized time, expiry, nonce, and session;
+3. `subject_sha256`, `subject_length`, `subject_scope`, and
+   `subject_encoding`, computed from the exact framed bytes before the prompt;
+4. `shown_sha256`, `shown_length`, `shown_media_type`,
+   `shown_character_encoding`, renderer name, renderer version, and immutable
+   renderer-manifest SHA-256, all captured from the bytes actually written to
+   the approval surface;
+5. the approver/signing key identifier, registered signature algorithm, and
+   exact authorization domain; and
+6. the original signed token bytes in their original encoding, not merely
+   parsed fields or a signature detached from its signed message.
 
-| field | what it asserts | who can verify it | what it does **not** assert |
-|---|---|---|---|
-| `status` | `DISPATCHED` means seal emitted a frame at its named outbound boundary; `NOT_DISPATCHED` names why it did not | the seal boundary verifier and audit-signature verifier | downstream receipt, parsing, tool invocation, or effect |
-| `subject` | the exact emitted frame bytes when status is `DISPATCHED` | anyone with the outbound byte artifact and boundary evidence | equality with another leg unless tuples are compared explicitly |
-| `boundary` | the adapter, destination identity, transport, and observation point | an operator checking the configured route and boundary evidence | executor identity unless independently authenticated |
-| `dispatched_at` | the boundary's recorded emission time | the boundary verifier | arrival time |
-| `dispatch_evidence` | a seal signature or observer record binding status, subject, boundary, and time | anyone with the pinned verifier key and observer artifact | ACKNOWLEDGED or an effect |
+ApprovalRecord v2 uses authorization domain `seal.approval-record/v2` and the
+section 2.1 canonical encoder. Its signature preimage is
+`ASCII("seal.approval-record/v2") || 0x00 || canonical_approval_payload`, where
+the payload contains every item in 1–5 exactly once and no signature field.
+The configured approval key signs that preimage with Ed25519. The token carries
+the signed payload, `signature_algorithm: "Ed25519"`,
+`signature_encoding: "base64url-nopad"`, signer key ID, and signature. Trust in
+that key remains the approval channel's trust decision; it is not an outer v3
+record signature.
 
-The work order reports that the `1e308` control already demonstrated a
-downstream observer reading exactly the bytes the kernel signed, with
-`request_sha256` binding them. The present repository documents `1e308` as an
-agreement-safe negative control in `NUMERIC-AGREEMENT.md`, but the complete
-boundary artifact for that reported run was not found here; that narrower
-claim remains listed as UNVERIFIED below.
+The v3 `authorization_token` field is this exact-byte wrapper:
 
-### 2.5 ACKNOWLEDGED
+```json
+{
+  "encoding": "base64url-nopad",
+  "decoded_length": 123,
+  "sha256": "<digest of the original token bytes>",
+  "bytes": "<base64url without padding>"
+}
+```
 
-Today the object is exactly:
+Decoding `bytes` must yield exactly `decoded_length` bytes and the stated
+digest. Those are the originally retained token bytes; the v3 assembler does
+not reconstruct or re-sign them. Retaining a legacy token while adding unsigned
+subject or shown fields is non-conforming.
+
+For `EVIDENCE_UNAVAILABLE`, `subject` is the current request subject,
+`reason` is `LEGACY_APPROVAL_DID_NOT_BIND_SUBJECT_AND_SHOWN`, and every field
+from `shown` through `authorization_token` is null. This status is the only
+conforming mapping of an approval-gated ALLOW backed solely by the reported
+legacy ApprovalRecord. It is not an authorization proof.
+
+For `NOT_REQUIRED`, `subject` is the request subject, `reason` is
+`EXPLICIT_POLICY_ALLOW`, and every human-approval field is null. For
+`NOT_REACHED`, `subject` is the blocked request subject, `reason` is
+`JUDGMENT_BLOCKED`, and every human-approval field is null.
+
+### 2.5 DISPATCH ATTEMPTED
+
+The required attempted shape is:
+
+```json
+{
+  "status": "ATTEMPTED",
+  "subject": {},
+  "attempt_id": "<unique identifier>",
+  "intended_boundary": {
+    "adapter": "<adapter>",
+    "destination": "<configured destination>",
+    "transport": "<transport>",
+    "observation_point": "immediately-before-write_child"
+  },
+  "attempt_recorded_at": 0,
+  "completion": null,
+  "reason": null
+}
+```
+
+`ATTEMPTED` asserts exactly this: seal reached the last persisted pre-write
+boundary, selected the subject bytes and intended route, allocated the
+`attempt_id`, and committed its control flow to invoke `write_child` next. It
+does **not** assert that `write_child` was entered, accepted bytes, wrote one
+byte, wrote the complete frame, flushed, reached a child, or succeeded. Because
+the record precedes the call, failed dispatch and successful dispatch have the
+same v3 ATTEMPTED value.
+
+`completion` is always null in v3. A presenter must render the literal
+**ATTEMPTED, COMPLETION UNKNOWN**, not DISPATCHED.
+
+For a blocked request, the complete shape instead has status
+`NOT_ATTEMPTED`, null `subject`, null `attempt_id`, null `intended_boundary`,
+null `attempt_recorded_at`, null `completion`, and reason
+`JUDGMENT_BLOCKED`.
+
+Upgrading an attempt to completed dispatch requires evidence captured after the
+write boundary: a new authenticated `seal.dispatch-outcome/v1` artifact binding
+the `attempt_id`, exact observed outbound subject, actual boundary, outcome and
+time. `COMPLETED` requires a positive full-frame boundary observation, not only
+a successful return code. `FAILED` binds the error and any observed byte count
+without claiming completion. The v3 record is immutable; a consumer composes it
+with that later artifact. An in-record `COMPLETED` status therefore requires a
+future record version persisted after the observation and a configured signer
+and trust root. Reordering this v3 emit is not an allowed shortcut.
+
+### 2.6 ACKNOWLEDGED
+
+For every attempted path, the object is exactly:
 
 ```json
 {
   "status": "UNKNOWN",
   "sound": false,
-  "expected_subject": {
-    "sha256": "<the DISPATCHED subject digest>",
-    "length": 123,
-    "scope": "mcp-jsonrpc-request-frame-including-delimiter",
-    "encoding": "bytes"
-  },
+  "expected_subject": {},
   "observed_subject": null,
   "executor": null,
   "interpretation": null,
@@ -233,159 +384,100 @@ Today the object is exactly:
 }
 ```
 
-These values are inside the signed payload. `UNKNOWN`, `sound: false`, the five
-null observation fields, and the reason are all mandatory. This follows the
-reachability-report v0 discipline described in the work order: put both the
-negative soundness flag and null coverage inside the signature rather than
-letting a presenter invent completeness.
+The `expected_subject` equals DISPATCH ATTEMPTED's intended subject. It says
+what a future acknowledgment would have to answer; it does not say any executor
+received it. `UNKNOWN`, `sound: false`, all five null observation fields, and
+the reason are mandatory. This is an honest hole, not a presentation default.
 
-`expected_subject` says which dispatch an acknowledgment would have to answer.
-It does not say the executor observed it. `observed_subject: null` makes the
-missing observation machine-visible. `sound: false` applies to any
-end-to-end-reading-agreement claim; it does not invalidate the narrower
-authorization decision.
+For BLOCK, ACKNOWLEDGED has status `NOT_APPLICABLE`, `sound: false`,
+`expected_subject: null`, the same five null observation fields, and reason
+`DISPATCH_NOT_ATTEMPTED`.
 
-A consumer must:
+A consumer must reject an absent ACKNOWLEDGED slot, render literal uppercase
+**UNKNOWN** for that status, reject UNKNOWN with any non-null observation
+field, refuse to compute end-to-end agreement while `sound` is false, and
+preserve the slot in every export advertised as an authorization record.
 
-1. reject a payload in which ACKNOWLEDGED is absent;
-2. render the literal uppercase word **UNKNOWN** whenever `status` is
-   `UNKNOWN`;
-3. reject `UNKNOWN` if any observation field is non-null;
-4. reject `OBSERVED` if any required observation field is null;
-5. refuse to compute or display end-to-end agreement while `sound` is false;
-6. preserve ACKNOWLEDGED and `completeness` in every export and projection
-   advertised as an authorization record.
+A future observed acknowledgment needs an executor-authenticated identity,
+received-frame subject, named interpretation, exact extracted projection, and
+attestation binding all of them. It may establish only what that executor says
+it received and extracted. It still does not prove an effect.
 
-A future observed acknowledgment replaces the nulls with the executor's
-authenticated identity, its named and versioned interpretation, its observed
-frame subject, its typed extracted projection, and an attestation covering all
-of them. It may set `sound: true` only for the narrowly defined statement that
-the attested extraction is present and comparable. It still does not prove an
-effect.
+## 3. Total state table
 
-## 3. Interpretation identity
+“Approval-gated ALLOW” below has two permitted AUTHORIZED values because the
+legacy record cannot be promoted. “Failed dispatch” means a later
+`seal.dispatch-outcome/v1` artifact reports failure; the earlier immutable v3
+record cannot know that result.
 
-The initial profile name is:
+| leg | approval-gated ALLOW | explicit-policy ALLOW | BLOCK | failed dispatch learned later |
+|---|---|---|---|---|
+| JUDGED | `RECORDED_ALLOW`; request subject; retained host audit | `RECORDED_ALLOW`; request subject; retained host audit | `RECORDED_BLOCK`; request subject; retained host audit | unchanged `RECORDED_ALLOW` |
+| AUTHORIZED | ApprovalRecord v2: `AUTHORIZED`, complete non-null signed fields; legacy record: `EVIDENCE_UNAVAILABLE`, reason `LEGACY_APPROVAL_DID_NOT_BIND_SUBJECT_AND_SHOWN`, proof fields null | `NOT_REQUIRED`; request subject; reason `EXPLICIT_POLICY_ALLOW`; all human fields null | `NOT_REACHED`; blocked subject; reason `JUDGMENT_BLOCKED`; all human fields null | unchanged from the applicable ALLOW column |
+| DISPATCH ATTEMPTED | `ATTEMPTED`; intended subject, route, attempt ID and pre-write time; `completion: null` | same `ATTEMPTED` shape | `NOT_ATTEMPTED`; all attempt fields null; reason `JUDGMENT_BLOCKED` | unchanged `ATTEMPTED`; linked outcome says `FAILED` and v3 still does not say dispatched |
+| ACKNOWLEDGED | `UNKNOWN`; `sound: false`; expected subject; five observation fields null; reason `EXECUTOR_ATTESTATION_UNAVAILABLE` | same `UNKNOWN` shape | `NOT_APPLICABLE`; `sound: false`; expected subject and observation fields null; reason `DISPATCH_NOT_ATTEMPTED` | unchanged `UNKNOWN`; a dispatch failure is not executor acknowledgment |
 
-```
-seal.kernel-json/1
-```
+For approval-gated legacy ALLOW, `unknown_legs` is
+`["AUTHORIZED","ACKNOWLEDGED"]`. For ApprovalRecord v2 ALLOW and
+explicit-policy ALLOW it is `["ACKNOWLEDGED"]`. For BLOCK it is `[]`.
+`all_legs_observed` remains false in all four columns for the reasons in
+section 2.
 
-Every JUDGED leg carries:
+## 4. Signing and trust
 
-```json
-{
-  "profile": "seal.kernel-json/1",
-  "manifest_sha256": "<64 lowercase hex>",
-  "manifest_media_type": "application/vnd.seal.interpretation+json"
-}
-```
+Nothing signs a v3 outer record. No record-assembly key, trust configuration,
+registered record signature algorithm, or outer-envelope verifier is specified
+or inferred. `integrity: "UNSIGNED"` is mandatory.
 
-The profile is a semantic name and major version, not a Git branch, package
-version, or implementation hash. The immutable manifest defines at least:
+The cost is material: a portable verifier cannot authenticate the assembler,
+trust the standalone state table values, or detect malicious rewrite from the
+record alone. It may verify a nested ApprovalRecord v2 token when present and
+may replay retained audit evidence, but that does not authenticate the outer
+composition. Deployment must label v3 **UNSIGNED** and rely on a separately
+authenticated transport or log if source provenance matters.
 
-- accepted wire grammar and framing;
-- object-member and duplicate-key rules;
-- the numeric value domain and canonical form;
-- string escape, Unicode scalar, malformed escape, and lone-surrogate rules;
-- depth, size, and parse-cost limits;
-- tool/method extraction and the canonical action projection;
-- refusal reasons;
-- lossless field-locator construction;
-- policy-path matching and the `Consulted(policy)` algorithm;
-- the canonical encoding of every `DENOTED` projection value.
+A signed successor needs a named signing authority, key provisioning and
+rotation, trust-root distribution, a registered algorithm with strict
+verification rules, domain-separated signature bytes, revocation semantics,
+and an outer verification path with test vectors. Adding only signature-shaped
+fields is forbidden.
 
-`manifest_sha256` pins the exact manifest. `kernel_artifact_sha256` separately
-identifies the implementation used. A semantic change requires a new profile
-version and manifest digest; rebuilding the same semantics requires only a new
-artifact digest. A stranger can therefore distinguish the reading without
-asking seal which commit happened to be deployed.
+## 5. Production cost and implementation boundary
 
-The profile must describe exact-arithmetic number readings and must admit
-`BYTES_ONLY` for wire literals outside the kernel's value domain. It must not
-define replacement of a lone surrogate with `U+FFFD` as faithful denotation of
-the wire literal.
+The v3 shape is implementable without inventing the five deferred evidence
+systems:
 
-The manifest and its registry do not exist in this repository today. The name
-above is normative for the new machinery, not a claim that a published
-manifest already exists.
+| item | v3 action | deferred upgrade |
+|---|---|---|
+| canonical encoding | implement the algorithm and vectors in section 2.1 | none |
+| version | emit and strictly dispatch on the v3 discriminator pair | coordinated legacy migration remains separate |
+| outer signing | emit explicitly unsigned checksum envelope | authenticated record-assembly protocol |
+| JUDGED | retain current audit bytes and use `RECORDED_` status | interpretation manifest, consulted set, projection, policy identity, kernel evidence |
+| AUTHORIZED | map legacy records to `EVIDENCE_UNAVAILABLE`; implement ApprovalRecord v2 to earn `AUTHORIZED` | richer display/approver schemes require a new approval version |
+| dispatch | persist ATTEMPTED at the existing point | authenticated post-write outcome |
+| acknowledgment | emit signed-by-nobody but structurally mandatory UNKNOWN | executor cooperation and attestation |
 
-## 4. Narrowed guard scope
+An implementation lane may build v3 now, including the ApprovalRecord v2
+producer/retention path if it wants to emit `AUTHORIZED`. It must remain able to
+emit `EVIDENCE_UNAVAILABLE` for legacy approvals and must not call that status
+authorized. A lane that cannot change the approval protocol can still build an
+honest v3 recorder, but cannot claim a completed AUTHORIZED leg.
 
-Option D removes the global cross-reader-agreement requirement. The guard
-protects policy judgment, not universal parser agreement.
-
-Define `Consulted(P)` from the exact signed policy version `P` before evaluating
-the request:
-
-1. Normalize the policy to its signed abstract syntax.
-2. Collect every request-field path whose **value** is an operand, directly or
-   through a derived expression, of any predicate that can contribute to the
-   selected authorization entry point.
-3. Take the collection over all syntactic branches, including branches that
-   runtime short-circuiting would skip. Request data must not be able to make an
-   otherwise consulted path become unconsulted.
-4. A comparison, ordering, membership test, pattern/regex operation,
-   arithmetic operation, value-derived hash, canonicalization, or whole-value
-   equality consults the value. Consulting a container as a whole consults
-   every descendant needed to denote that container.
-5. A pure presence test consults presence, not the contained literal. A pure
-   wire-type test consults the syntactic type, not the literal's denotation.
-   If an operator mixes these with a value operation, the value rule wins.
-6. Wildcards, aliases, or derived fields expand conservatively. If the checker
-   cannot prove a literal is outside `Consulted(P)`, it is consulted.
-7. Record the expanded paths and a digest of the complete dependency set in
-   JUDGED.
-
-The raw structural scanner locates literal spans and paths without first
-coercing their contents into the kernel value type. For each literal `L`:
-
-- If `L` is faithfully denotable under the named interpretation, the kernel may
-  denote it.
-- If `L` is not faithfully denotable and its path is in `Consulted(P)`, refuse
-  before judgment, authorization, approval consumption, or dispatch. Name the
-  path, byte span, interpretation, and reason.
-- If `L` is not faithfully denotable and its path is outside `Consulted(P)`,
-  bind its exact span bytes and enclosing request bytes, emit a `BYTES_ONLY`
-  projection item, and do not construct a semantic value for `L`.
-- If the scanner cannot map a span to a policy path losslessly—for example
-  because a key or structure needed for path resolution is itself
-  undenotable—refuse. Ambiguity is not evidence of non-consultation.
-
-The same rule applies recursively. An undenotable descendant makes an
-otherwise-consulted whole container undenotable. The policy dependency set is
-static for a signed policy version, while the resulting span matches are
-request-specific and recorded.
-
-The existing parse-cost guard remains a separate resource-control question.
-The narrowed rule does not license pathological inputs, relax duplicate-key
-controls, or turn a cost refusal into a semantic reading.
-
-## 5. Production cost and availability
-
-No conforming `seal.authorization-decision` v1 record exists today. The
-available pieces and their costs are:
-
-| leg | evidence available today | production cost | missing machinery |
-|---|---|---|---|
-| JUDGED | findings 24, 34, 36, and 37 show the kernel judgment and replay apparatus for measured vectors | kernel parse/classification, policy evaluation, projection serialization, and kernel evidence | interpretation manifest/registry, lossless partial projection, static consulted-set evidence, and the new record encoder |
-| AUTHORIZED | the current signed message binds a target and authorization context; the current interactive path shows the full target digest | one human ceremony plus signature verification and retention | capture the actual shown artifact, make the human signature cover it and the exact framed-byte subject, version the renderer, and change the signed shape |
-| DISPATCHED | finding 24 says raw-byte `request_sha256` survives; the work order reports the `1e308` downstream-boundary control | hash/length at the outbound boundary plus a signed boundary observation and byte-artifact retention | encode the boundary tuple in this record and independently reproduce the reported control artifact |
-| ACKNOWLEDGED | no executor extraction attestation is available; only the honest UNKNOWN object can be produced | today: negligible cost to sign UNKNOWN; future: executor parse hook, identity, projection, signature, transport, retention, and verification | cooperation and protocol changes in every executor whose reading is claimed |
-
-The outer record signature and content-addressed byte/display retention are
-additional costs shared by all legs. They do not manufacture evidence a leg
-does not have.
+The wire schema, canonical vectors, strict validator tests, and examples should
+enter the contract-region freeze set described by `OPEN-FINDINGS.md` finding
+41. That freeze work is not a prerequisite for writing the first implementation
+but is a prerequisite for shipping the shape as stable.
 
 ## 6. Rejected alternatives and decision history
 
 ### Option A — canonical re-encoding: rejected
 
-Re-encoding cannot make `-10^9999` representable in binary64 and cannot make a
-lone surrogate representable in Lean `String`. It also changes the bytes
-between authorization and dispatch, replacing an observed byte-identity claim
-with a new semantics-preservation obligation. `NUMERIC-AGREEMENT.md` section 3
-records the numeric part of this rejection.
+Re-encoding request bytes cannot make `-10^9999` representable in binary64 and
+cannot make a lone surrogate representable in Lean `String`. It also changes
+the bytes between authorization and dispatch, replacing byte identity with a
+new semantics-preservation obligation. `NUMERIC-AGREEMENT.md` section 3 records
+the numeric part of this rejection. The canonical encoding in section 2.1 is
+only for the record payload; it never rewrites the mediated request.
 
 ### Option B — agreement-safe restriction: ruled, then superseded
 
@@ -402,7 +494,7 @@ nothing for the surrogate class that the kernel cannot denote at all. D
 therefore supersedes B as the semantic rule. Resource-cost limits remain
 independent.
 
-### Option C — downstream attestation: rejected, ruled, then reopened
+### Option C — downstream attestation: rejected, ruled, then reversed
 
 `NUMERIC-AGREEMENT.md` section 5 originally rejected C “for now”: it is correct
 in principle, but no MCP server supplies an attestation and requiring one would
@@ -412,122 +504,138 @@ After the surrogate finding established that kernel parser work cannot recover
 an executor-only value, C was reconsidered. Ben ruled C at 08:01 on 2026-07-27:
 only an executor can authoritatively state what that executor extracted.
 
-C was reopened because making that unavailable statement a prerequisite for
-the record either prevents seal from issuing an authorization decision or
-quietly turns the object into an effect-side receipt. Both violate the object
-boundary. Ben replaced it with D at 08:34: preserve the acknowledgment leg,
-print it UNKNOWN, and do not weaken the other three facts or pretend the fourth
-exists.
+C as the whole-record prerequisite was reversed at 08:34. Making the
+unavailable statement a prerequisite either prevents seal from issuing an
+authorization decision or quietly turns the object into an effect-side receipt.
+Ben replaced it with D: preserve the acknowledgment leg, print it UNKNOWN, and
+do not pretend executor evidence exists. C remains the upgrade path for that
+one leg, not the admission rule for the other legs.
 
-### Option D — four separate facts: selected
+### Option D — four separate facts: selected, then claim-narrowed
 
-D represents the observed disagreement rather than prohibiting it or fusing
-it. It keeps authorization useful without executor cooperation, keeps the
-missing cooperation visible inside the signature, and leaves a precise slot
-for later executor evidence.
+D represents disagreement rather than prohibiting it or fusing it. It keeps
+missing executor cooperation visible and leaves a precise slot for later
+evidence.
+
+The implementation refusal exposed that the first D draft still demanded facts
+the producer did not possess: undefined canonical signing, an over-rich JUDGED
+leg, exact-byte/display approval fields absent from ApprovalRecord, and a
+DISPATCHED claim written before dispatch. This v3 revision keeps four required
+slots but reduces JUDGED to retained audit evidence, admits legacy
+authorization evidence is unavailable, makes the envelope unsigned, and changes
+leg three to DISPATCH ATTEMPTED under Ben's 11:11 ruling. The emit order remains
+unchanged.
 
 ## 7. Evidence bar
 
-No leg may be advertised as working from a green unit test or schema-valid
-record alone. Before a claim ships, observe all applicable items below and
-retain exact commands, artifacts, hashes, counts, and exit statuses under a
-named RUN.
+Before v3 is advertised as implemented, retain exact commands, artifacts,
+hashes, counts, and exit statuses under a named RUN.
+
+### Canonical envelope and version
+
+1. Reproduce all three positive digests and every rejection vector in section
+   2.1 through the production encoder and independent verifier.
+2. Change one payload byte and observe checksum failure.
+3. Send legacy v1, current v2, v3, and mixed-version objects through the
+   discriminator; observe only exact v3 reach the v3 validator.
+4. Add each unknown signature-shaped field and observe strict rejection.
 
 ### JUDGED
 
-1. Replay the exact frame with the pinned kernel, interpretation manifest, and
-   policy; reproduce the recorded decision, consulted set, and every projection
-   item.
-2. Observe the huge-number and surrogate vectors. The former must preserve the
-   exact kernel arithmetic reading; an unconsulted lone surrogate must be
-   `BYTES_ONLY`, never replacement-character agreement.
-3. Negative control: change one request byte or one manifest byte and observe
-   digest/evidence verification fail.
-4. Guard ablation: remove consulted-field refusal and observe a consulted
-   undenotable literal reach judgment; restore it and observe refusal before
-   authorization or dispatch.
+1. Retain exact audit bytes and independently recompute `audit_sha256`.
+2. Replay ALLOW and BLOCK and reproduce the audit-to-status mapping and
+   `request_sha256 == subject.sha256`.
+3. Change one request or audit byte and observe validation fail.
+4. Confirm every output uses `RECORDED_ALLOW` or `RECORDED_BLOCK`, never a
+   stronger unqualified JUDGED claim.
 
 ### AUTHORIZED
 
-1. Capture the actual display bytes at the approval surface and verify their
-   digest and length against `shown`.
-2. Verify the human signature over both the exact request subject and complete
-   shown tuple.
-3. Exercise a rounded-above-`2^53` display so JUDGED and SHOWN visibly differ
-   without either being overwritten.
-4. Negative control: mutate one request byte and, separately, one shown byte;
-   each mutation must invalidate authorization.
+1. For ApprovalRecord v2, capture the exact display bytes and request frame and
+   verify both against the signed token fields.
+2. Mutate request, shown bytes, renderer manifest, session, nonce, and expiry
+   one at a time; each must invalidate approval.
+3. Feed a legacy ApprovalRecord and observe `EVIDENCE_UNAVAILABLE`, null proof
+   fields, and the required reason.
+4. Exercise explicit-policy ALLOW and BLOCK and observe the exact nullability
+   and reasons in section 3.
 
-### DISPATCHED
+### DISPATCH ATTEMPTED
 
-1. Observe at the named outbound boundary the full frame bytes, length, scope,
-   and digest matching DISPATCHED.
-2. Re-run the reported `1e308` control and retain the kernel, dispatch, and
-   downstream-boundary artifacts in one named RUN.
-3. Negative control: mutate or truncate a frame after the dispatch claim is
-   formed and observe boundary verification fail. A dispatcher that emits
-   nothing must not satisfy the control.
+1. At the persisted pre-write point, recompute the intended subject and retain
+   attempt ID, route, and timestamp.
+2. Make `write_child` fail. The v3 record must still say ATTEMPTED with null
+   completion; only a linked outcome may say FAILED.
+3. Ablate the `write_child` call after persistence. The record must still not
+   say DISPATCHED or COMPLETED. This negative control demonstrates the limit,
+   not dispatch success.
+4. To claim completed dispatch later, observe exact full-frame bytes after the
+   boundary and verify a separately authenticated outcome binding attempt ID.
 
 ### ACKNOWLEDGED
 
-1. Until cooperation exists, verify that every output format prints
-   ACKNOWLEDGED as UNKNOWN and that deleting the leg makes validation fail.
-2. To claim `OBSERVED`, capture an executor-authenticated statement binding the
-   received frame digest, executor interpretation, and exact extracted
-   projection.
-3. Run both huge-number and lone-surrogate disagreement vectors. The record
-   must preserve disagreement or rejection; no normalizer may round either to
-   JUDGED agreement.
-4. Negative control: alter the received digest, extracted projection, or
-   executor identity and observe attestation verification fail.
+1. Verify every attempted output prints UNKNOWN and deleting the slot makes
+   validation fail.
+2. Verify UNKNOWN has `sound: false` and all five observation fields null.
+3. Verify BLOCK produces NOT_APPLICABLE rather than inventing an expected
+   dispatch.
+4. Do not claim OBSERVED until an executor-authenticated protocol passes
+   identity, received-subject, interpretation, extraction, and tamper controls.
 
 ### Whole record
 
-1. Verify the outer signature and every leg-specific evidence object.
+1. Exercise every cell of the state table, including both legacy and v2
+   approval-gated ALLOW.
 2. Remove each leg in turn and observe strict validation fail.
-3. Attempt to export UNKNOWN without `sound: false` and the null fields; observe
-   validation fail.
-4. Search every user-facing label for effect claims. The strongest permitted
-   top-level label is **authorization decision**.
+3. Verify the record is visibly labelled UNSIGNED in every output.
+4. Search user-facing labels; the strongest permitted top-level label is
+   **authorization decision**.
 
 ## 8. Disagreements
 
-None with the four-leg ruling.
+Four is a presentation ruling, not an evidentiary invariant. In v3, JUDGED is
+only a retained host-audit statement, AUTHORIZED can honestly be
+EVIDENCE_UNAVAILABLE or NOT_REQUIRED, and DISPATCH ATTEMPTED is deliberately a
+pre-call claim. Naming the slots with completed English participles invites
+overstatement. A future redesign may be clearer as an event sequence plus
+optional authenticated evidence rather than exactly four “legs.”
 
-There is one terminology constraint worth making explicit: ACKNOWLEDGED is a
-required **slot** in the authorization record, but it is not a prerequisite for
-the authorization decision to be valid. Treating all four legs as jointly
-required evidence for authorization would recreate Option C and turn the
-record into the effect receipt this ruling forbids.
+That concern does not justify fusing facts or violating the ruling. This spec
+keeps four mandatory slots and makes the weak statuses literal. ACKNOWLEDGED
+UNKNOWN and ATTEMPTED-with-null-completion must not be softened in UI or prose.
 
 ## 9. Unverified inputs and limits
 
 The following were not independently checkable from this repository at the
 starting commit and must not be promoted to observed facts by this spec:
 
-- The 2026-07-27 08:01 Option C and 08:34 Option D rulings and their exact
-  timestamps were supplied in the work order; the repository still recorded
-  Option B accepted and Option C rejected for now.
-- The complete five-observer surrogate matrix is already marked
-  **UNVERIFIED INDEPENDENTLY** in `OPEN-FINDINGS.md` finding 36. Only the
-  independently reproduced Lean/Node/Python shape is treated as verified here.
-- The reported `1e308` downstream observer run with `request_sha256` byte
-  binding was supplied in the work order. `NUMERIC-AGREEMENT.md` names `1e308`
-  as the required agreement-safe control, but its complete run artifact is not
-  present in this repository.
-- The reachability-report v0 example with signed `sound: false` and
-  `coverage_percent: null` was supplied in the work order; no such v0 artifact
-  was found in this repository. This spec adopts its stated discipline, not an
-  independently inspected implementation.
-- No executor acknowledgment protocol, interpretation manifest registry, or
-  conforming v1 record implementation was found here. Their shapes above are
-  requirements, not current-behavior claims.
+- Ben's 2026-07-27 08:01 Option C, 08:34 Option D, and 11:11 DISPATCH ATTEMPTED
+  rulings and exact timestamps were supplied in work orders.
+- The `fourleg-impl` report says the current kernel audit has verdict, tool,
+  epoch, request digest and certificate fields but lacks interpretation,
+  consulted-set and projection evidence. The implementation lives outside this
+  repository, so the exact live field set is **UNVERIFIED HERE**.
+- The report says ApprovalRecord retains only target/time/nonce and discards
+  the signed token. The general separation of ApprovalRecord from the canonical
+  approval tuple is documented in this repository; the exact live struct is
+  **UNVERIFIED HERE**.
+- The report says the authorization record is persisted before `write_child`
+  and that no record signer/trust path exists. Neither implementation is in this
+  repository, so those live-code claims are **UNVERIFIED HERE**. This spec
+  nonetheless adopts the supplied ordering and unsigned constraint as
+  normative inputs.
+- The complete five-observer surrogate matrix remains **UNVERIFIED
+  INDEPENDENTLY** in `OPEN-FINDINGS.md` finding 36.
+- No conforming v3 encoder, validator, ApprovalRecord v2, dispatch-outcome
+  protocol, executor acknowledgment, or end-to-end implementation test was
+  found in this repository. Their shapes above are requirements, not
+  current-behavior claims.
 
 ## 10. Specification evidence
 
-This specification was derived from `OPEN-FINDINGS.md` findings 24 and 34–37,
-`NUMERIC-AGREEMENT.md` sections 3–7, `COMPREHENSION-CHECK.md`, and
-`ROADMAP-KERNEL-OUTWARD.md`. Claims that exceed those on-disk sources are
-explicitly listed as unverified above.
+This revision was derived from `OPEN-FINDINGS.md` findings 34–37 and 40–42,
+`NUMERIC-AGREEMENT.md`, `COMPREHENSION-CHECK.md`, the prior specification, and
+the mandated `fourleg-impl` refusal report. Claims exceeding on-disk sources
+are listed as unverified above.
 
-Evidence: RUN fourlegs-spec-2026-07-27
+Evidence: RUN specrev-fourlegs-v3-2026-07-27
