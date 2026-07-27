@@ -63,6 +63,24 @@ change.
 Nothing here starts until phase 0 item 1 lands, because otherwise we cannot
 tell whether the result is green or merely unmeasured.
 
+**Phase 1 is OPEN as of 2026-07-27.** Item 1 landed, so the gate is satisfied.
+Ben ruled item 8 top priority the same day.
+
+One honest sequencing note, because "item 8 first" is not literally executable as
+written. Item 8 has two halves with different prerequisites:
+
+- The **kernel half**, extending `SignedMessage` to cover the rendering, does
+  depend on item 6, because a signature cannot cover the output of a function
+  nobody has designed yet.
+- The **record half**, growing `ApprovalRecord` to v2 so it carries the exact
+  displayed-byte tuple, renderer identity and the original signed token, does
+  NOT. It binds whatever bytes were displayed without needing those bytes to
+  come from a verified `R`.
+
+So the record half starts now and unblocks the AUTHORIZED leg. The kernel half
+waits on item 6, which is therefore the real next task rather than a queue item.
+Both land under one domain-tag bump.
+
 6. **Design the rendering function `R`** and its three obligations: derivation
    from the same canonical parse the digest covers, AGREEMENT as a theorem (two
    requests rendering identically must digest identically), and totality.
@@ -73,6 +91,24 @@ tell whether the result is green or merely unmeasured.
 8. **Extend `SignedMessage`** so the human's signature covers the rendering.
    This is the batched bump: `seal.effect/v2` plus the comprehension field, one
    domain tag, per the razor.
+   **TOP PRIORITY, ruled by Ben 2026-07-27 11:45.** Two independent lines of work
+   converged on this single change and neither can finish without it:
+   - From the kernel side, it is this item as written.
+   - From the record side, the AUTHORIZED leg of `AUTHORIZATION-RECORD.md` cannot
+     be emitted at all today. `ApprovalRecord` retains only target, time and
+     nonce and discards the signed token, so nothing binds what the human was
+     SHOWN to what they signed. The spec therefore requires an `ApprovalRecord`
+     v2 carrying the exact displayed-byte tuple, renderer identity, and the
+     original signed token bytes, with the Ed25519 signature covering all of it.
+     Until that exists the leg emits `EVIDENCE_UNAVAILABLE`.
+   These are the same change seen from two ends. Doing item 8 without the record
+   fields leaves the record dishonest; doing the record fields without item 8
+   leaves the signature not covering the display. **One design, one domain-tag
+   bump, both ends specified together.**
+   Load-bearing measurement behind it: a JavaScript approval renderer rounds
+   integers past 2^53 exactly as `JSON.parse` does, so a human can authorize
+   `1234567890123456768` while the kernel judged `...789` (`OPEN-FINDINGS.md`
+   row 40). One slot cannot express that divergence. Two can.
 9. **Prove agreement.** Not a test. If it is only achievable up to some stated
    equivalence, declare the equivalence rather than discover it later.
 10. **Check type coercion** between the canonical parse and the rendering. If
@@ -85,9 +121,18 @@ tell whether the result is green or merely unmeasured.
 11. **The printer.** Unverified Rust, and therefore trusted for consent. GLM and
     Qwen both showed that a correct kernel rendering does not save you from the
     process that prints it. **Add the display path to `TCB.md` as trusted.**
-12. **Receipt records what was shown.** Ben's ruling. Turns the receipt from
+12. **The record states what was shown.** Ben's ruling. Turns the artifact from
     "an approval happened" into "this specific consent was obtained", and makes
     a disputed approval forensically answerable.
+    **RESHAPED 2026-07-27, and largely absorbed into item 8.** The word receipt
+    is retired: `refactor/authorization-decision` renamed 63 of 64 sites, and the
+    object is an AUTHORIZATION DECISION, never an effect receipt. Ben ruled
+    Option D at 08:34: four separate facts, never fused. `AUTHORIZATION-RECORD.md`
+    on main specifies them. Two are honestly incomplete by design and must stay
+    that way: ACKNOWLEDGED prints UNKNOWN because it needs cooperation seal does
+    not have, and leg 3 is DISPATCH ATTEMPTED, not DISPATCHED, because the record
+    is persisted before `write_child` runs (ruled 11:11). What remains here after
+    item 8 lands is emitting the legs, not designing them.
 13. **Rebuild `seal.wasm` ONCE**, against the settled shape, and repin: artifact,
     `PINNED_WASM_SHA256`, and `PROVENANCE.txt` together. Deferred here
     deliberately; rebuilding before the shape settles means doing it twice.
