@@ -78,6 +78,19 @@ must explicitly supersede them and inherit every checked correspondence and
 honest verifier outcome. Until that fork is ruled, their floor obligations
 remain live and their implementation status is **UNVERIFIED**.
 
+## Verify an UNVERIFIED marker before implementing
+
+**MEASURED:** two consecutive Phase-2 items, 2.3 and 2.4, carried
+OPEN/PARTIAL and implementation-UNVERIFIED states even though the requested
+controls already existed and were correct. Both closed on evidence from the
+existing implementation and tests; neither required new code. In these two
+cases, the roadmap's own UNVERIFIED markers had not themselves been verified.
+
+**INFERRED working rule:** before building anything for an item marked
+UNVERIFIED, first check whether the current implementation already satisfies
+it. This observation is about exactly these two items, not a claim that the
+whole roadmap is stale.
+
 ## Ordered plan
 
 ### Phase 0 — establish the g9 Phase-1 floor
@@ -203,15 +216,38 @@ conformance, security and golden-path result must be observed.
 `f198642` being an ancestor of `seal-host` main and by the gate script and
 workflow wiring present there.
 
-2.3 **Repair `differential.rs` and `parser_boundary.rs` outcome contracts**
-*(former item 2)*. Keep enumerated fail-closed outcomes and negative controls;
-do not relax to “anything nonzero.”
-**Serves: V3.1. Status: PARTIAL.** The former roadmap verified the differential
-and host-path side; `parser_boundary.rs` remains UNVERIFIED here.
+2.3 **Repair `differential.rs` and `parser_boundary.rs` outcome contracts:
+CLOSED; ALREADY-TIGHT** *(former item 2)*. Keep enumerated fail-closed outcomes
+and negative controls; do not relax to “anything nonzero.”
+**Serves: V3.1. Status: CLOSED; ALREADY-TIGHT.** **MEASURED:** the previously
+verified differential and host-path side was already closed.
+`parser_boundary_map` compares every observed named class for exact equality
+with its per-case expectation; `props::no_bypass_no_new_divergence` runs 4,000
+generated cases and admits exactly `agree-routed`, `agree-unrouted`,
+`reduced-scope-unparseable`, `reduced-scope-structural`, and `wire-refused`.
+The file contains no process-status, nonzero-exit, ignored-test, or subprocess
+assertion that could turn a crash, missing dependency, observation error, or
+different named boundary outcome green. RUN
+`parserbound-contract-verification-2026-07-27` measured the freeze gate at exit
+0, both parser-boundary tests passing, and the full-suite failure set unchanged
+at the three known environmental failures. No code was written because the
+contract already met the item.
 
-2.4 **Literal interior-NUL boundary test** *(former item 3)*. Exercise an actual
-`0x00` byte, not only a JSON escape, and retain the observed failing control.
-**Serves: V3.1. Status: OPEN; implementation UNVERIFIED.**
+2.4 **Literal interior-NUL boundary test: CLOSED; ALREADY-COVERED** *(former
+item 3)*. Exercise an actual `0x00` byte, not only a JSON escape, and retain the
+observed failing control.
+**Serves: V3.1. Status: CLOSED; ALREADY-COVERED.** **MEASURED:**
+`rust/tests/common/mod.rs:131` uses Rust source escape `\u{0}` in
+`str-raw-nul`, producing a literal byte `0x00`, and pins the named
+`agree-unrouted` outcome. `rust/tests/nul_seam.rs:12-15` places literal `\0`
+inside `"arg\0uments"` and asserts `line.as_bytes()[48] == 0`; the test then
+pins exact classifier outcomes `0` for the 48-byte prefix and `2` for the full
+sequence. RUN
+`nulbyte2-20260727-already-covered` measured the freeze gate at exit 0 and
+the focused tests passing, with the full-suite failure set unchanged at the
+three known environmental failures; it also retained the historical failing
+ablation. No code was written because the requested boundary coverage already
+existed.
 
 2.5 **Make `RepinStep2Guards` a real lakefile target** *(former item 4)*, then
 ablate the NFD comparison and record the red result.
@@ -457,6 +493,14 @@ evidence is UNVERIFIED rather than confidently coloured.
 - No connector catalogue, secrets store, HA product, dashboard, enterprise
   surface or threshold sharing for a password enters this plan without a new
   explicit ruling.
+- **MEASURED — 2.3 status correction, not new work:** the
+  `parser_boundary.rs` outcome contracts were already tight; RUN
+  `parserbound-contract-verification-2026-07-27` closed the stale
+  PARTIAL/UNVERIFIED marker without a code change.
+- **MEASURED — 2.4 status correction, not new work:** literal interior-NUL
+  coverage already existed in `str-raw-nul` and `nul_seam.rs`; RUN
+  `nulbyte2-20260727-already-covered` closed the stale OPEN/UNVERIFIED marker
+  without a code change.
 
 ## Historical red, not promoted to current status
 
