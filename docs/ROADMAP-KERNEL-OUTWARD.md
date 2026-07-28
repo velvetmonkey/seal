@@ -514,47 +514,58 @@ item 3.12)*.
 per-file classification and invocation table is
 `/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md`: 6 `RUNS-GREEN`, 3
 `RUNS-RED`, 2 `BLOCKED-DEP`, 2 `NOT-AN-ENTRYPOINT`, and 9 `UNASSESSABLE`.
-**INFERRED:** this supersedes the former presence-only count of 21; it
-establishes a classified baseline, not a green demo surface.
-**Serves: V3.3, V3.4, VERIFY. Status: MEASURED BASELINE; 22/22 CLASSIFIED.**
+D.3's build-enabled follow-up has now reclassified those nine fenced outcomes
+as 1 `RUNS-GREEN` and 8 `RUNS-RED`. **INFERRED:** this supersedes the former
+presence-only count of 21 and preserves the inventory as the classified
+baseline; `UNASSESSABLE` records the earlier lane fence, not the nine files'
+current measured state.
+**Serves: V3.3, V3.4, VERIFY. Status: MEASURED BASELINE; 22/22 CLASSIFIED;
+NINE RECLASSIFIED IN D.3.**
 
-D.2 **Keep the three red demos separated by cause.** **MEASURED:**
-`demo/dogfood_cli.py` and `demo/dogfood_failclosed.py` both reach the stale
-shared positive config producer. It is one of three acceptance-intended
-producers that collectively emit eight narrow guard rules, and the host rejects
-these two demos at startup because guarded targets now require
-`[{"full_arguments": true}]`. `demo/run_g7.py` is red for a different,
-still-uncharacterised reason inside Canary MCP initialization, ending in
-`mcp.shared.exceptions.McpError: Connection closed`. **INFERRED:** repairing
-the stale config path would not establish that `run_g7.py` is green.
-**Serves: V3.3, V3.4, VERIFY. Status: OPEN; 3 RUNS-RED WITH TWO DISTINCT
+D.2 **Keep the eight measured red demos separated into four cause classes.**
+**MEASURED:** the build-enabled table at
+`/home/monkey/.mega-monkey/golden-state-2026-07-28.md` records: (1)
+`demo/golden_path.py`, `demo/golden_path_postgres.py`, and
+`demo/golden_path_filesystem.py` reached `seal verify`, which rejected the
+host-produced authorization decision with `no recognized version
+discriminator`; (2) `demo/golden_path_composition.py` Safety-BLOCKED its
+headline call where the demo requires ALLOW; (3) `demo/golden_path_temporal.py`
+and `demo/golden_path_convergence.py` refused exact pre-minted approvals and
+returned `approval required`; and (4) `demo/golden_path_token.py` and
+`demo/golden_path_deploy.py` asked for Safety approval before the expected
+Budget and Consensus denials. None of the eight outputs contained the exact
+known-stale-guard-config failure. **INFERRED:** similar approval symptoms do
+not merge these assertion-site and ordering failures into one class.
+**Serves: V3.3, V3.4, VERIFY. Status: OPEN; 8 RUNS-RED WITH FOUR DISTINCT
 CAUSE CLASSES.**
 
-D.3 **Resolve the nine build-fenced unknowns with a build-enabled pass.**
-**MEASURED:** the inventory marks nine files `UNASSESSABLE` because their
-functional paths invoke prohibited build or Lake work and the inventory lane
-was fenced from builds. Their state is **UNKNOWN**: help output did not exercise
-their mediation claims. **INFERRED:** none of the nine is evidenced as passing
-or broken until a build-enabled pass runs them.
-**Serves: V3.3, V3.4, VERIFY. Status: UNKNOWN; BUILD-ENABLED PASS REQUIRED.**
+D.3 **Resolve the nine build-fenced unknowns with a build-enabled pass:
+RESOLVED.** **MEASURED:** a serial build-enabled pass at `seal-host`
+`091d68f` ran all nine functional paths without a timeout or kill.
+`demo/proof_manifest.py` exited 0 and produced a manifest with
+`axiom_gate: PASS`; the other eight exited 1. Their four cause classes are:
+three authorization decisions rejected for `no recognized version
+discriminator`; one composition headline call Safety-BLOCKED instead of
+ALLOW; two exact pre-minted approvals refused with `approval required`; and
+two precedence failures where Safety requested approval before the expected
+Budget or Consensus denial. **INFERRED:** the earlier “state is unknown” claim
+is closed by functional evidence; the later fleet parser repair in D.7 does
+not retroactively turn the three measured red runs green without a rerun.
+**Serves: V3.3, V3.4, VERIFY. Status: RESOLVED; 1 RUNS-GREEN, 8 RUNS-RED.**
 
-D.4 **CI proves the negative and never runs the positive Python integration
-suites.** **MEASURED:**
-`.github/workflows/ci.yml:133` runs
-`scripts/production_startup_conformance.mjs`, whose narrow-target probe passes
-only when the host rejects the config. The same script has a separate
-full-argument positive startup control, but it does not exercise the shared
-Python config producers or their integration behavior. Across all five
-workflow files, `grep -c test_host` returns `0,0,0,0,0`; neither Python host
-integration entrypoint runs in CI. CI therefore verifies that a bad config is
-refused and that one hand-built good config starts, while nothing checks that
-configs from the positive Python integration path still start a host. The
-deliberate Stage A full-argument restriction at `mcp-seal-dev` `f119487`
-consequently took both Python host integration entrypoints red without CI
-surfacing the failure. **INFERRED:** the present workflow graph cannot witness
-that positive-path regression.
-**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: OPEN; PYTHON POSITIVE-PATH CI
-COVERAGE ABSENT.**
+D.4 **Run both positive Python host integration entrypoints in CI: CLOSED.**
+**MEASURED:** merged `seal-host` commit `49a2a12` changes all eight
+acceptance-intended guard rules to `[{"full_arguments": true}]` and adds a
+debug Rust-host build plus direct invocations of
+`test/integration/test_host.py` and `test/integration/test_host_rs.py` at
+`.github/workflows/ci.yml:125-134`. History checks in the guard-fix evidence
+found neither entrypoint in prior workflow commits. Both entrypoints now pass
+trusted-config startup but remain red: `test_host.py` fails at line 212 and
+`test_host_rs.py` at line 117 because their pre-minted approval targets still
+use the old commitment recipe. **INFERRED:** the positive-path CI coverage gap
+is closed; the approval-fixture defect is the separate open D.6 item.
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: CLOSED; CI WIRING MERGED AT
+`49a2a12`; BOTH SUITES RED.**
 
 D.5 **Witness child startup failures at their real cause: CLOSED.**
 **MEASURED:** merged `seal-host` commit `091d68f` replaces the terminal
@@ -568,6 +579,33 @@ guard rejection. **INFERRED:** this closes the witness defect only; it neither
 repairs the stale config nor turns a red demo green.
 **Serves: V3.3, V3.4, VERIFY. Status: CLOSED; MERGED AT `091d68f`; REDS
 REMAIN RED BY DESIGN.**
+
+D.6 **Regenerate approval fixtures for the full-arguments commitment recipe.**
+**MEASURED:** after `seal-host` `49a2a12` moved the eight acceptance rules to
+full-arguments targets, `test/integration/test_host.py:204,241` and
+`test/integration/test_host_rs.py:89` still pre-mint `db.execute` targets with
+the old `"db"`, `database`, `"write"`, `sql` recipe. The measured direct
+entrypoint runs exit 1 at `test_host.py:212` and `test_host_rs.py:117`, after
+trusted-config startup. **INFERRED:** the old hashes are not equivalent to the
+new whole-arguments commitment, so stale approval fixtures block both Python
+integration suites.
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: OPEN; APPROVAL-FIXTURE
+REGENERATION BLOCKS BOTH PYTHON SUITES.**
+
+D.7 **Accept the authorization-decision discriminator across the verifier
+fleet: CLOSED.** **MEASURED:** `seal-host` `7c83191` emits
+`{"record_type": "seal.authorization-decision", "record_version": 2}`. The
+seven live/shipping on-disk `receipt-format.js` copies accept that exact pair
+on the current-v2 path; the test-only frozen
+`seal-verify-action/test/reference-kit-0aeb35a/receipt-format.js` deliberately
+retains its historical behavior. The five pushed fleet fixes are
+`seal-assurance-kit` `bd1cf89`, `seal-check` `fcda028`, `seal-live-demo`
+`ec03f2d`, `seal-verify-action` `7ea3cdb`, and `seal-demo` `a998b5b`.
+`seal-host` `f820f0f` repins golden-path CI to `bd1cf89`. **INFERRED:** this
+closes the discriminator split that caused three D.3 reds; their post-fix demo
+outcomes remain unmeasured until a new run records them.
+**Serves: V3.3, V3.4, VERIFY. Status: CLOSED; FIVE FLEET FIXES PUSHED AND CI
+REPINNED AT `f820f0f`.**
 
 ## WHY-to-HOW map for the original 17-item roadmap
 
@@ -612,7 +650,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; no complete four-leg evidence RUN was established here |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| demos | **22/22 CLASSIFIED; 6 GREEN, 3 RED, 2 BLOCKED, 2 NOT ENTRYPOINTS, 9 UNKNOWN** | Phase D inventory; per-file evidence is in `/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md` |
+| demos | **22/22 CLASSIFIED BASELINE; NINE BUILD-FENCED OUTCOMES RECLASSIFIED AS 1 GREEN / 8 RED** | Phase D inventory plus D.3's build-enabled pass; per-file evidence is in `/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md` and `/home/monkey/.mega-monkey/golden-state-2026-07-28.md` |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
 
 ## Rejected alternatives and reversals that remain load-bearing
