@@ -477,15 +477,6 @@ human was shown, and run the negative control in which a shell-bearing agent
 attempts a direct connection and fails for lack of credentials.
 **Serves: V3.3, VERIFY. Status: UNVERIFIED.**
 
-3.12 **Make the demos a real roadmap surface.** There are 21 Python scripts
-under `seal-host/demo/`. Inventory each against a north-star claim, define its
-prerequisites and oracle, run it on a clean path, and retain at least one
-failure observation for every demo promoted as evidence. Scripts that are
-examples rather than controls must say so.
-**Serves: V3.3, V3.4, VERIFY. Status: 21 PRESENT; RUN STATE UNKNOWN.**
-Presence was established by enumerating `seal-host/demo/*.py`; no claim is made
-that any particular script runs today.
-
 3.13 **Start boxpol only after V3.1 is closed.** Keep analyzer-undecidable
 constructs as permanent parse errors and treat the first UNKNOWN caused by a
 policy construct, rather than a lens or world gap, as an incident.
@@ -509,6 +500,74 @@ UNVERIFIED.** “Merge remaining branches” is maintenance, not a product reaso
 4.3 **Move to the monorepo topology from a green base** *(former item 17)* so
 the correspondence checks, pins and release gate version together.
 **Serves: FLOOR, V3.1. Status: OPEN; migration status UNVERIFIED.**
+
+### Phase D — own the demo surface; ordered placement is a fork for Ben
+
+This phase owns the measured demo surface without placing it relative to Phases
+2–4. Ben must choose that placement; these rows do not choose what to build
+first. North-star authority remains
+[NORTH-STAR-V3](NORTH-STAR-V3.md).
+
+D.1 **Keep the recursive demo inventory as the measured baseline** *(former
+item 3.12)*.
+**MEASURED:** `find seal-host/demo -type f -name '*.py'` returns 22 files. The
+per-file classification and invocation table is
+`/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md`: 6 `RUNS-GREEN`, 3
+`RUNS-RED`, 2 `BLOCKED-DEP`, 2 `NOT-AN-ENTRYPOINT`, and 9 `UNASSESSABLE`.
+**INFERRED:** this supersedes the former presence-only count of 21; it
+establishes a classified baseline, not a green demo surface.
+**Serves: V3.3, V3.4, VERIFY. Status: MEASURED BASELINE; 22/22 CLASSIFIED.**
+
+D.2 **Keep the three red demos separated by cause.** **MEASURED:**
+`demo/dogfood_cli.py` and `demo/dogfood_failclosed.py` both reach the stale
+shared positive config producer. It is one of three acceptance-intended
+producers that collectively emit eight narrow guard rules, and the host rejects
+these two demos at startup because guarded targets now require
+`[{"full_arguments": true}]`. `demo/run_g7.py` is red for a different,
+still-uncharacterised reason inside Canary MCP initialization, ending in
+`mcp.shared.exceptions.McpError: Connection closed`. **INFERRED:** repairing
+the stale config path would not establish that `run_g7.py` is green.
+**Serves: V3.3, V3.4, VERIFY. Status: OPEN; 3 RUNS-RED WITH TWO DISTINCT
+CAUSE CLASSES.**
+
+D.3 **Resolve the nine build-fenced unknowns with a build-enabled pass.**
+**MEASURED:** the inventory marks nine files `UNASSESSABLE` because their
+functional paths invoke prohibited build or Lake work and the inventory lane
+was fenced from builds. Their state is **UNKNOWN**: help output did not exercise
+their mediation claims. **INFERRED:** none of the nine is evidenced as passing
+or broken until a build-enabled pass runs them.
+**Serves: V3.3, V3.4, VERIFY. Status: UNKNOWN; BUILD-ENABLED PASS REQUIRED.**
+
+D.4 **CI proves the negative and never runs the positive Python integration
+suites.** **MEASURED:**
+`.github/workflows/ci.yml:133` runs
+`scripts/production_startup_conformance.mjs`, whose narrow-target probe passes
+only when the host rejects the config. The same script has a separate
+full-argument positive startup control, but it does not exercise the shared
+Python config producers or their integration behavior. Across all five
+workflow files, `grep -c test_host` returns `0,0,0,0,0`; neither Python host
+integration entrypoint runs in CI. CI therefore verifies that a bad config is
+refused and that one hand-built good config starts, while nothing checks that
+configs from the positive Python integration path still start a host. The
+deliberate Stage A full-argument restriction at `mcp-seal-dev` `f119487`
+consequently took both Python host integration entrypoints red without CI
+surfacing the failure. **INFERRED:** the present workflow graph cannot witness
+that positive-path regression.
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: OPEN; PYTHON POSITIVE-PATH CI
+COVERAGE ABSENT.**
+
+D.5 **Witness child startup failures at their real cause: CLOSED.**
+**MEASURED:** merged `seal-host` commit `091d68f` replaces the terminal
+`BrokenPipeError` and `JSONDecodeError` witnesses at the affected demo and
+Python integration exchanges with the dead child's exit code and verbatim
+stderr. Before that repair, the child had already died and the real startup
+reason remained in an unread stderr pipe. Focused tests pin the dead-child
+diagnostic and the non-blocking live-child path. The affected entrypoints
+deliberately remain exit 1 and now report startup exit 3 plus the full-argument
+guard rejection. **INFERRED:** this closes the witness defect only; it neither
+repairs the stale config nor turns a red demo green.
+**Serves: V3.3, V3.4, VERIFY. Status: CLOSED; MERGED AT `091d68f`; REDS
+REMAIN RED BY DESIGN.**
 
 ## WHY-to-HOW map for the original 17-item roadmap
 
@@ -553,7 +612,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; no complete four-leg evidence RUN was established here |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| demos | **21 PYTHON SCRIPTS PRESENT; RUN STATE UNKNOWN** | enumerated `seal-host/demo/*.py`; none was assumed runnable from presence |
+| demos | **22/22 CLASSIFIED; 6 GREEN, 3 RED, 2 BLOCKED, 2 NOT ENTRYPOINTS, 9 UNKNOWN** | Phase D inventory; per-file evidence is in `/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md` |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
 
 ## Rejected alternatives and reversals that remain load-bearing
