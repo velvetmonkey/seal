@@ -522,7 +522,8 @@ current measured state.
 **Serves: V3.3, V3.4, VERIFY. Status: MEASURED BASELINE; 22/22 CLASSIFIED;
 NINE RECLASSIFIED IN D.3.**
 
-D.2 **Keep the eight measured red demos separated into four cause classes.**
+D.2 **Preserve the four measured symptom classes, but do not mistake them for
+four current root causes: SUPERSEDED.**
 **MEASURED:** the build-enabled table at
 `/home/monkey/.mega-monkey/golden-state-2026-07-28.md` records: (1)
 `demo/golden_path.py`, `demo/golden_path_postgres.py`, and
@@ -534,16 +535,26 @@ and `demo/golden_path_convergence.py` refused exact pre-minted approvals and
 returned `approval required`; and (4) `demo/golden_path_token.py` and
 `demo/golden_path_deploy.py` asked for Safety approval before the expected
 Budget and Consensus denials. None of the eight outputs contained the exact
-known-stale-guard-config failure. **INFERRED:** similar approval symptoms do
-not merge these assertion-site and ordering failures into one class.
-**Serves: V3.3, V3.4, VERIFY. Status: OPEN; 8 RUNS-RED WITH FOUR DISTINCT
-CAUSE CLASSES.**
+known-stale-guard-config failure. **CORRECTED BY LATER MEASUREMENT:** the
+earlier inference that these were four distinct cause classes is no longer
+current. `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md` establishes
+that the five approval-carrying demos share the legacy v1 signer and that the
+host structurally refuses that record; its one authoritative after-run reached
+the host-minted target and stopped on that refusal. **INFERRED:** the old table
+still records four useful symptom/assertion-site classes, but three of those
+classes are now partly explained by the shared v1 approval root. The remaining
+four after-runs were fenced and must not be called reproduced at that deeper
+reason.
+**Serves: V3.3, V3.4, VERIFY. Status: SUPERSEDED AS A ROOT-CAUSE
+CLASSIFICATION; HISTORICAL 8-RUN SYMPTOM TABLE RETAINED.**
 
 D.3 **Resolve the nine build-fenced unknowns with a build-enabled pass:
 RESOLVED.** **MEASURED:** a serial build-enabled pass at `seal-host`
 `091d68f` ran all nine functional paths without a timeout or kill.
 `demo/proof_manifest.py` exited 0 and produced a manifest with
-`axiom_gate: PASS`; the other eight exited 1. Their four cause classes are:
+`axiom_gate: PASS`; the other eight exited 1. Their four measured symptom
+classes—called cause classes in that lane report, with the root-cause reading
+now superseded by D.2—are:
 three authorization decisions rejected for `no recognized version
 discriminator`; one composition headline call Safety-BLOCKED instead of
 ALLOW; two exact pre-minted approvals refused with `approval required`; and
@@ -607,6 +618,81 @@ outcomes remain unmeasured until a new run records them.
 **Serves: V3.3, V3.4, VERIFY. Status: CLOSED; FIVE FLEET FIXES PUSHED AND CI
 REPINNED AT `f820f0f`.**
 
+D.8 **Obtain demo approval targets from the host, not private commitment
+recipes.** **MEASURED:** `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md`
+finds private approval-target recipes in five demos and records their
+replacement with targets discovered by blocked calls to the real host on
+`fix/demo-approval-target-from-host`, commit
+`888187ec8f99e0d72fc9983f709f23268ebafc87`. The token after-run used the same
+host-minted target in the signed token and subsequent refusal, so target
+discovery reached its intended boundary. The report explicitly leaves four
+after-runs and the watched argument mutation unverified. **INFERRED:** this
+removes one false oracle from the demo harnesses, but cannot make the demos
+green while they still sign a record version the host refuses.
+**Serves: V3.1, V3.3, VERIFY. Status: PARTIAL; TARGET DISCOVERY FIXED ON AN
+UNMERGED BRANCH; DEMOS STILL RED.**
+
+D.9 **Make ApprovalRecord v2 mintable from the product refusal.**
+**MEASURED:** `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md` records
+that all five affected demos use the shared legacy v1 signer and that
+`rust/src/providers.rs:21` names the structural refusal
+`approval_record_v1_not_supported`; the path check recorded in
+`/home/monkey/.mega-monkey/docsync-2026-07-28.md` resolves its two admission
+calls at `rust/src/providers.rs:654` and `:1060`.
+`/home/monkey/.mega-monkey/approvalv2-2026-07-28.md` records that v2 admission
+requires the exact delimiter-bearing framed subject, while the refusal exposes
+only the target and the retained BLOCK record contains a canonical body and
+body hash rather than that framed preimage.
+**INFERRED:** a separate approver receiving only the refusal cannot mint a
+host-admissible v2 record; signing client-retained bytes would demonstrate
+privileged harness knowledge, not a usable approval channel. **RULED:** the
+refusal will emit the framed subject as base64 with explicit length; lane
+`framedsubject` is implementing that decision.
+**Serves: V3.3, VERIFY. Status: RULED AND IN PROGRESS; NOT DONE.**
+
+D.10 **Track watched-mutation coverage against declared denominators.**
+**MEASURED:** `/home/monkey/.mega-monkey/oraclecensus-2026-07-28.md` establishes
+the first watched-mutation denominator:
+
+| population | WATCHED | total |
+|---|---:|---:|
+| kernel guard rules | 35 | 47 |
+| ApprovalRecord v2 signed leaves | 1 | 21 |
+| authorization-decision committed leaves | 1 | 55 |
+
+Population A is not declared in one place; the report reconstructs it across
+several public judgment functions, ingest paths, and both legacy and v2
+stacks. Its sole `UNTOUCHED` kernel rule is the legacy control-file symlink
+refusal at `Seal/Channel.lean:50-69`, with no test reference found.
+**INFERRED:** the denominator is a tracked baseline, not a completeness proof;
+new public decision paths can move it until the population is centrally
+declared. The next controls should be exact item mutations, beginning with the
+authority-bearing gaps named by the census, rather than generic whole-record
+reds.
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: MEASURED BASELINE; CONTROL
+EXPANSION OPEN.**
+
+D.11 **State the shipped ApprovalRecord v2 display limit without turning an
+unimplemented profile into a defect.** **INFERRED FROM SOURCE:** the complete
+leaf warrant in
+`/home/monkey/.mega-monkey/v2leafwarrant-2026-07-28.md` classifies all 21
+signed leaves as 7 `ENFORCED`, 14 `WELL-FORMEDNESS-ONLY`, and 0 `CARRIED`.
+The weakness is concentrated in the display half: `shown_*`, `renderer.*`,
+`approver`, and `session` meet no displayed bytes, renderer registry, or
+authenticated approver comparand in the host. **MEASURED:** the three
+independent searches recorded in
+`/home/monkey/.mega-monkey/docsync-2026-07-28.md` find none of
+`EVIDENCE_UNAVAILABLE`, `AUTHORIZED`, `NOT_REQUIRED`, or `NOT_REACHED` under
+`seal-host/rust/src`, and find neither `shown` nor `presentation` in
+`rust/src/authorization_decision.rs`. **INFERRED:** the shipped v2 record
+carries display attestations that no component verifies, so claiming it proves
+what a human saw would overstate the implementation today. This is not a
+violation of `docs/AUTHORIZATION-RECORD.md:3,230-315`, whose
+exact-presentation promise belongs to a profile explicitly marked `SPECIFIED,
+NOT IMPLEMENTED`.
+**Serves: V3.3, V3.4, VERIFY. Status: LIMIT MEASURED; SPEC LEFT ALONE;
+DISPLAY VERIFICATION OPEN.**
+
 ## WHY-to-HOW map for the original 17-item roadmap
 
 | former item | now | north-star WHY |
@@ -645,12 +731,13 @@ evidence is UNVERIFIED rather than confidently coloured.
 | blind T1.2 | **FRISKED; UNREACHABLE IN IMPLEMENTATION; SPEC LABEL OPEN** | **MEASURED:** the g9 verifier/outcome ABI is absent; RUN `t12-always-allow` reached the live child with an `ALLOW` authorization decision and emitted no g9 status; the over-broad predicate and live B-naming claims are partly rejected |
 | blind T1.3 / compulsory verify moment | **DIRECTION SETTLED; IMPLEMENTATION UNFRISKED/OPEN** | Ben's 2026-07-24 ruling selects the mandatory inline gate; the blind lead's current code diagnosis was not independently established here |
 | V3.2 reachability | **V0 EXISTS AND IS MERGED; NOT COMPLETE** | `b800096` is an ancestor of `seal-host` main; signed payload on disk contains `denominator.sound = false` and `coverage_percent = null` |
-| V3.3 one sink end to end | **UNVERIFIED AS A WHOLE** | no run satisfying all four V3.3 success criteria was checked in this graft |
-| ApprovalRecord v2 sub-artifact | **LANDED** | `e8f3a3a` and demo follow-up `444af1e` are ancestors of `seal-host` main |
-| four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; no complete four-leg evidence RUN was established here |
+| V3.3 one sink end to end | **PARTIAL; END TO END UNVERIFIED** | D.1-D.11 establish a classified baseline, several landed repairs, and the current approval queue; no run yet satisfies all four V3.3 success criteria |
+| ApprovalRecord v2 sub-artifact | **LANDED; PRODUCT MINTING PATH OPEN; DISPLAY CLAIM LIMITED** | the artifact commits are merged, but D.9 measures that a separate approver cannot mint v2 from the current refusal and records the framed-subject repair as in progress; D.11 records that the shipped display tuple has no external comparand |
+| four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; D.11's independent searches find none of the four authorization-leg outcome names and no shown/presentation field in the shipped authorization-decision builder |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| demos | **22/22 CLASSIFIED BASELINE; NINE BUILD-FENCED OUTCOMES RECLASSIFIED AS 1 GREEN / 8 RED** | Phase D inventory plus D.3's build-enabled pass; per-file evidence is in `/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md` and `/home/monkey/.mega-monkey/golden-state-2026-07-28.md` |
+| demos | **22/22 CLASSIFIED BASELINE; TARGET FIX UNMERGED; FRAMED-SUBJECT REPAIR IN PROGRESS** | D.2 preserves the measured 1-green/8-red symptom table but supersedes its four-root inference; D.8-D.9 record the shared v1 refusal, unmerged target discovery, and ruled v2 product repair |
+| watched-mutation coverage | **BASELINE MEASURED; EXPANSION OPEN** | D.10 tracks kernel guards at 35/47 WATCHED, ApprovalRecord v2 signed leaves at 1/21, and authorization-decision committed leaves at 1/55; Population A is reconstructed rather than centrally declared |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
 
 ## Rejected alternatives and reversals that remain load-bearing
