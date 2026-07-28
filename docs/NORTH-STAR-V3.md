@@ -66,7 +66,7 @@ Last refreshed 2026-07-28.
 |---|---|---|
 | V3.1 proofs-to-bytes | **PARTIAL** | numeric agreement and the 18-vector/five-observer characterization are complete; parser correspondence is not (`ROADMAP-KERNEL-OUTWARD.md` 2.7-2.8; `mcp-seal-dev` `6c23b5c`; `seal-host` `ba4e21d`) |
 | V3.2 unbrokered reachability | **PARTIAL — V0 ONLY** | v0 signs an honestly unsound declared inventory, prints UNKNOWN and no percentage, and rejects a payload that claims a sound denominator; total-reachability discovery remains undone (`ROADMAP-KERNEL-OUTWARD.md` 2.13; `seal-host` `b800096`, `rust/src/reachability.rs:321-399,432-470,506-509,624-661`) |
-| V3.3 one sink end to end | **PARTIAL** | 22/22 demo files are classified and the nine build-fenced paths measured 1 green/8 red in four cause classes; the discriminator repair landed across five verifier repos, but no post-repair rerun makes a red demo green (`ROADMAP-KERNEL-OUTWARD.md` D.1-D.3,D.7; `seal-host` `091d68f`,`f820f0f`) |
+| V3.3 one sink end to end | **PARTIAL — FRAMED SUBJECT IN PROGRESS** | position: target discovery is fixed only on unmerged `888187e`; the five approval demos still sign refused v1 records, and a separate approver cannot mint v2 from the current refusal. Queue: finish the ruled framed-subject emission, integrate target discovery, migrate the demos to v2, then rerun the watched mutations and classified demo surface (`ROADMAP-KERNEL-OUTWARD.md` D.2,D.8-D.11) |
 | V3.4 the write-up | **NOT STARTED** | |
 | boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
 
