@@ -52,7 +52,12 @@ Consequences that bind the rest of this document:
 
 ## 3. The build, in order
 
-Four things, plus one admitted by ruling. Nothing else is on the roadmap.
+Four things, plus two admitted by ruling. Nothing else is on the roadmap.
+
+**Correction, 2026-07-28.** The previous sentence said “plus one.” Ben has now
+ruled MCP revision 2026-07-28 support into seal v1. That admits a required
+compatibility workstream; it does not silently assign Phase M a schedule
+position among the settled four.
 
 ### Status at a glance
 
@@ -69,6 +74,7 @@ Last refreshed 2026-07-28.
 | V3.3 one sink end to end | **PARTIAL — FRAMED SUBJECT IN PROGRESS** | position: target discovery is fixed only on unmerged `888187e`; the five approval demos still sign refused v1 records, and a separate approver cannot mint v2 from the current refusal. Queue: finish the ruled framed-subject emission, integrate target discovery, migrate the demos to v2, then rerun the watched mutations and classified demo surface (`ROADMAP-KERNEL-OUTWARD.md` D.2,D.8-D.11) |
 | V3.4 the write-up | **NOT STARTED** | |
 | boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
+| V3.5 MCP 2026-07-28 conformance | **NOT STARTED, ONE FORK OPEN** | no conformance implementation is claimed; the `_meta` partition is the open fork, and Phase M gives all seven items disk-verifiable closure conditions (`ROADMAP-KERNEL-OUTWARD.md` Phase M) |
 
 **What V3.1 PARTIAL means**, because a colour is not evidence:
 
@@ -245,6 +251,36 @@ Without (4) this is an architecture diagram.
   been watched to fail, and here are the 12 that have not" is the most credible
   paragraph we could put in front of a serious reviewer.
 
+### V3.5 MCP revision 2026-07-28 conformance
+
+**Ruled by Ben 2026-07-28: seal v1 supports MCP revision 2026-07-28.** Support
+means that the stdio interposer refuses top-level batches, preserves
+`server/discover`, validates modern per-request metadata before making an
+authority decision, signs the revision semantics it actually enforced, commits
+MRTR `requestState` and `inputResponses` without weakening exact frame binding,
+relays modern results truthfully, and has at least one 2026 golden path.
+
+This is not a version-string-only change. The scalar adapter update is **10–25
+LOC in 2–3 files**, while a supported-set or ingress/egress signed shape is
+**250–450 LOC across 8–12 files**. Batch refusal is **120–220 LOC across about
+8 files**; coherent MRTR accommodation is **550–1,000 LOC across 16–24 files**;
+per-request validation is **150–300 LOC across 5–8 files**. The open `_meta`
+fork ranges from **200–400 LOC across 6–10 files** for a Rust-only stripping
+transform, through **250–450 LOC across 8–12 files plus another 250–450 across
+6–10 files** for complete commitment through V2, to **500–900 LOC across
+10–16 files or 700–1,200 across 16–24 files** for a coherent partition,
+depending on the v1 boundary. These are source-surface estimates, not measured
+diffs, and they are not a schedule. No `_meta` branch is selected here.
+
+Conformance does **not** mean adding Streamable HTTP, consuming child tool
+schemas, fabricating child capabilities, guaranteeing that a child server
+conforms, or claiming modern/legacy translation that does not exist. The
+stateless core removes no dependency from the current stdio host. MRTR is
+fail-closed today, not safely accommodated. `_meta` is covered by the raw frame
+evidence but omitted from the semantic target today. UNKNOWN stays UNKNOWN:
+until M.1 is ruled and every Phase M closure condition is evidenced on disk,
+the status is **NOT STARTED, ONE FORK OPEN**.
+
 ## 4. What we are NOT building
 
 Every item below appeared on at least one seat's kill list. Naming them here so
@@ -256,7 +292,13 @@ that adding one back is a visible decision rather than a drift.
   broker is single-holder per shard and that ceiling is stated in the claims.
 - **Dashboards, enterprise anything, privileged-session management.**
 - **The MCP proxy transport as a maintained product surface.** It stays as the
-  current adapter, but it is not the contribution and it does not get polished.
+  current adapter and is not the contribution or a maintained connector
+  catalogue.
+
+  **Correction, 2026-07-28.** The earlier wording said the adapter “does not get
+  polished.” Ben's MCP ruling makes that too broad: v1 must conform to revision
+  2026-07-28. That obligation does not add Streamable HTTP, a translation
+  gateway or connector breadth.
 - **m-of-n threshold secret sharing for sink credentials.** Refuted 2026-07-25:
   you cannot threshold-present a password. See `BROKER-HA.md`.
 
