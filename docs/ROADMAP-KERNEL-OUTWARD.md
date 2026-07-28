@@ -709,65 +709,68 @@ are `/home/monkey/.mega-monkey/v1mcp2026-2026-07-28.md`. The stateless core is
 not work for the current stdio host. The live drift order is `_meta`, top-level
 batch arrays, then MRTR; MRTR fails closed today.
 
-M.1 **The `_meta` partition decision: FORK FOR BEN.** Today `_meta` is covered
-by the raw-line receipt digest and the exact full-frame approval subject, but
-not by the effect commitment, kernel target or Rust canonical-request
-projection. The three costed branches are:
+**Ruling, 2026-07-28 21:47 — V2 release boundary.** V2 typed targets and effect
+envelopes are inside the seal v1 release boundary. **Status: RULED, NOT
+STARTED.** This ruling roughly doubles the affected Phase M estimates; every
+estimate and closure condition below therefore includes the V2 surface where
+the costing lane supplied one.
 
-- **A — commit everything.** Add a canonical complete `_meta` value, including
-  absent/present, to the effect and guard/typed target. Cost: **250–450 changed
-  LOC across 8–12 files** for the v1 effect/guard path and immediate host
-  projection, plus **another 250–450 changed LOC across 6–10 files** if the V2
-  typed target and envelope are in the v1 boundary. Repin: **definite**.
-- **B — strip `_meta` on the mediated path.** Keep the kernel shape and retain
-  the received-frame digest, but rewrite the frame before forwarding. This is
-  not transparent 2026 mediation: it removes required modern metadata, trace
-  propagation and legal extensions. Cost: **200–400 changed LOC across 6–10
-  files** for a Rust transform, forwarded-frame receipt fields and differential
-  tests, plus **150–300 changed LOC across 4–7 files** if the transform becomes
-  Lean/FFI-owned. Repin: a Rust-only transform does **not** itself force a Lean
-  repin; a Lean-owned transform does.
-- **C — partition `_meta`.** Sign the committed fields, the sorted names
-  deliberately excluded from authority identity, and fail-closed or
-  value-committing treatment for unknown keys; retain the exact full-frame
-  binding. Cost: **500–900 changed LOC across 10–16 files** for one coherent
-  v1 kernel/host shape, or **700–1,200 across 16–24 files** with the V2 target,
-  Rust twin, receipts and golden corpora. Repin: **definite**.
+M.1 **Commit the complete validated `_meta` object: OPTION A.** **Ruling,
+2026-07-28 21:47:** the complete validated object, including every unknown key
+and a distinct absent/present state, enters the effect commitment and the
+guard/typed target. Today `_meta` is covered by the raw-line receipt digest and
+exact full-frame approval subject but not those semantic identities or the
+Rust canonical-request projection. Because V2 is now inside v1, the cost is
+**up to 900 changed LOC across up to 22 files**, the sum of the costing lane's
+two with-V2 upper bounds; this is roughly double the old v1-only estimate as a
+direct consequence of the release-boundary ruling. Repin: **definite**.
 
-**Correction carried into the roadmap:** the earlier claim that every
+The guard target becomes an **invocation identity rather than a stable name for
+an action**. That cost is accepted, not overlooked and not a risk reserved for
+later avoidance: approvals, capabilities and replay namespaces are intentionally
+invocation-specific under this v1 contract.
+
+**Correction, 2026-07-28:** the earlier claim that every
 `traceparent` carries a fresh span ID on every request was too strong. The
 trace keys are optional and MCP does not mandate a new span for every request.
-The target-stability objection survives: one permitted changing value is
-enough to turn a target that commits all metadata into invocation identity
-rather than a stable action name. No branch is recommended here.
+One permitted changing value is nevertheless enough to produce the now-accepted
+invocation identity. The C-refuse-unknown versus C-commit-unknown sub-question
+is **CLOSED AS MOOT** because Option A commits unknown keys by construction;
+`META-PARTITION-SPEC.md` retains the three-option decision history.
 
-**CLOSED only when** Ben's A/B/C ruling is recorded, the selected signed and
-receipt shapes are present on disk, absent/null/duplicate/unknown-key behavior
-is pinned by fixtures, the exact-frame subject regression remains green, and
-every required vector, artifact and pin for that branch is regenerated.
-**Serves: FLOOR, V3.1, VERIFY. Status: NOT STARTED; FORK FOR BEN.**
+**CLOSED only when** the complete validated `_meta` value is present in the
+effect commitment, guard target and V2 typed target/envelope; absent, null,
+duplicate and unknown-key behavior is pinned by fixtures; mutations of any
+accepted key change invocation identity; the exact-frame subject regression
+remains green; and every required vector, artifact and pin is regenerated.
+**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
 
-M.2 **Sign the adapter revision actually enforced.** The deployed constant is
+M.2 **Represent supported adapter revisions as a set.** **Ruling, 2026-07-28
+21:47:** `MCP_ADAPTER_VERSION` becomes a supported-set representation, not a
+scalar bump. The deployed constant is
 `MCP_ADAPTER_VERSION = "2025-06-18"` at
 `seal-host/rust/src/envelope_v23.rs:34`, two revisions behind the ruled
-revision and already inside signed effect bytes. A scalar change to
-`"2026-07-28"` costs **10–25 changed LOC in 2–3 files**. It changes signatures,
-host artifacts and deployed-byte goldens, but not the generic Lean encoding
-shape and therefore does not independently require a Lean source repin.
+revision and already inside signed effect bytes. Because the ruled set is a
+signed-shape change, the cost is **up to 450 changed LOC across up to 12 files**,
+replacing the old 10–25 LOC scalar estimate for that reason, and it requires a
+definite repin. A capability set does not erase the per-call fact: supported
+revisions belong in `server/discover`, while each signed effect must still
+identify the actual semantics used for that call.
 
-A supported set is a different claim: capability is not the per-call revision
-fact. Translation requires at least the actual client-facing revision, actual
-child-facing revision and a translation-profile identifier. That signed-shape
-change costs **250–450 changed LOC across 8–12 files** and requires a definite
-repin. Supported revisions belong in `server/discover`; the signed effect must
-still identify the semantics used for that call.
+M.2a **Settle the mixed-version policy forced by the supported set.** The named
+choice is transparent dual-era mediation versus an explicitly terminating
+translation gateway. Translation must identify at least the actual
+client-facing revision, actual child-facing revision and translation-profile
+identifier; transparency must make no translation claim. The obligation to
+settle and encode this policy now is **RULED, NOT STARTED**; no hidden default is
+permitted.
 
 **CLOSED only when** every signed effect identifies the actual enforced
 revision semantics, Rust and Lean verification agree on that representation,
-all affected signatures/goldens are regenerated, and the scalar or shaped
-claim's repin verdict is reflected in `lake-manifest.json`, `PINS.md` and
-native/wasm provenance as applicable.
-**Serves: FLOOR, V3.1, VERIFY. Status: NOT STARTED.**
+the M.2a transparent-or-translation policy is explicit and tested, all affected
+signatures/goldens are regenerated, and the set claim is reflected in
+`lake-manifest.json`, `PINS.md` and native/wasm provenance.
+**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
 
 M.3 **Refuse top-level batch arrays. REQUIRED-FOR-V1.** A top-level JSON-RPC
 array currently leaves the verified classifier as passthrough `0`; 2026 stdio
@@ -796,18 +799,20 @@ admission check. Today an MRTR resubmission re-enters mediation and needs fresh
 approval, so the live behavior is fail-closed; the latent defect is that the
 kernel target cannot distinguish changed state or responses.
 
-The v1 guard/host path costs **200–350 changed LOC across 8–12 files**. The V2
-typed/signed path costs **350–650 changed LOC across 8–14 additional files**.
-A coherent combined boundary costs **550–1,000 changed LOC across 16–24
-files**. Repin: **definite**. This accommodation fixes target collision; it
-does not introduce approval reuse.
+Because the ruled v1 boundary includes both surfaces, the cost is **up to 1,000
+changed LOC across up to 24 files**, the upper end of the costing lane's
+combined v1 guard/host plus V2 typed/signed estimate; the increase from the old
+v1-only upper bound of 350 LOC is a consequence of that ruling. Repin:
+**definite**. This accommodation fixes target collision; it does not introduce
+approval reuse.
 
 **CLOSED only when** equal arguments with different `requestState` or
 `inputResponses` produce different proved target keys, absence is distinct
 from every present value, Rust and Lean signed shapes agree, the existing exact
 frame digest/length check remains in force with a regression test, and all
 affected classifier, signed-shape, vector and artifact pins are regenerated.
-**Serves: FLOOR, V3.1, VERIFY. Status: NOT STARTED; REQUIRED-FOR-V1.**
+**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED;
+REQUIRED-FOR-V1.**
 
 M.5 **Preserve `server/discover`.** Implementing the endpoint in seal is
 **NOT-APPLICABLE** while seal is a transparent interposer: the child server,
@@ -824,23 +829,24 @@ seal path fabricates child versions, capabilities or `serverInfo`.
 **Serves: V3.1, VERIFY. Status: NOT STARTED; REQUIRED-FOR-V1 AS A PRESERVED
 METHOD.**
 
-M.6 **Move the demos to a 2026 golden path. REQUIRED-FOR-V1.** The eight
-checked-in `demo/golden_path*.py` programs use the legacy `initialize` /
-`"2025-06-18"` path. A modern path uses `server/discover`, carries required
-modern `_meta`, and emits the modern success shape including `resultType`
-where applicable. Directly modernizing all eight costs **120–240 LOC**.
-
-The dual-era question remains explicit, without a hidden default: a 2026 path
-may coexist with a 2025 path. A shared dual-era child plus client-mode
-parameter costs **about 200–400 changed LOC across the eight scripts and
-`demo/doctrine.py`**. Retaining a separate 2025 path is optional; at least one
-complete, truthful 2026 path is required.
+M.6 **Keep explicit 2025 and 2026 demo eras. REQUIRED-FOR-V1.** **Ruling,
+2026-07-28 21:47:** demos are dual-era, not silently mixed. **Status: RULED, NOT
+STARTED.** The eight checked-in `demo/golden_path*.py` programs use the legacy
+`initialize` / `"2025-06-18"` path. A modern path uses `server/discover`,
+carries required modern `_meta`, and emits the modern success shape including
+`resultType` where applicable. A shared dual-era child plus client-mode
+parameter costs **up to 400 changed LOC across the eight scripts and
+`demo/doctrine.py`**, replacing the old 120–240 LOC modernization-only estimate
+because the ruling retains both eras and requires their distinction to be
+taught explicitly.
 
 **CLOSED only when** at least one checked-in golden path exercises
 `server/discover`, required modern request metadata and `resultType`, its
-assertions pass under the ruled adapter semantics, and the chosen single-era
-or dual-era layout is explicit on disk with no 2025 path mislabeled as 2026.
-**Serves: V3.3, V3.4, VERIFY. Status: NOT STARTED; REQUIRED-FOR-V1.**
+assertions pass under the ruled adapter semantics, both the 2025 and 2026 paths
+are explicit on disk with no cross-era mislabeling, and a reader can tell which
+era each demo speaks and why both eras exist.
+**Serves: V3.3, V3.4, VERIFY. Status: RULED, NOT STARTED;
+REQUIRED-FOR-V1.**
 
 M.7 **Close the other transparent-interposer obligations.** For mediated
 `tools/call`, validate per-request modern `protocolVersion` and
@@ -865,36 +871,46 @@ intersection advertising, validation, error/result/MRTR translation and the
 signed ingress/egress/profile claim cost **800–1,500 changed LOC across 12–20
 files** before adversarial interoperability fixtures, with a definite repin.
 
-If V2.3 is in v1, its unsolicited startup
+**Correction, 2026-07-28:** V2 typed targets and envelopes are inside v1, so
+the earlier conditional boundary language is false. The V2.3 unsolicited startup
 `notifications/seal/session` is also non-conforming modern stdio output.
 Moving issuance behind a defined extension or subscription costs **100–250
 changed LOC across 4–7 files** without a signed-shape repin if the session
 claim stays intact; changing that signed session shape costs **250–500 LOC**
-and requires a definite repin. If V2.3 is outside v1, this sub-item is
-not-applicable to the shipped path, not evidence that the current notification
-conforms.
+and requires a definite repin. This is a required v1 closure surface.
 
 **CLOSED only when** modern `tools/call` metadata errors are pinned in
 cross-language differential fixtures before any authority decision; success
 responses preserve child `resultType` bytes; both discovery and legacy
 initialization relay truthfully; the signed adapter fact matches the semantics
 used; no translation is claimed without complete gateway fixtures; and the
-V2.3 notification is either outside the declared v1 boundary or emitted by a
-conforming mechanism.
-**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: NOT STARTED.**
+V2.3 notification is emitted only by a conforming mechanism.
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: RULED, NOT STARTED.**
+
+M.8 **Write the one-repin execution runbook.** **Ruling, 2026-07-28 21:47:** the
+single Phase M repin must be fully written down so the process is repeatable.
+This item records the deliverable; it does not contain or claim the runbook.
+
+**CLOSED only when** a stranger can execute the checked-in runbook without
+tribal knowledge and it names, at minimum: the ordered steps; every artifact
+that must move together; the verification after each step; and the named
+failure modes from past repins.
+**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
 
 #### Phase M repin summary
 
-Five independent change classes in the costing force a verified
-kernel/artifact repin: an A or C `_meta` target/effect shape; batch
-classification from passthrough to refuse; MRTR fields in the guard/typed
-target; a signed adapter claim changed from a scalar to a set or
-ingress/egress translation shape; and a changed V2 signed session shape.
+**Standing rule, ruled 2026-07-28 21:47: ALWAYS ONE REPIN.** Never piecemeal.
+Every Phase M item that forces a repin waits, and all such changes, artifacts,
+pins and provenance land in one verified repin act. M.8 makes that act
+repeatable; neither the rule nor the runbook obligation is implementation
+evidence.
 
-A scalar-only adapter-version change alters signatures and host artifacts but
-not the generic Lean encoding shape. A Rust-only B transform likewise avoids a
-Lean source repin, while still requiring new native provenance and
-receipt/forwarding fixtures. The concrete pin surfaces are
+Five change classes in the costing can force the verified kernel/artifact
+repin: the selected A `_meta` target/effect shape; batch
+classification from passthrough to refuse; MRTR fields in the guard/typed
+target; the ruled signed adapter set or a later
+ingress/egress translation shape; and a changed V2 signed session shape.
+The concrete pin surfaces are
 `seal-host/lake-manifest.json:14-23`, `seal-host/PINS.md:42-46`, the native FFI
 artifact and `seal-host/wasm-spike/verified/PROVENANCE.txt:12` onward.
 
@@ -941,7 +957,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; D.11's independent searches find none of the four authorization-leg outcome names and no shown/presentation field in the shipped authorization-decision builder |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| MCP 2026-07-28 conformance | **NOT STARTED; ONE FORK OPEN** | Phase M records seven disk-verifiable closure conditions; M.1 is the unresolved `_meta` fork |
+| MCP 2026-07-28 conformance | **RULED, NOT STARTED** | Phase M records eight disk-verifiable closure conditions; its decision forks are ruled, but no implementation evidence is claimed |
 | demos | **22/22 CLASSIFIED BASELINE; TARGET FIX UNMERGED; FRAMED-SUBJECT REPAIR IN PROGRESS** | D.2 preserves the measured 1-green/8-red symptom table but supersedes its four-root inference; D.8-D.9 record the shared v1 refusal, unmerged target discovery, and ruled v2 product repair |
 | watched-mutation coverage | **BASELINE MEASURED; EXPANSION OPEN** | D.10 tracks kernel guards at 35/47 WATCHED, ApprovalRecord v2 signed leaves at 1/21, and authorization-decision committed leaves at 1/55; Population A is reconstructed rather than centrally declared |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
