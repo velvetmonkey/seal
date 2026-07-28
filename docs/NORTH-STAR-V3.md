@@ -65,7 +65,7 @@ Last refreshed 2026-07-28.
 | item | status | the honest one-liner |
 |---|---|---|
 | V3.1 proofs-to-bytes | **PARTIAL** | numeric agreement and the 18-vector/five-observer characterization are complete; parser correspondence is not (`ROADMAP-KERNEL-OUTWARD.md` 2.7-2.8; `mcp-seal-dev` `6c23b5c`; `seal-host` `ba4e21d`) |
-| V3.2 unbrokered reachability | **PARTIAL — V0 ONLY** | v0 signs an honestly unsound declared inventory, prints UNKNOWN and no percentage, and rejects a payload that claims a sound denominator; total-reachability discovery remains undone (`ROADMAP-KERNEL-OUTWARD.md` 2.13; `seal-host` `b800096`, `rust/src/reachability.rs:321-399,432-470,506-509,624-661`) |
+| V3.2 unbrokered reachability | **PARTIAL — V0 ONLY** | v0 declares its scope and limitations in the signed document, prints total reachability as UNKNOWN and no percentage, and rejects a payload that claims a sound denominator; V3.2 has not moved past v0 (`ROADMAP-KERNEL-OUTWARD.md` 2.13; `seal-host` `b800096`, `rust/src/reachability.rs:321-399,432-470,506-509,624-661`) |
 | V3.3 one sink end to end | **PARTIAL — FRAMED SUBJECT IN PROGRESS** | position: target discovery is fixed only on unmerged `888187e`; the five approval demos still sign refused v1 records, and a separate approver cannot mint v2 from the current refusal. Queue: finish the ruled framed-subject emission, integrate target discovery, migrate the demos to v2, then rerun the watched mutations and classified demo surface (`ROADMAP-KERNEL-OUTWARD.md` D.2,D.8-D.11) |
 | V3.4 the write-up | **NOT STARTED** | |
 | boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
@@ -171,7 +171,7 @@ which emit a signed coverage artifact.
 The deliverable is a signed document of the shape:
 
 ```
-This agent has N paths to cause an effect.
+This agent has N enumerated path records.
   BROKERED (3):    postgres.query, fs.write, deploy.hook
   UNBROKERED (5):  outbound HTTP, shell, scheduler, 2 in-process tool handles
   UNKNOWN (1):     <cannot classify, and says so>
@@ -188,10 +188,17 @@ dashboard imply otherwise.
 
 Design constraints:
 - UNKNOWN is a first-class value, never rounded to covered or to safe.
-- The denominator is total agent reachability, never the brokered subset. A
-  coverage figure computed over what we already watch is the project's own
-  signature defect wearing a new hat.
+- A denominator may be printed only when the scope over which it is computed is
+  declared in the same signed document, and no percentage may be printed over a
+  scope the artifact cannot bound. A coverage figure computed over what we
+  already watch without that bound is the project's own signature defect wearing
+  a new hat.
 - The report is signed and verifiable independently of the host that produced it.
+
+**Signpost 2026-08-11:** if V3.2 has not moved past V0, that is a finding about
+where effort is going, not a status update. V3.2 is the named invention and the
+least advanced item while V3.1 and V3.3 absorb nearly all effort; §1 itself calls
+claim one "table stakes".
 
 ### V3.3 One sink, end to end
 
@@ -232,6 +239,11 @@ Without (4) this is an architecture diagram.
   formalising this "a genuine contribution".
 - A repo where every claim has an executable check and **every check has been
   observed failing**.
+- **Watched-mutation census.** Carry D.10's declared-denominator baseline into
+  the write-up: kernel guard rules 35/47 WATCHED, ApprovalRecord v2 signed leaves
+  1/21, and authorization-decision committed leaves 1/55. "35 of 47 rules have
+  been watched to fail, and here are the 12 that have not" is the most credible
+  paragraph we could put in front of a serious reviewer.
 
 ## 4. What we are NOT building
 
