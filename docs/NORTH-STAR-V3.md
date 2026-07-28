@@ -74,7 +74,8 @@ Last refreshed 2026-07-28.
 | V3.3 one sink end to end | **PARTIAL — FRAMED SUBJECT IN PROGRESS** | position: target discovery is fixed only on unmerged `888187e`; the five approval demos still sign refused v1 records, and a separate approver cannot mint v2 from the current refusal. Queue: finish the ruled framed-subject emission, integrate target discovery, migrate the demos to v2, then rerun the watched mutations and classified demo surface (`ROADMAP-KERNEL-OUTWARD.md` D.2,D.8-D.11) |
 | V3.4 the write-up | **NOT STARTED** | |
 | boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
-| V3.5 MCP 2026-07-28 conformance | **NOT STARTED, ONE FORK OPEN** | no conformance implementation is claimed; the `_meta` partition is the open fork, and Phase M gives all seven items disk-verifiable closure conditions (`ROADMAP-KERNEL-OUTWARD.md` Phase M) |
+| V3.5 MCP 2026-07-28 conformance | **RULED, NOT STARTED** | Option A commits complete `_meta`; supported revisions are a signed set; V2 targets/envelopes are inside v1; demos are dual-era; and Phase M gives all eight items disk-verifiable closure conditions (`ROADMAP-KERNEL-OUTWARD.md` Phase M) |
+| factory prediction confirmation | **RULED, NOT STARTED** | the needs-you inbox is the selected answer to the prediction-confirmation bottleneck; neither retirement of the unresolvable class nor waiting for 31 July remains the plan |
 
 **What V3.1 PARTIAL means**, because a colour is not evidence:
 
@@ -141,6 +142,12 @@ part of the ruling, not commentary:
   rubber-stamping in formal clothes, and `POLICY-LANGUAGE.md` §8 instruments it: the
   first UNKNOWN whose cause is a policy CONSTRUCT rather than a lens or world gap is
   to be treated as an incident, not a line item.
+
+**Factory-work ruling, 2026-07-28 21:47.** The **needs-you inbox** is the answer to
+the prediction-confirmation bottleneck, selected over retiring the unresolvable
+class or waiting for 31 July. This does not add another seal build item to the
+ordered four; it fixes how the surrounding work factory obtains human
+confirmation. **Status: RULED, NOT STARTED.**
 
 ### V3.1 Close the gap between the proofs and the bytes
 
@@ -258,19 +265,35 @@ means that the stdio interposer refuses top-level batches, preserves
 `server/discover`, validates modern per-request metadata before making an
 authority decision, signs the revision semantics it actually enforced, commits
 MRTR `requestState` and `inputResponses` without weakening exact frame binding,
-relays modern results truthfully, and has at least one 2026 golden path.
+relays modern results truthfully, and keeps explicit 2025 and 2026 demo paths
+whose eras and reasons for coexisting are legible to a reader.
 
-This is not a version-string-only change. The scalar adapter update is **10–25
-LOC in 2–3 files**, while a supported-set or ingress/egress signed shape is
-**250–450 LOC across 8–12 files**. Batch refusal is **120–220 LOC across about
-8 files**; coherent MRTR accommodation is **550–1,000 LOC across 16–24 files**;
-per-request validation is **150–300 LOC across 5–8 files**. The open `_meta`
-fork ranges from **200–400 LOC across 6–10 files** for a Rust-only stripping
-transform, through **250–450 LOC across 8–12 files plus another 250–450 across
-6–10 files** for complete commitment through V2, to **500–900 LOC across
-10–16 files or 700–1,200 across 16–24 files** for a coherent partition,
-depending on the v1 boundary. These are source-surface estimates, not measured
-diffs, and they are not a schedule. No `_meta` branch is selected here.
+**Correction, 2026-07-28 21:47.** The prior paragraph costed a scalar adapter bump,
+left `_meta` open and treated the V2 boundary and dual-era demos as optional.
+Ben ruled supported **sets**, `_meta` Option A, V2 typed targets and envelopes
+inside v1, and dual-era demos. The corresponding upper-end estimates are now
+**450 changed LOC across 12 files** for the signed adapter set, **900 changed
+LOC across 22 files** for complete `_meta` commitment through V2, **1,000
+changed LOC across 24 files** for coherent MRTR through V2, and **400 changed
+LOC across the eight demo scripts plus `demo/doctrine.py`** for the explicit
+dual-era demo surface. The roughly doubled `_meta` and MRTR budgets are a
+consequence of including V2 in the v1 release boundary. Batch refusal remains
+**120–220 LOC across about 8 files** and per-request validation remains
+**150–300 LOC across 5–8 files** because that ruling did not change their
+costed surfaces. These are source-surface estimates, not measured diffs, and
+they are not a schedule.
+
+Option A commits the complete validated `_meta` object, including unknown keys,
+to the effect commitment and guard/typed target. The guard target therefore
+becomes an **invocation identity rather than a stable name for an action**.
+That is an accepted v1 cost, not an overlooked risk. The
+C-refuse-unknown/C-commit-unknown question is closed as moot.
+
+The adapter set forces an explicit mixed-version policy: transparent dual-era
+mediation or a terminating translation gateway with signed client-facing
+revision, child-facing revision and translation profile. Phase M also rules
+**ALWAYS ONE REPIN**, never piecemeal, and requires a repeatable runbook before
+that single act.
 
 Conformance does **not** mean adding Streamable HTTP, consuming child tool
 schemas, fabricating child capabilities, guaranteeing that a child server
@@ -278,8 +301,8 @@ conforms, or claiming modern/legacy translation that does not exist. The
 stateless core removes no dependency from the current stdio host. MRTR is
 fail-closed today, not safely accommodated. `_meta` is covered by the raw frame
 evidence but omitted from the semantic target today. UNKNOWN stays UNKNOWN:
-until M.1 is ruled and every Phase M closure condition is evidenced on disk,
-the status is **NOT STARTED, ONE FORK OPEN**.
+until every Phase M closure condition is evidenced on disk, the implementation
+status is **RULED, NOT STARTED**.
 
 ## 4. What we are NOT building
 

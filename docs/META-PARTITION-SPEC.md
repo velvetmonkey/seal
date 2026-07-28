@@ -1,10 +1,15 @@
 # MCP 2026-07-28 `_meta` partition specification
 
-Status: **PROPOSED FOR THE M.1 A/C DECISION.**
+**Ruling, 2026-07-28 21:47:** Ben selected **Option A — commit everything**. The
+complete validated `_meta` object, including unknown keys, enters the effect
+commitment and guard/typed target. **Status: RULED, NOT STARTED.** This document
+retains all three options as decision history.
 
-This document specifies the semantic choices that Ben must rule on. It is not
+**Correction, 2026-07-28:** this document originally specified choices for Ben
+to rule on and selected no winner. It is not
 an encoding, domain-tag, byte-layout, signature, or implementation
-specification. Nothing in this document selects A or C.
+specification; the dated ruling above, not a rewrite of the option analysis,
+records the selection.
 
 Branch B is not costed again: stripping `_meta` deletes protocol-mandated
 metadata, trace propagation, and legal extensions from traffic seal claims to
@@ -251,13 +256,14 @@ It must never say or imply “not present” for a present excluded key, and mus
 never call an excluded key or value “inert.” “Not present” is reserved for a
 structural absence actually observed in the request.
 
-## 6. Option A remains live
+## 6. Option A — ruled 2026-07-28
 
 Under A, the complete validated `_meta` object, with a distinct absence state
 where the selected protocol era permits absence, enters the effect commitment
 and guard/typed target. The result is complete and simple: every server-visible
 metadata difference changes authority identity. The cost is that the target is
-an invocation identity, not a stable name for an action.
+an invocation identity, not a stable name for an action. **That cost is
+accepted, not overlooked, and is not reserved for later avoidance.**
 
 ### 6.1 Target-keyed consumers in the current tree
 
@@ -302,12 +308,19 @@ A's real risk is contractual, not hidden implementation breadth: it gives up a
 stable action name and makes approvals, capabilities, and replay namespaces
 invocation-specific. C preserves stable authority identity for named volatile
 metadata but has more implementation surface and a greater omission risk.
-That is the decision for Ben; this document does not select a winner.
+**Correction, 2026-07-28:** this comparison remains decision history; Ben has
+selected A.
 
-## 7. Mandatory negative control
+## 7. Option C negative control (decision history)
 
-The implementation owes a watched mutation that proves the partition boundary
-can fail.
+**Correction, 2026-07-28:** the partition-boundary controls below were
+mandatory only for Option C. They remain as the recorded C design and are not
+Option A implementation obligations. Option A instead owes watched mutations
+showing that every accepted `_meta` key, including an unknown key, changes the
+committed invocation identity.
+
+Under C, the implementation would owe a watched mutation that proves the
+partition boundary can fail.
 
 Minimum required control:
 
@@ -329,12 +342,13 @@ refusal; under C-commit-unknown the authority-identity stability assertion must
 turn red. Either outcome demonstrates that an excluded-name omission cannot
 pass silently.
 
-## 8. Deliberately open representation decisions
+## 8. Remaining representation decisions and closed forks
 
-The following are **OPEN / PROPOSED**, and Ben's A/C ruling does not by itself
-settle them:
+**Correction, 2026-07-28:** two entries in the original open list are now
+closed by Ben's rulings; they are retained rather than deleted.
 
-- C-refuse-unknown versus C-commit-unknown.
+- **C-refuse-unknown versus C-commit-unknown — CLOSED AS MOOT.** Option A
+  commits unknown keys by construction.
 - Exact metadata and nesting resource limits, and the wire error for a limit
   breach.
 - The domain tag or version identifier for any changed effect, target,
@@ -343,8 +357,8 @@ settle them:
   map/list encoding, and whether a semantic partition is embedded or
   referenced.
 - The signature container for the partition attestation and receipt.
-- Whether V2 typed targets and effect envelopes are inside the v1 release
-  boundary.
+- **Whether V2 typed targets and effect envelopes are inside the v1 release
+  boundary — RULED INSIDE V1.**
 - Migration and display language for old receipts whose
   `canonical_request` projection omitted `_meta`.
 
