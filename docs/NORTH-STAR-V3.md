@@ -60,11 +60,13 @@ Added 2026-07-26. Before this, answering "how far along are we" meant reading th
 whole file and then digging on disk. **Keep this current or delete it**, because a
 status board that lags is the same defect as a stale `PINS.md` row.
 
+Last refreshed 2026-07-28.
+
 | item | status | the honest one-liner |
 |---|---|---|
-| V3.1 proofs-to-bytes | **PARTIAL** | the gap is now MEASURED, not theorised, and one class of it is being closed |
-| V3.2 unbrokered reachability | **NOT STARTED** | the novel contribution; nothing exists |
-| V3.3 one sink end to end | **NOT STARTED** | |
+| V3.1 proofs-to-bytes | **PARTIAL** | numeric agreement and the 18-vector/five-observer characterization are complete; parser correspondence is not (`ROADMAP-KERNEL-OUTWARD.md` 2.7-2.8; `mcp-seal-dev` `6c23b5c`; `seal-host` `ba4e21d`) |
+| V3.2 unbrokered reachability | **PARTIAL — V0 ONLY** | v0 signs an honestly unsound declared inventory, prints UNKNOWN and no percentage, and rejects a payload that claims a sound denominator; total-reachability discovery remains undone (`ROADMAP-KERNEL-OUTWARD.md` 2.13; `seal-host` `b800096`, `rust/src/reachability.rs:321-399,432-470,506-509,624-661`) |
+| V3.3 one sink end to end | **PARTIAL** | 22/22 demo files are classified and the nine build-fenced paths measured 1 green/8 red in four cause classes; the discriminator repair landed across five verifier repos, but no post-repair rerun makes a red demo green (`ROADMAP-KERNEL-OUTWARD.md` D.1-D.3,D.7; `seal-host` `091d68f`,`f820f0f`) |
 | V3.4 the write-up | **NOT STARTED** | |
 | boxpol | **SPECIFIED, NOT BUILT** | correctly gated: starts after V3.1 or not at all |
 
@@ -79,13 +81,41 @@ status board that lags is the same defect as a stale `PINS.md` row.
   under the kernel's `CanonicalAction` does NOT by itself establish downstream
   agreement about the forwarded effect. NOT a demonstrated unsafe act: the
   application rejected those arguments afterwards for unrelated reasons.
-- **In flight.** `NUMERIC-AGREEMENT.md` Option B, accepted 2026-07-26. Predicate
-  implemented in the kernel; the seal-host repin and host-side wiring are running.
+- **Done for the numeric subwork; not V3.1 done.** `NUMERIC-AGREEMENT.md` Option
+  B was accepted 2026-07-26, and is no longer in flight. Its first implemented
+  rule's coefficient conjunct was superseded by Ben's 2026-07-27 11:05 ruling:
+  exact binary64 agreement now decides accepted integers, with coefficient length
+  retained only as a pre-conversion resource bound (`mcp-seal-dev` `b467c7d`,
+  merged as `6c23b5c`; `Seal/JsonUtil.lean:336-367,381-418`). The numeric spec's
+  Option C, downstream attestation, was present and rejected on 2026-07-26; no
+  numeric Option D exists on disk.
 - **NOT done, and this is the stated V3.1 scope.** A verified JSON parser in Lean,
   or proven serialization invariants with executable checks that the host upholds
   them. Neither exists.
-- **NOT done.** 13 of 18 divergent vectors untested; the run halted at the first
-  disagreement by design. Four of five configured observers never ran.
+- **Done for characterization; not parser correspondence.** The recursive harness
+  names and ran all 18 divergence vectors, one negative control and five concrete
+  observers: 18/18 vectors, 5/5 observers and 90/90 matrix cells have definite
+  outcomes (`seal-host` `ba4e21d`;
+  `scripts/downstream_parser_agreement.py:3-18,40-74,99-130,448-536`;
+  `docs/V31-DOWNSTREAM-PARSER-AGREEMENT.md:13-22,72-108,131-168`).
+- **Done, with two baselines rather than a flattering uniform one.** The
+  module-aware gate at `mcp-seal-dev` `d4c13be` checks 1,286 declarations:
+  24 regular kernel modules retain `[propext, Classical.choice, Quot.sound]`;
+  `Ffi` alone adds `lcProof`. There is no uniform three-name module baseline
+  (`Test/ModuleAxiomScan.lean:13-29,52-85,214-252`).
+- **Wired, not yet reached in CI.** `seal-host` `49a2a12` moves the acceptance
+  guards to Stage A full-arguments targets and invokes both Python host integration
+  entrypoints from CI; direct runs remain red on stale pre-minted approval targets,
+  and every Actions attempt since the wiring has skipped that step. `091d68f`
+  repairs the witness so a dead child reports its exit code and stderr rather than
+  a downstream `BrokenPipeError` or `JSONDecodeError`
+  (`ROADMAP-KERNEL-OUTWARD.md` D.4-D.6).
+
+Claims discipline has a coverage gap of its own: the Python host suites existed
+before they were wired, and `test/test_rebased_pin_baseline.py` still has no
+workflow caller. The fresh-receipt filesystem leg is not a third never-run
+example—it passed in Golden Path run `30213014766` on 2026-07-26—although the
+latest run `30352188374` stopped at the token gate before reaching it.
 
 **The trap:** the encoder twin passing is about WRITING agreement. The measured
 defect is about READING agreement. Conflating the two is how this gap stayed open,
