@@ -194,12 +194,14 @@ closure commits. No such check exists in the reconstructed history.
 As measured on 2026-07-29, the two M.4 kernel commits are no longer missing:
 `cd9ebba449bd2c0bd87a39eecdf1a58ee92a9ed7` and
 `81b2114a40e7904fd68cee3698416c05817688b7` are on authoritative
-`mcp-seal-dev` `main`. The host closure exists at
-`207e21c6ade85ae7ead4caaadb7d799e373527a1`, but that commit is not an
-ancestor of `seal-host` `main`. This dated state is **EVIDENCED** by the two
-repository histories and means stop condition 1 still applies: existence on
-an unmerged review branch is not a merged Phase M disposition. It does not
-remove the **PROPOSED** merge-ledger or final-selection requirements above.
+`mcp-seal-dev` `main`. Host topic commit
+`207e21c6ade85ae7ead4caaadb7d799e373527a1` is the second parent of merge
+`6700282635e2aec38d622314718bb12c38377590`, which is on authoritative
+`seal-host` `main`. This dated state is **EVIDENCED** by the two repository
+histories and establishes a merged source disposition for M.4. It does not
+remove the **PROPOSED** merge-ledger or final-selection requirements above,
+does not perform the repin, and does not clear stop condition 1 for Phase M
+work whose disposition remains open.
 
 ### 3. Confirm source and host gates are green — EVIDENCED locally;
 clean-runner status PROPOSED
@@ -692,12 +694,13 @@ independent baseline. Confirmation is the reviewed contract diff, the
 reviewer's hand-updated baseline, an explicit dual-accept disposition, and the
 green ordinary gate.
 
-As measured on 2026-07-29 at unmerged host commit `207e21c`, the gate reports
+As measured on 2026-07-29 at host topic commit `207e21c`, now contained by
+`main` merge `6700282635e2aec38d622314718bb12c38377590`, the gate reports
 `rust/src/envelope_v23.rs` changing from reviewed digest `6374ef4e…` to
 `15edd4a0…`; the default-branch diff is 165 insertions and zero deletions. The
 same run also reports a changed `docs/EFFECT-ENVELOPE-V23.md`. This is
 **EVIDENCED** by the gate output and Git diff, and neither additive shape nor
-staging status waives the review.
+merged source status waives the review.
 
 ### 9. Prepare the receipt verifier and all six fleet copies — copy topology
 EVIDENCED; cross-repository edit commands PROPOSED

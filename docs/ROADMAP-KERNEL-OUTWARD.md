@@ -710,10 +710,10 @@ not work for the current stdio host. The live drift order is `_meta`, top-level
 batch arrays, then MRTR; MRTR fails closed today.
 
 **Ruling, 2026-07-28 21:47 — V2 release boundary.** V2 typed targets and effect
-envelopes are inside the seal v1 release boundary. **Status: RULED, NOT
-STARTED.** This ruling roughly doubles the affected Phase M estimates; every
-estimate and closure condition below therefore includes the V2 surface where
-the costing lane supplied one.
+envelopes are inside the seal v1 release boundary. **Status: RULED; SOURCE
+IMPLEMENTATION IN PROGRESS; NOT REPINNED.** This ruling roughly doubles the
+affected Phase M estimates; every estimate and closure condition below
+therefore includes the V2 surface where the costing lane supplied one.
 
 M.1 **Commit the complete validated `_meta` object: OPTION A.** **Ruling,
 2026-07-28 21:47:** the complete validated object, including every unknown key
@@ -743,7 +743,8 @@ effect commitment, guard target and V2 typed target/envelope; absent, null,
 duplicate and unknown-key behavior is pinned by fixtures; mutations of any
 accepted key change invocation identity; the exact-frame subject regression
 remains green; and every required vector, artifact and pin is regenerated.
-**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
+**Serves: FLOOR, V3.1, VERIFY. Status: STAGES 1–3 MERGED; COORDINATED REPIN
+AND ROADMAP CLOSURE OPEN.**
 
 M.2 **Represent supported adapter revisions as a set.** **Ruling, 2026-07-28
 21:47:** `MCP_ADAPTER_VERSION` becomes a supported-set representation, not a
@@ -762,15 +763,16 @@ choice is transparent dual-era mediation versus an explicitly terminating
 translation gateway. Translation must identify at least the actual
 client-facing revision, actual child-facing revision and translation-profile
 identifier; transparency must make no translation claim. The obligation to
-settle and encode this policy now is **RULED, NOT STARTED**; no hidden default is
-permitted.
+settle and encode this policy is **RULED AND ENCODED IN MERGED SOURCE**; no
+hidden default is permitted.
 
 **CLOSED only when** every signed effect identifies the actual enforced
 revision semantics, Rust and Lean verification agree on that representation,
 the M.2a transparent-or-translation policy is explicit and tested, all affected
 signatures/goldens are regenerated, and the set claim is reflected in
 `lake-manifest.json`, `PINS.md` and native/wasm provenance.
-**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
+**Serves: FLOOR, V3.1, VERIFY. Status: SOURCE IMPLEMENTATION MERGED;
+COORDINATED REPIN AND END-TO-END CLOSURE OPEN.**
 
 M.3 **Refuse top-level batch arrays. REQUIRED-FOR-V1.** A top-level JSON-RPC
 array currently leaves the verified classifier as passthrough `0`; 2026 stdio
@@ -789,7 +791,8 @@ the executable host, the old batch escape witness and traces are repaired or
 removed, the Rust differential must-refuse corpus contains the case, all named
 partition/escape proofs pass, and the classifier plus native/wasm pins are
 refreshed on disk.
-**Serves: FLOOR, V3.1, VERIFY. Status: NOT STARTED; REQUIRED-FOR-V1.**
+**Serves: FLOOR, V3.1, VERIFY. Status: SOURCE CHANGE MERGED; ROADMAP CLOSURE
+AND REPIN OPEN; REQUIRED-FOR-V1.**
 
 M.4 **Accommodate MRTR without weakening frame binding. REQUIRED-FOR-V1.**
 The fixed rule is to represent absence distinctly, commit opaque
@@ -811,8 +814,8 @@ approval reuse.
 from every present value, Rust and Lean signed shapes agree, the existing exact
 frame digest/length check remains in force with a regression test, and all
 affected classifier, signed-shape, vector and artifact pins are regenerated.
-**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED;
-REQUIRED-FOR-V1.**
+**Serves: FLOOR, V3.1, VERIFY. Status: STAGES 1–3 MERGED; COORDINATED REPIN
+AND ROADMAP CLOSURE OPEN; REQUIRED-FOR-V1.**
 
 M.4a **Ship the replay-store guard release before the repin.** **RULED,
 Ben 2026-07-29 11:57: option C, refuse startup on a stale or
@@ -842,35 +845,37 @@ M.5 **Preserve `server/discover`.** Implementing the endpoint in seal is
 **NOT-APPLICABLE** while seal is a transparent interposer: the child server,
 not seal, owns its versions, capabilities and `serverInfo`. Preservation is
 **REQUIRED-FOR-V1**. The current non-`tools/call` passthrough is the intended
-class, but it has no explicit byte-preservation closure evidence. A request
-and response preservation fixture costs **10–25 LOC in 1–2 files**, with no
-repin. Terminating discovery would be a different gateway design and costs
-**150–300 LOC across 4–7 files** before translation logic.
+class. A request/response byte-preservation and no-fabrication fixture is now
+merged at `seal-host/test/integration/test_discover_preservation.py`; this
+audit established its presence on `main` but did not re-run it. Terminating
+discovery would be a different gateway design and costs **150–300 LOC across
+4–7 files** before translation logic.
 
 **CLOSED only when** a checked host/differential fixture proves a
 `server/discover` request and its child response survive byte-for-byte, and no
 seal path fabricates child versions, capabilities or `serverInfo`.
-**Serves: V3.1, VERIFY. Status: NOT STARTED; REQUIRED-FOR-V1 AS A PRESERVED
-METHOD.**
+**Serves: V3.1, VERIFY. Status: BYTE-PRESERVATION FIXTURE MERGED; EXECUTION
+EVIDENCE NOT RECHECKED HERE; REQUIRED-FOR-V1 AS A PRESERVED METHOD.**
 
 M.6 **Keep explicit 2025 and 2026 demo eras. REQUIRED-FOR-V1.** **Ruling,
-2026-07-28 21:47:** demos are dual-era, not silently mixed. **Status: RULED, NOT
-STARTED.** The eight checked-in `demo/golden_path*.py` programs use the legacy
-`initialize` / `"2025-06-18"` path. A modern path uses `server/discover`,
-carries required modern `_meta`, and emits the modern success shape including
-`resultType` where applicable. A shared dual-era child plus client-mode
-parameter costs **up to 400 changed LOC across the eight scripts and
-`demo/doctrine.py`**, replacing the old 120–240 LOC modernization-only estimate
-because the ruling retains both eras and requires their distinction to be
-taught explicitly.
+2026-07-28 21:47:** demos are dual-era, not silently mixed. **Status: RULED,
+PARTIAL — FILESYSTEM DUAL-ERA; SEVEN DEMOS LEGACY-ONLY.** All eight checked-in
+`demo/golden_path*.py` programs retain the legacy `initialize` /
+`"2025-06-18"` path; only the filesystem program also carries the modern
+path. A modern path uses `server/discover`, carries required modern `_meta`,
+and emits the modern success shape including `resultType` where applicable. A
+shared dual-era child plus client-mode parameter costs **up to 400 changed LOC
+across the eight scripts and `demo/doctrine.py`**, replacing the old 120–240
+LOC modernization-only estimate because the ruling retains both eras and
+requires their distinction to be taught explicitly.
 
 **CLOSED only when** at least one checked-in golden path exercises
 `server/discover`, required modern request metadata and `resultType`, its
 assertions pass under the ruled adapter semantics, both the 2025 and 2026 paths
 are explicit on disk with no cross-era mislabeling, and a reader can tell which
 era each demo speaks and why both eras exist.
-**Serves: V3.3, V3.4, VERIFY. Status: RULED, NOT STARTED;
-REQUIRED-FOR-V1.**
+**Serves: V3.3, V3.4, VERIFY. Status: RULED, PARTIAL — FILESYSTEM DUAL-ERA;
+SEVEN DEMOS LEGACY-ONLY; REQUIRED-FOR-V1.**
 
 M.7 **Close the other transparent-interposer obligations.** For mediated
 `tools/call`, validate per-request modern `protocolVersion` and
@@ -909,7 +914,8 @@ responses preserve child `resultType` bytes; both discovery and legacy
 initialization relay truthfully; the signed adapter fact matches the semantics
 used; no translation is claimed without complete gateway fixtures; and the
 V2.3 notification is emitted only by a conforming mechanism.
-**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: RULED, NOT STARTED.**
+**Serves: FLOOR, V3.1, V3.3, VERIFY. Status: RULED, PARTIAL; PER-REQUEST
+VALIDATION/ERROR MAPPINGS AND CONFORMING V2.3 FORWARDING NOT IMPLEMENTED.**
 
 M.8 **Write the one-repin execution runbook.** **Ruling, 2026-07-28 21:47:** the
 single Phase M repin must be fully written down so the process is repeatable.
@@ -919,7 +925,8 @@ This item records the deliverable; it does not contain or claim the runbook.
 tribal knowledge and it names, at minimum: the ordered steps; every artifact
 that must move together; the verification after each step; and the named
 failure modes from past repins.
-**Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED.**
+**Serves: FLOOR, V3.1, VERIFY. Status: RUNBOOK PRESENT; EXECUTABLE CLOSURE
+NOT ESTABLISHED.**
 
 #### Phase M repin summary
 
@@ -944,8 +951,9 @@ repin: the selected A `_meta` target/effect shape; batch
 classification from passthrough to refuse; MRTR fields in the guard/typed
 target; the ruled signed adapter set or a later
 ingress/egress translation shape; and a changed V2 signed session shape.
-**Disk-verified status, 2026-07-29:** the implementation status below
-supersedes the stale planning labels above for these five classes only. It is
+**Disk-verified status, 2026-07-29:** the commit-level implementation status
+below supersedes the dated pre-implementation descriptions above for these
+five classes only; the item-level status lines use current vocabulary. It is
 not evidence that an entire M item is closed, and none of it is a repin:
 
 - **Option A `_meta` target/effect shape (M.1): STAGES 1–3 MERGED; COORDINATED
@@ -967,11 +975,17 @@ not evidence that an entire M item is closed, and none of it is a repin:
   `81b2114a40e7904fd68cee3698416c05817688b7`, and host stage 3 at
   `6700282635e2aec38d622314718bb12c38377590`; all are ancestors of their
   repository `main`.
-- **Ruled signed adapter set (M.2): IN FLIGHT, UNMERGED.** Disk has kernel
-  commit `3512664c95717a755e188a07d3fa3bc00e4ca9a5` and host commit
-  `d7e1abb9c334c63e18e018cdd9535e1e99248d4e` at the tips of their respective
-  `feat/m2-adapter-revision-set` branches; neither commit is an ancestor of its
-  repository `main`.
+- **Ruled signed adapter set (M.2/M.2a): SOURCE IMPLEMENTATION MERGED;
+  COORDINATED REPIN AND END-TO-END CLOSURE OPEN.** Kernel merge
+  `811adf9bd3da6a3774737f49b8658d61c0239dc9` and host merge
+  `8dd43b5e8fe8dd536df2b620ed9804f3aa184e76` are each both `main` and
+  `origin/main`. The kernel tree contains the adapter revision set and scalar
+  entry-era mapping in `SealV2/EffectEnvelope.lean`; the host tree contains
+  `rust/src/adapter_revision.rs` and the transparent dual-era policy. These
+  source merges do not repin any kernel or derived artifact. M.7 still owns
+  per-request `protocolVersion` / `clientCapabilities` validation and the
+  `-32602` / `-32022` mappings; only the filesystem child advertises the dual
+  set, and no modern V2.3 signed effect has been forwarded end to end.
 - **Changed V2 signed session shape (M.7 tail): UNVERIFIED as a repository-wide
   “not started” claim.** No changed shape was established. The current checked
   host still emits `notifications/seal/session` with `schema:
@@ -1027,7 +1041,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; D.11's independent searches find none of the four authorization-leg outcome names and no shown/presentation field in the shipped authorization-decision builder |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| MCP 2026-07-28 conformance | **RULED, IN PROGRESS; NOT REPINNED** | Phase M records its disk-verifiable closure conditions and M.4a's ruled guard-release prerequisite; the dated repin summary now records merged M.1/M.3/M.4 work, unmerged M.2 work, and the remaining **UNVERIFIED** session-shape status without claiming a completed item, implemented guard, transition procedure, or repin |
+| MCP 2026-07-28 conformance | **RULED, IN PROGRESS; NOT REPINNED** | Phase M records its disk-verifiable closure conditions and M.4a's ruled guard-release prerequisite; the dated repin summary now records merged M.1/M.3/M.4 work plus M.2/M.2a source merges `811adf9bd3da6a3774737f49b8658d61c0239dc9` and `8dd43b5e8fe8dd536df2b620ed9804f3aa184e76`, while M.7 validation/forwarding closure remains open, without claiming a completed item, implemented guard, transition procedure, release, or repin |
 | demos | **22/22 CLASSIFIED BASELINE; TARGET FIX UNMERGED; FRAMED-SUBJECT REPAIR IN PROGRESS** | D.2 preserves the measured 1-green/8-red symptom table but supersedes its four-root inference; D.8-D.9 record the shared v1 refusal, unmerged target discovery, and ruled v2 product repair |
 | watched-mutation coverage | **BASELINE MEASURED; EXPANSION OPEN** | D.10 tracks kernel guards at 35/47 WATCHED, ApprovalRecord v2 signed leaves at 1/21, and authorization-decision committed leaves at 1/55; Population A is reconstructed rather than centrally declared |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
