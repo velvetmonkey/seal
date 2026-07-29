@@ -905,11 +905,52 @@ pins and provenance land in one verified repin act. M.8 makes that act
 repeatable; neither the rule nor the runbook obligation is implementation
 evidence.
 
+**Confirming ruling, 2026-07-29 11:56 — ONE.** Asked against the live
+temptation to repin what had landed and return for the rest, Ben answered
+**"one"**. This confirms the standing rule against that concrete split; it
+does not replace or re-date the 2026-07-28 rule.
+
 Five change classes in the costing can force the verified kernel/artifact
 repin: the selected A `_meta` target/effect shape; batch
 classification from passthrough to refuse; MRTR fields in the guard/typed
 target; the ruled signed adapter set or a later
 ingress/egress translation shape; and a changed V2 signed session shape.
+**Disk-verified status, 2026-07-29:** the implementation status below
+supersedes the stale planning labels above for these five classes only. It is
+not evidence that an entire M item is closed, and none of it is a repin:
+
+- **Option A `_meta` target/effect shape (M.1): STAGES 1–3 MERGED; COORDINATED
+  REPIN OPEN.** Kernel stage 1 merged at
+  `bcf8817d70f479ce69edf31f0d8c5c192e3669ec`, V2 stage 2 at
+  `4131b85996c7c3e859dc4810243a3ffb594adf9e`, and the host projection stage 3
+  at `f49d1981582b90c0623200c351bc064460ab6932`. All three are ancestors of
+  their repository `main`; the first two merge records explicitly defer the
+  host repin.
+- **Batch passthrough-to-refuse classification (M.3): SOURCE CHANGE MERGED;
+  ROADMAP CLOSURE AND REPIN OPEN.** The source merge is
+  `5bf8e5577c0fdba9ddfadf324b10488f61075b3e`; its commit record explicitly
+  says it does not repin `seal-host`, so M.3 is not yet **CLOSED** under the
+  closure condition above that requires refreshed classifier and native/wasm
+  pins.
+- **MRTR guard/typed-target fields (M.4): STAGES 1–3 MERGED; COORDINATED REPIN
+  OPEN.** Kernel stage 1 merged at
+  `cd9ebba449bd2c0bd87a39eecdf1a58ee92a9ed7`, V2 stage 2 at
+  `81b2114a40e7904fd68cee3698416c05817688b7`, and host stage 3 at
+  `6700282635e2aec38d622314718bb12c38377590`; all are ancestors of their
+  repository `main`.
+- **Ruled signed adapter set (M.2): IN FLIGHT, UNMERGED.** Disk has kernel
+  commit `3512664c95717a755e188a07d3fa3bc00e4ca9a5` and host commit
+  `d7e1abb9c334c63e18e018cdd9535e1e99248d4e` at the tips of their respective
+  `feat/m2-adapter-revision-set` branches; neither commit is an ancestor of its
+  repository `main`.
+- **Changed V2 signed session shape (M.7 tail): UNVERIFIED as a repository-wide
+  “not started” claim.** No changed shape was established. The current checked
+  host still emits `notifications/seal/session` with `schema:
+  "seal.session/v1"` and `envelope: "seal.effect/v2"` at
+  `seal-host/rust/src/main.rs:1200-1210`, also documented at
+  `seal-host/docs/EFFECT-ENVELOPE-V23.md:15-29`; absence of a located change is
+  not proof that no branch or uncommitted lane exists.
+
 The concrete pin surfaces are
 `seal-host/lake-manifest.json:14-23`, `seal-host/PINS.md:42-46`, the native FFI
 artifact and `seal-host/wasm-spike/verified/PROVENANCE.txt:12` onward.
@@ -957,7 +998,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; D.11's independent searches find none of the four authorization-leg outcome names and no shown/presentation field in the shipped authorization-decision builder |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| MCP 2026-07-28 conformance | **RULED, NOT STARTED** | Phase M records eight disk-verifiable closure conditions; its decision forks are ruled, but no implementation evidence is claimed |
+| MCP 2026-07-28 conformance | **RULED, IN PROGRESS; NOT REPINNED** | Phase M records eight disk-verifiable closure conditions; the dated repin summary now records merged M.1/M.3/M.4 work, unmerged M.2 work, and the remaining **UNVERIFIED** session-shape status without claiming a completed item or repin |
 | demos | **22/22 CLASSIFIED BASELINE; TARGET FIX UNMERGED; FRAMED-SUBJECT REPAIR IN PROGRESS** | D.2 preserves the measured 1-green/8-red symptom table but supersedes its four-root inference; D.8-D.9 record the shared v1 refusal, unmerged target discovery, and ruled v2 product repair |
 | watched-mutation coverage | **BASELINE MEASURED; EXPANSION OPEN** | D.10 tracks kernel guards at 35/47 WATCHED, ApprovalRecord v2 signed leaves at 1/21, and authorization-decision committed leaves at 1/55; Population A is reconstructed rather than centrally declared |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |
