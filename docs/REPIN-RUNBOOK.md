@@ -194,12 +194,14 @@ closure commits. No such check exists in the reconstructed history.
 As measured on 2026-07-29, the two M.4 kernel commits are no longer missing:
 `cd9ebba449bd2c0bd87a39eecdf1a58ee92a9ed7` and
 `81b2114a40e7904fd68cee3698416c05817688b7` are on authoritative
-`mcp-seal-dev` `main`. The host closure exists at
-`207e21c6ade85ae7ead4caaadb7d799e373527a1`, but that commit is not an
-ancestor of `seal-host` `main`. This dated state is **EVIDENCED** by the two
-repository histories and means stop condition 1 still applies: existence on
-an unmerged review branch is not a merged Phase M disposition. It does not
-remove the **PROPOSED** merge-ledger or final-selection requirements above.
+`mcp-seal-dev` `main`. Host topic commit
+`207e21c6ade85ae7ead4caaadb7d799e373527a1` is the second parent of merge
+`6700282635e2aec38d622314718bb12c38377590`, which is on authoritative
+`seal-host` `main`. This dated state is **EVIDENCED** by the two repository
+histories and establishes a merged source disposition for M.4. It does not
+remove the **PROPOSED** merge-ledger or final-selection requirements above,
+does not perform the repin, and does not clear stop condition 1 for Phase M
+work whose disposition remains open.
 
 ### 3. Confirm source and host gates are green — EVIDENCED locally;
 clean-runner status PROPOSED
@@ -692,12 +694,13 @@ independent baseline. Confirmation is the reviewed contract diff, the
 reviewer's hand-updated baseline, an explicit dual-accept disposition, and the
 green ordinary gate.
 
-As measured on 2026-07-29 at unmerged host commit `207e21c`, the gate reports
+As measured on 2026-07-29 at host topic commit `207e21c`, now contained by
+`main` merge `6700282635e2aec38d622314718bb12c38377590`, the gate reports
 `rust/src/envelope_v23.rs` changing from reviewed digest `6374ef4e…` to
 `15edd4a0…`; the default-branch diff is 165 insertions and zero deletions. The
 same run also reports a changed `docs/EFFECT-ENVELOPE-V23.md`. This is
 **EVIDENCED** by the gate output and Git diff, and neither additive shape nor
-staging status waives the review.
+merged source status waives the review.
 
 ### 9. Prepare the receipt verifier and all six fleet copies — copy topology
 EVIDENCED; cross-repository edit commands PROPOSED
@@ -895,26 +898,69 @@ selected loader hash. A clean runner that merely tests the committed wasm is
 not reproduction evidence.
 
 ### 13. Approve and stage replay-namespace transition — hazard EVIDENCED;
-remedy PROPOSED
+remedy RULED; procedure UNDESIGNED
 
 Do not publish the host cutover until the replay-state transition has an
 approved executable procedure. M.4 stage 2 changed
 `SealV2.serializeTargetKey` from NUL-intercalated fields to
 `Seal.encodeParts Target.keyParts` and added the two MRTR presence/value
-parts. `replayNamespace` embeds that serialized target key. Consequently, a
-live consumed nonce stored under the pre-change key is not found by a
-post-change lookup using the new key: across the upgrade boundary it can look
-fresh and fail open.
+parts.
 
-The hazard is **EVIDENCED** by the before/after kernel definitions, the
-stage-2 report, and the absence of any persisted-store transition in stages 2
-or 3. This is a deployment failure mode, not a missing proof about the new
-encoding.
+**Correction, 2026-07-29 — the preceding runbook version described the wrong
+live store.** It said that a live consumed nonce was persisted under
+`replayNamespace` / the serialized target key and could therefore look fresh
+after the target-key reshape. That is the Lean kernel model:
+`mcp-seal-dev/SealV2/Validation.lean:281-299` gives `ConsumedNonce` an `ns :
+ReplayNamespace`, `:564-573,633-637` puts `serializeTargetKey target` in that
+namespace, and `:777-782` defines `listReplayStore` as an in-memory reference
+store. `mcp-seal-dev/ASSURANCE_CASE.md:38` likewise describes that
+`listReplayStore` path as in-memory.
 
-The remedy is **PROPOSED**. No checked-in rotation, migration, drain, or
-mixed-version deployment procedure has been designed or exercised, so this
-runbook does not invent commands for one. Confirmation required before
-publication is:
+It is **not** the shipped SQLite schema. The host creates
+`nonces(nonce TEXT PRIMARY KEY, issued_at INTEGER, expiry_at INTEGER)` at
+`seal-host/rust/src/replay_store.rs:72-76` and burns through
+`insert_returning_is_new` at `:103-115` by nonce string alone. It persists no
+target, replay namespace, namespace-encoding version, schema version, or
+target preimage. Therefore the same nonce string remains burned across a
+`serializeTargetKey` reshape; the reshape does not by itself make that nonce
+fresh in the shipped store.
+
+The shipped hazard is instead that there is no persisted preimage from which
+a new target key can be recomputed and no version marker on which a candidate
+make an upgrade decision. **Option B, recompute under the new target key, is
+REJECTED AS NOT WELL-DEFINED.** This is a verified fact, not a preference: the
+shipped store retains no target preimage to re-key from, as shown by
+`seal-host/rust/src/replay_store.rs:72-76` and `:103-115`. This correction does
+not establish a safe cutover and removes none of the confirmations below.
+
+**Council record:** Council `db8f1180-92ae-48a5-aafe-53c86c4f17d5`,
+2026-07-29, closed PARTIAL, topology harmonic, parse rate 0.5. Codex
+(`gpt-5.6-sol`, confidence 0.88) and Grok (`grok-4.5`, confidence 0.86) both
+selected C independently from checked source. Gemini completed with no
+structured verdict parsed. Claude timed out as a straggler. Accepted by Ben
+2026-07-29 11:57.
+
+**RULED, Ben 2026-07-29 11:57: option C, refuse startup on a stale or
+format-mismatched replay store.** This ruling is on the design. It is not
+implementation evidence and it is not an executable procedure. Rotation
+(Option A) is not the default cutover: it survives only as an explicit operator
+act performed after the refusal gate, never as automatic boot-time acceptance
+of a foreign encoding.
+
+**Ruled critical-path prerequisite:** before the repin, first ship a guard
+release that retains the old codec and creates and checks `schema_version`,
+`namespace_encoding_version`, and `ledger_generation` against authority-signed
+configuration. A store-minted generation is not a trust anchor. Candidate-only
+startup refusal cannot control an older unguarded binary that ignores the
+markers, so the guard release ships before the candidate repin. Once guarded
+store state is activated, rollback to any unguarded binary is forbidden; only
+roll-forward is safe.
+
+The remedy and its guard-release prerequisite are **RULED DESIGN, NOT
+IMPLEMENTATION EVIDENCE OR PROCEDURE**. No checked-in rotation, migration,
+drain, or mixed-version deployment procedure has been designed or exercised,
+so this runbook does not invent commands for one.
+Confirmation required before publication is:
 
 1. a reviewed, checked-in procedure that names the persisted replay-store
    schema and chooses rotation, migration, or a safe drain explicitly;
@@ -926,6 +972,13 @@ publication is:
    ordering window reopens a live consumed nonce; and
 4. a positive control proving a genuinely distinct MRTR value receives its
    intended distinct new namespace.
+
+**Named anti-pattern — REFUSAL-ONLY FALSE GREEN.** “candidate refuses a v1
+store” passes even if the candidate refuses every request. That result alone
+is not transition evidence and cannot satisfy the confirmations above; the
+eventual upgrade evidence must include a non-vacuity control that distinguishes
+the intended stale-store refusal from an always-refuse candidate. The exact
+procedure remains undesigned.
 
 Record the reviewed procedure, exact old and candidate commits, replay-store
 fixture, and green test logs in `REPIN_EVIDENCE_DIR`. Until all four
