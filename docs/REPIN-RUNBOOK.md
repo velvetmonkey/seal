@@ -400,16 +400,16 @@ If a new import is missing from the FFI object closure, stop here. Repair and
 review the build script as part of this one repin; do not test against the old
 `.so`.
 
-### 3. Mint the wasm twice before copying it — build sequence EVIDENCED;
-clean provisioning PROPOSED
+### 3. Mint the wasm twice before copying it — build sequence and clean
+provisioning EVIDENCED; independent clean-runner reproduction PROPOSED
 
-The checked-in wasm scripts require ignored `wasm-spike/emsdk/` and
-`wasm-spike/lean4-src/` trees. Refuse to proceed if they are absent:
+The checked-in provisioner recreates or verifies the ignored
+`wasm-spike/emsdk/` and `wasm-spike/lean4-src/` trees. Run it before activating
+Emscripten, including when those directories already exist:
 
 ```sh
 cd "$HOST_ROOT/wasm-spike"
-test -f emsdk/emsdk_env.sh
-test -d lean4-src
+./provision_toolchain.sh
 source ./emsdk/emsdk_env.sh
 
 (cd .. && lake build)
@@ -441,10 +441,17 @@ PASS same-machine wasm reproduction <wasm sha256> <javascript sha256>
 `build_runtime_wasm.sh`, `build_core.sh`, `build_base.sh`,
 `build_closure.sh`, and strict `build_wasm.sh` are checked in. Commit
 `f247c049d7b864e9301704613f5640c2a2b43a4c` records this sequence and a
-same-machine repeat. The clean provisioning of Emscripten 6.0.0 and the Lean
-source tree is **PROPOSED** because no checked-in bootstrap script recreates
-those ignored directories. Confirmation required: a clean-runner wasm-mint
-job that provisions pinned tools and reproduces both hashes.
+same-machine repeat. Commit
+`e996e437bf50e1570c7006b0b4c9be59833ca5ea` makes clean toolchain
+provisioning **EVIDENCED**: it checks in `provision_toolchain.sh`, pins and
+verifies Emscripten 6.0.0 and Lean v4.28.0, applies and verifies the recorded
+Lean runtime patch, and records successful provisioning from an empty scratch
+directory.
+
+Independent artifact reproduction remains **PROPOSED**. No clean runner has
+yet used the provisioned trees to mint and reproduce both `SECOND_WASM` and
+`SECOND_JS`. Confirmation required: a clean-runner wasm-mint job that records
+the exact host commit and provisioned source state and reproduces both hashes.
 
 Do not copy the artifact if the two local links differ. The unresolved
 `0d3536e5` versus `3d70637f` episode shows why same-source provenance is not
@@ -963,6 +970,52 @@ unreachable commit, or mismatched downstream path.
 **Recovery:** do not make the lock “true” by weakening the gate. Before
 merge, point it only at exact tested candidate commits. After publication
 starts, stop and follow the abort rules; cross-fleet rollback is untested.
+
+### An ignored source tree carries an unrecorded local modification
+
+**Hazard status: EVIDENCED; byte-effect diagnosis: PROPOSED.**
+
+**Historical evidence:** `build_runtime_wasm.sh` compiles every
+`lean4-src/src/runtime/*.cpp`, including `interrupt.cpp`, into the runtime
+archive consumed by the final link. Commit
+`e996e437bf50e1570c7006b0b4c9be59833ca5ea` records that the Lean v4.28.0
+tree used for the checked-in build was not pristine: it changed
+`std::uncaught_exception()` to `std::uncaught_exceptions()` in
+`src/runtime/interrupt.cpp`. The exact checked-in patch has SHA-256
+`e79761006e0e7d9e7cd4024b038a7182cf1c56a31dd8dc4672892a7ec24b4d8a`.
+
+The July 26 history contains two sibling mints from host parent
+`4b0845e5d16ba058ef5b3503ffac334a144d8541`, both pinned to
+`mcp-seal-dev` `6c74b61382f8b7057cfb332a44a45e9e1b04e2b4`.
+Commit `6bb14dfa95869773c296d43dea2018ebedb38347` recorded
+`5c9dab764007e48685c4784a8cdeac377fb30535d55ad4e07854c74554d4d24e`
+(5,701,288 bytes); its follow-up
+`b92aed329e7c7376d837d2f310e736feadea2b2e` remains on
+`fix/wasm-repin-wire-guards`. Later,
+`f247c049d7b864e9301704613f5640c2a2b43a4c` recorded
+`70bee4b9ce4bed005429cb62515d6de7c61cb151a16b28c680399534d187cabf`
+(5,701,292 bytes), and merge
+`bc692053155d58f448fd4468552c349e38b5c865` carried that artifact to
+`main`.
+
+Neither mint commit, the abandoned branch follow-up, nor the merge named the
+`interrupt.cpp` modification. The first checked-in mention is `e996e43`.
+The later record implicates the patch as an input to the current artifact, but
+does not show that the patch caused the four-byte difference. The sibling
+records also differ in their account of empty object directories, the closure
+script changed between the two mint commits, and there is no immutable
+historical toolchain snapshot or build log for both runs. Until controlled
+evidence exists, the difference is unexplained.
+
+**Symptom:** a provisioner or clean runner reports a source diff not named in
+provenance, or nominally identical source pins produce a different wasm hash
+or size.
+
+**Recovery:** abort the repin. Preserve the complete source diff, object-state
+inventory, toolchain identity, logs, and artifacts. Reproduce the historical
+recipes on clean runners, then perform a patched-versus-pristine A/B mint with
+every other input fixed. That diagnosis is **PROPOSED** until recorded; do not
+attribute the byte change to the patch or select either artifact without it.
 
 ### Same claimed source produces a different wasm
 
