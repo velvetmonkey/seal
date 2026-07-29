@@ -115,7 +115,7 @@ module. Compare the generated glue, and verify whichever choice is made.
 
 The exact Phase M fixture list cannot be frozen before the remaining Phase M
 changes land. That list is therefore discovered by the old-hash and
-shape-diff sweeps in steps 7 and 9; omission is a stop condition.
+shape-diff sweep in step 7; omission is a stop condition.
 
 ### Fleet publication
 
@@ -190,6 +190,16 @@ behind M.8, so “not started” is not evidence that it is safe to omit.
 Confirmation required: check in a machine-readable Phase M merge ledger or a
 script that compares the selected `KERNEL_REV` and host base with the roadmap
 closure commits. No such check exists in the reconstructed history.
+
+As measured on 2026-07-29, the two M.4 kernel commits are no longer missing:
+`cd9ebba449bd2c0bd87a39eecdf1a58ee92a9ed7` and
+`81b2114a40e7904fd68cee3698416c05817688b7` are on authoritative
+`mcp-seal-dev` `main`. The host closure exists at
+`207e21c6ade85ae7ead4caaadb7d799e373527a1`, but that commit is not an
+ancestor of `seal-host` `main`. This dated state is **EVIDENCED** by the two
+repository histories and means stop condition 1 still applies: existence on
+an unmerged review branch is not a merged Phase M disposition. It does not
+remove the **PROPOSED** merge-ledger or final-selection requirements above.
 
 ### 3. Confirm source and host gates are green — EVIDENCED locally;
 clean-runner status PROPOSED
@@ -314,7 +324,7 @@ publish pending”; that is the state established by
 ## Ordered execution
 
 Every step is a gate for the next one. Keep source, host, and all downstream
-work on dedicated branches until step 12.
+work on dedicated branches until step 14.
 
 ### 1. Update the two source-pin declarations — artifact movement EVIDENCED;
 exact edit and regeneration command PROPOSED
@@ -376,10 +386,19 @@ checkout could otherwise survive.
 
 ### 2. Rebuild and verify the native layer — EVIDENCED
 
+This step is order-sensitive. The Rust crate links `sealffi`, so the Lean
+runtime closure and `.lake/build/lib/libsealffi.so` must exist before Cargo
+links the host. `scripts/build_all.sh` records and enforces the order
+`lake build +Ffi` → `scripts/build_ffi_so.sh` → Cargo. CI and
+`scripts/evidence.sh` use the same ordering.
+
 ```sh
 cd "$HOST_ROOT"
 scripts/build_all.sh
 test "$(git -C .lake/packages/mcp-seal rev-parse HEAD)" = "$KERNEL_REV"
+test -s .lake/build/lib/libsealffi.so
+test -f rust/Cargo.toml
+test ! -e Cargo.toml
 sha256sum .lake/build/lib/libsealffi.so rust/target/debug/seal-host-rs |
   tee "$REPIN_EVIDENCE_DIR/native.sha256"
 ```
@@ -390,8 +409,27 @@ Expected terminal line from the script:
 ==> done: rust/target/debug/seal-host-rs
 ```
 
+If Cargo is invoked separately after the shared object has been built, invoke
+it from the crate directory, not the repository root:
+
+```sh
+cd "$HOST_ROOT"
+test -s .lake/build/lib/libsealffi.so
+cd rust
+cargo build
+```
+
+`rust/build.rs` defaults `SEAL_FFI_LIB_DIR` to
+`$HOST_ROOT/.lake/build/lib` relative to `rust/Cargo.toml` and emits both the
+native link-search path and runtime rpath. That is the checked-in equivalent
+of supplying an explicit `RUSTFLAGS=-L ...` and matching runtime library path;
+CI relies on it. If the linker still reports `unable to find library
+-lsealffi`, do not add Cargo retries or continue with cached products: verify
+the shared object and `SEAL_FFI_LIB_DIR`, then return to the Lean/FFI build
+above.
+
 Then run the native portion of the integrated evidence chain, or the entire
-chain at step 10. `scripts/build_ffi_so.sh` rebuilds the explicit object
+chain at step 11. `scripts/build_ffi_so.sh` rebuilds the explicit object
 closure and checks exports and unresolved dynamic symbols. This check is
 required because the July 24 raw-wire work spent four days behind a stale
 `.so` after its module closure ceased to link.
@@ -610,7 +648,58 @@ fields to all signed artifacts. Confirmation required: a checked-in generator
 or completeness test. Until then, two-person review of this classification is
 a stop condition.
 
-### 8. Prepare the receipt verifier and all six fleet copies — copy topology
+### 8. Obtain independent review of the frozen Phase M contract — EVIDENCED
+
+Run the freeze gate before approving or refreezing any changed contract:
+
+```sh
+cd "$HOST_ROOT"
+python3 scripts/contract_freeze_gate.py
+```
+
+Any `REVIEW` row is a stop, even when the contract diff is purely additive.
+The gate hashes the contract view of the whole file; it intentionally does not
+infer that additions are harmless. A human reviewer must inspect every
+reported contract diff and update the corresponding digest in
+`scripts/contract_freeze_gate.py` `REVIEWED_HASHES` by hand.
+
+The Phase M review must specifically exclude **dual-accept**: staging a second
+envelope shape must not create a host path that accepts both the old and Phase
+M signed shapes under the unchanged domain tag. The reviewer must establish
+that the pre-repin encoder remains the sole active shape until the coordinated
+cutover, and that the cutover selects only the reviewed Phase M shape. A
+compatibility path that admits both is a review failure, not a migration
+convenience.
+
+Only after that human review and hand edit, update the writable manifest and
+rerun the ordinary gate:
+
+```sh
+cd "$HOST_ROOT"
+python3 scripts/contract_freeze_gate.py --refreeze
+python3 scripts/contract_freeze_gate.py
+```
+
+Expected final line:
+
+```text
+PASS  <current count> frozen V2.3 contract files match docs/effect-envelope-v23.freeze.json; independent review baseline and golden anchors agree
+```
+
+`--refreeze` is explicitly not a substitute for review: the script checks
+`REVIEWED_HASHES` before writing the manifest and refuses to change that
+independent baseline. Confirmation is the reviewed contract diff, the
+reviewer's hand-updated baseline, an explicit dual-accept disposition, and the
+green ordinary gate.
+
+As measured on 2026-07-29 at unmerged host commit `207e21c`, the gate reports
+`rust/src/envelope_v23.rs` changing from reviewed digest `6374ef4e…` to
+`15edd4a0…`; the default-branch diff is 165 insertions and zero deletions. The
+same run also reports a changed `docs/EFFECT-ENVELOPE-V23.md`. This is
+**EVIDENCED** by the gate output and Git diff, and neither additive shape nor
+staging status waives the review.
+
+### 9. Prepare the receipt verifier and all six fleet copies — copy topology
 EVIDENCED; cross-repository edit commands PROPOSED
 
 Copy the already verified `NEW_WASM` into:
@@ -671,7 +760,7 @@ Do not update only the claimed hash. The stale `seal-check` incident emitted
 kernel. The July 21 Golden Path failure likewise printed different local and
 claimed prefixes.
 
-### 9. Commit candidate branches and construct the candidate fleet lock —
+### 10. Commit candidate branches and construct the candidate fleet lock —
 commit topology EVIDENCED; exact staging order PROPOSED
 
 Create reviewed commits in all changed downstream repositories. Do not merge
@@ -736,7 +825,7 @@ PIN STATE: fleet=<full new hash> local=<full new hash>: fleet and local pins agr
 Review the generated footprint diff. A falling occurrence count is not
 automatically an improvement; it may mean a pin surface disappeared.
 
-### 10. Run the integrated host and downstream evidence — EVIDENCED
+### 11. Run the integrated host and downstream evidence — EVIDENCED
 
 With the candidate repositories as siblings:
 
@@ -784,7 +873,7 @@ That gate checks out the commits in the candidate lock, verifies all six
 wasm copies, and runs their recorded suites. It will fail if the lock names an
 uncommitted or wrong commit.
 
-### 11. Obtain green clean-runner evidence for every candidate — requirement
+### 12. Obtain green clean-runner evidence for every candidate — requirement
 EVIDENCED; query procedure PROPOSED
 
 Push candidate branches without merging them, then require green CI at the
@@ -805,9 +894,46 @@ In particular, the independent wasm mint must reproduce `NEW_WASM` and the
 selected loader hash. A clean runner that merely tests the committed wasm is
 not reproduction evidence.
 
-### 12. Publish once — policy EVIDENCED; cross-repository order PROPOSED
+### 13. Approve and stage replay-namespace transition — hazard EVIDENCED;
+remedy PROPOSED
 
-Only after steps 1–11 are green:
+Do not publish the host cutover until the replay-state transition has an
+approved executable procedure. M.4 stage 2 changed
+`SealV2.serializeTargetKey` from NUL-intercalated fields to
+`Seal.encodeParts Target.keyParts` and added the two MRTR presence/value
+parts. `replayNamespace` embeds that serialized target key. Consequently, a
+live consumed nonce stored under the pre-change key is not found by a
+post-change lookup using the new key: across the upgrade boundary it can look
+fresh and fail open.
+
+The hazard is **EVIDENCED** by the before/after kernel definitions, the
+stage-2 report, and the absence of any persisted-store transition in stages 2
+or 3. This is a deployment failure mode, not a missing proof about the new
+encoding.
+
+The remedy is **PROPOSED**. No checked-in rotation, migration, drain, or
+mixed-version deployment procedure has been designed or exercised, so this
+runbook does not invent commands for one. Confirmation required before
+publication is:
+
+1. a reviewed, checked-in procedure that names the persisted replay-store
+   schema and chooses rotation, migration, or a safe drain explicitly;
+2. an automated upgrade test that consumes a nonce for an MRTR-absent request
+   under the exact pre-change host, preserves that live replay state, starts
+   the exact candidate host, and proves the same logical request, public key,
+   session, policy version, and nonce is still rejected as consumed;
+3. mixed-version, interrupted-cutover, and rollback tests proving that no
+   ordering window reopens a live consumed nonce; and
+4. a positive control proving a genuinely distinct MRTR value receives its
+   intended distinct new namespace.
+
+Record the reviewed procedure, exact old and candidate commits, replay-store
+fixture, and green test logs in `REPIN_EVIDENCE_DIR`. Until all four
+confirmations exist, stop here.
+
+### 14. Publish once — policy EVIDENCED; cross-repository order PROPOSED
+
+Only after steps 1–13 are green:
 
 1. freeze the exact candidate commit ledger;
 2. make the selected kernel source commit reachable on its authoritative
@@ -831,7 +957,7 @@ old/new verification window. Confirmation required: a tested release
 controller or an explicitly approved maintenance-window protocol with a
 measured compatibility result for both directions.
 
-### 13. Verify published state — EVIDENCED
+### 15. Verify published state — EVIDENCED
 
 From fresh clones of the default branches, run:
 
