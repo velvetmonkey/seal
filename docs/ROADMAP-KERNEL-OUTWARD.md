@@ -814,6 +814,30 @@ affected classifier, signed-shape, vector and artifact pins are regenerated.
 **Serves: FLOOR, V3.1, VERIFY. Status: RULED, NOT STARTED;
 REQUIRED-FOR-V1.**
 
+M.4a **Ship the replay-store guard release before the repin.** **RULED,
+Ben 2026-07-29 11:57: option C, refuse startup on a stale or
+format-mismatched replay store.** This is a ruling on design, not implementation
+evidence and not an executable procedure. The guard release is a **RULED
+PREREQUISITE** on the Phase M critical path: it ships before the repin, retains
+the old codec, and creates and checks `schema_version`,
+`namespace_encoding_version`, and `ledger_generation` against authority-signed
+configuration. A store-minted generation is not a trust anchor.
+
+Rotation (Option A) is not the default cutover. It remains available only as an
+explicit operator act after the refusal gate and never as automatic boot-time
+acceptance of a foreign encoding. Migration (Option B) is **REJECTED AS NOT
+WELL-DEFINED** as a verified fact, not a preference: the shipped store retains
+no target preimage to re-key from. The evidence is
+`seal-host/rust/src/replay_store.rs:72-76` and `:103-115`. After activation,
+rollback to any unguarded binary is forbidden; only roll-forward is safe.
+
+No rotation, migration, drain, mixed-version deployment, or rollback command is
+designed here. The Phase M critical path remains blocked on the implementation
+evidence and the four unchanged transition confirmations in
+`docs/REPIN-RUNBOOK.md` step 13.
+**Serves: FLOOR, V3.1, VERIFY. Status: RULED PREREQUISITE; NOT IMPLEMENTED;
+PROCEDURE UNDESIGNED.**
+
 M.5 **Preserve `server/discover`.** Implementing the endpoint in seal is
 **NOT-APPLICABLE** while seal is a transparent interposer: the child server,
 not seal, owns its versions, capabilities and `serverInfo`. Preservation is
@@ -904,6 +928,11 @@ Every Phase M item that forces a repin waits, and all such changes, artifacts,
 pins and provenance land in one verified repin act. M.8 makes that act
 repeatable; neither the rule nor the runbook obligation is implementation
 evidence.
+
+**Ruled prerequisite, Ben 2026-07-29 11:57:** M.4a's old-codec guard
+release ships before that one repin. The repin cannot be the first binary that
+interprets replay-store format markers. This ordering is ruled design, not
+evidence that the guard or transition procedure exists.
 
 **Confirming ruling, 2026-07-29 11:56 — ONE.** Asked against the live
 temptation to repin what had landed and return for the rest, Ben answered
@@ -998,7 +1027,7 @@ evidence is UNVERIFIED rather than confidently coloured.
 | four-leg Option D authorization decision | **PARTIAL / COMPLETE IMPLEMENTATION UNVERIFIED** | rename and ApprovalRecord v2 commits landed; D.11's independent searches find none of the four authorization-leg outcome names and no shown/presentation field in the shipped authorization-decision builder |
 | V3.4 write-up | **UNVERIFIED** | no completion evidence checked |
 | boxpol | **SPECIFICATION PRESENT; BUILD UNVERIFIED** | V3 points to `POLICY-LANGUAGE.md`; build state was not established |
-| MCP 2026-07-28 conformance | **RULED, IN PROGRESS; NOT REPINNED** | Phase M records eight disk-verifiable closure conditions; the dated repin summary now records merged M.1/M.3/M.4 work, unmerged M.2 work, and the remaining **UNVERIFIED** session-shape status without claiming a completed item or repin |
+| MCP 2026-07-28 conformance | **RULED, IN PROGRESS; NOT REPINNED** | Phase M records its disk-verifiable closure conditions and M.4a's ruled guard-release prerequisite; the dated repin summary now records merged M.1/M.3/M.4 work, unmerged M.2 work, and the remaining **UNVERIFIED** session-shape status without claiming a completed item, implemented guard, transition procedure, or repin |
 | demos | **22/22 CLASSIFIED BASELINE; TARGET FIX UNMERGED; FRAMED-SUBJECT REPAIR IN PROGRESS** | D.2 preserves the measured 1-green/8-red symptom table but supersedes its four-root inference; D.8-D.9 record the shared v1 refusal, unmerged target discovery, and ruled v2 product repair |
 | watched-mutation coverage | **BASELINE MEASURED; EXPANSION OPEN** | D.10 tracks kernel guards at 35/47 WATCHED, ApprovalRecord v2 signed leaves at 1/21, and authorization-decision committed leaves at 1/55; Population A is reconstructed rather than centrally declared |
 | post-shape `three_way_agreement` | **UNVERIFIED** | the prior roadmap's dated red is preserved below as history; this graft did not run the current suite |

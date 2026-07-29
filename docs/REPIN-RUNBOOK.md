@@ -895,7 +895,7 @@ selected loader hash. A clean runner that merely tests the committed wasm is
 not reproduction evidence.
 
 ### 13. Approve and stage replay-namespace transition — hazard EVIDENCED;
-remedy PROPOSED
+remedy RULED; procedure UNDESIGNED
 
 Do not publish the host cutover until the replay-state transition has an
 approved executable procedure. M.4 stage 2 changed
@@ -924,35 +924,39 @@ fresh in the shipped store.
 
 The shipped hazard is instead that there is no persisted preimage from which
 a new target key can be recomputed and no version marker on which a candidate
-can make an upgrade decision. **Option B, recompute under the new target key,
-is not well-defined for this schema**, not merely expensive. This correction
-does not establish a safe cutover and removes none of the confirmations below.
+make an upgrade decision. **Option B, recompute under the new target key, is
+REJECTED AS NOT WELL-DEFINED.** This is a verified fact, not a preference: the
+shipped store retains no target preimage to re-key from, as shown by
+`seal-host/rust/src/replay_store.rs:72-76` and `:103-115`. This correction does
+not establish a safe cutover and removes none of the confirmations below.
 
-**Council record, 2026-07-29 — `db8f1180`: PARTIAL, topology harmonic, parse
-rate 0.5.** Codex (`gpt-5.6-sol`, `valid_json`, confidence 0.88) recommended
-**C, refuse startup on a stale store**. Grok (`grok-4.5`, `valid_json`,
-confidence 0.86) also recommended **C**. Gemini (`agy`, Gemini 3.1 Pro High)
-completed but produced no parsed structured verdict and its predictions were
-not captured. Claude (`opus-5`) timed out and was cut as a straggler after the
-600-second grace. This is a recommendation from two of four seats. **Ben has
-not accepted it; no option has been chosen.** The remedy here remains
-**PROPOSED**, not **RULED**. The two parsed seats independently identified the
-undefined Option B and the refusal-only false green named below.
+**Council record:** Council `db8f1180-92ae-48a5-aafe-53c86c4f17d5`,
+2026-07-29, closed PARTIAL, topology harmonic, parse rate 0.5. Codex
+(`gpt-5.6-sol`, confidence 0.88) and Grok (`grok-4.5`, confidence 0.86) both
+selected C independently from checked source. Gemini completed with no
+structured verdict parsed. Claude timed out as a straggler. Accepted by Ben
+2026-07-29 11:57.
 
-**New proposed critical-path prerequisite from the unconfirmed council
-recommendation:** before the repin, first ship a guard release that retains the
-old codec but creates and checks `schema_version`,
-`namespace_encoding_version`, and `ledger_generation`. The generation check
-must compare the store marker with authority-signed configuration; a
-store-minted generation is not a trust anchor. Candidate-only startup refusal
-cannot control an older unguarded binary that ignores the marker, which is why
-the proposed guard release must precede the candidate repin. This prerequisite
-is **PROPOSED, NOT RULED**, and no executable release or cutover procedure is
-yet designed here.
+**RULED, Ben 2026-07-29 11:57: option C, refuse startup on a stale or
+format-mismatched replay store.** This ruling is on the design. It is not
+implementation evidence and it is not an executable procedure. Rotation
+(Option A) is not the default cutover: it survives only as an explicit operator
+act performed after the refusal gate, never as automatic boot-time acceptance
+of a foreign encoding.
 
-The remedy and its guard-release prerequisite are **PROPOSED**. No checked-in
-rotation, migration, drain, or mixed-version deployment procedure has been
-designed or exercised, so this runbook does not invent commands for one.
+**Ruled critical-path prerequisite:** before the repin, first ship a guard
+release that retains the old codec and creates and checks `schema_version`,
+`namespace_encoding_version`, and `ledger_generation` against authority-signed
+configuration. A store-minted generation is not a trust anchor. Candidate-only
+startup refusal cannot control an older unguarded binary that ignores the
+markers, so the guard release ships before the candidate repin. Once guarded
+store state is activated, rollback to any unguarded binary is forbidden; only
+roll-forward is safe.
+
+The remedy and its guard-release prerequisite are **RULED DESIGN, NOT
+IMPLEMENTATION EVIDENCE OR PROCEDURE**. No checked-in rotation, migration,
+drain, or mixed-version deployment procedure has been designed or exercised,
+so this runbook does not invent commands for one.
 Confirmation required before publication is:
 
 1. a reviewed, checked-in procedure that names the persisted replay-store
@@ -966,7 +970,7 @@ Confirmation required before publication is:
 4. a positive control proving a genuinely distinct MRTR value receives its
    intended distinct new namespace.
 
-**Named anti-pattern — REFUSAL-ONLY FALSE GREEN.** “Candidate refuses a v1
+**Named anti-pattern — REFUSAL-ONLY FALSE GREEN.** “candidate refuses a v1
 store” passes even if the candidate refuses every request. That result alone
 is not transition evidence and cannot satisfy the confirmations above; the
 eventual upgrade evidence must include a non-vacuity control that distinguishes
