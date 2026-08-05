@@ -16,7 +16,7 @@ classical fragment, no `sorry`, no `native_decide`.
 | Claim | Status | Checked by | Home |
 |---|---|---|---|
 | An unguarded or unapproved action is never allowed (default deny). | **Proven** | `default_deny_never_allowed` (SealCore/Safety.lean) | mcp-seal-dev |
-| A guarded action passes **iff** a live human approval matches that exact target. | **Proven** | `guarded_allow_iff_live`, `approval_binds_to_target` | mcp-seal-dev |
+| The safety kernel allows a guarded target **iff** its state contains a matching live approval record for that exact target. | **Proven** | `guarded_allow_iff_live`, `approval_binds_to_target` | mcp-seal-dev |
 | An approval for one target never authorizes another (confused deputy blocked). | **Proven** | `confused_deputy_blocks_from_single_other_approval` | mcp-seal-dev |
 | Approvals are single-use and expire. | **Proven** | `consumed_approval_not_live`, `expired_not_live` | mcp-seal-dev |
 | The canonical request grammar is total to parse and roundtrip-stable, with exactly one byte representation per Unicode string. | **Proven** | `parse_total`, `canonical_roundtrip`, `escapeString_injective` | mcp-seal-dev (SealV2) |
