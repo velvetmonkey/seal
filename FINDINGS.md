@@ -10,8 +10,8 @@
 
 | Claim (verbatim or close paraphrase from public surface) | Backed? | File:line / evidence | Action |
 |----------------------------------------------------------|---------|----------------------|--------|
-| An AI agent tries to delete your production database. Seal stops it, because no human approved that exact action. | Yes (showcase) | seal-live-demo/scripts/run_local.sh + assert.mjs (15 invariants, P2 block vs P3 bypass on identical canonical_request_sha256); fixtures/ | keep |
-| Seal puts one checkpoint... did a human explicitly approve *this exact request*? No matching approval, no action. | Yes (proven + tested) | mcp-seal-dev/SealCore/Safety.lean: default_deny_never_allowed, guarded_allow_iff_live, approval_binds_to_target; conformance in seal-host + seal-check tests | keep |
+| An AI agent tries to delete your production database. Seal stops it, because no human approved that exact action. | Yes (showcase) | seal-live-demo/scripts/run_local.sh + assert.mjs (17 invariants, P2 block vs P3 bypass on identical canonical_request_sha256); fixtures/ | keep |
+| Seal puts one checkpoint... is there a matching live approval for *this exact request*? No matching approval, no guarded action. (The theorems bind an approval record in state; that the approver is the human you think is the declared custody assumption — see the "Approval origin" row.) | Yes (proven + tested) | mcp-seal-dev/SealCore/Safety.lean: default_deny_never_allowed, guarded_allow_iff_live, approval_binds_to_target; conformance in seal-host + seal-check tests | keep |
 | Every decision lands as a tamper-evident receipt you can re-check yourself. | Yes (tested) | seal-assurance-kit/bin/seal verify + src/verify.cjs; seal-check/test/receipt-verify.test.cjs; seal-live-demo evidence/ + pwa replay | keep |
 | The core question is narrow enough to *prove*: a guarded action must not pass unless the approval state authorizes that exact target. | Yes (proven) | mcp-seal-dev/SealCore/Safety.lean + SealV2/DecideTheorems.lean (non_bypass etc.); axiom footprint documented | keep |
 | The rulebook is a machine-checked theorem in Lean 4... Rust, wasm, JavaScript are tied back by byte-exact conformance tests over a shared corpus. | Yes (tested) | seal-host/scripts/conformance_bridge.mjs + docs/conformance-*.txt; seal-host/rust tests; seal-check differential | keep |
@@ -28,7 +28,7 @@
 | Universal conformance over all inputs. | Not claimed | EVALUATOR-START, CLAIMS-MATRIX | keep |
 | default_deny_never_allowed (unguarded action never allowed). | Yes (proven) | mcp-seal/SealCore/Safety.lean:8 (theorem default_deny_never_allowed) | keep |
 | guarded_allow_iff_live + approval_binds_to_target (exact target match required). | Yes (proven) | mcp-seal/SealCore/Safety.lean:16,29 | keep |
-| The live demo evidence is real (blocked vs bypassed on identical canonical sha). | Yes (tested) | seal/scripts/run-showcase.sh (captured output shows "blocked" "bypassed" from bundle); seal-live-demo/scripts/assert.mjs (15 invariants) | keep |
+| The live demo evidence is real (blocked vs bypassed on identical canonical sha). | Yes (tested) | seal/scripts/run-showcase.sh (captured output shows "blocked" "bypassed" from bundle); seal-live-demo/scripts/assert.mjs (17 invariants) | keep |
 | Tamper-evident receipt re-derivable by anyone (PWA or kit). | Yes (tested) | seal/scripts/run-showcase.sh + PWA html served (replay grid); seal-assurance-kit + seal-check tests | keep |
 
 ## NEEDS BEN (unverified or out-of-scope in this pass)

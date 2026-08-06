@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Seal: a proven checkpoint for AI agents</title>
-<meta name="description" content="Seal is a proven checkpoint for AI agents: no exact human approval, no action, with a record you can check yourself.">
+<meta name="description" content="Seal is a proven checkpoint for AI agents: no matching approval record, no guarded action, with a record you can check yourself.">
 <style>
   :root { --bg:#0d0d12; --panel:#15151d; --ink:#e8e8ef; --dim:#9aa0ad; --line:#26263340; --accent:#a855f7; }
   * { box-sizing:border-box; }
@@ -44,7 +44,7 @@
   <header>
     <div class="logo" role="img" aria-label="Seal logo"></div>
     <h1>Seal</h1>
-    <p class="thesis">A proven checkpoint for AI agents: no exact human approval, no action. And a record you can check yourself.</p>
+    <p class="thesis">A proven checkpoint for AI agents: no matching approval record, no guarded action. And a record you can check yourself.</p>
     <p class="lede">Seal sits at the MCP tool boundary, where model output becomes a real external effect.
       It mediates the action, records the decision, and leaves a receipt a skeptic can rerun.</p>
     <p class="meta">by <a href="https://github.com/velvetmonkey">velvetmonkey</a> ·
@@ -57,7 +57,8 @@
       MCP tools.</p>
     <p>That power is useful. It is also where a hallucination, prompt injection, stale
       approval, or confused workflow becomes a real-world effect. Seal answers at the
-      point of effect: did a human approve this exact request?</p>
+      point of effect: does a live approval record match this exact request? (Record
+      origin — that the approver is the human you intend — is a declared assumption.)</p>
   </section>
 
   <a class="featured" href="https://github.com/velvetmonkey/seal-live-demo">
@@ -66,7 +67,7 @@
 
   <h2>How it works</h2>
   <ul>
-    <li><span class="name">Mediate every guarded action.</span> <span class="desc">A guarded MCP tool call forwards only when its target commitment has a live human approval.</span></li>
+    <li><span class="name">Mediate every guarded action.</span> <span class="desc">A guarded MCP tool call forwards only when its target commitment has a live approval record.</span></li>
     <li><span class="name">Record every decision.</span> <span class="desc">Allowed and blocked decisions produce receipts and tamper-evident record-chain evidence.</span></li>
     <li><span class="name">Prove the rulebook.</span> <span class="desc">The kernel rules are machine-checked theorems in Lean 4.</span></li>
     <li><span class="name">Check every body that runs it.</span> <span class="desc">The Rust host, browser wasm, and JavaScript checkers are byte-conformance-tested against the proven rulebook over a corpus; they are not themselves proved bug-free.</span></li>
@@ -128,7 +129,8 @@
 - Seal does NOT prevent compromise of hosts, browsers, build systems, keys, operators, or downstream tools.
 - Seal's audit chain is tamper-EVIDENT, not tamper-IMPOSSIBLE.
 - Seal does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
-- Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.</pre>
+- Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.
+- The axiom-footprint line is a per-theorem ceiling for theorems named in the family's axiom-pin gates; it is not a repository-wide census. Pin scope and named exceptions are indexed in the seal claims matrix (seal/docs/CLAIMS-MATRIX.md).</pre>
   <!-- claims:end -->
 
   <footer>

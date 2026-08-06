@@ -4,11 +4,11 @@
 
 [![CI](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
-**An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no human ever approved that exact action.**
+**An AI agent tries to `rm -rf /prod`. Seal stops it cold — because no live approval ever matched that exact action.**
 
 Bypass the boundary and the identical request wipes your data. Agents now act on the real world through tools. One bad call, one hallucination, one prompt injection — and real money moves, real records vanish.
 
-Seal is the hard stop at that seam. It asks one question and only one: *did a human explicitly approve this exact request?* No ticket, no action. Every decision is emitted as a tamper-evident receipt anyone can re-derive in a browser or CLI.
+Seal is the hard stop at that seam. For a guarded request it asks one checkable question: *does a live approval record match this exact request?* No record, no action; policy can also allow an explicitly-listed safe call without one, and everything else is denied by default. (That a record was minted by the human you intend is a declared custody assumption, not a theorem.) Every decision is emitted as a tamper-evident receipt anyone can re-derive in a browser or CLI.
 
 This is default-deny you can watch work in three minutes. The proof story (Lean kernel, conformance, TCB) comes after you have seen it stop the attack.
 
@@ -43,7 +43,7 @@ See the four explicit Trust boundaries (Byzantine replica, egress P6, model-vs-b
 
 Two jobs, no more:
 
-1. **Mediate.** Forward a guarded tool call only when the exact target has a live human approval. Otherwise it stops before the tool ever sees it.
+1. **Mediate.** Forward a guarded tool call only when the exact target has a live approval record. Otherwise it stops before the tool ever sees it.
 2. **Record.** Emit a receipt and a record-chain for every decision, so anyone can replay "was this effect authorized?" long after the incident.
 
 It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
@@ -96,7 +96,7 @@ One demo, one command, real containers, deterministic outcome:
 
 ```
 git clone https://github.com/velvetmonkey/seal-live-demo && cd seal-live-demo
-bash scripts/run_local.sh        # needs Docker + Node; ends with "ASSERT OK: 15/15"
+bash scripts/run_local.sh        # needs Docker + Node; ends with "ASSERT OK: 17/17"
 ```
 
 You will watch an agent's unapproved destructive call get **blocked** by Seal, the identical
@@ -135,6 +135,7 @@ Mandatory non-claims (canonical copy: [docs/LIMITATIONS.md](docs/LIMITATIONS.md)
 - Seal's audit chain is tamper-EVIDENT, not tamper-IMPOSSIBLE.
 - Seal does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
 - Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.
+- The axiom-footprint line is a per-theorem ceiling for theorems named in the family's axiom-pin gates; it is not a repository-wide census. Pin scope and named exceptions are indexed in the seal claims matrix (seal/docs/CLAIMS-MATRIX.md).
 <!-- claims:end -->
 
 ## License
