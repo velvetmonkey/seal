@@ -13,11 +13,14 @@ ever disagree, they win.
 Proven rows are axiom-gated in their home repo **where the cited theorem is named in that
 repo's pin sources** (seal-host: `lake exe axiom_check` over the `Test/Axioms.lean`
 import-and-pin closure; mcp-seal-dev: `Test/Axioms.lean` + `Test/AxiomAllowlist.lean` +
-the 26-module `Test/ModuleAxiomScan.lean` gate; crdt-lean: `Test/Axioms.lean` `#guard_msgs`
+the `Test/ModuleAxiomScan.lean` gate, which scans exactly the modules assigned in its
+`kernelBaselineModuleNames` list — an explicit list, not the whole build, so check the list at
+the rev you are auditing rather than trusting any frozen count; crdt-lean: `Test/Axioms.lean` `#guard_msgs`
 pins, a default target). That coverage is not total. Named exceptions, checked against the
 pin sources on 2026-08-06: `guarded_allow_iff_live` and `approval_not_transferable_across_targets`
 (both `SealCore/Safety.lean`) appear in no mcp-seal-dev pin, and `SealCore.Safety` is not one
-of the module gate's 26 assigned modules — those two theorems compile in the build but their
+of the module gate's assigned modules (`SealCore.Safety` does not appear in
+`kernelBaselineModuleNames`) — those two theorems compile in the build but their
 axiom footprints are not CI-pinned. Adding them to the pins is a gate change reserved for the
 maintainer.
 Each pinned theorem uses **at most** the minimal classical fragment
