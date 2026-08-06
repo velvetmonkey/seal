@@ -10,8 +10,15 @@ drift-guarded blocks ([docs/LIMITATIONS.md](LIMITATIONS.md), [docs/TRUTH-BOX.md]
 `seal-host/docs/PROOF-REFERENCE.md` and `seal-assurance-kit/CLAIMS.md`. If this table and those
 ever disagree, they win.
 
-All proven rows carry the axiom footprint `{propext, Classical.choice, Quot.sound}` — the minimal
-classical fragment, no `sorry`, no `native_decide`.
+Every proven row is axiom-gated in its home repo (seal-host: `lake exe axiom_check` over the
+`Test/Axioms.lean` import-and-pin closure; mcp-seal-dev: `Test/Axioms.lean` +
+`Test/AxiomAllowlist.lean`; crdt-lean: `Test/Axioms.lean` `#guard_msgs` pins, a default target).
+Each pinned theorem uses **at most** the minimal classical fragment
+`{propext, Classical.choice, Quot.sound}` — no `sorry`, no `native_decide` — and some use less
+(seal-host's record-chain theorems are axiom-free; several crdt-lean merge lemmas use `propext`
+only). The footprints are not one uniform set, and the gate is not repository-wide: seal-host
+measures 51 of 53 theorem-bearing modules inside its closure; the two outside it are named in
+seal-host/CLAIMS.md ("Proof build-wire scope").
 
 | Claim | Status | Checked by | Home |
 |---|---|---|---|
@@ -33,10 +40,10 @@ classical fragment, no `sorry`, no `native_decide`.
 | Decision receipts (schema v2) validate, derived hashes recompute, the verdict re-derives identically, and emitted decision bytes are byte-identical. | **Tested** | `seal verify` check list + `npm test` frozen vectors | seal-assurance-kit |
 | A tampered receipt fails verification; a bypass receipt is never reported as verified. | **Tested** | seal-check tamper suite (`test/receipt-verify.test.cjs`), kit bypass expect-fail gate | seal-check / seal-assurance-kit |
 | Nonce replay across host **restart** is rejected (durable replay store, production signed-token channel). | **Tested** | `sqlite_replay_survives_restart` (seal-host Rust tests) | seal-host |
-| The live demo's evidence is real: the blocked destructive request and the bypass-executed one are **byte-identical** (`canonical_request_sha256` equal), and all phase receipts are v2. | **Tested** | `scripts/assert.mjs` (15 invariants, gates the docker run) | seal-live-demo |
+| The live demo's evidence is real: the blocked destructive request and the bypass-executed one are **byte-identical** (`canonical_request_sha256` equal), and all phase receipts are v2. | **Tested** | `scripts/assert.mjs` (17 invariants, +1 when the optional obfuscation gauntlet ran; gates the docker run) | seal-live-demo |
 | The approval field set carries enough information to identify the exact effect it authorizes (receipt-field **sufficiency**). The pre-v2 field set **failed** this check — a concrete collision: two different effects indistinguishable through the committed fields — and v2's `args_hash` is the field that closes it. A collision indicts the field set, not one implementation; no implementation reading insufficient fields can fix it. | **Tested** (finite refinement analysis) | `seal adequacy` (anchored on `witness_computable_iff_refines` / `witness_separation_fails`); `witness-check`, the private sufficiency analyzer | seal-assurance-kit / witness-check |
 | Differences between two receipts are detected and classified against the authorization surface (integrity-checked against each receipt's own hashes before diffing; a pre-v2 → v2 pair is called out as the approval surface widening). | **Tested** | `seal receipt-diff` test suite (11 cases in the kit's npm chain) | seal-assurance-kit |
-| The same `seal verify` closure runs in CI: vendored byte-identical into the GitHub Action, sha256-pinned to the kit commit, drift-guarded, exercised by a fixture selftest workflow. | **Tested** | seal-verify-action ci + selftest workflows | seal-verify-action |
+| The `seal verify` closure runs in CI, vendored into the GitHub Action as a maintained **downstream-stricter fork** of the kit verifier: pinned to a base kit revision with five named fork-delta files (the action requires a valid `signed_config` for an authorised outcome; kit HEAD's verifier is trust-rootless), kernel wasm byte-identical to the kit's, every vendored file sha256-checked in CI against `VENDORED.md`, exercised by a fixture selftest workflow. | **Tested** | seal-verify-action ci + selftest workflows | seal-verify-action |
 | SHA-256 collision resistance. | **Assumed** (named, scoped: A-CR) | docs/LIMITATIONS.md, TCB docs | family-wide |
 | Rust glue, wasm/JS mirror bodies, Lean toolchain, OS, Ed25519 provider, human operators. | **Assumed** (TCB) | seal-host/docs/TCB.md, SEAL-SYSTEM-TCB.md | seal-host |
 | MCP is the sole effect channel; an unconfined shell bypasses the gate by design scope. | **Assumed** | EVALUATOR-START.md §7 | umbrella |
