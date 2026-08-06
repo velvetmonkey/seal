@@ -6,8 +6,8 @@ never seen, it guesses. And when a heuristic guard guesses wrong it fails **open
 action goes through, and usually nothing is left behind to show that a guess was even
 made.
 
-Seal's kernel does not judge. It asks one checkable question — *does a live human
-approval match this exact target?* — and the rule that an unapproved action is never
+Seal's kernel does not judge. It asks one checkable question — *does a live approval
+record match this exact target?* — and the rule that an unapproved action is never
 allowed is a machine-checked Lean 4 theorem (`default_deny_never_allowed`). Novelty
 does not move it: an attack the kernel has never seen has no matching approval, so it
 fails **closed**. Every decision, allow or block, leaves a tamper-evident receipt that

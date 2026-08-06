@@ -54,6 +54,11 @@ updates in 8 repos. Four genuine items flagged below.
   sufficiency row now names `witness-check`; ARCHITECTURE +2 boxes (Drift, CI gate) with
   honest "packaging, not new verification logic" note; EVALUATOR-START §8 updated;
   index.html +2 entries. Guards green.
+  *[2026-08-06 correction: the "packaging, not new verification logic" conclusion recorded
+  above is superseded — the Action is a maintained downstream-stricter fork of the kit
+  verifier (it additionally requires a valid `signed_config` for an authorised outcome);
+  see seal-verify-action/VENDORED.md and CLAIMS-MATRIX.md's Action row. The sweep record is
+  kept as written.]*
 
 ### seal-host
 - Found: roster = 6, missing the 3 tools; family sentence present but not leading (README:16,

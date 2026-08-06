@@ -29,7 +29,7 @@ flowchart LR
     receipt -.-> verify["seal verify — CLI\n(seal-assurance-kit)"]
     receipt -.-> browser["seal-check\nbrowser wasm verifier"]
     receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
-    verify -.-> action["seal-verify-action:\nthe same verify closure\nas a CI gate"]
+    verify -.-> action["seal-verify-action:\ndownstream-stricter fork of\nthe verify closure, as a CI gate"]
 
     conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven kernel"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw

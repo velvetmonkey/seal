@@ -10,9 +10,16 @@ drift-guarded blocks ([docs/LIMITATIONS.md](LIMITATIONS.md), [docs/TRUTH-BOX.md]
 `seal-host/docs/PROOF-REFERENCE.md` and `seal-assurance-kit/CLAIMS.md`. If this table and those
 ever disagree, they win.
 
-Every proven row is axiom-gated in its home repo (seal-host: `lake exe axiom_check` over the
-`Test/Axioms.lean` import-and-pin closure; mcp-seal-dev: `Test/Axioms.lean` +
-`Test/AxiomAllowlist.lean`; crdt-lean: `Test/Axioms.lean` `#guard_msgs` pins, a default target).
+Proven rows are axiom-gated in their home repo **where the cited theorem is named in that
+repo's pin sources** (seal-host: `lake exe axiom_check` over the `Test/Axioms.lean`
+import-and-pin closure; mcp-seal-dev: `Test/Axioms.lean` + `Test/AxiomAllowlist.lean` +
+the 26-module `Test/ModuleAxiomScan.lean` gate; crdt-lean: `Test/Axioms.lean` `#guard_msgs`
+pins, a default target). That coverage is not total. Named exceptions, checked against the
+pin sources on 2026-08-06: `guarded_allow_iff_live` and `approval_not_transferable_across_targets`
+(both `SealCore/Safety.lean`) appear in no mcp-seal-dev pin, and `SealCore.Safety` is not one
+of the module gate's 26 assigned modules — those two theorems compile in the build but their
+axiom footprints are not CI-pinned. Adding them to the pins is a gate change reserved for the
+maintainer.
 Each pinned theorem uses **at most** the minimal classical fragment
 `{propext, Classical.choice, Quot.sound}` — no `sorry`, no `native_decide` — and some use less
 (seal-host's record-chain theorems are axiom-free; several crdt-lean merge lemmas use `propext`
@@ -24,7 +31,7 @@ seal-host/CLAIMS.md ("Proof build-wire scope").
 |---|---|---|---|
 | An unguarded or unapproved action is never allowed (default deny). | **Proven** | `default_deny_never_allowed` (SealCore/Safety.lean) | mcp-seal-dev |
 | The safety kernel allows a guarded target **iff** its state contains a matching live approval record for that exact target. | **Proven** | `guarded_allow_iff_live`, `approval_binds_to_target` | mcp-seal-dev |
-| An approval for one target never authorizes another (confused deputy blocked). | **Proven** | `confused_deputy_blocks_from_single_other_approval` | mcp-seal-dev |
+| An approval for one target never authorizes another (confused deputy blocked). | **Proven** | `approval_binds_to_target`, `approval_not_transferable_across_targets` (SealCore/Safety.lean) | mcp-seal-dev |
 | Approvals are single-use and expire. | **Proven** | `consumed_approval_not_live`, `expired_not_live` | mcp-seal-dev |
 | The canonical request grammar is total to parse and roundtrip-stable, with exactly one byte representation per Unicode string. | **Proven** | `parse_total`, `canonical_roundtrip`, `escapeString_injective` | mcp-seal-dev (SealV2) |
 | Kernel decisions cannot be bypassed inside the model: every Allow carries a validity witness. | **Proven** | `non_bypass`, `decide_emit_unique` | mcp-seal-dev |
