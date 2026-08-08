@@ -33,7 +33,7 @@ cd seal
 bash scripts/showcase.sh
 ```
 
-It spins the live agent, gateway, kernel, and DB, then walks three steps: a staging insert is ALLOWed, the tricked prod-delete is BLOCKed (rows unchanged), and the identical bytes with Seal removed destroy the table. Real row counts and re-verifiable receipts land in your terminal. Run without the sibling `seal-live-demo` and it prints the next real step instead of dead-ending.
+It spins the gateway, kernel, and DB (the attack tool-call is scripted, not emitted by a live model — the demo's own provenance says so), then walks three steps: a staging insert is ALLOWed, the scripted prod-delete is BLOCKed (rows unchanged), and the identical bytes with Seal removed destroy the table. Real row counts and re-verifiable receipts land in your terminal. Run without the sibling `seal-live-demo` and it prints the next real step instead of dead-ending.
 
 **Why a proof, not a prompt** — machine-checked default-deny vs fail-open judgment: [Why a proof, not a prompt](docs/WHY-DIFFERENT.md).
 
@@ -47,6 +47,16 @@ Two jobs, no more:
 2. **Record.** Emit a receipt and a record-chain for every decision, so anyone can replay "was this effect authorized?" long after the incident.
 
 It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
+
+```mermaid
+flowchart LR
+    A[agent / MCP client] -->|guarded tools/call| S{Seal gate}
+    S -->|no matching live approval| B["BLOCKED<br/>+ receipt (BLOCK)"]
+    H[human approver] -.->|signed approval,<br/>bound to the exact request| S
+    S -->|"every gating kernel allows<br/>+ live approval (one shot)"| T["real tool executes<br/>+ receipt (ALLOW)"]
+```
+
+One picture of the whole family — proven core, deployed host, receipts, verifiers: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Distributed by proof.** Seal's guarantees extend to fleets. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
 
@@ -96,7 +106,7 @@ One demo, one command, real containers, deterministic outcome:
 
 ```
 git clone https://github.com/velvetmonkey/seal-live-demo && cd seal-live-demo
-bash scripts/run_local.sh        # needs Docker + Node; ends with "ASSERT OK: 17/17"
+bash scripts/run_local.sh        # needs Docker + Node; ends with "ASSERT OK: 19/19"
 ```
 
 You will watch an agent's unapproved destructive call get **blocked** by Seal, the identical
