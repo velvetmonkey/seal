@@ -48,6 +48,16 @@ Two jobs, no more:
 
 It does not need the model to understand *why* a request is dangerous. It checks whether the exact effect was approved. That is the whole trick.
 
+```mermaid
+flowchart LR
+    A[agent / MCP client] -->|guarded tools/call| S{Seal gate}
+    S -->|no matching live approval| B["BLOCKED<br/>+ receipt (BLOCK)"]
+    H[human approver] -.->|signed approval,<br/>bound to the exact request| S
+    S -->|"every gating kernel allows<br/>+ live approval (one shot)"| T["real tool executes<br/>+ receipt (ALLOW)"]
+```
+
+One picture of the whole family — proven core, deployed host, receipts, verifiers: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 **Distributed by proof.** Seal's guarantees extend to fleets. A one-shot approval provably cannot be double-spent across a network partition without coordination, and that impossibility is transferred to the real gate, honestly scoped to within the approval's TTL. See the [authorization mesh](docs/AUTHORIZATION-MESH.md).
 
 ## Why you can believe it
