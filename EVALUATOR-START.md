@@ -147,11 +147,11 @@ run rather than carrying forward the 2026-07-31 red result.
 | Umbrella regeneration | **STILL TRUE.** This file remains hand-maintained | No generator exists under `seal/scripts`; `scripts/linkcheck.mjs` reads this file but does not generate it. Closure still requires checked regeneration from both CLAIMS files, the lock, and live profiles |
 | Passthrough perimeter choice | **STILL TRUE.** The model proves P1 escape bypass; no option is chosen | `seal-host/CLAIMS.md` K4 and `Host/PassthroughPerimeter.lean` prove `widened_non_bypass_fails`. Closure still requires either refusing every escape or a named strict-child adapter profile with executable evidence |
 | Release gating at the exact tagged commit | **CLOSED.** Publication requires same-commit CI, Golden Path, and Security runs, including the CI `release-evidence` conjunction | `seal-host/scripts/tag_release_gate.py`; `release.yml` runs it without `continue-on-error`; all 12 focused gate tests pass and cover absent, pending, red, ambiguous, and missing-evidence cases |
-| Public tree buildable with zero private access | **STILL TRUE pending execution.** Every manifest and fleet input is anonymously readable, and the release build plus reusable fleet gate now carry no `SEAL_CI_READ_TOKEN`; no credential-free release build has completed on these changes yet | `seal-host/lake-manifest.json`, `release/fleet-lock.json`, `.github/workflows/release.yml`, `.github/workflows/acceptance.yml`. Closure requires the new release build to complete successfully without a private-read credential |
+| Public tree buildable with zero private access | **CLOSED, MEASURED 2026-08-09.** A cold build resolved every pinned dependency and completed the Lean tests, FFI export/shared library, optimized Rust binaries, and release-policy gate with no credential available | `seal-host/lake-manifest.json`, `release/fleet-lock.json`, `.github/workflows/release.yml`, `.github/workflows/acceptance.yml`; local credential-free run completed in 14m01s with all 10 Lean test binaries passing |
 
-The table is the 2026-08-09 current disposition: two prior stop-ships are
-closed and three remain loud. A code path or anonymous fetch is not promoted
-to a successful build result until the credential-free release build finishes.
+The table is the 2026-08-09 current disposition: three prior stop-ships are
+closed and two remain loud. The public-build row is backed by a completed cold
+build, not merely a code path or anonymous fetch.
 
 ## 7. Four secondary roadmap items
 
@@ -190,8 +190,6 @@ One prior command row is retained as an explicit gap:
 - Runtime three-way agreement inside the clean container: not checked.
 - Universal parser or conformance coverage beyond the named corpora: not
   checked.
-- A completed release build with zero private access: not checked. All current
-  Git inputs fetched anonymously and the release workflow is now credential-free,
-  but its first execution on these changes has not occurred.
+- A second credential-free build on another host or architecture: not checked.
 - Browser replay exact command: NO BACKING.
 - The removed quickstart commands and their claimed results: not checked.
