@@ -69,4 +69,4 @@ flowchart LR
 
 Claim-status per box: [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
-Family links are private; they resolve only for authorised evaluators.
+Fleet links are public and resolve for everyone; `witness-check` remains proprietary.
