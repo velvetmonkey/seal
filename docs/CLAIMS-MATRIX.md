@@ -66,4 +66,4 @@ seal-host/CLAIMS.md ("Proof build-wire scope").
 
 Read next: [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md)
 (the buyer-legible honesty boundary) and [EVALUATOR-START.md](../EVALUATOR-START.md) (the
-proved-vs-deployed map). Family links are private; they resolve only for authorised evaluators.
+proved-vs-deployed map). The Seal fleet links are public and resolve for everyone; `witness-check` remains proprietary.

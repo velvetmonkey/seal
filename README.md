@@ -74,7 +74,7 @@ So the honest claim is precise, and that precision is the point. Seal does not c
 
 ## The family
 
-_All Seal-family repositories are currently private; these links resolve only for authorised evaluators._
+_The Seal fleet repositories are public; these links resolve for everyone. `witness-check` remains proprietary._
 
 | Repository | Role | Start here when... |
 |---|---|---|
@@ -132,7 +132,7 @@ receipt you can re-verify yourself (`seal-check` in the browser, or `seal verify
 > **Claim:** policy-covered request-effects recognised by the compatible MCP boundary reach the downstream child MCP server only after every applicable Lean kernel returns Allow. Effects configured as guarded additionally require a matching live approval record. Seam failures block; every mediated decision emits replayable evidence.
 > **Non-claim:** the deployed host is not proved end to end, and canonical parser rejection is not currently the runtime gate. Host `ApprovalRecord` tokens are a separate signed channel from the v2 kernel-defined approval tuple. “Canonical” in Seal names the pinned kernel byte rule, not RFC 8785/JCS. Seal verifies the configured authorization evidence. Whether that evidence represents the intended human, device or service is an identity and key-custody assumption, not a proved property.
 <!-- truthbox:end -->
-> Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md) — private repo; the link resolves only for authorised evaluators.
+> Map: [EVALUATOR-START.md](EVALUATOR-START.md) · profile detail: [seal-host/PROFILE.md](https://github.com/velvetmonkey/seal-host/blob/main/PROFILE.md) — public repository; the link resolves for everyone.
 
 Mandatory non-claims (canonical copy: [docs/LIMITATIONS.md](docs/LIMITATIONS.md)):
 
