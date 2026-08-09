@@ -1,10 +1,10 @@
 # Why a proof, not a prompt: Seal vs heuristic guards
 
-Most guardrails for agent tools work by judgment: an LLM judge, a prompt filter, a
-pattern match on the request. Judgment is probabilistic — on the novel attack it has
-never seen, it guesses. And when a heuristic guard guesses wrong it fails **open**: the
-action goes through, and usually nothing is left behind to show that a guess was even
-made.
+LLM judges and prompt filters for agent tools work by judgment: a model or prompt-level
+heuristic classifies the request. Judgment is probabilistic — on the novel attack it has
+never seen, it guesses. And when one of these heuristic guards guesses wrong it can fail
+**open**: the action goes through, and usually nothing is left behind to show that a
+guess was even made.
 
 Seal's kernel does not judge. It asks one checkable question — *does a live approval
 record match this exact target?* — and the rule that an unapproved action is never
@@ -23,8 +23,6 @@ anyone can re-derive.
 
 - Single-delivery: deliver each approval to exactly one replica (`sealv2_partitioned_safe`).
 - Mesh-coordinated over shared store: sealv2_mesh_safe (Safe by composition given the mesh's SealedSenders); concrete outright-Safe witness sealv2_token_mesh_safe, holder-live via mesh_holder_live_at_init.
-
-This is what nobody else in agent authorization ships: a machine-checked answer to "which fleet architectures actually enforce single-use?"
 
 **Honest boundary for these results:** these are proofs about a model tightly bound to the real SealV2 consume seam (`validateAndConsumeWithStore`), within the approval's TTL, for one approval per instance, hypothesis-form validation. Not a line-by-line proof of the whole deployed Rust/wasm/JS binary or end-to-end system. The shipped bodies are tied by conformance testing over a corpus.
 

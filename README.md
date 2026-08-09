@@ -2,7 +2,8 @@
 
 # Seal
 
-[![CI](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Host acceptance](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
 
 Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
 
