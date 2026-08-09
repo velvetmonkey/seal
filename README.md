@@ -4,7 +4,7 @@
 
 > **Badge-name merge prerequisites:** both badges report workflow status from
 > `main`. Their labels become the workflow titles only after `seal` commit
-> `347d47e` (Docs & claims consistency) and `seal-host` commit `e8662de` (Host
+> `347d47e` (Docs & claims consistency) and `seal-host` commit `40ae69a` (Host
 > acceptance) merge to their respective `main` branches. Until then, GitHub's
 > raw SVG titles remain `CI` and `Golden Path - deterministic shell + Postgres
 > + deploy + token governor + temporal freeze + filesystem`; the status and
