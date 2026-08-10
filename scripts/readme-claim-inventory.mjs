@@ -8,6 +8,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const readme = readFileSync(resolve(root, "README.md"), "utf8");
 const inventory = [
   ["default-deny exact-target gate", "docs/CLAIMS-MATRIX.md", "matching live approval record for that exact target"],
   ["one-use approvals expire", "docs/CLAIMS-MATRIX.md", "Approvals are single-use and expire"],
@@ -44,6 +45,9 @@ for (const [name, file, needle] of inventory) {
     failures++;
   } else if (!readFileSync(path, "utf8").includes(needle)) {
     console.error(`LOST CLAIM  ${name}: ${file} no longer contains ${JSON.stringify(needle)}`);
+    failures++;
+  } else if (!readme.includes(`](${file})`)) {
+    console.error(`UNLINKED HOME  ${name}: README.md does not link ${file}`);
     failures++;
   }
 }

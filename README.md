@@ -8,16 +8,18 @@ Seal is the agent authorization gate whose decision rule is machine-checked, who
 
 Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently. It enforces authorization at the effect boundary; it does not claim to read intent.
 
-## See it work
+## First run
 
 Run one command. Watch the call get blocked. Approve the exact effect. Watch it flow. Verify the receipt.
+
+**Prerequisites:** Docker with Compose and Node.js; no Seal source build, key, or policy file. **Context:** start from any directory; this is a fresh clone, not a continuation of another example.
 
 ```bash
 git clone https://github.com/velvetmonkey/seal-live-demo && cd seal-live-demo
 bash scripts/run_local.sh
 ```
 
-This is an **attack replay**, not a live-agent attack: it deterministically blocks a scripted destructive tool call, records the receipt, then shows the identical request succeed only when Seal is bypassed. It needs Docker and Node and ends with `ASSERT OK: 19/19`. [Demo detail](https://github.com/velvetmonkey/seal-live-demo) · [verify a fixture with no Docker](https://github.com/velvetmonkey/seal-assurance-kit).
+**Expected output:** `ASSERT OK: 19/19 invariants hold. Green check = evidence.` **What it proves:** this **attack replay**, not a live-agent attack, deterministically blocks a destructive tool call, then shows the identical request succeed only when Seal is bypassed. The replay does not exercise an interactive approval; that is the deployment path below. Its exact shell command is not run by CI; the equivalent scenario is exercised by `seal-live-demo`’s manually dispatched `seal · live agent threat demo` / `demo` job. [Demo detail](https://github.com/velvetmonkey/seal-live-demo) · [verify a fixture with no Docker](https://github.com/velvetmonkey/seal-assurance-kit).
 
 ## What the evidence says
 
@@ -29,13 +31,13 @@ This is an **attack replay**, not a live-agent attack: it deterministically bloc
 
 - Deploy the MCP gate: [seal-host deployment guide](https://github.com/velvetmonkey/seal-host/blob/main/docs/DEPLOY.md).
 - Inspect the decision, receipt, and pinned-kernel relationship: [architecture](docs/ARCHITECTURE.md) and [authorization record](docs/AUTHORIZATION-RECORD.md).
-- Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX-TAMPER.md) and [evaluator start](EVALUATOR-START.md).
+- Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX.md) and [evaluator start](EVALUATOR-START.md).
 
 The current release ships the gate. Seal proves which fleet deployment shapes preserve single-use authorization; coordinated mesh deployment is a separate architecture, not a shipped promise. [Read the boundary](docs/AUTHORIZATION-MESH.md).
 
 ## Go deeper
 
-The [family map](docs/ARCHITECTURE.md) links the kernel, host, receipt verifier, assurance kit, and proprietary `witness-check`. [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) explains the decision rule; [limitations](docs/LIMITATIONS.md) and the [claims matrix](docs/CLAIMS-MATRIX.md) are the canonical honesty surface.
+The [family map](docs/ARCHITECTURE.md) links the kernel, host, receipt verifier, assurance kit, and proprietary `witness-check`. [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) explains the decision rule; [limitations](docs/LIMITATIONS.md) and the [claims matrix](docs/CLAIMS-MATRIX.md) are the canonical honesty surface. [Seal’s effect boundary](docs/WHAT-SEAL-IS.md) explains why MCP is an adapter, not the product boundary.
 
 Interested in contributing? Useful lanes are adapters (MCP clients, approval channels, identity and audit integrations), evidence (conformance vectors and adversarial cases), and proof review (assumptions, theorem statements, and missing bridge obligations). [Repository topology](docs/REPO-TOPOLOGY.md) explains the project boundary.
 
