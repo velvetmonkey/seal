@@ -131,14 +131,16 @@ in every Lean module. Source locations win over stale inventory anchors. For
 example, the host inventory says `Host.step_forward_non_bypass` is at
 `Host/Composition.lean:241`; the theorem is currently at line 504.
 
-As of 2026-08-10, the module axiom gate was CLOSED at public `mcp-seal-dev`
-commit `71dc8801e0242b06a5f75cd537b666cd56d89ec6`. At that snapshot, the gate
-expected 51 production modules and 25 kernel-baseline assignments, matching the
-checked-in tree and its assignment table. GitHub Actions run `31054969690`
-completed successfully for that exact commit. This regeneration did not run
-Lean locally; it checked the public commit, the gate source, the tree census,
-and the completed remote run rather than carrying forward the 2026-07-31 red
-result.
+The module axiom gate is derived evidence: run `lake exe module_axiom_check` in
+the public `mcp-seal-dev` tree. The command computes the production-module
+count from the checked-out tree, reports the kernel-baseline assignment-list
+size, and fails if either population drifts from the gate's enumerated scope.
+GitHub Actions run `31054969690` completed successfully for public commit
+`71dc8801e0242b06a5f75cd537b666cd56d89ec6`. The 2026-08-09 regeneration
+checked that public commit, the gate source, the tree census, and the completed
+remote run rather than carrying forward the 2026-07-31 red result. This repair
+also reran the command locally. Re-run it for the counts in any later tree;
+they are not copied into this document.
 
 ## 6. Five stop-ships
 
