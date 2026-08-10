@@ -12,4 +12,5 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/linkcheck.mjs
+      - run: node scripts/readme-source-inventory.mjs
       - run: node scripts/claims-drift.mjs
