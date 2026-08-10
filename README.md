@@ -31,7 +31,7 @@ bash scripts/run_local.sh
 
 - Deploy the MCP gate: [seal-host deployment guide](https://github.com/velvetmonkey/seal-host/blob/main/docs/DEPLOY.md).
 - Inspect the decision, receipt, and pinned-kernel relationship: [architecture](docs/ARCHITECTURE.md) and [authorization record](docs/AUTHORIZATION-RECORD.md).
-- Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX.md) and [evaluator start](EVALUATOR-START.md).
+- Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX-TAMPER.md) and [evaluator start](EVALUATOR-START.md).
 
 The current release ships the gate. Seal proves which fleet deployment shapes preserve single-use authorization; coordinated mesh deployment is a separate architecture, not a shipped promise. [Read the boundary](docs/AUTHORIZATION-MESH.md).
 
