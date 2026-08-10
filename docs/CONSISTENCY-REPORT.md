@@ -107,11 +107,11 @@ updates in 8 repos. Four genuine items flagged below.
   receipt-diff named alongside witness-check in the not-checks list's family pointer.
   NOTICE / PR-DESCRIPTION.md deliberately untouched (item 2).
 
-### Demos / mirrors (mcp-seal, seal-demo, seal-backchannel-demo, canary) — audit only
-- Zero stale refs across all four (grep: "still emits", v0 receipt, seal_live_receipt,
-  witness-check, receipt-diff, seal-verify-action, "proven checkpoint": one intentional
-  family-sentence hit in canary README:36, correctly scoped, no private repo names). mcp-seal
-  public "Related repositories" lists only public repos ✓ — clean as a public mirror.
+### Demos / mirrors (mcp-seal, seal-demo, seal-backchannel-demo) — audit only
+- Zero stale refs across the three active demos/mirrors (grep: "still emits", v0 receipt,
+  seal_live_receipt, witness-check, receipt-diff, seal-verify-action, "proven checkpoint").
+  mcp-seal public "Related repositories" lists only public repos ✓ — clean as a public
+  mirror. The retired Canary demo is no longer part of this audit scope.
   **No edits made.**
 
 ## Review follow-up (2026-07-09, second pass on the same branches)
