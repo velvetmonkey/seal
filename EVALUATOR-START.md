@@ -131,19 +131,20 @@ in every Lean module. Source locations win over stale inventory anchors. For
 example, the host inventory says `Host.step_forward_non_bypass` is at
 `Host/Composition.lean:241`; the theorem is currently at line 504.
 
-The module axiom gate is CLOSED at public `mcp-seal-dev` commit
-`71dc8801e0242b06a5f75cd537b666cd56d89ec6`. The gate now expects 51 production
-modules and 25 kernel-baseline assignments, matching the checked-in tree and
-its assignment table. GitHub Actions run `31054969690` completed successfully
-for that exact commit. This regeneration did not run Lean locally; it checked
-the public commit, the gate source, the tree census, and the completed remote
-run rather than carrying forward the 2026-07-31 red result.
+As of 2026-08-10, the module axiom gate was CLOSED at public `mcp-seal-dev`
+commit `71dc8801e0242b06a5f75cd537b666cd56d89ec6`. At that snapshot, the gate
+expected 51 production modules and 25 kernel-baseline assignments, matching the
+checked-in tree and its assignment table. GitHub Actions run `31054969690`
+completed successfully for that exact commit. This regeneration did not run
+Lean locally; it checked the public commit, the gate source, the tree census,
+and the completed remote run rather than carrying forward the 2026-07-31 red
+result.
 
 ## 6. Five stop-ships
 
 | Stop-ship | Current measured state | Backing and closure condition |
 |---|---|---|
-| Coordinated wasm/fleet promotion | **CLOSED.** The lock and all six pinned wasm paths carry `28bb3ae7…` | `seal-host/release/fleet-lock.json`; every exact pinned revision fetched anonymously on 2026-08-09 and every locked wasm path hashed to `28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657` |
+| Coordinated wasm/fleet promotion | **CLOSED, AS OF 2026-08-10.** At that snapshot, the lock and all six pinned wasm paths carried `28bb3ae7…` | `seal-host/release/fleet-lock.json`; every exact pinned revision fetched anonymously on 2026-08-09 and every locked wasm path hashed to `28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657` |
 | Umbrella regeneration | **STILL TRUE.** This file remains hand-maintained | No generator exists under `seal/scripts`; `scripts/linkcheck.mjs` reads this file but does not generate it. Closure still requires checked regeneration from both CLAIMS files, the lock, and live profiles |
 | Passthrough perimeter choice | **STILL TRUE.** The model proves P1 escape bypass; no option is chosen | `seal-host/CLAIMS.md` K4 and `Host/PassthroughPerimeter.lean` prove `widened_non_bypass_fails`. Closure still requires either refusing every escape or a named strict-child adapter profile with executable evidence |
 | Release gating at the exact tagged commit | **CLOSED.** Publication requires same-commit CI, Golden Path, and Security runs, including the CI `release-evidence` conjunction | `seal-host/scripts/tag_release_gate.py`; `release.yml` runs it without `continue-on-error`; all 12 focused gate tests pass and cover absent, pending, red, ambiguous, and missing-evidence cases |
