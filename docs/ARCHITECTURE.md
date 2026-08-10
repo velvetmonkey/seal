@@ -47,7 +47,7 @@ flowchart LR
   guarded call through the kernel and forwards only the exact approved bytes. The Rust glue is
   **TCB** (trusted, not proven); it is tied to the proof by conformance testing.
 - **Receipt** — every decision emits a v2 receipt (normative spec:
-  `seal-host/docs/DECISION-RECEIPT-SCHEMA.md` §11) with derived SHA-256 hashes. Tamper-**evident**,
+  the host's [authorization decision schema](https://github.com/velvetmonkey/seal-host/blob/main/docs/AUTHORIZATION-DECISION-SCHEMA.md) §11) with derived SHA-256 hashes. Tamper-**evident**,
   not tamper-impossible. Two independent checkers: `seal verify` (CLI) and `seal-check` (browser).
 - **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
   deployed bodies (Rust, wasm, JS) agree with the proven kernel byte-for-byte over a corpus.

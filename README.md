@@ -2,7 +2,8 @@
 
 # Seal
 
-[![CI](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
 
 Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
 
@@ -33,7 +34,7 @@ bash scripts/run_local.sh
 - Inspect the decision, receipt, and pinned-kernel relationship: [architecture](docs/ARCHITECTURE.md) and [authorization record](docs/AUTHORIZATION-RECORD.md).
 - Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX.md) and [evaluator start](EVALUATOR-START.md).
 
-The current release ships the gate. Seal proves which fleet deployment shapes preserve single-use authorization; coordinated mesh deployment is a separate architecture, not a shipped promise. [Read the boundary](docs/AUTHORIZATION-MESH.md).
+As of 2026-08-10, the published release shipped the gate, while coordinated mesh deployment remained a separate architecture rather than a shipped promise. Seal proves which fleet deployment shapes preserve single-use authorization. [Read the boundary](docs/AUTHORIZATION-MESH.md).
 
 ## Go deeper
 
