@@ -14,5 +14,8 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/linkcheck.mjs
+      - run: node scripts/readme-navigation.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: node scripts/readme-claim-inventory.mjs
       - run: node scripts/claims-drift.mjs

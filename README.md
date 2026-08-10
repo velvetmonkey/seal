@@ -37,7 +37,21 @@ The current release ships the gate. Seal proves which fleet deployment shapes pr
 
 ## Go deeper
 
-The [family map](docs/ARCHITECTURE.md) links the kernel, host, receipt verifier, assurance kit, and proprietary `witness-check`. [Why a proof, not a prompt](docs/WHY-DIFFERENT.md) explains the decision rule; [limitations](docs/LIMITATIONS.md) and the [claims matrix](docs/CLAIMS-MATRIX.md) are the canonical honesty surface. [Seal’s effect boundary](docs/WHAT-SEAL-IS.md) explains why MCP is an adapter, not the product boundary.
+The public Seal family is available to everyone; `witness-check` is the named proprietary exception.
+
+| Repository | What it is | Start here when... |
+|---|---|---|
+| [mcp-seal-dev](https://github.com/velvetmonkey/mcp-seal-dev) | Lean kernel and core safety theorems. | You need the proved rulebook. |
+| [seal-host](https://github.com/velvetmonkey/seal-host) | Deployable MCP gate and conformance bridge. | You are putting the gate in front of an MCP server. |
+| [seal-check](https://github.com/velvetmonkey/seal-check) | Browser receipt verifier. | You want to replay a receipt without installing tooling. |
+| [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) | Reproducible attack replay. | You want to watch the block and bypass control. |
+| [seal-assurance-kit](https://github.com/velvetmonkey/seal-assurance-kit) | CLI evidence tools. | You need `seal verify`, `seal receipt-diff`, or `seal adequacy`. |
+| [seal-verify-action](https://github.com/velvetmonkey/seal-verify-action) | GitHub Action receipt gate. | You want unverifiable receipts to fail CI. |
+| [witness-check](https://github.com/velvetmonkey/witness-check) | Proprietary sufficiency analyzer. | You need to test whether an evidence field set is sufficient. |
+
+For a receipt: `seal verify` checks well-formed, canonical, re-derived evidence; `seal receipt-diff` asks what changed on the authorization surface; `seal adequacy` checks finite-sample sufficiency; proprietary `witness-check` analyzes sufficiency itself. The distributed `crdt-lean` work is deliberately not linked here: it left v1 for Seal v3 and remains a deferred architecture, not a current developer route.
+
+[Why a proof, not a prompt](docs/WHY-DIFFERENT.md) explains the decision rule; [limitations](docs/LIMITATIONS.md) and the [claims matrix](docs/CLAIMS-MATRIX.md) are the canonical honesty surface. [Seal’s effect boundary](docs/WHAT-SEAL-IS.md) explains why MCP is an adapter, not the product boundary.
 
 Interested in contributing? Useful lanes are adapters (MCP clients, approval channels, identity and audit integrations), evidence (conformance vectors and adversarial cases), and proof review (assumptions, theorem statements, and missing bridge obligations). [Repository topology](docs/REPO-TOPOLOGY.md) explains the project boundary.
 
