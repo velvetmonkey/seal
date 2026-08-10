@@ -4,12 +4,9 @@
 // surfaces; this asserts each mirror is a verbatim copy of its canonical block,
 // so drift fails loudly instead of shipping silently.
 //
-// Two guarded blocks:
-//   non-claims (<!-- claims:begin --> ... <!-- claims:end -->)      canonical docs/LIMITATIONS.md
-//   truth-box  (<!-- truthbox:begin --> ... <!-- truthbox:end -->)  canonical docs/TRUTH-BOX.md
-// The truth-box "Map" line is per-repo (relative vs absolute links) and is
-// deliberately OUTSIDE the markers, so only the profile/claim/non-claim lines
-// are guarded.
+// The canonical non-claims block (<!-- claims:begin --> ... <!-- claims:end -->)
+// lives in docs/LIMITATIONS.md and is mirrored in index.html. The README links
+// to the canonical honesty surface instead of duplicating it.
 //
 // Exit codes: 0 in sync · 1 drift (diff printed) · 2 markers missing/malformed.
 // Node only, no dependencies. Run: node scripts/claims-drift.mjs
@@ -21,9 +18,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const BLOCKS = [
   { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->",
-    canonical: "docs/LIMITATIONS.md", mirrors: ["README.md", "index.html"] },
-  { begin: "<!-- truthbox:begin -->", end: "<!-- truthbox:end -->",
-    canonical: "docs/TRUTH-BOX.md", mirrors: ["README.md"] },
+    canonical: "docs/LIMITATIONS.md", mirrors: ["index.html"] },
 ];
 
 function extract(file, begin, end) {

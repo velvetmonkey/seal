@@ -8,8 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # source inventory reads the held origin/main base
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: node scripts/linkcheck.mjs
+      - run: node scripts/readme-claim-inventory.mjs
       - run: node scripts/claims-drift.mjs
