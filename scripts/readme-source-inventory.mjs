@@ -19,6 +19,7 @@ if (original.status !== 0) {
 }
 
 const lines = original.stdout.split("\n");
+const auditLegacy = process.argv[2] === "--audit-legacy" ? process.argv[3] : null;
 const sectionHomes = new Map([
   ["preamble", ["docs/WHAT-SEAL-IS.md", "Seal is an object-capability broker"]],
   ["First receipt in 60 seconds — zero dependencies (no Docker, no Lean toolchain)", ["docs/CLAIMS-MATRIX.md", "| Claim |"]],
@@ -76,6 +77,15 @@ for (let index = 0; index < lines.length; index++) {
 emitParagraph();
 
 let failures = 0;
+let legacyText = "";
+if (auditLegacy) {
+  const legacy = spawnSync("git", ["show", `${auditLegacy}:scripts/readme-claim-inventory.mjs`], { cwd: root, encoding: "utf8" });
+  if (legacy.status !== 0) {
+    console.error(`ERROR unable to read legacy inventory at ${auditLegacy}: ${legacy.stderr.trim()}`);
+    process.exit(2);
+  }
+  legacyText = legacy.stdout;
+}
 for (const unit of units) {
   const home = specialHomes.get(unit.start) ?? sectionHomes.get(unit.section);
   if (!home) {
@@ -84,6 +94,11 @@ for (const unit of units) {
     continue;
   }
   const [file, needle] = home;
+  if (auditLegacy && !legacyText.includes(`sourceLine: ${unit.start}`)) {
+    console.error(`UNCLASSIFIED legacy ${unit.start}-${unit.end}: historical inventory has no source-line classification`);
+    failures++;
+    continue;
+  }
   const path = resolve(root, file);
   const classification = file === "README.md" ? "RETAINED" : "RELOCATED";
   console.log(`${classification.padEnd(9)} ${unit.start}-${unit.end} -> ${file}`);
