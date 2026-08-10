@@ -13,10 +13,10 @@ does not move it: an attack the kernel has never seen has no matching approval, 
 fails **closed**. Every decision, allow or block, leaves a tamper-evident receipt that
 anyone can re-derive.
 
-| | Heuristic guard | Seal |
+| | LLM judge or prompt filter | Seal |
 |---|---|---|
 | **Decision basis** | Model judgment / patterns | Machine-checked exact-target approval match |
-| **Failure direction** | Fails open on the novel attack | Default-deny: fails closed (`default_deny_never_allowed`) |
+| **Failure direction** | Can fail open on a novel attack | Default-deny: fails closed (`default_deny_never_allowed`) |
 | **Evidence left behind** | Logs, if any | Tamper-evident receipt, re-derivable by anyone |
 
 **The fleet-scale headliner (new since last pass, axiom-pinned):** the obvious developer design — "put approvals in a shared DB and dedupe on replay" — is *provably unable* to stop cross-replica double-spend of a one-shot approval. Seal proves the lower bound (`sealv2_shared_not_sealed_senders` in Host/AuthorityFrontierBridge.lean): over a shared replay-store, two replicas can both honour the same approval. It also proves the shapes that *do* work:

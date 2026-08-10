@@ -4,15 +4,30 @@ on:
   push:
   pull_request:
 jobs:
-  links:
+  docs-claims:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # source inventory reads the held origin/main base
+      - name: Check out the workflow reported by the host-acceptance badge
+        uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-host
+          ref: 2133a9936c3535af83a0fa76b0af7cbe03764ddf
+          path: .launch-truth/seal-host
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check badge and launch-claim truth
+        run: >-
+          node scripts/launch-truth-gate.mjs
+          README.md
+          .github/workflows/ci.yml
+          .launch-truth/seal-host/.github/workflows/golden-path.yml
+          EVALUATOR-START.md
+          docs/WHY-DIFFERENT.md
+          index.html
       - run: node scripts/linkcheck.mjs
       - run: node scripts/readme-navigation.mjs
         env:
