@@ -88,8 +88,8 @@ authority. In the gate model, a shared replay store alone does not supply the
 seal; single-delivery and mesh-coordinated shapes are safe in their stated
 models. The transfer is scoped to the approval TTL and concurrent replicas.
 
-Published releases: **0**. No gate is shipped as a release. Coordinated mesh
-deployment is a separate architecture, not a feature implied by the repository. Read the
+Published releases: **1**. Release v0.1.5 ships the Linux host gate. Coordinated mesh
+deployment is a separate architecture, not a feature implied by the release. Read the
 [authorization mesh](AUTHORIZATION-MESH.md) for the necessity theorem,
 finite-model sufficiency results, third safe shape, and all scope limits.
 

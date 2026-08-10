@@ -33,11 +33,12 @@ The complete walkthrough, including every prerequisite before its command and
 observed terminal output, is in
 [seal-host's getting-started guide](https://github.com/velvetmonkey/seal-host/blob/main/docs/GETTING-STARTED.md).
 
-**Availability today:** no GitHub binary release is published, so a new
-developer cannot complete that route without a pre-existing source build. The
-guide stops explicitly at release discovery; it does not substitute an
-unpublished tag or pretend a source build is the release. This is the current
-adoption blocker, not a step for the reader to debug.
+**Availability today:** `seal-host` v0.1.5 is the first published release. Its
+eight assets include x86_64 and aarch64 Linux hosts, both SBOMs, checksums, and
+signed provenance. The host guide records the actual download, checksum,
+provenance verification, and x86_64 extraction. Windows/WSL2 remains untested;
+the 20m55s source-build path is separate and is not silently substituted for
+the release install.
 
 ## Why the claim is narrow
 

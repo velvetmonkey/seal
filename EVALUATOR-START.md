@@ -1,10 +1,18 @@
 # Seal: Evaluator Truth Surface
 
-Regenerated: 2026-08-09. This file separates proved, tested, reproduced,
+Regenerated: 2026-08-10. This file separates proved, tested, reproduced,
 shipped, and open facts. It is still hand-generated from the two `CLAIMS.md`
 files, the fleet lock, the live verifier declarations, and the current
 proof-reference inventories. No checked-in generator exists; that remains a
 stop-ship.
+
+> **Publication correction, measured 2026-08-10.** `seal-host` v0.1.5 became
+> the project's first published GitHub release at `00:38:06Z`. It has eight
+> assets: two Linux archives, two SBOMs, `SHA256SUMS`, the standalone verifier,
+> the six-subject provenance statement, and its Sigstore bundle. The prior
+> dated sentence saying no release existed is historical only. This publication
+> does not close the separate public-tree/zero-private-access row in Section 6:
+> the successful release workflow still declared `SEAL_CI_READ_TOKEN`.
 
 > **Dated correction, measured 2026-08-08.** Section 2's historical
 > artifact-identity rows
@@ -16,8 +24,8 @@ stop-ship.
 > were independently re-hashed to
 > `28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657`. The
 > `dd00cd2b` clean-rebuild candidate row remains a true record of that rebuild.
-> No GitHub release has been published for any tag as of this date
-> (re-checked after the repin; the release policy gate still refuses). The rest
+> At that 2026-08-08 measurement no GitHub release had been published
+> (the later v0.1.5 publication is recorded above). The rest
 > of this file is retained verbatim as the 2026-07-31 audit.
 
 ## 1. Source order and status words
@@ -147,7 +155,7 @@ run rather than carrying forward the 2026-07-31 red result.
 | Umbrella regeneration | **STILL TRUE.** This file remains hand-maintained | No generator exists under `seal/scripts`; `scripts/linkcheck.mjs` reads this file but does not generate it. Closure still requires checked regeneration from both CLAIMS files, the lock, and live profiles |
 | Passthrough perimeter choice | **STILL TRUE.** The model proves P1 escape bypass; no option is chosen | `seal-host/CLAIMS.md` K4 and `Host/PassthroughPerimeter.lean` prove `widened_non_bypass_fails`. Closure still requires either refusing every escape or a named strict-child adapter profile with executable evidence |
 | Release gating at the exact tagged commit | **CLOSED.** Publication requires same-commit CI, Golden Path, and Security runs, including the CI `release-evidence` conjunction | `seal-host/scripts/tag_release_gate.py`; `release.yml` runs it without `continue-on-error`; all 12 focused gate tests pass and cover absent, pending, red, ambiguous, and missing-evidence cases |
-| Public tree buildable with zero private access | **STILL TRUE pending execution.** Every manifest and fleet input is anonymously readable, and the release build plus reusable fleet gate now carry no `SEAL_CI_READ_TOKEN`; no credential-free release build has completed on these changes yet | `seal-host/lake-manifest.json`, `release/fleet-lock.json`, `.github/workflows/release.yml`, `.github/workflows/acceptance.yml`. Closure requires the new release build to complete successfully without a private-read credential |
+| Public tree buildable with zero private access | **STILL TRUE pending execution.** v0.1.5 published successfully, but that release workflow declared and checked `SEAL_CI_READ_TOKEN`; it was not the missing credential-free build | GitHub Actions run `31339047697` succeeded at `b4da65e`; `seal-host/.github/workflows/release.yml` still declares and checks the token. Closure still requires a successful release build without a private-read credential |
 
 The table is the 2026-08-09 current disposition: two prior stop-ships are
 closed and three remain loud. A code path or anonymous fetch is not promoted
@@ -190,8 +198,8 @@ One prior command row is retained as an explicit gap:
 - Runtime three-way agreement inside the clean container: not checked.
 - Universal parser or conformance coverage beyond the named corpora: not
   checked.
-- A completed release build with zero private access: not checked. All current
-  Git inputs fetched anonymously and the release workflow is now credential-free,
-  but its first execution on these changes has not occurred.
+- A completed release build with zero private access: not checked. The v0.1.5
+  release run succeeded, but its workflow declared and checked
+  `SEAL_CI_READ_TOKEN`; publication does not close this row.
 - Browser replay exact command: NO BACKING.
 - The removed quickstart commands and their claimed results: not checked.
