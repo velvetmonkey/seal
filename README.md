@@ -2,16 +2,8 @@
 
 # Seal
 
-> **Badge-name merge prerequisites:** both badges report workflow status from
-> `main`. Their labels become the workflow titles only after `seal` commit
-> `347d47e` (Docs & claims consistency) and `seal-host` commit `40ae69a` (Host
-> acceptance) merge to their respective `main` branches. Until then, GitHub's
-> raw SVG titles remain `CI` and `Golden Path - deterministic shell + Postgres
-> + deploy + token governor + temporal freeze + filesystem`; the status and
-> colour still report current `main`.
-
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
-[![Host acceptance](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
+[![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
 
 Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
 
