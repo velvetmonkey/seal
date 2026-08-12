@@ -228,7 +228,7 @@ Do not combine the names and pretend the tradeoff disappeared.
 1)*. Missing private evidence must make the release verdict red, and every
 required Lean, Rust, conformance, security and golden-path result must be
 observed. **MEASURED:** the gate rejects malformed input, every non-`success`
-result, and tokenless apparent success for the private Lean/Rust jobs
+result, and tokenless apparent success for the credential-gated Lean/Rust jobs
 (`seal-host/scripts/release_evidence_gate.py:15-65`). The workflow runs it
 under `always()` after five named prerequisite jobs
 (`seal-host/.github/workflows/ci.yml:225-242`), and negative and green pins
