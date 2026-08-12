@@ -1,10 +1,10 @@
 # Truth box (canonical)
 
 <!-- Canonical copy of the truth-box claim block: runtime profile, claim,
-     non-claim. The README mirrors these three lines verbatim between the same
+     non-claim. index.html mirrors these three lines verbatim between the same
      markers. The per-repo "Map" line is NOT part of this block (its links are
      relative here, absolute in the sibling repos). Edit here first;
-     scripts/claims-drift.mjs enforces equality. -->
+     scripts/claims-drift.mjs enforces equality for this local mirror. -->
 
 <!-- truthbox:begin -->
 > **Runtime profile: `compatible`.** Strict `canonical-l0` is proved and modelled, not the deployed route yet.
