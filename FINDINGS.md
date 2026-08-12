@@ -34,8 +34,8 @@
 ## NEEDS BEN (unverified or out-of-scope in this pass)
 - Full end-to-end live run of `bash scripts/run_local.sh` in this environment (Docker + Node required; the local ./scripts/run-showcase.sh + captured seal-demo.log + bundle evidence provide the showcase instead).
 - Exhaustive audit of every theorem in mcp-seal-dev (used local mcp-seal/SealCore/Safety.lean + Test/ + matrix as proxy; the matrix itself is the comprehensive view).
-- Private links (mcp-seal-dev full tree) — backing via local mirrors and the drift-guarded matrix.
-- Private evaluator links (mcp-seal-dev, crdt-lean full) — backing cited via public matrix + local mcp-seal/ + seal-host/ sources only.
+- Public source links (including the mcp-seal-dev full tree) — backing via the linked repositories and the drift-guarded matrix.
+- Evaluator links (mcp-seal-dev and seal-host) — backing cited via their public trees and the public matrix; the deferred crdt-lean work is not a current product route.
 - Exhaustive audit of every .lean theorem vs every line of every conformance corpus entry (sampled the load-bearing safety + non-interference + bridge theorems; matrix + PROOF-REFERENCE already do the heavy lifting).
 - Any claim surface added after 2026-07 (this audit is against the files read in this session).
 
