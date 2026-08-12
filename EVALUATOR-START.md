@@ -62,8 +62,8 @@ byte-identical `lake-manifest.json`. Backing:
 
 The limits are part of the result:
 
-- Private repository authorization still required one transient host GitHub
-  credential. It was unset before compilation and not mounted from disk.
+- At the time of this rebuild, repository authorization required one transient
+  host GitHub credential. It was unset before compilation and not mounted from disk.
   Backing: `REPRODUCE.md:27-46`; `reproduce.sh:11-17`.
 - Cross-hardware and cross-kernel reproducibility was not checked. This is one
   x86-64 cold-container sample. Backing: `evidence/environment.txt`; no second
@@ -72,7 +72,7 @@ The limits are part of the result:
   and hashes; it does not run the three-way runtime agreement suite. Backing:
   `reproduce.sh:77-109`.
 - The checked-in provenance recipe is not the recipe that succeeded. It names
-  `/home/monkey/bin/leanbuild` and omits the private dependency C-object build;
+  `/home/monkey/bin/leanbuild` and omits the separate dependency C-object build;
   the clean recipe used pinned `lake build` and first ran
   `.lake/packages/mcp-seal/c/build.sh`. Backing:
   `seal-host/wasm-spike/verified/PROVENANCE.txt:76-91` and

@@ -1,8 +1,8 @@
 # Repository topology and deployment model
 
-Decided 2026-07-25. This records WHY the repositories are shaped the way they
-are, so the question does not get re-argued from scratch every time something
-diverges.
+Decided 2026-07-25 and retained as historical design rationale. Its private-source
+publication model was superseded when all nine Seal-family repositories became
+public; `witness-check` remains the one private, proprietary exception.
 
 ## The decision
 
@@ -44,7 +44,7 @@ a visibility flag: `seal-host`'s `public-export.yml`, "Signed public source
 export", runs the export twice independently and compares the deterministic
 payloads across separate runs before publishing.
 
-So the model is: **one private source of truth, one reproducible signed export.**
+The proposed model was: **one private source of truth, one reproducible signed export.**
 The export decides what is public, and proves it did so deterministically. A
 monorepo suits that better than several repositories each needing its own
 decision.
@@ -83,7 +83,7 @@ Do not migrate onto an untrustworthy signal. In order:
 
 1. Suite genuinely green, with the reasons understood rather than suppressed.
 2. A `release-evidence` CI job that fails unless every security-relevant job
-   returned success. Today a missing private-access token makes CI skip the Lean
+   returned success. At the time, a missing private-access token made CI skip the Lean
    build, axiom checks, host tests, conformance and the three-way differential,
    and still report green. Migrating before this fixes nothing and moves an
    unreliable green into the repository we want to be the trustworthy one.

@@ -1,8 +1,8 @@
-# Public-flip checklist (gated: 31 Jul / ARIA verdict)
+# Public visibility checklist (completed 12 Aug 2026)
 
-What must be decided or scrubbed before ANY Seal-family repo goes public. Durable list —
-add items as they surface; strike them only when actually done in the repo concerned.
-Nothing here happens automatically at the flip: each line is an explicit pre-flip action.
+Historical checklist used before the Seal-family repositories became public. All nine
+Seal-family repositories are public; `witness-check` is the single intentional private,
+proprietary exception. The remaining unchecked items below are non-visibility follow-ups.
 
 ## Identity decisions (Ben only — no doc pass may act on these)
 
@@ -22,17 +22,14 @@ Nothing here happens automatically at the flip: each line is an explicit pre-fli
   shared authorship across seal-check / kit / kernel. Scrubbed 2026-07-09. Consider deleting
   the file entirely at flip time — it is a working PR draft, not user documentation.
 
-## Per-repo pre-flip actions
+## Per-repo visibility results
 
-- [ ] **Which repos flip, which stay private.** witness-check is proprietary and expected to
-  STAY private; every public README that names it must survive that (current wording marks it
-  "private/proprietary" — verify at flip that this is still the decision).
-- [ ] **Private-link disclaimers.** Family READMEs say links "resolve only for authorised
-  evaluators". After a partial flip this sentence is half-wrong per repo — re-scope it to
-  whichever repos remain private.
-- [ ] **mcp-seal / mcp-seal-dev naming.** The frozen public mirror is `mcp-seal`; the live
-  private repo is `mcp-seal-dev`; all family docs link `-dev`. The retirement/rename has NOT
-  happened. Decide the end-state name before flip and update rosters in one pass.
+- [x] **Which repos are public.** All nine Seal-family repositories are public.
+  `witness-check` remains private and proprietary on purpose.
+- [x] **Link disclaimers.** Family links resolve for everyone; no evaluator-only access
+  disclaimer remains for a public family repository.
+- [x] **mcp-seal / mcp-seal-dev naming.** Both the frozen `mcp-seal` repository and the live
+  `mcp-seal-dev` repository are public. Current family documentation links `mcp-seal-dev`.
 - [ ] **seal-verify-action Emscripten NOTICE gap** (flagged at its build): confirm
   `kernel/wasm/seal.js` Emscripten-generated glue attribution requirements are met in NOTICE.
 - [ ] **claims-drift + truth-box final run** across all six guarded repos on the flip commit.
@@ -42,5 +39,5 @@ Nothing here happens automatically at the flip: each line is an explicit pre-fli
 
 ## Standing rule
 
-Anything a doc pass finds that would prematurely expose identity, private-repo status, or
-unpublished material gets LISTED here and flagged — not silently fixed, not silently shipped.
+Anything a doc pass finds that would expose sensitive identity or unpublished material gets
+listed and flagged. Public repository status itself is not sensitive.
