@@ -26,7 +26,7 @@ Stop without changing a pin if any of these is true:
 1. A Phase M change that alters kernel, host, receipt, verifier, fixture, or
    demo shape is not merged.
 2. Any required source or host CI job is red, skipped, unavailable, or was run
-   without its private-repository credential.
+   without any credential its workflow configuration requires.
 3. `node scripts/pins_gate.mjs --check` is red.
 4. The selected `mcp-seal-dev` commit is not present on its authoritative
    remote.
