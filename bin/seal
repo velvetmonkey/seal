@@ -38,15 +38,19 @@ function status() {
     : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
 
   let entries;
-  try { entries = fs.readdirSync(receiptDir, { withFileTypes: true }); }
+  try {
+    const directory = fs.statSync(receiptDir);
+    if (!directory.isDirectory() || (directory.mode & 0o444) === 0) throw new Error("receipt directory is unreadable");
+    entries = fs.readdirSync(receiptDir, { withFileTypes: true });
+  }
   catch (error) {
     if (error.code === "ENOENT") {
       console.log(`Receipts: 0 stored in ${receiptDir} (directory does not exist)`);
-      console.log("Most recent: none observed");
+      console.log("Most recent: no receipt yet (receipt directory is missing)");
       return;
     }
-    console.log(`Receipts: 0 stored in ${receiptDir} (directory unreadable: ${error.message})`);
-    console.log("Most recent: none observed");
+    console.log(`Receipts: unavailable in ${receiptDir} (directory cannot be read)`);
+    console.log("Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions");
     return;
   }
 
@@ -73,7 +77,7 @@ function status() {
     }
   }
   if (observed.length === 0) {
-    console.log("Most recent: none observed");
+    console.log("Most recent: receipt files exist, but none could be read as a receipt");
     return;
   }
   observed.sort((a, b) => b.mtimeMs - a.mtimeMs);

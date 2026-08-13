@@ -15,13 +15,36 @@ function run(args, root, input = "") {
   } catch (error) { return { code: error.status, out: `${error.stdout || ""}${error.stderr || ""}` }; }
 }
 
-test("status reports an empty fresh machine without network", () => {
+test("status names a missing receipt directory as no receipt yet", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-empty-"));
   const result = run(["status"], root);
   assert.equal(result.code, 0);
   assert.match(result.out, /^Runtime: absent /m);
   assert.match(result.out, /^Receipts: 0 stored in .* \(directory does not exist\)$/m);
-  assert.match(result.out, /^Most recent: none observed$/m);
+  assert.match(result.out, /^Most recent: no receipt yet \(receipt directory is missing\)$/m);
+});
+
+test("status names an unreadable receipt directory and its permission action", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-unreadable-dir-"));
+  const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.chmodSync(receiptDir, 0o000);
+  const result = run(["status"], root);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /^Receipts: unavailable in .* \(directory cannot be read\)$/m);
+  assert.match(result.out, /^Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions$/m);
+  fs.chmodSync(receiptDir, 0o700);
+});
+
+test("status names receipt files when none can be parsed", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-no-parseable-"));
+  const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(receiptDir, "not-a-receipt.json"), "not json\n");
+  const result = run(["status"], root);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /^Receipt unreadable: not-a-receipt\.json \(Unexpected token/m);
+  assert.match(result.out, /^Most recent: receipt files exist, but none could be read as a receipt$/m);
 });
 
 test("status reports the demo runtime and receipt, and names corruption", () => {
