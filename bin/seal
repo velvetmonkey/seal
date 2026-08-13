@@ -86,11 +86,28 @@ async function demo() {
   console.log("PASS VERIFIED  the receipt re-derived the approved decision");
   if (process.env.SEAL_DEMO_KEEP !== "1") fs.rmSync(dir, { recursive: true, force: true });
 }
+async function verify(receiptPath) {
+  if (!receiptPath) throw new Error("usage: seal verify PATH");
+  const absolute = path.resolve(receiptPath);
+  let stat;
+  try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
+  if (!stat.isFile()) throw new Error(`receipt is not a readable file: ${absolute}`);
+  if ((stat.mode & 0o444) === 0) throw new Error(`receipt is not a readable file: ${absolute}`);
+  let text;
+  try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
+  if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
+  try { JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
+  const runtime = await ensureRuntime();
+  const verifier = require(path.join(runtime, "src/verify.cjs"));
+  const result = await verifier.verifyDetailed(absolute);
+  process.exitCode = result.ok ? 0 : result.exitCode || 1;
+}
 async function main() {
   const command = process.argv[2];
   if (command === "demo") return demo();
+  if (command === "verify") return verify(process.argv[3]);
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
-  console.log("seal — the developer gate\n\n  seal demo    block, approve once, execute, and verify a receipt");
+  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt");
   process.exitCode = command ? 2 : 0;
 }
 main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });
