@@ -7,7 +7,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const expectedPath = resolve(ROOT, "scripts/claims-drift-family-hashes.json");
+const expectedPath = process.env.FAMILY_CLAIMS_RECORD ?? resolve(ROOT, "scripts/claims-drift-family-hashes.json");
 const REPOSITORIES = Object.freeze([
   ["seal-check", "master"], ["seal-demo", "main"],
   ["seal-live-demo", "master"], ["seal-verify-action", "main"],
