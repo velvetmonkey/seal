@@ -25,7 +25,7 @@ function runLauncher(launcher, args, cache, dataHome, input = undefined, extraEn
 }
 function runDemo(input, cache, dataHome) { return runCommand(["demo"], cache, dataHome, input); }
 
-test("seal demo emits the exact hint for each launcher mode", () => {
+function hintModeFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-hint-modes-"));
   const cache = fs.mkdtempSync(path.join(root, "cache-"));
   const dataHome = fs.mkdtempSync(path.join(root, "data-"));
@@ -35,22 +35,34 @@ test("seal demo emits the exact hint for each launcher mode", () => {
   fs.mkdirSync(path.dirname(pathLauncher), { recursive: true });
   fs.symlinkSync(path.join(__dirname, "../bin/seal"), npxLauncher);
   fs.symlinkSync(path.join(__dirname, "../bin/seal"), pathLauncher);
-  const receipt = (output) => output.match(/^RECEIPT\s+(.+)$/m)?.[1];
+  return { root, cache, dataHome, npxLauncher, pathLauncher, receipt: (output) => output.match(/^RECEIPT\s+(.+)$/m)?.[1] };
+}
 
+test("seal demo emits the exact npx launcher hint", () => {
+  const { cache, dataHome, npxLauncher, receipt } = hintModeFixture();
   const npx = runLauncher(npxLauncher, ["demo"], cache, dataHome, "y\n", { PATH: "/usr/bin:/bin" });
   assert.equal(npx.code, 0, npx.output);
   assert.match(npx.output, new RegExp(`Verify later with: npx github:velvetmonkey/seal verify ${receipt(npx.output)}`));
+});
 
+test("seal demo emits the exact PATH-installed launcher hint", () => {
+  const { cache, dataHome, pathLauncher, receipt } = hintModeFixture();
   const installed = runLauncher(pathLauncher, ["demo"], cache, dataHome, "y\n", { PATH: `${path.dirname(pathLauncher)}:/usr/bin:/bin` });
   assert.equal(installed.code, 0, installed.output);
   assert.match(installed.output, new RegExp(`Verify later with: seal verify ${receipt(installed.output)}`));
+});
 
+test("seal demo emits the exact direct-node launcher hint", () => {
+  const { cache, dataHome, receipt } = hintModeFixture();
   const direct = runLauncher(path.join(__dirname, "../bin/seal"), ["demo"], cache, dataHome, "y\n", { PATH: "/usr/bin:/bin" });
   assert.equal(direct.code, 0, direct.output);
   const directReceipt = receipt(direct.output);
   assert.match(direct.output, new RegExp(`Verify later with: ${directReceipt}`));
   assert.doesNotMatch(direct.output, /Verify later with: (?:npx |seal verify)/);
+});
 
+test("seal demo emits the exact PATH hint despite ambient npm variables", () => {
+  const { cache, dataHome, pathLauncher, receipt } = hintModeFixture();
   const ambient = runLauncher(pathLauncher, ["demo"], cache, dataHome, "y\n", { PATH: `${path.dirname(pathLauncher)}:/usr/bin:/bin`, npm_command: "exec", npm_config_npx: "true" });
   assert.equal(ambient.code, 0, ambient.output);
   assert.match(ambient.output, new RegExp(`Verify later with: seal verify ${receipt(ambient.output)}`));
