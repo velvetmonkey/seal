@@ -80,6 +80,26 @@ function status() {
   const recent = observed[0];
   console.log(`Most recent: ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
 }
+function shellWord(value) {
+  return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+function sealOnPath() {
+  const current = fs.realpathSync(process.argv[1]);
+  for (const directory of (process.env.PATH || "").split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(directory, process.platform === "win32" ? "seal.cmd" : "seal");
+    try {
+      if (fs.realpathSync(candidate) === current) return true;
+    } catch {}
+  }
+  return false;
+}
+function verifyHint(receipt) {
+  const launcher = path.resolve(process.argv[1] || "");
+  const npxByArgv = /(?:^|[/\\])_npx(?:[/\\])/.test(launcher);
+  if (npxByArgv) return `npx github:velvetmonkey/seal verify ${shellWord(receipt)}`;
+  if (sealOnPath()) return `seal verify ${shellWord(receipt)}`;
+  return shellWord(receipt);
+}
 async function fetchBytes(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`runtime download failed: ${response.status} ${url}`);
@@ -148,7 +168,7 @@ async function demo() {
   if (!result.ok) throw new Error("receipt verification failed");
   console.log(`RECEIPT   ${receipt}`);
   console.log("PASS VERIFIED  the receipt re-derived the approved decision");
-  console.log(`Verify later with: seal verify ${receipt}`);
+  console.log(`Verify later with: ${verifyHint(receipt)}`);
 }
 async function verify(receiptPath) {
   if (!receiptPath) throw new Error("usage: seal verify PATH");

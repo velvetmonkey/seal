@@ -14,7 +14,59 @@ function runCommand(args, cache, dataHome, input = undefined) {
     return { code: error.status, output: `${error.stdout || ""}${error.stderr || ""}` };
   }
 }
+function runLauncher(launcher, args, cache, dataHome, input = undefined, extraEnv = {}) {
+  try {
+    return { code: 0, output: execFileSync(process.execPath, [launcher, ...args], {
+      env: { ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome, ...extraEnv }, input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+    }) };
+  } catch (error) {
+    return { code: error.status, output: `${error.stdout || ""}${error.stderr || ""}` };
+  }
+}
 function runDemo(input, cache, dataHome) { return runCommand(["demo"], cache, dataHome, input); }
+
+function hintModeFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-hint-modes-"));
+  const cache = fs.mkdtempSync(path.join(root, "cache-"));
+  const dataHome = fs.mkdtempSync(path.join(root, "data-"));
+  const npxLauncher = path.join(root, "_npx", "pkg", "bin", "seal");
+  const pathLauncher = path.join(root, "path-bin", "seal");
+  fs.mkdirSync(path.dirname(npxLauncher), { recursive: true });
+  fs.mkdirSync(path.dirname(pathLauncher), { recursive: true });
+  fs.symlinkSync(path.join(__dirname, "../bin/seal"), npxLauncher);
+  fs.symlinkSync(path.join(__dirname, "../bin/seal"), pathLauncher);
+  return { root, cache, dataHome, npxLauncher, pathLauncher, receipt: (output) => output.match(/^RECEIPT\s+(.+)$/m)?.[1] };
+}
+
+test("seal demo emits the exact npx launcher hint", () => {
+  const { cache, dataHome, npxLauncher, receipt } = hintModeFixture();
+  const npx = runLauncher(npxLauncher, ["demo"], cache, dataHome, "y\n", { PATH: "/usr/bin:/bin" });
+  assert.equal(npx.code, 0, npx.output);
+  assert.match(npx.output, new RegExp(`Verify later with: npx github:velvetmonkey/seal verify ${receipt(npx.output)}`));
+});
+
+test("seal demo emits the exact PATH-installed launcher hint", () => {
+  const { cache, dataHome, pathLauncher, receipt } = hintModeFixture();
+  const installed = runLauncher(pathLauncher, ["demo"], cache, dataHome, "y\n", { PATH: `${path.dirname(pathLauncher)}:/usr/bin:/bin` });
+  assert.equal(installed.code, 0, installed.output);
+  assert.match(installed.output, new RegExp(`Verify later with: seal verify ${receipt(installed.output)}`));
+});
+
+test("seal demo emits the exact direct-node launcher hint", () => {
+  const { cache, dataHome, receipt } = hintModeFixture();
+  const direct = runLauncher(path.join(__dirname, "../bin/seal"), ["demo"], cache, dataHome, "y\n", { PATH: "/usr/bin:/bin" });
+  assert.equal(direct.code, 0, direct.output);
+  const directReceipt = receipt(direct.output);
+  assert.match(direct.output, new RegExp(`Verify later with: ${directReceipt}`));
+  assert.doesNotMatch(direct.output, /Verify later with: (?:npx |seal verify)/);
+});
+
+test("seal demo emits the exact PATH hint despite ambient npm variables", () => {
+  const { cache, dataHome, pathLauncher, receipt } = hintModeFixture();
+  const ambient = runLauncher(pathLauncher, ["demo"], cache, dataHome, "y\n", { PATH: `${path.dirname(pathLauncher)}:/usr/bin:/bin`, npm_command: "exec", npm_config_npx: "true" });
+  assert.equal(ambient.code, 0, ambient.output);
+  assert.match(ambient.output, new RegExp(`Verify later with: seal verify ${receipt(ambient.output)}`));
+});
 
 test("seal demo distinguishes approval, decline, and EOF", () => {
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-runtime-approval-test-"));
@@ -23,6 +75,7 @@ test("seal demo distinguishes approval, decline, and EOF", () => {
   assert.equal(approved.code, 0);
   assert.match(approved.output, /EXECUTED  demo server accepted the approved call/);
   assert.match(approved.output, /PASS VERIFIED  the receipt re-derived the approved decision/);
+  assert.match(approved.output, /Verify later with: /);
 
   const declined = runDemo("N\n", cache, dataHome);
   assert.equal(declined.code, 0);
@@ -41,7 +94,7 @@ test("seal demo keeps receipts for later verification and keeps both runs", () =
   const firstPath = first.output.match(/^RECEIPT\s+(.+)$/m)?.[1];
   assert.ok(firstPath, first.output);
   assert.ok(fs.existsSync(firstPath), firstPath);
-  assert.match(first.output, /Verify later with: seal verify /);
+  assert.match(first.output, /Verify later with: /);
 
   const verifyCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-runtime-verify-test-"));
   const verifyDataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-data-verify-test-"));
