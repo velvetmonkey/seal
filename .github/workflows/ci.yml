@@ -34,3 +34,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - run: node scripts/readme-claim-inventory.mjs
       - run: node scripts/claims-drift.mjs
+      - run: node --test test/claims-drift.test.mjs
