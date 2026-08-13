@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// The product shell. Runtime semantics remain in the separately published
+// assurance-kit artifact named by runtime-manifest.json.
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const crypto = require("node:crypto");
+const { pathToFileURL } = require("node:url");
+const readline = require("node:readline");
+
+const ROOT = path.resolve(__dirname, "..");
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
+const runtimeBase = process.env.SEAL_RUNTIME_BASE_URL ||
+  `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
+const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
+const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+const receiptDir = path.join(dataHome, "seal", "receipts");
+
+function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
+async function fetchBytes(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`runtime download failed: ${response.status} ${url}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+async function ensureRuntime() {
+  for (const [relative, expected] of Object.entries(manifest.files)) {
+    const target = path.join(cache, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (fs.existsSync(target)) {
+      const got = sha256(fs.readFileSync(target));
+      if (got !== expected) throw new Error(`cached runtime hash mismatch for ${relative}: ${got}`);
+      continue;
+    }
+    const bytes = await fetchBytes(`${runtimeBase}/${relative}`);
+    const got = sha256(bytes);
+    if (got !== expected) throw new Error(`downloaded runtime hash mismatch for ${relative}: ${got}`);
+    const temporary = `${target}.download-${process.pid}`;
+    fs.writeFileSync(temporary, bytes, { mode: 0o600 });
+    fs.renameSync(temporary, target);
+  }
+  return cache;
+}
+function ask(question) {
+  return new Promise((resolve) => {
+    const input = readline.createInterface({ input: process.stdin, output: process.stderr });
+    let answered = false;
+    input.once("line", (line) => {
+      answered = true;
+      input.close();
+      resolve({ kind: "answer", value: line.trim().toLowerCase() });
+    });
+    input.once("close", () => {
+      if (!answered) resolve({ kind: "eof" });
+    });
+    input.output.write(question);
+  });
+}
+async function demo() {
+  const runtime = await ensureRuntime();
+  console.log(`Seal runtime verified: ${manifest.repository}@${manifest.commit.slice(0, 12)}`);
+  const config = await import(pathToFileURL(path.join(runtime, "kernel/seal-config.js")));
+  const runner = require(path.join(runtime, "kernel/runner.cjs"));
+  const verifier = require(path.join(runtime, "src/verify.cjs"));
+  const call = { tool: "db.execute", args: { database: "demo", sql: "drop table users" }, now: 1000 };
+  const target = config.guardTarget(call.tool, call.args);
+  const demoConfig = config.SCENARIOS["destructive-sql"].config;
+  const blocked = await runner.decide(demoConfig, { ...call, approvals: [] });
+  if (blocked.verdict !== "BLOCK") throw new Error(`demo expected BLOCK, got ${blocked.verdict}`);
+  console.log("BLOCKED  db.execute demo call requires approval");
+  console.log(`approval required: ${target}`);
+  const response = await ask("Approve this demo call once? [y/N] ");
+  if (response.kind === "eof") {
+    console.error("No approval response received (EOF); no call executed.");
+    process.exitCode = 1;
+    return;
+  }
+  if (response.value !== "y") { console.log("Demo stopped safely; no call executed."); return; }
+  const allowed = await runner.decide(demoConfig, { ...call, approvals: [target] });
+  if (allowed.verdict !== "ALLOW") throw new Error(`demo expected ALLOW, got ${allowed.verdict}`);
+  fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
+  const receipt = path.join(receiptDir, `receipt-${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}.json`);
+  fs.writeFileSync(receipt, JSON.stringify(allowed.receipt, null, 2) + "\n", { mode: 0o600 });
+  console.log("EXECUTED  demo server accepted the approved call");
+  const result = await verifier.verifyDetailed(receipt);
+  if (!result.ok) throw new Error("receipt verification failed");
+  console.log(`RECEIPT   ${receipt}`);
+  console.log("PASS VERIFIED  the receipt re-derived the approved decision");
+  console.log(`Verify later with: seal verify ${receipt}`);
+}
+async function verify(receiptPath) {
+  if (!receiptPath) throw new Error("usage: seal verify PATH");
+  const absolute = path.resolve(receiptPath);
+  let stat;
+  try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
+  if (!stat.isFile()) throw new Error(`receipt is not a readable file: ${absolute}`);
+  if ((stat.mode & 0o444) === 0) throw new Error(`receipt is not a readable file: ${absolute}`);
+  let text;
+  try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
+  if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
+  try { JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
+  const runtime = await ensureRuntime();
+  const verifier = require(path.join(runtime, "src/verify.cjs"));
+  const result = await verifier.verifyDetailed(absolute);
+  process.exitCode = result.ok ? 0 : result.exitCode || 1;
+}
+async function main() {
+  const command = process.argv[2];
+  if (command === "demo") return demo();
+  if (command === "verify") return verify(process.argv[3]);
+  if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
+  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt");
+  process.exitCode = command ? 2 : 0;
+}
+main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });

@@ -1,5 +1,22 @@
 <p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
 
+# First run: `seal demo`
+
+```sh
+seal demo
+```
+
+The CLI downloads and hash-verifies the pinned runtime, then walks through one
+guarded demo: blocked call, one approval, execution, and an independently
+verified receipt. No hand-written JSON, keys, SQLite, Docker, Lean, Python,
+Git, GitHub CLI, or Cosign setup is required.
+
+To verify a receipt saved from any machine later:
+
+```sh
+seal verify /path/to/receipt.json
+```
+
 # Seal
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
