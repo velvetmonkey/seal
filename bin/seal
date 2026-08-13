@@ -22,11 +22,11 @@ function inspectRuntime() {
   for (const [relative, expected] of Object.entries(manifest.files)) {
     const target = path.join(cache, relative);
     try {
-      if (!fs.statSync(target).isFile()) return { present: false, reason: `${relative} is not a file` };
+      if (!fs.statSync(target).isFile()) return { present: false, state: "absent", reason: `${relative} is not a file` };
       const got = sha256(fs.readFileSync(target));
-      if (got !== expected) return { present: false, reason: `${relative} hash mismatch` };
+      if (got !== expected) return { present: false, state: "integrity check failed", reason: `${relative} hash mismatch` };
     } catch (error) {
-      return { present: false, reason: `${relative} is unavailable` };
+      return { present: false, state: "absent", reason: `${relative} is unavailable` };
     }
   }
   return { present: true };
@@ -35,7 +35,9 @@ function status() {
   const runtime = inspectRuntime();
   console.log(runtime.present
     ? `Runtime: present seal-assurance-kit@${manifest.commit}`
-    : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+    : runtime.state === "integrity check failed"
+      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; cached bytes do not match the published runtime)`
+      : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
 
   let entries;
   try { entries = fs.readdirSync(receiptDir, { withFileTypes: true }); }
