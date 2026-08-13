@@ -14,6 +14,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.js
 const runtimeBase = process.env.SEAL_RUNTIME_BASE_URL ||
   `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
 const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
+const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+const receiptDir = path.join(dataHome, "seal", "receipts");
 
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
 async function fetchBytes(url) {
@@ -76,15 +78,15 @@ async function demo() {
   if (response.value !== "y") { console.log("Demo stopped safely; no call executed."); return; }
   const allowed = await runner.decide(demoConfig, { ...call, approvals: [target] });
   if (allowed.verdict !== "ALLOW") throw new Error(`demo expected ALLOW, got ${allowed.verdict}`);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
-  const receipt = path.join(dir, "receipt.json");
+  fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
+  const receipt = path.join(receiptDir, `receipt-${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}.json`);
   fs.writeFileSync(receipt, JSON.stringify(allowed.receipt, null, 2) + "\n", { mode: 0o600 });
   console.log("EXECUTED  demo server accepted the approved call");
   const result = await verifier.verifyDetailed(receipt);
   if (!result.ok) throw new Error("receipt verification failed");
   console.log(`RECEIPT   ${receipt}`);
   console.log("PASS VERIFIED  the receipt re-derived the approved decision");
-  if (process.env.SEAL_DEMO_KEEP !== "1") fs.rmSync(dir, { recursive: true, force: true });
+  console.log(`Verify later with: seal verify ${receipt}`);
 }
 async function verify(receiptPath) {
   if (!receiptPath) throw new Error("usage: seal verify PATH");
