@@ -18,6 +18,68 @@ const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", 
 const receiptDir = path.join(dataHome, "seal", "receipts");
 
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
+function inspectRuntime() {
+  for (const [relative, expected] of Object.entries(manifest.files)) {
+    const target = path.join(cache, relative);
+    try {
+      if (!fs.statSync(target).isFile()) return { present: false, reason: `${relative} is not a file` };
+      const got = sha256(fs.readFileSync(target));
+      if (got !== expected) return { present: false, reason: `${relative} hash mismatch` };
+    } catch (error) {
+      return { present: false, reason: `${relative} is unavailable` };
+    }
+  }
+  return { present: true };
+}
+function status() {
+  const runtime = inspectRuntime();
+  console.log(runtime.present
+    ? `Runtime: present seal-assurance-kit@${manifest.commit}`
+    : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+
+  let entries;
+  try { entries = fs.readdirSync(receiptDir, { withFileTypes: true }); }
+  catch (error) {
+    if (error.code === "ENOENT") {
+      console.log(`Receipts: 0 stored in ${receiptDir} (directory does not exist)`);
+      console.log("Most recent: none observed");
+      return;
+    }
+    console.log(`Receipts: 0 stored in ${receiptDir} (directory unreadable: ${error.message})`);
+    console.log("Most recent: none observed");
+    return;
+  }
+
+  const candidates = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink());
+  console.log(`Receipts: ${candidates.length} stored in ${receiptDir}`);
+  const observed = [];
+  for (const entry of entries) {
+    const target = path.join(receiptDir, entry.name);
+    let stat;
+    try { stat = fs.statSync(target); } catch (error) {
+      console.log(`Receipt unreadable: ${entry.name} (${error.message})`);
+      continue;
+    }
+    if (!stat.isFile()) {
+      console.log(`Receipt unreadable: ${entry.name} (not a regular file)`);
+      continue;
+    }
+    try {
+      const receipt = JSON.parse(fs.readFileSync(target, "utf8"));
+      if (typeof receipt.verdict !== "string" || receipt.now === undefined) throw new Error("missing verdict or decision time");
+      observed.push({ target, name: entry.name, verdict: receipt.verdict, now: receipt.now, mtimeMs: stat.mtimeMs });
+    } catch (error) {
+      console.log(`Receipt unreadable: ${entry.name} (${error.message})`);
+    }
+  }
+  if (observed.length === 0) {
+    console.log("Most recent: none observed");
+    return;
+  }
+  observed.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const recent = observed[0];
+  console.log(`Most recent: ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
+}
 async function fetchBytes(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`runtime download failed: ${response.status} ${url}`);
@@ -113,8 +175,12 @@ async function main() {
   const command = process.argv[2];
   if (command === "demo") return demo();
   if (command === "verify") return verify(process.argv[3]);
+  if (command === "status") {
+    if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
+    return status();
+  }
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
-  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt");
+  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
   process.exitCode = command ? 2 : 0;
 }
 main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });
