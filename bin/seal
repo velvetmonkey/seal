@@ -102,7 +102,12 @@ async function verify(receiptPath) {
   const runtime = await ensureRuntime();
   const verifier = require(path.join(runtime, "src/verify.cjs"));
   const result = await verifier.verifyDetailed(absolute);
-  process.exitCode = result.ok ? 0 : result.exitCode || 1;
+  if (result.ok) {
+    console.log("PASS VERIFIED  the receipt re-derived the approved decision");
+    process.exitCode = 0;
+  } else {
+    process.exitCode = result.exitCode || 1;
+  }
 }
 async function main() {
   const command = process.argv[2];
