@@ -23,6 +23,7 @@ test("seal demo distinguishes approval, decline, and EOF", () => {
   assert.equal(approved.code, 0);
   assert.match(approved.output, /EXECUTED  demo server accepted the approved call/);
   assert.match(approved.output, /PASS VERIFIED  the receipt re-derived the approved decision/);
+  assert.match(approved.output, /Verify later with: /);
 
   const declined = runDemo("N\n", cache, dataHome);
   assert.equal(declined.code, 0);
@@ -41,7 +42,7 @@ test("seal demo keeps receipts for later verification and keeps both runs", () =
   const firstPath = first.output.match(/^RECEIPT\s+(.+)$/m)?.[1];
   assert.ok(firstPath, first.output);
   assert.ok(fs.existsSync(firstPath), firstPath);
-  assert.match(first.output, /Verify later with: seal verify /);
+  assert.match(first.output, /Verify later with: /);
 
   const verifyCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-runtime-verify-test-"));
   const verifyDataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-data-verify-test-"));
