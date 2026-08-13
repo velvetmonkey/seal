@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedPath = resolve(ROOT, "scripts/claims-drift-family-hashes.json");
 const REPOSITORIES = Object.freeze([
-  ["seal", "main"], ["seal-check", "master"], ["seal-demo", "main"],
+  ["seal-check", "master"], ["seal-demo", "main"],
   ["seal-live-demo", "master"], ["seal-verify-action", "main"],
   ["seal-assurance-kit", "main"], ["mcp-seal-dev", "main"],
 ]);
@@ -29,7 +29,10 @@ function shared(source, repository) {
 }
 function roots() {
   const configured = new Map((process.env.FAMILY_CLAIMS_ROOTS ?? "").split(";").filter(Boolean).map((entry) => entry.split("=", 2)));
-  return REPOSITORIES.map(([repository, branch]) => [repository, configured.get(repository) ? resolve(configured.get(repository), "scripts/claims-drift.mjs") : `https://raw.githubusercontent.com/velvetmonkey/${repository}/${branch}/scripts/claims-drift.mjs`]);
+  return [
+    ["seal", resolve(ROOT, "scripts/claims-drift.mjs")],
+    ...REPOSITORIES.map(([repository, branch]) => [repository, configured.get(repository) ? resolve(configured.get(repository), "scripts/claims-drift.mjs") : `https://raw.githubusercontent.com/velvetmonkey/${repository}/${branch}/scripts/claims-drift.mjs`]),
+  ];
 }
 async function source(location) {
   if (location.startsWith("https://")) {
@@ -54,4 +57,3 @@ for (const [repository, location] of roots()) {
   } catch (error) { fail(`${repository}: ${error.message}`); bad = true; }
 }
 if (bad) process.exitCode = 2;
-
