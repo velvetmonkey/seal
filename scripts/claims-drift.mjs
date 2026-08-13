@@ -26,6 +26,7 @@ const CLAIM_MANIFEST = [
   ["docs/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"],
 ];
 
+// FAMILY-SHARED:BEGIN core
 let fatal = false;
 
 function fatalError(message) {
@@ -53,6 +54,7 @@ function extract(file, begin, end) {
   }
   return text.slice(i + begin.length, j);
 }
+// FAMILY-SHARED:END core
 
 // Per-line trim + drop blanks; strip any HTML <pre> wrapper. The claim text
 // itself contains no HTML entities or tags, so tag-stripping is safe.
@@ -66,6 +68,7 @@ function normalise(block) {
     .join("\n");
 }
 
+// FAMILY-SHARED:BEGIN evaluation
 let drift = false;
 for (const blk of BLOCKS) {
   const canonicalBlock = extract(blk.canonical, blk.begin, blk.end);
@@ -120,3 +123,4 @@ if (fatal) {
 if (!drift && !fatal) {
   console.log("all claim blocks in sync across all surfaces");
 }
+// FAMILY-SHARED:END evaluation
