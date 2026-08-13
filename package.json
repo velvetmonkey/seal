@@ -1,0 +1,8 @@
+{
+  "name": "@velvetmonkey/seal",
+  "version": "0.1.0",
+  "description": "The Seal developer CLI",
+  "bin": { "seal": "bin/seal" },
+  "license": "Apache-2.0",
+  "engines": { "node": ">=20" }
+}
