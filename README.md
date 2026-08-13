@@ -1,21 +1,44 @@
+```sh
+npx github:velvetmonkey/seal demo
+```
+
+You will see, in this order:
+
+```
+Seal runtime verified: velvetmonkey/seal-assurance-kit@1d9c38666b38
+BLOCKED  db.execute demo call requires approval
+approval required: fbbb4e3a4ebef24733221b680cb08a7bbbdda4b0a6265ee3144f4366e26e59dc
+```
+
+then a prompt on the terminal (it ends with a space):
+
+```
+Approve this demo call once? [y/N] 
+```
+
+Answer `y`. The same call then succeeds:
+
+```
+EXECUTED  demo server accepted the approved call
+```
+
+The bundled verifier prints its checks, then a `RECEIPT` line naming a file under your per-user directory (by default `~/.local/share/seal/receipts/`, or `$XDG_DATA_HOME/seal/receipts/` if that is set), then:
+
+```
+PASS VERIFIED  the receipt re-derived the approved decision
+```
+
+and a `Verify later with: seal verify PATH` line that repeats that path. That receipt is yours to keep and re-check. The printed short name needs the optional install below. Until then, re-check with `npx github:velvetmonkey/seal verify PATH`.
+
+If you do not answer the prompt, the demo prints `No approval response received (EOF); no call executed.` and exits 1. Nothing is executed.
+
+The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. Node and `npx` are required. No Docker, Lean, Python, global install, or PATH edit is required for the command above.
+
+To install the short name `seal` later, from a clone of this repository: `npm install -g --prefix ~/.local .` and put `~/.local/bin` on your PATH. `@velvetmonkey/seal` is not on the npm registry.
+
+Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+
 <p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
-
-# First run: `seal demo`
-
-```sh
-seal demo
-```
-
-The CLI downloads and hash-verifies the pinned runtime, then walks through one
-guarded demo: blocked call, one approval, execution, and an independently
-verified receipt. No hand-written JSON, keys, SQLite, Docker, Lean, Python,
-Git, GitHub CLI, or Cosign setup is required.
-
-To verify a receipt saved from any machine later:
-
-```sh
-seal verify /path/to/receipt.json
-```
 
 # Seal
 
@@ -24,11 +47,9 @@ seal verify /path/to/receipt.json
 
 Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
 
-Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently. Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
 
-## First run
-
-Run one command. Watch the call get blocked. Approve the exact effect. Watch it flow. Verify the receipt.
+## Attack replay
 
 **Prerequisites:** Docker with Compose and Node.js; no Seal source build, key, or policy file. **Context:** start from any directory; this is a fresh clone, not a continuation of another example.
 
