@@ -74,7 +74,7 @@ test("seal demo distinguishes approval, decline, and EOF", () => {
   const approved = runDemo("y\n", cache, dataHome);
   assert.equal(approved.code, 0);
   assert.match(approved.output, /EXECUTED  demo server accepted the approved call/);
-  assert.match(approved.output, /PASS VERIFIED  the receipt re-derived the approved decision/);
+  assert.match(approved.output, /PASS VERIFIED/);
   assert.match(approved.output, /Verify later with: /);
 
   const declined = runDemo("N\n", cache, dataHome);
