@@ -1,3 +1,24 @@
+```sh
+seal demo
+```
+
+<!-- TODO(phase1): `seal demo` is not on origin/main and is not published.
+     Another lane is building `bin/seal`. The command above is the planned
+     first-run from phase1-report.md, not a command this tree can run today.
+     Do not invent an install line (`npx`, a release tarball, a PATH hook)
+     until that work exists. -->
+
+What you will see, in this order:
+
+1. The call **BLOCKED**, and the exact approval identity the demo is waiting for. <!-- TODO(phase1): planned `seal demo` output from phase1-report.md; not observed from this tree. -->
+2. One approval prompt in the terminal. <!-- TODO(phase1): planned `seal demo` prompt; not observed from this tree. -->
+3. The identical call succeeding (`EXECUTED`). <!-- TODO(phase1): planned `seal demo` success line; not observed from this tree. -->
+4. The receipt path, then `PASS VERIFIED` from the bundled verifier — or a loud failure. <!-- TODO(phase1): planned `seal demo` verifier ending; not observed from this tree. -->
+
+The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. <!-- TODO(phase1): these absences are the Phase 1 contract. They are not true of this tree until `bin/seal` lands. -->
+
+Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+
 <p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
 
 # First run: `seal demo`
@@ -24,11 +45,9 @@ seal verify /path/to/receipt.json
 
 Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
 
-Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently. Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
 
-## First run
-
-Run one command. Watch the call get blocked. Approve the exact effect. Watch it flow. Verify the receipt.
+## What you can run today
 
 **Prerequisites:** Docker with Compose and Node.js; no Seal source build, key, or policy file. **Context:** start from any directory; this is a fresh clone, not a continuation of another example.
 
