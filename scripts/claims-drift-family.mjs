@@ -47,13 +47,31 @@ let expected;
 try { expected = JSON.parse(readFileSync(expectedPath, "utf8")); }
 catch (error) { fail(`expected hash record ${expectedPath}: ${error.message}`); process.exit(); }
 
+const repositories = roots().map(([repository]) => repository);
+if (!expected || typeof expected !== "object" || Array.isArray(expected) || Object.keys(expected).length === 0) {
+  fail(`expected hash record ${expectedPath} is empty or malformed`);
+  process.exit();
+}
+for (const repository of Object.keys(expected)) {
+  if (!repositories.includes(repository)) fail(`expected hash record contains unknown repository ${repository}`);
+}
+for (const repository of repositories) {
+  if (typeof expected[repository] !== "string" || !/^[0-9a-f]{64}$/.test(expected[repository])) {
+    fail(`expected hash record missing or invalid repository ${repository}`);
+  }
+}
+if (process.exitCode) process.exit();
+
 let bad = false;
+let reference;
 for (const [repository, location] of roots()) {
-  if (typeof expected[repository] !== "string") { fail(`expected hash record missing repository ${repository}`); bad = true; continue; }
   try {
     const hash = createHash("sha256").update(shared(await source(location), repository)).digest("hex");
-    if (hash !== expected[repository]) { console.error(`FAIL  ${repository} shared claims-drift hash ${hash} != expected ${expected[repository]}`); bad = true; }
-    else console.log(`PASS  ${repository} shared claims-drift hash ${hash}`);
+    if (reference === undefined) {
+      reference = hash;
+      console.log(`PASS  ${repository} shared claims-drift hash ${hash} is family reference`);
+    } else if (hash !== reference) { console.error(`FAIL  ${repository} shared claims-drift hash ${hash} != seal ${reference}`); bad = true; }
+    else console.log(`PASS  ${repository} shared claims-drift hash ${hash} matches seal`);
   } catch (error) { fail(`${repository}: ${error.message}`); bad = true; }
 }
 if (bad) process.exitCode = 2;
