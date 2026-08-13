@@ -1,11 +1,6 @@
-`@velvetmonkey/seal` is not on the npm registry. From a clone of this repository, with Node 20 or newer:
-
 ```sh
-npm install -g --prefix ~/.local .
-seal demo
+npx github:velvetmonkey/seal demo
 ```
-
-The install line puts `seal` in `~/.local/bin`. Default `npm install -g` writes to a prefix this tree cannot use without root.
 
 You will see, in this order:
 
@@ -33,11 +28,13 @@ The bundled verifier prints its checks, then a `RECEIPT` line naming a file unde
 PASS VERIFIED  the receipt re-derived the approved decision
 ```
 
-and a `Verify later with: seal verify PATH` line that repeats that path. That receipt is yours to keep and re-check. Run the printed `seal verify PATH` later; it independently re-derives the decision from the saved bytes.
+and a `Verify later with: seal verify PATH` line that repeats that path. That receipt is yours to keep and re-check. The printed short name needs the optional install below. Until then, re-check with `npx github:velvetmonkey/seal verify PATH`.
 
 If you do not answer the prompt, the demo prints `No approval response received (EOF); no call executed.` and exits 1. Nothing is executed.
 
-The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. No Docker, Lean, Python, or GitHub CLI is required for `seal demo`.
+The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. Node and `npx` are required. No Docker, Lean, Python, global install, or PATH edit is required for the command above.
+
+To install the short name `seal` later, from a clone of this repository: `npm install -g --prefix ~/.local .` and put `~/.local/bin` on your PATH. `@velvetmonkey/seal` is not on the npm registry.
 
 Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 
