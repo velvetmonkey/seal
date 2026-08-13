@@ -1,12 +1,12 @@
 {
   "repository": "velvetmonkey/seal-assurance-kit",
-  "commit": "1d9c38666b38293e2dae5d6076c29ffb5764e875",
+  "commit": "962823b22d179f3354f8b8cf1a7091029a23c715",
   "files": {
     "kernel/wasm/seal.js": "801417decfbc49b926a16c9968aa3e77e792abf05eb782ec8ed530325fb8c6c5",
     "kernel/wasm/seal.wasm": "28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657",
     "kernel/kernel.js": "94c283b153c00135d04f9a2ed6915596ef0a183c89af034a8ee68eaa959f9a0d",
     "kernel/seal-config.js": "8092a84687755e2155f49daa1ad02ecce1105795c68a6577f6634869df901fed",
-    "kernel/receipt-format.js": "06e01626dbf295a48112e4c84dcfce02abd2703fec1a650e1457790b35cb8395",
+    "kernel/receipt-format.js": "7cd715371f2d3958c444652ca7fa428f66c73b3be1b6918ebd49730332a68819",
     "kernel/runner.cjs": "0d5b12d64d2c1215b4ad8284488fe3e567331423281ef30d333f01efaed2fb46",
     "src/verify.cjs": "19616c5f8882050296f2da4f4f1299dfa7fad60e4aa4d250fb8c8e729567fc7b"
   }
