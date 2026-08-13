@@ -2,41 +2,43 @@
 seal demo
 ```
 
-<!-- TODO(phase1): `seal demo` is not on origin/main and is not published.
-     Another lane is building `bin/seal`. The command above is the planned
-     first-run from phase1-report.md, not a command this tree can run today.
-     Do not invent an install line (`npx`, a release tarball, a PATH hook)
-     until that work exists. -->
+You will see, in this order:
 
-What you will see, in this order:
+```
+Seal runtime verified: velvetmonkey/seal-assurance-kit@1d9c38666b38
+BLOCKED  db.execute demo call requires approval
+approval required: fbbb4e3a4ebef24733221b680cb08a7bbbdda4b0a6265ee3144f4366e26e59dc
+```
 
-1. The call **BLOCKED**, and the exact approval identity the demo is waiting for. <!-- TODO(phase1): planned `seal demo` output from phase1-report.md; not observed from this tree. -->
-2. One approval prompt in the terminal. <!-- TODO(phase1): planned `seal demo` prompt; not observed from this tree. -->
-3. The identical call succeeding (`EXECUTED`). <!-- TODO(phase1): planned `seal demo` success line; not observed from this tree. -->
-4. The receipt path, then `PASS VERIFIED` from the bundled verifier — or a loud failure. <!-- TODO(phase1): planned `seal demo` verifier ending; not observed from this tree. -->
+then a prompt on the terminal:
 
-The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. <!-- TODO(phase1): these absences are the Phase 1 contract. They are not true of this tree until `bin/seal` lands. -->
+```
+Approve this demo call once? [y/N]
+```
+
+Answer `y`. The same call then succeeds:
+
+```
+EXECUTED  demo server accepted the approved call
+```
+
+The bundled verifier prints its checks, then (from one run; the filename is unique each time):
+
+```
+RECEIPT   /home/monkey/.local/share/seal/receipts/receipt-1786638798686-701209-1011bdd2.json
+PASS VERIFIED  the receipt re-derived the approved decision
+Verify later with: seal verify /home/monkey/.local/share/seal/receipts/receipt-1786638798686-701209-1011bdd2.json
+```
+
+That receipt is yours to keep and re-check. It stays in your per-user directory (by default `~/.local/share/seal/receipts/`, or `$XDG_DATA_HOME/seal/receipts/` if that is set). Run the printed `seal verify PATH` later; it independently re-derives the decision from the saved bytes.
+
+If you do not answer the prompt, the demo prints `No approval response received (EOF); no call executed.` and exits 1. Nothing is executed.
+
+The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. No Docker, Lean, Python, Git, or GitHub CLI is required for this command.
 
 Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 
 <p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
-
-# First run: `seal demo`
-
-```sh
-seal demo
-```
-
-The CLI downloads and hash-verifies the pinned runtime, then walks through one
-guarded demo: blocked call, one approval, execution, and an independently
-verified receipt. No hand-written JSON, keys, SQLite, Docker, Lean, Python,
-Git, GitHub CLI, or Cosign setup is required.
-
-To verify a receipt saved from any machine later:
-
-```sh
-seal verify /path/to/receipt.json
-```
 
 # Seal
 
@@ -47,7 +49,7 @@ Seal is the agent authorization gate whose decision rule is machine-checked, who
 
 Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
 
-## What you can run today
+## Attack replay
 
 **Prerequisites:** Docker with Compose and Node.js; no Seal source build, key, or policy file. **Context:** start from any directory; this is a fresh clone, not a continuation of another example.
 
