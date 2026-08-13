@@ -6,6 +6,7 @@ const { execFileSync } = require("node:child_process");
 const test = require("node:test");
 
 const CLI = path.join(__dirname, "../bin/seal");
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../runtime-manifest.json"), "utf8"));
 function run(args, root, input = "") {
   try {
     return { code: 0, out: execFileSync(process.execPath, [CLI, ...args], {
@@ -45,6 +46,17 @@ test("status names receipt files when none can be parsed", () => {
   assert.equal(result.code, 0);
   assert.match(result.out, /^Receipt unreadable: not-a-receipt\.json \(Unexpected token/m);
   assert.match(result.out, /^Most recent: receipt files exist, but none could be read as a receipt$/m);
+});
+
+test("status names cached runtime hash mismatch as an integrity failure", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-hash-mismatch-"));
+  const staged = path.join(root, ".cache", "seal", "runtime", manifest.commit, "kernel", "wasm", "seal.js");
+  fs.mkdirSync(path.dirname(staged), { recursive: true });
+  fs.writeFileSync(staged, "one corrupt staged byte\n");
+  const result = run(["status"], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, new RegExp(`^Runtime: integrity check failed seal-assurance-kit@${manifest.commit} \\(kernel/wasm/seal\\.js hash mismatch; cached bytes do not match the published runtime\\)$`, "m"));
+  assert.doesNotMatch(result.out, /^Runtime: absent /m);
 });
 
 test("status reports the demo runtime and receipt, and names corruption", () => {
