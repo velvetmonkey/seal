@@ -29,20 +29,60 @@ test("seal verify accepts a receipt copied away from all demo state", () => {
   const verifyData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-data-"));
   const result = run(["verify", copied], verifyCache, verifyData);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /PASS VERIFIED  the receipt re-derived the approved decision/);
+  assert.match(result.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);
 });
 
-test("verify refuses absent, empty, unreadable, directory, and non-receipt JSON paths", () => {
+test("verify names demo and saved-receipt verification separately", () => {
+  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-cache-"));
+  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-data-"));
+  const demo = run(["demo"], cache, dataHome, "y\n");
+  assert.equal(demo.code, 0, demo.out);
+  assert.match(demo.out, /PASS VERIFIED  the demo receipt re-derived the approved decision/);
+  const receipt = demo.out.match(/^RECEIPT\s+(.+)$/m)?.[1];
+  const verified = run(["verify", receipt], cache, dataHome);
+  assert.equal(verified.code, 0, verified.out);
+  assert.match(verified.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);
+});
+
+test("verify distinguishes an uninspectable path from unreadable receipt contents", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-inputs-"));
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-cache-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-data-"));
-  for (const [name, pattern] of [["absent.json", /cannot read receipt/], ["empty.json", /receipt is empty/], ["bad.json", /not valid JSON/], ["directory", /not a readable file/], ["unreadable.json", /not a readable file/], ["not-a-receipt.json", /receipt verification failed|not a valid receipt|schema valid/]]) {
+  const absent = path.join(root, "absent.json");
+  const result = run(["verify", absent], cache, dataHome);
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, new RegExp(`seal: cannot inspect receipt path: ${absent}`));
+  const unreadableContents = run(["verify", "/proc/1/mem"], cache, dataHome);
+  assert.notEqual(unreadableContents.code, 0, unreadableContents.out);
+  assert.match(unreadableContents.out, /seal: cannot read receipt contents: \/proc\/1\/mem/);
+});
+
+test("verify distinguishes a non-file path from denied receipt permissions", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-kind-"));
+  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-cache-"));
+  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-data-"));
+  const directory = path.join(root, "directory");
+  fs.mkdirSync(directory);
+  const nonFile = run(["verify", directory], cache, dataHome);
+  assert.notEqual(nonFile.code, 0, nonFile.out);
+  assert.match(nonFile.out, new RegExp(`seal: receipt path is not a regular file: ${directory}`));
+  const unreadable = path.join(root, "unreadable.json");
+  fs.writeFileSync(unreadable, "{}\n");
+  fs.chmodSync(unreadable, 0o000);
+  const denied = run(["verify", unreadable], cache, dataHome);
+  assert.notEqual(denied.code, 0, denied.out);
+  assert.match(denied.out, new RegExp(`seal: receipt file permissions deny reading: ${unreadable}`));
+});
+
+test("verify refuses empty, malformed, and non-receipt JSON paths", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-"));
+  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-cache-"));
+  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-data-"));
+  for (const [name, pattern] of [["empty.json", /receipt is empty/], ["bad.json", /not valid JSON/], ["not-a-receipt.json", /receipt verification failed|not a valid receipt|schema valid/]]) {
     const target = path.join(root, name);
     if (name === "empty.json") fs.writeFileSync(target, "");
     else if (name === "bad.json") fs.writeFileSync(target, "{");
-    else if (name === "not-a-receipt.json") fs.writeFileSync(target, "{}\n");
-    else if (name === "directory") fs.mkdirSync(target);
-    else if (name === "unreadable.json") { fs.writeFileSync(target, "{}"); fs.chmodSync(target, 0o000); }
+    else fs.writeFileSync(target, "{}\n");
     const result = run(["verify", target], cache, dataHome);
     assert.notEqual(result.code, 0, `${name} unexpectedly passed: ${result.out}`);
     assert.match(result.out, pattern);

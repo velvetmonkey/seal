@@ -173,25 +173,25 @@ async function demo() {
   const result = await verifier.verifyDetailed(receipt);
   if (!result.ok) throw new Error("receipt verification failed");
   console.log(`RECEIPT   ${receipt}`);
-  console.log("PASS VERIFIED  the receipt re-derived the approved decision");
+  console.log("PASS VERIFIED  the demo receipt re-derived the approved decision");
   console.log(`Verify later with: ${verifyHint(receipt)}`);
 }
 async function verify(receiptPath) {
   if (!receiptPath) throw new Error("usage: seal verify PATH");
   const absolute = path.resolve(receiptPath);
   let stat;
-  try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
-  if (!stat.isFile()) throw new Error(`receipt is not a readable file: ${absolute}`);
-  if ((stat.mode & 0o444) === 0) throw new Error(`receipt is not a readable file: ${absolute}`);
+  try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
+  if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
+  if ((stat.mode & 0o444) === 0) throw new Error(`receipt file permissions deny reading: ${absolute}`);
   let text;
-  try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt: ${absolute}`); }
+  try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
   try { JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
   const runtime = await ensureRuntime();
   const verifier = require(path.join(runtime, "src/verify.cjs"));
   const result = await verifier.verifyDetailed(absolute);
   if (result.ok) {
-    console.log("PASS VERIFIED  the receipt re-derived the approved decision");
+    console.log("PASS VERIFIED  the saved receipt re-derived the approved decision");
     process.exitCode = 0;
   } else {
     process.exitCode = result.exitCode || 1;
