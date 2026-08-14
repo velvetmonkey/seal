@@ -166,7 +166,7 @@ async function verify(receiptPath) {
   const verifier = require(path.join(runtime, "src/verify.cjs"));
   const result = await verifier.verifyDetailed(absolute);
   if (result.ok) {
-    console.log("PASS VERIFIED  the saved receipt re-derived the approved decision");
+    console.log("RE-DERIVED  this binary re-derived the approved decision from the saved receipt (checking is a separate tool's job)");
     process.exitCode = 0;
   } else {
     process.exitCode = result.exitCode || 1;
@@ -185,7 +185,7 @@ async function main() {
   }
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
   if (command) console.error(`seal: unknown command: ${command}`);
-  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
+  console.log("seal — the developer gate\n\n  seal demo             gate one call: block, approve once, execute, write a receipt\n  seal verify PATH     re-derive a saved kernel receipt with this binary\n  seal status           show local runtime and receipt state");
   process.exitCode = command ? 2 : 0;
 }
 main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });

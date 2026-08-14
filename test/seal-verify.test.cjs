@@ -28,7 +28,7 @@ test("seal verify accepts a receipt copied away from all generating state", asyn
   const verifyData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-data-"));
   const result = run(["verify", copied], verifyCache, verifyData);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);
+  assert.match(result.out, /RE-DERIVED  this binary re-derived the approved decision from the saved receipt/);
 });
 
 test("verify re-derives a saved kernel receipt in place", async () => {
@@ -37,7 +37,7 @@ test("verify re-derives a saved kernel receipt in place", async () => {
   const receipt = await writeKernelReceipt(cache, dataHome);
   const verified = run(["verify", receipt], cache, dataHome);
   assert.equal(verified.code, 0, verified.out);
-  assert.match(verified.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);
+  assert.match(verified.out, /RE-DERIVED  this binary re-derived the approved decision from the saved receipt/);
 });
 
 test("verify distinguishes an uninspectable path from unreadable receipt contents", () => {

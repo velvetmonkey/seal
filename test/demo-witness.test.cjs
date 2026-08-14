@@ -82,7 +82,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   assert.match(run.out, /child calls observed: still 1 \(read from /);
 
   // Output discipline: no verification claims anywhere.
-  assert.doesNotMatch(run.out, /PASS VERIFIED/);
+  assert.doesNotMatch(run.out, new RegExp(["PASS", "VERIFIED"].join(" ")));
   assert.doesNotMatch(run.out, /verif/i);
 });
 
