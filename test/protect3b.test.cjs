@@ -256,10 +256,31 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   assert.equal(doctor.code, 0);
   assert.match(doctor.out, /^ASSUMPTION$/m);
   assert.match(doctor.out, /Claude Code presents approval requests to a human and faithfully returns\n  the response/);
-  assert.match(doctor.out, /✓ No elicitation auto-response hooks detected/);
+  assert.doesNotMatch(doctor.out, /✓/);
 
   const refused = run(project, home, ["doctor"], { SEAL_ELICITATION_AUTO_RESPONSE: "accept" });
   assert.notEqual(refused.code, 0);
   assert.match(refused.out, /^REFUSED$/m);
   assert.match(refused.out, /Human approval origin cannot be assumed/);
+});
+
+test("status renders a dead activation lease as pending restart, not active", () => {
+  const root = tmpdir("seal-protect3b-dead-lease-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const state = readState(statePath);
+  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: 999999 } }, null, 2));
+
+  const status = run(project, home, ["status"], env);
+  assert.equal(status.code, 0, status.out);
+  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
+  assert.match(status.out, /previous wrapper lease pid is not live/);
+  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });

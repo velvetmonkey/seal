@@ -173,6 +173,18 @@ function stateWithProject(projectRoot, env = process.env) {
   return { root, filePath, state: readState(filePath) };
 }
 
+function protectionView(state) {
+  if (!state || state.state === STATES.UNPROTECTED) return { state: STATES.UNPROTECTED };
+  if (state.state === STATES.ACTIVE && !livePid(state.lease?.pid)) {
+    return {
+      ...state,
+      state: STATES.PENDING_RESTART,
+      detail: "previous wrapper lease pid is not live; restart Claude Code to activate the local override",
+    };
+  }
+  return state;
+}
+
 function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin = process.argv[1], env = process.env }) {
   if (!serverName || !guardTool) throw new ProtectionError("usage", "usage: seal protect SERVER TOOL");
   const root = realProjectRoot(projectRoot);
@@ -301,7 +313,7 @@ function doctor(env = process.env) {
   }
   return {
     ok: true,
-    text: "ASSUMPTION\n  Claude Code presents approval requests to a human and faithfully returns\n  the response. Seal cannot distinguish a human click from client-generated\n  acceptance.\n\n✓ No elicitation auto-response hooks detected\n",
+    text: "ASSUMPTION\n  Claude Code presents approval requests to a human and faithfully returns\n  the response. Seal cannot distinguish a human click from client-generated\n  acceptance.\n",
   };
 }
 
@@ -314,6 +326,7 @@ module.exports = {
   doctor,
   localOverrideExists,
   protect,
+  protectionView,
   projectDirectory,
   projectId,
   readProjectServer,

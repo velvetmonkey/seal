@@ -42,12 +42,14 @@ function status() {
 
   try {
     const { filePath, state } = protection.stateWithProject(process.cwd(), process.env);
-    if (!state || state.state === "UNPROTECTED") {
+    const view = protection.protectionView(state);
+    if (!view || view.state === "UNPROTECTED") {
       console.log("Protection: - outside Seal");
     } else {
-      console.log(`Protection: ${state.state} ${state.serverName}.${state.guardTool} (${filePath})`);
-      if (state.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
-      if (state.state === "BROKEN") console.log(`Protection detail: ${state.brokenReason || "stored state is broken"}`);
+      console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
+      if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
+      if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
+      if (view.detail) console.log(`Protection detail: ${view.detail}`);
     }
   } catch (error) {
     console.log(`Protection: BROKEN (${error.message})`);
