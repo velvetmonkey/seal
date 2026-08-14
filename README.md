@@ -1,3 +1,16 @@
+<p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
+
+# Seal
+
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
+
+Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
+
+Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
+
+## Try it in one command
+
 ```sh
 npx github:velvetmonkey/seal demo
 ```
@@ -54,16 +67,6 @@ use `seal verify PATH` and `seal status`.
 
 Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 
-<p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
-
-# Seal
-
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
-[![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
-
-Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
-
-Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
 
 ## Attack replay
 
