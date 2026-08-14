@@ -59,10 +59,11 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
   assert.doesNotMatch(result.out, /^Runtime: absent /m);
 });
 
-test("status reports the demo runtime and receipt, and names corruption", () => {
+const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+
+test("status reports the kernel runtime and receipt, and names corruption", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-demo-"));
-  const demo = run(["demo"], root, "y\n");
-  assert.equal(demo.code, 0, demo.out);
+  await writeKernelReceipt(path.join(root, ".cache", "seal"), path.join(root, ".local", "share"));
   const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
   fs.writeFileSync(path.join(receiptDir, "corrupt.json"), "not json\n");
   const result = run(["status"], root);

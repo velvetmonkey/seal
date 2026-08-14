@@ -48,11 +48,41 @@ const REFUSALS = Object.freeze({
   DECLINED: "declined",
 });
 
-function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, terminalWidth = 80 } = {}) {
+function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, terminalWidth = 80, store } = {}) {
   const pendingById = new Map(); // id -> the contract's OWN copy, the only source of truth
+
+  // Durable one-use (spine2): when a store is supplied, every state
+  // transition is journaled through it and the journal is replayed here at
+  // construction, so "already consumed" survives a process restart. The
+  // store is persistence only; the transition authority stays in this file.
+  if (store) {
+    for (const event of store.events) {
+      if (event.type === "issued") {
+        pendingById.set(event.id, {
+          id: event.id, token: event.token, tool: event.tool,
+          argsSha256: event.argsSha256, issuedAt: event.issuedAt,
+          expiresAt: event.expiresAt, status: "pending",
+        });
+      } else if (event.type === "status") {
+        const record = pendingById.get(event.id);
+        if (!record) throw new Error(`approval store is inconsistent: status for unknown request ${event.id}`);
+        record.status = event.status;
+      } else {
+        throw new Error(`approval store is inconsistent: unknown event type ${event.type}`);
+      }
+    }
+  }
 
   function refuse(refusal, detail) {
     return { kind: "refuse", refusal, detail };
+  }
+
+  // Persist a status transition BEFORE it takes effect for any caller: an
+  // append that fails must fail the transition, never leave memory ahead of
+  // the journal.
+  function setStatus(record, status) {
+    if (store) store.append({ type: "status", id: record.id, status, at: now() });
+    record.status = status;
   }
 
   // First tools/call for a guarded effect: either offer approval through the
@@ -74,6 +104,7 @@ function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, termin
       expiresAt: issuedAt + ttlMs,
       status: "pending", // pending | consumed | declined | cancelled | expired
     };
+    if (store) store.append({ type: "issued", id, token, tool, argsSha256: record.argsSha256, issuedAt, expiresAt: record.expiresAt });
     pendingById.set(id, record);
 
     return {
@@ -117,7 +148,7 @@ function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, termin
     if (record.status === "declined") return refuse(REFUSALS.TERMINALLY_DECLINED, "this request was declined; denial is terminal");
     if (record.status === "cancelled") return refuse(REFUSALS.CANCELLED, "this request was cancelled");
     if (now() > record.expiresAt) {
-      record.status = "expired";
+      setStatus(record, "expired");
       return refuse(REFUSALS.EXPIRED, "the approval window closed before the retry arrived");
     }
 
@@ -137,11 +168,11 @@ function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, termin
       return refuse(REFUSALS.RESPONSE_MALFORMED, "inputResponses carries no readable approval answer");
     }
     if (answer.action === "decline") {
-      record.status = "declined";
+      setStatus(record, "declined");
       return refuse(REFUSALS.DECLINED, "the answer was decline; denial is terminal for this request");
     }
     if (answer.action === "cancel") {
-      record.status = "cancelled";
+      setStatus(record, "cancelled");
       return refuse(REFUSALS.CANCELLED, "the answer was cancel");
     }
     if (answer.action !== "accept" || answer.content?.approve !== true) {
@@ -151,7 +182,7 @@ function createApprovalContract({ now = () => Date.now(), ttlMs = 120000, termin
     // One-use consumption happens HERE, before the caller may forward
     // anything: a crash after this point loses an approval, never gains a
     // second call.
-    record.status = "consumed";
+    setStatus(record, "consumed");
     record.consumedAt = now();
 
     return {
