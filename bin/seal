@@ -32,12 +32,28 @@ function inspectRuntime() {
   return { present: true };
 }
 function status() {
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
     ? `Runtime: present seal-assurance-kit@${manifest.commit}`
     : runtime.state === "integrity check failed"
       ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; cached bytes do not match the published runtime)`
       : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+
+  try {
+    const { filePath, state } = protection.stateWithProject(process.cwd(), process.env);
+    const view = protection.protectionView(state);
+    if (!view || view.state === "UNPROTECTED") {
+      console.log("Protection: - outside Seal");
+    } else {
+      console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
+      if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
+      if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
+      if (view.detail) console.log(`Protection detail: ${view.detail}`);
+    }
+  } catch (error) {
+    console.log(`Protection: BROKEN (${error.message})`);
+  }
 
   let entries;
   try {
@@ -172,6 +188,32 @@ async function verify(receiptPath) {
     process.exitCode = result.exitCode || 1;
   }
 }
+
+function protectCommand(args) {
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
+  const [serverName, guardTool] = args;
+  const result = protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env });
+  console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
+  console.log(`Protection: PENDING RESTART ${serverName}.${guardTool}`);
+  console.log(`State: ${result.statePath}`);
+}
+
+function unprotectCommand(args) {
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
+  const [serverName] = args;
+  const result = protection.unprotect({ serverName, projectRoot: process.cwd(), env: process.env });
+  console.log(`Project .mcp.json hash before unprotect: ${result.beforeHash}`);
+  console.log(`Project .mcp.json hash after unprotect: ${result.afterHash}`);
+  console.log("Protection: - outside Seal");
+}
+
+function doctorCommand() {
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
+  const result = protection.doctor(process.env);
+  process.stdout.write(result.text);
+  if (!result.ok) process.exitCode = 1;
+}
+
 async function main() {
   const command = process.argv[2];
   if (command === "demo") return demo(process.argv.slice(3));
@@ -179,13 +221,21 @@ async function main() {
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv[3]);
+  if (command === "protect") return protectCommand(process.argv.slice(3));
+  if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
+  if (command === "doctor") return doctorCommand();
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
     return status();
   }
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
   if (command) console.error(`seal: unknown command: ${command}`);
-  console.log("seal — the developer gate\n\n  seal demo             gate one call: block, approve once, execute, write a receipt\n  seal verify PATH     re-derive a saved kernel receipt with this binary\n  seal status           show local runtime and receipt state");
+  console.log("seal — the developer gate\n\n  seal protect SERVER TOOL  install a local Claude Code override for one tool\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 gate one call: block, approve once, execute, write a receipt\n  seal verify PATH          re-derive a saved kernel receipt with this binary\n  seal status               show local runtime, receipt and protection state");
   process.exitCode = command ? 2 : 0;
 }
-main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });
+main().catch((error) => {
+  const prefix = typeof error.code === "string" ? `${error.code}: ` : "";
+  console.error(`seal: ${prefix}${error.message}`);
+  if (process.env.SEAL_DEBUG) console.error(error.stack);
+  process.exitCode = 1;
+});

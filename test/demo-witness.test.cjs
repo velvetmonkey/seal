@@ -105,11 +105,11 @@ test("the demo harness accepts no server, URI, transport or configuration", () =
   }
 });
 
-test("the public command surface inventory: demo, verify, status, and nothing hidden in help", () => {
+test("the public command surface inventory lists only public commands and nothing hidden in help", () => {
   const help = runSeal([]);
   assert.equal(help.code, 0);
   const listed = [...help.out.matchAll(/^  seal ([a-z-]+)/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(listed, ["demo", "status", "verify"], help.out);
+  assert.deepEqual(listed, ["demo", "doctor", "protect", "status", "unprotect", "verify"], help.out);
   assert.doesNotMatch(help.out, /__/, "private subcommands must be absent from help");
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
   assert.deepEqual(Object.keys(pkg.bin), ["seal"], "one binary, no harness export");
