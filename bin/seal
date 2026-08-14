@@ -205,7 +205,7 @@ async function main() {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
     return status();
   }
-  if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
+  if (command === "--version" || command === "-V") return console.log(fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim());
   console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
   process.exitCode = command ? 2 : 0;
 }
