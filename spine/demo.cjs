@@ -213,8 +213,9 @@ async function run(argv, sealBinPath) {
   console.log("Seal is a gate, not a sandbox: it controls the path through it, and only that path.");
   await proxy.stop();
   console.log(`summary: approval required once, executed once after approval, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
-  console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary:");
+  console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:");
   console.log(`  node checker/seal-receipt-check.mjs "${receiptPaths[receiptPaths.length - 1]}" --pubkey "${pubkeyPath}"`);
+  console.log("  Note: this demo wrote that key in the same folder as the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   process.exit(0);
 }
 

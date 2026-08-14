@@ -2,18 +2,32 @@
 //
 // V11-RECEIPT-01 — the EXTERNAL Seal receipt checker.
 //
-// This program is deliberately NOT the seal binary. It imports nothing from
-// the seal command or its internal modules, and it never spawns or shells out
-// to them; it re-implements canonicalisation, hashing and Ed25519
-// verification from scratch on top of node:crypto alone. A reader can
-// therefore check Seal's claim about a receipt without running — or trusting
-// — Seal's own code.
+// This program is deliberately NOT the seal binary. It needs none of Seal's
+// code at RUNTIME: it imports nothing from the seal command or its internal
+// modules, never spawns or shells out to them, and reaches its answer using
+// only node:crypto and node:fs. A reader can therefore check a receipt
+// without running — or trusting — Seal's own code at check time.
 //
 // Trust model, stated plainly: the public key is a TRUST INPUT the reader
 // supplies out of band (--pubkey). The checker NEVER takes the verifying key
 // from inside the receipt, because a mutator who could edit the receipt could
 // also swap an embedded key. Given a trusted key, this checker refuses any
 // receipt whose decision, tool, arguments or signature has been altered.
+//
+// LIMITS — what this check does NOT establish:
+//   1. Runtime-independent, NOT implementation-independent. The canonical()
+//      below is a byte-for-byte COPY of the sealer's canonical function
+//      (spine/receipt-seal.cjs), kept local only so no module is shared at
+//      runtime. It is not a second, independent implementation: a bug in
+//      that canonicalisation is a bug in BOTH sides, and they would agree on
+//      the same wrong answer. Catching that class needs a genuinely separate
+//      implementation, which this is not.
+//   2. Key provisioning is the whole trust. If the reader supplies the
+//      SEALER'S OWN key, the checker accepts whatever that sealer signed —
+//      including a hostile sealer's receipts. The check is only as meaningful
+//      as the --pubkey argument: the verifying key must come from a source
+//      the reader ALREADY trusts, not from the sealer and not from beside the
+//      receipt. This program cannot tell a trusted key from an attacker's.
 //
 // Usage:
 //   node checker/seal-receipt-check.mjs RECEIPT.json --pubkey (HEX | FILE)
@@ -32,7 +46,10 @@ function sha256Hex(text) {
   return createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
 }
 
-// Independent canonicaliser: compact JSON, object keys sorted by UTF-8 bytes.
+// Canonical form (compact JSON, object keys sorted by UTF-8 bytes). This is a
+// byte-identical COPY of the sealer's canonical function, held here only so
+// the checker shares no module with Seal at runtime — see LIMITS #1: it is a
+// copy, not an independent implementation.
 function canonical(value) {
   if (value === null || typeof value === "number" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "string") return JSON.stringify(value);
