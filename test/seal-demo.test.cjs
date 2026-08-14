@@ -65,7 +65,7 @@ test("seal demo emits the exact PATH hint despite ambient npm variables", () => 
   assert.match(ambient.output, new RegExp(`Verify later with: seal verify ${receipt(ambient.output)}`));
 });
 
-test("seal demo describes the approval decision without claiming execution", () => {
+test("seal demo and help describe the approval decision without claiming execution", () => {
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-runtime-approval-test-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-data-test-"));
   const approved = runDemo("y\n", cache, dataHome);
@@ -73,7 +73,7 @@ test("seal demo describes the approval decision without claiming execution", () 
   assert.match(approved.output, /BLOCKED  the kernel found no matching approval/);
   assert.match(approved.output, /Approval requested/);
   assert.match(approved.output, /Tool          db\.execute/);
-  assert.match(approved.output, /Exact effect  database: demo\n                sql: DROP TABLE users/);
+  assert.match(approved.output, /Exact effect  database: demo\n                sql: drop table users/);
   assert.match(approved.output, /Scope         these exact arguments/);
   assert.match(approved.output, /Approve\? \[y\/N\]/);
   assert.match(approved.output, /ALLOWED  the kernel accepted the supplied approval/);
@@ -81,6 +81,11 @@ test("seal demo describes the approval decision without claiming execution", () 
   assert.match(approved.output, /Verify later with: /);
   assert.doesNotMatch(approved.output, /Commitment digest/);
   assert.doesNotMatch(approved.output, /\b(?:EXECUTED|demo server|once)\b/i, "demo output must not imply an executed call or one-use grant");
+
+  const help = runCommand([], cache, dataHome);
+  assert.equal(help.code, 0, help.output);
+  assert.match(help.output, /seal demo             block, show the exact effect, approve, and verify a receipt/);
+  assert.doesNotMatch(help.output, /\b(?:EXECUTED|demo server|once)\b/i, "help output must not imply an executed call or one-use grant");
 
   const detailed = runCommand(["demo", "--details"], cache, dataHome, "y\n");
   assert.equal(detailed.code, 0, detailed.output);

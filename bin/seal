@@ -160,7 +160,7 @@ async function demo() {
   console.log("Approval requested");
   console.log("  Tool          db.execute");
   console.log("  Exact effect  database: demo");
-  console.log("                sql: DROP TABLE users");
+  console.log("                sql: drop table users");
   console.log("  Scope         these exact arguments");
   if (process.argv.includes("--details")) console.log(`  Commitment digest  ${target}`);
   console.log("");
@@ -213,7 +213,7 @@ async function main() {
     return status();
   }
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
-  console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
+  console.log("seal — the developer gate\n\n  seal demo             block, show the exact effect, approve, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
   process.exitCode = command ? 2 : 0;
 }
 main().catch((error) => { console.error(`seal: ${error.message}`); if (process.env.SEAL_DEBUG) console.error(error.stack); process.exitCode = 1; });

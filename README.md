@@ -24,7 +24,7 @@ BLOCKED  the kernel found no matching approval
 Approval requested
   Tool          db.execute
   Exact effect  database: demo
-                sql: DROP TABLE users
+                sql: drop table users
   Scope         these exact arguments
 
 Approve? [y/N] ALLOWED  the kernel accepted the supplied approval
