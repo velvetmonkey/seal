@@ -50,6 +50,12 @@ function ask(question) {
 async function run(argv, sealBinPath) {
   requireSupportedPlatform();
   let dir;
+  // The embedded demo harness is INTERNAL: it accepts no server command,
+  // URI, transport or configuration — only --dir for its own scratch space.
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--dir") { i += 1; continue; }
+    fail(`seal demo accepts only --dir PATH; the demo harness takes no server, URI, transport or configuration (got: ${argv[i]})`);
+  }
   const dirIndex = argv.indexOf("--dir");
   if (dirIndex !== -1) {
     dir = argv[dirIndex + 1];
@@ -129,6 +135,9 @@ async function run(argv, sealBinPath) {
   if (typeof message !== "string") fail("input_required carried no approval message to display");
   console.log("INPUT REQUIRED  the proxy holds this call's approval; the contract's message:");
   console.log(message.split("\n").map((line) => `    ${line}`).join("\n"));
+  const shown = readCount(countFile);
+  if (shown !== "0") fail(`the approval dialog is shown but the count file already reads ${shown}`);
+  console.log(`child calls observed: still ${shown} (read from ${countFile}) — approval shown, nothing executed`);
 
   const answer = await ask("Approve? [y/N] ");
   if (answer.kind === "eof") {
@@ -160,9 +169,45 @@ async function run(argv, sealBinPath) {
   console.log(`BLOCKED   the shared proxy refused the replay: "${replayed.result.content[0].text}"`);
   console.log(`one-use enforced: the consumed approval admitted no second call; child calls observed: still ${finalCount} (read from ${countFile})`);
 
-  await proxy.stop();
   for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
-  console.log("receipts are claims, not proofs: checking them belongs in a separate tool, and this binary does not do it.");
+
+  // THE SCOPE WITNESS. Not optional, not behind a flag: the demo ends by
+  // doing a harmless write that bypasses the gate, while the proxy is STILL
+  // RUNNING, and observes that Seal emitted nothing for it. The witness
+  // completes the demonstration; it does not apologise for it.
+  const receiptsDir = path.join(dir, "receipts");
+  const outsidePath = path.join(dir, "outside.txt");
+  const receiptsBefore = fs.readdirSync(receiptsDir).length;
+  console.log("");
+  console.log("SCOPE WITNESS");
+  console.log("");
+  console.log("Seal controlled this path:");
+  console.log(`  demo client -> Seal -> demo MCP server -> ${TOOL}`);
+  console.log("");
+  console.log("Now the demo performs a harmless direct local write");
+  console.log("that does not cross the Seal gate.");
+  console.log("");
+  const fd = fs.openSync(outsidePath, "w", 0o600);
+  try {
+    fs.writeSync(fd, "this harmless line was written directly, without crossing the Seal gate\n");
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (!fs.readFileSync(outsidePath, "utf8").includes("without crossing the Seal gate")) {
+    fail("the direct write did not land; the witness would be false");
+  }
+  const receiptsAfter = fs.readdirSync(receiptsDir).length;
+  if (receiptsAfter !== receiptsBefore) {
+    fail(`the direct write produced ${receiptsAfter - receiptsBefore} Seal decision(s); the witness would be false`);
+  }
+  console.log("DIRECT WRITE SUCCEEDED");
+  console.log(`Seal decisions emitted: 0 (receipts in ${receiptsDir}: ${receiptsBefore} before the write, ${receiptsAfter} after)`);
+  console.log("");
+  console.log("Seal is a gate, not a sandbox: it controls the path through it, and only that path.");
+  await proxy.stop();
+  console.log(`summary: approval required once, executed once after approval, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
+  console.log("receipts are claims, not proofs: check them with the separately published checker once it is tagged (lane V11-RECEIPT-01), never with this binary.");
   process.exit(0);
 }
 
