@@ -15,30 +15,34 @@ Seal protects effects. The current production adapter mediates MCP `tools/call`:
 npx github:velvetmonkey/seal demo
 ```
 
-You will see, in this order:
+Here is output captured by running that command and answering `y`:
 
 ```
-Seal runtime verified: velvetmonkey/seal-assurance-kit@1d9c38666b38
-BLOCKED  db.execute demo call requires approval
-approval required: fbbb4e3a4ebef24733221b680cb08a7bbbdda4b0a6265ee3144f4366e26e59dc
-```
+Seal runtime verified: velvetmonkey/seal-assurance-kit@962823b22d17
+BLOCKED  the kernel found no matching approval
 
-then a prompt on the terminal (it ends with a space):
+Approval requested
+  Tool          db.execute
+  Exact effect  database: demo
+                sql: DROP TABLE users
+  Scope         these exact arguments
 
-```
-Approve this demo call once? [y/N] 
-```
-
-Answer `y`. The same call then succeeds:
-
-```
-EXECUTED  demo server accepted the approved call
-```
-
-The bundled verifier prints its checks, then a `RECEIPT` line naming a file under your per-user directory (by default `~/.local/share/seal/receipts/`, or `$XDG_DATA_HOME/seal/receipts/` if that is set), then:
-
-```
-PASS VERIFIED  the receipt re-derived the approved decision
+Approve? [y/N] ALLOWED  the kernel accepted the supplied approval
+seal verify  /tmp/seal-demo-transcript-tljlOU/data/seal/receipts/receipt-1786720874670-1791991-839913de.json
+  receipt verdict: ALLOW   kernel: 28bb3ae71985
+  PASS  schema valid (v2)
+  PASS  kernel binary matches receipt   (local 28bb3ae71985 / claimed 28bb3ae71985)
+  PASS  kernel binary is the audited build   (pinned 28bb3ae71985)
+  PASS  stored canonical_request equals derived line
+  PASS  canonical request hash matches   (b9d57df415a0)
+  PASS  grants resolve to approval targets   (1 target(s), 1 opaque)
+  PASS  verdict re-derives identically   (re-derived ALLOW / claimed ALLOW)
+  PASS  kernel-attested request binding (audit sha256 of the judged bytes equals the request identity)   (b9d57df415a0)
+  PASS  emitted decision bytes byte-identical modulo the kernel request commitment
+  PASS  VERIFIED
+RECEIPT   /tmp/seal-demo-transcript-tljlOU/data/seal/receipts/receipt-1786720874670-1791991-839913de.json
+PASS VERIFIED  the resulting decision receipt re-derived successfully
+Verify later with: npx github:velvetmonkey/seal verify /tmp/seal-demo-transcript-tljlOU/data/seal/receipts/receipt-1786720874670-1791991-839913de.json
 ```
 
 That receipt is yours to keep and re-check. In the no-install path above, run:
@@ -56,7 +60,7 @@ npx github:velvetmonkey/seal status
 `seal status` reports whether the pinned runtime is present, how many receipts
 are stored and where, and the most recent observed decision.
 
-If you do not answer the prompt, the demo prints `No approval response received (EOF); no call executed.` and exits 1. Nothing is executed.
+If you do not answer the prompt, the demo prints `No approval response received (EOF); no downstream tool was contacted.` and exits 1. No downstream tool is contacted.
 
 The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. Node and `npx` are required. No Docker, Lean, Python, global install, or PATH edit is required for the command above.
 

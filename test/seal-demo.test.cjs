@@ -2,17 +2,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 function runCommand(args, cache, dataHome, input = undefined) {
-  try {
-    return { code: 0, output: execFileSync(process.execPath, [path.join(__dirname, "../bin/seal"), ...args], {
-      env: { ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome }, input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
-    }) };
-  } catch (error) {
-    return { code: error.status, output: `${error.stdout || ""}${error.stderr || ""}` };
-  }
+  const result = spawnSync(process.execPath, [path.join(__dirname, "../bin/seal"), ...args], {
+    env: { ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome }, input, encoding: "utf8",
+  });
+  return { code: result.status, output: `${result.stdout || ""}${result.stderr || ""}` };
 }
 function runLauncher(launcher, args, cache, dataHome, input = undefined, extraEnv = {}) {
   try {
@@ -68,22 +65,34 @@ test("seal demo emits the exact PATH hint despite ambient npm variables", () => 
   assert.match(ambient.output, new RegExp(`Verify later with: seal verify ${receipt(ambient.output)}`));
 });
 
-test("seal demo distinguishes approval, decline, and EOF", () => {
+test("seal demo describes the approval decision without claiming execution", () => {
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-runtime-approval-test-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-data-test-"));
   const approved = runDemo("y\n", cache, dataHome);
   assert.equal(approved.code, 0);
-  assert.match(approved.output, /EXECUTED  demo server accepted the approved call/);
-  assert.match(approved.output, /PASS VERIFIED/);
+  assert.match(approved.output, /BLOCKED  the kernel found no matching approval/);
+  assert.match(approved.output, /Approval requested/);
+  assert.match(approved.output, /Tool          db\.execute/);
+  assert.match(approved.output, /Exact effect  database: demo\n                sql: DROP TABLE users/);
+  assert.match(approved.output, /Scope         these exact arguments/);
+  assert.match(approved.output, /Approve\? \[y\/N\]/);
+  assert.match(approved.output, /ALLOWED  the kernel accepted the supplied approval/);
+  assert.match(approved.output, /PASS VERIFIED  the resulting decision receipt re-derived successfully/);
   assert.match(approved.output, /Verify later with: /);
+  assert.doesNotMatch(approved.output, /Commitment digest/);
+  assert.doesNotMatch(approved.output, /\b(?:EXECUTED|demo server|once)\b/i, "demo output must not imply an executed call or one-use grant");
+
+  const detailed = runCommand(["demo", "--details"], cache, dataHome, "y\n");
+  assert.equal(detailed.code, 0, detailed.output);
+  assert.match(detailed.output, /Commitment digest  [0-9a-f]{64}/);
 
   const declined = runDemo("N\n", cache, dataHome);
   assert.equal(declined.code, 0);
-  assert.match(declined.output, /Demo stopped safely; no call executed\./);
+  assert.match(declined.output, /Demo stopped safely; no downstream tool was contacted\./);
 
   const eof = runDemo("", cache, dataHome);
   assert.notEqual(eof.code, 0);
-  assert.match(eof.output, /No approval response received \(EOF\); no call executed\./);
+  assert.match(eof.output, /No approval response received \(EOF\); no downstream tool was contacted\./);
 });
 
 test("seal demo keeps receipts for later verification and keeps both runs", () => {

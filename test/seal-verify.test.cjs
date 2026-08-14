@@ -37,7 +37,7 @@ test("verify names demo and saved-receipt verification separately", () => {
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-data-"));
   const demo = run(["demo"], cache, dataHome, "y\n");
   assert.equal(demo.code, 0, demo.out);
-  assert.match(demo.out, /PASS VERIFIED  the demo receipt re-derived the approved decision/);
+  assert.match(demo.out, /PASS VERIFIED  the resulting decision receipt re-derived successfully/);
   const receipt = demo.out.match(/^RECEIPT\s+(.+)$/m)?.[1];
   const verified = run(["verify", receipt], cache, dataHome);
   assert.equal(verified.code, 0, verified.out);

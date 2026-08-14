@@ -155,25 +155,32 @@ async function demo() {
   const demoConfig = config.SCENARIOS["destructive-sql"].config;
   const blocked = await runner.decide(demoConfig, { ...call, approvals: [] });
   if (blocked.verdict !== "BLOCK") throw new Error(`demo expected BLOCK, got ${blocked.verdict}`);
-  console.log("BLOCKED  db.execute demo call requires approval");
-  console.log(`approval required: ${target}`);
-  const response = await ask("Approve this demo call once? [y/N] ");
+  console.log("BLOCKED  the kernel found no matching approval");
+  console.log("");
+  console.log("Approval requested");
+  console.log("  Tool          db.execute");
+  console.log("  Exact effect  database: demo");
+  console.log("                sql: DROP TABLE users");
+  console.log("  Scope         these exact arguments");
+  if (process.argv.includes("--details")) console.log(`  Commitment digest  ${target}`);
+  console.log("");
+  const response = await ask("Approve? [y/N] ");
   if (response.kind === "eof") {
-    console.error("No approval response received (EOF); no call executed.");
+    console.error("No approval response received (EOF); no downstream tool was contacted.");
     process.exitCode = 1;
     return;
   }
-  if (response.value !== "y") { console.log("Demo stopped safely; no call executed."); return; }
+  if (response.value !== "y") { console.log("Demo stopped safely; no downstream tool was contacted."); return; }
   const allowed = await runner.decide(demoConfig, { ...call, approvals: [target] });
   if (allowed.verdict !== "ALLOW") throw new Error(`demo expected ALLOW, got ${allowed.verdict}`);
   fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
   const receipt = path.join(receiptDir, `receipt-${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}.json`);
   fs.writeFileSync(receipt, JSON.stringify(allowed.receipt, null, 2) + "\n", { mode: 0o600 });
-  console.log("EXECUTED  demo server accepted the approved call");
+  console.log("ALLOWED  the kernel accepted the supplied approval");
   const result = await verifier.verifyDetailed(receipt);
   if (!result.ok) throw new Error("receipt verification failed");
   console.log(`RECEIPT   ${receipt}`);
-  console.log("PASS VERIFIED  the demo receipt re-derived the approved decision");
+  console.log("PASS VERIFIED  the resulting decision receipt re-derived successfully");
   console.log(`Verify later with: ${verifyHint(receipt)}`);
 }
 async function verify(receiptPath) {
