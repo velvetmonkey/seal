@@ -14,6 +14,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 
 const { createProxy, StoreError } = require("./proxy.cjs");
+const { generateSigner } = require("./receipt-seal.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { TOOL } = require("./demo-server.cjs");
@@ -71,11 +72,16 @@ async function run(argv, sealBinPath) {
   const pendingById = new Map();
   const receiptPaths = [];
 
+  const signer = generateSigner();
+  const pubkeyPath = path.join(dir, "receipt-signer.pub");
+  fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o600 });
+
   let proxy;
   try {
     createJournal(storePath); // deliberate init: absent-at-gate-time is a refusal
     proxy = createProxy({
       guardTool: TOOL,
+      signer,
       storePath,
       receiptsDir: path.join(dir, "receipts"),
       childArgv: [process.execPath, sealBinPath, "__demo-server", dataFile],
@@ -207,7 +213,8 @@ async function run(argv, sealBinPath) {
   console.log("Seal is a gate, not a sandbox: it controls the path through it, and only that path.");
   await proxy.stop();
   console.log(`summary: approval required once, executed once after approval, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
-  console.log("receipts are claims, not proofs: check them with the separately published checker once it is tagged (lane V11-RECEIPT-01), never with this binary.");
+  console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary:");
+  console.log(`  node checker/seal-receipt-check.mjs "${receiptPaths[receiptPaths.length - 1]}" --pubkey "${pubkeyPath}"`);
   process.exit(0);
 }
 

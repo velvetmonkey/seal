@@ -27,6 +27,7 @@ function createProxy(options) {
     guardTool,        // the ONE selected tool name
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
+    signer,           // optional receipt-sealing keypair (V11-RECEIPT-01)
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     beforeForward,    // optional fail-closed live drift check
@@ -40,7 +41,7 @@ function createProxy(options) {
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
   const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth });
-  const receipts = openReceiptEmitter(receiptsDir);
+  const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
 
   const child = spawn(childArgv[0], childArgv.slice(1), {
@@ -59,6 +60,7 @@ function createProxy(options) {
       at: Date.now(),
       decision,
       tool: frame.params?.name,
+      arguments: frame.params?.arguments ?? {},
       child: { argv: childArgv },
       ...extra,
     });
