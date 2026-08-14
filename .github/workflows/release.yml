@@ -26,8 +26,17 @@ jobs:
             --json databaseId,headBranch --jq '[.[] | select(.headBranch == "main")][0].databaseId')"
           test -n "$run_id"
           echo "Exact-commit default-branch CI run: $run_id"
-      - name: Build the reproducible umbrella source archive and evidence
-        run: scripts/build-release.sh seal "$GITHUB_REF_NAME" "$RUNNER_TEMP/release"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the one Linux x86-64 install artifact
+        run: node scripts/build-dist.cjs --out "$RUNNER_TEMP/dist"
+      - name: Require the artifact version to match the tag
+        run: |
+          version="$(tr -d '\n' < VERSION)"
+          test "$GITHUB_REF_NAME" = "v$version"
+          test -f "$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
+          grep -F "seal-v${version}-linux-x64" "$RUNNER_TEMP/dist/SHA256SUMS"
       - name: Publish the immutable release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,14 +45,21 @@ jobs:
             echo "release already exists: $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          version="$(tr -d '\n' < VERSION)"
+          artifact="$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
-            'This release provides a reproducible source archive of the Seal umbrella documentation and static product-family site.' \
+            'Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.' \
             '' \
-            'It is source and tracked static content, not a compiled binary, a build of sibling repositories, or proof that Seal or its supply chain is bug-free. See `SHA256SUMS` for the archive digest and `SEAL-RELEASE-PROVENANCE.json` for the workflow run, commit, and builder record.' > "$notes"
+            'The installable artifact is the single file `seal-vVERSION-linux-x64`.' \
+            'Pin it with the digest and byte length in `SHA256SUMS`, then:' \
+            '' \
+            '    ./seal-vVERSION-linux-x64 --sha256 HEX --bytes N --prefix ~/.local' \
+            '' \
+            'Altered bytes refuse. A missing, truncated or unreadable file refuses by name.' \
+            'This file is not a signature and not a compiled native binary. Node >= 20 is required.' > "$notes"
           gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/release/seal-$GITHUB_REF_NAME.tar.gz" \
-            "$RUNNER_TEMP/release/SHA256SUMS" \
-            "$RUNNER_TEMP/release/SEAL-RELEASE-PROVENANCE.json" \
+            "$artifact" \
+            "$RUNNER_TEMP/dist/SHA256SUMS" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
 
