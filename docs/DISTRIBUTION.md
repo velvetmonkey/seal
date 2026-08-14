@@ -7,9 +7,11 @@ release.
 ## The artifact
 
 `scripts/build-dist.cjs` writes `dist/seal-vVERSION-linux-x64`. That file
-is the installer and the payload. `dist/SHA256SUMS` records its digest and
-byte length so an operator can pin it. The sums file is a pin, not a second
-product.
+is the installer and the payload. The published pin lives in `SHA256SUMS`
+at the repository root (digest and byte length). That file is a pin, not
+a second product. `test/dist-pin.test.cjs` rebuilds the artifact and
+fails if `SHA256SUMS` does not match, so a hand-copied hash cannot rot
+the next time a payload file is added.
 
 There is no signing-key ceremony. The operator supplies `--sha256` (and
 optionally `--bytes`) from a source they already trust. Without that pin
@@ -18,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 <hex> --bytes <n> --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 f2ab71e328346c017ed74369ccebcfd4541ea75dd64fa178519095c388094f96 --bytes 114577 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
