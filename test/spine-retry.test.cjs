@@ -55,9 +55,11 @@ test("seal demo: input_required, approve once, replay refused; counts from the c
   await run.waitFor(/Approve\? \[y\/N\]/);
   assert.equal(readCount(countFile), "0", "child must have observed zero calls before approval");
   assert.match(run.out, /child calls observed: 0/);
-  // The contract's message is displayed, not summarised.
-  assert.match(run.out, /Approve exactly this call, once\./);
-  assert.match(run.out, /outside Seal/);
+  // The contract's fixed dialog is displayed, not summarised.
+  assert.match(run.out, /Approval required/);
+  assert.match(run.out, /Tool: demo\.mutate/);
+  assert.match(run.out, /one use; 2 min/);
+  assert.match(run.out, /Outside Seal: Bash, network, subprocesses/);
 
   child.stdin.write("y\n");
   const code = await run.exit;
@@ -147,7 +149,7 @@ test("seal __proxy: input_required, approved retry flows once, replay refused; c
   const opened = await responseFor(2);
   assert.equal(opened.result.resultType, "input_required");
   const state = opened.result.requestState;
-  assert.match(state, /^seal-approval-v1:/);
+  assert.match(state, /^seal-rs1\.[0-9a-f]{64}$/);
   assert.equal(readCount(countFile), "0");
 
   proxy.stdin.write(JSON.stringify({ ...callParams("protected line", { requestState: state, inputResponses: ACCEPT }), id: 3 }) + "\n");
@@ -200,6 +202,41 @@ test("restart survival: an approval consumed before restart is refused after res
   assert.match(replayed.result.content[0].text, /already_consumed/,
     "a one-use rule that forgets on restart is not one use");
   assert.equal(readCount(`${dataB}.count`), "0", "the restarted proxy's child must receive nothing");
+  b.proxy.stdin.end();
+  assert.equal(await b.run.exit, 0, b.run.err);
+});
+
+test("restart invalidation: a PENDING continuation does not survive a restart", async (t) => {
+  const dir = tmpdir("seal-spine2-pending-");
+  const storePath = path.join(dir, "approvals.journal");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", storePath]);
+
+  // Session A: open a continuation, answer nothing, exit.
+  const dataA = path.join(dir, "a", "data.txt");
+  const a = spawnProxy(dir, dataA, { storePath, receiptsDir: path.join(dir, "receipts") });
+  t.after(a.run.kill);
+  a.proxy.stdin.write(JSON.stringify({ ...callParams("pending line"), id: 1 }) + "\n");
+  const opened = await a.responseFor(1);
+  const state = opened.result.requestState;
+  assert.equal(opened.result.resultType, "input_required");
+  a.proxy.stdin.end();
+  assert.equal(await a.run.exit, 0, a.run.err);
+
+  // Session B: the old pending handle must be invalid; a fresh call is forced.
+  const dataB = path.join(dir, "b", "data.txt");
+  const b = spawnProxy(dir, dataB, { storePath, receiptsDir: path.join(dir, "receipts") });
+  t.after(b.run.kill);
+  b.proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: {} }) + "\n");
+  await b.responseFor(90);
+  b.proxy.stdin.write(JSON.stringify({ ...callParams("pending line", { requestState: state, inputResponses: ACCEPT }), id: 1 }) + "\n");
+  const stale = await b.responseFor(1);
+  assert.equal(stale.result.isError, true);
+  assert.match(stale.result.content[0].text, /restart_invalidated/);
+  assert.equal(readCount(`${dataB}.count`), "0", "an invalidated continuation may not touch the child");
+  // A fresh call still works in session B.
+  b.proxy.stdin.write(JSON.stringify({ ...callParams("pending line"), id: 2 }) + "\n");
+  const fresh = await b.responseFor(2);
+  assert.equal(fresh.result.resultType, "input_required");
   b.proxy.stdin.end();
   assert.equal(await b.run.exit, 0, b.run.err);
 });

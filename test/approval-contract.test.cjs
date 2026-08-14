@@ -93,12 +93,14 @@ test("refusal 2: altered requestState; child receives nothing", async (t) => {
   const child = await startChild(t);
   const contract = createApprovalContract();
   const state = freshPending(contract);
-  const tampered = state.slice(0, -1) + (state.endsWith("0") ? "1" : "0"); // flip last token char
+  const tampered = state.slice(0, -1) + (state.endsWith("0") ? "1" : "0"); // flip last handle char
   const decision = await attempt(contract, child, {
     tool: TOOL, args: ARGS, requestState: tampered, inputResponses: ACCEPT,
   });
   assert.equal(decision.kind, "refuse");
-  assert.equal(decision.refusal, REFUSALS.STATE_ALTERED);
+  // Opaque handle: an altered handle is a lookup miss, indistinguishable by
+  // design from a never-issued one — the client is incapable, not detectable.
+  assert.equal(decision.refusal, REFUSALS.UNKNOWN_STATE);
   assert.equal(child.count(), "0");
 });
 
@@ -131,18 +133,21 @@ test("refusal 5: approval claimed for a request the contract never issued; child
   const child = await startChild(t);
   const contract = createApprovalContract();
   freshPending(contract); // a real pending request exists, but the claim names another
-  const fabricated = `seal-approval-v1:${"ab".repeat(8)}:${"cd".repeat(16)}`;
+  const fabricated = `seal-rs1.${"ab".repeat(32)}`;
   const decision = await attempt(contract, child, {
     tool: TOOL, args: ARGS, requestState: fabricated, inputResponses: ACCEPT,
   });
   assert.equal(decision.kind, "refuse");
-  assert.equal(decision.refusal, REFUSALS.UNKNOWN_REQUEST);
+  assert.equal(decision.refusal, REFUSALS.UNKNOWN_STATE);
   assert.equal(child.count(), "0");
 });
 
-test("the five refusals are five distinct names", () => {
-  const five = [REFUSALS.ARGUMENTS_ALTERED, REFUSALS.STATE_ALTERED, REFUSALS.ALREADY_CONSUMED, REFUSALS.EXPIRED, REFUSALS.UNKNOWN_REQUEST];
-  assert.equal(new Set(five).size, 5);
+test("the refusal names are distinct; altered and never-issued deliberately share one", () => {
+  // With an opaque random handle nothing meaningful crosses the wire, so an
+  // altered handle IS an unknown handle: four distinct names cover the five
+  // forgery fixtures, and the sharing is by design (spine2 addendum).
+  const names = [REFUSALS.ARGUMENTS_ALTERED, REFUSALS.UNKNOWN_STATE, REFUSALS.ALREADY_CONSUMED, REFUSALS.EXPIRED];
+  assert.equal(new Set(names).size, 4);
 });
 
 // --- terminal denial, cancel, malformed ------------------------------------
@@ -185,7 +190,8 @@ test("allow evidence states the limit: human presence is unknown", async (t) => 
   const decision = await attempt(contract, child, { tool: TOOL, args: ARGS, requestState: state, inputResponses: ACCEPT });
   assert.equal(decision.kind, "allow");
   assert.equal(decision.evidence.human_present, "unknown");
-  assert.match(decision.evidence.human_present_detail, /cannot observe the client's dialog/);
+  assert.match(decision.evidence.human_present_detail, /can fabricate an acceptance/);
+  assert.match(decision.evidence.human_present_detail, /declared assumption, not an enforced property/);
 });
 
 // --- the rendering envelope, measured --------------------------------------
@@ -200,13 +206,23 @@ function assertInsideEnvelope(rendered, terminalWidth = 80) {
   }
 }
 
-test("the approval message fits seven lines at 80 columns and carries the required content", () => {
+test("the approval message is the fixed dialog and fits the envelope", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
   assertInsideEnvelope(rendered);
-  assert.match(rendered.message, /demo\.mutate/);
-  assert.ok(rendered.message.includes(canonicalString(ARGS)), "the EXACT canonical arguments must appear");
-  assert.match(rendered.message, /once/);
-  assert.match(rendered.message, /outside Seal/);
+  assert.equal(rendered.lines[0], "Approval required");
+  assert.equal(rendered.lines[1], "Tool: demo.mutate");
+  assert.equal(rendered.lines[2], "Arguments:");
+  assert.equal(rendered.lines[3], `  line: ${canonicalString(ARGS.line)}`);
+  assert.match(rendered.lines[4], /^Scope: parsed JSON; object-key order and 1 vs 1\.0 match; one use; 2 min\.$/);
+  assert.equal(rendered.lines[5], "Outside Seal: Bash, network, subprocesses, other tools and servers.");
+  assert.equal(rendered.lines.length, 6);
+});
+
+test("a CHANGED first line replaces, never adds", () => {
+  const rendered = renderApprovalMessage(TOOL, ARGS, { firstLine: "CHANGED: line fixture → other" });
+  assertInsideEnvelope(rendered);
+  assert.equal(rendered.lines[0], "CHANGED: line fixture → other");
+  assert.equal(rendered.lines.length, 6);
 });
 
 test("an effect that cannot be shown completely is refused, not truncated — and begin() refuses to offer it", async (t) => {
@@ -214,7 +230,7 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   const bigArgs = { line: "x".repeat(400) };
   const rendered = renderApprovalMessage(TOOL, bigArgs);
   assert.equal(rendered.ok, false);
-  assert.match(rendered.reason, /hides the rest without any indicator/);
+  assert.match(rendered.reason, /hides the rest without any indicator|truncation would hide/);
   const contract = createApprovalContract();
   const decision = contract.begin({ tool: TOOL, args: bigArgs });
   assert.equal(decision.kind, "refuse");
@@ -233,4 +249,45 @@ test("every offered message obeys the envelope across argument sizes", () => {
     if (rendered.ok) assertInsideEnvelope(rendered);
     else assert.match(rendered.reason, /lines|columns/);
   }
+});
+
+// --- the two lifetimes and the hash-only journal (spine2 addendum) ----------
+
+const { createJournal, openJournal } = require("../spine/store.cjs");
+
+test("the journal stores the handle hash, never the raw handle", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-journal-"));
+  const storePath = path.join(dir, "approvals.journal");
+  createJournal(storePath);
+  const contract = createApprovalContract({ store: openJournal(storePath) });
+  const opened = contract.begin({ tool: TOOL, args: ARGS });
+  const handle = opened.result.requestState;
+  const journalText = fs.readFileSync(storePath, "utf8");
+  assert.ok(!journalText.includes(handle), "the raw handle must never be persisted");
+  assert.ok(!journalText.includes(handle.slice("seal-rs1.".length)), "nor its hex body");
+  const { sha256Hex } = require("../contract/canonical.cjs");
+  assert.ok(journalText.includes(sha256Hex(handle)), "the handle hash must be persisted");
+});
+
+test("consumed survives a restart; pending does not (connection epoch)", async (t) => {
+  const child = await startChild(t);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-epoch-"));
+  const storePath = path.join(dir, "approvals.journal");
+  createJournal(storePath);
+
+  // "Process" A: one continuation consumed, one left pending.
+  const a = createApprovalContract({ store: openJournal(storePath) });
+  const consumedState = a.begin({ tool: TOOL, args: ARGS }).result.requestState;
+  const consumed = await attempt(a, child, { tool: TOOL, args: ARGS, requestState: consumedState, inputResponses: ACCEPT });
+  assert.equal(consumed.kind, "allow");
+  assert.equal(child.count(), "1");
+  const pendingState = a.begin({ tool: TOOL, args: ARGS }).result.requestState;
+
+  // "Process" B: a fresh contract (new connection epoch) on the SAME journal.
+  const b = createApprovalContract({ store: openJournal(storePath) });
+  const replay = await attempt(b, child, { tool: TOOL, args: ARGS, requestState: consumedState, inputResponses: ACCEPT });
+  assert.equal(replay.refusal, REFUSALS.ALREADY_CONSUMED, "a one-use rule that forgets on restart is not one use");
+  const stale = await attempt(b, child, { tool: TOOL, args: ARGS, requestState: pendingState, inputResponses: ACCEPT });
+  assert.equal(stale.refusal, REFUSALS.RESTART_INVALIDATED, "a pending continuation must not survive a restart");
+  assert.equal(child.count(), "1", "neither refusal may touch the child");
 });
