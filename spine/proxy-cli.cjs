@@ -7,6 +7,7 @@
 const readline = require("node:readline");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
+const { activationLease, beforeForwardFromState, ProtectionError } = require("./protection.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 
 function parseArgs(argv) {
@@ -21,6 +22,7 @@ function parseArgs(argv) {
     if (flag === "--guard") options.guardTool = value;
     else if (flag === "--store") options.storePath = value;
     else if (flag === "--receipts") options.receiptsDir = value;
+    else if (flag === "--protect-state") options.protectState = value;
     else throw new Error(`unknown flag ${flag}`);
     i += 2;
   }
@@ -34,7 +36,7 @@ function run(argv) {
     parsed = parseArgs(argv);
   } catch (error) {
     process.stderr.write(`seal __proxy: ${error.message}\n`);
-    process.stderr.write("usage: seal __proxy --guard TOOL --store FILE --receipts DIR -- CMD [ARGS...]\n       seal __proxy --init-store --store FILE\n");
+    process.stderr.write("usage: seal __proxy --guard TOOL --store FILE --receipts DIR -- CMD [ARGS...]\n       seal __proxy --protect-state FILE\n       seal __proxy --init-store --store FILE\n");
     process.exit(2);
   }
   const { options, childArgv } = parsed;
@@ -51,10 +53,29 @@ function run(argv) {
     process.exit(0);
   }
 
-  for (const required of ["guardTool", "storePath", "receiptsDir"]) {
-    if (!options[required]) { process.stderr.write(`seal __proxy: ${required} is required\n`); process.exit(2); }
+  let proxyOptions = { ...options, childArgv };
+  if (options.protectState) {
+    try {
+      const state = activationLease(options.protectState);
+      proxyOptions = {
+        guardTool: state.guardTool,
+        storePath: state.storePath,
+        receiptsDir: state.receiptsDir,
+        childArgv: state.childArgv,
+        childEnv: state.childEnv,
+        beforeForward: beforeForwardFromState(options.protectState),
+      };
+    } catch (error) {
+      const prefix = error instanceof ProtectionError ? error.code : "startup failed";
+      process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
+      process.exit(1);
+    }
   }
-  if (childArgv.length === 0) {
+
+  for (const required of ["guardTool", "storePath", "receiptsDir"]) {
+    if (!proxyOptions[required]) { process.stderr.write(`seal __proxy: ${required} is required\n`); process.exit(2); }
+  }
+  if (proxyOptions.childArgv.length === 0) {
     process.stderr.write("seal __proxy: a server command is required after --\n");
     process.exit(2);
   }
@@ -62,8 +83,7 @@ function run(argv) {
   let proxy;
   try {
     proxy = createProxy({
-      ...options,
-      childArgv,
+      ...proxyOptions,
       onClientLine: (line) => process.stdout.write(line + "\n"),
       onChildExit: (code) => {
         if (code !== 0 && code !== null) {

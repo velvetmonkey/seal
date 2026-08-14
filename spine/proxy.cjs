@@ -28,6 +28,8 @@ function createProxy(options) {
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
     childArgv,        // [command, ...args] for the protected server
+    childEnv,         // optional environment overlay from the project server
+    beforeForward,    // optional fail-closed live drift check
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
@@ -41,7 +43,10 @@ function createProxy(options) {
   const receipts = openReceiptEmitter(receiptsDir);
   const decisionSink = onDecision || (() => {});
 
-  const child = spawn(childArgv[0], childArgv.slice(1), { stdio: ["pipe", "pipe", "inherit"] });
+  const child = spawn(childArgv[0], childArgv.slice(1), {
+    stdio: ["pipe", "pipe", "inherit"],
+    env: childEnv ? { ...process.env, ...childEnv } : process.env,
+  });
   let stopping = false;
   child.once("close", (code, signal) => {
     if (onChildExit) onChildExit(stopping ? 0 : code, signal);
@@ -67,6 +72,22 @@ function createProxy(options) {
 
   function refusalResult(refusal, detail) {
     return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}` }], isError: true };
+  }
+
+  function blockForward(frame, refusal, detail) {
+    emitReceipt("BLOCK", frame, { refusal, detail });
+    if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult(refusal, detail));
+  }
+
+  function canForward(frame) {
+    if (beforeForward) {
+      const check = beforeForward();
+      if (!check?.ok) {
+        blockForward(frame, check.refusal || "forward_refused", check.detail || "protected server forwarding refused");
+        return false;
+      }
+    }
+    return true;
   }
 
   function decideGuarded(frame) {
@@ -99,6 +120,7 @@ function createProxy(options) {
     }
     // The contract has already journaled the one-use consumption (fsynced)
     // before we forward: a crash here loses an approval, never gains a call.
+    if (!canForward(frame)) return;
     emitReceipt("ALLOW", frame, { evidence: decision.evidence });
     child.stdin.write(JSON.stringify({
       jsonrpc: "2.0", id: frame.id, method: frame.method,
@@ -120,7 +142,7 @@ function createProxy(options) {
         decideGuarded(frame);
         return;
       }
-      child.stdin.write(line + "\n");
+      if (canForward(frame)) child.stdin.write(line + "\n");
     },
     stop() {
       stopping = true;
