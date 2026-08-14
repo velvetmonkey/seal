@@ -284,3 +284,46 @@ test("status renders a dead activation lease as pending restart, not active", ()
   assert.match(status.out, /previous wrapper lease pid is not live/);
   assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });
+
+test("status downgrades to pending restart after a REAL wrapper lease exits naturally", () => {
+  // Route B (the real-world case): a genuine `seal __proxy --protect-state`
+  // wrapper activates the lease, then exits as any Claude session does. The
+  // stored state stays ACTIVE with the now-dead wrapper pid; status must
+  // observe the dead lease and report PENDING RESTART, never ACTIVE.
+  const root = tmpdir("seal-protect3b-realexit-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = {
+    HOME: home,
+    XDG_DATA_HOME: path.join(home, ".local", "share"),
+    PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+  };
+  // A project server that stays alive so activation would genuinely promote.
+  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], { PATH: env.PATH }).code, 0);
+
+  const statePath = statePathFor(project, { XDG_DATA_HOME: env.XDG_DATA_HOME });
+
+  // Run the genuine wrapper to completion: empty stdin closes, the proxy
+  // activates the lease with ITS OWN pid, then exits. No hand-written pid.
+  execFileSync(SEAL, ["__proxy", "--protect-state", statePath], {
+    cwd: project, env: { ...process.env, ...env }, input: "", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  // The stored state proves the wrapper really activated: ACTIVE with a real
+  // pid that is now dead (the wrapper's own, and the wrapper has exited).
+  const stored = readState(statePath);
+  assert.equal(stored.state, "ACTIVE", "the wrapper must have genuinely promoted to ACTIVE");
+  assert.ok(Number.isInteger(stored.lease.pid) && stored.lease.pid !== 999999, "a real wrapper pid, not a hand-written sentinel");
+  let leaseAlive = true;
+  try { process.kill(stored.lease.pid, 0); } catch { leaseAlive = false; }
+  assert.equal(leaseAlive, false, "the wrapper has exited; its lease pid must be dead");
+
+  const status = run(project, home, ["status"], { PATH: env.PATH });
+  assert.equal(status.code, 0, status.out);
+  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
+  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
+});
