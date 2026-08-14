@@ -5,9 +5,9 @@
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 [![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
 
-Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions can be independently re-derived against pinned kernel bytes.
+Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions this binary can re-derive against pinned kernel bytes. Checking a receipt is a separate tool's job.
 
-Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can verify independently.
+Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can check with the separate external checker.
 
 ## Try it in one command
 
@@ -38,7 +38,7 @@ EXECUTED  demo server accepted the approved call
 The bundled verifier prints its checks, then a `RECEIPT` line naming a file under your per-user directory (by default `~/.local/share/seal/receipts/`, or `$XDG_DATA_HOME/seal/receipts/` if that is set), then:
 
 ```
-PASS VERIFIED  the receipt re-derived the approved decision
+RE-DERIVED  this binary re-derived the approved decision from the saved receipt (checking is a separate tool's job)
 ```
 
 That receipt is yours to keep and re-check. In the no-install path above, run:

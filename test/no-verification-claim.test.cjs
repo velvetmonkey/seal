@@ -32,9 +32,17 @@ function scan(dir, hits) {
   }
 }
 
-test("no banned verification claim survives in bin/ spine/ contract/ test/", () => {
+test("no banned verification claim survives in bin/ spine/ contract/ test/ README.md", () => {
   const hits = [];
   for (const dir of ["bin", "spine", "contract", "test"]) scan(path.join(ROOT, dir), hits);
+  // Step 0 is repository-wide for the *product claim*. README was the hole:
+  // this guard used to skip it. Historical docs/ still say "independently"
+  // in non-verification senses and are not this scan.
+  const readme = path.join(ROOT, "README.md");
+  const text = fs.readFileSync(readme, "utf8");
+  for (const needle of BANNED) {
+    if (text.includes(needle)) hits.push(`README.md: ${needle}`);
+  }
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
 });
 
