@@ -144,37 +144,12 @@ function ask(question) {
     input.output.write(question);
   });
 }
-async function demo() {
-  const runtime = await ensureRuntime();
-  console.log(`Seal runtime verified: ${manifest.repository}@${manifest.commit.slice(0, 12)}`);
-  const config = await import(pathToFileURL(path.join(runtime, "kernel/seal-config.js")));
-  const runner = require(path.join(runtime, "kernel/runner.cjs"));
-  const verifier = require(path.join(runtime, "src/verify.cjs"));
-  const call = { tool: "db.execute", args: { database: "demo", sql: "drop table users" }, now: 1000 };
-  const target = config.guardTarget(call.tool, call.args);
-  const demoConfig = config.SCENARIOS["destructive-sql"].config;
-  const blocked = await runner.decide(demoConfig, { ...call, approvals: [] });
-  if (blocked.verdict !== "BLOCK") throw new Error(`demo expected BLOCK, got ${blocked.verdict}`);
-  console.log("BLOCKED  db.execute demo call requires approval");
-  console.log(`approval required: ${target}`);
-  const response = await ask("Approve this demo call once? [y/N] ");
-  if (response.kind === "eof") {
-    console.error("No approval response received (EOF); no call executed.");
-    process.exitCode = 1;
-    return;
-  }
-  if (response.value !== "y") { console.log("Demo stopped safely; no call executed."); return; }
-  const allowed = await runner.decide(demoConfig, { ...call, approvals: [target] });
-  if (allowed.verdict !== "ALLOW") throw new Error(`demo expected ALLOW, got ${allowed.verdict}`);
-  fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
-  const receipt = path.join(receiptDir, `receipt-${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}.json`);
-  fs.writeFileSync(receipt, JSON.stringify(allowed.receipt, null, 2) + "\n", { mode: 0o600 });
-  console.log("EXECUTED  demo server accepted the approved call");
-  const result = await verifier.verifyDetailed(receipt);
-  if (!result.ok) throw new Error("receipt verification failed");
-  console.log(`RECEIPT   ${receipt}`);
-  console.log("PASS VERIFIED  the demo receipt re-derived the approved decision");
-  console.log(`Verify later with: ${verifyHint(receipt)}`);
+// The demo, the hidden demo server and the protected-path proxy all live on
+// the shared retry-model spine under spine/, consuming the merged approval
+// contract in contract/. `seal demo` is wired ON TOP of the same
+// proxy/contract/journal/receipt path the protected lane uses.
+async function demo(args) {
+  return require(path.join(ROOT, "spine", "demo.cjs")).run(args, __filename);
 }
 async function verify(receiptPath) {
   if (!receiptPath) throw new Error("usage: seal verify PATH");
@@ -199,7 +174,10 @@ async function verify(receiptPath) {
 }
 async function main() {
   const command = process.argv[2];
-  if (command === "demo") return demo();
+  if (command === "demo") return demo(process.argv.slice(3));
+  // Private spine subcommands: not part of the command surface, not listed.
+  if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
+  if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv[3]);
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }

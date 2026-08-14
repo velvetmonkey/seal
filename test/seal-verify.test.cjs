@@ -13,18 +13,17 @@ function run(args, cache, dataHome, input = "") {
   } catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
 }
 
-test("seal verify accepts a receipt copied away from all demo state", () => {
-  const demoCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-demo-cache-"));
-  const demoData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-demo-data-"));
-  const demo = run(["demo"], demoCache, demoData, "y\n");
-  assert.equal(demo.code, 0, demo.out);
-  const original = demo.out.match(/^RECEIPT\s+(.+)$/m)?.[1];
-  assert.ok(original, demo.out);
+const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+
+test("seal verify accepts a receipt copied away from all generating state", async () => {
+  const genCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-cache-"));
+  const genData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-data-"));
+  const original = await writeKernelReceipt(genCache, genData);
   const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-copy-"));
   const copied = path.join(fresh, "carried-receipt.json");
   fs.copyFileSync(original, copied);
-  fs.rmSync(demoCache, { recursive: true, force: true });
-  fs.rmSync(demoData, { recursive: true, force: true });
+  fs.rmSync(genCache, { recursive: true, force: true });
+  fs.rmSync(genData, { recursive: true, force: true });
   const verifyCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-cache-"));
   const verifyData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-data-"));
   const result = run(["verify", copied], verifyCache, verifyData);
@@ -32,13 +31,10 @@ test("seal verify accepts a receipt copied away from all demo state", () => {
   assert.match(result.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);
 });
 
-test("verify names demo and saved-receipt verification separately", () => {
+test("verify re-derives a saved kernel receipt in place", async () => {
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-cache-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-data-"));
-  const demo = run(["demo"], cache, dataHome, "y\n");
-  assert.equal(demo.code, 0, demo.out);
-  assert.match(demo.out, /PASS VERIFIED  the demo receipt re-derived the approved decision/);
-  const receipt = demo.out.match(/^RECEIPT\s+(.+)$/m)?.[1];
+  const receipt = await writeKernelReceipt(cache, dataHome);
   const verified = run(["verify", receipt], cache, dataHome);
   assert.equal(verified.code, 0, verified.out);
   assert.match(verified.out, /PASS VERIFIED  the saved receipt re-derived the approved decision/);

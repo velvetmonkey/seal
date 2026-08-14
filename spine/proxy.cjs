@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: Apache-2.0
+// The shared product spine on the RETRY protocol (roadmap step 2).
+//
+// One implementation serves both the demo and the protected path. The proxy
+// owns effect extraction, `input_required` construction (via the merged
+// approval contract), approval minting, durable replay state, forwarding to
+// the child, and receipt emission. Renderers own display and the user's
+// answer — nothing here asks a question or draws a line, and nothing
+// outside the contract decides whether an effect executes. Deleting or
+// bypassing the contract's transition must break every consumer at once;
+// there is deliberately no second decision path.
+//
+// Transport (child spawn/lifecycle, line framing, passthrough) is harvested
+// from the feat/spine1 proxy; that branch's held-protocol approval flow
+// (Ed25519 token files, approvals NDJSON) is discarded — Claude Code
+// rejects the held shape on a modern connection, and authorization now
+// lives entirely in the contract's own state.
+const { spawn } = require("node:child_process");
+const readline = require("node:readline");
+
+const { createApprovalContract } = require("../contract/contract.cjs");
+const { openJournal, StoreError } = require("./store.cjs");
+const { openReceiptEmitter } = require("./receipts.cjs");
+
+function createProxy(options) {
+  const {
+    guardTool,        // the ONE selected tool name
+    storePath,        // durable approval journal (absent/corrupt is fatal)
+    receiptsDir,      // receipt per decision
+    childArgv,        // [command, ...args] for the protected server
+    onClientLine,     // (line) => void — what the MCP client receives
+    onDecision,       // ({decision, refusal?, receiptPath}) => void
+    onChildExit,      // (code, signal) => void
+    now, ttlMs, terminalWidth, // forwarded to the contract (tests inject clocks)
+  } = options;
+  if (typeof guardTool !== "string" || guardTool.length === 0) throw new Error("guardTool is required");
+  if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
+
+  const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth });
+  const receipts = openReceiptEmitter(receiptsDir);
+  const decisionSink = onDecision || (() => {});
+
+  const child = spawn(childArgv[0], childArgv.slice(1), { stdio: ["pipe", "pipe", "inherit"] });
+  let stopping = false;
+  child.once("close", (code, signal) => {
+    if (onChildExit) onChildExit(stopping ? 0 : code, signal);
+  });
+  const childOut = readline.createInterface({ input: child.stdout, terminal: false });
+  childOut.on("line", (line) => onClientLine(line));
+
+  function emitReceipt(decision, frame, extra) {
+    const receiptPath = receipts.emit({
+      at: Date.now(),
+      decision,
+      tool: frame.params?.name,
+      child: { argv: childArgv },
+      ...extra,
+    });
+    decisionSink({ decision, refusal: extra?.refusal, receiptPath });
+    return receiptPath;
+  }
+
+  function respond(id, result) {
+    onClientLine(JSON.stringify({ jsonrpc: "2.0", id, result }));
+  }
+
+  function refusalResult(refusal, detail) {
+    return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}` }], isError: true };
+  }
+
+  function decideGuarded(frame) {
+    const params = frame.params || {};
+    const tool = params.name;
+    const args = params.arguments ?? {};
+    const { requestState, inputResponses } = params;
+
+    if (requestState === undefined && inputResponses === undefined) {
+      // First call for the guarded effect: offer approval through the
+      // client's renderer, or refuse to offer at all.
+      const decision = contract.begin({ tool, args });
+      if (decision.kind === "refuse") {
+        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        return;
+      }
+      emitReceipt("INPUT_REQUIRED", frame, { requestState: decision.result.requestState });
+      respond(frame.id, decision.result);
+      return;
+    }
+
+    // The retry: client-supplied state and answer, judged only against the
+    // contract's own record.
+    const decision = contract.retry({ tool, args, requestState, inputResponses });
+    if (decision.kind === "refuse") {
+      emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+      respond(frame.id, refusalResult(decision.refusal, decision.detail));
+      return;
+    }
+    // The contract has already journaled the one-use consumption (fsynced)
+    // before we forward: a crash here loses an approval, never gains a call.
+    emitReceipt("ALLOW", frame, { evidence: decision.evidence });
+    child.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: frame.id, method: frame.method,
+      params: { name: tool, arguments: args },
+    }) + "\n");
+  }
+
+  return {
+    write(line) {
+      if (line.trim() === "") return;
+      let frame;
+      try {
+        frame = JSON.parse(line);
+      } catch {
+        onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "seal proxy: unparseable frame refused" } }));
+        return;
+      }
+      if (frame.method === "tools/call" && frame.params?.name === guardTool) {
+        decideGuarded(frame);
+        return;
+      }
+      child.stdin.write(line + "\n");
+    },
+    stop() {
+      stopping = true;
+      return new Promise((resolve) => {
+        if (child.exitCode !== null || child.signalCode !== null) return resolve();
+        child.once("close", () => resolve());
+        try { child.stdin.end(); } catch {}
+        child.kill("SIGTERM");
+        setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 2000).unref();
+      });
+    },
+  };
+}
+
+module.exports = { createProxy, StoreError };
