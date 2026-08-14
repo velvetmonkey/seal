@@ -184,6 +184,7 @@ async function main() {
     return status();
   }
   if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
+  if (command) console.error(`seal: unknown command: ${command}`);
   console.log("seal — the developer gate\n\n  seal demo             block, approve once, execute, and verify a receipt\n  seal verify PATH     independently verify a saved receipt\n  seal status           show local runtime and receipt state");
   process.exitCode = command ? 2 : 0;
 }
