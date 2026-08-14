@@ -302,4 +302,20 @@ process.exit(2);
   });
   assert.equal(verified.code, 0, verified.out);
   assert.match(verified.stdout, /RE-DERIVED/);
+
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
+  const store = path.join(prefix, record.store);
+  assert.ok(fs.existsSync(path.join(store, "spine", "receipt-seal.cjs")), "3C sealer must be in the payload");
+  const packagedChecker = path.join(store, "checker", "seal-receipt-check.mjs");
+  assert.ok(fs.existsSync(packagedChecker), "3C checker must be in the payload");
+  const allow = fs.readdirSync(path.join(demoDir, "receipts")).find((name) => name.includes("-ALLOW.json"));
+  assert.ok(allow, out);
+  const checked = runNode([
+    packagedChecker,
+    path.join(demoDir, "receipts", allow),
+    "--pubkey", path.join(demoDir, "receipt-signer.pub"),
+  ], { cwd: built.out });
+  assert.equal(checked.code, 0, checked.out);
+  assert.match(checked.stdout, /^ACCEPT ALLOW demo\.mutate/);
+  assert.match(out, new RegExp(packagedChecker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

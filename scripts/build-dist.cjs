@@ -24,10 +24,12 @@ const PAYLOAD_PATHS = [
   "spine/proxy.cjs",
   "spine/proxy-cli.cjs",
   "spine/receipts.cjs",
+  "spine/receipt-seal.cjs",
   "spine/store.cjs",
   "contract/canonical.cjs",
   "contract/contract.cjs",
   "contract/renderer.cjs",
+  "checker/seal-receipt-check.mjs",
   "scripts/seal-launch.cjs",
 ];
 
