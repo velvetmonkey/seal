@@ -225,7 +225,7 @@ async function run(argv, sealBinPath) {
   await proxy.stop();
   console.log(`summary: approval matched the effect, one child call observed, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
   const checkerPath = path.resolve(path.dirname(sealBinPath), "..", "checker", "seal-receipt-check.mjs");
-  console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:");
+  console.log("receipts are claims, not proofs. Check one with the separate checker (V11-RECEIPT-01). It runs as its own process and shares no code with this binary at runtime. It ships in this same artifact, so it cannot protect against a replaced artifact:");
   console.log(`  node ${JSON.stringify(checkerPath)} ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   process.exit(0);

@@ -16,7 +16,7 @@ Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM, and other platf
 
 Only the demo signs receipts, using a key generated for that run. The protected path writes its receipts unsigned, and the shipped checker refuses those protected-path receipts as `REFUSE unsealed`. ([README.md](../README.md); [distribution notes](DISTRIBUTION.md); [truth gate](../scripts/launch-truth-gate.mjs); [checker implementation](../checker/seal-receipt-check.mjs))
 
-The checker ships inside the same install artifact. It does not import Seal at check time, but its canonicalisation is a copy of the product-side implementation; it is therefore not an independent external check. ([artifact payload](../scripts/build-dist.cjs); [checker limits](../checker/seal-receipt-check.mjs); [checker test](../test/receipt-checker.test.cjs); merged [18bba8e](https://github.com/velvetmonkey/seal/commit/18bba8ea230ead9fb605cd61d352a0e894c256d5))
+The checker ships inside the same install artifact. It does not import Seal at check time, but its canonicalisation is a copy of the product-side implementation; it is therefore not an independently obtained check. ([artifact payload](../scripts/build-dist.cjs); [checker limits](../checker/seal-receipt-check.mjs); [checker test](../test/receipt-checker.test.cjs); merged [18bba8e](https://github.com/velvetmonkey/seal/commit/18bba8ea230ead9fb605cd61d352a0e894c256d5))
 
 These notes make no stranger-verification claim. They also do not use the Lean or family-assurance material as evidence for this Node artifact. ([artifact inheritance boundary](ARTIFACT-INHERITANCE.md); [distribution test](../test/dist3d.test.cjs))
 

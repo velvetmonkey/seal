@@ -189,12 +189,12 @@ async function verify(receiptPath) {
   let parsed;
   try { parsed = JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
   // Spine receipts (what the product actually writes) are checked by the
-  // SEPARATE external checker, on purpose (V11-RECEIPT-01): the product does
+  // SEPARATE checker, on purpose (V11-RECEIPT-01): the product does
   // not verify its own receipts. Recognise the format and route there rather
   // than crash it through the kernel verifier as an "unrecognized" schema.
   if (parsed && parsed.receipt === "seal.spine/v1") {
-    console.error(`seal: spine_receipt_use_external_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
-    console.error(`Check it with the separate external checker: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
+    console.error(`seal: spine_receipt_use_separate_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
+    console.error(`Check it with the separate checker shipped in this artifact. It shares no code with this binary at runtime, but cannot protect against a replaced artifact: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
     process.exitCode = 2;
     return;
   }
