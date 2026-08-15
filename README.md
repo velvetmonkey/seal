@@ -8,6 +8,12 @@ Seal puts an approval gate in front of one tool of one MCP server. You approve o
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 
+The situation it is built for: your project's `.mcp.json` has an MCP server
+whose tools are mostly harmless — schema reads, lookups, drafts — and one
+tool that is not: the one that executes SQL on a shared database, issues a
+refund, merges the pull request. Seal puts its gate in front of exactly that
+one tool and passes the rest of that server's tools straight through.
+
 **Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
 What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
@@ -21,18 +27,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 70cfeec68d69ee27dc5abd70b9752e5ac81119d887f8c475aa6992e8ec77a98f --bytes 118221 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 8e97479eaf4df66d89b16e659db513bf12a83a928b8199244f8f4ec5c65c9c2f --bytes 118209 --prefix ~/.local
 ```
 
 ```
-/tmp/seal-readme-run-rNaUhj/repo/dist/seal-v0.1.1-linux-x64
-sha256 70cfeec68d69ee27dc5abd70b9752e5ac81119d887f8c475aa6992e8ec77a98f
-bytes 118221
-tree 43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523
+/home/monkey/wt/docsland/dist/seal-v0.1.1-linux-x64
+sha256 8e97479eaf4df66d89b16e659db513bf12a83a928b8199244f8f4ec5c65c9c2f
+bytes 118209
+tree 6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-readme-run-rNaUhj/home/.local/lib/seal/store/43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523
-command: /tmp/seal-readme-run-rNaUhj/home/.local/bin/seal
-tree: 43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523
+store: /home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
+command: /home/monkey/scratch/docsland-reader-walk-run/home/.local/bin/seal
+tree: 6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -43,32 +49,84 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 2. Demo
 
+The demo builds a working gate in miniature, on your machine, in about a
+minute. It starts a tiny MCP server as a hidden child process — that server is
+this same `seal` binary playing the server role, so nothing else is involved —
+and puts Seal's proxy between you and that child's one tool, `demo.mutate`,
+which appends a line to a real file. The child also keeps a count file on disk
+and bumps it each time the tool actually runs. That counter is the evidence to
+watch: the demo reads it back to you at every step, and it is the difference
+between a story about what happened and a file you can check.
+
 ```sh
 seal demo
 ```
 
+The first lines set the table — who is playing, then the counter's starting
+value:
+
 ```
-seal spine demo — one shared proxy, one hidden child, one real file
+seal demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-fEELrr/child/data.txt
-temporary demo directory: /tmp/seal-demo-fEELrr (remains after the demo for the printed checker command)
-child calls observed: 0 (read from /tmp/seal-demo-fEELrr/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt
+temporary demo directory: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2 (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
+```
+
+The `tool` line names the single tool this run guards. The `child` line names
+what stands behind the gate: seal itself, launched as the demo's server,
+writing to a real file in the temporary directory it just printed. And `child
+calls observed: 0` is the counter, read from the child's own count file. **The
+counter is the ground truth of this walk: it moves only when the guarded tool
+actually runs**, and it starts at zero.
+
+Now the demo's client asks for the guarded tool. Instead of running anything,
+the proxy stops and shows you the request:
+
+```
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
     Arguments:
-      line: "seal spine demo wrote this line"
+      line: "seal demo wrote this line"
     Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-fEELrr/child/data.txt.count) — approval shown, nothing executed
-Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-fEELrr/child/data.txt.count)
+child calls observed: still 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count) — approval shown, nothing executed
+```
+
+Read the message the way you would sign it. `Tool` and `Arguments` are the
+exact parsed call. `Scope` is how narrow your yes will be: this identical call
+(down to argument key order and how the numbers are spelled), at most one run,
+expiring in two minutes. `Outside Seal` is what your yes does not cover. And
+the last line re-reads the counter: still 0. Showing you the request executed
+nothing.
+
+Type `y` and three things happen in a row: the call runs once, the demo
+replays it, and the replay is refused. (Your `y` is consumed by the prompt, so
+in the transcript the child's reply lands on the same line as the question.)
+
+```
+Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-one-use held: the replay did not run the call again; child calls observed: still 1 (read from /tmp/seal-demo-fEELrr/child/data.txt.count)
-receipt written: /tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957916-3017604-0001-INPUT_REQUIRED.json
-receipt written: /tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957919-3017604-0002-ALLOW.json
-receipt written: /tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957922-3017604-0003-BLOCK.json
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
+receipt written: /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452628-3115472-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452631-3115472-0002-ALLOW.json
+receipt written: /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json
+```
+
+The counter has now told the whole story: 0 before anything ran, still 0 while
+the approval sat on screen, 1 after your yes — exactly one run — and **still 1
+after the replay: the identical retry was refused, because the one approval it
+depended on was already spent.** Each decision along the way — approval
+requested, call allowed, replay blocked — was written down as its own receipt
+file; those paths matter in a moment.
+
+What comes next is the part most tools leave out. `SCOPE WITNESS` is the demo
+stating its own boundary, starting with the one path it controlled:
+
+```
 
 SCOPE WITNESS
 
@@ -76,24 +134,40 @@ Seal controlled this path:
   demo client -> Seal -> demo MCP server -> demo.mutate
 
 If a route to the same effect does not pass through the printed Seal path, Seal did not control it.
+```
 
+That second sentence is a rule, and the demo now proves the rule is real by
+breaking it on purpose — writing a file directly, without crossing the gate:
+
+```
 Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts: 3 before the write, 3 after)
+```
 
+**The write succeeded and Seal emitted nothing for it** — same receipts before
+and after. A route that does not cross the gate is a route Seal does not see,
+which is what "a gate, not a sandbox" means. The demo closes by saying exactly
+that, and by handing you a command to check one of its receipts:
+
+```
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate checker (V11-RECEIPT-01). It runs as its own process and shares no code with this binary at runtime. It ships in this same artifact, so it cannot protect against a replaced artifact:
-  node "/tmp/seal-readme-run-rNaUhj/home/.local/lib/seal/store/43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523/checker/seal-receipt-check.mjs" "/tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957922-3017604-0003-BLOCK.json" --pubkey "/tmp/seal-demo-fEELrr/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
-The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
+The demo just called its own receipts claims, not proofs, so take it at its
+word and check one. The command it printed runs the packaged checker — a
+separate process that shares no code with the gate at runtime — against the
+BLOCK receipt the refused replay produced, using your run's own paths. Here is
+that command from the run above, run as printed:
 
 ```sh
-node "/tmp/seal-readme-run-rNaUhj/home/.local/lib/seal/store/43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523/checker/seal-receipt-check.mjs" "/tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957922-3017604-0003-BLOCK.json" --pubkey "/tmp/seal-demo-fEELrr/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -103,8 +177,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-readme-run-rNaUhj/home/.local/share/seal/receipts/receipt-1786787957922-3017604-0003-BLOCK.json > /tmp/seal-readme-run-rNaUhj/tampered.json
-node "/tmp/seal-readme-run-rNaUhj/home/.local/lib/seal/store/43cd51282f07bcf27b1b863b24b3642e13d994f01922cc0a2b539a2dcb019523/checker/seal-receipt-check.mjs" /tmp/seal-readme-run-rNaUhj/tampered.json --pubkey "/tmp/seal-demo-fEELrr/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -114,6 +188,44 @@ REFUSE decision_binding_mismatch: the recorded decision does not match its seale
 The checker's `--pubkey` is a trust input. The demo generated that key for this one run — it is the very key that signed the receipt — so the check above establishes self-consistency and nothing more. For a receipt check to mean something, the verifying key must reach you from a source you already trust — not from the sealer, and not from beside the receipt. This signed-receipt cycle is the demo's today: the protected path below writes its receipts without a signature, and the same checker refuses them.
 
 > Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human's choice; Seal cannot distinguish a human click from a client-generated acceptance.
+
+## Where this fits
+
+Seal v1.1 guards one tool of one stdio MCP server in one Claude Code project,
+with you approving each exact call. That is narrow on purpose. It maps onto a
+specific, recognisable moment: a server you already use all day, where almost
+every call is harmless and one call is not.
+
+**The database.** Your `.mcp.json` carries a Postgres MCP server so Claude
+Code can read schemas and query data while you work. The reads are the point;
+the tool that executes arbitrary SQL is the exposure — one UPDATE or DELETE
+with the wrong WHERE clause against the shared staging database is an
+afternoon of restore work. Protect that one tool and the reads keep flowing
+exactly as before, while a call to it stops and shows you the statement it
+parsed. You approve that statement, once; if the client re-sends the same
+approved call, Seal refuses it instead of running it again.
+
+**The money.** Stripe publishes an MCP server for agent workflows. An agent
+doing support triage reads customers and charges harmlessly, but the refund
+tool moves real money, and the classic failure there is not malice — it is a
+timeout followed by a retry that issues the same refund twice. That failure is
+the exact shape of Seal's contract: one approval for one parsed call, spent
+when the call runs, refused (`already_consumed`) when the identical retry
+arrives. Every decision is written down as a receipt file; on this protected
+path those receipts are unsigned today, so treat them as your own local
+record, not as evidence you could hand to someone else.
+
+**The repository.** The GitHub MCP server runs locally over stdio. An agent
+can triage issues, read pull requests and draft comments all day without
+supervision; the tool that merges a pull request is different, because a wrong
+merge lands on a shared branch and costs the rest of the morning to unwind.
+Protect the merge tool and the triage continues untouched, while a merge
+stops, shows you exactly which pull request it named, and runs only after
+your yes — a yes that covers that call and no other.
+
+In every case the boundary stays what the demo showed: Seal controls the path
+through the proxy and only that path. Bash, the network, other tools and other
+servers are outside it.
 
 ## 3. Protect
 
