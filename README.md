@@ -36,18 +36,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 e90b1462a4b4a5d8c080bca7df1bdc8666ff0937b475a32c1769e111f6d1f8c5 --bytes 6117433 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb --bytes 6117802 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/bridgetimeout/dist/seal-v0.1.1-linux-x64
-sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9
-bytes 6117433
-tree 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb
+bytes 6117802
+tree 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 command: /tmp/seal-kernel-timeout-prefix/bin/seal
-tree: 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+tree: 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -164,16 +164,17 @@ that, and by handing you a command to check one of its receipts:
 ```
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
-receipts are claims, not proofs. Check one with the separate checker (V11-RECEIPT-01). It runs as its own process and shares no code with this binary at runtime. It ships in this same artifact, so it cannot protect against a replaced artifact:
+receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
   node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo just called its own receipts claims, not proofs, so take it at its
 word and check one. The command it printed runs the packaged checker — a
-separate process that shares no code with the gate at runtime — against the
-BLOCK receipt the refused replay produced, using your run's own paths. Here is
-that command from the run above, run as printed:
+separate process that imports no Seal module at runtime, but copies the gate's
+canonicalisation rule and shares its Node crypto platform — against the BLOCK
+receipt the refused replay produced, using your run's own paths. Here is that
+command from the run above, run as printed:
 
 ```sh
 node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
