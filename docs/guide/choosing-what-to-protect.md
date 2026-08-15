@@ -52,7 +52,7 @@ Protection: PENDING RESTART notes.delete_all_notes
 State: /home/monkey/scratch/opguide-run/home/.local/share/seal/projects/9852104386c7756d6abbd76408f7014b/state.json
 ```
 
-Three things happened, and only three:
+The three user-visible changes are:
 
 1. **Seal recorded the server as it is right now** — the exact `.mcp.json`
    entry, hashed — in a state file under your home directory (the `State:`
@@ -87,8 +87,8 @@ This is most of the answer, and it is deliberate.
 
   `append_note` ran with no prompt. Only `delete_all_notes` waits for
   approval.
-- **Every other server in the project.** Seal never reads or touches their
-  entries.
+- **Every other server in the project.** Seal reads the project configuration
+  to find the selected server, but does not change the other servers' entries.
 - **Everything that is not this server's MCP traffic.** The approval prompt
   itself names the boundary every time:
   `Outside Seal: Bash, network, subprocesses, other tools and servers.`

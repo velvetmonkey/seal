@@ -19,8 +19,8 @@ Most recent (by write time): BLOCK at receipt time 1786795258224 (receipt-178679
 
 Three parts, always in this order:
 
-- **Runtime** — a cached component only `seal verify` uses. It has nothing to
-  do with whether your project is protected; see below.
+- **Runtime** — a cached component that `seal verify` uses. Its presence does
+  not decide whether your project is protected; see below.
 - **Protection** — this project's gate: its state, then
   `server.tool`, then the path of the state file the answer came from.
 - **Receipts** — how many decision records exist and which one was written
@@ -35,8 +35,9 @@ Three parts, always in this order:
 Protection: - outside Seal
 ```
 
-No gate in this project. Nothing recorded, nothing intercepted. This is also
-what you see after a clean `seal unprotect`.
+No gate in this project, so no calls are intercepted. This is also what you
+see after a clean `seal unprotect`; its state record and past receipts can
+still remain on disk.
 
 ### `PENDING RESTART`
 
@@ -109,7 +110,8 @@ Protection detail: simulated: cannot write local config
 
 `seal protect` got halfway: it recorded the state, then the
 `claude mcp add` step failed, and the failure reason is kept as the detail.
-The gate was never installed.
+Seal did not finish installing the gate; because the external command failed,
+check Claude Code's local override before assuming it made no partial change.
 
 What to do about `BROKEN` is honest but currently not smooth:
 `seal protect` refuses (`already_protected: project is already BROKEN`) and

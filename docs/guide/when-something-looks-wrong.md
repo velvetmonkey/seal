@@ -17,8 +17,9 @@ Refusals arrive in one of four shapes:
 - as a plain refusal line from the installer, the installed launcher, the
   checker, or `seal doctor`: `REFUSE <token>: <reason>`
 
-A refusal always means the questionable thing did not happen. None of these
-tokens reports damage done; each reports something refused.
+A refusal means Seal did not complete the action at the point named by that
+token. It does not prove an earlier step changed nothing: for example, an
+installer or a failed external command can have made partial changes first.
 
 ## While using the protected tool
 
@@ -207,16 +208,17 @@ exactly the kind of silent change Seal exists to prevent.
 
 ### `claude_install_failed`
 
-The `claude mcp add` step failed, so the gate was never installed, and the
-state is recorded as `BROKEN` with the failure reason. The message carries
-Claude Code's own error; fix that (permissions, configuration) first. Then
-recover — this is currently awkward, found and recorded as a product
-finding: `seal protect` refuses (`already_protected`) and `seal unprotect`
-refuses too if there is no override to remove (`claude_remove_failed`). The
-recovery that worked in a real run: re-create the override by hand with
-`claude mcp add --scope local <server> -- <anything>`, then run
-`seal unprotect <server>`, which removes it and returns the project to
-`- outside Seal`.
+The `claude mcp add` step reported failure, and Seal recorded the state as
+`BROKEN` with that reason. Because the external command may have made a
+partial change, check Claude Code's local override before recovery. The
+message carries Claude Code's own error; fix that (permissions,
+configuration) first. Then recover — this is currently awkward, found and
+recorded as a product finding: `seal protect` refuses (`already_protected`)
+and `seal unprotect` refuses too if there is no override to remove
+(`claude_remove_failed`). The recovery that worked in a real run: re-create
+the override by hand with `claude mcp add --scope local <server> --
+<anything>`, then run `seal unprotect <server>`, which removes it and returns
+the project to `- outside Seal`.
 
 ### `claude_remove_failed`
 
@@ -292,8 +294,10 @@ installation. Reinstall from a fresh artifact.
 
 ## From the installer
 
-The installer judges the artifact before writing anything; every refusal
-here means no files were changed. Minted in `scripts/install.cjs`.
+The installer checks the artifact before it runs it, but some later checks
+occur while extraction is writing the store. A refusal here can therefore
+follow partial store writes; remove the failed install and reinstall from a
+verified artifact. Minted in `scripts/install.cjs`.
 
 ### `pin_missing`
 
@@ -389,8 +393,10 @@ command.
 ### `unsealed`
 
 The receipt carries no seal block, so there is nothing to check it against.
-Receipts written by the gate are always sealed; an unsealed one did not come
-from it intact.
+`seal demo` receipts are sealed, but the normal protected Claude Code path
+currently writes unsealed receipts because it has no operator signing key.
+For those genuine receipts the checker returns `REFUSE unsealed`; that result
+does not mean the receipt was damaged.
 
 ### `unknown_algorithm`
 

@@ -1,15 +1,18 @@
 # The Seal operating guide
 
 Seal puts one approval gate in front of one tool of one MCP server in one
-project. When Claude Code tries to run that tool, you see exactly what would
-run, and nothing runs until you approve that exact call — once, and only once.
-Every other tool keeps working as if Seal were not there.
+project. When a healthy gate can show a fresh approval request for that tool,
+you see exactly what would run, and the call waits for approval — once, and
+only once. In a healthy, non-drifted wrapper, other tools keep working as if
+Seal were not there; drift, missing state, or a server-start failure refuses
+the server instead.
 
 This guide is for using that gate day to day. It assumes you have seen a
 `.mcp.json` before and can run commands in a terminal, and nothing more. Every
-command shown here was actually run, and every output shown is what that run
-printed; the outputs were captured in a scratch project on 2026-08-15, so the
-paths in them will differ from yours.
+command shown here was actually run. Literal output blocks reproduce that run;
+blocks marked with an ellipsis or explanatory text are excerpts. The outputs
+were captured in a scratch project on 2026-08-15, so paths in them will differ
+from yours.
 
 ## Before you start
 
@@ -47,6 +50,11 @@ telling it which bytes you meant to install. Make sure `~/.local/bin` is on
 your `PATH`, then run `seal demo` once — it walks the whole approve-once,
 replay-blocked story in about a minute, against a harmless built-in server,
 and asks for nothing but a y/N.
+
+One limit to know before you rely on receipt checking: `seal demo` writes
+signed receipts, but the normal protected Claude Code path currently writes
+unsigned receipts because it has no operator signing key. The shipped checker
+therefore returns `REFUSE unsealed` for a genuine protected-path receipt.
 
 ## The path through this guide
 

@@ -7,8 +7,9 @@ that has been altered. This page walks all three, from real runs.
 
 ## The approval prompt, line by line
 
-When Claude Code calls the protected tool, nothing executes. Instead you get
-this prompt (captured from a live gated call):
+When a healthy gate receives a fresh protected call it can render, it holds
+the call before forwarding and sends this approval request (captured from a
+live gated call):
 
 ```
 Approval required
@@ -73,7 +74,7 @@ states.
 
 ## What a refusal means
 
-A refusal looks like this, always in the same shape:
+A retry refusal from the approval contract has this shape:
 
 ```
 approval refused: <token> — <plain-language detail>
@@ -96,7 +97,13 @@ of this page is for.
 
 Every decision — the prompt being offered, an allowed call, a refusal —
 writes one JSON file. `seal status` shows where they live and which is
-newest. A receipt records what the gate decided and about what:
+newest. A receipt records what the gate decided and about what. Only receipts
+with a seal and a public key you trust can be checked today: `seal demo`
+writes signed receipts, while the normal protected Claude Code path writes
+unsigned ones and the shipped checker returns `REFUSE unsealed` for them,
+even when they are genuine.
+
+This signed example is from `seal demo`:
 
 ```json
 {
