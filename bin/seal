@@ -211,12 +211,34 @@ async function verify(receiptPath) {
 
 async function protectCommand(args) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
-  const [serverName, guardTool] = args;
-  const result = await protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env });
+  let timeoutMs = protection.DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS;
+  const positional = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--timeout-ms") {
+      const value = args[index + 1];
+      if (!value || !/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > 2147483647) {
+        throw new protection.ProtectionError("usage", "--timeout-ms requires an integer from 1 to 2147483647");
+      }
+      timeoutMs = Number(value);
+      index += 1;
+    } else if (argument.startsWith("--")) {
+      throw new protection.ProtectionError("usage", `unknown protect option: ${argument}`);
+    } else {
+      positional.push(argument);
+    }
+  }
+  if (positional.length !== 2) {
+    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL");
+  }
+  const [serverName, guardTool] = positional;
+  const result = await protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   console.log(`Protection: PENDING RESTART ${serverName}.${guardTool}`);
   const outside = result.toolNames.filter((name) => name !== guardTool);
-  console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} OUTSIDE Seal${outside.length ? `: ${outside.join(", ")}` : ""}`);
+  const shownOutside = outside.slice(0, 20);
+  const hiddenOutside = outside.length - shownOutside.length;
+  console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} OUTSIDE Seal${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
   console.log(`State: ${result.statePath}`);
 }
 
@@ -257,7 +279,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect SERVER TOOL  install a local Claude Code override for one tool\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL\n                         install a local Claude Code override for one tool\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
 }
 main().catch((error) => {
   const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";

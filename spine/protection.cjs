@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
 const STATE_SCHEMA = "seal.protect/v1";
+const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 5000;
 const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",
@@ -174,7 +175,7 @@ function observedNames(names) {
 // Start the configured stdio server with the same argv, working directory and
 // environment overlay used by the proxy, then perform the MCP handshake Seal
 // relies on before claiming that a named tool is protected.
-function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, timeoutMs = 5000 }) {
+function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS }) {
   return new Promise((resolve, reject) => {
     const child = spawn(childArgv[0], childArgv.slice(1), {
       cwd: projectRoot,
@@ -203,7 +204,10 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
     };
     const arm = (code, message) => {
       clearTimeout(timer);
-      timer = setTimeout(() => fail(code, `${message} after ${timeoutMs}ms${detail()}`), timeoutMs);
+      timer = setTimeout(() => fail(
+        code,
+        `${message} after ${timeoutMs}ms (default: ${DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS}ms; increase with --timeout-ms <milliseconds>)${detail()}`,
+      ), timeoutMs);
       timer.unref();
     };
     const send = (frame) => child.stdin.write(JSON.stringify(frame) + "\n");
@@ -318,7 +322,14 @@ function protectionView(state) {
   return state;
 }
 
-async function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin = process.argv[1], env = process.env }) {
+async function protect({
+  serverName,
+  guardTool,
+  projectRoot = process.cwd(),
+  sealBin = process.argv[1],
+  env = process.env,
+  timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+}) {
   if (!serverName || !guardTool) throw new ProtectionError("usage", "usage: seal protect SERVER TOOL");
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
@@ -336,6 +347,7 @@ async function protect({ serverName, guardTool, projectRoot = process.cwd(), sea
     childEnv: project.childEnv,
     projectRoot: root,
     env,
+    timeoutMs,
   });
   if (!toolNames.includes(guardTool)) {
     throw new ProtectionError(
@@ -365,6 +377,7 @@ async function protect({ serverName, guardTool, projectRoot = process.cwd(), sea
     projectServer: project.server,
     childArgv: project.childArgv,
     childEnv: project.childEnv,
+    discoveryTimeoutMs: timeoutMs,
     storePath,
     receiptsDir,
     protectedAt: new Date().toISOString(),
@@ -443,6 +456,7 @@ async function activationLease(statePath, env = process.env) {
       childEnv: state.childEnv,
       projectRoot: state.projectRoot,
       env,
+      timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
     markBroken(statePath, state, error);
@@ -494,6 +508,7 @@ function doctor(env = process.env) {
 }
 
 module.exports = {
+  DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
   ProtectionError,
   STATES,
   activationLease,

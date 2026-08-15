@@ -83,6 +83,32 @@ test("an initialize failure refuses protection", () => {
   assert.match(result.out, /protected_server_initialize_failed/);
 });
 
+test("a slow initialize refuses at the default deadline and names --timeout-ms", () => {
+  const ctx = setup("slow-initialize", "5100");
+  const result = run(ctx, ["protect", "db", "db.drop_table"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /protected_server_initialize_failed/);
+  assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+});
+
+test("--timeout-ms permits a legitimate slow initialize and is persisted for activation", () => {
+  const ctx = setup("slow-initialize", "5100");
+  const result = run(ctx, ["protect", "--timeout-ms", "6000", "db", "db.drop_table"]);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /Protection: PENDING RESTART db\.db\.drop_table/);
+  assert.equal(readState(statePathFor(ctx.project, ctx.env)).discoveryTimeoutMs, 6000);
+});
+
+test("a dead initialize still refuses at the default deadline", () => {
+  const ctx = setup("dead-initialize");
+  const result = run(ctx, ["protect", "db", "db.drop_table"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /protected_server_initialize_failed/);
+  assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+});
+
 test("a tools/list error refuses protection", () => {
   const ctx = setup("list-error");
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
@@ -96,6 +122,16 @@ test("an empty tools/list refuses protection", () => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_tools_empty/);
   assert.doesNotMatch(result.out, /PENDING RESTART/);
+});
+
+test("protection scope caps a large tool inventory and reports the omitted count", () => {
+  const ctx = setup("many", "20000");
+  const result = run(ctx, ["protect", "db", "db.tool_0"]);
+  assert.equal(result.code, 0, result.out);
+  const scope = result.out.split("\n").find((line) => line.startsWith("Protection scope:"));
+  assert.match(scope, /^Protection scope: 19999 other tools OUTSIDE Seal: /);
+  assert.match(scope, /\(\+19979 more\)$/);
+  assert.ok(scope.length < 500, `scope line was ${scope.length} characters`);
 });
 
 test("activation becomes visibly BROKEN when the protected tool vanished", () => {
