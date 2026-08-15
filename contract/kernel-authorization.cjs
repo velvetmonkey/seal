@@ -10,6 +10,7 @@ const { spawnSync } = require("node:child_process");
 const PRODUCT_ROOT = path.resolve(__dirname, "..");
 const DEFAULT_KERNEL_ROOT = path.join(PRODUCT_ROOT, "test-support", "runtime-fixture", "kernel");
 const DEFAULT_MANIFEST = path.join(PRODUCT_ROOT, "runtime-manifest.json");
+const DEFAULT_KERNEL_TIMEOUT_MS = 5000;
 
 class KernelAuthorizationError extends Error {
   constructor(code, message) {
@@ -41,6 +42,7 @@ function createKernelAuthorizationAdapter({
   kernelRoot = DEFAULT_KERNEL_ROOT,
   manifestPath = DEFAULT_MANIFEST,
   workerPath = path.join(__dirname, "kernel-authorization-worker.cjs"),
+  workerTimeoutMs = DEFAULT_KERNEL_TIMEOUT_MS,
 } = {}) {
   return {
     authorize(input) {
@@ -62,8 +64,16 @@ function createKernelAuthorizationAdapter({
       const child = spawnSync(process.execPath, [workerPath, kernelRoot], {
         input: JSON.stringify(input),
         encoding: "utf8",
+        timeout: workerTimeoutMs,
+        killSignal: "SIGKILL",
         maxBuffer: 8 * 1024 * 1024,
       });
+      if (child.error?.code === "ETIMEDOUT") {
+        throw new KernelAuthorizationError(
+          "kernel_execution_refused",
+          `kernel worker exceeded its ${workerTimeoutMs} ms deadline`,
+        );
+      }
       if (child.error) {
         throw new KernelAuthorizationError("kernel_execution_refused", `kernel worker could not start: ${child.error.message}`);
       }
@@ -90,4 +100,5 @@ module.exports = {
   KernelAuthorizationError,
   DEFAULT_KERNEL_ROOT,
   DEFAULT_MANIFEST,
+  DEFAULT_KERNEL_TIMEOUT_MS,
 };

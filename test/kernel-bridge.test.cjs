@@ -14,6 +14,7 @@ const {
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+const HANGING_WORKER = path.join(ROOT, "test-support", "hanging-kernel-worker.cjs");
 const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
@@ -136,6 +137,19 @@ test("physical wasm corruption refuses by name with no JavaScript fallback", (t)
   const refused = acceptedRetry(contract, fresh(contract));
   assert.equal(refused.refusal, REFUSALS.KERNEL_INTEGRITY_REFUSED);
   assert.match(refused.detail, /no JavaScript fallback exists/);
+});
+
+test("a hung kernel worker reaches its product deadline and refuses closed", () => {
+  const contract = createApprovalContract({
+    kernelAdapter: createKernelAuthorizationAdapter({ workerPath: HANGING_WORKER }),
+  });
+  const started = Date.now();
+  const refused = acceptedRetry(contract, fresh(contract));
+  const elapsed = Date.now() - started;
+  assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
+  assert.match(refused.detail, /kernel worker exceeded its 5000 ms deadline/);
+  assert.ok(elapsed >= 5000, `worker returned before its deadline: ${elapsed} ms`);
+  assert.ok(elapsed < 7000, `worker did not return promptly: ${elapsed} ms`);
 });
 
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {

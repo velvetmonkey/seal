@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 0c75acaa89faaaeed7f7abcec180e67934c2767da2feade260723af74951fe27 --bytes 6115130 --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9 --bytes 6115530 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
@@ -47,7 +47,10 @@ that invokes it. The authorization rule is PROVED. The state machine is
 TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
 accepted by `seal_init`; this is demo-grade self-authorization, not a
 production config-signing trust root. Corrupt or unpinned WASM refuses and has
-no JavaScript authorization fallback.
+no JavaScript authorization fallback. Each kernel worker invocation has a
+5000ms product-enforced deadline and is killed if it exceeds that deadline; the
+guarded call refuses as `kernel_execution_refused` and does not fall back to
+Node authorization.
 The demo prints the absolute path of that packaged checker. The launcher
 never searches `PATH` for another `seal`.
 

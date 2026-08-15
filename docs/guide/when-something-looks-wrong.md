@@ -127,10 +127,12 @@ pin. Restore a complete pinned installation; do not invent a replacement hash.
 
 ### `kernel_execution_refused`
 
-The isolated kernel worker could not start, `seal_init` rejected its signed
-configuration, or kernel execution failed. Nothing forwards. Preserve the full
-detail and report it; this may expose a damaged runtime or an incompatible
-kernel/config boundary.
+The isolated kernel worker could not start, exceeded its 5000ms execution
+deadline, `seal_init` rejected its signed configuration, or kernel execution
+failed. Nothing forwards. A deadline refusal includes the exceeded limit in
+milliseconds, which distinguishes a hung worker from other execution failures.
+Preserve the full detail and report it; this may expose a slow or damaged
+runtime, or an incompatible kernel/config boundary.
 
 ### `kernel_output_refused`
 

@@ -36,18 +36,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 0c75acaa89faaaeed7f7abcec180e67934c2767da2feade260723af74951fe27 --bytes 6115130 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9 --bytes 6115530 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/wasmbridge/dist/seal-v0.1.1-linux-x64
-sha256 0c75acaa89faaaeed7f7abcec180e67934c2767da2feade260723af74951fe27
-bytes 6115130
-tree 280af61546bfec11eca2271b88d354aeda70bb1813723119e6f8fb95459d0aa6
+/home/monkey/wt/bridgetimeout/dist/seal-v0.1.1-linux-x64
+sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9
+bytes 6115530
+tree 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-kernel-bridge-prefix/lib/seal/store/280af61546bfec11eca2271b88d354aeda70bb1813723119e6f8fb95459d0aa6
-command: /tmp/seal-kernel-bridge-prefix/bin/seal
-tree: 280af61546bfec11eca2271b88d354aeda70bb1813723119e6f8fb95459d0aa6
+store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+command: /tmp/seal-kernel-timeout-prefix/bin/seal
+tree: 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
