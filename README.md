@@ -21,21 +21,21 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 eefad734cc6a88caa034206f8e0ff5c4fb3f004e0588d025388c728ce880cca8 --bytes 117799 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 e88fe25c3b629423552203db94eff096966278d3834a02fde714fe123af8c2b7 --bytes 117907 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/coldfix/dist/seal-v0.1.1-linux-x64
-sha256 eefad734cc6a88caa034206f8e0ff5c4fb3f004e0588d025388c728ce880cca8
-bytes 117799
-tree b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
+/home/monkey/wt/coldwalk-polish/dist/seal-v0.1.1-linux-x64
+sha256 e88fe25c3b629423552203db94eff096966278d3834a02fde714fe123af8c2b7
+bytes 117907
+tree e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c
 installed seal 0.1.1 linux-x64
-store: /home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
-command: /home/monkey/scratch/coldwalkfix-run/home/.local/bin/seal
-tree: b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
+store: /home/monkey/scratch/coldwalk-polish-run/home/.local/lib/seal/store/e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c
+command: /home/monkey/scratch/coldwalk-polish-run/home/.local/bin/seal
+tree: e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c
 ```
 
-The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. If `~/.local/bin` is not on your PATH:
+The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -50,8 +50,9 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-wO8oyt/child/data.txt
-child calls observed: 0 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-zT5Arp/child/data.txt
+temporary demo directory: /tmp/seal-demo-zT5Arp (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /tmp/seal-demo-zT5Arp/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -59,15 +60,15 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal spine demo wrote this line"
     Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-zT5Arp/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-zT5Arp/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this approval was one-use and has already admitted a call"
-one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
-receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431663-2729237-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431667-2729237-0002-ALLOW.json
-receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json
+one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-zT5Arp/child/data.txt.count)
+receipt written: /home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936858-2764726-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936861-2764726-0002-ALLOW.json
+receipt written: /home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936864-2764726-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -78,19 +79,19 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval required once, executed once after approval, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json" --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
+  node "/home/monkey/scratch/coldwalk-polish-run/home/.local/lib/seal/store/e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936864-2764726-0003-BLOCK.json" --pubkey "/tmp/seal-demo-zT5Arp/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json" --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
+node "/home/monkey/scratch/coldwalk-polish-run/home/.local/lib/seal/store/e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936864-2764726-0003-BLOCK.json" --pubkey "/tmp/seal-demo-zT5Arp/receipt-signer.pub"
 ```
 
 ```
@@ -100,8 +101,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json > /home/monkey/scratch/coldwalkfix-run/tampered.json
-node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" /home/monkey/scratch/coldwalkfix-run/tampered.json --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/coldwalk-polish-run/xdg/seal/receipts/receipt-1786773936864-2764726-0003-BLOCK.json > /home/monkey/scratch/coldwalk-polish-run/tampered.json
+node "/home/monkey/scratch/coldwalk-polish-run/home/.local/lib/seal/store/e4cc2d0956cd940492b722ad8d3c88e8038970f4215c68df534ca432f5ab5a3c/checker/seal-receipt-check.mjs" /home/monkey/scratch/coldwalk-polish-run/tampered.json --pubkey "/tmp/seal-demo-zT5Arp/receipt-signer.pub"
 ```
 
 ```
@@ -175,6 +176,8 @@ chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
 ```
 
 Receipts and per-project state remain under `~/.local/share/seal/`. They are yours; delete them with `rm -r ~/.local/share/seal` if you want nothing left.
+
+The demo's temporary directory — the `/tmp/seal-demo-*` location it prints before asking for approval — also remains after the walk. It holds the demo journal, child data and count, the outside-the-gate write, and the receipt-signing public key needed by the checker command. After you run that command, remove the exact directory the demo printed with `rm -r` if you want nothing left.
 
 ## What Seal covers, and what it does not
 

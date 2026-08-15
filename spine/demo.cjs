@@ -136,6 +136,7 @@ async function run(argv, sealBinPath) {
     console.log(`tool      ${tool.name}  ${tool.name === TOOL ? "guarded" : "—"}`);
   }
   console.log(`child     seal __demo-server (this same binary) mutating ${dataFile}`);
+  console.log(`temporary demo directory: ${dir} (remains after the demo for the printed checker command)`);
 
   const before = readCount(countFile);
   if (before !== "0") fail(`expected a fresh child at 0 observed calls, count file reads ${before}`);
