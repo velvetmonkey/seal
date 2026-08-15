@@ -65,7 +65,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   assert.match(
     run.out,
     /receipts are claims, not proofs\. Check one with the separate checker \(V11-RECEIPT-01\)\. It runs as its own process and shares no code with this binary at runtime\. It ships in this same artifact, so it cannot protect against a replaced artifact:/,
-    "demo must state both the checker's process isolation and its same-artifact limit",
+    "demo must state the separate checker, its process isolation, and its same-artifact limit, and must not call it external",
   );
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call its same-artifact checker external");
 
