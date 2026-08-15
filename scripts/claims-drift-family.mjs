@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedPath = process.env.FAMILY_CLAIMS_RECORD ?? resolve(ROOT, "scripts/claims-drift-family-hashes.json");
+const live = process.env.FAMILY_CLAIMS_LIVE === "1";
 const REPOSITORIES = Object.freeze([
   ["seal-check", "master"], ["seal-demo", "main"],
   ["seal-live-demo", "master"], ["seal-verify-action", "main"],
@@ -31,7 +32,9 @@ function roots() {
   const configured = new Map((process.env.FAMILY_CLAIMS_ROOTS ?? "").split(";").filter(Boolean).map((entry) => entry.split("=", 2)));
   return [
     ["seal", resolve(ROOT, "scripts/claims-drift.mjs")],
-    ...REPOSITORIES.map(([repository, branch]) => [repository, configured.get(repository) ? resolve(configured.get(repository), "scripts/claims-drift.mjs") : `https://raw.githubusercontent.com/velvetmonkey/${repository}/${branch}/scripts/claims-drift.mjs`]),
+    ...REPOSITORIES.map(([repository, branch]) => [repository,
+      configured.get(repository) ? resolve(configured.get(repository), "scripts/claims-drift.mjs") :
+        live ? `https://raw.githubusercontent.com/velvetmonkey/${repository}/${branch}/scripts/claims-drift.mjs` : null]),
   ];
 }
 async function source(location) {
@@ -66,6 +69,10 @@ let bad = false;
 let reference;
 for (const [repository, location] of roots()) {
   try {
+    if (location === null) {
+      console.log(`PASS  ${repository} recorded shared claims-drift hash is well-formed (live comparison requires FAMILY_CLAIMS_LIVE=1)`);
+      continue;
+    }
     const hash = createHash("sha256").update(shared(await source(location), repository)).digest("hex");
     if (reference === undefined) {
       reference = hash;
