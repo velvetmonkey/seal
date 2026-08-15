@@ -44,6 +44,12 @@ for (const file of ["README.md", "docs/DISTRIBUTION.md", path.join("docs", relea
   replace(file, /Seal v\d+\.\d+(?:\.\d+)?/g, `Seal v${version}`);
 }
 
+// These are release claims addressed to readers, but do not carry the "Seal"
+// prefix. Keep their version identity in step with VERSION as well.
+for (const file of ["README.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+  replace(file, /\bv\d+\.\d+(?:\.\d+)?\b/g, `v${version}`);
+}
+
 for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md"]) {
   replace(file, /seal-v\d+\.\d+\.\d+-linux-x64/g, `seal-v${version}-linux-x64`);
 }
