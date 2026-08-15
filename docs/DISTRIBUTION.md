@@ -38,9 +38,9 @@ this release does not mint.
 `--version` prints the `VERSION` file from the installed tree. It must
 equal the version in the artifact name and in the install record.
 
-The payload is the current product: `bin/seal`, the spine (including
-the receipt-sealing module, which only the demo path invokes today —
-the protected path writes unsigned receipts), the approval contract,
-and `checker/seal-receipt-check.mjs`. The demo prints the absolute path
-of that packaged checker. The launcher never searches `PATH` for
-another `seal`.
+The payload is the current product: `bin/seal`, the mediation and
+receipt components (including the receipt-sealing module, which only
+the demo path invokes today — the protected path writes unsigned
+receipts), the approval contract, and `checker/seal-receipt-check.mjs`.
+The demo prints the absolute path of that packaged checker. The launcher
+never searches `PATH` for another `seal`.
