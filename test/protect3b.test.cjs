@@ -56,6 +56,10 @@ if (args[1] === "get") {
 }
 if (args[1] === "add") {
   const name = args[4];
+  if (process.env.SEAL_TEST_CLAUDE_ADD_FAIL === "1") {
+    console.error("stub add failed: simulated write failure");
+    process.exit(23);
+  }
   const split = args.indexOf("--");
   fs.writeFileSync(localPath(name), JSON.stringify({ command: args[split + 1], args: args.slice(split + 2) }));
   console.log("Added stdio MCP server " + name + " to local config");
@@ -63,7 +67,11 @@ if (args[1] === "add") {
 }
 if (args[1] === "remove") {
   const name = args[4];
-  try { fs.unlinkSync(localPath(name)); } catch {}
+  if (!fs.existsSync(localPath(name))) {
+    console.error('No MCP server named "' + name + '" in local scope');
+    process.exit(1);
+  }
+  fs.unlinkSync(localPath(name));
   console.log("Removed MCP server " + name + " from local config");
   process.exit(0);
 }
@@ -238,6 +246,49 @@ test("unprotect refuses while an activation lease pid is live", () => {
   const result = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /active_claude_session/);
+});
+
+test("unprotect unwedges BROKEN state when Claude reports the local override is absent", () => {
+  const root = tmpdir("seal-protect3b-unwedge-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+
+  const failedProtect = run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_ADD_FAIL: "1" });
+  assert.notEqual(failedProtect.code, 0);
+  assert.match(failedProtect.out, /claude_install_failed/);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  assert.equal(readState(statePath).state, "BROKEN");
+
+  const refusedProtect = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.notEqual(refusedProtect.code, 0);
+  assert.match(refusedProtect.out, /already_protected: project is already BROKEN/);
+
+  const unprotected = run(project, home, ["unprotect", "db"], env);
+  assert.equal(unprotected.code, 0, unprotected.out);
+  assert.equal(readState(statePath).state, "UNPROTECTED");
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+});
+
+test("unprotect still refuses when the Claude command is unavailable during remove", () => {
+  const root = tmpdir("seal-protect3b-remove-failure-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+
+  const refused = run(project, home, ["unprotect", "db"], { PATH: path.dirname(process.execPath) });
+  assert.notEqual(refused.code, 0);
+  assert.match(refused.out, /claude_remove_failed/);
+  assert.match(refused.out, /ENOENT/);
 });
 
 test("status and doctor use outside-Seal and assumption/refusal language", () => {

@@ -139,6 +139,14 @@ function runClaude(args, env = process.env, cwd = process.cwd()) {
   return { code: result.status === null ? 1 : result.status, stdout: result.stdout || "", stderr: result.stderr || "", error: result.error };
 }
 
+function localOverrideIsAbsent(result, serverName) {
+  // Claude Code reports this exact scoped diagnostic for a failed remove when
+  // the requested local override does not exist. Keep this intentionally
+  // narrow: a changed or unrelated failure must still refuse loudly.
+  const absent = `No MCP server named "${serverName}" in local scope`;
+  return !result.error && result.code === 1 && `${result.stdout}\n${result.stderr}`.trim() === absent;
+}
+
 function localOverrideExists(serverName, projectRoot = process.cwd(), env = process.env) {
   const result = runClaude(["mcp", "get", serverName], env, projectRoot);
   if (result.error && result.error.code === "ENOENT") return false;
@@ -251,7 +259,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   }
   const before = readProjectConfig(root).hash;
   const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root);
-  if (remove.error || remove.code !== 0) {
+  if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, serverName))) {
     throw new ProtectionError("claude_remove_failed", `Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
   }
   const after = readProjectConfig(root).hash;
