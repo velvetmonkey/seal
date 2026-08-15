@@ -179,6 +179,8 @@ Receipts and per-project state remain under `~/.local/share/seal/`. They are you
 
 The demo's temporary directory — the `/tmp/seal-demo-*` location it prints before asking for approval — also remains after the walk. It holds the demo journal, child data and count, the outside-the-gate write, and the receipt-signing public key needed by the checker command. After you run that command, remove the exact directory the demo printed with `rm -r` if you want nothing left.
 
+In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> demo.mutate`. The direct write, Bash, and everything else were outside it.
+
 ## What Seal covers, and what it does not
 
 - Seal is a gate, not a sandbox. It controls the path through it, and only that path. The demo ends by writing a file outside the gate and reporting zero Seal decisions for it; that is the honest boundary, demonstrated rather than footnoted.

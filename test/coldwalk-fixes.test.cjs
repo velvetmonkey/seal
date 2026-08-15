@@ -35,6 +35,18 @@ test("the first screen requires Claude Code for Protect and provides its availab
   assert.match(firstScreen, /the `claude` command for Protect \(check with `claude --version`\)/);
 });
 
+test("the removal beat leaves the demo authority path fresh in the reader's memory", () => {
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const remove = readme.indexOf("## 4. Remove");
+  const limits = readme.indexOf("## What Seal covers, and what it does not");
+  const pathReminder = "demo client -> Seal -> demo MCP server -> demo.mutate";
+
+  assert.ok(remove >= 0, "README must contain the Remove beat");
+  assert.ok(limits > remove, "limits must follow the Remove beat");
+  assert.ok(readme.indexOf(pathReminder, remove) > remove, "the authority path must appear after Remove");
+  assert.ok(readme.indexOf(pathReminder, remove) < limits, "the authority path must appear before the limits list");
+});
+
 test("both conventional help flags print the bare-command help and succeed", () => {
   const bare = runSeal([]);
   assert.equal(bare.code, 0, bare.stderr);

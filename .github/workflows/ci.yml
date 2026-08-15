@@ -36,7 +36,7 @@ jobs:
 
           gate_status=0
           expected_zero=0
-          minimum_tests=95
+          minimum_tests=96
           if (( node_status != 0 )); then
             echo "::error::node --test exited $node_status"
             gate_status=1
