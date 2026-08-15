@@ -51,7 +51,14 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
 
   // Printed witness, in the specified shape.
   assert.match(run.out, /SCOPE WITNESS/);
-  assert.match(run.out, /demo client -> Seal -> demo MCP server -> demo\.mutate/);
+  const pathLine = "demo client -> Seal -> demo MCP server -> demo.mutate";
+  const rule = "If a route to the same effect does not pass through the printed Seal path, Seal did not control it.";
+  const pathAt = run.out.indexOf(pathLine);
+  const ruleAt = run.out.indexOf(rule);
+  const directWriteAt = run.out.indexOf("Now the demo performs a harmless direct local write");
+  assert.ok(pathAt >= 0, "demo output must print the authority path");
+  assert.ok(ruleAt > pathAt, "demo output must print the boundary rule after the authority path");
+  assert.ok(directWriteAt > ruleAt, "demo output must print the direct write after the boundary rule");
   assert.match(run.out, /DIRECT WRITE SUCCEEDED/);
   assert.match(run.out, /Seal decisions emitted: 0/);
   assert.match(run.out, /a gate, not a sandbox/);
@@ -84,6 +91,19 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   // Output discipline: no verification claims anywhere.
   assert.doesNotMatch(run.out, new RegExp(["PASS", "VERIFIED"].join(" ")));
   assert.doesNotMatch(run.out, /verif/i);
+});
+
+test("the scope rule appears between the printed path and the direct write", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-order-"));
+  const result = runSeal(["demo", "--dir", dir], "y\n");
+  assert.equal(result.code, 0, result.out + result.err);
+
+  const pathAt = result.out.indexOf("demo client -> Seal -> demo MCP server -> demo.mutate");
+  const ruleAt = result.out.indexOf("If a route to the same effect does not pass through the printed Seal path, Seal did not control it.");
+  const directWriteAt = result.out.indexOf("Now the demo performs a harmless direct local write");
+  assert.ok(pathAt >= 0, "demo output must print the authority path");
+  assert.ok(ruleAt > pathAt, "demo output must print the boundary rule after the authority path");
+  assert.ok(directWriteAt > ruleAt, "demo output must print the direct write after the boundary rule");
 });
 
 // --- the internal-harness controls ------------------------------------------
