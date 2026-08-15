@@ -119,7 +119,7 @@ function readState(statePath) {
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
   if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
+    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state && state.schema)}, not ${STATE_SCHEMA}`);
   }
   if (state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");

@@ -220,8 +220,8 @@ test("4b deleted protected-server binary: protected_server_missing, no forward",
   assertUntouched(ctx, before, "deleted child binary");
 });
 
-test("5 incompatible state: incompatible_state, files untouched", () => {
-  const ctx = setup("f5-incompat-");
+test("5a incompatible state (version): message names the version, not the schema", () => {
+  const ctx = setup("f5-incompat-ver-");
   const statePath = statePathFor(ctx.project, ctx.env);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
@@ -229,7 +229,24 @@ test("5 incompatible state: incompatible_state, files untouched", () => {
   const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /incompatible_state/);
-  assertUntouched(ctx, before, "incompatible state");
+  assert.match(result.out, /stored protection state is from another binary version/);
+  assert.doesNotMatch(result.out, /has schema/);
+  assertUntouched(ctx, before, "incompatible version");
+});
+
+test("5b incompatible state (schema): message names the schema, not a version", () => {
+  const ctx = setup("f5-incompat-schema-");
+  const statePath = statePathFor(ctx.project, ctx.env);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify({ schema: "seal.protect/v0", sealVersion: "0.1.1", state: "PENDING RESTART" }));
+  const before = snapshot(ctx);
+  const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /incompatible_state/);
+  assert.match(result.out, /has schema "seal\.protect\/v0"/);
+  assert.match(result.out, /not seal\.protect\/v1/);
+  assert.doesNotMatch(result.out, /another binary version/);
+  assertUntouched(ctx, before, "incompatible schema");
 });
 
 test("6 two protected projects: works by design, isolation holds", () => {
