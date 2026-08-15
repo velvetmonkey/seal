@@ -61,15 +61,39 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
 
 const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
 
-test("status reports the kernel runtime and receipt, and names corruption", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-demo-"));
-  await writeKernelReceipt(path.join(root, ".cache", "seal"), path.join(root, ".local", "share"));
+// The END-TO-END path a user takes: run `seal demo`, then `seal status`, and
+// see the receipts. No --dir, no hand-built fixture, no copying — the demo
+// writes where a real run writes and status reads where it reads. This single
+// assertion catches BOTH defects at once: the wrong schema (status could not
+// parse a spine receipt) and the wrong place (the demo wrote to a temp dir
+// status never looks in). A test that builds its own input, or hands status a
+// receipt directly, would have caught neither.
+test("END TO END: seal demo then seal status shows the receipts, and names corruption", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-e2e-"));
+  const demo = run(["demo"], root, "y\n");
+  assert.equal(demo.code, 0, demo.out);
+
+  // The demo wrote its receipts to the store status reads — plant a corrupt
+  // file there too, then run status once.
   const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
   fs.writeFileSync(path.join(receiptDir, "corrupt.json"), "not json\n");
+
   const result = run(["status"], root);
-  assert.equal(result.code, 0);
-  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
-  assert.match(result.out, /^Receipts: 2 stored in /m);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Receipts: 4 stored in /m);
   assert.match(result.out, /^Receipt unreadable: corrupt\.json \(Unexpected token/m);
-  assert.match(result.out, /^Most recent: ALLOW at receipt time 1000 \(/m);
+  assert.doesNotMatch(result.out, /^Receipt unreadable: receipt-.*\(missing/m);
+  assert.match(result.out, /^Most recent \(by write time\): (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
+});
+
+test("status reports the kernel runtime as present when it is cached", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-runtime-"));
+  // The helper's job here is only to POPULATE the assurance-kit runtime cache;
+  // the kernel receipt it also writes is removed so this test asserts the
+  // runtime line, not receipt reading (that is the demo-driven test above).
+  const receipt = await writeKernelReceipt(path.join(root, ".cache", "seal"), path.join(root, ".local", "share"));
+  fs.rmSync(receipt);
+  const result = run(["status"], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
 });
