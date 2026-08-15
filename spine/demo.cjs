@@ -183,7 +183,7 @@ async function run(argv, sealBinPath) {
   const finalCount = readCount(countFile);
   if (finalCount !== "1") fail(`after the replay the child's count file reads ${finalCount}, not 1`);
   console.log(`BLOCKED   the shared proxy refused the replay: "${replayed.result.content[0].text}"`);
-  console.log(`one-use enforced: the consumed approval admitted no second call; child calls observed: still ${finalCount} (read from ${countFile})`);
+  console.log(`at-most-once enforced: the consumed approval could not release the replay; child calls observed: still ${finalCount} (read from ${countFile})`);
 
   for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
 
@@ -221,7 +221,7 @@ async function run(argv, sealBinPath) {
   console.log("");
   console.log("Seal is a gate, not a sandbox: it controls the path through it, and only that path.");
   await proxy.stop();
-  console.log(`summary: approval required once, executed once after approval, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
+  console.log(`summary: approval matched the effect, one child call observed, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
   const checkerPath = path.resolve(path.dirname(sealBinPath), "..", "checker", "seal-receipt-check.mjs");
   console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:");
   console.log(`  node ${JSON.stringify(checkerPath)} ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);

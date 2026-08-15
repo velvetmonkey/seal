@@ -3,7 +3,7 @@
 // Step 4 — the four beats, as a stranger would run them.
 //
 // Read this file top to bottom. It is the acceptance test for:
-//   install → demo (approve once, execute once) → check the receipt
+//   install → demo (approval bounds the effect) → check the receipt
 //   → protect one tool → unprotect (remove)
 // from the INSTALLED linux-x64 artifact, not from this checkout.
 //
@@ -147,7 +147,7 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   };
   assert.doesNotMatch(runEnv.PATH, /elan|cargo|\.local\/bin/i);
 
-  // DEMO — approve once, execute once, write a signed receipt.
+  // DEMO — observe one effect and refusal of the approval replay.
   assertNoForbiddenTool(process.execPath, [seal, "demo", "--dir", demoDir]);
   const demo = spawn(process.execPath, [seal, "demo", "--dir", demoDir], {
     stdio: ["pipe", "pipe", "pipe"],
