@@ -105,7 +105,11 @@ function status() {
   }
   observed.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const recent = observed[0];
-  console.log(`Most recent: ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
+  // "by write time" names the sort: this is the newest receipt file, not a
+  // verdict on any session. A demo writes several receipts (the last is the
+  // replay refusal), so an unqualified "Most recent: BLOCK" could be misread
+  // as "the run was blocked" when the approved call actually ran.
+  console.log(`Most recent (by write time): ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
 }
 function shellWord(value) {
   return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;

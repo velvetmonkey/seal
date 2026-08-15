@@ -83,7 +83,7 @@ test("END TO END: seal demo then seal status shows the receipts, and names corru
   assert.match(result.out, /^Receipts: 4 stored in /m);
   assert.match(result.out, /^Receipt unreadable: corrupt\.json \(Unexpected token/m);
   assert.doesNotMatch(result.out, /^Receipt unreadable: receipt-.*\(missing/m);
-  assert.match(result.out, /^Most recent: (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
+  assert.match(result.out, /^Most recent \(by write time\): (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
 });
 
 test("status reports the kernel runtime as present when it is cached", async () => {
