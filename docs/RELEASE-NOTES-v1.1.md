@@ -8,7 +8,7 @@ The release carries the approval contract and retry continuation through the sam
 
 ## What Seal does not cover
 
-Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal. ([README boundary list](../README.md); [scope-witness test](../test/demo-witness.test.cjs); merged [09967fc](https://github.com/velvetmonkey/seal/commit/09967fcf911ca30824e6e4fb3c51f15f7de7d138) and [e4d5ba1](https://github.com/velvetmonkey/seal/commit/e4d5ba15ca6cbffadc280ba6f54c110a587ed863))
+Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal. ([README boundary list](../README.md); [scope-witness test](../test/demo-witness.test.cjs); merged [09967fc](https://github.com/velvetmonkey/seal/commit/09967fcf911ca30824e6e4fb3c51f15f7de7d138) and [e4d5ba1](https://github.com/velvetmonkey/seal/commit/e4d5ba1173ccb864d3450bfda6d9d1ce686ce652))
 
 Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override. ([README boundary list](../README.md); [Protect test](../test/protect3b.test.cjs); merged [37fefe4](https://github.com/velvetmonkey/seal/commit/37fefe440af778f03b416798583a3a3e64f69094))
 
