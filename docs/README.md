@@ -43,6 +43,20 @@ the Node CLI this repository ships.
    check time, but copies the producer's canonicalisation rule and uses the
    same Node crypto platform; read what that does and does not establish.
 
+## I want to operate Seal day to day
+
+- [guide/README.md](guide/README.md) — the operating-guide entry point,
+  including prerequisites and a recommended route through the guide.
+- [guide/choosing-what-to-protect.md](guide/choosing-what-to-protect.md) — how
+  to choose the one tool that needs a gate and understand what protection
+  changes or leaves alone.
+- [guide/what-is-protected-right-now.md](guide/what-is-protected-right-now.md)
+  — how to read every `seal status` protection state and use `seal doctor`.
+- [guide/knowing-it-worked.md](guide/knowing-it-worked.md) — how to interpret
+  approval prompts, refusals, demo evidence, and receipt checks.
+- [guide/when-something-looks-wrong.md](guide/when-something-looks-wrong.md) —
+  what each refusal token means, what caused it, and what to do next.
+
 ## I want the design history
 
 Dated records of how v0.1.1 got its shape. Several describe designs that were
