@@ -23,7 +23,7 @@ tool that is not: the one that executes SQL on a shared database, issues a
 refund, merges the pull request. Seal puts its gate in front of exactly that
 one tool and passes the rest of that server's tools straight through.
 
-**Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
 What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
@@ -36,16 +36,16 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 e90b1462a4b4a5d8c080bca7df1bdc8666ff0937b475a32c1769e111f6d1f8c5 --bytes 6117433 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 08bcd0a1707c741afeb762f8a952aec54edf5024f2af64b3c927e85b9ada5bad --bytes 6117518 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/bridgetimeout/dist/seal-v0.1.1-linux-x64
-sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9
-bytes 6117433
-tree 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+sha256 08bcd0a1707c741afeb762f8a952aec54edf5024f2af64b3c927e85b9ada5bad
+bytes 6117518
+tree 81e86e344818e7846ad4bf2781933c80b536abe55a166d0c6d3ccb5a48669268
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/81e86e344818e7846ad4bf2781933c80b536abe55a166d0c6d3ccb5a48669268
 command: /tmp/seal-kernel-timeout-prefix/bin/seal
 tree: 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
 ```
@@ -165,7 +165,7 @@ that, and by handing you a command to check one of its receipts:
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate checker (V11-RECEIPT-01). It runs as its own process and shares no code with this binary at runtime. It ships in this same artifact, so it cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/81e86e344818e7846ad4bf2781933c80b536abe55a166d0c6d3ccb5a48669268/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
@@ -176,7 +176,7 @@ BLOCK receipt the refused replay produced, using your run's own paths. Here is
 that command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/81e86e344818e7846ad4bf2781933c80b536abe55a166d0c6d3ccb5a48669268/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -187,7 +187,7 @@ Change one recorded field and the same checker refuses:
 
 ```sh
 sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/home/.local/share/seal/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/81e86e344818e7846ad4bf2781933c80b536abe55a166d0c6d3ccb5a48669268/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -200,7 +200,7 @@ The checker's `--pubkey` is a trust input. The demo generated that key for this 
 
 ## Where this fits
 
-Seal v1.1 guards one tool of one stdio MCP server in one Claude Code project,
+Seal v0.1.1 guards one tool of one stdio MCP server in one Claude Code project,
 with you approving each exact call. That is narrow on purpose. It maps onto a
 specific, recognisable moment: a server you already use all day, where almost
 every call is harmless and one call is not.
@@ -327,7 +327,7 @@ In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> dem
 - The optional verification path fetches a separately pinned runtime from GitHub, so verification is bounded by that external repository and the integrity of the fetched bytes.
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix, so another process running as that user can replace the entry point before the next run even though the packaged store is read-only and integrity-checked.
-- Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
+- Seal v0.1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License
 

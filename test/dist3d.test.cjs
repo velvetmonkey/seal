@@ -181,7 +181,7 @@ test("clause 3: wrong architecture is a named refusal and changes nothing", () =
   );
   assert.equal(result.code, 1, result.out);
   assert.match(result.stderr, /UNSUPPORTED PLATFORM/);
-  assert.match(result.stderr, /Seal v1\.1 supports Linux x86-64 only/);
+  assert.match(result.stderr, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 only`));
   assert.match(result.stderr, /^REFUSE unsupported_platform:/m);
   assert.doesNotMatch(result.out, /experimental|may work|coming soon/i);
   assert.equal(fs.existsSync(path.join(prefix, "bin", "seal")), false);
