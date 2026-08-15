@@ -199,6 +199,8 @@ async function run(argv, sealBinPath) {
   console.log("Seal controlled this path:");
   console.log(`  demo client -> Seal -> demo MCP server -> ${TOOL}`);
   console.log("");
+  console.log("If a route to the same effect does not pass through the printed Seal path, Seal did not control it.");
+  console.log("");
   console.log("Now the demo performs a harmless direct local write");
   console.log("that does not cross the Seal gate.");
   console.log("");

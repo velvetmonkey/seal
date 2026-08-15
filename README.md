@@ -21,18 +21,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 a5c70c63f3a29ecd9d8183dd361a0f38d0a3934798d09e4a6f07a1126b09566d --bytes 117884 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 f16b5027d8640a85b08c6db471b8529fe4bcde4e3c468db93e8da800affb05ea --bytes 118021 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/atmostonce/dist/seal-v0.1.1-linux-x64
-sha256 a5c70c63f3a29ecd9d8183dd361a0f38d0a3934798d09e4a6f07a1126b09566d
-bytes 117884
-tree efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
+/tmp/seal-readme-run-1HDiJT/repo/dist/seal-v0.1.1-linux-x64
+sha256 f16b5027d8640a85b08c6db471b8529fe4bcde4e3c468db93e8da800affb05ea
+bytes 118021
+tree b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
-command: /tmp/seal-atmostonce-readable-RLswPf/home/.local/bin/seal
-tree: efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
+store: /tmp/seal-readme-run-1HDiJT/home/.local/lib/seal/store/b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f
+command: /tmp/seal-readme-run-1HDiJT/home/.local/bin/seal
+tree: b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -50,9 +50,9 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-V6GQD3/child/data.txt
-temporary demo directory: /tmp/seal-demo-V6GQD3 (remains after the demo for the printed checker command)
-child calls observed: 0 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-9tMtNR/child/data.txt
+temporary demo directory: /tmp/seal-demo-9tMtNR (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /tmp/seal-demo-9tMtNR/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -60,38 +60,40 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal spine demo wrote this line"
     Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-9tMtNR/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-9tMtNR/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-one-use held: the replay did not run the call again; child calls observed: still 1 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
-receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138389-2873325-0001-INPUT_REQUIRED.json
-receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138392-2873325-0002-ALLOW.json
-receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from /tmp/seal-demo-9tMtNR/child/data.txt.count)
+receipt written: /tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640688-2970144-0001-INPUT_REQUIRED.json
+receipt written: /tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640691-2970144-0002-ALLOW.json
+receipt written: /tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640694-2970144-0003-BLOCK.json
 
 SCOPE WITNESS
 
 Seal controlled this path:
   demo client -> Seal -> demo MCP server -> demo.mutate
 
+If a route to the same effect does not pass through the printed Seal path, Seal did not control it.
+
 Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json" --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
+  node "/tmp/seal-readme-run-1HDiJT/home/.local/lib/seal/store/b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f/checker/seal-receipt-check.mjs" "/tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640694-2970144-0003-BLOCK.json" --pubkey "/tmp/seal-demo-9tMtNR/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json" --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
+node "/tmp/seal-readme-run-1HDiJT/home/.local/lib/seal/store/b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f/checker/seal-receipt-check.mjs" "/tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640694-2970144-0003-BLOCK.json" --pubkey "/tmp/seal-demo-9tMtNR/receipt-signer.pub"
 ```
 
 ```
@@ -101,8 +103,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json > /tmp/seal-atmostonce-readable-RLswPf/tampered.json
-node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" /tmp/seal-atmostonce-readable-RLswPf/tampered.json --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-readme-run-1HDiJT/home/.local/share/seal/receipts/receipt-1786785640694-2970144-0003-BLOCK.json > /tmp/seal-readme-run-1HDiJT/tampered.json
+node "/tmp/seal-readme-run-1HDiJT/home/.local/lib/seal/store/b374625ecc3d8063beea9a8708480613549c402463a185b659f655f92d07784f/checker/seal-receipt-check.mjs" /tmp/seal-readme-run-1HDiJT/tampered.json --pubkey "/tmp/seal-demo-9tMtNR/receipt-signer.pub"
 ```
 
 ```
