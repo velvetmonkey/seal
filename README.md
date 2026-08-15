@@ -10,7 +10,7 @@ Seal is a gate, not a sandbox: it controls the path through it, and only that pa
 
 **Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
-What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
+What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
 Every command below was run, in this order, on one Linux x86-64 machine against the bytes pinned in [`SHA256SUMS`](SHA256SUMS). The output under each command is the output that run printed.
 
@@ -21,18 +21,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 3e33caaea77f159fd42929f2de8ea2dc4a45b8962bd79a790410f36140b28ba1 --bytes 117655 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 eefad734cc6a88caa034206f8e0ff5c4fb3f004e0588d025388c728ce880cca8 --bytes 117799 --prefix ~/.local
 ```
 
 ```
-/tmp/seal/dist/seal-v0.1.1-linux-x64
-sha256 3e33caaea77f159fd42929f2de8ea2dc4a45b8962bd79a790410f36140b28ba1
-bytes 117655
-tree 87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e
+/home/monkey/wt/coldfix/dist/seal-v0.1.1-linux-x64
+sha256 eefad734cc6a88caa034206f8e0ff5c4fb3f004e0588d025388c728ce880cca8
+bytes 117799
+tree b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
 installed seal 0.1.1 linux-x64
-store: /home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e
-command: /home/monkey/.local/bin/seal
-tree: 87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e
+store: /home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
+command: /home/monkey/scratch/coldwalkfix-run/home/.local/bin/seal
+tree: b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. If `~/.local/bin` is not on your PATH:
@@ -50,8 +50,8 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-MUeEEK/child/data.txt
-child calls observed: 0 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-wO8oyt/child/data.txt
+child calls observed: 0 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -59,15 +59,15 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal spine demo wrote this line"
     Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this approval was one-use and has already admitted a call"
-one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531992-2611546-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531995-2611546-0002-ALLOW.json
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json
+one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-wO8oyt/child/data.txt.count)
+receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431663-2729237-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431667-2729237-0002-ALLOW.json
+receipt written: /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -78,19 +78,19 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /home/monkey/.local/share/seal/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval required once, executed once after approval, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json" --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
+  node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json" --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json" --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
+node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" "/home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json" --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
 ```
 
 ```
@@ -100,8 +100,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json > /tmp/tampered.json
-node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/coldwalkfix-run/xdg/seal/receipts/receipt-1786771431670-2729237-0003-BLOCK.json > /home/monkey/scratch/coldwalkfix-run/tampered.json
+node "/home/monkey/scratch/coldwalkfix-run/home/.local/lib/seal/store/b458ae8afe36ac35a5eeabcf51977572aaec7665414227ce886a437f287ab0c5/checker/seal-receipt-check.mjs" /home/monkey/scratch/coldwalkfix-run/tampered.json --pubkey "/tmp/seal-demo-wO8oyt/receipt-signer.pub"
 ```
 
 ```
@@ -114,7 +114,7 @@ The checker's `--pubkey` is a trust input. The demo generated that key for this 
 
 ## 3. Protect
 
-`seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server so the sequence runs on a scratch directory; protecting a real project is the same two words, `seal protect SERVER TOOL`, against the file that is already there.
+`seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. Check that command first with `claude --version`. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server so the sequence runs on a scratch directory; protecting a real project is the same two words, `seal protect SERVER TOOL`, against the file that is already there.
 
 ```sh
 mkdir /tmp/myproject && cd /tmp/myproject
@@ -132,12 +132,12 @@ seal protect db demo.mutate
 ```
 
 ```
-Project .mcp.json hash before protect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
+Project .mcp.json hash before protect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
 Protection: PENDING RESTART db.demo.mutate
-State: /home/monkey/.local/share/seal/projects/31bb674eeb73f9c84ed476fbe8c450c2/state.json
+State: /home/monkey/scratch/coldwalkfix-run/xdg/seal/projects/21888168db00aa616c9c647108a4acfd/state.json
 ```
 
-`protect` installs a local Claude Code override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls are held for the same one-use approval the demo showed — the demo and the protected path run the same proxy and the same approval contract — and if the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+`protect` invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls are held for the same one-use approval the demo showed — the demo and the protected path run the same proxy and the same approval contract — and if the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
 Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
 
@@ -162,12 +162,12 @@ seal unprotect db
 ```
 
 ```
-Project .mcp.json hash before unprotect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
-Project .mcp.json hash after unprotect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
+Project .mcp.json hash before unprotect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
+Project .mcp.json hash after unprotect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
 Protection: - outside Seal
 ```
 
-The project file is byte-identical before and after; only the local override is removed. To remove Seal itself (the store is installed read-only, so make it writable first):
+The project file is byte-identical before and after. `unprotect` invokes Claude Code's `claude mcp remove` to remove only the local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain. To remove Seal itself (the store is installed read-only, so make it writable first):
 
 ```sh
 rm ~/.local/bin/seal
