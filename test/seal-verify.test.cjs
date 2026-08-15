@@ -13,7 +13,7 @@ function run(args, cache, dataHome, input = "") {
   } catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
 }
 
-const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
 test("seal verify accepts a receipt copied away from all generating state", async () => {
   const genCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-cache-"));

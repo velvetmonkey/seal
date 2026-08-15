@@ -293,7 +293,7 @@ process.exit(2);
   assert.equal(unprotectedRun.code, 0, unprotectedRun.out);
   assert.match(unprotectedRun.stdout, /outside Seal/);
 
-  const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+  const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
   const cache = path.join(built.out, "runtime-cache");
   const dataHome = path.join(home, ".local", "share");
   const receipt = await writeKernelReceipt(cache, path.join(built.out, "verify-home"));

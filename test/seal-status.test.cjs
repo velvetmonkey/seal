@@ -59,7 +59,7 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
   assert.doesNotMatch(result.out, /^Runtime: absent /m);
 });
 
-const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
 // The END-TO-END path a user takes: run `seal demo`, then `seal status`, and
 // see the receipts. No --dir, no hand-built fixture, no copying — the demo

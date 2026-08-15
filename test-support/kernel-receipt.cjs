@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
-const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "runtime-manifest.json"), "utf8"));
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "runtime-manifest.json"), "utf8"));
 
 async function ensureRuntime(cacheRoot) {
   const base = process.env.SEAL_RUNTIME_BASE_URL ||
