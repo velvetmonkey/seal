@@ -4,6 +4,42 @@ on:
   push:
   pull_request:
 jobs:
+  product-suite:
+    name: product-suite (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Run and count the complete product suite
+        shell: bash
+        run: |
+          output_file="$RUNNER_TEMP/seal-node-test.tap"
+          set +e
+          node --test 2>&1 | tee "$output_file"
+          node_status=${PIPESTATUS[0]}
+          set -e
+
+          gate_status=0
+          if (( node_status != 0 )); then
+            echo "::error::node --test exited $node_status"
+            gate_status=1
+          fi
+          if ! grep -Eq '^# fail 0$' "$output_file"; then
+            echo "::error::node --test did not report exactly zero failures"
+            gate_status=1
+          fi
+          if ! grep -Eq '^# tests 88$' "$output_file"; then
+            echo "::error::node --test did not run exactly 88 tests"
+            gate_status=1
+          fi
+          exit "$gate_status"
+
   docs-claims:
     runs-on: ubuntu-latest
     steps:
