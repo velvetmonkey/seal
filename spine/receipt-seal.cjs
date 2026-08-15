@@ -14,6 +14,15 @@ const crypto = require("node:crypto");
 const DOMAIN = "seal.receipt-seal/v1\n";
 const SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
+class ReceiptRefusal extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "ReceiptRefusal";
+    this.code = code;
+    this.refusal = true;
+  }
+}
+
 function sha256Hex(text) {
   return crypto.createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
 }
@@ -22,9 +31,16 @@ function sha256Hex(text) {
 // re-implements on its own. Kept local (no shared import) so the two
 // canonicalizers are genuinely separate implementations.
 function canonical(value) {
+  if (value === undefined) throw new ReceiptRefusal("receipt_value_absent", "receipt value is absent");
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new ReceiptRefusal("receipt_value_malformed", "receipt number is not finite");
+  }
   if (value === null || typeof value === "number" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "string") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value !== "object") {
+    throw new ReceiptRefusal("receipt_value_malformed", `receipt value has unsupported type ${typeof value}`);
+  }
   const names = Object.keys(value).sort((a, b) => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")));
   return `{${names.map((k) => `${JSON.stringify(k)}:${canonical(value[k])}`).join(",")}}`;
 }
@@ -58,4 +74,4 @@ function sealReceipt(signer, body) {
   return committed;
 }
 
-module.exports = { generateSigner, sealReceipt, canonical, sha256Hex, publicKeyHex };
+module.exports = { ReceiptRefusal, generateSigner, sealReceipt, canonical, sha256Hex, publicKeyHex };

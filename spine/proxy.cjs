@@ -151,14 +151,18 @@ function createProxy(options) {
     const approvalRequest = correlation === undefined ? undefined : { correlation };
     const decision = contract.retry({ tool, args, requestState, inputResponses });
     if (decision.kind === "refuse") {
-      emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail, approvalRequest });
+      const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
+      if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+      emitReceipt("BLOCK", frame, receiptExtra);
       respond(frame.id, refusalResult(decision.refusal, decision.detail));
       return;
     }
     // The contract has already journaled the one-use consumption (fsynced)
     // before we forward: a crash here loses an approval, never gains a call.
     if (!canForward(frame)) return;
-    emitReceipt("ALLOW", frame, { evidence: decision.evidence, approvalRequest });
+    const receiptExtra = { evidence: decision.evidence };
+    if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+    emitReceipt("ALLOW", frame, receiptExtra);
     child.stdin.write(JSON.stringify({
       jsonrpc: "2.0", id: frame.id, method: frame.method,
       params: { name: tool, arguments: args },
