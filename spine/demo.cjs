@@ -112,7 +112,12 @@ async function run(argv, sealBinPath) {
     nextId += 1;
     const id = nextId;
     const promise = new Promise((resolve) => pendingById.set(id, resolve));
-    proxy.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+    try {
+      proxy.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+    } catch (error) {
+      pendingById.delete(id);
+      return proxy.stop().then(() => Promise.reject(error));
+    }
     return promise;
   }
   const baseParams = () => ({ name: TOOL, arguments: { line: DEMO_LINE } });

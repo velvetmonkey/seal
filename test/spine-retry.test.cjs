@@ -133,6 +133,76 @@ function callParams(line, extraParams = {}) {
 }
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 
+function receiptFor(dir, decision) {
+  const receipts = path.join(dir, "receipts");
+  const file = fs.readdirSync(receipts).find((name) => name.endsWith(`-${decision}.json`));
+  assert.ok(file, `expected a ${decision} receipt in ${receipts}`);
+  return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
+}
+
+test("INPUT_REQUIRED receipt records a non-replayable approval correlation", async (t) => {
+  const dir = tmpdir("seal-receipt-correlation-");
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+
+  proxy.stdin.write(JSON.stringify({ ...callParams("receipt correlation"), id: 1 }) + "\n");
+  const opened = await responseFor(1);
+  assert.equal(opened.result.resultType, "input_required");
+  const receipt = receiptFor(dir, "INPUT_REQUIRED");
+  assert.ok(!Object.hasOwn(receipt, "requestState"), "a receipt must never carry the retry credential");
+  assert.match(receipt.approvalRequest?.correlation || "", /^seal-receipt-correlation\/v1\.[0-9a-f]{64}$/);
+  assert.notEqual(receipt.approvalRequest.correlation, opened.result.requestState);
+
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
+
+test("approved retry receipt correlates with its INPUT_REQUIRED receipt", async (t) => {
+  const dir = tmpdir("seal-receipt-approved-retry-");
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+
+  proxy.stdin.write(JSON.stringify({ ...callParams("approved correlation"), id: 1 }) + "\n");
+  const opened = await responseFor(1);
+  proxy.stdin.write(JSON.stringify({ ...callParams("approved correlation", { requestState: opened.result.requestState, inputResponses: ACCEPT }), id: 2 }) + "\n");
+  const flowed = await responseFor(2);
+  assert.ok(!flowed.result.isError, JSON.stringify(flowed));
+  assert.equal(readCount(`${dataFile}.count`), "1");
+  assert.equal(receiptFor(dir, "ALLOW").approvalRequest.correlation, receiptFor(dir, "INPUT_REQUIRED").approvalRequest.correlation);
+
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
+
+test("retry using only an INPUT_REQUIRED receipt is refused as state_malformed", async (t) => {
+  const dir = tmpdir("seal-receipt-only-retry-");
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+
+  // Establish the child-owned count file before asserting that refusal left it
+  // at zero. Without this round trip, Node 20 can observe the refusal before
+  // the spawned demo server has created its startup count file.
+  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: {} }) + "\n");
+  await responseFor(90);
+  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry"), id: 1 }) + "\n");
+  await responseFor(1);
+  const receipt = receiptFor(dir, "INPUT_REQUIRED");
+  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry", { requestState: receipt.approvalRequest.correlation, inputResponses: ACCEPT }), id: 2 }) + "\n");
+  const refused = await responseFor(2);
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /state_malformed/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
+
 test("seal __proxy: input_required, approved retry flows once, replay refused; counts from the child's file", async (t) => {
   const dir = tmpdir("seal-spine2-proxy-");
   const dataFile = path.join(dir, "data.txt");

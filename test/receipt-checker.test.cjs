@@ -7,12 +7,33 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn, spawnSync, execFileSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-check.mjs");
+
+test("receipt canonicaliser refuses an absent value by name and the caller exits promptly", () => {
+  const started = Date.now();
+  const probe = spawnSync(process.execPath, ["-e", `
+    const { canonical } = require(${JSON.stringify(path.join(ROOT, "spine", "receipt-seal.cjs"))});
+    try {
+      canonical(undefined);
+      process.exit(0);
+    } catch (error) {
+      if (error.refusal) {
+        console.error(\`REFUSE \${error.code}: \${error.message}\`);
+        process.exit(1);
+      }
+      throw error;
+    }
+  `], { encoding: "utf8", timeout: 1000 });
+
+  assert.ok(Date.now() - started < 1000, "absent receipt input must not leave its caller open");
+  assert.equal(probe.status, 1);
+  assert.match(probe.stderr, /REFUSE receipt_value_absent/);
+});
 
 // Run seal demo once; return the ALLOW receipt path and the pubkey sidecar.
 function makeRealReceipt() {

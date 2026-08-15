@@ -16,6 +16,7 @@
 // rejects the held shape on a modern connection, and authorization now
 // lives entirely in the contract's own state.
 const { spawn } = require("node:child_process");
+const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const readline = require("node:readline");
 
@@ -44,6 +45,20 @@ function createProxy(options) {
   const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
+  // This identifier exists only to join receipt records from this proxy
+  // session. It is random, is not derived from the approval handle, and is
+  // discarded at process exit (where pending approvals are refused anyway).
+  const receiptCorrelations = new Map();
+
+  function receiptCorrelation(requestState) {
+    return receiptCorrelations.get(requestState);
+  }
+
+  function mintReceiptCorrelation(requestState) {
+    const correlation = `seal-receipt-correlation/v1.${randomBytes(32).toString("hex")}`;
+    receiptCorrelations.set(requestState, correlation);
+    return correlation;
+  }
 
   const childCommand = childArgv[0];
   if ((childCommand.includes("/") || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
@@ -123,23 +138,31 @@ function createProxy(options) {
         respond(frame.id, refusalResult(decision.refusal, decision.detail));
         return;
       }
-      emitReceipt("INPUT_REQUIRED", frame, { requestState: decision.result.requestState });
+      emitReceipt("INPUT_REQUIRED", frame, {
+        approvalRequest: { correlation: mintReceiptCorrelation(decision.result.requestState) },
+      });
       respond(frame.id, decision.result);
       return;
     }
 
     // The retry: client-supplied state and answer, judged only against the
     // contract's own record.
+    const correlation = receiptCorrelation(requestState);
+    const approvalRequest = correlation === undefined ? undefined : { correlation };
     const decision = contract.retry({ tool, args, requestState, inputResponses });
     if (decision.kind === "refuse") {
-      emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+      const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
+      if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+      emitReceipt("BLOCK", frame, receiptExtra);
       respond(frame.id, refusalResult(decision.refusal, decision.detail));
       return;
     }
     // The contract has already journaled the one-use consumption (fsynced)
     // before we forward: a crash here loses an approval, never gains a call.
     if (!canForward(frame)) return;
-    emitReceipt("ALLOW", frame, { evidence: decision.evidence });
+    const receiptExtra = { evidence: decision.evidence };
+    if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+    emitReceipt("ALLOW", frame, receiptExtra);
     child.stdin.write(JSON.stringify({
       jsonrpc: "2.0", id: frame.id, method: frame.method,
       params: { name: tool, arguments: args },
