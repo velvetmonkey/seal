@@ -8,6 +8,15 @@ Seal puts an approval gate in front of one tool of one MCP server. You approve o
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 
+The authorization rule is PROVED. The state machine is TESTED. On a guarded
+retry, Node owns handle lookup, freshness, protocol shape, and durable one-use
+consumption; the exact-call authorization rule runs through the pinned vendored
+WASM, and its answer is required before forwarding. Kernel failure or a
+Node/kernel disagreement refuses—there is no JavaScript authorization
+fallback. The kernel configuration is currently signed by an Ed25519 key
+generated inside the same worker that submits it. That is demo-grade
+self-authorization, not an externally trusted production config key.
+
 The situation it is built for: your project's `.mcp.json` has an MCP server
 whose tools are mostly harmless — schema reads, lookups, drafts — and one
 tool that is not: the one that executes SQL on a shared database, issues a
@@ -27,18 +36,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 678dc5e046dadc03fe440449296eca6856fb50d38edc298af0ed9d36723e5326 --bytes 129409 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 e90b1462a4b4a5d8c080bca7df1bdc8666ff0937b475a32c1769e111f6d1f8c5 --bytes 6117433 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/tooltimeout/dist/seal-v0.1.1-linux-x64
-sha256 678dc5e046dadc03fe440449296eca6856fb50d38edc298af0ed9d36723e5326
-bytes 129409
-tree 3363fadbbd191bff177f70f7975a1cf5437cbbfe8b39238ae5e9680387fbdc43
+/home/monkey/wt/bridgetimeout/dist/seal-v0.1.1-linux-x64
+sha256 7d14fc7be8a2fc0ecd23e3d3150cc492578ee9946ffe5bb32b3e13e25a1df5f9
+bytes 6117433
+tree 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
 installed seal 0.1.1 linux-x64
-store: /home/monkey/scratch/tooltimeout-readme-20260815/prefix-final/lib/seal/store/113203d5d60beefb35859913a8feaf4b7ee59387288f61bec3c8f07f3fa44328
-command: /home/monkey/scratch/tooltimeout-readme-20260815/prefix-final/bin/seal
-tree: 3363fadbbd191bff177f70f7975a1cf5437cbbfe8b39238ae5e9680387fbdc43
+store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
+command: /tmp/seal-kernel-timeout-prefix/bin/seal
+tree: 55f7f0c881c62f0656bd7b368637967d54c2b625a407efd4a3d4c00b712c0269
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:

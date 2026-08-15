@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 678dc5e046dadc03fe440449296eca6856fb50d38edc298af0ed9d36723e5326 --bytes 129409 --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 e90b1462a4b4a5d8c080bca7df1bdc8666ff0937b475a32c1769e111f6d1f8c5 --bytes 6117433 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
@@ -42,6 +42,15 @@ The payload is the current product: `bin/seal`, the mediation and
 receipt components (including the receipt-sealing module, which only
 the demo path invokes today — the protected path writes unsigned
 receipts), the approval contract, and `checker/seal-receipt-check.mjs`.
+It also includes the pinned vendored kernel and the fail-closed Node adapter
+that invokes it. The authorization rule is PROVED. The state machine is
+TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
+accepted by `seal_init`; this is demo-grade self-authorization, not a
+production config-signing trust root. Corrupt or unpinned WASM refuses and has
+no JavaScript authorization fallback. Each kernel worker invocation has a
+5000ms product-enforced deadline and is killed if it exceeds that deadline; the
+guarded call refuses as `kernel_execution_refused` and does not fall back to
+Node authorization.
 The demo prints the absolute path of that packaged checker. The launcher
 never searches `PATH` for another `seal`.
 

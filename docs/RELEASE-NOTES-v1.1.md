@@ -6,6 +6,16 @@ Seal puts an approval gate in front of one selected tool of one MCP server. An a
 
 The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths. ([approval-contract test](../test/approval-contract.test.cjs); [retry-continuation test](../test/spine-retry.test.cjs); merged [00176cd](https://github.com/velvetmonkey/seal/commit/00176cd88e8a20e50239342c05f2eafa3830520f) and [4228744](https://github.com/velvetmonkey/seal/commit/42287448e51f75f43250782faec59bcb23f1d7b8))
 
+The authorization rule is PROVED. The state machine is TESTED. The Node
+product now calls the pinned vendored WASM for the exact-call authorization
+sub-question and refuses its BLOCK, failure, integrity mismatch, or
+disagreement with Node. Handle lifetime, retry protocol state, and durable
+one-use consumption remain tested Node logic. The config accepted by
+`seal_init` is signed using an Ed25519 key generated inside the same worker;
+that is demo-grade self-authorization, not an externally trusted production
+config key. ([adapter implementation](../contract/contract.cjs);
+[architecture split](ARCHITECTURE.md))
+
 ## What Seal does not cover
 
 Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal. ([README boundary list](../README.md); [scope-witness test](../test/demo-witness.test.cjs); merged [09967fc](https://github.com/velvetmonkey/seal/commit/09967fcf911ca30824e6e4fb3c51f15f7de7d138) and [e4d5ba1](https://github.com/velvetmonkey/seal/commit/e4d5ba1173ccb864d3450bfda6d9d1ce686ce652))
@@ -21,6 +31,10 @@ The checker ships inside the same install artifact. It does not import Seal at c
 These notes make no stranger-verification claim. They also do not use the Lean or family-assurance material as evidence for this Node artifact. ([artifact inheritance boundary](ARTIFACT-INHERITANCE.md); [distribution test](../test/dist3d.test.cjs))
 
 ## What changed
+
+- The guarded retry path now uses the proved WASM authorization kernel through
+  a named fail-closed adapter. There is no JavaScript authorization fallback.
+  ([adapter implementation](../contract/contract.cjs))
 
 - The approval contract now binds the displayed call to a retry and records a consumed approval across a restart; altered, expired, malformed, declined, and replayed continuations have named refusals. ([approval-contract test](../test/approval-contract.test.cjs); [retry-continuation test](../test/spine-retry.test.cjs); merged [00176cd](https://github.com/velvetmonkey/seal/commit/00176cd88e8a20e50239342c05f2eafa3830520f) and [4228744](https://github.com/velvetmonkey/seal/commit/42287448e51f75f43250782faec59bcb23f1d7b8))
 

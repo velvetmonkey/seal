@@ -1,5 +1,5 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
-> For its configured guarded tool, this repository's Node CLI uses the JavaScript retry contract for authorization and also requires its forwarding checks to pass.
+> The authorization rule is PROVED. The state machine is TESTED.
 > For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).
 
 # Why a proof, not a prompt: Seal vs heuristic guards

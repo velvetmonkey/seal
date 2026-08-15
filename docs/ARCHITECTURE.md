@@ -1,5 +1,5 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
-> For its configured guarded tool, this repository's Node CLI uses the JavaScript retry contract for authorization and also requires its forwarding checks to pass.
+> The authorization rule is PROVED. The state machine is TESTED.
 > For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).
 
 # Seal family architecture — one picture
@@ -74,3 +74,27 @@ flowchart LR
 Claim-status per box: [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
 Fleet links are public and resolve for everyone; `witness-check` remains proprietary.
+
+## Shipped Node bridge
+
+The shipped Node CLI keeps continuation state in Node and sends only the
+authorization sub-question through the vendored WASM. A guarded retry follows
+`spine/proxy.cjs` → `contract/contract.cjs` →
+`contract/kernel-authorization.cjs` →
+`test-support/runtime-fixture/kernel/runner.cjs` → `seal_decide`. The WASM
+answer is load-bearing: BLOCK, unreadable output, a hash mismatch, or a
+Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
+
+Node still owns opaque-handle lookup, status and expiry, connection-epoch
+currency, the `inputResponses` protocol shape, and journal-before-forward
+one-use consumption. The kernel answers exact tool, canonical arguments,
+issue-time project/server binding as supplied by Node, and the affirmative
+acceptance translated to its target commitment. Therefore the accurate product
+claim is exactly: The authorization rule is PROVED. The state machine is TESTED.
+
+The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
+stub envelope. It generates an Ed25519 key inside the kernel worker and signs
+the config immediately before `seal_init`. That gets the real kernel onto the
+product path without weakening signature verification, but it is still
+demo-grade, self-authorized configuration signing—not an externally trusted
+production configuration key.

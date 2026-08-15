@@ -107,6 +107,39 @@ with no readable approve value. Usually a client defect rather than a user
 action. Call again; if it repeats, the client is not returning the form
 faithfully.
 
+### `authorization_disagreement`
+
+Node and the WASM kernel gave different answers to an authorization row. The
+detail names the side that refused. Seal fails closed and does not consume or
+forward the call. Preserve the receipt and report the disagreement; retrying
+without understanding it is not a remedy.
+
+### `kernel_integrity_refused`
+
+The vendored WASM is missing, unreadable, or its SHA-256 does not match the
+published pin. Seal does not fall back to JavaScript authorization. Restore the
+installed artifact from bytes that match the trusted distribution pin.
+
+### `kernel_manifest_refused`
+
+The runtime manifest is missing, unreadable, malformed, or lacks a valid WASM
+pin. Restore a complete pinned installation; do not invent a replacement hash.
+
+### `kernel_execution_refused`
+
+The isolated kernel worker could not start, exceeded its 5000ms execution
+deadline, `seal_init` rejected its signed configuration, or kernel execution
+failed. Nothing forwards. A deadline refusal includes the exceeded limit in
+milliseconds, which distinguishes a hung worker from other execution failures.
+Preserve the full detail and report it; this may expose a slow or damaged
+runtime, or an incompatible kernel/config boundary.
+
+### `kernel_output_refused`
+
+The kernel worker returned unreadable output or a verdict other than ALLOW or
+BLOCK. Seal treats silence and malformed output as denial. Preserve the output
+detail and report it.
+
 ### `unrenderable_effect`
 
 Seal refused to *ask* for approval, because the complete effect could not be

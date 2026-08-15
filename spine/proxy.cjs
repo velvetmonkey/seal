@@ -13,8 +13,8 @@
 // Transport (child spawn/lifecycle, line framing, passthrough) is harvested
 // from the feat/spine1 proxy; that branch's held-protocol approval flow
 // (Ed25519 token files, approvals NDJSON) is discarded — Claude Code
-// rejects the held shape on a modern connection, and authorization now
-// lives entirely in the contract's own state.
+// rejects the held shape on a modern connection. Retry state lives in the
+// contract; its authorization sub-question is delegated to the proved kernel.
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
