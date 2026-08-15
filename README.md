@@ -27,18 +27,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 2b2c2dbfab355d9f91ae80f1d67339d91de185b4586a3e57ab1f72bc72abbd63 --bytes 128383 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 e86223ed876d6d99864c2162e8acd08572225003ec145c821827f1522dc94ddd --bytes 129206 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/tooltimeout/dist/seal-v0.1.1-linux-x64
-sha256 2b2c2dbfab355d9f91ae80f1d67339d91de185b4586a3e57ab1f72bc72abbd63
-bytes 128383
-tree 113203d5d60beefb35859913a8feaf4b7ee59387288f61bec3c8f07f3fa44328
+sha256 e86223ed876d6d99864c2162e8acd08572225003ec145c821827f1522dc94ddd
+bytes 129206
+tree 2bcfd74fcefc9391941ed85758d0982c2e76ba5b3f7b5a8e91e0fb819dc4f2bb
 installed seal 0.1.1 linux-x64
 store: /home/monkey/scratch/tooltimeout-readme-20260815/prefix-final/lib/seal/store/113203d5d60beefb35859913a8feaf4b7ee59387288f61bec3c8f07f3fa44328
 command: /home/monkey/scratch/tooltimeout-readme-20260815/prefix-final/bin/seal
-tree: 113203d5d60beefb35859913a8feaf4b7ee59387288f61bec3c8f07f3fa44328
+tree: 2bcfd74fcefc9391941ed85758d0982c2e76ba5b3f7b5a8e91e0fb819dc4f2bb
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
