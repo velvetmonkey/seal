@@ -4,7 +4,7 @@
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
-Seal puts an approval gate in front of one tool of one MCP server. A guarded call is blocked until you approve that exact call, once. Then it runs once, and Seal writes a signed receipt.
+Seal puts an approval gate in front of one tool of one MCP server. A guarded call is blocked until you approve that exact call, once. Then it runs once, and Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
 
 **Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
@@ -106,7 +106,7 @@ node "/home/monkey/.local/lib/seal/store/38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0
 REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
 ```
 
-The checker's `--pubkey` is a trust input. The demo wrote that key next to the receipt, so the check above establishes self-consistency and nothing more. For a receipt check to mean something, the verifying key must reach you from a source you already trust — not from the sealer, and not from beside the receipt.
+The checker's `--pubkey` is a trust input. The demo generated that key for this one run and wrote it next to the receipt, so the check above establishes self-consistency and nothing more. For a receipt check to mean something, the verifying key must reach you from a source you already trust — not from the sealer, and not from beside the receipt. This signed-receipt cycle is the demo's today: the protected path below writes its receipts without a signature, and the same checker refuses them.
 
 > Seal enforces that only a matching, one-use approval response can release the exact effect; on the Claude Code path, it trusts Claude Code to present that request to a human and faithfully return the human's choice, and does not claim to distinguish a human click from a client-generated acceptance.
 
@@ -136,6 +136,8 @@ State: /home/monkey/.local/share/seal/projects/31bb674eeb73f9c84ed476fbe8c450c2/
 ```
 
 `protect` installs a local Claude Code override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls are held for the same one-use approval the demo showed — the demo and the protected path run the same proxy and the same approval contract — and if the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+
+Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
 
 Seal states its trust assumption instead of decorating it with a green tick:
 
@@ -178,7 +180,8 @@ Receipts and per-project state remain under `~/.local/share/seal/`. They are you
 - One project, one server, one selected tool. Everything else — Bash, network, subprocesses, other tools and other servers — is outside Seal, and other controls may or may not exist there.
 - Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 - An approval matches one exact call — parsed JSON arguments, one use, a short expiry — and the dialog shows that scope before you answer. A consumed approval admits no second call.
-- A receipt is a signed claim, and checking it is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
+- Receipts from the protected path are unsigned today, and the shipped checker refuses them (`REFUSE unsealed`). Both paths write receipt files; only the demo signs them, with a key generated fresh for that run and gone with it. Until an operator signing key exists, a protected-path receipt is a plain local record, not checkable evidence.
+- Checking a signed receipt is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
 - Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License

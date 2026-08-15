@@ -87,6 +87,13 @@ if (originCount !== 1) fail(`README must carry the canonical approval-origin sen
 // The platform sentence, verbatim (roadmap section 7), stated plainly.
 requireMatch(readme, /\*\*Seal v1\.1 supports Linux x86-64 only\. macOS, Windows, Linux ARM and other platforms are not supported in this release\.\*\*/, 'README must state the Linux x86-64-only platform sentence verbatim');
 
+// The signed-receipt claim was the fifth false user-visible string in this
+// build: the demo signs receipts with a per-run key, the protected path
+// passes no signer (spine/proxy-cli.cjs) and the shipped checker refuses its
+// receipts. The README may only tell that story split by path.
+if (/writes a signed receipt/.test(readme)) fail('README claims the gate writes a signed receipt; only the demo path signs today, and the README must say which path');
+if (!readme.includes('REFUSE unsealed')) fail('README must disclose that the shipped checker refuses protected-path receipts (REFUSE unsealed) until an operator signing key exists');
+
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording
 // from git history and update this gate in the same change.
