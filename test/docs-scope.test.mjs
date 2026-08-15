@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const COMMON_SCOPE_LINES = [
-  "> For its configured guarded tool, this repository's Node CLI uses the JavaScript retry contract for authorization and also requires its forwarding checks to pass.",
+  "> The authorization rule is PROVED. The state machine is TESTED.",
   "> For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).",
 ];
 const FAMILY_PRODUCT_SCOPE_BLOCK = [

@@ -28,6 +28,7 @@
 const crypto = require("node:crypto");
 const { canonicalString, sha256Hex } = require("./canonical.cjs");
 const { renderApprovalMessage } = require("./renderer.cjs");
+const { createKernelAuthorizationAdapter, KernelAuthorizationError } = require("./kernel-authorization.cjs");
 
 const HANDLE_PATTERN = /^seal-rs1\.[0-9a-f]{64}$/;
 const INPUT_REQUEST_KEY = "approval";
@@ -46,6 +47,11 @@ const REFUSALS = Object.freeze({
   ARGUMENTS_ALTERED: "arguments_altered",
   RESPONSE_MALFORMED: "response_malformed",
   DECLINED: "declined",
+  AUTHORIZATION_DISAGREEMENT: "authorization_disagreement",
+  KERNEL_INTEGRITY_REFUSED: "kernel_integrity_refused",
+  KERNEL_MANIFEST_REFUSED: "kernel_manifest_refused",
+  KERNEL_EXECUTION_REFUSED: "kernel_execution_refused",
+  KERNEL_OUTPUT_REFUSED: "kernel_output_refused",
 });
 
 function createApprovalContract({
@@ -55,6 +61,7 @@ function createApprovalContract({
   projectId = "default-project",
   serverId = "default-server",
   store,
+  kernelAdapter = createKernelAuthorizationAdapter(),
 } = {}) {
   // A fresh random epoch per construction: pendings from any earlier epoch
   // are invalid by definition — a restart forces a fresh call.
@@ -190,25 +197,25 @@ function createApprovalContract({
       return refuse(REFUSALS.EXPIRED, "the approval window closed before the retry arrived");
     }
 
-    // 3. Require the same project, server and connection epoch.
-    if ((retryProject ?? projectId) !== record.project_id || (retryServer ?? serverId) !== record.server_id) {
-      return refuse(REFUSALS.CONTEXT_MISMATCH, "the retry arrived for a different project or server than the one bound at issue time");
-    }
+    // 3. Connection currency is Node state. Project/server binding is retained
+    // for the authorization adapter below.
+    const contextMatches = (retryProject ?? projectId) === record.project_id &&
+      (retryServer ?? serverId) === record.server_id;
     if (record.connection_epoch !== connectionEpoch) {
       return refuse(REFUSALS.RESTART_INVALIDATED, "this continuation predates a restart; send a fresh call");
     }
 
-    // 4-5. Recompute the canonical parsed effect and compare to the STORED bytes.
-    if (tool !== record.tool) return refuse(REFUSALS.TOOL_ALTERED, "the retry names a different tool than the one bound at issue time");
+    // 4-5. Retain the exact issue-time and retry effects. Node computes its
+    // side of the authorization comparison; the kernel must separately
+    // agree before this transaction may consume or forward.
+    const toolMatches = tool === record.tool;
     let canonicalEffect;
     try {
       canonicalEffect = canonicalString({ args: args ?? {}, tool });
     } catch (error) {
       return refuse(REFUSALS.ARGUMENTS_ALTERED, `retry arguments have no canonical form: ${error.message}`);
     }
-    if (canonicalEffect !== record.canonical_effect_bytes) {
-      return refuse(REFUSALS.ARGUMENTS_ALTERED, "the retry effect differs from the exact effect shown for approval");
-    }
+    const argumentsMatch = canonicalEffect === record.canonical_effect_bytes;
 
     // 6. Require exactly the expected inputResponses entry.
     if (inputResponses === null || typeof inputResponses !== "object") {
@@ -234,6 +241,38 @@ function createApprovalContract({
       return refuse(REFUSALS.RESPONSE_MALFORMED, "the answer is neither accept, decline, nor cancel with a readable approve value");
     }
 
+    const nodeAuthorized = contextMatches && toolMatches && argumentsMatch;
+    let kernel;
+    try {
+      kernel = kernelAdapter.authorize({
+        epoch: 1,
+        issuedTool: record.tool,
+        issuedArgs: JSON.parse(record.canonical_effect_bytes).args,
+        retryTool: tool,
+        retryArgs: args ?? {},
+        accepted: nodeAuthorized,
+        now: Math.floor(now() / 1000),
+      });
+    } catch (error) {
+      if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
+        return refuse(error.code, `${error.message}; Node authorization did not override the kernel refusal`);
+      }
+      return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, `${error.message}; Node authorization did not override the kernel refusal`);
+    }
+    const kernelAuthorized = kernel.verdict === "ALLOW";
+    if (nodeAuthorized !== kernelAuthorized) {
+      const side = nodeAuthorized ? "kernel" : "Node";
+      return refuse(
+        REFUSALS.AUTHORIZATION_DISAGREEMENT,
+        `${side} refused while ${side === "kernel" ? "Node" : "kernel"} allowed; authorization disagreement fails closed`,
+      );
+    }
+    if (!nodeAuthorized) {
+      if (!contextMatches) return refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding");
+      if (!toolMatches) return refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool");
+      return refuse(REFUSALS.ARGUMENTS_ALTERED, "Node and kernel refused: retry effect differs from the exact issue-time effect");
+    }
+
     // 7. Atomically consume BEFORE the caller may forward anything.
     setStatus(record, "consumed");
     record.consumed_at = now();
@@ -247,6 +286,14 @@ function createApprovalContract({
         same_connection_epoch: true,
         one_use_consumed_now: true,
         approval_nonce: record.approval_nonce,
+        authorization_rule: "PROVED",
+        state_machine: "TESTED",
+        kernel: {
+          verdict: kernel.verdict,
+          raw: kernel.raw,
+          issued_target: kernel.issued_target,
+          wasm_sha256: kernel.wasm_sha256,
+        },
         // The honest limit, verbatim in the evidence: the client is stopped
         // from altering the continuation; a human click is not proven.
         human_present: "unknown",
