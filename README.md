@@ -4,6 +4,19 @@
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
+## Contents
+
+- [1. Install](#1-install)
+- [2. Demo](#2-demo)
+- [Where this fits](#where-this-fits)
+- [3. Protect](#3-protect)
+- [4. Remove](#4-remove)
+- [What Seal covers, and what it does not](#what-seal-covers-and-what-it-does-not)
+- [License](#license)
+
+The [full documentation index](docs/README.md) links the operating guide,
+evidence, limitations, and design history.
+
 Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
