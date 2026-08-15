@@ -19,18 +19,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 f2ab71e328346c017ed74369ccebcfd4541ea75dd64fa178519095c388094f96 --bytes 114577 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 8700070e6254e6da7e7f9bdf2b7a0db5644fca47d3982529018ef3d5b37e860a --bytes 115728 --prefix ~/.local
 ```
 
 ```
 /tmp/seal/dist/seal-v0.1.1-linux-x64
-sha256 f2ab71e328346c017ed74369ccebcfd4541ea75dd64fa178519095c388094f96
-bytes 114577
-tree d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+sha256 8700070e6254e6da7e7f9bdf2b7a0db5644fca47d3982529018ef3d5b37e860a
+bytes 115728
+tree 38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139
 installed seal 0.1.1 linux-x64
-store: /home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+store: /home/monkey/.local/lib/seal/store/38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139
 command: /home/monkey/.local/bin/seal
-tree: d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+tree: 38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. If `~/.local/bin` is not on your PATH:
@@ -48,8 +48,8 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-2SDY78/child/data.txt
-child calls observed: 0 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-HObVLN/child/data.txt
+child calls observed: 0 (read from /tmp/seal-demo-HObVLN/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -57,15 +57,15 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal spine demo wrote this line"
     Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-2SDY78/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-HObVLN/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-HObVLN/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this approval was one-use and has already admitted a call"
-one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
-receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575885-2448664-0001-INPUT_REQUIRED.json
-receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575888-2448664-0002-ALLOW.json
-receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json
+one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-HObVLN/child/data.txt.count)
+receipt written: /tmp/seal-demo-HObVLN/receipts/receipt-1786757238656-2461245-0001-INPUT_REQUIRED.json
+receipt written: /tmp/seal-demo-HObVLN/receipts/receipt-1786757238659-2461245-0002-ALLOW.json
+receipt written: /tmp/seal-demo-HObVLN/receipts/receipt-1786757238662-2461245-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -76,19 +76,19 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /tmp/seal-demo-2SDY78/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /tmp/seal-demo-HObVLN/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval required once, executed once after approval, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" "/tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json" --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+  node "/home/monkey/.local/lib/seal/store/38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139/checker/seal-receipt-check.mjs" "/tmp/seal-demo-HObVLN/receipts/receipt-1786757238662-2461245-0003-BLOCK.json" --pubkey "/tmp/seal-demo-HObVLN/receipt-signer.pub"
   Note: this demo wrote that key in the same folder as the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" "/tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json" --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+node "/home/monkey/.local/lib/seal/store/38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139/checker/seal-receipt-check.mjs" "/tmp/seal-demo-HObVLN/receipts/receipt-1786757238662-2461245-0003-BLOCK.json" --pubkey "/tmp/seal-demo-HObVLN/receipt-signer.pub"
 ```
 
 ```
@@ -98,8 +98,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json > /tmp/tampered.json
-node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-demo-HObVLN/receipts/receipt-1786757238662-2461245-0003-BLOCK.json > /tmp/tampered.json
+node "/home/monkey/.local/lib/seal/store/38b27ac6927a91ab1ca3fe7dc9fe9c8a632e3f0500ceb9f26198fdacd424c139/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-HObVLN/receipt-signer.pub"
 ```
 
 ```
