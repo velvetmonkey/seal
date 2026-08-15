@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Live family claims drift
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+jobs:
+  live-family-claims:
+    name: live sibling comparison
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare shared claims blocks across sibling repositories
+        run: node scripts/claims-drift-family.mjs
+        env:
+          FAMILY_CLAIMS_LIVE: '1'

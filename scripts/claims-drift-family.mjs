@@ -22,8 +22,8 @@ function shared(source, repository) {
     const end = `// FAMILY-SHARED:END ${name}`;
     const first = source.indexOf(begin);
     const last = source.indexOf(end);
-    if (first === -1 || last === -1 || last < first) throw new Error(`${repository}: shared ${name} region missing or malformed`);
-    if (source.indexOf(begin, first + 1) !== -1 || source.indexOf(end, last + 1) !== -1) throw new Error(`${repository}: shared ${name} region repeated`);
+    if (first === -1 || last === -1 || last < first) throw new Error(`${repository} shared claims-drift subject drifted: shared ${name} region missing or malformed`);
+    if (source.indexOf(begin, first + 1) !== -1 || source.indexOf(end, last + 1) !== -1) throw new Error(`${repository} shared claims-drift subject drifted: shared ${name} region repeated`);
     return source.slice(first, last + end.length);
   });
   return regions.join("\n");
@@ -51,6 +51,7 @@ try { expected = JSON.parse(readFileSync(expectedPath, "utf8")); }
 catch (error) { fail(`expected hash record ${expectedPath}: ${error.message}`); process.exit(); }
 
 const repositories = roots().map(([repository]) => repository);
+const configuredRoots = new Map((process.env.FAMILY_CLAIMS_ROOTS ?? "").split(";").filter(Boolean).map((entry) => entry.split("=", 2)));
 if (!expected || typeof expected !== "object" || Array.isArray(expected) || Object.keys(expected).length === 0) {
   fail(`expected hash record ${expectedPath} is empty or malformed`);
   process.exit();
@@ -66,7 +67,14 @@ for (const repository of repositories) {
 if (process.exitCode) process.exit();
 
 let bad = false;
-let reference;
+const reference = expected.seal;
+if (!live) {
+  if (configuredRoots.size === 0) {
+    console.log("INFO  this run compared the local claim block only; cross-repository comparison requires FAMILY_CLAIMS_LIVE=1 and did not run");
+  } else {
+    console.log("INFO  this run compared local and configured claim blocks only; live cross-repository comparison requires FAMILY_CLAIMS_LIVE=1 and did not run");
+  }
+}
 for (const [repository, location] of roots()) {
   try {
     if (location === null) {
@@ -74,11 +82,12 @@ for (const [repository, location] of roots()) {
       continue;
     }
     const hash = createHash("sha256").update(shared(await source(location), repository)).digest("hex");
-    if (reference === undefined) {
-      reference = hash;
-      console.log(`PASS  ${repository} shared claims-drift hash ${hash} is family reference`);
-    } else if (hash !== reference) { console.error(`FAIL  ${repository} shared claims-drift hash ${hash} != seal ${reference}`); bad = true; }
-    else console.log(`PASS  ${repository} shared claims-drift hash ${hash} matches seal`);
+    if (hash !== reference) {
+      console.error(`FAIL  ${repository} shared claims-drift subject drifted: hash ${hash} != recorded seal reference ${reference}`);
+      bad = true;
+    } else {
+      console.log(`PASS  ${repository} shared claims-drift hash ${hash} matches recorded seal reference`);
+    }
   } catch (error) { fail(`${repository}: ${error.message}`); bad = true; }
 }
 if (bad) process.exitCode = 2;
