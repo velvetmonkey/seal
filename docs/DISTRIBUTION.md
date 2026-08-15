@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 06bf3e94a250901ff3938c19c5dcd8282cd0deb843a8046e78430f340b2b5d2d --bytes 118710 --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 cb0c385b6d20c7bd1c8388b70f3560a35a8f9b3b17aea9308372c8c9d22bcf8d --bytes 127506 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
@@ -44,3 +44,8 @@ the demo path invokes today — the protected path writes unsigned
 receipts), the approval contract, and `checker/seal-receipt-check.mjs`.
 The demo prints the absolute path of that packaged checker. The launcher
 never searches `PATH` for another `seal`.
+
+For `seal protect`, MCP discovery has a 5000ms deadline per phase by
+default. Slow but legitimate servers can use
+`seal protect --timeout-ms MILLISECONDS SERVER TOOL`; timeout refusals name
+that flag, and the selected deadline is retained for the activation re-check.

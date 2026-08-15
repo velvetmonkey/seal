@@ -3,9 +3,11 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
+const readline = require("node:readline");
 
 const STATE_SCHEMA = "seal.protect/v1";
+const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 5000;
 const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",
@@ -22,6 +24,7 @@ class ProtectionError extends Error {
   constructor(code, message) {
     super(message);
     this.code = code;
+    this.refusal = true;
   }
 }
 
@@ -165,6 +168,132 @@ function assertNoLocalOverride(serverName, projectRoot = process.cwd(), env = pr
   }
 }
 
+function observedNames(names) {
+  return names.length === 0 ? "(none)" : names.join(", ");
+}
+
+// Start the configured stdio server with the same argv, working directory and
+// environment overlay used by the proxy, then perform the MCP handshake Seal
+// relies on before claiming that a named tool is protected.
+function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(childArgv[0], childArgv.slice(1), {
+      cwd: projectRoot,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: childEnv ? { ...env, ...childEnv } : env,
+    });
+    let phase = "start";
+    let settled = false;
+    let stderr = "";
+    let timer;
+    let listId = 2;
+    const namesFound = new Set();
+    const cursorsSeen = new Set();
+
+    const detail = () => stderr.trim() ? ` (${stderr.trim().slice(0, 500)})` : "";
+    const stop = () => {
+      clearTimeout(timer);
+      try { child.stdin.end(); } catch {}
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+    };
+    const fail = (code, message) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      reject(new ProtectionError(code, message));
+    };
+    const arm = (code, message) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fail(
+        code,
+        `${message} after ${timeoutMs}ms (default: ${DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS}ms; increase with --timeout-ms <milliseconds>)${detail()}`,
+      ), timeoutMs);
+      timer.unref();
+    };
+    const send = (frame) => child.stdin.write(JSON.stringify(frame) + "\n");
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => { if (stderr.length < 2000) stderr += chunk; });
+    child.stdin.on("error", (error) => {
+      if (settled) return;
+      const code = phase === "initialize" ? "protected_server_initialize_failed" : "protected_server_tools_list_failed";
+      fail(code, `configured server input failed during ${phase}: ${error.message}${detail()}`);
+    });
+    child.once("error", (error) => {
+      fail("protected_server_start_failed", `configured server could not start: ${error.message}`);
+    });
+    child.once("spawn", () => {
+      phase = "initialize";
+      send({
+        jsonrpc: "2.0", id: 1, method: "initialize", params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "seal-protect", version: sealVersion() },
+        },
+      });
+      arm("protected_server_initialize_failed", "configured server did not answer initialize");
+    });
+    child.once("close", (code, signal) => {
+      if (settled) return;
+      const ending = signal ? `signal ${signal}` : `exit ${code}`;
+      if (phase === "start") fail("protected_server_start_failed", `configured server did not start (${ending})${detail()}`);
+      else if (phase === "initialize") fail("protected_server_initialize_failed", `configured server closed during initialize (${ending})${detail()}`);
+      else fail("protected_server_tools_list_failed", `configured server closed during tools/list (${ending})${detail()}`);
+    });
+
+    const lines = readline.createInterface({ input: child.stdout, terminal: false });
+    lines.on("line", (line) => {
+      if (settled || line.trim() === "") return;
+      let frame;
+      try { frame = JSON.parse(line); } catch {
+        const code = phase === "initialize" ? "protected_server_initialize_failed" : "protected_server_tools_list_failed";
+        fail(code, `configured server returned non-JSON during ${phase}${detail()}`);
+        return;
+      }
+      if (phase === "initialize" && frame.id === 1) {
+        if (frame.error || !frame.result || typeof frame.result !== "object") {
+          fail("protected_server_initialize_failed", `configured server refused or malformed initialize: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          return;
+        }
+        phase = "tools/list";
+        send({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
+        send({ jsonrpc: "2.0", id: listId, method: "tools/list", params: {} });
+        arm("protected_server_tools_list_failed", "configured server did not answer tools/list");
+        return;
+      }
+      if (phase === "tools/list" && frame.id === listId) {
+        if (frame.error || !frame.result || !Array.isArray(frame.result.tools)) {
+          fail("protected_server_tools_list_failed", `configured server refused or malformed tools/list: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          return;
+        }
+        for (const tool of frame.result.tools) {
+          if (tool && typeof tool.name === "string" && tool.name.length > 0) namesFound.add(tool.name);
+        }
+        const cursor = frame.result.nextCursor;
+        if (typeof cursor === "string" && cursor.length > 0) {
+          if (cursorsSeen.has(cursor)) {
+            fail("protected_server_tools_list_failed", `configured server repeated tools/list cursor ${JSON.stringify(cursor)}`);
+            return;
+          }
+          cursorsSeen.add(cursor);
+          listId += 1;
+          send({ jsonrpc: "2.0", id: listId, method: "tools/list", params: { cursor } });
+          arm("protected_server_tools_list_failed", "configured server did not answer paginated tools/list");
+          return;
+        }
+        const names = [...namesFound].sort();
+        if (names.length === 0) {
+          fail("protected_server_tools_empty", "configured server returned no named tools from tools/list");
+          return;
+        }
+        settled = true;
+        stop();
+        resolve(names);
+      }
+    });
+  });
+}
+
 function livePid(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -193,7 +322,14 @@ function protectionView(state) {
   return state;
 }
 
-function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin = process.argv[1], env = process.env }) {
+async function protect({
+  serverName,
+  guardTool,
+  projectRoot = process.cwd(),
+  sealBin = process.argv[1],
+  env = process.env,
+  timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+}) {
   if (!serverName || !guardTool) throw new ProtectionError("usage", "usage: seal protect SERVER TOOL");
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
@@ -206,6 +342,19 @@ function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin =
   }
   const project = readProjectServer(root, serverName);
   assertNoLocalOverride(serverName, root, env);
+  const toolNames = await listServerTools({
+    childArgv: project.childArgv,
+    childEnv: project.childEnv,
+    projectRoot: root,
+    env,
+    timeoutMs,
+  });
+  if (!toolNames.includes(guardTool)) {
+    throw new ProtectionError(
+      "protected_tool_absent",
+      `requested tool "${guardTool}" was not returned by tools/list; observed tools: ${observedNames(toolNames)}`,
+    );
+  }
 
   const directory = path.dirname(statePath);
   const storePath = path.join(directory, "approvals.journal");
@@ -228,6 +377,7 @@ function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin =
     projectServer: project.server,
     childArgv: project.childArgv,
     childEnv: project.childEnv,
+    discoveryTimeoutMs: timeoutMs,
     storePath,
     receiptsDir,
     protectedAt: new Date().toISOString(),
@@ -243,7 +393,7 @@ function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin =
     writeState(statePath, { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() });
     throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}`);
   }
-  return { statePath, beforeHash: project.hash, state };
+  return { statePath, beforeHash: project.hash, state, toolNames };
 }
 
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
@@ -281,7 +431,13 @@ function currentDigestForState(state) {
   }
 }
 
-function activationLease(statePath) {
+function markBroken(statePath, state, error) {
+  const next = { ...state, state: STATES.BROKEN, brokenReason: `${error.code || "activation_failed"}: ${error.message}`, lease: null };
+  writeState(statePath, next);
+  return next;
+}
+
+async function activationLease(statePath, env = process.env) {
   const state = readState(statePath);
   if (!state) throw new ProtectionError("state_broken", "protection state is absent");
   const childCommand = state.childArgv && state.childArgv[0];
@@ -292,6 +448,27 @@ function activationLease(statePath) {
   if (got !== state.projectServerDigest) {
     markDrifted(statePath, state, got);
     throw new ProtectionError("drifted", "project server drifted before proxy activation");
+  }
+  let toolNames;
+  try {
+    toolNames = await listServerTools({
+      childArgv: state.childArgv,
+      childEnv: state.childEnv,
+      projectRoot: state.projectRoot,
+      env,
+      timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+    });
+  } catch (error) {
+    markBroken(statePath, state, error);
+    throw error;
+  }
+  if (!toolNames.includes(state.guardTool)) {
+    const error = new ProtectionError(
+      "protected_tool_vanished",
+      `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
+    );
+    markBroken(statePath, state, error);
+    throw error;
   }
   const next = {
     ...state,
@@ -331,6 +508,7 @@ function doctor(env = process.env) {
 }
 
 module.exports = {
+  DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
   ProtectionError,
   STATES,
   activationLease,
@@ -338,6 +516,7 @@ module.exports = {
   dataHome,
   doctor,
   localOverrideExists,
+  listServerTools,
   protect,
   protectionView,
   projectDirectory,
