@@ -34,11 +34,11 @@ clone and install it with its own printed digest. From the clone:
 ```
 $ node scripts/build-dist.cjs --out dist
 dist/seal-v0.1.1-linux-x64
-sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149
-bytes 6118685
+sha256 50da57806941a29aa8b998036e72b6147ea8fef08f9147a455aa9cc9d12db1df
+bytes 6122267
 tree 3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 
-$ sh dist/seal-v0.1.1-linux-x64 --sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149 --bytes 6118685
+$ sh dist/seal-v0.1.1-linux-x64 --sha256 50da57806941a29aa8b998036e72b6147ea8fef08f9147a455aa9cc9d12db1df --bytes 6122267
 installed seal 0.1.1 linux-x64
 store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal

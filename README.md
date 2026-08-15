@@ -49,13 +49,13 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149 --bytes 6118685 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 50da57806941a29aa8b998036e72b6147ea8fef08f9147a455aa9cc9d12db1df --bytes 6122267 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/demodir/dist/seal-v0.1.1-linux-x64
-sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149
-bytes 6118685
+sha256 50da57806941a29aa8b998036e72b6147ea8fef08f9147a455aa9cc9d12db1df
+bytes 6122267
 tree 3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 installed seal 0.1.1 linux-x64
 store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
