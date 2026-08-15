@@ -28,7 +28,7 @@ for (const file of ["README.md", "docs/guide/README.md"]) {
   rewrite(file, [
     [/^sha256 [0-9a-f]+$/gm, `sha256 ${sha256}`],
     [/^bytes \d+$/gm, `bytes ${bytes}`],
-    [/^tree [0-9a-f]+$/gm, `tree ${meta.treeSha256}`],
+    [/^tree:? [0-9a-f]+$/gm, `tree ${meta.treeSha256}`],
     [/\/store\/[0-9a-f]+/g, `/store/${meta.treeSha256}`],
   ]);
 }

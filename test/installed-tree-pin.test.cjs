@@ -11,7 +11,7 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
-const TREE = /\btree\s+([0-9a-f]{64})\b/g;
+const TREE = /\btree:?\s+([0-9a-f]{64})\b/g;
 const STORE = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
 
 function quotedTreeHashes(text) {
