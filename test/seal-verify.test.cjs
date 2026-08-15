@@ -84,3 +84,21 @@ test("verify refuses empty, malformed, and non-receipt JSON paths", () => {
     assert.match(result.out, pattern);
   }
 });
+
+test("seal verify recognizes a real spine receipt and routes to the external checker", () => {
+  // A spine receipt produced the way a user produces one: run the demo.
+  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-cache-"));
+  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-data-"));
+  const demo = run(["demo"], cache, dataHome, "y\n");
+  assert.equal(demo.code, 0, demo.out);
+  const receiptDir = path.join(dataHome, "seal", "receipts");
+  const spine = path.join(receiptDir, fs.readdirSync(receiptDir).find((f) => f.includes("ALLOW")));
+
+  const result = run(["verify", spine], cache, dataHome);
+  // Recognized coherently, not crashed as an unknown schema.
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /spine_receipt_use_external_checker/);
+  assert.match(result.out, /seal-receipt-check\.mjs/);
+  // The old bug: verify treated a real product receipt as an unrecognized kernel receipt.
+  assert.doesNotMatch(result.out, /unrecognized|no recognized version discriminator|verdict: undefined/);
+});

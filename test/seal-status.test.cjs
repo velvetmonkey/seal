@@ -61,33 +61,28 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
 
 const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
 
-// Produce receipts the way a USER does: run the demo. A test that hand-builds
-// its input is testing its own imagination — the previous version of this
-// test built kernel-schema receipts (verdict/now) the product never writes,
-// so it stayed green while `seal status` could not read a single real receipt.
-function runDemoReceipts() {
-  const demoDir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-demo-src-"));
-  execFileSync(process.execPath, [CLI, "demo", "--dir", demoDir], { input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
-  return path.join(demoDir, "receipts");
-}
+// The END-TO-END path a user takes: run `seal demo`, then `seal status`, and
+// see the receipts. No --dir, no hand-built fixture, no copying — the demo
+// writes where a real run writes and status reads where it reads. This single
+// assertion catches BOTH defects at once: the wrong schema (status could not
+// parse a spine receipt) and the wrong place (the demo wrote to a temp dir
+// status never looks in). A test that builds its own input, or hands status a
+// receipt directly, would have caught neither.
+test("END TO END: seal demo then seal status shows the receipts, and names corruption", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-e2e-"));
+  const demo = run(["demo"], root, "y\n");
+  assert.equal(demo.code, 0, demo.out);
 
-test("status reads the receipts the product actually writes, and names corruption", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-real-"));
+  // The demo wrote its receipts to the store status reads — plant a corrupt
+  // file there too, then run status once.
   const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
-  fs.mkdirSync(receiptDir, { recursive: true });
-  const produced = runDemoReceipts();
-  const names = fs.readdirSync(produced);
-  assert.equal(names.length, 3, `demo should write 3 receipts, wrote ${names.length}`);
-  for (const name of names) fs.copyFileSync(path.join(produced, name), path.join(receiptDir, name));
   fs.writeFileSync(path.join(receiptDir, "corrupt.json"), "not json\n");
 
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Receipts: 4 stored in /m);
-  // Only the corrupt file is unreadable; every real product receipt is read.
   assert.match(result.out, /^Receipt unreadable: corrupt\.json \(Unexpected token/m);
   assert.doesNotMatch(result.out, /^Receipt unreadable: receipt-.*\(missing/m);
-  // Most recent names a real spine decision at a real receipt time.
   assert.match(result.out, /^Most recent: (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
 });
 
