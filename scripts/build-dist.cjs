@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Build the ONE Linux x86-64 install artifact. No macOS, no arm64, no key.
+const fs = require("node:fs");
+const path = require("node:path");
+const { packPayload, sha256Hex } = require("../spine/integrity.cjs");
+const { requireMatchingVersion } = require("../spine/version.cjs");
+
+const ROOT = path.join(__dirname, "..");
+const MARKER = "\n// --SEAL-PAYLOAD--\n";
+
+const PAYLOAD_PATHS = [
+  "bin/seal",
+  "VERSION",
+  "package.json",
+  "LICENSE",
+  "runtime-manifest.json",
+  "spine/version.cjs",
+  "spine/platform.cjs",
+  "spine/integrity.cjs",
+  "spine/demo.cjs",
+  "spine/demo-server.cjs",
+  "spine/protection.cjs",
+  "spine/proxy.cjs",
+  "spine/proxy-cli.cjs",
+  "spine/receipts.cjs",
+  "spine/receipt-seal.cjs",
+  "spine/store.cjs",
+  "contract/canonical.cjs",
+  "contract/contract.cjs",
+  "contract/renderer.cjs",
+  "checker/seal-receipt-check.mjs",
+  "scripts/seal-launch.cjs",
+];
+
+function copyInto(staging, rel) {
+  const src = path.join(ROOT, rel);
+  const dest = path.join(staging, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+}
+
+function main() {
+  const version = requireMatchingVersion();
+  const outDir = process.argv.includes("--out")
+    ? path.resolve(process.argv[process.argv.indexOf("--out") + 1])
+    : path.join(ROOT, "dist");
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const staging = fs.mkdtempSync(path.join(outDir, ".stage-"));
+  try {
+    for (const rel of PAYLOAD_PATHS) copyInto(staging, rel);
+    const { payload, manifest } = packPayload(staging, version);
+    const installerSrc = fs.readFileSync(path.join(ROOT, "scripts", "install.cjs"), "utf8")
+      .replace(/^#!\/usr\/bin\/env node\n/, "");
+    // A shell stub so Node never parses the binary payload. `node FILE`
+    // would treat the payload as JavaScript; the stranger runs THIS file.
+    const header = [
+      "#!/bin/sh",
+      "if ! command -v node >/dev/null 2>&1; then",
+      "  printf '%s\\n' \"REFUSE node_missing: Seal requires Node >= 20 on Linux x86-64\"",
+      "  exit 1",
+      "fi",
+      "exec node - \"$0\" \"$@\" <<'SEAL_INSTALL_JS'",
+      installerSrc,
+      "SEAL_INSTALL_JS",
+      MARKER.trimEnd(),
+      "",
+    ].join("\n");
+    const artifact = Buffer.concat([Buffer.from(header, "utf8"), payload]);
+    const name = `seal-v${version}-linux-x64`;
+    const dest = path.join(outDir, name);
+    fs.writeFileSync(dest, artifact, { mode: 0o555 });
+    const digest = sha256Hex(artifact);
+    const sums = `${digest}  ${artifact.length}  ${name}\n`;
+    fs.writeFileSync(path.join(outDir, "SHA256SUMS"), sums);
+    const meta = {
+      schema: "seal.dist/v1",
+      version,
+      platform: "linux-x64",
+      artifact: name,
+      sha256: digest,
+      bytes: artifact.length,
+      treeSha256: manifest.treeSha256,
+    };
+    fs.writeFileSync(path.join(outDir, `${name}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
+    process.stdout.write(`${dest}\n`);
+    process.stdout.write(`sha256 ${digest}\n`);
+    process.stdout.write(`bytes ${artifact.length}\n`);
+    process.stdout.write(`tree ${manifest.treeSha256}\n`);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+main();

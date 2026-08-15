@@ -15,7 +15,7 @@ const STATES = Object.freeze({
 });
 
 function sealVersion() {
-  return require("../package.json").version;
+  return require("./version.cjs").requireMatchingVersion();
 }
 
 class ProtectionError extends Error {
@@ -191,7 +191,7 @@ function protect({ serverName, guardTool, projectRoot = process.cwd(), sealBin =
   const statePath = statePathFor(root, env);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED) {
-    if (existing.sealVersion && existing.sealVersion !== require("../package.json").version) {
+    if (existing.sealVersion && existing.sealVersion !== sealVersion()) {
       throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
     }
     throw new ProtectionError("already_protected", `project is already ${existing.state}`);
@@ -243,7 +243,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   const state = readState(statePath);
-  if (state && state.sealVersion && state.sealVersion !== require("../package.json").version) {
+  if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
   }
   if (state?.lease?.pid && livePid(state.lease.pid)) {

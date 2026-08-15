@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Linux x86-64 installer. This file is also the body of the published
+// artifact: the payload is appended after the marker. It never searches
+// PATH for another seal, and it will not install without an operator pin.
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const MARKER = "\n// --SEAL-PAYLOAD--\n";
+const MAGIC = "SEALPAY1\n";
+const DATA = "--DATA--\n";
+
+function refuse(code, reason) {
+  process.stderr.write(`REFUSE ${code}: ${reason}\n`);
+  process.exit(1);
+}
+
+function sha256Hex(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function treeDigest(files) {
+  const lines = [...files]
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .map((file) => `${file.sha256}  ${file.bytes}  ${file.path}\n`)
+    .join("");
+  return sha256Hex(Buffer.from(lines, "utf8"));
+}
+
+function platformOk() {
+  const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
+  const arch = process.env.SEAL_SPINE_ARCH || process.arch;
+  return { ok: platform === "linux" && arch === "x64", platform, arch };
+}
+
+function unpackPayload(payload) {
+  if (payload.length < MAGIC.length || payload.subarray(0, MAGIC.length).toString("utf8") !== MAGIC) {
+    refuse("artifact_malformed", "payload does not start with SEALPAY1");
+  }
+  const marker = Buffer.from(DATA, "utf8");
+  const dataAt = payload.indexOf(marker, MAGIC.length);
+  if (dataAt < 0) refuse("artifact_truncated", "payload is missing the data marker");
+  let manifest;
+  try {
+    manifest = JSON.parse(payload.subarray(MAGIC.length, dataAt).toString("utf8").trim());
+  } catch (error) {
+    refuse("artifact_malformed", `payload header is not JSON: ${error.message}`);
+  }
+  let offset = dataAt + marker.length;
+  const extracted = [];
+  for (const file of manifest.files || []) {
+    const end = offset + file.bytes;
+    if (payload.length < end) {
+      refuse("artifact_truncated", `payload ends at ${payload.length} bytes; ${file.path} needs ${file.bytes} more`);
+    }
+    const data = payload.subarray(offset, end);
+    const got = sha256Hex(data);
+    if (got !== file.sha256) refuse("artifact_digest_mismatch", `${file.path} does not match the payload manifest`);
+    extracted.push({ ...file, data });
+    offset = end;
+  }
+  if (offset !== payload.length) refuse("artifact_malformed", "payload has trailing bytes");
+  if (treeDigest(manifest.files) !== manifest.treeSha256) {
+    refuse("artifact_digest_mismatch", "payload tree digest does not match its manifest");
+  }
+  return { manifest, files: extracted };
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const flag = argv[i];
+    if (flag === "--sha256" || flag === "--prefix" || flag === "--bytes") {
+      const value = argv[i + 1];
+      if (value === undefined) refuse("pin_missing", `${flag} needs a value`);
+      if (flag === "--sha256") out.sha256 = value;
+      else if (flag === "--prefix") out.prefix = value;
+      else out.bytes = Number(value);
+      i += 1;
+      continue;
+    }
+    refuse("unknown_flag", `unknown installer flag: ${flag}`);
+  }
+  return out;
+}
+
+function writeFileDeep(target, data, mode) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, data, { mode });
+}
+
+function main() {
+  const plat = platformOk();
+  if (!plat.ok) {
+    process.stderr.write([
+      "UNSUPPORTED PLATFORM",
+      "",
+      "Seal v1.1 supports Linux x86-64 only.",
+      "macOS arm64 has not completed Seal's end-to-end acceptance path.",
+      "",
+      "No files were changed.",
+      "",
+    ].join("\n"));
+    process.stderr.write(`REFUSE unsupported_platform: this is ${plat.platform}-${plat.arch}\n`);
+    process.exit(1);
+  }
+
+  // `node - "$0" "$@"` (the published artifact) puts the file path at argv[2].
+  const argv = process.argv;
+  const selfPath = argv[1] === "-" ? argv[2] : argv[1];
+  const flags = argv[1] === "-" ? argv.slice(3) : argv.slice(2);
+  if (!selfPath || selfPath === "-") refuse("artifact_missing", "installer path is missing");
+  const args = parseArgs(flags);
+  if (!args.sha256) {
+    refuse("pin_missing", "install requires --sha256 <hex> (the published digest of this artifact)");
+  }
+  if (!/^[0-9a-f]{64}$/.test(args.sha256)) {
+    refuse("pin_invalid", "--sha256 must be 64 lowercase hex characters");
+  }
+  let self;
+  try {
+    self = fs.readFileSync(selfPath);
+  } catch (error) {
+    if (error && error.code === "ENOENT") refuse("artifact_missing", `installer is missing: ${selfPath}`);
+    refuse("artifact_unreadable", `installer is unreadable: ${error.message}`);
+  }
+
+  if (Number.isFinite(args.bytes)) {
+    if (self.length < args.bytes) {
+      refuse("artifact_truncated", `installer is ${self.length} bytes, published length is ${args.bytes}`);
+    }
+    if (self.length !== args.bytes) {
+      refuse("artifact_digest_mismatch", `installer is ${self.length} bytes, published length is ${args.bytes}`);
+    }
+  }
+
+  const got = sha256Hex(self);
+  if (got !== args.sha256) {
+    refuse("artifact_digest_mismatch", "installer digest does not match the supplied --sha256 pin");
+  }
+
+  const marker = Buffer.from(MARKER, "utf8");
+  const at = self.indexOf(marker);
+  if (at < 0) refuse("artifact_malformed", "this file carries no payload; it is not a built release artifact");
+  const payload = self.subarray(at + marker.length);
+  const { manifest, files } = unpackPayload(payload);
+  if (manifest.platform !== "linux-x64") {
+    refuse("unsupported_platform", `artifact platform is ${manifest.platform}, not linux-x64`);
+  }
+
+  const prefix = path.resolve(args.prefix || path.join(process.env.HOME || ".", ".local"));
+  const storeRel = path.posix.join("lib", "seal", "store", manifest.treeSha256);
+  const storeRoot = path.join(prefix, "lib", "seal", "store", manifest.treeSha256);
+  const recordPath = path.join(prefix, "lib", "seal", "install.json");
+  const launchPath = path.join(prefix, "bin", "seal");
+
+  for (const file of files) {
+    if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
+    const mode = file.path === "bin/seal" || file.path.endsWith("/seal-launch.cjs") ? 0o555 : 0o444;
+    writeFileDeep(path.join(storeRoot, file.path), file.data, mode);
+  }
+
+  const launchSrc = files.find((file) => file.path === "scripts/seal-launch.cjs");
+  if (!launchSrc) refuse("artifact_missing", "payload has no scripts/seal-launch.cjs");
+  writeFileDeep(launchPath, launchSrc.data, 0o555);
+
+  const record = {
+    schema: "seal.install/v1",
+    version: manifest.version,
+    platform: "linux-x64",
+    treeSha256: manifest.treeSha256,
+    store: storeRel,
+    files: manifest.files,
+  };
+  writeFileDeep(recordPath, `${JSON.stringify(record, null, 2)}\n`, 0o444);
+
+  try { fs.chmodSync(storeRoot, 0o555); } catch { /* best-effort; hash check is the detector */ }
+
+  process.stdout.write(`installed seal ${manifest.version} linux-x64\n`);
+  process.stdout.write(`store: ${storeRoot}\n`);
+  process.stdout.write(`command: ${launchPath}\n`);
+  process.stdout.write(`tree: ${manifest.treeSha256}\n`);
+}
+
+main();

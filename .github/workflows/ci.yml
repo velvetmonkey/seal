@@ -36,3 +36,7 @@ jobs:
       - run: node scripts/claims-drift.mjs
       - run: node --test test/claims-drift.test.mjs
       - run: node scripts/claims-drift-family.mjs
+      - name: Banned verification claims must not return (README included)
+        run: node --test --test-name-pattern 'no banned verification claim' test/no-verification-claim.test.cjs
+      - name: Published dist pin must match a freshly built artifact
+        run: node --test test/dist-pin.test.cjs

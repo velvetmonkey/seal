@@ -8,6 +8,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
+const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
@@ -228,9 +229,9 @@ async function main() {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
     return status();
   }
-  if (command === "--version" || command === "-V") return console.log(require(path.join(ROOT, "package.json")).version);
+  if (command === "--version" || command === "-V") return console.log(requireMatchingVersion());
   if (command) console.error(`seal: unknown command: ${command}`);
-  console.log("seal — the developer gate\n\n  seal protect SERVER TOOL  install a local Claude Code override for one tool\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 gate one call: block, approve once, execute, write a receipt\n  seal verify PATH          re-derive a saved kernel receipt with this binary\n  seal status               show local runtime, receipt and protection state");
+  console.log("seal — the developer gate\n\n  seal protect SERVER TOOL  install a local Claude Code override for one tool\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 gate one call: block, approve once, execute, write a receipt\n  seal verify PATH          re-derive a saved kernel receipt with this binary\n  seal status               show local runtime, receipt and protection state\n\n  Linux x86-64 only.");
   process.exitCode = command ? 2 : 0;
 }
 main().catch((error) => {
