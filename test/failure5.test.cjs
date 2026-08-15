@@ -73,6 +73,8 @@ function setup(prefix) {
   fs.mkdirSync(project);
   fs.mkdirSync(home);
   const dataFile = path.join(root, "data.txt");
+  fs.writeFileSync(dataFile, "");
+  fs.writeFileSync(`${dataFile}.count`, "0\n");
   const fakeBin = fakeClaudeBin(root);
   const env = {
     PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
@@ -201,22 +203,20 @@ test("4a deleted overlay binary: no fallback, child count does not move", () => 
   const attempt = spawnSync(process.execPath, [gone, ...(rec.args || [])], { encoding: "utf8" });
   assert.notEqual(attempt.status, 0);
   assert.match(`${attempt.stderr || ""}${attempt.stdout || ""}`, /Cannot find module|ENOENT|MODULE_NOT_FOUND/);
-  assert.equal(countOf(ctx.dataFile), "ABSENT");
+  assert.equal(countOf(ctx.dataFile), "0");
   assert.equal(sha256(fs.readFileSync(ctx.mcpPath)), before.mcp);
 });
 
-test("4b deleted protected-server binary: protected_server_missing, no forward", () => {
+test("4b missing protected-server binary: protect refuses before recording state", () => {
   const ctx = setup("f5-gone-child-");
   const missing = path.join(ctx.root, "no-such-server");
   writeProject(ctx.project, { command: missing, args: ["--stdio"] });
-  const protect = runSeal(ctx, ["protect", "db", "demo.mutate"]);
-  assert.equal(protect.code, 0, protect.out);
   const before = snapshot(ctx);
-  const started = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePathFor(ctx.project, ctx.env)], {
-    cwd: ctx.project, env: { ...process.env, ...ctx.env }, encoding: "utf8", input: "",
-  });
-  assert.notEqual(started.status, 0);
-  assert.match(`${started.stderr}${started.stdout}`, /protected_server_missing/);
+  const protect = runSeal(ctx, ["protect", "db", "demo.mutate"]);
+  assert.notEqual(protect.code, 0);
+  assert.match(protect.out, /protected_server_start_failed/);
+  assert.doesNotMatch(protect.out, /PENDING RESTART/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
   assertUntouched(ctx, before, "deleted child binary");
 });
 

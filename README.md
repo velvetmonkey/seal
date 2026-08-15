@@ -27,18 +27,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 06bf3e94a250901ff3938c19c5dcd8282cd0deb843a8046e78430f340b2b5d2d --bytes 118710 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 d8ba8d3557f26effc68675ee570d1edadc20ede28e5a0ee9732ee4db3950d4df --bytes 125880 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/docsland/dist/seal-v0.1.1-linux-x64
-sha256 06bf3e94a250901ff3938c19c5dcd8282cd0deb843a8046e78430f340b2b5d2d
-bytes 118710
-tree fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7
+/home/monkey/wt/toolexists/dist/seal-v0.1.1-linux-x64
+sha256 d8ba8d3557f26effc68675ee570d1edadc20ede28e5a0ee9732ee4db3950d4df
+bytes 125880
+tree baf5ccac371a464bb22f0cba012b929571d699376940ce800534817f44a1c485
 installed seal 0.1.1 linux-x64
-store: /home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7
-command: /home/monkey/scratch/docsland-reader-walk-run/home/.local/bin/seal
-tree: fe9b95fd544c5fd9c85a2e1bf218e4295d54368e3599b862de621c368cd5a0c7
+store: /home/monkey/scratch/toolexists-readme-20260815/prefix-final/lib/seal/store/baf5ccac371a464bb22f0cba012b929571d699376940ce800534817f44a1c485
+command: /home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal
+tree: baf5ccac371a464bb22f0cba012b929571d699376940ce800534817f44a1c485
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -229,30 +229,37 @@ servers are outside it.
 
 ## 3. Protect
 
-`seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. Check that command first with `claude --version`. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server so the sequence runs on a scratch directory; protecting a real project is the same two words, `seal protect SERVER TOOL`, against the file that is already there.
+`seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. Check that command first with `claude --version`. Before recording protection, Seal starts that server, completes MCP `initialize`, calls `tools/list`, and refuses unless the requested tool is in the observed names. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server in the isolated scratch run used for this transcript.
 
 ```sh
-mkdir /tmp/myproject && cd /tmp/myproject
+mkdir -p /home/monkey/scratch/toolexists-readme-20260815/final-project
+cd /home/monkey/scratch/toolexists-readme-20260815/final-project
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
     "db": {
-      "command": "$HOME/.local/bin/seal",
-      "args": ["__demo-server", "/tmp/myproject/data.txt"]
+      "command": "/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal",
+      "args": [
+        "__demo-server",
+        "/home/monkey/scratch/toolexists-readme-20260815/final-project/data.txt"
+      ]
     }
   }
 }
 EOF
-seal protect db demo.mutate
+HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home \
+XDG_DATA_HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share \
+/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal protect db demo.mutate
 ```
 
 ```
-Project .mcp.json hash before protect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
+Project .mcp.json hash before protect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Protection: PENDING RESTART db.demo.mutate
-State: /home/monkey/scratch/coldwalkfix-run/xdg/seal/projects/21888168db00aa616c9c647108a4acfd/state.json
+Protection scope: 0 other tools OUTSIDE Seal
+State: /home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share/seal/projects/4198aa21a911c2c7e9899c24a49e6b28/state.json
 ```
 
-`protect` invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls use the same rule the demo showed: Seal will not run the approved call twice, and it may spend the approval without running it. The demo and protected path run the same proxy and contract. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+`protect` reports how many tools returned by that server remain outside Seal, then invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. At activation Seal repeats the handshake and tool inventory; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. From that restart on, `demo.mutate` calls use the same rule the demo showed: Seal will not run the approved call twice, and it may spend the approval without running it. The demo and protected path run the same proxy and contract. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
 Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
 
@@ -272,13 +279,15 @@ ASSUMPTION
 ## 4. Remove
 
 ```sh
-cd /tmp/myproject
-seal unprotect db
+cd /home/monkey/scratch/toolexists-readme-20260815/final-project
+HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home \
+XDG_DATA_HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share \
+/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal unprotect db
 ```
 
 ```
-Project .mcp.json hash before unprotect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
-Project .mcp.json hash after unprotect: f82f46ff49e514ea59cec6a6929114386594f2e3070429af5970611ab41d8476
+Project .mcp.json hash before unprotect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
+Project .mcp.json hash after unprotect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Protection: - outside Seal
 ```
 

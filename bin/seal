@@ -209,12 +209,14 @@ async function verify(receiptPath) {
   }
 }
 
-function protectCommand(args) {
+async function protectCommand(args) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const [serverName, guardTool] = args;
-  const result = protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env });
+  const result = await protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   console.log(`Protection: PENDING RESTART ${serverName}.${guardTool}`);
+  const outside = result.toolNames.filter((name) => name !== guardTool);
+  console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} OUTSIDE Seal${outside.length ? `: ${outside.join(", ")}` : ""}`);
   console.log(`State: ${result.statePath}`);
 }
 
@@ -258,7 +260,7 @@ function printHelp() {
   console.log("seal — the developer gate\n\n  seal protect SERVER TOOL  install a local Claude Code override for one tool\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
 }
 main().catch((error) => {
-  const prefix = typeof error.code === "string" ? `${error.code}: ` : "";
+  const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";
   console.error(`seal: ${prefix}${error.message}`);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
   process.exitCode = 1;

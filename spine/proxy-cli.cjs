@@ -29,7 +29,7 @@ function parseArgs(argv) {
   return { options, childArgv: [] };
 }
 
-function run(argv) {
+async function run(argv) {
   requireSupportedPlatform();
   let parsed;
   try {
@@ -56,7 +56,7 @@ function run(argv) {
   let proxyOptions = { ...options, childArgv };
   if (options.protectState) {
     try {
-      const state = activationLease(options.protectState);
+      const state = await activationLease(options.protectState, process.env);
       proxyOptions = {
         guardTool: state.guardTool,
         storePath: state.storePath,

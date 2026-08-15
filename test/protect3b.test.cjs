@@ -162,7 +162,7 @@ test("protect names install-time refusals", () => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /project_server_non_stdio/);
 
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "override-data.txt")] });
   execFileSync("claude", ["mcp", "add", "--scope", "local", "db", "--", "node", "-e", "process.exit(0)"], {
     cwd: project,
     env: { ...process.env, ...env, HOME: home },
@@ -173,7 +173,7 @@ test("protect names install-time refusals", () => {
 
   const incompatibleProject = path.join(root, "incompatible-project");
   fs.mkdirSync(incompatibleProject);
-  writeProject(incompatibleProject, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(incompatibleProject, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "incompatible-data.txt")] });
   const incompatibleState = statePathFor(incompatibleProject, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   fs.mkdirSync(path.dirname(incompatibleState), { recursive: true });
   fs.writeFileSync(incompatibleState, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
@@ -237,7 +237,7 @@ test("unprotect refuses while an activation lease pid is live", () => {
   fs.mkdirSync(home);
   const fakeBin = fakeClaudeBin(root);
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "active-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
@@ -256,7 +256,7 @@ test("unprotect unwedges BROKEN state when Claude reports the local override is 
   fs.mkdirSync(home);
   const fakeBin = fakeClaudeBin(root);
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "unwedge-data.txt")] });
 
   const failedProtect = run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_ADD_FAIL: "1" });
   assert.notEqual(failedProtect.code, 0);
@@ -282,7 +282,7 @@ test("unprotect still refuses when the Claude command is unavailable during remo
   fs.mkdirSync(home);
   const fakeBin = fakeClaudeBin(root);
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "remove-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
 
   const refused = run(project, home, ["unprotect", "db"], { PATH: path.dirname(process.execPath) });
@@ -323,7 +323,7 @@ test("status renders a dead activation lease as pending restart, not active", ()
   fs.mkdirSync(home);
   const fakeBin = fakeClaudeBin(root);
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "dead-lease-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
@@ -352,8 +352,8 @@ test("status downgrades to pending restart after a REAL wrapper lease exits natu
     XDG_DATA_HOME: path.join(home, ".local", "share"),
     PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
   };
-  // A project server that stays alive so activation would genuinely promote.
-  writeProject(project, { command: process.execPath, args: ["-e", "setInterval(()=>{},1000)"] });
+  // A real MCP project server that stays alive so activation genuinely validates and promotes.
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "real-exit-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], { PATH: env.PATH }).code, 0);
 
   const statePath = statePathFor(project, { XDG_DATA_HOME: env.XDG_DATA_HOME });
