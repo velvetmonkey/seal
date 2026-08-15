@@ -2,7 +2,14 @@
   "name": "@velvetmonkey/seal",
   "version": "0.1.1",
   "description": "The Seal developer CLI",
-  "bin": { "seal": "bin/seal" },
+  "bin": {
+    "seal": "bin/seal"
+  },
   "license": "Apache-2.0",
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "prepack": "node scripts/sync-version.cjs"
+  }
 }

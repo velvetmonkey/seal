@@ -6,17 +6,19 @@ const path = require("node:path");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
+const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+const NOTES = path.join(ROOT, "docs", `RELEASE-NOTES-v${VERSION}.md`);
 
 test("release notes state the platform and unsigned protected-receipt limits", () => {
-  const notes = fs.readFileSync(path.join(ROOT, "docs", "RELEASE-NOTES-v1.1.md"), "utf8");
+  const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, /Seal v1\.1 supports Linux x86-64 only\./);
+  assert.match(notes, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 only\\.`));
   assert.match(notes, /The protected path writes its receipts unsigned/);
   assert.match(notes, /REFUSE unsealed/);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {
-  const notesPath = path.join(ROOT, "docs", "RELEASE-NOTES-v1.1.md");
+  const notesPath = NOTES;
   const notes = fs.readFileSync(notesPath, "utf8");
   const links = [...notes.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
   const shas = [...new Set(notes.match(/\b[0-9a-f]{7,40}\b/g) ?? [])];

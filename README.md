@@ -23,7 +23,7 @@ tool that is not: the one that executes SQL on a shared database, issues a
 refund, merges the pull request. Seal puts its gate in front of exactly that
 one tool and passes the rest of that server's tools straight through.
 
-**Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
 What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
@@ -201,7 +201,7 @@ The checker's `--pubkey` is a trust input. The demo generated that key for this 
 
 ## Where this fits
 
-Seal v1.1 guards one tool of one stdio MCP server in one Claude Code project,
+Seal v0.1.1 guards one tool of one stdio MCP server in one Claude Code project,
 with you approving each exact call. That is narrow on purpose. It maps onto a
 specific, recognisable moment: a server you already use all day, where almost
 every call is harmless and one call is not.
@@ -328,7 +328,7 @@ In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> dem
 - The optional verification path fetches a separately pinned runtime from GitHub, so verification is bounded by that external repository and the integrity of the fetched bytes.
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix, so another process running as that user can replace the entry point before the next run even though the packaged store is read-only and integrity-checked.
-- Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
+- Seal v0.1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License
 
