@@ -15,21 +15,30 @@ if (result.status !== 0) {
   process.exit(2);
 }
 const repos = JSON.parse(result.stdout).filter((repo) => !repo.isPrivate && !repo.isFork && repo.name !== "seal");
-const linkedFamily = new Set(["mcp-seal-dev", "seal-host", "seal-check", "seal-live-demo", "seal-assurance-kit", "seal-verify-action"]);
+// Roadmap step 6: the developer README links no sibling repository. Every
+// public sibling must therefore discharge with a stated reason, and a family
+// repository appearing in the README is a failure, not a success.
+const offRouteFamily = new Set(["mcp-seal-dev", "seal-host", "seal-check", "seal-live-demo", "seal-assurance-kit", "seal-verify-action"]);
 function discharge(name) {
+  if (offRouteFamily.has(name)) return "repository family is off the developer route (roadmap step 6); named for evaluators in EVALUATOR-START.md and docs/REPO-TOPOLOGY.md";
   if (name === "crdt-lean") return "deferred Seal v3 distributed architecture, not a current developer route";
   if (name === "seal-demo") return "superseded by seal-live-demo";
   if (name === "mcp-seal-aria") return "separate experiment, not the Seal product family";
   if (!name.includes("seal")) return "public research or account repository, not the Seal product family";
   return null;
 }
-let failures = 0, linked = 0, discharged = 0;
+let failures = 0, discharged = 0;
 for (const repo of repos) {
-  if (readme.includes(repo.url)) { console.log(`LINKED     ${repo.name}`); linked++; continue; }
+  if (readme.includes(repo.url)) {
+    console.error(`LINKED     ${repo.name}: the developer README must not link sibling repositories (roadmap step 6)`);
+    failures++;
+    continue;
+  }
   const reason = discharge(repo.name);
   if (reason) { console.log(`DISCHARGED ${repo.name}: ${reason}`); discharged++; continue; }
-  console.error(`UNREACHABLE ${repo.name}: public sibling is neither linked nor discharged`);
+  console.error(`UNREACHABLE ${repo.name}: public sibling is neither discharged nor accounted for`);
   failures++;
 }
+const linked = 0;
 console.log(`navigation-inventory: ${repos.length} public siblings, ${linked} linked, ${discharged} discharged, ${failures} unreachable`);
 process.exit(failures ? 1 : 0);

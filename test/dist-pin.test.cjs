@@ -40,4 +40,11 @@ test("the published pin matches a freshly built artifact", () => {
   const docs = fs.readFileSync(path.join(ROOT, "docs", "DISTRIBUTION.md"), "utf8");
   assert.ok(docs.includes(recorded.sha256), "docs/DISTRIBUTION.md must carry the published sha256");
   assert.ok(docs.includes(String(recorded.bytes)), "docs/DISTRIBUTION.md must carry the published byte count");
+
+  // The README's install beat pastes the pin inline so a stranger can copy
+  // it. A payload change that leaves those values behind is the published
+  // hash-vs-artifact mismatch this repo already shipped once; fail here first.
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  assert.ok(readme.includes(`--sha256 ${recorded.sha256}`), "README.md install command must carry the published sha256");
+  assert.ok(readme.includes(`--bytes ${recorded.bytes}`), "README.md install command must carry the published byte count");
 });
