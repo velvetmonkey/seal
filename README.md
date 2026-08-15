@@ -4,39 +4,75 @@
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
+Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
+
+The situation it is built for is an ordinary one: your project's `.mcp.json`
+has an MCP server whose tools are mostly harmless — schema reads, lookups,
+drafts — and one tool that is not: the one that executes SQL on a shared
+database, issues a refund, merges the pull request. Seal puts its gate in
+front of exactly that one tool and passes the rest of that server's tools
+straight through.
+
+Seal is a gate, not a sandbox: it controls the path through it, and only that
+path. The demo below ends by proving that boundary on your machine: it writes
+a file outside the gate and reports zero Seal decisions for it.
+
+**Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+
 ## Contents
 
+- [Where this fits](#where-this-fits)
 - [1. Install](#1-install)
 - [2. Demo](#2-demo)
-- [Where this fits](#where-this-fits)
 - [3. Protect](#3-protect)
 - [4. Remove](#4-remove)
+- [How the gate decides](#how-the-gate-decides)
 - [What Seal covers, and what it does not](#what-seal-covers-and-what-it-does-not)
 - [License](#license)
 
 The [full documentation index](docs/README.md) links the operating guide,
 evidence, limitations, and design history.
 
-Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
+## Where this fits
 
-Seal is a gate, not a sandbox: it controls the path through it, and only that path.
+Seal v0.1.1 guards one tool of one stdio MCP server in one Claude Code project,
+with you approving each exact call. That is narrow on purpose. It maps onto a
+specific, recognisable moment: a server you already use all day, where almost
+every call is harmless and one call is not. Moments like these:
 
-The authorization rule is PROVED. The state machine is TESTED. On a guarded
-retry, Node owns handle lookup, freshness, protocol shape, and durable one-use
-consumption; the exact-call authorization rule runs through the pinned vendored
-WASM, and its answer is required before forwarding. Kernel failure or a
-Node/kernel disagreement refuses—there is no JavaScript authorization
-fallback. The kernel configuration is currently signed by an Ed25519 key
-generated inside the same worker that submits it. That is demo-grade
-self-authorization, not an externally trusted production config key.
+**The database.** Your `.mcp.json` carries a Postgres MCP server so Claude
+Code can read schemas and query data while you work. The reads are the point;
+the tool that executes arbitrary SQL is the exposure — one UPDATE or DELETE
+with the wrong WHERE clause against the shared staging database is an
+afternoon of restore work. Protect that one tool and the reads keep flowing
+exactly as before, while a call to it stops and shows you the statement it
+parsed. You approve that statement, once; if the client re-sends the same
+approved call, Seal refuses it instead of running it again.
 
-The situation it is built for: your project's `.mcp.json` has an MCP server
-whose tools are mostly harmless — schema reads, lookups, drafts — and one
-tool that is not: the one that executes SQL on a shared database, issues a
-refund, merges the pull request. Seal puts its gate in front of exactly that
-one tool and passes the rest of that server's tools straight through.
+**The money.** Stripe publishes an MCP server for agent workflows. An agent
+doing support triage reads customers and charges harmlessly, but the refund
+tool moves real money, and the classic failure there is not malice — it is a
+timeout followed by a retry that issues the same refund twice. That failure is
+the exact shape of Seal's contract: one approval for one parsed call, spent
+when the call runs, refused (`already_consumed`) when the identical retry
+arrives. Every decision is written down as a receipt file; on this protected
+path those receipts are unsigned today, so treat them as your own local
+record, not as evidence you could hand to someone else.
 
-**Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**The repository.** The GitHub MCP server runs locally over stdio. An agent
+can triage issues, read pull requests and draft comments all day without
+supervision; the tool that merges a pull request is different, because a wrong
+merge lands on a shared branch and costs the rest of the morning to unwind.
+Protect the merge tool and the triage continues untouched, while a merge
+stops, shows you exactly which pull request it named, and runs only after
+your yes — a yes that covers that call and no other.
+
+In every case the boundary is the one the demo below demonstrates: Seal
+controls the path through the proxy and only that path. Bash, the network,
+other tools and other servers are outside it.
+
+The rest of this page walks the whole product, end to end: install, demo,
+protect, remove.
 
 What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
@@ -212,44 +248,6 @@ The checker's `--pubkey` is a trust input. The demo generated that key for this 
 
 > Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human's choice; Seal cannot distinguish a human click from a client-generated acceptance.
 
-## Where this fits
-
-Seal v0.1.1 guards one tool of one stdio MCP server in one Claude Code project,
-with you approving each exact call. That is narrow on purpose. It maps onto a
-specific, recognisable moment: a server you already use all day, where almost
-every call is harmless and one call is not.
-
-**The database.** Your `.mcp.json` carries a Postgres MCP server so Claude
-Code can read schemas and query data while you work. The reads are the point;
-the tool that executes arbitrary SQL is the exposure — one UPDATE or DELETE
-with the wrong WHERE clause against the shared staging database is an
-afternoon of restore work. Protect that one tool and the reads keep flowing
-exactly as before, while a call to it stops and shows you the statement it
-parsed. You approve that statement, once; if the client re-sends the same
-approved call, Seal refuses it instead of running it again.
-
-**The money.** Stripe publishes an MCP server for agent workflows. An agent
-doing support triage reads customers and charges harmlessly, but the refund
-tool moves real money, and the classic failure there is not malice — it is a
-timeout followed by a retry that issues the same refund twice. That failure is
-the exact shape of Seal's contract: one approval for one parsed call, spent
-when the call runs, refused (`already_consumed`) when the identical retry
-arrives. Every decision is written down as a receipt file; on this protected
-path those receipts are unsigned today, so treat them as your own local
-record, not as evidence you could hand to someone else.
-
-**The repository.** The GitHub MCP server runs locally over stdio. An agent
-can triage issues, read pull requests and draft comments all day without
-supervision; the tool that merges a pull request is different, because a wrong
-merge lands on a shared branch and costs the rest of the morning to unwind.
-Protect the merge tool and the triage continues untouched, while a merge
-stops, shows you exactly which pull request it named, and runs only after
-your yes — a yes that covers that call and no other.
-
-In every case the boundary stays what the demo showed: Seal controls the path
-through the proxy and only that path. Bash, the network, other tools and other
-servers are outside it.
-
 ## 3. Protect
 
 `seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. Check that command first with `claude --version`. Before recording protection, Seal starts that server, completes MCP `initialize`, calls `tools/list`, and refuses unless the requested tool is in the observed names. Discovery has a 5000ms deadline for each phase. If a legitimate server needs longer to cold-start or list its tools, run `seal protect --timeout-ms 15000 SERVER TOOL` (choosing a suitable deadline); the refusal names this flag. The selected deadline is also used for the activation re-check. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server in the isolated scratch run used for this transcript.
@@ -327,18 +325,47 @@ The demo's temporary directory — the `/tmp/seal-demo-*` location it prints bef
 
 In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> demo.mutate`. The direct write, Bash, and everything else were outside it.
 
+## How the gate decides
+
+The demo and the protected path run the same proxy and the same rule, and each
+piece of that rule is held with a different strength, stated here plainly. The
+authorization rule is PROVED. The state machine is TESTED. On a guarded retry,
+Node owns handle lookup, freshness, protocol shape, and durable one-use
+consumption; the exact-call authorization rule runs through the pinned vendored
+WASM, and its answer is required before forwarding. Kernel failure or a
+Node/kernel disagreement refuses — there is no JavaScript authorization
+fallback. The kernel configuration is currently signed by an Ed25519 key
+generated inside the same worker that submits it. That is demo-grade
+self-authorization, not an externally trusted production config key.
+
 ## What Seal covers, and what it does not
+
+Seal is deliberately narrow, and it would rather tell you where its authority
+ends than let you assume it reaches further. These are the edges, grouped by
+the question they answer. Every one is stated on purpose; none of them is
+small print.
+
+### Where the gate's authority ends
 
 - Seal is a gate, not a sandbox. It controls the path through it, and only that path. The demo ends by writing a file outside the gate and reporting zero Seal decisions for it; that is the honest boundary, demonstrated rather than footnoted.
 - One project, one server, one selected tool. Everything else — Bash, network, subprocesses, other tools and other servers — is outside Seal, and other controls may or may not exist there.
 - Protect mediates only a stdio MCP server entry; other MCP transport shapes are outside the protected path.
+
+### What your approval does and does not mean
+
 - Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 - Seal binds a client’s retry to the displayed request, but cannot establish that a human rather than the client or an automatic elicitation hook supplied the approval.
 - One approval covers the displayed call only. Seal will not run it twice, and a failure before forwarding can spend the approval without running it at all. The approval expires after a short time.
 - Approval expiry follows the local wall clock; Seal provides no trusted-time guarantee.
+
+### What a receipt is worth today
+
 - Receipts from the protected path are unsigned today, and the shipped checker refuses them (`REFUSE unsealed`). Both paths write receipt files; only the demo signs them, with a key generated fresh for that run and gone with it. Until an operator signing key exists, a protected-path receipt is a plain local record, not checkable evidence.
 - Checking a signed receipt is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
 - The optional verification path fetches a separately pinned runtime from GitHub, so verification is bounded by that external repository and the integrity of the fetched bytes.
+
+### What surrounds the gate on your machine
+
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix, so another process running as that user can replace the entry point before the next run even though the packaged store is read-only and integrity-checked.
 - Seal v0.1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
