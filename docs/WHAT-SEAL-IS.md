@@ -1,5 +1,5 @@
-> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
-> This repository ships a Node CLI whose gate is the JavaScript retry contract.
+> Scope: This document argues a Seal family product position accepted on 2026-07-25; it does not describe the Node CLI shipped by this repository.
+> For its configured guarded tool, this repository's Node CLI uses the JavaScript retry contract for authorization and also requires its forwarding checks to pass.
 > For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).
 
 # What seal is: an object-capability broker
