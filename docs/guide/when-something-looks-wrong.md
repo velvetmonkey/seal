@@ -375,6 +375,29 @@ occur while extraction is writing the store. A refusal here can therefore
 follow partial store writes; remove the failed install and reinstall from a
 verified artifact. Minted in `scripts/install.cjs`.
 
+### `install_parent_unwritable`
+
+Seal could not create, replace, or clean up an installer target because its
+parent directory is not writable. Check that the selected prefix and its
+`bin` and `lib/seal` parents are owned and writable by the installing user;
+then repair those permissions or choose a different prefix and rerun the
+verified artifact.
+
+### `install_target_unwritable`
+
+Seal found an existing install target but cannot inspect or read it because
+the installing user lacks permission. Do not force past that boundary: repair
+the target's ownership and read permission if it is your install, or select a
+fresh prefix that you control and install there.
+
+### `existing_install_untrusted`
+
+The selected prefix already contains incomplete, non-regular, unreadable, or
+non-verifying Seal install targets, or store content that differs from the
+artifact being installed. Do not overwrite it blindly. Choose a fresh prefix,
+or repair the existing install only after determining why it no longer
+verifies; then rerun the verified artifact.
+
 ### `pin_missing`
 
 You ran the artifact without `--sha256`. The pin is required, on purpose:

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
-const SCRATCH_ROOT = "/home/monkey/scratch";
+const SCRATCH_ROOT = path.join(os.tmpdir(), "seal-reinstall-tests");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
@@ -28,11 +29,16 @@ function install(built, prefix) {
   return run(built.artifact, ["--sha256", built.digest, "--bytes", built.bytes, "--prefix", prefix]);
 }
 
+console.log(`reinstall.test effective uid: ${process.geteuid()}`);
+
 test("installer succeeds over its verified existing immutable install", () => {
   const built = buildArtifact();
   const prefix = path.join(built.out, "prefix");
   const first = install(built, prefix);
   assert.equal(first.code, 0, `${first.stdout}${first.stderr}`);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
+  const storeMode = fs.statSync(path.join(prefix, "lib", "seal", "store", record.treeSha256)).mode & 0o777;
+  assert.equal(storeMode, 0o555, `expected immutable store mode 555, got ${storeMode.toString(8)}`);
   const second = install(built, prefix);
   assert.equal(second.code, 0, `${second.stdout}${second.stderr}`);
   const launched = run(process.execPath, [path.join(prefix, "bin", "seal"), "--version"]);
@@ -48,9 +54,25 @@ test("installer refuses a physically unwritable launcher parent", () => {
   const bin = path.join(prefix, "bin");
   fs.chmodSync(bin, 0o555);
   let refused;
+  let denied;
   try {
+    try {
+      fs.writeFileSync(path.join(bin, `.seal-precondition-${process.pid}`), "precondition", { flag: "wx" });
+    } catch (error) {
+      denied = error;
+    }
+    console.log(
+      `reinstall.test unwritable-parent precondition: euid=${process.geteuid()} chmod=0555 ` +
+      `create=${denied ? `denied(${denied.code})` : "allowed"}`,
+    );
+    assert.ok(
+      denied && (denied.code === "EACCES" || denied.code === "EPERM"),
+      `cannot establish unwritable launcher-parent precondition for euid ${process.geteuid()}: ` +
+      `create after chmod 0555 was ${denied ? denied.code : "allowed"}`,
+    );
     refused = install(built, prefix);
   } finally {
+    try { fs.unlinkSync(path.join(bin, `.seal-precondition-${process.pid}`)); } catch { /* absent when create was denied */ }
     fs.chmodSync(bin, 0o755);
   }
   assert.notEqual(refused.code, 0, `${refused.stdout}${refused.stderr}`);
