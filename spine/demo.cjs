@@ -19,7 +19,7 @@ const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { TOOL } = require("./demo-server.cjs");
 
-const DEMO_LINE = process.env.SEAL_DEMO_LINE || "seal spine demo wrote this line";
+const DEMO_LINE = process.env.SEAL_DEMO_LINE || "seal demo wrote this line";
 
 function fail(message) {
   process.stderr.write(`seal: ${message}\n`);
@@ -126,7 +126,7 @@ async function run(argv, sealBinPath) {
     process.exit(exitCode);
   }
 
-  console.log("seal spine demo — one shared proxy, one hidden child, one real file");
+  console.log("seal demo — one shared proxy, one hidden child, one real file");
   await waitForFile(countFile);
 
   await send("initialize", { protocolVersion: "2026-07-28" });
