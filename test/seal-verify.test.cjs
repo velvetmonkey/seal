@@ -87,14 +87,18 @@ test("verify refuses empty, malformed, and non-receipt JSON paths", async () => 
   }
 });
 
-test("seal verify recognizes a real spine receipt and routes to the separate checker", () => {
-  // A spine receipt produced the way a user produces one: run the demo.
+test("seal verify recognizes a self-contained real spine receipt and routes to the separate checker", () => {
+  // A spine receipt produced the way a user produces one: run the demo. The
+  // demo's fabricated, temporarily-signed receipts live beside its key, not
+  // in the durable data store supplied to this process.
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-cache-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-data-"));
   const demo = run(["demo"], cache, dataHome, "y\n");
   assert.equal(demo.code, 0, demo.out);
-  const receiptDir = path.join(dataHome, "seal", "receipts");
-  const spine = path.join(receiptDir, fs.readdirSync(receiptDir).find((f) => f.includes("ALLOW")));
+  const receiptPaths = [...demo.out.matchAll(/^receipt written: (.+)$/gm)].map((match) => match[1]);
+  const spine = receiptPaths.find((receiptPath) => receiptPath.includes("-ALLOW.json"));
+  assert.ok(spine, demo.out);
+  assert.ok(!fs.existsSync(path.join(dataHome, "seal", "receipts")), "demo must not use the durable receipt store");
 
   const result = run(["verify", spine], cache, dataHome);
   // Recognized coherently, not crashed as an unknown schema.

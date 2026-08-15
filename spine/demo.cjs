@@ -68,15 +68,10 @@ async function run(argv, sealBinPath) {
   const dataFile = path.join(dir, "child", "data.txt");
   const countFile = `${dataFile}.count`;
   const storePath = path.join(dir, "approvals.journal");
-  // Receipts are the product's durable evidence and `seal status`' whole job
-  // is to show them — so a real run writes them to the store status reads
-  // (XDG_DATA_HOME/seal/receipts), not a temp dir status never looks in.
-  // An explicit --dir keeps everything, receipts included, inside that dir
-  // for a fully isolated run (the tests use this). The disposable scratch —
-  // journal, child data, the scope-witness outside file, the signing key —
-  // always stays in the working dir.
-  const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
-  const receiptsDir = dirIndex !== -1 ? path.join(dir, "receipts") : path.join(dataHome, "seal", "receipts");
+  // The demo creates fabricated decisions and signs them with this run's
+  // temporary key. Keep both in its working directory: a no-flag demo must
+  // not plant uncheckable claims in the user's durable receipt store.
+  const receiptsDir = path.join(dir, "receipts");
 
   const pendingById = new Map();
   const receiptPaths = [];
