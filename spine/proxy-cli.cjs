@@ -104,7 +104,8 @@ async function run(argv) {
       proxy.write(line);
     } catch (error) {
       process.stderr.write(`seal __proxy: ${error.message}\n`);
-      process.exitCode = 1;
+      input.close();
+      proxy.stop().finally(() => process.exit(1));
     }
   });
   input.on("close", async () => {
