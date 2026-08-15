@@ -16,6 +16,7 @@
 // rejects the held shape on a modern connection, and authorization now
 // lives entirely in the contract's own state.
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
@@ -44,11 +45,22 @@ function createProxy(options) {
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
 
-  const child = spawn(childArgv[0], childArgv.slice(1), {
+  const childCommand = childArgv[0];
+  if ((childCommand.includes("/") || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+    const error = new Error(`protected server command is missing: ${childCommand}`);
+    error.code = "protected_server_missing";
+    throw error;
+  }
+
+  const child = spawn(childCommand, childArgv.slice(1), {
     stdio: ["pipe", "pipe", "inherit"],
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });
   let stopping = false;
+  let childSpawnError = null;
+  child.once("error", (error) => {
+    childSpawnError = error.code === "ENOENT" ? "protected_server_missing" : "protected_server_failed";
+  });
   child.once("close", (code, signal) => {
     if (onChildExit) onChildExit(stopping ? 0 : code, signal);
   });
@@ -82,6 +94,10 @@ function createProxy(options) {
   }
 
   function canForward(frame) {
+    if (childSpawnError) {
+      blockForward(frame, childSpawnError, `protected server command failed to start: ${childArgv[0]}`);
+      return false;
+    }
     if (beforeForward) {
       const check = beforeForward();
       if (!check?.ok) {
