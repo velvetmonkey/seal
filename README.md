@@ -6,9 +6,11 @@
 
 Seal puts an approval gate in front of one tool of one MCP server. A guarded call is blocked until you approve that exact call, once. Then it runs once, and Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
 
+Seal is a gate, not a sandbox: it controls the path through it, and only that path.
+
 **Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
-What it costs you: Node 20 or later, Git, one file installed under `~/.local`, and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
+What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
 Every command below was run, in this order, on one Linux x86-64 machine against the bytes pinned in [`SHA256SUMS`](SHA256SUMS). The output under each command is the output that run printed.
 
@@ -48,8 +50,8 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-lWJpA8/child/data.txt
-child calls observed: 0 (read from /tmp/seal-demo-lWJpA8/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-MUeEEK/child/data.txt
+child calls observed: 0 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -57,15 +59,15 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal spine demo wrote this line"
     Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-lWJpA8/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-lWJpA8/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this approval was one-use and has already admitted a call"
-one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-lWJpA8/child/data.txt.count)
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786765271534-2592481-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786765271537-2592481-0002-ALLOW.json
-receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786765271539-2592481-0003-BLOCK.json
+one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-MUeEEK/child/data.txt.count)
+receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531992-2611546-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531995-2611546-0002-ALLOW.json
+receipt written: /home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -81,14 +83,14 @@ Seal decisions emitted: 0 (receipts in /home/monkey/.local/share/seal/receipts: 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval required once, executed once after approval, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786765271539-2592481-0003-BLOCK.json" --pubkey "/tmp/seal-demo-lWJpA8/receipt-signer.pub"
+  node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json" --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786765271539-2592481-0003-BLOCK.json" --pubkey "/tmp/seal-demo-lWJpA8/receipt-signer.pub"
+node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" "/home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json" --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
 ```
 
 ```
@@ -98,8 +100,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/.local/share/seal/receipts/receipt-1786765271539-2592481-0003-BLOCK.json > /tmp/tampered.json
-node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-lWJpA8/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/.local/share/seal/receipts/receipt-1786766531997-2611546-0003-BLOCK.json > /tmp/tampered.json
+node "/home/monkey/.local/lib/seal/store/87503f7c5e6d87c33adaa1c0d4bf788150d969b38b4b65a2d1b79328eaf6822e/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-MUeEEK/receipt-signer.pub"
 ```
 
 ```
