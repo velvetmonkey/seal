@@ -96,7 +96,7 @@ function main() {
     process.stderr.write([
       "UNSUPPORTED PLATFORM",
       "",
-      "Seal v1.1 supports Linux x86-64 only.",
+      "Seal v0.1.1 supports Linux x86-64 only.",
       "macOS arm64 has not completed Seal's end-to-end acceptance path.",
       "",
       "No files were changed.",

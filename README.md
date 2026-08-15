@@ -23,7 +23,7 @@ tool that is not: the one that executes SQL on a shared database, issues a
 refund, merges the pull request. Seal puts its gate in front of exactly that
 one tool and passes the rest of that server's tools straight through.
 
-**Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
 What it costs you: Node 20 or later, Git, one command and one read-only store directory installed under `~/.local`, the `claude` command for Protect (check with `claude --version`), and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
@@ -36,18 +36,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 04af487261ebc1ae2c8ada732bb82884437ccd0a46f89c1dcee7967561347516 --bytes 6118600 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149 --bytes 6118685 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/demodir/dist/seal-v0.1.1-linux-x64
-sha256 04af487261ebc1ae2c8ada732bb82884437ccd0a46f89c1dcee7967561347516
-bytes 6118600
-tree b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
+sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149
+bytes 6118685
+tree 3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree: b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
+tree 3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -165,7 +165,7 @@ that, and by handing you a command to check one of its receipts:
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
@@ -177,7 +177,7 @@ receipt the refused replay produced, using your run's own paths. Here is that
 command from the run above, run as printed:
 
 ```sh
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -188,7 +188,7 @@ Change one recorded field and the same checker refuses:
 
 ```sh
 sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/3e6e891a47f8e85b997317f191ff5146ec016132aa99759543e8d93f60951427/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -201,7 +201,7 @@ The checker's `--pubkey` is a trust input. The demo generated that key for this 
 
 ## Where this fits
 
-Seal v1.1 guards one tool of one stdio MCP server in one Claude Code project,
+Seal v0.1.1 guards one tool of one stdio MCP server in one Claude Code project,
 with you approving each exact call. That is narrow on purpose. It maps onto a
 specific, recognisable moment: a server you already use all day, where almost
 every call is harmless and one call is not.
@@ -271,7 +271,7 @@ State: /home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share/s
 
 `protect` reports how many tools returned by that server remain outside Seal, showing at most 20 names and the number omitted, then invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. At activation Seal repeats the handshake and tool inventory; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. From that restart on, `demo.mutate` calls use the same rule the demo showed: Seal will not run the approved call twice, and it may spend the approval without running it. The demo and protected path run the same proxy and contract. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
-Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
+Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v0.1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
 
 Seal states its trust assumption instead of decorating it with a green tick:
 
@@ -328,7 +328,7 @@ In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> dem
 - The optional verification path fetches a separately pinned runtime from GitHub, so verification is bounded by that external repository and the integrity of the fetched bytes.
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix, so another process running as that user can replace the entry point before the next run even though the packaged store is read-only and integrity-checked.
-- Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
+- Seal v0.1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License
 

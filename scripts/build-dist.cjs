@@ -3,6 +3,7 @@
 // Build the ONE Linux x86-64 install artifact. No macOS, no arm64, no key.
 const fs = require("node:fs");
 const path = require("node:path");
+require("./sync-version.cjs");
 const { packPayload, sha256Hex } = require("../spine/integrity.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
@@ -78,6 +79,7 @@ function main() {
     const artifact = Buffer.concat([Buffer.from(header, "utf8"), payload]);
     const name = `seal-v${version}-linux-x64`;
     const dest = path.join(outDir, name);
+    if (fs.existsSync(dest)) fs.rmSync(dest, { force: true });
     fs.writeFileSync(dest, artifact, { mode: 0o555 });
     const digest = sha256Hex(artifact);
     const sums = `${digest}  ${artifact.length}  ${name}\n`;

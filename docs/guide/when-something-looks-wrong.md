@@ -353,7 +353,7 @@ checker command to run instead. Nothing is wrong with the receipt.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike: Seal
-v1.1 supports Linux x86-64 only, refuses everything else, and changes no
+v0.1.1 supports Linux x86-64 only, refuses everything else, and changes no
 files when it refuses.
 
 ### `node_missing`

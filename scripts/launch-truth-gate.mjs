@@ -63,6 +63,8 @@ const umbrellaWorkflow = readRequired('umbrella workflow', umbrellaWorkflowPath)
 const evaluator = readRequired('evaluator truth surface', evaluatorPath);
 const comparison = readRequired('guardrail comparison', comparisonPath);
 const landingPage = readRequired('landing page', landingPagePath);
+const version = readRequired('VERSION', new URL('../VERSION', import.meta.url)).trim();
+if (!/^\d+\.\d+\.\d+$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
 
 // --- README: the developer route, roadmap step 6 ---
 
@@ -85,7 +87,9 @@ const originCount = readme.split(approvalOrigin).length - 1;
 if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
 
 // The platform sentence, verbatim (roadmap section 7), stated plainly.
-requireMatch(readme, /\*\*Seal v1\.1 supports Linux x86-64 only\. macOS, Windows, Linux ARM and other platforms are not supported in this release\.\*\*/, 'README must state the Linux x86-64-only platform sentence verbatim');
+const platformSentence = `**Seal v${version} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**`;
+const platformCount = readme.split(platformSentence).length - 1;
+if (platformCount !== 1) fail(`README must state the Linux x86-64-only platform sentence verbatim exactly once; found ${platformCount}`);
 
 // The signed-receipt claim was the fifth false user-visible string in this
 // build: the demo signs receipts with a per-run key, the protected path
