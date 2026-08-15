@@ -181,6 +181,42 @@ The named server is `http` (or anything but `stdio`). Seal gates local
 stdio servers only — there is no local process to stand in front of
 otherwise.
 
+### `protected_server_start_failed`
+
+Seal could not start the configured server while checking its tools, or the
+server exited before initialization began. Check the command, permissions,
+environment, and any stderr included in the message, then run `seal protect`
+again. The same check runs when the wrapper activates; a failure there marks
+the protection state `BROKEN`.
+
+### `protected_server_initialize_failed`
+
+The configured server did not complete the MCP initialize exchange: it may
+have timed out, exited, rejected the request, or returned malformed output.
+Fix the server or increase the discovery limit with `--timeout-ms`, then run
+`seal protect` again. At wrapper activation this failure marks the state
+`BROKEN`.
+
+### `protected_server_tools_list_failed`
+
+The configured server did not return a usable, complete `tools/list`: it may
+have timed out, exited, rejected the request, returned malformed output, or
+repeated a pagination cursor. Fix the server or increase the discovery limit
+with `--timeout-ms`, then run `seal protect` again. At wrapper activation this
+failure marks the state `BROKEN`.
+
+### `protected_server_tools_empty`
+
+The server's complete `tools/list` contained no named tools, so there is
+nothing Seal can guard. Fix the server's tool registration and protect again.
+At wrapper activation this failure marks the state `BROKEN`.
+
+### `protected_tool_absent`
+
+The server answered `tools/list`, but the tool named on `seal protect` was not
+among the observed names. Check the spelling or fix the server so it exposes
+that tool, then protect again.
+
 ### `claude_unavailable`
 
 The `claude` command is not on `PATH`. `seal protect` installs the gate
@@ -254,6 +290,13 @@ The recorded state file exists but cannot be read (exercised by corrupting
 it). Seal will not gate on a record it cannot read. If you have no
 explanation for the damage, treat that seriously; the blunt recovery is to
 remove the broken state and the local override and protect again.
+
+### `protected_tool_vanished`
+
+The guarded tool existed at protect time but was absent from `tools/list` when
+the wrapper tried to activate. Seal marks the protection state `BROKEN`
+instead of starting a gate for a different tool set. Restore the tool, then
+remove the broken state and local override and protect again.
 
 ## From `seal doctor`
 

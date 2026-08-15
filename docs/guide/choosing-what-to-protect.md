@@ -77,8 +77,9 @@ This is most of the answer, and it is deliberate.
 
 - **Your `.mcp.json`.** Untouched, byte for byte. The hash printed at protect
   time and the hash printed at unprotect time are the same file.
-- **Every other tool on the protected server.** They flow through the gate
-  unasked. From a live run against the protected `notes` server:
+- **When the gate is healthy and non-drifted, every other tool on the
+  protected server flows through the gate unasked.** From a live run against
+  the protected `notes` server:
 
   ```
   tools/list through the proxy: append_note, delete_all_notes
@@ -106,8 +107,9 @@ Project .mcp.json hash after unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326
 Protection: - outside Seal
 ```
 
-The local override is removed, the two hashes tell you `.mcp.json` was never
-touched, and the project is back to plain Claude Code. If a Claude Code
+The local override is removed; when the before and after hashes match, they
+show that `.mcp.json` had the same bytes at those two observations, and the
+project is back to plain Claude Code. If a Claude Code
 session is still running with the wrapper, `seal unprotect` refuses with
 `active_claude_session` until you stop it — taking the gate down mid-session
 is exactly the kind of silent change the gate exists to prevent.

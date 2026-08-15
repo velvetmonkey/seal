@@ -95,9 +95,10 @@ of this page is for.
 
 ## Checking a receipt afterwards
 
-Every decision — the prompt being offered, an allowed call, a refusal —
-writes one JSON file. `seal status` shows where they live and which is
-newest. A receipt records what the gate decided and about what. Only receipts
+When the gate can write its receipt directory, every decision — the prompt
+being offered, an allowed call, a refusal — writes one JSON file. `seal status`
+shows where they live and which is newest. A receipt records what the gate
+decided and about what. Only receipts
 with a seal and a public key you trust can be checked today: `seal demo`
 writes signed receipts, while the normal protected Claude Code path writes
 unsigned ones and the shipped checker returns `REFUSE unsealed` for them,

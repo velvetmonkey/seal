@@ -22,7 +22,12 @@ const SOURCES = [
   { file: "contract/contract.cjs", patterns: [/^\s+[A-Z_]+: "([a-z_]+)",/gm], sentinel: "already_consumed" },
   {
     file: "spine/protection.cjs",
-    patterns: [/new ProtectionError\(\s*"([a-z_]+)"/g, /\brefusal: "([a-z_]+)"/g, /\bcode: "([a-z_]+)"/g],
+    patterns: [
+      /new ProtectionError\(\s*"([a-z_]+)"/g,
+      /\bfail\("([a-z_]+)"/g,
+      /\brefusal: "([a-z_]+)"/g,
+      /\bcode: "([a-z_]+)"/g,
+    ],
     sentinel: "drifted",
   },
   { file: "spine/proxy.cjs", patterns: [/"(protected_server_missing|protected_server_failed|forward_refused)"/g], sentinel: "forward_refused" },

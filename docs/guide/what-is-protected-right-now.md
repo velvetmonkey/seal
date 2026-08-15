@@ -167,8 +167,9 @@ Receipts: 0 stored in …/seal/receipts (directory does not exist)
 Most recent: no receipt yet (receipt directory is missing)
 ```
 
-Nothing has ever been decided on this machine — a fresh install looks like
-this until the first demo or protected call.
+On a fresh install before the first demo or protected call, nothing has yet
+been decided, and status looks like this. A missing directory by itself does
+not prove that history: an earlier receipt directory may have been removed.
 
 ```
 Receipts: unavailable in …/seal/receipts (directory cannot be read)
