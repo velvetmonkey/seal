@@ -35,6 +35,8 @@ jobs:
           set -e
 
           gate_status=0
+          expected_zero=0
+          minimum_tests=94
           if (( node_status != 0 )); then
             echo "::error::node --test exited $node_status"
             gate_status=1
@@ -62,20 +64,20 @@ jobs:
             fi
           done
 
-          if (( summary_status[fail] == 0 && summary[fail] != 0 )); then
-            echo "::error::node --test reported ${summary[fail]} failures, expected 0"
+          if (( summary_status[fail] == 0 && summary[fail] != expected_zero )); then
+            echo "::error::node --test reported ${summary[fail]} failures, expected ${expected_zero}"
             gate_status=1
           fi
-          if (( summary_status[skipped] == 0 && summary[skipped] != 0 )); then
-            echo "::error::node --test reported ${summary[skipped]} skipped tests, expected 0"
+          if (( summary_status[skipped] == 0 && summary[skipped] != expected_zero )); then
+            echo "::error::node --test reported ${summary[skipped]} skipped tests, expected ${expected_zero}"
             gate_status=1
           fi
-          if (( summary_status[todo] == 0 && summary[todo] != 0 )); then
-            echo "::error::node --test reported ${summary[todo]} todo tests, expected 0"
+          if (( summary_status[todo] == 0 && summary[todo] != expected_zero )); then
+            echo "::error::node --test reported ${summary[todo]} todo tests, expected ${expected_zero}"
             gate_status=1
           fi
-          if (( summary_status[tests] == 0 && summary[tests] < 93 )); then
-            echo "::error::node --test ran ${summary[tests]} tests, expected at least 93"
+          if (( summary_status[tests] == 0 && summary[tests] < minimum_tests )); then
+            echo "::error::node --test ran ${summary[tests]} tests, expected at least ${minimum_tests}"
             gate_status=1
           fi
           if (( summary_status[pass] == 0 && summary_status[tests] == 0 && summary[pass] != summary[tests] )); then
