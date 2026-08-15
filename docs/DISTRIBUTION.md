@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 e90b1462a4b4a5d8c080bca7df1bdc8666ff0937b475a32c1769e111f6d1f8c5 --bytes 6117433 --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 a48a027970f1a15cee5c4b621c0751d87f130cab712ebf23a6b1864dcdaddbff --bytes 6117635 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
@@ -52,7 +52,10 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The demo prints the absolute path of that packaged checker. The launcher
-never searches `PATH` for another `seal`.
+never searches `PATH` for another `seal`. The checker imports no Seal module
+at check time, but copies the receipt canonicalisation rule and uses the same
+Node crypto platform as the producer. It detects receipt mutation under a
+trusted supplied key, not defects in those shared implementation choices.
 
 For `seal protect`, MCP discovery has a 5000ms deadline per phase by
 default. Slow but legitimate servers can use

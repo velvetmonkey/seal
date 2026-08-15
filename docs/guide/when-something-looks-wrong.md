@@ -449,7 +449,10 @@ untrustworthy and reinstall from a verified artifact.
 fact matches its sealed commitment under a key you supplied. Each refusal
 names the first thing that did not. For any `*_mismatch` token: the receipt
 does not prove what it appears to say — do not rely on it, and keep it as
-evidence that something rewrote it.
+evidence that something rewrote it. This is a separate process which imports
+no Seal module at check time, not a separately implemented checker: it
+copies the producer's canonicalisation rule and shares Node crypto, so it
+cannot detect a defect common to those parts.
 
 ### `unreadable_receipt`
 

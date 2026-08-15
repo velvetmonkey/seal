@@ -2,8 +2,11 @@
 
 Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
-A receipt records what was decided, and a separate checker refuses a receipt
-that has been altered. This page walks all three, from real runs.
+A receipt records what was decided, and a separate-process checker refuses a
+receipt that has been altered. The checker imports no Seal module at runtime,
+but copies Seal's canonicalisation rule and uses the same Node crypto
+platform, so it cannot detect defects shared there. This page walks all
+three, from real runs.
 
 ## The approval prompt, line by line
 
@@ -120,8 +123,10 @@ This signed example is from `seal demo`:
 ```
 
 Receipts are claims written by the gate, not proofs — so they are checked by
-a separate program that shares no code with the `seal` binary at runtime, and
-it needs a public key you already trust as input:
+a separate process that imports no Seal module at runtime and needs a public
+key you already trust as input. Its canonicalisation is nevertheless a
+byte-identical copy of the producer's rule, and both use Node crypto: a defect
+shared there can make both agree on a wrong receipt.
 
 ```
 $ node …/checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
@@ -144,6 +149,9 @@ whole meaning of the check:
   proves only self-consistency — a hostile sealer could sign its own.
 - The checker ships in the same artifact as Seal, so it cannot protect
   against a wholesale replaced artifact.
+- The checker is runtime-separate, not implementation-independent: it copies
+  the producer's canonicalisation rule and shares the Node crypto platform.
+  It cannot expose a defect common to those parts.
 
 One routing note: `seal verify` is **not** the command for these receipts. It
 handles a different, older receipt format, and pointed at one of its own

@@ -34,15 +34,15 @@ clone and install it with its own printed digest. From the clone:
 ```
 $ node scripts/build-dist.cjs --out dist
 dist/seal-v0.1.1-linux-x64
-sha256 8e97479eaf4df66d89b16e659db513bf12a83a928b8199244f8f4ec5c65c9c2f
-bytes 118209
-tree 6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
+sha256 a48a027970f1a15cee5c4b621c0751d87f130cab712ebf23a6b1864dcdaddbff
+bytes 6117635
+tree 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 
-$ sh dist/seal-v0.1.1-linux-x64 --sha256 8e97479eaf4df66d89b16e659db513bf12a83a928b8199244f8f4ec5c65c9c2f
+$ sh dist/seal-v0.1.1-linux-x64 --sha256 a48a027970f1a15cee5c4b621c0751d87f130cab712ebf23a6b1864dcdaddbff
 installed seal 0.1.1 linux-x64
-store: /home/monkey/scratch/opguide-run/home2/.local/lib/seal/store/6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
+store: /home/monkey/scratch/opguide-run/home2/.local/lib/seal/store/1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 command: /home/monkey/scratch/opguide-run/home2/.local/bin/seal
-tree: 6cb6c1584cfe297c5ae7c76be07f840705263f11a411b3321393d2078741b8bb
+tree: 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
