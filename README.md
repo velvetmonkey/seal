@@ -183,10 +183,16 @@ The demo's temporary directory — the `/tmp/seal-demo-*` location it prints bef
 
 - Seal is a gate, not a sandbox. It controls the path through it, and only that path. The demo ends by writing a file outside the gate and reporting zero Seal decisions for it; that is the honest boundary, demonstrated rather than footnoted.
 - One project, one server, one selected tool. Everything else — Bash, network, subprocesses, other tools and other servers — is outside Seal, and other controls may or may not exist there.
+- Protect mediates only a stdio MCP server entry; other MCP transport shapes are outside the protected path.
 - Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+- Seal binds a client’s retry to the displayed request, but cannot establish that a human rather than the client or an automatic elicitation hook supplied the approval.
 - An approval matches one exact call — parsed JSON arguments, one use, a short expiry — and the dialog shows that scope before you answer. A consumed approval admits no second call.
+- Approval expiry follows the local wall clock; Seal provides no trusted-time guarantee.
 - Receipts from the protected path are unsigned today, and the shipped checker refuses them (`REFUSE unsealed`). Both paths write receipt files; only the demo signs them, with a key generated fresh for that run and gone with it. Until an operator signing key exists, a protected-path receipt is a plain local record, not checkable evidence.
 - Checking a signed receipt is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
+- The optional verification path fetches a separately pinned runtime from GitHub, so verification is bounded by that external repository and the integrity of the fetched bytes.
+- Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
+- The installed command sits in a user-writable prefix, so another process running as that user can replace the entry point before the next run even though the packaged store is read-only and integrity-checked.
 - Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License

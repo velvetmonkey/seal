@@ -74,8 +74,8 @@ jobs:
             echo "::error::node --test reported ${summary[todo]} todo tests, expected 0"
             gate_status=1
           fi
-          if (( summary_status[tests] == 0 && summary[tests] < 92 )); then
-            echo "::error::node --test ran ${summary[tests]} tests, expected at least 92"
+          if (( summary_status[tests] == 0 && summary[tests] < 93 )); then
+            echo "::error::node --test ran ${summary[tests]} tests, expected at least 93"
             gate_status=1
           fi
           if (( summary_status[pass] == 0 && summary_status[tests] == 0 && summary[pass] != summary[tests] )); then
