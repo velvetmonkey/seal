@@ -77,8 +77,9 @@ This is most of the answer, and it is deliberate.
 
 - **Your `.mcp.json`.** Untouched, byte for byte. The hash printed at protect
   time and the hash printed at unprotect time are the same file.
-- **When the gate is healthy and non-drifted, every other tool on the
-  protected server flows through the gate unasked.** From a live run against
+- **When an ACTIVE wrapper or session is running for a healthy, non-drifted
+  gate, every other tool on the protected server flows through the gate
+  unasked.** From a live run against
   the protected `notes` server:
 
   ```
