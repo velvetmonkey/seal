@@ -8,7 +8,7 @@
 //   Tool: <tool>
 //   Arguments:
 //     <key>: <value>
-//   Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
+//   Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
 //   Outside Seal: Bash, network, subprocesses, other tools and servers.
 //
 // When something changed, the caller REPLACES the first line (e.g.
@@ -23,7 +23,7 @@ const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
 const WIDTH_MARGIN = 4;
-const SCOPE_RULE = "parsed JSON; object-key order and 1 vs 1.0 match; one use";
+const SCOPE_RULE = "this parsed call (key order and 1/1.0 match); at most one run";
 const OUTSIDE_LINE = "Outside Seal: Bash, network, subprocesses, other tools and servers.";
 const BARE_VALUE = /^[A-Za-z0-9_.\/:@-]+$/;
 

@@ -58,7 +58,7 @@ test("seal demo: input_required, approve once, replay refused; counts from the c
   // The contract's fixed dialog is displayed, not summarised.
   assert.match(run.out, /Approval required/);
   assert.match(run.out, /Tool: demo\.mutate/);
-  assert.match(run.out, /one use; 2 min/);
+  assert.match(run.out, /at most one run; 2 min/);
   assert.match(run.out, /Outside Seal: Bash, network, subprocesses/);
 
   child.stdin.write("y\n");
@@ -68,7 +68,7 @@ test("seal demo: input_required, approve once, replay refused; counts from the c
   assert.equal(readCount(countFile), "1", "child must have observed exactly one call after approve + replay");
   assert.match(run.out, /child calls observed: 1/);
   assert.match(run.out, /still 1/);
-  assert.match(run.out, /one-use enforced/);
+  assert.match(run.out, /one-use held/);
   assert.match(run.out, /already_consumed/);
 
   const receiptPaths = [...run.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);

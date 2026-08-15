@@ -179,7 +179,7 @@ function createApprovalContract({
     if (!record) return refuse(REFUSALS.UNKNOWN_STATE, "no continuation matches this handle; altered and never-issued are the same miss");
 
     // 2. Require pending and unexpired.
-    if (record.status === "consumed") return refuse(REFUSALS.ALREADY_CONSUMED, "this approval was one-use and has already admitted a call");
+    if (record.status === "consumed") return refuse(REFUSALS.ALREADY_CONSUMED, "this one-use approval has already been consumed");
     if (record.status === "declined") return refuse(REFUSALS.TERMINALLY_DECLINED, "this request was declined; denial is terminal");
     if (record.status === "cancelled") return refuse(REFUSALS.CANCELLED, "this request was cancelled");
     if (record.status === "restart_invalidated") {
