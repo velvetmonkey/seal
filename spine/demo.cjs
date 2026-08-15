@@ -68,6 +68,15 @@ async function run(argv, sealBinPath) {
   const dataFile = path.join(dir, "child", "data.txt");
   const countFile = `${dataFile}.count`;
   const storePath = path.join(dir, "approvals.journal");
+  // Receipts are the product's durable evidence and `seal status`' whole job
+  // is to show them — so a real run writes them to the store status reads
+  // (XDG_DATA_HOME/seal/receipts), not a temp dir status never looks in.
+  // An explicit --dir keeps everything, receipts included, inside that dir
+  // for a fully isolated run (the tests use this). The disposable scratch —
+  // journal, child data, the scope-witness outside file, the signing key —
+  // always stays in the working dir.
+  const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+  const receiptsDir = dirIndex !== -1 ? path.join(dir, "receipts") : path.join(dataHome, "seal", "receipts");
 
   const pendingById = new Map();
   const receiptPaths = [];
@@ -83,7 +92,7 @@ async function run(argv, sealBinPath) {
       guardTool: TOOL,
       signer,
       storePath,
-      receiptsDir: path.join(dir, "receipts"),
+      receiptsDir,
       childArgv: [process.execPath, sealBinPath, "__demo-server", dataFile],
       onClientLine: (line) => {
         const frame = JSON.parse(line);
@@ -181,7 +190,6 @@ async function run(argv, sealBinPath) {
   // doing a harmless write that bypasses the gate, while the proxy is STILL
   // RUNNING, and observes that Seal emitted nothing for it. The witness
   // completes the demonstration; it does not apologise for it.
-  const receiptsDir = path.join(dir, "receipts");
   const outsidePath = path.join(dir, "outside.txt");
   const receiptsBefore = fs.readdirSync(receiptsDir).length;
   console.log("");
@@ -216,7 +224,7 @@ async function run(argv, sealBinPath) {
   const checkerPath = path.resolve(path.dirname(sealBinPath), "..", "checker", "seal-receipt-check.mjs");
   console.log("receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:");
   console.log(`  node ${JSON.stringify(checkerPath)} ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);
-  console.log("  Note: this demo wrote that key in the same folder as the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
+  console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   process.exit(0);
 }
 

@@ -89,8 +89,12 @@ function status() {
     }
     try {
       const receipt = JSON.parse(fs.readFileSync(target, "utf8"));
-      if (typeof receipt.verdict !== "string" || receipt.now === undefined) throw new Error("missing verdict or decision time");
-      observed.push({ target, name: entry.name, verdict: receipt.verdict, now: receipt.now, mtimeMs: stat.mtimeMs });
+      // Status reports the receipts the product actually writes: spine
+      // receipts carry `decision` and `at`. Kernel receipts (verdict/now)
+      // are a separate format handled by `seal verify` on an explicit path,
+      // not surfaced here.
+      if (typeof receipt.decision !== "string" || receipt.at === undefined) throw new Error("missing decision or receipt time");
+      observed.push({ target, name: entry.name, verdict: receipt.decision, now: receipt.at, mtimeMs: stat.mtimeMs });
     } catch (error) {
       console.log(`Receipt unreadable: ${entry.name} (${error.message})`);
     }
@@ -101,7 +105,11 @@ function status() {
   }
   observed.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const recent = observed[0];
-  console.log(`Most recent: ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
+  // "by write time" names the sort: this is the newest receipt file, not a
+  // verdict on any session. A demo writes several receipts (the last is the
+  // replay refusal), so an unqualified "Most recent: BLOCK" could be misread
+  // as "the run was blocked" when the approved call actually ran.
+  console.log(`Most recent (by write time): ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
 }
 function shellWord(value) {
   return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
@@ -178,7 +186,18 @@ async function verify(receiptPath) {
   let text;
   try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
-  try { JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
+  // Spine receipts (what the product actually writes) are checked by the
+  // SEPARATE external checker, on purpose (V11-RECEIPT-01): the product does
+  // not verify its own receipts. Recognise the format and route there rather
+  // than crash it through the kernel verifier as an "unrecognized" schema.
+  if (parsed && parsed.receipt === "seal.spine/v1") {
+    console.error(`seal: spine_receipt_use_external_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
+    console.error(`Check it with the separate external checker: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
+    process.exitCode = 2;
+    return;
+  }
   const runtime = await ensureRuntime();
   const verifier = require(path.join(runtime, "src/verify.cjs"));
   const result = await verifier.verifyDetailed(absolute);
