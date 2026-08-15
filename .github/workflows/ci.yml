@@ -16,6 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Expose the selected Node to the installed-artifact test
+        shell: bash
+        run: |
+          selected_node="$(command -v node)"
+          if [[ -e /usr/bin/node ]]; then
+            test "$(readlink -f /usr/bin/node)" = "$(readlink -f "$selected_node")"
+          else
+            sudo ln -s "$selected_node" /usr/bin/node
+          fi
       - name: Run and count the complete product suite
         shell: bash
         run: |
