@@ -34,15 +34,15 @@ clone and install it with its own printed digest. From the clone:
 ```
 $ node scripts/build-dist.cjs --out dist
 dist/seal-v0.1.1-linux-x64
-sha256 5afa66db620db2e8eaadca76949c63160d3af36b13185564ab94892ab61383c9
-bytes 6117652
-tree 84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
+sha256 04af487261ebc1ae2c8ada732bb82884437ccd0a46f89c1dcee7967561347516
+bytes 6118600
+tree b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
 
-$ sh dist/seal-v0.1.1-linux-x64 --sha256 5afa66db620db2e8eaadca76949c63160d3af36b13185564ab94892ab61383c9
+$ sh dist/seal-v0.1.1-linux-x64 --sha256 04af487261ebc1ae2c8ada732bb82884437ccd0a46f89c1dcee7967561347516
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-kernelpath-prefix.6M8ax0/lib/seal/store/84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
-command: /tmp/seal-kernelpath-prefix.6M8ax0/bin/seal
-tree: 84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
+command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
+tree: b22385f417b20c3ce26bda2535c03ef9b3fe107af996477a38d82579fd568d65
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are

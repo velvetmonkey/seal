@@ -61,29 +61,25 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
 
 const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
-// The END-TO-END path a user takes: run `seal demo`, then `seal status`, and
-// see the receipts. No --dir, no hand-built fixture, no copying — the demo
-// writes where a real run writes and status reads where it reads. This single
-// assertion catches BOTH defects at once: the wrong schema (status could not
-// parse a spine receipt) and the wrong place (the demo wrote to a temp dir
-// status never looks in). A test that builds its own input, or hands status a
-// receipt directly, would have caught neither.
-test("END TO END: seal demo then seal status shows the receipts, and names corruption", () => {
+// Demo receipts are deliberately self-contained: they are fabricated and the
+// signing key is temporary. Status must therefore continue to report the
+// user's durable store as empty after a demo run.
+test("END TO END: seal demo leaves status's durable receipt store untouched", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-e2e-"));
   const demo = run(["demo"], root, "y\n");
   assert.equal(demo.code, 0, demo.out);
 
-  // The demo wrote its receipts to the store status reads — plant a corrupt
-  // file there too, then run status once.
+  const receiptPaths = [...demo.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
+  assert.equal(receiptPaths.length, 3, demo.out);
+  for (const receiptPath of receiptPaths) assert.match(receiptPath, /\/seal-demo-[^/]+\/receipts\//);
+
   const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
-  fs.writeFileSync(path.join(receiptDir, "corrupt.json"), "not json\n");
+  assert.ok(!fs.existsSync(receiptDir), `demo must not create ${receiptDir}`);
 
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Receipts: 4 stored in /m);
-  assert.match(result.out, /^Receipt unreadable: corrupt\.json \(Unexpected token/m);
-  assert.doesNotMatch(result.out, /^Receipt unreadable: receipt-.*\(missing/m);
-  assert.match(result.out, /^Most recent \(by write time\): (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
+  assert.match(result.out, /^Receipts: 0 stored in .* \(directory does not exist\)$/m);
+  assert.match(result.out, /^Most recent: no receipt yet \(receipt directory is missing\)$/m);
 });
 
 test("status reports the kernel runtime as present when it is cached", async () => {

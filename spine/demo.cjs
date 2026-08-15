@@ -30,6 +30,40 @@ function readCount(countFile) {
   return fs.readFileSync(countFile, "utf8").trim();
 }
 
+function canonicalPath(filePath) {
+  const absolute = path.isAbsolute(filePath)
+    ? filePath
+    : `${process.cwd()}${path.sep}${filePath}`;
+  try {
+    return fs.realpathSync(absolute);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    const parent = path.dirname(absolute);
+    if (parent === absolute) return path.resolve(absolute);
+    return path.resolve(canonicalPath(parent), path.basename(absolute));
+  }
+}
+
+function isWithin(candidate, root) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
+}
+
+function realReceiptStoreRoots() {
+  const roots = [path.join(os.homedir(), ".local", "share", "seal")];
+  if (process.env.XDG_DATA_HOME) roots.push(path.join(process.env.XDG_DATA_HOME, "seal"));
+  return [...new Set(roots.map(canonicalPath))];
+}
+
+function refuseRealReceiptStore(demoDir) {
+  const resolved = canonicalPath(demoDir);
+  const receiptRoot = realReceiptStoreRoots().find((root) => isWithin(resolved, root));
+  if (receiptRoot) {
+    fail(`REFUSE demo_directory_is_real_receipt_store: --dir resolves inside Seal's real receipt store (${receiptRoot}): ${resolved}`);
+  }
+  return resolved;
+}
+
 async function waitForFile(filePath, ms = 5000) {
   const started = Date.now();
   while (!fs.existsSync(filePath)) {
@@ -58,25 +92,23 @@ async function run(argv, sealBinPath) {
     fail(`seal demo accepts only --dir PATH; the demo harness takes no server, URI, transport or configuration (got: ${argv[i]})`);
   }
   const dirIndex = argv.indexOf("--dir");
+  let demoCreatedDirectory = false;
   if (dirIndex !== -1) {
     dir = argv[dirIndex + 1];
     if (!dir) fail("--dir needs a path");
+    dir = refuseRealReceiptStore(dir);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   } else {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
+    demoCreatedDirectory = true;
   }
   const dataFile = path.join(dir, "child", "data.txt");
   const countFile = `${dataFile}.count`;
   const storePath = path.join(dir, "approvals.journal");
-  // Receipts are the product's durable evidence and `seal status`' whole job
-  // is to show them — so a real run writes them to the store status reads
-  // (XDG_DATA_HOME/seal/receipts), not a temp dir status never looks in.
-  // An explicit --dir keeps everything, receipts included, inside that dir
-  // for a fully isolated run (the tests use this). The disposable scratch —
-  // journal, child data, the scope-witness outside file, the signing key —
-  // always stays in the working dir.
-  const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
-  const receiptsDir = dirIndex !== -1 ? path.join(dir, "receipts") : path.join(dataHome, "seal", "receipts");
+  // The demo creates fabricated decisions and signs them with this run's
+  // temporary key. Keep both in its working directory: a no-flag demo must
+  // not plant uncheckable claims in the user's durable receipt store.
+  const receiptsDir = path.join(dir, "receipts");
 
   const pendingById = new Map();
   const receiptPaths = [];
@@ -141,7 +173,7 @@ async function run(argv, sealBinPath) {
     console.log(`tool      ${tool.name}  ${tool.name === TOOL ? "guarded" : "—"}`);
   }
   console.log(`child     seal __demo-server (this same binary) mutating ${dataFile}`);
-  console.log(`temporary demo directory: ${dir} (remains after the demo for the printed checker command)`);
+  console.log(`${demoCreatedDirectory ? "temporary demo directory" : "demo directory"}: ${dir} (remains after the demo for the printed checker command)`);
 
   const before = readCount(countFile);
   if (before !== "0") fail(`expected a fresh child at 0 observed calls, count file reads ${before}`);
