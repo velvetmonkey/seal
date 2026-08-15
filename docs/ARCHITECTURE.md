@@ -1,3 +1,7 @@
+> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
+> For its configured guarded tool, this repository's Node CLI uses the JavaScript retry contract for authorization and also requires its forwarding checks to pass.
+> For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).
+
 # Seal family architecture — one picture
 
 One diagram, five roles: **decision core** (proven), **enforcement** (deployed), **receipt**
