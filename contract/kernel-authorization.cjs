@@ -8,7 +8,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const PRODUCT_ROOT = path.resolve(__dirname, "..");
-const DEFAULT_KERNEL_ROOT = path.join(PRODUCT_ROOT, "test-support", "runtime-fixture", "kernel");
+const DEFAULT_KERNEL_ROOT = path.join(PRODUCT_ROOT, "runtime", "kernel");
 const DEFAULT_MANIFEST = path.join(PRODUCT_ROOT, "runtime-manifest.json");
 const DEFAULT_KERNEL_TIMEOUT_MS = 5000;
 

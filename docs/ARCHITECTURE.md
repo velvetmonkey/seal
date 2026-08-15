@@ -81,7 +81,7 @@ The shipped Node CLI keeps continuation state in Node and sends only the
 authorization sub-question through the vendored WASM. A guarded retry follows
 `spine/proxy.cjs` → `contract/contract.cjs` →
 `contract/kernel-authorization.cjs` →
-`test-support/runtime-fixture/kernel/runner.cjs` → `seal_decide`. The WASM
+`runtime/kernel/runner.cjs` → `seal_decide`. The WASM
 answer is load-bearing: BLOCK, unreadable output, a hash mismatch, or a
 Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
 

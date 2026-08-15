@@ -14,10 +14,34 @@ const {
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+const OLD_KERNEL_ROOT = path.join(ROOT, "test-support", "runtime-fixture", "kernel");
 const HANGING_WORKER = path.join(ROOT, "test-support", "hanging-kernel-worker.cjs");
 const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
+
+test("the production kernel has one runtime location and the retired fixture path is absent", () => {
+  assert.equal(DEFAULT_KERNEL_ROOT, path.join(ROOT, "runtime", "kernel"));
+  assert.ok(fs.statSync(path.join(DEFAULT_KERNEL_ROOT, "wasm", "seal.wasm")).isFile());
+  assert.equal(fs.existsSync(OLD_KERNEL_ROOT), false);
+});
+
+test("a valid kernel placed only at the retired fixture path cannot satisfy the adapter", (t) => {
+  const product = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-old-path-only-"));
+  t.after(() => fs.rmSync(product, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(product, "contract"), { recursive: true });
+  fs.mkdirSync(path.dirname(path.join(product, "test-support", "runtime-fixture", "kernel")), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, "contract", "kernel-authorization.cjs"), path.join(product, "contract", "kernel-authorization.cjs"));
+  fs.copyFileSync(path.join(ROOT, "runtime-manifest.json"), path.join(product, "runtime-manifest.json"));
+  fs.cpSync(DEFAULT_KERNEL_ROOT, path.join(product, "test-support", "runtime-fixture", "kernel"), { recursive: true });
+
+  const isolated = require(path.join(product, "contract", "kernel-authorization.cjs"));
+  assert.equal(fs.existsSync(isolated.DEFAULT_KERNEL_ROOT), false);
+  assert.throws(
+    () => isolated.createKernelAuthorizationAdapter().authorize({}),
+    (error) => error.code === "kernel_integrity_refused" && /cannot hash the vendored wasm/.test(error.message),
+  );
+});
 
 function fresh(contract, args = ARGS) {
   return contract.begin({ tool: TOOL, args }).result.requestState;

@@ -5,8 +5,8 @@
 // `seal status` still consume them, so their tests build one here.
 //
 // The product deliberately downloads this runtime on a cold `seal verify`
-// cache. Tests must not: the checked-in fixture is the manifest-pinned
-// runtime, copied to each test's fresh cache after hash verification.
+// cache. Tests must not: the checked-in manifest-pinned runtime is copied to
+// each test's fresh cache after hash verification.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -14,13 +14,16 @@ const { pathToFileURL } = require("node:url");
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "runtime-manifest.json"), "utf8"));
 const fixture = path.join(__dirname, "runtime-fixture");
+const kernel = path.join(__dirname, "..", "runtime", "kernel");
 
 async function ensureRuntime(cacheRoot) {
   const cache = path.join(cacheRoot, "runtime", manifest.commit);
   for (const [relative, expected] of Object.entries(manifest.files)) {
     const target = path.join(cache, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    const source = path.join(fixture, relative);
+    const source = relative.startsWith("kernel/")
+      ? path.join(kernel, relative.slice("kernel/".length))
+      : path.join(fixture, relative);
     const bytes = fs.readFileSync(source);
     const got = crypto.createHash("sha256").update(bytes).digest("hex");
     if (got !== expected) throw new Error(`runtime fixture hash mismatch for ${relative}: ${got}`);

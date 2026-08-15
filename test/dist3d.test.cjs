@@ -96,6 +96,9 @@ test("the published artifact version matches the release name and the installed 
   assert.equal(record.version, VERSION);
   assert.equal(record.platform, "linux-x64");
   assert.ok(path.basename(built.artifact).includes(`v${VERSION}`));
+  const store = path.join(prefix, record.store);
+  assert.ok(fs.statSync(path.join(store, "runtime", "kernel", "wasm", "seal.wasm")).isFile());
+  assert.equal(fs.existsSync(path.join(store, "test-support", "runtime-fixture", "kernel")), false);
 });
 
 test("clause 1: changing one byte of the installed artifact is a named refusal", () => {

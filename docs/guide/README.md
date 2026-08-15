@@ -34,15 +34,15 @@ clone and install it with its own printed digest. From the clone:
 ```
 $ node scripts/build-dist.cjs --out dist
 dist/seal-v0.1.1-linux-x64
-sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb
-bytes 6117802
-tree 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
+sha256 5afa66db620db2e8eaadca76949c63160d3af36b13185564ab94892ab61383c9
+bytes 6117652
+tree 84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
 
-$ sh dist/seal-v0.1.1-linux-x64 --sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb
+$ sh dist/seal-v0.1.1-linux-x64 --sha256 5afa66db620db2e8eaadca76949c63160d3af36b13185564ab94892ab61383c9
 installed seal 0.1.1 linux-x64
-store: /home/monkey/scratch/opguide-run/home2/.local/lib/seal/store/1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
-command: /home/monkey/scratch/opguide-run/home2/.local/bin/seal
-tree: 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
+store: /tmp/seal-kernelpath-prefix.6M8ax0/lib/seal/store/84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
+command: /tmp/seal-kernelpath-prefix.6M8ax0/bin/seal
+tree: 84549b9c29d2b9ba4f9a46b9d25dd774c3dc2d830867e838fcc17d07e4c10b0d
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
