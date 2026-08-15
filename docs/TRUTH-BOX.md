@@ -1,3 +1,7 @@
+> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
+> This repository ships a Node CLI whose gate is the JavaScript retry contract.
+> For the truth about what you installed, read [docs/RELEASE-NOTES-v1.1.md](RELEASE-NOTES-v1.1.md) and the [README](../README.md).
+
 # Truth box (canonical)
 
 <!-- Canonical copy of the truth-box claim block: runtime profile, claim,
