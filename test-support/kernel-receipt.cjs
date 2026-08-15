@@ -3,26 +3,28 @@
 // assurance-kit runtime, exactly as the retired wasm demo used to. The
 // spine demo no longer emits kernel receipts, but `seal verify` and
 // `seal status` still consume them, so their tests build one here.
+//
+// The product deliberately downloads this runtime on a cold `seal verify`
+// cache. Tests must not: the checked-in fixture is the manifest-pinned
+// runtime, copied to each test's fresh cache after hash verification.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "runtime-manifest.json"), "utf8"));
+const fixture = path.join(__dirname, "runtime-fixture");
 
 async function ensureRuntime(cacheRoot) {
-  const base = process.env.SEAL_RUNTIME_BASE_URL ||
-    `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
   const cache = path.join(cacheRoot, "runtime", manifest.commit);
   for (const [relative, expected] of Object.entries(manifest.files)) {
     const target = path.join(cache, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (fs.existsSync(target)) continue;
-    const response = await fetch(`${base}/${relative}`);
-    if (!response.ok) throw new Error(`runtime download failed: ${response.status} ${relative}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
+    const source = path.join(fixture, relative);
+    const bytes = fs.readFileSync(source);
     const got = crypto.createHash("sha256").update(bytes).digest("hex");
-    if (got !== expected) throw new Error(`runtime hash mismatch for ${relative}: ${got}`);
+    if (got !== expected) throw new Error(`runtime fixture hash mismatch for ${relative}: ${got}`);
+    if (fs.existsSync(target)) continue;
     fs.writeFileSync(target, bytes, { mode: 0o600 });
   }
   return cache;
@@ -44,4 +46,4 @@ async function writeKernelReceipt(cacheRoot, dataHome) {
   return receipt;
 }
 
-module.exports = { writeKernelReceipt };
+module.exports = { ensureRuntime, writeKernelReceipt };

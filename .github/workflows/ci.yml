@@ -112,6 +112,7 @@ jobs:
       - run: node scripts/readme-claim-inventory.mjs
       - run: node scripts/claims-drift.mjs
       - run: node --test test/claims-drift.test.mjs
+      # Required CI compares the local claim block against the committed hash only; live sibling comparison is in family-claims-live.yml.
       - run: node scripts/claims-drift-family.mjs
       - name: Banned verification claims must not return (README included)
         run: node --test --test-name-pattern 'no banned verification claim' test/no-verification-claim.test.cjs

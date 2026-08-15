@@ -13,7 +13,7 @@ function run(args, cache, dataHome, input = "") {
   } catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
 }
 
-const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
+const { ensureRuntime, writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
 test("seal verify accepts a receipt copied away from all generating state", async () => {
   const genCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-cache-"));
@@ -26,6 +26,7 @@ test("seal verify accepts a receipt copied away from all generating state", asyn
   fs.rmSync(genData, { recursive: true, force: true });
   const verifyCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-cache-"));
   const verifyData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-data-"));
+  await ensureRuntime(verifyCache);
   const result = run(["verify", copied], verifyCache, verifyData);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /RE-DERIVED  this binary re-derived the approved decision from the saved receipt/);
@@ -70,10 +71,11 @@ test("verify distinguishes a non-file path from denied receipt permissions", () 
   assert.match(denied.out, new RegExp(`seal: receipt file permissions deny reading: ${unreadable}`));
 });
 
-test("verify refuses empty, malformed, and non-receipt JSON paths", () => {
+test("verify refuses empty, malformed, and non-receipt JSON paths", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-"));
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-cache-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-data-"));
+  await ensureRuntime(cache);
   for (const [name, pattern] of [["empty.json", /receipt is empty/], ["bad.json", /not valid JSON/], ["not-a-receipt.json", /receipt verification failed|not a valid receipt|schema valid/]]) {
     const target = path.join(root, name);
     if (name === "empty.json") fs.writeFileSync(target, "");
