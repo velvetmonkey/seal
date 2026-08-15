@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
+// Truth gate for the launch surfaces.
+//
+// Since roadmap step 6 the README is the developer route only: one badge,
+// four exercised beats, the canonical approval-origin sentence, and no
+// repository family, replay narrative or mesh claim. This gate holds that
+// shape, and holds the evaluator and comparison surfaces to the corrections
+// they already carry. If a removed claim is reintroduced, the gate fails
+// until the claim returns WITH its qualification and this gate is updated
+// deliberately in the same change.
 import fs from 'node:fs';
 
 const EXPECTED = {
   readme: 'README.md',
   umbrellaWorkflow: '.github/workflows/ci.yml',
-  hostWorkflow: 'seal-host/.github/workflows/golden-path.yml',
   evaluator: 'EVALUATOR-START.md',
   comparison: 'docs/WHY-DIFFERENT.md',
   landingPage: 'index.html',
@@ -45,59 +53,62 @@ function requireMatch(source, pattern, message) {
   if (!pattern.test(source)) fail(message);
 }
 
-if (process.argv.length !== 8) {
-  fail(`expected six inputs (${Object.values(EXPECTED).join(', ')}); received ${process.argv.length - 2}`);
+if (process.argv.length !== 7) {
+  fail(`expected five inputs (${Object.values(EXPECTED).join(', ')}); received ${process.argv.length - 2}`);
 }
 
-const [readmePath, umbrellaWorkflowPath, hostWorkflowPath, evaluatorPath, comparisonPath, landingPagePath] = process.argv.slice(2);
+const [readmePath, umbrellaWorkflowPath, evaluatorPath, comparisonPath, landingPagePath] = process.argv.slice(2);
 const readme = readRequired('README', readmePath);
 const umbrellaWorkflow = readRequired('umbrella workflow', umbrellaWorkflowPath);
-const hostWorkflow = readRequired('host workflow', hostWorkflowPath);
 const evaluator = readRequired('evaluator truth surface', evaluatorPath);
 const comparison = readRequired('guardrail comparison', comparisonPath);
 const landingPage = readRequired('landing page', landingPagePath);
 
+// --- README: the developer route, roadmap step 6 ---
+
 const umbrellaName = workflowName('umbrella workflow', umbrellaWorkflow);
-const hostName = workflowName('host workflow', hostWorkflow);
 const badges = [...readme.matchAll(/\[!\[([^\]]+)\]\(([^)]+badge\.svg\?branch=main)\)\]\(([^)]+)\)/g)]
   .map((match) => ({ label: match[1], image: match[2], target: match[3] }));
-
-const expectedBadges = [
-  {
-    label: umbrellaName,
-    image: 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main',
-    target: 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml',
-  },
-  {
-    label: hostName,
-    image: 'https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main',
-    target: 'https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml',
-  },
-];
-
-if (badges.length !== expectedBadges.length) fail(`README must contain exactly ${expectedBadges.length} native main-branch workflow badges; found ${badges.length}`);
-for (const expected of expectedBadges) {
-  if (!badges.some((badge) => badge.label === expected.label && badge.image === expected.image && badge.target === expected.target)) {
-    fail(`README badge does not truthfully map workflow ${JSON.stringify(expected.label)} to ${expected.image}`);
-  }
+if (badges.length !== 1) fail(`README must contain exactly one native main-branch workflow badge; found ${badges.length}`);
+const badge = badges[0];
+if (badge.label !== umbrellaName
+  || badge.image !== 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main'
+  || badge.target !== 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml') {
+  fail(`README badge does not truthfully map workflow ${JSON.stringify(umbrellaName)} to this repository's ci.yml`);
 }
 if (/shields\.io[^\n]*actions\/workflow\/status/i.test(readme)) fail('README uses a workflow-status proxy instead of the native GitHub badge endpoint');
 
-requireMatch(readme, /this \*\*attack replay\*\*, not a live-agent attack,/, 'README must identify the demonstration as an attack replay, not a live-agent attack');
-const liveAttackMentions = readme.match(/live-agent attack/gi) ?? [];
-if (liveAttackMentions.length !== 1) fail(`README must contain exactly one negated live-agent-attack clarification; found ${liveAttackMentions.length}`);
+// The canonical approval-origin sentence, verbatim (roadmap section 6),
+// placed once on the front page.
+const approvalOrigin = 'Seal enforces that only a matching, one-use approval response can release the exact effect; on the Claude Code path, it trusts Claude Code to present that request to a human and faithfully return the human\'s choice, and does not claim to distinguish a human click from a client-generated acceptance.';
+const originCount = readme.split(approvalOrigin).length - 1;
+if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
+
+// The platform sentence, verbatim (roadmap section 7), stated plainly.
+requireMatch(readme, /\*\*Seal v1\.1 supports Linux x86-64 only\. macOS, Windows, Linux ARM and other platforms are not supported in this release\.\*\*/, 'README must state the Linux x86-64-only platform sentence verbatim');
+
+// Claims removed from the developer route must not creep back without their
+// qualifications. If one of these words returns, re-add the qualified wording
+// from git history and update this gate in the same change.
+if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
+if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
+if (/github\.com\/velvetmonkey\/(?!seal[)\s/])/.test(readme)) fail('README links a sibling repository; the developer route carries no repository family');
+
+// --- Landing page and comparison surfaces: corrections stay in place ---
+
 requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay');
-if (/replayed live-agent attack|see a live-agent attack blocked/i.test(`${readme}\n${landingPage}`)) fail('a sales surface still describes the replay as a live-agent attack');
+if (/replayed live-agent attack|see a live-agent attack blocked/i.test(landingPage)) fail('the landing page describes the replay as a live-agent attack');
+if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
 
 requireMatch(comparison, /^LLM judges and prompt filters for agent tools work by judgment:/m, 'comparison must be narrowed to LLM judges and prompt filters');
 requireMatch(comparison, /when one of these heuristic guards guesses wrong it can fail\s+\*\*open\*\*/m, 'comparison must use the qualified “can fail open” claim');
 if (/Most guardrails|heuristic guard guesses wrong it fails \*\*open\*\*|\| \*\*Failure direction\*\* \| Fails open/i.test(comparison)) fail('comparison makes an overbroad fail-open claim');
-if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
 
-requireMatch(readme, /^As of \d{4}-\d{2}-\d{2}, the published release shipped the gate, while coordinated mesh deployment remained/m, 'mesh-shipping claim must carry an explicit as-of date');
+// --- Evaluator surface: dated corrections stay dated ---
+
 requireMatch(evaluator, /> \*\*Dated correction, measured \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,1200}28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657/, 'fleet hash must remain inside its dated correction');
 requireMatch(evaluator, /The module axiom gate is derived evidence: run `lake exe module_axiom_check`[\s\S]{0,900}Re-run it for the counts in any later tree;/, 'module census must remain derived from the executable gate instead of copied as current prose');
 if (/expected 51 production modules and 25 kernel-baseline assignments/.test(evaluator)) fail('time-dependent module and assignment counts were copied back into the evaluator prose');
 requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}28bb3ae7/, 'current fleet disposition must remain explicitly dated');
 
-console.log(`LAUNCH TRUTH OK: ${umbrellaName}; ${hostName}; badges, dated claims, and attack-replay language agree`);
+console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the approval-origin and platform sentences, and the standing corrections all hold`);

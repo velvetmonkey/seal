@@ -3,115 +3,183 @@
 # Seal
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
-[![Golden Path - deterministic shell + Postgres + deploy + token governor + temporal freeze + filesystem](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal-host/actions/workflows/golden-path.yml)
 
-Seal is the agent authorization gate whose decision rule is machine-checked, whose effect commitment is tested for sufficiency, and whose deployed decisions this binary can re-derive against pinned kernel bytes. Checking a receipt is a separate tool's job.
+Seal puts an approval gate in front of one tool of one MCP server. A guarded call is blocked until you approve that exact call, once. Then it runs once, and Seal writes a signed receipt.
 
-Seal protects effects. The current production adapter mediates MCP `tools/call`: it blocks a guarded call unless a live, one-use approval matches that exact effect, then emits a receipt you can check with the separate external checker.
+**Seal v1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
-## Try it in one command
+What it costs you: Node 20 or later, Git, one file installed under `~/.local`, and one restart of Claude Code when you protect a tool. What it does not cover is listed at the end, before the license.
 
-```sh
-npx github:velvetmonkey/seal demo
-```
+Every command below was run, in this order, on one Linux x86-64 machine against the bytes pinned in [`SHA256SUMS`](SHA256SUMS). The output under each command is the output that run printed.
 
-You will see, in this order:
-
-```
-Seal runtime verified: velvetmonkey/seal-assurance-kit@1d9c38666b38
-BLOCKED  db.execute demo call requires approval
-approval required: fbbb4e3a4ebef24733221b680cb08a7bbbdda4b0a6265ee3144f4366e26e59dc
-```
-
-then a prompt on the terminal (it ends with a space):
-
-```
-Approve this demo call once? [y/N] 
-```
-
-Answer `y`. The same call then succeeds:
-
-```
-EXECUTED  demo server accepted the approved call
-```
-
-The bundled verifier prints its checks, then a `RECEIPT` line naming a file under your per-user directory (by default `~/.local/share/seal/receipts/`, or `$XDG_DATA_HOME/seal/receipts/` if that is set), then:
-
-```
-RE-DERIVED  this binary re-derived the approved decision from the saved receipt (checking is a separate tool's job)
-```
-
-That receipt is yours to keep and re-check. In the no-install path above, run:
+## 1. Install
 
 ```sh
-npx github:velvetmonkey/seal verify PATH
+cd /tmp
+git clone https://github.com/velvetmonkey/seal
+cd seal
+node scripts/build-dist.cjs
+./dist/seal-v0.1.1-linux-x64 --sha256 f2ab71e328346c017ed74369ccebcfd4541ea75dd64fa178519095c388094f96 --bytes 114577 --prefix ~/.local
 ```
 
-Then inspect the local state the demo left behind:
+```
+/tmp/seal/dist/seal-v0.1.1-linux-x64
+sha256 f2ab71e328346c017ed74369ccebcfd4541ea75dd64fa178519095c388094f96
+bytes 114577
+tree d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+installed seal 0.1.1 linux-x64
+store: /home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+command: /home/monkey/.local/bin/seal
+tree: d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7
+```
+
+The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. If `~/.local/bin` is not on your PATH:
 
 ```sh
-npx github:velvetmonkey/seal status
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-`seal status` reports whether the pinned runtime is present, how many receipts
-are stored and where, and the most recent observed decision.
+## 2. Demo
 
-If you do not answer the prompt, the demo prints `No approval response received (EOF); no call executed.` and exits 1. Nothing is executed.
-
-The CLI owns the demo policy, approval state, and receipt paths. You do not author JSON, generate keys, initialise SQLite, install Cosign, or clone a second repository. It downloads and hash-verifies the pinned runtime. Node and `npx` are required. No Docker, Lean, Python, global install, or PATH edit is required for the command above.
-
-To install the short name `seal` later, from a clone of this repository, run
-`npm install -g --prefix ~/.local .` and put `~/.local/bin` on your PATH.
-`@velvetmonkey/seal` is not on the npm registry. After that optional install,
-use `seal verify PATH` and `seal status`.
-
-Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
-
-
-## Attack replay
-
-**Prerequisites:** Docker with Compose and Node.js; no Seal source build, key, or policy file. **Context:** start from any directory; this is a fresh clone, not a continuation of another example.
-
-```bash
-git clone https://github.com/velvetmonkey/seal-live-demo && cd seal-live-demo
-bash scripts/run_local.sh
+```sh
+seal demo
 ```
 
-**Expected output:** `ASSERT OK: 19/19 invariants hold. Green check = evidence.` **What it proves:** this **attack replay**, not a live-agent attack, deterministically blocks a destructive tool call, then shows the identical request succeed only when Seal is bypassed. The replay does not exercise an interactive approval; that is the deployment path below. Its exact shell command is not run by CI; the equivalent scenario is exercised by `seal-live-demo`’s manually dispatched `seal · live agent threat demo` / `demo` job. [Demo detail](https://github.com/velvetmonkey/seal-live-demo) · [verify a fixture with no Docker](https://github.com/velvetmonkey/seal-assurance-kit).
+```
+seal spine demo — one shared proxy, one hidden child, one real file
+tool      demo.mutate  guarded
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-2SDY78/child/data.txt
+child calls observed: 0 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
+INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
+    Approval required
+    Tool: demo.mutate
+    Arguments:
+      line: "seal spine demo wrote this line"
+    Scope: parsed JSON; object-key order and 1 vs 1.0 match; one use; 2 min.
+    Outside Seal: Bash, network, subprocesses, other tools and servers.
+child calls observed: still 0 (read from /tmp/seal-demo-2SDY78/child/data.txt.count) — approval shown, nothing executed
+Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
+child calls observed: 1 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
+replaying the identical retry with the same requestState…
+BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this approval was one-use and has already admitted a call"
+one-use enforced: the consumed approval admitted no second call; child calls observed: still 1 (read from /tmp/seal-demo-2SDY78/child/data.txt.count)
+receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575885-2448664-0001-INPUT_REQUIRED.json
+receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575888-2448664-0002-ALLOW.json
+receipt written: /tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json
 
-## What the evidence says
+SCOPE WITNESS
 
-- **Proven:** the Lean kernel is default-deny and permits a guarded effect only with a matching live approval; its distributed results identify which fleet shapes preserve one-use authorization. [Claims matrix](docs/CLAIMS-MATRIX.md) · [fleet boundary](docs/AUTHORIZATION-MESH.md).
-- **Tested:** Rust, wasm, and JavaScript agree with the kernel over the conformance corpus. Receipt-field sufficiency is tested, not proven: pre-v2 fields collided for two different effects, so v2 commits `args_hash`. `witness-check`, the proprietary sufficiency analyzer, checks that question. [Evidence and status](docs/CLAIMS-MATRIX.md).
-- **Not claimed:** an approved malicious-but-valid request is still authorized; Seal does not read intent, prove the deployed system end-to-end, or secure approvers, hosts, keys, browsers, build systems, or downstream tools. [Limits and trust boundaries](docs/LIMITATIONS.md) · [runtime boundary](docs/TRUTH-BOX.md).
+Seal controlled this path:
+  demo client -> Seal -> demo MCP server -> demo.mutate
 
-## Start where you are
+Now the demo performs a harmless direct local write
+that does not cross the Seal gate.
 
-- Deploy the MCP gate: [seal-host deployment guide](https://github.com/velvetmonkey/seal-host/blob/main/docs/DEPLOY.md).
-- Inspect the decision, receipt, and pinned-kernel relationship: [architecture](docs/ARCHITECTURE.md) and [authorization record](docs/AUTHORIZATION-RECORD.md).
-- Audit every claim and its check: [claims matrix](docs/CLAIMS-MATRIX.md) and [evaluator start](EVALUATOR-START.md).
+DIRECT WRITE SUCCEEDED
+Seal decisions emitted: 0 (receipts in /tmp/seal-demo-2SDY78/receipts: 3 before the write, 3 after)
 
-As of 2026-08-10, the published release shipped the gate, while coordinated mesh deployment remained a separate architecture rather than a shipped promise. Seal proves which fleet deployment shapes preserve single-use authorization. [Read the boundary](docs/AUTHORIZATION-MESH.md).
+Seal is a gate, not a sandbox: it controls the path through it, and only that path.
+summary: approval required once, executed once after approval, replay refused; 3 receipts written; one write happened outside Seal.
+receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
+  node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" "/tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json" --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+  Note: this demo wrote that key in the same folder as the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
+```
 
-## Go deeper
+The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
-The public Seal family is available to everyone; `witness-check` is the named proprietary exception.
+```sh
+node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" "/tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json" --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+```
 
-| Repository | What it is | Start here when... |
-|---|---|---|
-| [mcp-seal-dev](https://github.com/velvetmonkey/mcp-seal-dev) | Lean kernel and core safety theorems. | You need the proved rulebook. |
-| [seal-host](https://github.com/velvetmonkey/seal-host) | Deployable MCP gate and conformance bridge. | You are putting the gate in front of an MCP server. |
-| [seal-check](https://github.com/velvetmonkey/seal-check) | Browser receipt verifier. | You want to replay a receipt without installing tooling. |
-| [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) | Reproducible attack replay. | You want to watch the block and bypass control. |
-| [seal-assurance-kit](https://github.com/velvetmonkey/seal-assurance-kit) | CLI evidence tools. | You need `seal verify`, `seal receipt-diff`, or `seal adequacy`. |
-| [seal-verify-action](https://github.com/velvetmonkey/seal-verify-action) | GitHub Action receipt gate. | You want unverifiable receipts to fail CI. |
-| [witness-check](https://github.com/velvetmonkey/witness-check) | Proprietary sufficiency analyzer. | You need to test whether an evidence field set is sufficient. |
+```
+ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments
+```
 
-For a receipt: `seal verify` checks well-formed, canonical, re-derived evidence; `seal receipt-diff` asks what changed on the authorization surface; `seal adequacy` checks finite-sample sufficiency; proprietary `witness-check` analyzes sufficiency itself. The distributed `crdt-lean` work is deliberately not linked here: it left v1 for Seal v3 and remains a deferred architecture, not a current developer route.
+Change one recorded field and the same checker refuses:
 
-[Why a proof, not a prompt](docs/WHY-DIFFERENT.md) explains the decision rule; [limitations](docs/LIMITATIONS.md) and the [claims matrix](docs/CLAIMS-MATRIX.md) are the canonical honesty surface. [Seal’s effect boundary](docs/WHAT-SEAL-IS.md) explains why MCP is an adapter, not the product boundary.
+```sh
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-demo-2SDY78/receipts/receipt-1786756575891-2448664-0003-BLOCK.json > /tmp/tampered.json
+node "/home/monkey/.local/lib/seal/store/d3c29f8b8db41469461dc5c9e680246d3d962f9d70e82f49e3040251df0ab8b7/checker/seal-receipt-check.mjs" /tmp/tampered.json --pubkey "/tmp/seal-demo-2SDY78/receipt-signer.pub"
+```
 
-Interested in contributing? Useful lanes are adapters (MCP clients, approval channels, identity and audit integrations), evidence (conformance vectors and adversarial cases), and proof review (assumptions, theorem statements, and missing bridge obligations). [Repository topology](docs/REPO-TOPOLOGY.md) explains the project boundary.
+```
+REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
+```
+
+The checker's `--pubkey` is a trust input. The demo wrote that key next to the receipt, so the check above establishes self-consistency and nothing more. For a receipt check to mean something, the verifying key must reach you from a source you already trust — not from the sealer, and not from beside the receipt.
+
+> Seal enforces that only a matching, one-use approval response can release the exact effect; on the Claude Code path, it trusts Claude Code to present that request to a human and faithfully return the human's choice, and does not claim to distinguish a human click from a client-generated acceptance.
+
+## 3. Protect
+
+`seal protect` needs the `claude` command and a project whose `.mcp.json` already has a stdio MCP server. The `.mcp.json` written below is a stand-in for the file your project already has, pointing at Seal's own demo server so the sequence runs on a scratch directory; protecting a real project is the same two words, `seal protect SERVER TOOL`, against the file that is already there.
+
+```sh
+mkdir /tmp/myproject && cd /tmp/myproject
+cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "db": {
+      "command": "$HOME/.local/bin/seal",
+      "args": ["__demo-server", "/tmp/myproject/data.txt"]
+    }
+  }
+}
+EOF
+seal protect db demo.mutate
+```
+
+```
+Project .mcp.json hash before protect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
+Protection: PENDING RESTART db.demo.mutate
+State: /home/monkey/.local/share/seal/projects/31bb674eeb73f9c84ed476fbe8c450c2/state.json
+```
+
+`protect` installs a local Claude Code override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls are held for the same one-use approval the demo showed — the demo and the protected path run the same proxy and the same approval contract — and if the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+
+Seal states its trust assumption instead of decorating it with a green tick:
+
+```sh
+seal doctor
+```
+
+```
+ASSUMPTION
+  Claude Code presents approval requests to a human and faithfully returns
+  the response. Seal cannot distinguish a human click from client-generated
+  acceptance.
+```
+
+## 4. Remove
+
+```sh
+cd /tmp/myproject
+seal unprotect db
+```
+
+```
+Project .mcp.json hash before unprotect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
+Project .mcp.json hash after unprotect: f7f2cf0f10e6e8d2c231f8443ae5d9b5812cd2ef011bea563fd328c84a7c92af
+Protection: - outside Seal
+```
+
+The project file is byte-identical before and after; only the local override is removed. To remove Seal itself (the store is installed read-only, so make it writable first):
+
+```sh
+rm ~/.local/bin/seal
+chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
+```
+
+Receipts and per-project state remain under `~/.local/share/seal/`. They are yours; delete them with `rm -r ~/.local/share/seal` if you want nothing left.
+
+## What Seal covers, and what it does not
+
+- Seal is a gate, not a sandbox. It controls the path through it, and only that path. The demo ends by writing a file outside the gate and reporting zero Seal decisions for it; that is the honest boundary, demonstrated rather than footnoted.
+- One project, one server, one selected tool. Everything else — Bash, network, subprocesses, other tools and other servers — is outside Seal, and other controls may or may not exist there.
+- Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
+- An approval matches one exact call — parsed JSON arguments, one use, a short expiry — and the dialog shows that scope before you answer. A consumed approval admits no second call.
+- A receipt is a signed claim, and checking it is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
+- Seal v1.1 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 ## License
 
