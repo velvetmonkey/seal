@@ -119,7 +119,7 @@ function readState(statePath) {
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
   if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
+    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state && state.schema)}, not ${STATE_SCHEMA}`);
   }
   if (state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
@@ -276,6 +276,10 @@ function currentDigestForState(state) {
 function activationLease(statePath) {
   const state = readState(statePath);
   if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+  const childCommand = state.childArgv && state.childArgv[0];
+  if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+    throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
+  }
   const got = currentDigestForState(state);
   if (got !== state.projectServerDigest) {
     markDrifted(statePath, state, got);
@@ -308,7 +312,8 @@ function doctor(env = process.env) {
   if (hook) {
     return {
       ok: false,
-      text: "REFUSED\n  Claude Code can automatically answer elicitation requests.\n  Human approval origin cannot be assumed in this configuration.\n",
+      code: "elicitation_hook_configured",
+      text: "REFUSED\n  Claude Code can automatically answer elicitation requests.\n  Human approval origin cannot be assumed in this configuration.\nREFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed\n",
     };
   }
   return {
