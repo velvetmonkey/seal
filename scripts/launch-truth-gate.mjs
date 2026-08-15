@@ -80,7 +80,7 @@ if (/shields\.io[^\n]*actions\/workflow\/status/i.test(readme)) fail('README use
 
 // The canonical approval-origin sentence, verbatim (roadmap section 6),
 // placed once on the front page.
-const approvalOrigin = 'Seal enforces that only a matching, one-use approval response can release the exact effect; on the Claude Code path, it trusts Claude Code to present that request to a human and faithfully return the human\'s choice, and does not claim to distinguish a human click from a client-generated acceptance.';
+const approvalOrigin = 'Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human\'s choice; Seal cannot distinguish a human click from a client-generated acceptance.';
 const originCount = readme.split(approvalOrigin).length - 1;
 if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
 

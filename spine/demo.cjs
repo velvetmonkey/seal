@@ -183,7 +183,7 @@ async function run(argv, sealBinPath) {
   const finalCount = readCount(countFile);
   if (finalCount !== "1") fail(`after the replay the child's count file reads ${finalCount}, not 1`);
   console.log(`BLOCKED   the shared proxy refused the replay: "${replayed.result.content[0].text}"`);
-  console.log(`at-most-once enforced: the consumed approval could not release the replay; child calls observed: still ${finalCount} (read from ${countFile})`);
+  console.log(`one-use held: the replay did not run the call again; child calls observed: still ${finalCount} (read from ${countFile})`);
 
   for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
 

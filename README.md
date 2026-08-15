@@ -4,7 +4,7 @@
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
-Seal puts an approval gate in front of one tool of one MCP server. A guarded call waits for a matching, one-use approval response that can release at most that exact effect. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
+Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 
@@ -21,18 +21,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 1cd0057fc602de48e0eade1f0d5431c8aba35c4a825b5cb5abe9e1a115e62a79 --bytes 117903 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 a5c70c63f3a29ecd9d8183dd361a0f38d0a3934798d09e4a6f07a1126b09566d --bytes 117884 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/atmostonce/dist/seal-v0.1.1-linux-x64
-sha256 1cd0057fc602de48e0eade1f0d5431c8aba35c4a825b5cb5abe9e1a115e62a79
-bytes 117903
-tree 9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa
+sha256 a5c70c63f3a29ecd9d8183dd361a0f38d0a3934798d09e4a6f07a1126b09566d
+bytes 117884
+tree efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
 installed seal 0.1.1 linux-x64
-store: /tmp/seal-atmostonce-readme-SNjFYM/home/.local/lib/seal/store/9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa
-command: /tmp/seal-atmostonce-readme-SNjFYM/home/.local/bin/seal
-tree: 9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa
+store: /tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
+command: /tmp/seal-atmostonce-readable-RLswPf/home/.local/bin/seal
+tree: efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e
 ```
 
 The `--sha256` and `--bytes` values are the published pin from [`SHA256SUMS`](SHA256SUMS); the build you just ran must reproduce them or the installer refuses. The installer also refuses without a pin, refuses altered bytes by name (`artifact_digest_mismatch`), and on any platform other than Linux x86-64 refuses before changing any file. Add `~/.local/bin` to PATH before continuing:
@@ -50,25 +50,25 @@ seal demo
 ```
 seal spine demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /tmp/seal-demo-oBnFwO/child/data.txt
-temporary demo directory: /tmp/seal-demo-oBnFwO (remains after the demo for the printed checker command)
-child calls observed: 0 (read from /tmp/seal-demo-oBnFwO/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /tmp/seal-demo-V6GQD3/child/data.txt
+temporary demo directory: /tmp/seal-demo-V6GQD3 (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
     Arguments:
       line: "seal spine demo wrote this line"
-    Scope: parsed JSON (key order and 1/1.0 match); at most one effect; 2 min.
+    Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /tmp/seal-demo-oBnFwO/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 32 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /tmp/seal-demo-oBnFwO/child/data.txt.count)
+child calls observed: 1 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-at-most-once enforced: the consumed approval could not release the replay; child calls observed: still 1 (read from /tmp/seal-demo-oBnFwO/child/data.txt.count)
-receipt written: /tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544915-2844946-0001-INPUT_REQUIRED.json
-receipt written: /tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544918-2844946-0002-ALLOW.json
-receipt written: /tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544921-2844946-0003-BLOCK.json
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from /tmp/seal-demo-V6GQD3/child/data.txt.count)
+receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138389-2873325-0001-INPUT_REQUIRED.json
+receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138392-2873325-0002-ALLOW.json
+receipt written: /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -79,19 +79,19 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate external checker (V11-RECEIPT-01), which shares no code with this binary at runtime:
-  node "/tmp/seal-atmostonce-readme-SNjFYM/home/.local/lib/seal/store/9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544921-2844946-0003-BLOCK.json" --pubkey "/tmp/seal-demo-oBnFwO/receipt-signer.pub"
+  node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json" --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo's last lines print a checker command with your run's own paths. Here is that command from the run above, run as printed:
 
 ```sh
-node "/tmp/seal-atmostonce-readme-SNjFYM/home/.local/lib/seal/store/9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544921-2844946-0003-BLOCK.json" --pubkey "/tmp/seal-demo-oBnFwO/receipt-signer.pub"
+node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" "/tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json" --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
 ```
 
 ```
@@ -101,8 +101,8 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-atmostonce-readme-SNjFYM/xdg/seal/receipts/receipt-1786778544921-2844946-0003-BLOCK.json > /tmp/seal-atmostonce-readme-SNjFYM/tampered.json
-node "/tmp/seal-atmostonce-readme-SNjFYM/home/.local/lib/seal/store/9a51b463e5f04c2a97caf35ac0ccdd8981a7c7ace9462b56429a20427da2a0fa/checker/seal-receipt-check.mjs" /tmp/seal-atmostonce-readme-SNjFYM/tampered.json --pubkey "/tmp/seal-demo-oBnFwO/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /tmp/seal-atmostonce-readable-RLswPf/xdg/seal/receipts/receipt-1786780138395-2873325-0003-BLOCK.json > /tmp/seal-atmostonce-readable-RLswPf/tampered.json
+node "/tmp/seal-atmostonce-readable-RLswPf/home/.local/lib/seal/store/efe3fc1544a92e3f7856d60633aef1e42ae82063e38732da7f4a6b014e88aa7e/checker/seal-receipt-check.mjs" /tmp/seal-atmostonce-readable-RLswPf/tampered.json --pubkey "/tmp/seal-demo-V6GQD3/receipt-signer.pub"
 ```
 
 ```
@@ -111,7 +111,7 @@ REFUSE decision_binding_mismatch: the recorded decision does not match its seale
 
 The checker's `--pubkey` is a trust input. The demo generated that key for this one run — it is the very key that signed the receipt — so the check above establishes self-consistency and nothing more. For a receipt check to mean something, the verifying key must reach you from a source you already trust — not from the sealer, and not from beside the receipt. This signed-receipt cycle is the demo's today: the protected path below writes its receipts without a signature, and the same checker refuses them.
 
-> Seal enforces that only a matching, one-use approval response can release the exact effect; on the Claude Code path, it trusts Claude Code to present that request to a human and faithfully return the human's choice, and does not claim to distinguish a human click from a client-generated acceptance.
+> Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human's choice; Seal cannot distinguish a human click from a client-generated acceptance.
 
 ## 3. Protect
 
@@ -138,7 +138,7 @@ Protection: PENDING RESTART db.demo.mutate
 State: /home/monkey/scratch/coldwalkfix-run/xdg/seal/projects/21888168db00aa616c9c647108a4acfd/state.json
 ```
 
-`protect` invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls are held for the same at-most-one-effect approval contract the demo showed — the demo and the protected path run the same proxy and contract — and if the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+`protect` invokes Claude Code's `claude mcp add` to install a local override, private to you, that routes the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override; Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends in PENDING RESTART, never ACTIVE. From that restart on, `demo.mutate` calls use the same rule the demo showed: Seal will not run the approved call twice, and it may spend the approval without running it. The demo and protected path run the same proxy and contract. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
 Receipts are the one place the two paths differ today. The protected proxy records every decision as a receipt file, but v1.1 mints no operator signing key, so those receipts carry no signature and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Only the demo signs receipts today, with a key that exists only for that run. Where a durable operator key comes from is an open decision, so do not build anything on protected-path receipts passing the checker yet.
 
@@ -186,7 +186,7 @@ The demo's temporary directory — the `/tmp/seal-demo-*` location it prints bef
 - Protect mediates only a stdio MCP server entry; other MCP transport shapes are outside the protected path.
 - Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it.
 - Seal binds a client’s retry to the displayed request, but cannot establish that a human rather than the client or an automatic elicitation hook supplied the approval.
-- An approval binds the displayed call shape to at most one matching effect, with a short expiry. Failure before forwarding can consume it without a child call.
+- One approval covers the displayed call only. Seal will not run it twice, and a failure before forwarding can spend the approval without running it at all. The approval expires after a short time.
 - Approval expiry follows the local wall clock; Seal provides no trusted-time guarantee.
 - Receipts from the protected path are unsigned today, and the shipped checker refuses them (`REFUSE unsealed`). Both paths write receipt files; only the demo signs them, with a key generated fresh for that run and gone with it. Until an operator signing key exists, a protected-path receipt is a plain local record, not checkable evidence.
 - Checking a signed receipt is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
