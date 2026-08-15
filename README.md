@@ -36,13 +36,13 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.1.1-linux-x64 --sha256 a48a027970f1a15cee5c4b621c0751d87f130cab712ebf23a6b1864dcdaddbff --bytes 6117635 --prefix ~/.local
+./dist/seal-v0.1.1-linux-x64 --sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb --bytes 6117802 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/bridgetimeout/dist/seal-v0.1.1-linux-x64
-sha256 a48a027970f1a15cee5c4b621c0751d87f130cab712ebf23a6b1864dcdaddbff
-bytes 6117635
+sha256 80248b9afd8ca55b01fd7f79481cfb2b715914c496b3b7ad55e4008fbb3d8ccb
+bytes 6117802
 tree 1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d
 installed seal 0.1.1 linux-x64
 store: /tmp/seal-kernel-timeout-prefix/lib/seal/store/1cf971a07d4e8a2956d73ec7dd946e7e89fb84d285f61ad7f8fc86be907d667d

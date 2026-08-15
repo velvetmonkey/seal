@@ -29,9 +29,9 @@ function sha256Hex(text) {
 
 // Compact JSON with UTF-8-sorted keys. The checker carries a COPY of this same
 // rule, kept local so it imports no Seal module at check time. That is source
-// separation, NOT independent implementation: a defect in the rule itself is
-// present in both copies and the checker cannot detect it. Proved 2026-08-15 by
-// flipping the key comparator in both copies; the checker accepted the receipt.
+// separation only: a defect in the rule itself exists in both copies, and the
+// checker cannot detect it. Proved 2026-08-15 by flipping the key comparator in
+// both copies; the checker then accepted the receipt.
 function canonical(value) {
   if (value === undefined) throw new ReceiptRefusal("receipt_value_absent", "receipt value is absent");
   if (typeof value === "number" && !Number.isFinite(value)) {
