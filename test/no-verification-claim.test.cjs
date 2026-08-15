@@ -47,7 +47,7 @@ test("no banned verification claim survives in bin/ spine/ contract/ test/ READM
 });
 
 test("seal verify output claims re-derivation, never an outside verification", async () => {
-  const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
+  const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-noclaim-cache-"));
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-noclaim-data-"));
   const receipt = await writeKernelReceipt(cache, dataHome);

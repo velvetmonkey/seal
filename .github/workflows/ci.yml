@@ -4,6 +4,86 @@ on:
   push:
   pull_request:
 jobs:
+  product-suite:
+    name: product-suite (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Expose the selected Node to the installed-artifact test
+        shell: bash
+        run: |
+          selected_node="$(command -v node)"
+          if [[ -e /usr/bin/node ]]; then
+            test "$(readlink -f /usr/bin/node)" = "$(readlink -f "$selected_node")"
+          else
+            sudo ln -s "$selected_node" /usr/bin/node
+          fi
+      - name: Run and count the complete product suite
+        shell: bash
+        run: |
+          output_file="$RUNNER_TEMP/seal-node-test.tap"
+          set +e
+          node --test 2>&1 | tee "$output_file"
+          node_status=${PIPESTATUS[0]}
+          set -e
+
+          gate_status=0
+          if (( node_status != 0 )); then
+            echo "::error::node --test exited $node_status"
+            gate_status=1
+          fi
+
+          summary_value() {
+            local field="$1"
+            local count
+            count="$(grep -Ec "^# $field [0-9]+$" "$output_file")"
+            if (( count != 1 )); then
+              return 1
+            fi
+            sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$output_file"
+          }
+
+          declare -A summary summary_status
+          for field in tests pass fail skipped todo; do
+            set +e
+            summary[$field]="$(summary_value "$field")"
+            summary_status[$field]=$?
+            set -e
+            if (( summary_status[$field] != 0 )); then
+              echo "::error::node --test did not report exactly one canonical '# $field N' summary"
+              gate_status=1
+            fi
+          done
+
+          if (( summary_status[fail] == 0 && summary[fail] != 0 )); then
+            echo "::error::node --test reported ${summary[fail]} failures, expected 0"
+            gate_status=1
+          fi
+          if (( summary_status[skipped] == 0 && summary[skipped] != 0 )); then
+            echo "::error::node --test reported ${summary[skipped]} skipped tests, expected 0"
+            gate_status=1
+          fi
+          if (( summary_status[todo] == 0 && summary[todo] != 0 )); then
+            echo "::error::node --test reported ${summary[todo]} todo tests, expected 0"
+            gate_status=1
+          fi
+          if (( summary_status[tests] == 0 && summary[tests] < 87 )); then
+            echo "::error::node --test ran ${summary[tests]} tests, expected at least 87"
+            gate_status=1
+          fi
+          if (( summary_status[pass] == 0 && summary_status[tests] == 0 && summary[pass] != summary[tests] )); then
+            echo "::error::node --test reported ${summary[pass]} passes for ${summary[tests]} tests"
+            gate_status=1
+          fi
+          exit "$gate_status"
+
   docs-claims:
     runs-on: ubuntu-latest
     steps:
