@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 8e69aa4d23214c6a6b438462b5471de92431cbd28e94ef3d07e1d6de1109c149 --bytes 6118685 --prefix ~/.local
+./seal-v0.1.1-linux-x64 --sha256 50da57806941a29aa8b998036e72b6147ea8fef08f9147a455aa9cc9d12db1df --bytes 6122267 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and

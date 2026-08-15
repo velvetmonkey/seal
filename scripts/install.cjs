@@ -86,8 +86,89 @@ function parseArgs(argv) {
 }
 
 function writeFileDeep(target, data, mode) {
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, data, { mode });
+  const parent = path.dirname(target);
+  try {
+    fs.mkdirSync(parent, { recursive: true });
+  } catch (error) {
+    refuse("install_parent_unwritable", `cannot create or write parent directory ${parent}: ${error.message}`);
+  }
+  const temp = path.join(parent, `.${path.basename(target)}.${process.pid}.${crypto.randomBytes(8).toString("hex")}.tmp`);
+  try {
+    fs.writeFileSync(temp, data, { mode, flag: "wx" });
+    fs.renameSync(temp, target);
+  } catch (error) {
+    try { fs.unlinkSync(temp); } catch { /* a failed cleanup must not hide the refusal */ }
+    refuse("install_parent_unwritable", `cannot replace ${target} because its parent directory ${parent} is not writable: ${error.message}`);
+  }
+}
+
+function lstatOrAbsent(target) {
+  try {
+    return fs.lstatSync(target);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    if (error && (error.code === "EACCES" || error.code === "EPERM")) {
+      refuse("install_target_unwritable", `cannot inspect ${target}: ${error.message}`);
+    }
+    refuse("existing_install_untrusted", `cannot inspect existing install target ${target}: ${error.message}`);
+  }
+}
+
+function readVerifiedExistingInstall(recordPath, launchPath) {
+  const recordStat = lstatOrAbsent(recordPath);
+  const launchStat = lstatOrAbsent(launchPath);
+  if (!recordStat && !launchStat) return null;
+  if (!recordStat || !launchStat || !recordStat.isFile() || !launchStat.isFile()) {
+    refuse("existing_install_untrusted", "existing Seal targets are incomplete or are not regular files; choose a fresh prefix or repair this install");
+  }
+
+  let record;
+  let launcher;
+  try {
+    record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+    launcher = fs.readFileSync(launchPath);
+  } catch (error) {
+    if (error && (error.code === "EACCES" || error.code === "EPERM")) {
+      refuse("install_target_unwritable", `cannot read existing Seal install: ${error.message}`);
+    }
+    refuse("existing_install_untrusted", `cannot read existing Seal install: ${error.message}`);
+  }
+  const launcherEntry = record && Array.isArray(record.files)
+    ? record.files.find((file) => file && file.path === "scripts/seal-launch.cjs")
+    : null;
+  if (
+    !record || record.schema !== "seal.install/v1" || record.platform !== "linux-x64" ||
+    typeof record.treeSha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.treeSha256) ||
+    record.store !== path.posix.join("lib", "seal", "store", record.treeSha256) ||
+    !launcherEntry || launcherEntry.bytes !== launcher.length ||
+    launcherEntry.sha256 !== sha256Hex(launcher) || treeDigest(record.files) !== record.treeSha256
+  ) {
+    refuse("existing_install_untrusted", "existing Seal launcher and install record do not verify; choose a fresh prefix or repair this install");
+  }
+  return record;
+}
+
+function verifyOrWriteStoreFile(target, file, mode) {
+  const stat = lstatOrAbsent(target);
+  if (!stat) {
+    writeFileDeep(target, file.data, mode);
+    return;
+  }
+  if (!stat.isFile()) {
+    refuse("existing_install_untrusted", `existing store target is not a regular file: ${target}`);
+  }
+  let actual;
+  try {
+    actual = fs.readFileSync(target);
+  } catch (error) {
+    if (error && (error.code === "EACCES" || error.code === "EPERM")) {
+      refuse("install_target_unwritable", `cannot read existing store target ${target}: ${error.message}`);
+    }
+    refuse("existing_install_untrusted", `cannot read existing store target ${target}: ${error.message}`);
+  }
+  if (!actual.equals(file.data)) {
+    refuse("existing_install_untrusted", `existing store target does not match this Seal artifact: ${target}`);
+  }
 }
 
 function main() {
@@ -155,10 +236,12 @@ function main() {
   const recordPath = path.join(prefix, "lib", "seal", "install.json");
   const launchPath = path.join(prefix, "bin", "seal");
 
+  readVerifiedExistingInstall(recordPath, launchPath);
+
   for (const file of files) {
     if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
     const mode = file.path === "bin/seal" || file.path.endsWith("/seal-launch.cjs") ? 0o555 : 0o444;
-    writeFileDeep(path.join(storeRoot, file.path), file.data, mode);
+    verifyOrWriteStoreFile(path.join(storeRoot, file.path), file, mode);
   }
 
   const launchSrc = files.find((file) => file.path === "scripts/seal-launch.cjs");
