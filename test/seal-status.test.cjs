@@ -61,15 +61,44 @@ test("status names cached runtime hash mismatch as an integrity failure", () => 
 
 const { writeKernelReceipt } = require("./helpers/kernel-receipt.cjs");
 
-test("status reports the kernel runtime and receipt, and names corruption", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-demo-"));
-  await writeKernelReceipt(path.join(root, ".cache", "seal"), path.join(root, ".local", "share"));
+// Produce receipts the way a USER does: run the demo. A test that hand-builds
+// its input is testing its own imagination — the previous version of this
+// test built kernel-schema receipts (verdict/now) the product never writes,
+// so it stayed green while `seal status` could not read a single real receipt.
+function runDemoReceipts() {
+  const demoDir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-demo-src-"));
+  execFileSync(process.execPath, [CLI, "demo", "--dir", demoDir], { input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  return path.join(demoDir, "receipts");
+}
+
+test("status reads the receipts the product actually writes, and names corruption", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-real-"));
   const receiptDir = path.join(root, ".local", "share", "seal", "receipts");
+  fs.mkdirSync(receiptDir, { recursive: true });
+  const produced = runDemoReceipts();
+  const names = fs.readdirSync(produced);
+  assert.equal(names.length, 3, `demo should write 3 receipts, wrote ${names.length}`);
+  for (const name of names) fs.copyFileSync(path.join(produced, name), path.join(receiptDir, name));
   fs.writeFileSync(path.join(receiptDir, "corrupt.json"), "not json\n");
+
   const result = run(["status"], root);
-  assert.equal(result.code, 0);
-  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
-  assert.match(result.out, /^Receipts: 2 stored in /m);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Receipts: 4 stored in /m);
+  // Only the corrupt file is unreadable; every real product receipt is read.
   assert.match(result.out, /^Receipt unreadable: corrupt\.json \(Unexpected token/m);
-  assert.match(result.out, /^Most recent: ALLOW at receipt time 1000 \(/m);
+  assert.doesNotMatch(result.out, /^Receipt unreadable: receipt-.*\(missing/m);
+  // Most recent names a real spine decision at a real receipt time.
+  assert.match(result.out, /^Most recent: (ALLOW|BLOCK|INPUT_REQUIRED) at receipt time \d+ \(receipt-/m);
+});
+
+test("status reports the kernel runtime as present when it is cached", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-runtime-"));
+  // The helper's job here is only to POPULATE the assurance-kit runtime cache;
+  // the kernel receipt it also writes is removed so this test asserts the
+  // runtime line, not receipt reading (that is the demo-driven test above).
+  const receipt = await writeKernelReceipt(path.join(root, ".cache", "seal"), path.join(root, ".local", "share"));
+  fs.rmSync(receipt);
+  const result = run(["status"], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
 });

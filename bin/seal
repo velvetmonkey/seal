@@ -89,8 +89,12 @@ function status() {
     }
     try {
       const receipt = JSON.parse(fs.readFileSync(target, "utf8"));
-      if (typeof receipt.verdict !== "string" || receipt.now === undefined) throw new Error("missing verdict or decision time");
-      observed.push({ target, name: entry.name, verdict: receipt.verdict, now: receipt.now, mtimeMs: stat.mtimeMs });
+      // Status reports the receipts the product actually writes: spine
+      // receipts carry `decision` and `at`. Kernel receipts (verdict/now)
+      // are a separate format handled by `seal verify` on an explicit path,
+      // not surfaced here.
+      if (typeof receipt.decision !== "string" || receipt.at === undefined) throw new Error("missing decision or receipt time");
+      observed.push({ target, name: entry.name, verdict: receipt.decision, now: receipt.at, mtimeMs: stat.mtimeMs });
     } catch (error) {
       console.log(`Receipt unreadable: ${entry.name} (${error.message})`);
     }
