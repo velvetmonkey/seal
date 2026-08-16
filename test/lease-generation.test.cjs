@@ -56,24 +56,23 @@ test("a dead lease is replaceable and increments the generation", async () => {
   fs.writeFileSync(setup.statePath, JSON.stringify(state) + "\n");
 
   const activated = await activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome });
-  assert.equal(activated.leaseHolder, true);
   assert.equal(activated.lease.generation, 8);
   assert.equal(activated.lease.pid, process.pid);
   assert.equal(activated.lease.startWitness, processStartWitness(process.pid));
 });
 
-test("a live lease is not replaced and a second session is marked CONFLICT", async () => {
+test("a live lease is not replaced and a second starter is refused", async () => {
   const setup = setupLeaseState();
   const first = await activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome });
-  const second = await activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome });
+  await assert.rejects(
+    activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome }),
+    (error) => error.code === "proxy_lease_active" && error.message.includes(`pid ${first.lease.pid}, generation ${first.lease.generation}`),
+  );
   const stored = JSON.parse(fs.readFileSync(setup.statePath, "utf8"));
 
-  assert.equal(first.leaseHolder, true);
-  assert.equal(second.leaseHolder, false);
   assert.equal(stored.lease.pid, first.lease.pid);
   assert.equal(stored.lease.generation, first.lease.generation);
-  assert.equal(stored.lease.conflict.pid, process.pid);
-  assert.equal(stored.lease.conflict.generation, first.lease.generation);
+  assert.equal(Object.hasOwn(stored.lease, "conflict"), false);
 });
 
 test("stale in-memory contract refuses to consume after the lease generation moves", () => {

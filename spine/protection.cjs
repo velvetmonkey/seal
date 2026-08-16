@@ -13,7 +13,6 @@ const STATES = Object.freeze({
   PENDING_RESTART: "PENDING RESTART",
   ACTIVE: "ACTIVE",
   STALE: "STALE",
-  CONFLICT: "CONFLICT",
   DRIFTED: "DRIFTED",
   BROKEN: "BROKEN",
 });
@@ -425,7 +424,12 @@ function acquireProjectLock(projectRoot, env = process.env) {
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
       if (lockOwnerIsLive(existing)) {
-        throw new ProtectionError("proxy_already_active", "Another Seal proxy owns this project.");
+        const state = readState(statePathFor(projectRoot, env));
+        const generation = state?.lease?.generation ?? "unknown";
+        throw new ProtectionError(
+          "proxy_lease_active",
+          `active lease holder pid ${existing.pid}, generation ${generation}; retry after that session exits`,
+        );
       }
       try {
         fs.unlinkSync(filePath);
@@ -451,13 +455,6 @@ function protectionView(state, projectRoot, env = process.env) {
       ...state,
       state: STATES.STALE,
       detail: `previous wrapper lease is not live (generation ${state.lease?.generation ?? "unknown"}); restart Claude Code to replace it`,
-    };
-  }
-  if (state.state === STATES.ACTIVE && lockOwnerIsLive(state.lease?.conflict)) {
-    return {
-      ...state,
-      state: STATES.CONFLICT,
-      detail: `another live proxy is attempting to write generation ${state.lease.generation}; only the lease holder may consume approvals`,
     };
   }
   return state;
@@ -592,6 +589,12 @@ async function activationLease(statePath, env = process.env) {
   try {
     const state = readState(statePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+    if (lockOwnerIsLive(state.lease)) {
+      throw new ProtectionError(
+        "proxy_lease_active",
+        `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
+      );
+    }
     const childCommand = state.childArgv && state.childArgv[0];
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
@@ -623,25 +626,6 @@ async function activationLease(statePath, env = process.env) {
       throw error;
     }
     const existingLease = state.lease;
-    if (lockOwnerIsLive(existingLease)) {
-      const contender = {
-        pid: process.pid,
-        startWitness: processStartWitness(process.pid),
-        generation: existingLease.generation,
-        detectedAt: new Date().toISOString(),
-      };
-      const next = {
-        ...state,
-        state: STATES.ACTIVE,
-        lease: { ...existingLease, conflict: contender },
-      };
-      writeState(statePath, next);
-      lock.release();
-      Object.defineProperty(next, "leaseHolder", { value: false });
-      Object.defineProperty(next, "leaseToken", { value: contender });
-      Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
-      return next;
-    }
     const generation = Number.isInteger(existingLease?.generation) ? existingLease.generation + 1 : 1;
     const next = {
       ...state,
@@ -655,7 +639,6 @@ async function activationLease(statePath, env = process.env) {
     };
     writeState(statePath, next);
     lock.release();
-    Object.defineProperty(next, "leaseHolder", { value: true });
     Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
     return next;

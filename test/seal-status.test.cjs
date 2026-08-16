@@ -57,7 +57,7 @@ test("status finds the shipped kernel runtime with an empty cache", () => {
   assert.ok(!fs.existsSync(path.join(root, ".cache", "seal", "runtime")), "status must not create a cache as a side effect");
 });
 
-test("status distinguishes ACTIVE, STALE, and CONFLICT lease states", () => {
+test("status reports ACTIVE and STALE from observable lease facts", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-lease-states-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
@@ -78,11 +78,6 @@ test("status distinguishes ACTIVE, STALE, and CONFLICT lease states", () => {
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Protection: STALE db\.write /m);
 
-  const conflict = { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 3 };
-  writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: { ...liveLease, conflict } });
-  result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: CONFLICT db\.write /m);
 });
 
 test("status reads the protected project's recorded receipt directory", () => {

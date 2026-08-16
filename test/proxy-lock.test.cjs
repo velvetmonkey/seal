@@ -42,7 +42,7 @@ test("two concurrent writers: the second writer lock refuses while the first kee
   const [result, firstResult] = await Promise.all([waitForExit(second), waitForExit(first)]);
   assert.equal(result.code, 1);
   assert.match(result.signal || "", /^$|^null$/);
-  assert.match(secondStderr, /^proxy_already_active\nAnother Seal proxy owns this project\./);
+  assert.match(secondStderr, /^proxy_lease_active\nactive lease holder pid \d+, generation unknown; retry after that session exits/);
   assert.equal(firstResult.code, 0);
 });
 

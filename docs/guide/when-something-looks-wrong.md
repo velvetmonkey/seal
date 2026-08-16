@@ -316,12 +316,14 @@ Printed by the wrapper on stderr, visible in Claude Code's MCP logs as
 `seal __proxy: <token>: <message>`. `protected_server_missing` and
 `incompatible_state` (above) can also appear here.
 
-### `proxy_already_active`
+### `proxy_lease_active`
 
 Another Seal proxy already owns this project's protected route. The second
-session is refused with `Another Seal proxy owns this project.` Stop the
-other session, or let it exit and retry; a crashed owner is recovered when
-its PID and process-start witness are no longer live.
+starter is refused with the holder pid and lease generation. Stop that
+session, or let it exit and retry; a crashed owner is recoverable when its
+PID and process-start witness are no longer live and the next holder takes
+the next generation. This is a transient start event, not a persisted project
+status.
 
 ### `drifted`
 

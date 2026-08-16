@@ -75,6 +75,10 @@ async function run(argv) {
         },
       };
     } catch (error) {
+      if (error instanceof ProtectionError && error.code === "proxy_lease_active") {
+        process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
+        process.exit(1);
+      }
       const prefix = error instanceof ProtectionError ? error.code : "startup failed";
       process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
       process.exit(1);
