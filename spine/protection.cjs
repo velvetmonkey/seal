@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { platformSupport } = require("./platform.cjs");
 const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
@@ -12,6 +13,7 @@ const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",
   ACTIVE: "ACTIVE",
+  STALE: "STALE",
   DRIFTED: "DRIFTED",
   BROKEN: "BROKEN",
 });
@@ -365,6 +367,91 @@ function livePid(pid) {
   }
 }
 
+function processStartWitness(pid) {
+  // platformSupport's test-only override lets product-path tests exercise the
+  // same unavailable witness that a real non-Linux host would produce.
+  if (!Number.isInteger(pid) || pid <= 0 || platformSupport().platform !== "linux") return null;
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close < 0) return null;
+    const fields = stat.slice(close + 2).trim().split(/\s+/);
+    // The slice starts at field 3, so field 22 is index 19.
+    return fields[19] || null;
+  } catch {
+    return null;
+  }
+}
+
+function lockPathFor(projectRoot, env = process.env) {
+  return path.join(projectDirectory(projectRoot, env), "proxy.lock");
+}
+
+function lockOwnerIsLive(owner) {
+  if (!owner || !livePid(owner.pid)) return false;
+  const witness = processStartWitness(owner.pid);
+  if (witness === null) {
+    throw new ProtectionError(
+      "process_witness_unavailable",
+      `cannot establish process-start witness for live pid ${owner.pid}`,
+    );
+  }
+  return owner.startWitness === witness;
+}
+
+function leaseMatches(lease, token) {
+  return lease && token && lease.pid === token.pid &&
+    lease.startWitness === token.startWitness && lease.generation === token.generation;
+}
+
+function acquireProjectLock(projectRoot, env = process.env) {
+  const filePath = lockPathFor(projectRoot, env);
+  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  let recovered = false;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  for (;;) {
+    try {
+      const fd = fs.openSync(filePath, "wx", 0o600);
+      try {
+        fs.writeSync(fd, JSON.stringify(owner) + "\n");
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      return {
+        filePath,
+        recovered,
+        release() {
+          try {
+            const current = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            if (current.pid === owner.pid && current.startWitness === owner.startWitness) fs.unlinkSync(filePath);
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+          }
+        },
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      let existing;
+      try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
+      if (lockOwnerIsLive(existing)) {
+        const state = readState(statePathFor(projectRoot, env));
+        const generation = state?.lease?.generation ?? "unknown";
+        throw new ProtectionError(
+          "proxy_lease_active",
+          `active lease holder pid ${existing.pid}, generation ${generation}; retry after that session exits`,
+        );
+      }
+      try {
+        fs.unlinkSync(filePath);
+        recovered = true;
+      } catch (unlinkError) {
+        if (unlinkError.code !== "ENOENT") throw unlinkError;
+      }
+    }
+  }
+}
+
 function stateWithProject(projectRoot, env = process.env) {
   const root = realProjectRoot(projectRoot);
   const filePath = statePathFor(root, env);
@@ -374,11 +461,11 @@ function stateWithProject(projectRoot, env = process.env) {
 function protectionView(state, projectRoot, env = process.env) {
   if (!state || state.state === STATES.UNPROTECTED) return { state: STATES.UNPROTECTED };
   assertSealOwnedLocalOverride(state, projectRoot, state.serverName, env);
-  if (state.state === STATES.ACTIVE && !livePid(state.lease?.pid)) {
+  if (state.state === STATES.ACTIVE && !lockOwnerIsLive(state.lease)) {
     return {
       ...state,
-      state: STATES.PENDING_RESTART,
-      detail: "previous wrapper lease pid is not live; restart Claude Code to activate the local override",
+      state: STATES.STALE,
+      detail: `previous wrapper lease is not live (generation ${state.lease?.generation ?? "unknown"}); restart Claude Code to replace it`,
     };
   }
   return state;
@@ -473,7 +560,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
   }
-  if (state?.lease?.pid && livePid(state.lease.pid)) {
+  if (lockOwnerIsLive(state?.lease)) {
     throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
   }
   const before = readProjectConfig(root).hash;
@@ -507,51 +594,78 @@ function markBroken(statePath, state, error) {
 }
 
 async function activationLease(statePath, env = process.env) {
-  const state = readState(statePath);
-  if (!state) throw new ProtectionError("state_broken", "protection state is absent");
-  const childCommand = state.childArgv && state.childArgv[0];
-  if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
-    throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
-  }
-  const got = currentDigestForState(state);
-  if (got !== state.projectServerDigest) {
-    markDrifted(statePath, state, got);
-    throw new ProtectionError("drifted", "project server drifted before proxy activation");
-  }
-  let toolNames;
+  const initial = readState(statePath);
+  if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
+  const lock = acquireProjectLock(initial.projectRoot, env);
   try {
-    toolNames = await listServerTools({
-      childArgv: state.childArgv,
-      childEnv: state.childEnv,
-      projectRoot: state.projectRoot,
-      env,
-      timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
-    });
+    const state = readState(statePath);
+    if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+    if (lockOwnerIsLive(state.lease)) {
+      throw new ProtectionError(
+        "proxy_lease_active",
+        `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
+      );
+    }
+    const childCommand = state.childArgv && state.childArgv[0];
+    if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+      throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
+    }
+    const got = currentDigestForState(state);
+    if (got !== state.projectServerDigest) {
+      markDrifted(statePath, state, got);
+      throw new ProtectionError("drifted", "project server drifted before proxy activation");
+    }
+    let toolNames;
+    try {
+      toolNames = await listServerTools({
+        childArgv: state.childArgv,
+        childEnv: state.childEnv,
+        projectRoot: state.projectRoot,
+        env,
+        timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+      });
+    } catch (error) {
+      markBroken(statePath, state, error);
+      throw error;
+    }
+    if (!toolNames.includes(state.guardTool)) {
+      const error = new ProtectionError(
+        "protected_tool_vanished",
+        `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
+      );
+      markBroken(statePath, state, error);
+      throw error;
+    }
+    const existingLease = state.lease;
+    const generation = Number.isInteger(existingLease?.generation) ? existingLease.generation + 1 : 1;
+    const next = {
+      ...state,
+      state: STATES.ACTIVE,
+      lease: {
+        pid: process.pid,
+        startWitness: processStartWitness(process.pid),
+        generation,
+        startedAt: new Date().toISOString(),
+      },
+    };
+    writeState(statePath, next);
+    lock.release();
+    Object.defineProperty(next, "leaseToken", { value: next.lease });
+    Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+    return next;
   } catch (error) {
-    markBroken(statePath, state, error);
+    lock.release();
     throw error;
   }
-  if (!toolNames.includes(state.guardTool)) {
-    const error = new ProtectionError(
-      "protected_tool_vanished",
-      `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
-    );
-    markBroken(statePath, state, error);
-    throw error;
-  }
-  const next = {
-    ...state,
-    state: STATES.ACTIVE,
-    lease: { pid: process.pid, startedAt: new Date().toISOString() },
-  };
-  writeState(statePath, next);
-  return next;
 }
 
-function beforeForwardFromState(statePath) {
+function beforeForwardFromState(statePath, leaseToken) {
   return () => {
     const state = readState(statePath);
     if (!state) return { ok: false, refusal: "state_absent", detail: "protection state is absent" };
+    if (leaseToken && !leaseMatches(state.lease, leaseToken)) {
+      return { ok: false, refusal: "lease_generation_mismatch", detail: "this proxy no longer owns the active lease generation" };
+    }
     const got = currentDigestForState(state);
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);
@@ -580,12 +694,16 @@ module.exports = {
   DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
   ProtectionError,
   STATES,
+  acquireProjectLock,
   activationLease,
   beforeForwardFromState,
   dataHome,
   doctor,
   localOverrideExists,
   listServerTools,
+  lockPathFor,
+  lockOwnerIsLive,
+  processStartWitness,
   protect,
   protectionView,
   projectDirectory,

@@ -275,6 +275,12 @@ first if you want to protect a different tool.
 Stop that session first. Taking the gate down under a live session is
 exactly the kind of silent change Seal exists to prevent.
 
+### `lease_generation_mismatch`
+
+The proxy's durable lease generation changed while it was evaluating an
+approval. Seal refuses at the consume boundary; the journal remains
+authoritative, and the retry must be issued by the current lease holder.
+
 ### `claude_install_failed`
 
 The `claude mcp add` step reported failure, and Seal recorded the state as
@@ -309,6 +315,22 @@ with this one.
 Printed by the wrapper on stderr, visible in Claude Code's MCP logs as
 `seal __proxy: <token>: <message>`. `protected_server_missing` and
 `incompatible_state` (above) can also appear here.
+
+### `proxy_lease_active`
+
+Another Seal proxy already owns this project's protected route. The second
+starter is refused with the holder pid and lease generation. Stop that
+session, or let it exit and retry; a crashed owner is recoverable when its
+PID and process-start witness are no longer live and the next holder takes
+the next generation. This is a transient start event, not a persisted project
+status.
+
+### `process_witness_unavailable`
+
+Seal found a live PID for a stored lease or project lock but could not read a
+process-start witness for that PID. It refuses instead of guessing whether
+the owner is current or stale. Run on the supported Linux x86-64 path, where
+Seal can read `/proc/<pid>/stat`, or stop the recorded owner and retry.
 
 ### `drifted`
 

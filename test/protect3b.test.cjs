@@ -8,7 +8,7 @@ const readline = require("node:readline");
 const test = require("node:test");
 
 const SEAL = path.join(__dirname, "../bin/seal");
-const { statePathFor, readState } = require("../spine/protection.cjs");
+const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
 function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -290,11 +290,38 @@ test("unprotect refuses while an activation lease pid is live", () => {
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
-  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid } }, null, 2));
+  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } }, null, 2));
 
   const result = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /active_claude_session/);
+});
+
+test("unprotect recovers a live recycled PID whose witness does not match", () => {
+  const root = tmpdir("seal-protect3b-recycled-pid-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "recycled-data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const state = readState(statePath);
+  const unrelated = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  try {
+    fs.writeFileSync(statePath, JSON.stringify({
+      ...state,
+      state: "ACTIVE",
+      lease: { pid: unrelated.pid, startWitness: "witness-from-the-recycled-process", generation: 9 },
+    }, null, 2));
+    const result = run(project, home, ["unprotect", "db"], env);
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /outside Seal/);
+  } finally {
+    unrelated.kill("SIGKILL");
+  }
 });
 
 test("unprotect refuses without installed ownership proof", () => {
@@ -403,7 +430,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   assert.match(refused.out, /Human approval origin cannot be assumed/);
 });
 
-test("status renders a dead activation lease as pending restart, not active", () => {
+test("status renders a dead activation lease as STALE, not active", () => {
   const root = tmpdir("seal-protect3b-dead-lease-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
@@ -419,12 +446,12 @@ test("status renders a dead activation lease as pending restart, not active", ()
 
   const status = run(project, home, ["status"], env);
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
-  assert.match(status.out, /previous wrapper lease pid is not live/);
+  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
+  assert.match(status.out, /previous wrapper lease is not live/);
   assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });
 
-test("status downgrades to pending restart after a REAL wrapper lease exits naturally", () => {
+test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
   // Route B (the real-world case): a genuine `seal __proxy --protect-state`
   // wrapper activates the lease, then exits as any Claude session does. The
   // stored state stays ACTIVE with the now-dead wrapper pid; status must
@@ -463,6 +490,6 @@ test("status downgrades to pending restart after a REAL wrapper lease exits natu
 
   const status = run(project, home, ["status"], { PATH: env.PATH });
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
+  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
   assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });

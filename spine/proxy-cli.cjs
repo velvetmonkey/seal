@@ -57,15 +57,28 @@ async function run(argv) {
   if (options.protectState) {
     try {
       const state = await activationLease(options.protectState, process.env);
+      if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
         guardTool: state.guardTool,
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
-        beforeForward: beforeForwardFromState(options.protectState),
+        beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
+        leaseFence: () => {
+          const current = require("./protection.cjs").readState(options.protectState);
+          const lease = current?.lease;
+          const token = state.leaseToken;
+          const ok = lease && token && lease.pid === token.pid &&
+            lease.startWitness === token.startWitness && lease.generation === token.generation;
+          return ok ? { ok: true } : { ok: false, detail: "this proxy no longer owns the active lease generation" };
+        },
       };
     } catch (error) {
+      if (error instanceof ProtectionError && error.code === "proxy_lease_active") {
+        process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
+        process.exit(1);
+      }
       const prefix = error instanceof ProtectionError ? error.code : "startup failed";
       process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
       process.exit(1);
@@ -97,7 +110,6 @@ async function run(argv) {
     process.stderr.write(`${prefix}: ${error.message}\n`);
     process.exit(1);
   }
-
   const input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
     try {

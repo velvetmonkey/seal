@@ -29,7 +29,7 @@ function copyRunnableProduct(destination) {
 function breakSharedRetry(productRoot) {
   const file = path.join(productRoot, "contract", "contract.cjs");
   const original = fs.readFileSync(file, "utf8");
-  const signature = "  function retry({ tool, args, requestState, inputResponses, projectId: retryProject, serverId: retryServer }) {";
+  const signature = "  function retryUnlocked({ tool, args, requestState, inputResponses, projectId: retryProject, serverId: retryServer }) {";
   const replacement = `${signature}\n    throw new Error("STEP2_NEGATIVE_CONTROL: shared approval transition removed");`;
   assert.equal(original.split(signature).length, 2, "the negative control must find exactly one shared retry transition");
   fs.writeFileSync(file, original.replace(signature, replacement));

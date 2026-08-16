@@ -10,6 +10,7 @@
 // caller exits non-zero and never approves over it.
 const fs = require("node:fs");
 const path = require("node:path");
+const { lockOwnerIsLive, processStartWitness } = require("./protection.cjs");
 
 class StoreError extends Error {}
 
@@ -22,7 +23,7 @@ function createJournal(filePath) {
   }
 }
 
-function openJournal(filePath) {
+function readEvents(filePath) {
   let raw;
   try {
     raw = fs.readFileSync(filePath, "utf8");
@@ -47,18 +48,70 @@ function openJournal(filePath) {
     }
     events.push(event);
   }
-  return {
-    events,
+  return events;
+}
+
+function withFileLock(filePath, callback) {
+  const lockPath = `${filePath}.lock`;
+  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  for (;;) {
+    try {
+      const fd = fs.openSync(lockPath, "wx", 0o600);
+      try {
+        fs.writeSync(fd, JSON.stringify(owner) + "\n");
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      let existing;
+      try { existing = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { existing = null; }
+      if (!lockOwnerIsLive(existing)) {
+        try { fs.unlinkSync(lockPath); } catch (unlinkError) {
+          if (unlinkError.code !== "ENOENT") throw unlinkError;
+        }
+        continue;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    }
+  }
+  try {
+    return callback();
+  } finally {
+    try { fs.unlinkSync(lockPath); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+}
+
+function openJournal(filePath) {
+  let events = readEvents(filePath);
+  const journal = {
+    get events() { return events; },
+    refresh() {
+      events = readEvents(filePath);
+      return events;
+    },
+    withLock(callback) {
+      return withFileLock(filePath, () => {
+        journal.refresh();
+        return callback();
+      });
+    },
     append(event) {
       const fd = fs.openSync(filePath, "a", 0o600);
       try {
         fs.writeSync(fd, JSON.stringify(event) + "\n");
         fs.fsyncSync(fd);
+        events.push(event);
       } finally {
         fs.closeSync(fd);
       }
     },
   };
+  return journal;
 }
 
 module.exports = { createJournal, openJournal, StoreError };

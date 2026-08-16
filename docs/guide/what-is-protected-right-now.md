@@ -47,12 +47,12 @@ Protection: PENDING RESTART notes.delete_all_notes (…/state.json)
 
 The gate is installed but no running Claude Code session has picked it up
 yet. Calls made before the restart are **not** gated. Restart Claude Code in
-this project. You will also see this form, with a detail line, after a
-session ends:
+this project. You will see `STALE`, with a detail line, after a session ends:
 
 ```
-Protection: PENDING RESTART notes.delete_all_notes (…/state.json)
-Protection detail: previous wrapper lease pid is not live; restart Claude Code to activate the local override
+Protection: STALE notes.delete_all_notes (…/state.json)
+Protection lease: pid 4127 generation 6
+Protection detail: previous wrapper lease is not live (generation 6); restart Claude Code to replace it
 ```
 
 That is normal, not an error: the wrapper from the last session has exited,
@@ -62,11 +62,18 @@ and the next session will raise the gate again on start.
 
 ```
 Protection: ACTIVE notes.delete_all_notes (…/state.json)
+Protection lease: pid 4127 generation 6
 ```
 
 A live Claude Code session is running the wrapper right now. Calls to
 `delete_all_notes` stop at the approval prompt; everything else on `notes`
 flows through.
+
+Status reports only observable lease facts. A live pid and generation identify
+the current holder as `ACTIVE`; a dead pid is `STALE` and recoverable by the
+next wrapper, which takes the next generation. A second starter is refused at
+startup with the holder pid and generation; that transient event is not a
+project status and does not persist a conflict mode.
 
 ### `DRIFTED`
 

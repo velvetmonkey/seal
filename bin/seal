@@ -9,6 +9,7 @@ const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
+const { requireSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
@@ -41,6 +42,9 @@ function inspectRuntime() {
   return inspectRuntimeAt(cache, Object.entries(manifest.files));
 }
 function status() {
+  // Status derives ACTIVE/STALE from Linux process-start witnesses. Keep this
+  // product path behind the same platform refusal as `seal __proxy`.
+  requireSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
@@ -60,6 +64,9 @@ function status() {
       return;
     } else {
       console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
+      if (view.lease?.pid && view.lease?.generation !== undefined) {
+        console.log(`Protection lease: pid ${view.lease.pid} generation ${view.lease.generation}`);
+      }
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
