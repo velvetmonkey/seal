@@ -52,9 +52,17 @@ The demo builds a working gate in about a minute. Watch one number: the child's 
 
 ```sh
 export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
-set -o pipefail
-seal demo | tee "$SEAL_DEMO_LOG"
+(set -o pipefail; seal demo | tee "$SEAL_DEMO_LOG")
+SEAL_DEMO_STATUS="$?"
+if test "$SEAL_DEMO_STATUS" -ne 0; then
+  echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
+  exit "$SEAL_DEMO_STATUS"
+fi
 export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
+if test -z "$SEAL_DEMO_DIR"; then
+  echo "README walk stopped: seal demo printed no temporary demo directory" >&2
+  exit 1
+fi
 ```
 
 ```
