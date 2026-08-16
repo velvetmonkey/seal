@@ -365,6 +365,71 @@ function livePid(pid) {
   }
 }
 
+function processStartWitness(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || process.platform !== "linux") return null;
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close < 0) return null;
+    const fields = stat.slice(close + 2).trim().split(/\s+/);
+    // The slice starts at field 3, so field 22 is index 19.
+    return fields[19] || null;
+  } catch {
+    return null;
+  }
+}
+
+function lockPathFor(projectRoot, env = process.env) {
+  return path.join(projectDirectory(projectRoot, env), "proxy.lock");
+}
+
+function lockOwnerIsLive(owner) {
+  return owner && livePid(owner.pid) && owner.startWitness === processStartWitness(owner.pid);
+}
+
+function acquireProjectLock(projectRoot, env = process.env) {
+  const filePath = lockPathFor(projectRoot, env);
+  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  let recovered = false;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  for (;;) {
+    try {
+      const fd = fs.openSync(filePath, "wx", 0o600);
+      try {
+        fs.writeSync(fd, JSON.stringify(owner) + "\n");
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      return {
+        filePath,
+        recovered,
+        release() {
+          try {
+            const current = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            if (current.pid === owner.pid && current.startWitness === owner.startWitness) fs.unlinkSync(filePath);
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+          }
+        },
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      let existing;
+      try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
+      if (lockOwnerIsLive(existing)) {
+        throw new ProtectionError("proxy_already_active", "Another Seal proxy owns this project.");
+      }
+      try {
+        fs.unlinkSync(filePath);
+        recovered = true;
+      } catch (unlinkError) {
+        if (unlinkError.code !== "ENOENT") throw unlinkError;
+      }
+    }
+  }
+}
+
 function stateWithProject(projectRoot, env = process.env) {
   const root = realProjectRoot(projectRoot);
   const filePath = statePathFor(root, env);
@@ -509,43 +574,51 @@ function markBroken(statePath, state, error) {
 async function activationLease(statePath, env = process.env) {
   const state = readState(statePath);
   if (!state) throw new ProtectionError("state_broken", "protection state is absent");
-  const childCommand = state.childArgv && state.childArgv[0];
-  if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
-    throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
-  }
-  const got = currentDigestForState(state);
-  if (got !== state.projectServerDigest) {
-    markDrifted(statePath, state, got);
-    throw new ProtectionError("drifted", "project server drifted before proxy activation");
-  }
-  let toolNames;
+  const lock = acquireProjectLock(state.projectRoot, env);
   try {
-    toolNames = await listServerTools({
-      childArgv: state.childArgv,
-      childEnv: state.childEnv,
-      projectRoot: state.projectRoot,
-      env,
-      timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
-    });
+    const childCommand = state.childArgv && state.childArgv[0];
+    if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+      throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
+    }
+    const got = currentDigestForState(state);
+    if (got !== state.projectServerDigest) {
+      markDrifted(statePath, state, got);
+      throw new ProtectionError("drifted", "project server drifted before proxy activation");
+    }
+    let toolNames;
+    try {
+      toolNames = await listServerTools({
+        childArgv: state.childArgv,
+        childEnv: state.childEnv,
+        projectRoot: state.projectRoot,
+        env,
+        timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+      });
+    } catch (error) {
+      markBroken(statePath, state, error);
+      throw error;
+    }
+    if (!toolNames.includes(state.guardTool)) {
+      const error = new ProtectionError(
+        "protected_tool_vanished",
+        `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
+      );
+      markBroken(statePath, state, error);
+      throw error;
+    }
+    const next = {
+      ...state,
+      state: STATES.ACTIVE,
+      lease: { pid: process.pid, startedAt: new Date().toISOString() },
+    };
+    writeState(statePath, next);
+    Object.defineProperty(next, "releaseLock", { value: lock.release });
+    Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+    return next;
   } catch (error) {
-    markBroken(statePath, state, error);
+    lock.release();
     throw error;
   }
-  if (!toolNames.includes(state.guardTool)) {
-    const error = new ProtectionError(
-      "protected_tool_vanished",
-      `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
-    );
-    markBroken(statePath, state, error);
-    throw error;
-  }
-  const next = {
-    ...state,
-    state: STATES.ACTIVE,
-    lease: { pid: process.pid, startedAt: new Date().toISOString() },
-  };
-  writeState(statePath, next);
-  return next;
 }
 
 function beforeForwardFromState(statePath) {
@@ -580,12 +653,15 @@ module.exports = {
   DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
   ProtectionError,
   STATES,
+  acquireProjectLock,
   activationLease,
   beforeForwardFromState,
   dataHome,
   doctor,
   localOverrideExists,
   listServerTools,
+  lockPathFor,
+  processStartWitness,
   protect,
   protectionView,
   projectDirectory,

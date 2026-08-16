@@ -310,6 +310,13 @@ Printed by the wrapper on stderr, visible in Claude Code's MCP logs as
 `seal __proxy: <token>: <message>`. `protected_server_missing` and
 `incompatible_state` (above) can also appear here.
 
+### `proxy_already_active`
+
+Another Seal proxy already owns this project's protected route. The second
+session is refused with `Another Seal proxy owns this project.` Stop the
+other session, or let it exit and retry; a crashed owner is recovered when
+its PID and process-start witness are no longer live.
+
 ### `drifted`
 
 The `.mcp.json` server entry changed between sessions, discovered at wrapper

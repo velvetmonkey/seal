@@ -54,9 +54,12 @@ async function run(argv) {
   }
 
   let proxyOptions = { ...options, childArgv };
+  let releaseLock = null;
   if (options.protectState) {
     try {
       const state = await activationLease(options.protectState, process.env);
+      releaseLock = state.releaseLock;
+      if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
         guardTool: state.guardTool,
         storePath: state.storePath,
@@ -66,6 +69,10 @@ async function run(argv) {
         beforeForward: beforeForwardFromState(options.protectState),
       };
     } catch (error) {
+      if (error instanceof ProtectionError && error.code === "proxy_already_active") {
+        process.stderr.write("REFUSED proxy_already_active\nAnother Seal proxy owns this project.\n");
+        process.exit(1);
+      }
       const prefix = error instanceof ProtectionError ? error.code : "startup failed";
       process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
       process.exit(1);
@@ -93,10 +100,12 @@ async function run(argv) {
       },
     });
   } catch (error) {
+    if (releaseLock) releaseLock();
     const prefix = error instanceof StoreError ? "seal __proxy" : "seal __proxy: startup failed";
     process.stderr.write(`${prefix}: ${error.message}\n`);
     process.exit(1);
   }
+  if (releaseLock) process.once("exit", releaseLock);
 
   const input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
