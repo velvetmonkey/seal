@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
+const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const INDEX = readFileSync(resolve(ROOT, "index.html"), "utf8");
 const ARCHITECTURE = readFileSync(resolve(ROOT, "docs/ARCHITECTURE.md"), "utf8");
 const SOURCES = [
@@ -19,7 +20,7 @@ const SOURCED_BLOCKS = [
   "Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.",
   "Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.",
   "Requires Node 20+, Git, and the <code>claude</code> command for Protect (check with <code>claude --version</code>). The install creates one command and one read-only store directory under <code>~/.local</code>.",
-  "Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.",
+  `Seal v${VERSION} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.`,
   "The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths.",
   "The demo and the protected path run the same proxy and rule. The authorization rule is PROVED. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.",
   "Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal.",

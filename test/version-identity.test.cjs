@@ -34,7 +34,7 @@ function readerFacingMarkdownFiles(root) {
 }
 
 test("every emitted release identity derives from VERSION", () => {
-  assert.match(VERSION, /^\d+\.\d+\.\d+$/);
+  assert.match(VERSION, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/);
   assert.equal(JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version, VERSION);
   const binary = run(process.execPath, [path.join(ROOT, "bin", "seal"), "--version"]);
   assert.equal(binary.code, 0, binary.stderr);

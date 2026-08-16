@@ -7,7 +7,7 @@ release_tag=${2:?release tag is required}
 release_dir=${3:?release output directory is required}
 expected_tag="v$(tr -d '\n' < VERSION)"
 
-if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
   echo "release tag is not exact SemVer: $release_tag" >&2
   exit 1
 fi
@@ -76,4 +76,3 @@ PY
   cd "$release_dir"
   sha256sum -c SHA256SUMS
 )
-

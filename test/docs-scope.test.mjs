@@ -4,9 +4,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
+const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const COMMON_SCOPE_LINES = [
   "> The authorization rule is PROVED. The state machine is TESTED.",
-  "> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.1.1.md](RELEASE-NOTES-v0.1.1.md) and the [README](../README.md).",
+  `> For the truth about what you installed, read [docs/RELEASE-NOTES-v${VERSION}.md](RELEASE-NOTES-v${VERSION}.md) and the [README](../README.md).`,
 ];
 const FAMILY_PRODUCT_SCOPE_BLOCK = [
   "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.",

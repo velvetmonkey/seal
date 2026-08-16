@@ -28,21 +28,17 @@ $ claude --version
 2.1.233 (Claude Code)
 ```
 
-There is no downloadable release yet: you build the install artifact from a
-clone and install it with its own printed digest. From the clone:
+After Ben publishes the `v0.2.0-rc.1` release, download its artifact and run it
+with the digest and byte length recorded in `SHA256SUMS`:
 
 ```
-$ node scripts/build-dist.cjs --out dist
-dist/seal-v0.1.1-linux-x64
-sha256 b53532d3ac1ad3972ebe6df683667625904588caae3da147fcdf36a850322879
-bytes 6126224
-tree dd1fd3978d2813b2478b5fdfb264cf5681a44368a3b959b207a37f0f5afca676
-
-$ sh dist/seal-v0.1.1-linux-x64 --sha256 b53532d3ac1ad3972ebe6df683667625904588caae3da147fcdf36a850322879 --bytes 6126224
-installed seal 0.1.1 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/dd1fd3978d2813b2478b5fdfb264cf5681a44368a3b959b207a37f0f5afca676
+$ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.1/seal-v0.2.0-rc.1-linux-x64
+$ chmod +x seal-v0.2.0-rc.1-linux-x64
+$ ./seal-v0.2.0-rc.1-linux-x64 --sha256 eef923946e1f9c24aa48b9428971f8b943a78a3e626afbb6d8f2f0904cb87846 --bytes 6126255
+installed seal 0.2.0-rc.1 linux-x64
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/d15228f81a2bc90b88fdf3c3938d0ca74384c1da996f27bb9efd7f762ee09ba3
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree dd1fd3978d2813b2478b5fdfb264cf5681a44368a3b959b207a37f0f5afca676
+tree d15228f81a2bc90b88fdf3c3938d0ca74384c1da996f27bb9efd7f762ee09ba3
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
