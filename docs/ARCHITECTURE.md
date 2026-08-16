@@ -94,10 +94,11 @@ Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
 
 Node still owns opaque-handle lookup, status and expiry, connection-epoch
 currency, the `inputResponses` protocol shape, and journal-before-forward
-one-use consumption. The kernel answers exact tool, canonical arguments,
-issue-time project/server binding as supplied by Node, and the affirmative
-acceptance translated to its target commitment. Therefore the accurate product
-claim is exactly: The authorization rule is PROVED. The state machine is TESTED.
+one-use consumption. The kernel checks the exact tool-and-arguments
+authorization target. Node tests project, server, continuation, expiry and
+response context before presenting that authorization state to the kernel.
+Therefore the accurate product claim is exactly: The authorization rule is
+PROVED. The state machine is TESTED.
 
 The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
 stub envelope. It generates an Ed25519 key inside the kernel worker and signs

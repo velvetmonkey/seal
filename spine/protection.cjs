@@ -572,7 +572,7 @@ function doctor(env = process.env) {
   }
   return {
     ok: true,
-    text: "ASSUMPTION\n  Claude Code presents approval requests to a human and faithfully returns\n  the response. Seal cannot distinguish a human click from client-generated\n  acceptance.\n",
+    text: "ASSUMPTION\n  Seal has not established whether this Claude Code configuration can\n  automatically answer elicitation requests.\n",
   };
 }
 

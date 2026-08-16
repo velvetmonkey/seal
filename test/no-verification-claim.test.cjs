@@ -39,6 +39,17 @@ const DOC_BANNED_CLAIMS = [
   },
 ];
 
+const DOC_BANNED_OVERCLAIMS = [
+  {
+    label: "doctor configuration-inspection claim",
+    pattern: /\bif\s+Claude\s+Code\s+is\s+configured\s+to\s+answer\s+elicitation\s+prompts\s+automatically,?\s+doctor\s+refuses\b/i,
+  },
+  {
+    label: "kernel project/server-binding claim",
+    pattern: /\bthe\s+kernel\s+answers\s+exact\s+tool,\s+canonical\s+arguments,\s+issue-time\s+project\/server\s+binding\b/i,
+  },
+];
+
 function scan(dir, hits) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
@@ -54,13 +65,13 @@ function scan(dir, hits) {
   }
 }
 
-function scanDocs(dir, hits) {
+function scanDocs(dir, claims, hits) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) { scanDocs(full, hits); continue; }
+    if (entry.isDirectory()) { scanDocs(full, claims, hits); continue; }
     if (!entry.isFile()) continue;
     const text = fs.readFileSync(full, "utf8");
-    for (const { label, pattern } of DOC_BANNED_CLAIMS) {
+    for (const { label, pattern } of claims) {
       const matches = new RegExp(pattern.source, `${pattern.flags}g`);
       for (const match of text.matchAll(matches)) {
         const line = text.slice(0, match.index).split("\n").length;
@@ -82,8 +93,14 @@ test("no banned verification claim survives in product surfaces or docs/", () =>
   // word legitimately in unrelated historical and design material,
   // so scan every docs/ file for the receipt-verification claims at issue.
   // This is a semantic scope, not a path exemption: no docs file is skipped.
-  scanDocs(path.join(ROOT, "docs"), hits);
+  scanDocs(path.join(ROOT, "docs"), DOC_BANNED_CLAIMS, hits);
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
+});
+
+test("no stale doctor or kernel allocation claim survives in docs/", () => {
+  const hits = [];
+  scanDocs(path.join(ROOT, "docs"), DOC_BANNED_OVERCLAIMS, hits);
+  assert.deepEqual(hits, [], `banned overclaims found:\n${hits.join("\n")}`);
 });
 
 test("seal verify output claims re-derivation, never an outside verification", async () => {
