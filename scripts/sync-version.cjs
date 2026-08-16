@@ -29,7 +29,11 @@ function replaceIfPresent(file, expression, replacement) {
 const packagePath = path.join(ROOT, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 packageJson.version = version;
-fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+// build-dist can run concurrently (including from separate test files).  Keep
+// readers from ever observing a partially written package manifest.
+const packageTempPath = `${packagePath}.${process.pid}.tmp`;
+fs.writeFileSync(packageTempPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+fs.renameSync(packageTempPath, packagePath);
 
 const notesCandidates = fs.readdirSync(path.join(ROOT, "docs")).filter((file) => /^RELEASE-NOTES-v\d+\.\d+(?:\.\d+)?\.md$/.test(file));
 if (notesCandidates.length !== 1) throw new Error(`expected one versioned release-notes file, found ${notesCandidates.join(", ")}`);
