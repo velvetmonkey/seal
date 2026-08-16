@@ -43,7 +43,6 @@ jobs:
 
   product-suite:
     name: product-suite (Node ${{ matrix.node-version }})
-    needs: version-identity
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -56,6 +55,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      # This is the enforced collision brake. It runs in the required check
+      # itself, so no upstream result can turn a collision into a skipped pass.
+      - name: Require one released version to identify one commit
+        run: node scripts/check-version-identity.cjs
       - name: Expose the selected Node to the installed-artifact test
         shell: bash
         run: |
