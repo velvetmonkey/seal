@@ -37,7 +37,7 @@ const EVIDENCE_ROOT_NAME = "claude-code";
 const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
 const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code call not observed";
-const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json"];
+const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
 
 const REQUIRED_CASES = [
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
@@ -183,14 +183,14 @@ function checkPackPath(packDir, manifest, report) {
   }
 }
 
-function checkSynthetic(packDir, manifest, report, { release, allowSynthetic }) {
+function checkSynthetic(packDir, manifest, report, { release, allowSynthetic }, processSynthetic) {
   const markerPresent = existsSync(join(packDir, SYNTHETIC_MARKER_FILE));
   const bannerInManifest = JSON.stringify(manifest).includes(SYNTHETIC_BANNER);
   const versionLooksSynthetic = /synthetic|stand-in/i.test(String(manifest.client?.version ?? ""));
   const declared = manifest.synthetic === true;
-  const synthetic = declared || markerPresent || bannerInManifest || versionLooksSynthetic;
+  const synthetic = declared || markerPresent || bannerInManifest || versionLooksSynthetic || processSynthetic;
   if (synthetic && !declared) {
-    report.refuse("synthetic_marker_conflict", `this pack carries synthetic markers (marker file: ${markerPresent}, banner: ${bannerInManifest}, client version: ${manifest.client?.version}) but its manifest declares synthetic ${JSON.stringify(manifest.synthetic)}`);
+    report.refuse("synthetic_marker_conflict", `this pack carries synthetic evidence (fixture-observed stand-in process: ${processSynthetic}, marker file: ${markerPresent}, banner: ${bannerInManifest}, client version: ${manifest.client?.version}) but its manifest declares synthetic ${JSON.stringify(manifest.synthetic)}`);
   }
   if (declared && !markerPresent) {
     report.refuse("synthetic_marker_conflict", `this pack declares itself synthetic but carries no ${SYNTHETIC_MARKER_FILE} beside its manifest`);
@@ -265,13 +265,67 @@ function checkChildLog(packDir, manifest, report) {
   try {
     raw = readFileSync(join(packDir, "child.jsonl"), "utf8");
   } catch {
-    return; // already refused as an absent or unreadable evidence file
+    return []; // already refused as an absent or unreadable evidence file
+  }
+  if (!raw.endsWith("\n")) {
+    report.refuse("child_log_truncated", "child.jsonl does not end at a newline-delimited record boundary");
   }
   const records = [];
-  for (const line of raw.split("\n")) {
+  const recordLines = new Map();
+  const lines = raw.split("\n").filter((line) => line !== "");
+  for (const [index, line] of lines.entries()) {
     if (line.trim() === "") continue;
-    try { records.push(JSON.parse(line)); } catch { records.push({ kind: "unparseable" }); }
+    let record;
+    try { record = JSON.parse(line); } catch {
+      report.refuse("child_log_malformed", `child.jsonl record ${index + 1} is not valid JSON`);
+      continue;
+    }
+    records.push(record);
+    recordLines.set(record, line);
+    if (record.fixture !== "seal.cc-fixture/v1") {
+      report.refuse("child_log_schema_disagrees", `child.jsonl record ${index + 1} is not a seal.cc-fixture/v1 record`);
+    }
   }
+  const sessions = new Map();
+  for (const record of records) {
+    if (typeof record.session !== "string" || record.session.length === 0) {
+      report.refuse("child_log_session_absent", `child.jsonl record ${record.n ?? "?"} has no fixture session id`);
+      continue;
+    }
+    const state = sessions.get(record.session);
+    if (record.kind === "start") {
+      if (state) report.refuse("child_log_session_discontinuous", `fixture session ${record.session} starts more than once`);
+      if (record.n !== 1 || record.previous_sha256 !== "0".repeat(64)) {
+        report.refuse("child_log_chain_broken", `fixture session ${record.session} does not begin at record 1 with the zero digest`);
+      }
+      sessions.set(record.session, {
+        pid: record.pid,
+        closed: false,
+        n: record.n,
+        sha256: sha256(Buffer.from(`${recordLines.get(record)}\n`, "utf8")),
+      });
+      continue;
+    }
+    if (!state) {
+      report.refuse("child_log_session_discontinuous", `fixture session ${record.session} has ${record.kind} before start`);
+      continue;
+    }
+    if (state.closed) report.refuse("child_log_session_discontinuous", `fixture session ${record.session} has a record after exit`);
+    if (record.pid !== state.pid) report.refuse("child_log_session_discontinuous", `fixture session ${record.session} changes pid`);
+    if (record.n !== state.n + 1 || record.previous_sha256 !== state.sha256) {
+      report.refuse("child_log_chain_broken", `fixture session ${record.session} record ${JSON.stringify(record.n)} does not continue its digest chain after ${state.n}`);
+    }
+    state.n = record.n;
+    state.sha256 = sha256(Buffer.from(`${recordLines.get(record)}\n`, "utf8"));
+    if (record.kind === "exit") state.closed = true;
+  }
+  // A client may tear down an MCP subprocess without closing its stdin, so an
+  // individual session need not carry exit. The independent final-boundary
+  // commitment below establishes the complete byte length of the whole log.
+  if (records.length === 0 || records.at(-1)?.kind !== "exit") {
+    report.refuse("child_log_truncated", "child.jsonl does not finish with the fixture's exit record");
+  }
+  checkChildLogCommitment(packDir, raw, lines.length, report);
   const calls = records.filter((record) => record.kind === "child-call");
   const accept = (manifest.observed || []).find((entry) => entry?.case === "accept");
   const reported = accept?.facts?.child_call_records_total;
@@ -299,6 +353,67 @@ function checkChildLog(packDir, manifest, report) {
       report.ok(`the child log carries exactly one child call, note ${JSON.stringify(note)}, effect sha256 ${expected}`);
     }
   }
+  return records;
+}
+
+// snapshots.json is written from a separate boundary read before packing. Its
+// final byte count, digest and record count independently commit to the whole
+// append-only fixture log; merely rehashing a shortened child.jsonl in the
+// manifest therefore cannot make a careful truncation self-consistent.
+function checkChildLogCommitment(packDir, raw, lines, report) {
+  let snapshots;
+  try { snapshots = JSON.parse(readFileSync(join(packDir, "snapshots.json"), "utf8")); } catch { return; }
+  const final = (snapshots.snapshots || []).find((entry) => entry?.case === "unprotect" && entry?.edge === "end")?.snapshot?.child_log;
+  if (!final) {
+    report.refuse("child_log_commitment_absent", "snapshots.json carries no unprotect.end child-log commitment");
+    return;
+  }
+  const digest = sha256(Buffer.from(raw, "utf8"));
+  if (final.sha256 !== digest || final.bytes !== Buffer.byteLength(raw) || final.lines !== lines) {
+    report.refuse("child_log_commitment_mismatch", `the final boundary commits to sha256 ${final.sha256}, ${final.bytes} bytes and ${final.lines} records; child.jsonl is sha256 ${digest}, ${Buffer.byteLength(raw)} bytes and ${lines} records`);
+  } else {
+    report.ok(`the final boundary independently commits to all ${lines} child-log records (${final.bytes} bytes)`);
+  }
+}
+
+function identityDigests(step) {
+  return [step?.executable, ...(Array.isArray(step?.argv_files) ? step.argv_files : [])]
+    .map((entry) => entry?.sha256)
+    .filter((digest) => typeof digest === "string");
+}
+
+// Realness comes from what the fixture read from /proc while the launcher
+// chain existed. The self-declared client hash must occur above the Seal proxy
+// in every start record, and the checked-in stand-in's hash is independently
+// recognized from those raw process identities.
+function checkProcessProvenance(records, manifest, report, { repoRoot }) {
+  const starts = records.filter((record) => record.kind === "start");
+  const declared = manifest.client?.executable_sha256;
+  let standInDigest = null;
+  try { standInDigest = sha256(readFileSync(join(repoRoot, "harness/claude-code/synthetic-client.cjs"))); } catch { /* fixture revision checks report tree drift */ }
+  let synthetic = false;
+  let mediated = 0;
+  for (const start of starts) {
+    const chain = Array.isArray(start.ancestry) ? start.ancestry : [];
+    const proxy = chain.findIndex((step) => Array.isArray(step.argv) && step.argv.includes("__proxy") && step.argv.includes("--protect-state"));
+    // The fixture is also started once directly while `seal protect` probes
+    // the server. That setup record proves nothing about the client and is
+    // deliberately excluded; activation separately requires no direct start
+    // inside the exercised client window.
+    if (proxy < 0) continue;
+    mediated += 1;
+    const aboveProxy = proxy < 0 ? [] : chain.slice(proxy + 1);
+    const observed = aboveProxy.flatMap(identityDigests);
+    if (typeof declared !== "string" || !observed.includes(declared)) {
+      report.refuse("client_process_not_observed", `fixture session ${start.session} does not observe client executable sha256 ${declared} above the Seal proxy`);
+    }
+    if (standInDigest && observed.includes(standInDigest)) synthetic = true;
+  }
+  if (mediated === 0) report.refuse("client_process_not_observed", "child.jsonl carries no fixture start mediated by the Seal proxy");
+  if (mediated > 0 && !report.refusals.some((entry) => entry.code === "client_process_not_observed")) {
+    report.ok(`the fixture observed client executable sha256 ${declared} above the Seal proxy in ${mediated} mediated session(s)`);
+  }
+  return synthetic;
 }
 
 function checkFixtureRevision(manifest, report, { release, repoRoot }) {
@@ -343,11 +458,12 @@ function checkPack(packDir, options) {
   const manifest = readManifest(packDir, report);
   if (!manifest) return report;
   checkPackPath(packDir, manifest, report);
-  checkSynthetic(packDir, manifest, report, options);
   checkArtifact(manifest, report, options);
   checkFiles(packDir, manifest, report);
   const observed = checkCases(manifest, report);
-  checkChildLog(packDir, manifest, report);
+  const childRecords = checkChildLog(packDir, manifest, report);
+  const processSynthetic = checkProcessProvenance(childRecords, manifest, report, options);
+  checkSynthetic(packDir, manifest, report, options, processSynthetic);
   checkFixtureRevision(manifest, report, options);
   const derived = labelFor(manifest, observed);
   if (manifest.label !== derived) {

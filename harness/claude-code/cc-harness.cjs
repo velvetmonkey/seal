@@ -984,8 +984,10 @@ function proxyRecord(state) {
 
 function childRecord(state) {
   const raw = (() => { try { return fs.readFileSync(state.paths.childLog, "utf8"); } catch { return ""; } })();
-  const banner = state.synthetic ? `${JSON.stringify({ record: "synthetic-banner", banner: SYNTHETIC_BANNER })}\n` : "";
-  return banner + raw;
+  // This is the fixture's byte-for-byte log. In particular, finish does not
+  // prepend a synthetic label: realness is derived by the checker from the
+  // process identities the fixture read from /proc while each session lived.
+  return raw;
 }
 
 function beforeAfter(state) {

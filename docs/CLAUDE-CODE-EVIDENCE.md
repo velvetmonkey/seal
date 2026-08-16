@@ -156,7 +156,11 @@ names but the pack does not carry, a file added beside the manifest that no
 hash covers, a manifest naming an artifact other than the one under release, an
 altered case requirement, a case that is not observed, a manifest whose
 child-call count its own `child.jsonl` contradicts, and a summary label that is
-not the label the observations produce.
+not the label the observations produce. It also strictly parses the fixture's
+numbered digest chain, compares the complete log to the independent final
+boundary digest, length, and record count in `snapshots.json`, and derives the
+client executable identity from process ancestry the fixture read from `/proc`
+while the client and Seal proxy were alive.
 
 The release workflow runs it against the exact artifact it just built. With no
 pack for that artifact, the release states the untested row and continues; with
@@ -187,18 +191,23 @@ checker is shown accepting and refusing. It proves the harness works. It proves
 nothing about Claude Code — a stand-in that declines to fall back declines
 because it was written to.
 
-Four independent markers keep such a pack out of a release, and the checker
-refuses on any one of them:
+The four labels below remain useful warnings, but release refusal no longer
+derives realness from them. The fixture hashes the actual files named by live
+process ancestry; the checker requires the manifest's client executable above
+the Seal proxy and recognizes the checked-in stand-in's digest there. Deleting
+all the labels therefore cannot turn the observed stand-in process into Claude
+Code:
 
 1. `synthetic: true` in the manifest, with a `synthetic_banner`;
 2. a `SYNTHETIC-NOT-A-REAL-RUN.txt` file beside the manifest;
 3. the client version `0.0.0-synthetic-stand-in`, which is also the directory
    the pack lives in;
-4. banner records inside the derived `proxy.jsonl` and `child.jsonl`.
+4. a banner record inside the derived `proxy.jsonl`.
 
-Removing one marker does not launder the pack: the checker refuses the
-disagreement between the markers as `synthetic_marker_conflict`, and refuses
-the pack itself in release mode as `synthetic_pack_in_release_evidence`. The
+Removing the warnings does not launder the pack: the raw fixture log still
+commits to the stand-in executable digest observed above the Seal proxy, so the
+checker derives synthetic provenance and refuses the pack as
+`synthetic_pack_in_release_evidence`. The
 synthetic run is never written into `evidence/`; it goes to a temporary
 directory, and
 [`test/cc-evidence.test.cjs`](../test/cc-evidence.test.cjs) fails if any pack

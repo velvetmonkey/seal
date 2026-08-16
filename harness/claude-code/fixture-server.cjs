@@ -40,13 +40,17 @@ const effectPath = process.env.SEAL_CC_FIXTURE_EFFECT;
 if (!logPath) refuse("fixture_log_unset", "SEAL_CC_FIXTURE_LOG names the append-only frame log; this fixture never runs unrecorded");
 if (!effectPath) refuse("fixture_effect_unset", "SEAL_CC_FIXTURE_EFFECT names the effect file the guarded tool writes");
 
+const session = crypto.randomUUID();
 let recordNumber = 0;
+let previousSha256 = "0".repeat(64);
 
 function appendRecord(record) {
   recordNumber += 1;
   const line = JSON.stringify({
     fixture: FIXTURE_SCHEMA,
     n: recordNumber,
+    session,
+    previous_sha256: previousSha256,
     pid: process.pid,
     at: new Date().toISOString(),
     ...record,
@@ -65,6 +69,7 @@ function appendRecord(record) {
   } finally {
     fs.closeSync(fd);
   }
+  previousSha256 = crypto.createHash("sha256").update(line).digest("hex");
 }
 
 function commandLine(pid) {
@@ -84,13 +89,37 @@ function parentOf(pid) {
   }
 }
 
+function fileIdentity(filePath) {
+  try {
+    const resolved = fs.realpathSync(filePath);
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) return null;
+    const bytes = fs.readFileSync(resolved);
+    return { path: resolved, sha256: crypto.createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length };
+  } catch {
+    return null;
+  }
+}
+
+function processIdentity(pid) {
+  const argv = commandLine(pid);
+  let executable = null;
+  try { executable = fileIdentity(`/proc/${pid}/exe`); } catch { executable = null; }
+  const argvFiles = [];
+  for (const word of argv || []) {
+    const identity = fileIdentity(word);
+    if (identity && !argvFiles.some((entry) => entry.path === identity.path)) argvFiles.push(identity);
+  }
+  return { pid, argv, executable, argv_files: argvFiles };
+}
+
 // The launcher chain, nearest parent first. Recorded as data, never judged
 // here: the checker decides what a Seal-mediated chain looks like.
 function ancestry(pid, depth = 8) {
   const chain = [];
   let current = parentOf(pid);
   while (current && current > 1 && chain.length < depth) {
-    chain.push({ pid: current, argv: commandLine(current) });
+    chain.push(processIdentity(current));
     current = parentOf(current);
   }
   return chain;

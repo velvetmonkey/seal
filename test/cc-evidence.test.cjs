@@ -74,6 +74,34 @@ function check(args) {
   return { code: result.status, out: `${result.stdout}${result.stderr}` };
 }
 
+function rehash(copy, name) {
+  const bytes = fs.readFileSync(path.join(copy.dir, name));
+  copy.rewriteManifest((manifest) => {
+    const entry = manifest.files.find((file) => file.path === name);
+    entry.sha256 = require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+    entry.bytes = bytes.length;
+  });
+}
+
+function promotedSyntheticPack() {
+  const copy = copyOfPack();
+  fs.rmSync(path.join(copy.dir, "SYNTHETIC-NOT-A-REAL-RUN.txt"));
+  copy.rewriteManifest((manifest) => {
+    manifest.files = manifest.files.filter((entry) => entry.path !== "SYNTHETIC-NOT-A-REAL-RUN.txt");
+    manifest.synthetic = false;
+    delete manifest.synthetic_banner;
+    manifest.client.name = "claude-code";
+    manifest.client.version = "9.9.9";
+    manifest.client.version_output = "9.9.9 (Claude Code)";
+    manifest.label = `Claude Code 9.9.9 integration:\nPASS — manually exercised on Linux x86-64 against artifact sha256 ${manifest.artifact.sha256}\nNot automated in CI.`;
+  });
+  const correctlyNamed = path.join(path.dirname(path.dirname(path.dirname(copy.dir))), "9.9.9", "linux-x64", pack().artifact);
+  fs.mkdirSync(path.dirname(correctlyNamed), { recursive: true });
+  fs.renameSync(copy.dir, correctlyNamed);
+  copy.dir = correctlyNamed;
+  return copy;
+}
+
 test("the checker ACCEPTS a correct pack", () => {
   const correct = pack();
   const result = check([correct.dir, "--allow-synthetic"]);
@@ -182,6 +210,29 @@ test("stripping one synthetic marker does not launder a synthetic pack", () => {
   const scrubbedResult = check([scrubbed.dir, "--release", "--artifact-sha256", pack().artifact]);
   assert.equal(scrubbedResult.code, 1, scrubbedResult.out);
   assert.match(scrubbedResult.out, /SYNTHETIC-NOT-A-REAL-RUN\.txt/, scrubbedResult.out);
+});
+
+test("the frisk's exact synthetic promotion is refused by fixture-observed process provenance", () => {
+  const promoted = promotedSyntheticPack();
+  const result = check([promoted.dir, "--release", "--artifact-sha256", pack().artifact]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE synthetic_marker_conflict: this pack carries synthetic evidence \(fixture-observed stand-in process: true,/m, result.out);
+  assert.match(result.out, /^REFUSE synthetic_pack_in_release_evidence: /m, result.out);
+  assert.doesNotMatch(result.out, /^Claude Code 9\.9\.9 integration:$/m, result.out);
+});
+
+test("a rehashed self-consistent tail truncation contradicts the separate boundary commitment", () => {
+  const copy = copyOfPack();
+  const childPath = path.join(copy.dir, "child.jsonl");
+  const raw = fs.readFileSync(childPath);
+  const finalLine = raw.lastIndexOf(0x0a, raw.length - 2) + 1;
+  fs.writeFileSync(childPath, raw.subarray(0, finalLine + 7));
+  rehash(copy, "child.jsonl");
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE child_log_truncated: child\.jsonl does not end at a newline-delimited record boundary$/m, result.out);
+  assert.match(result.out, /^REFUSE child_log_malformed: child\.jsonl record \d+ is not valid JSON$/m, result.out);
+  assert.match(result.out, /^REFUSE child_log_commitment_mismatch: /m, result.out);
 });
 
 test("the checker refuses a pack filed under a path that contradicts its manifest", () => {
