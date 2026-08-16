@@ -11,8 +11,7 @@ const {
   processStartWitness,
 } = require("../spine/protection.cjs");
 
-const SCRATCH = "/home/monkey/scratch/proxylock";
-fs.mkdirSync(SCRATCH, { recursive: true, mode: 0o700 });
+const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "seal-proxy-lock-"));
 
 function project() {
   const root = fs.mkdtempSync(path.join(SCRATCH, "test-"));
