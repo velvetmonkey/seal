@@ -6,6 +6,7 @@ const path = require("node:path");
 require("./sync-version.cjs");
 const { packPayload, sha256Hex } = require("../spine/integrity.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
+const { productIdentity, artifactName } = require("./product-identity.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const MARKER = "\n// --SEAL-PAYLOAD--\n";
@@ -51,6 +52,10 @@ function copyInto(staging, rel) {
 
 function main() {
   const version = requireMatchingVersion();
+  // The payload is named by VERSION and stays byte-identical across commits,
+  // so the published pin can be committed. The FILE is named by the product
+  // identity, so an untagged build cannot pass for the release.
+  const identity = productIdentity({ root: ROOT, version });
   const outDir = process.argv.includes("--out")
     ? path.resolve(process.argv[process.argv.indexOf("--out") + 1])
     : path.join(ROOT, "dist");
@@ -77,7 +82,7 @@ function main() {
       "",
     ].join("\n");
     const artifact = Buffer.concat([Buffer.from(header, "utf8"), payload]);
-    const name = `seal-v${version}-linux-x64`;
+    const name = artifactName(identity.identity);
     const dest = path.join(outDir, name);
     if (fs.existsSync(dest)) fs.rmSync(dest, { force: true });
     fs.writeFileSync(dest, artifact, { mode: 0o555 });
@@ -87,6 +92,9 @@ function main() {
     const meta = {
       schema: "seal.dist/v1",
       version,
+      identity: identity.identity,
+      identityKind: identity.kind,
+      commit: identity.commit,
       platform: "linux-x64",
       artifact: name,
       sha256: digest,

@@ -55,8 +55,16 @@ for (const file of ["README.md", path.join("docs", "guide", "README.md"), path.j
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, `v${version}`);
 }
 
+// An artifact filename carries the product identity, not the release version
+// alone: a build that is not the tag says so in its own name. A version bump
+// re-versions the name and leaves the commit it identifies alone.
+const ARTIFACT_NAME = /seal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?-linux-x64/g;
+function renameArtifact(match) {
+  const development = match.match(/-dev\.g([0-9a-f]{7,40})-linux-x64$/);
+  return development ? `seal-v${version}-dev.g${development[1]}-linux-x64` : `seal-v${version}-linux-x64`;
+}
 for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md"]) {
-  replace(file, /seal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?-linux-x64/g, `seal-v${version}-linux-x64`);
+  replace(file, ARTIFACT_NAME, renameArtifact);
 }
 
 for (const file of ["README.md", "docs/guide/README.md"]) {

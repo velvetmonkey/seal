@@ -10,6 +10,8 @@ const path = require("node:path");
 const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
+const { productIdentity, artifactName } = require("../scripts/product-identity.cjs");
+
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
@@ -54,11 +56,14 @@ function buildArtifact() {
   const out = tmpdir("seal-dist3d-build-");
   const built = runNode([BUILD, "--out", out]);
   assert.equal(built.code, 0, built.out);
-  const artifact = path.join(out, `seal-v${VERSION}-linux-x64`);
+  // The file is named for the product identity of the tree it was built from,
+  // which is the bare release version only at the tag.
+  const identityName = artifactName(productIdentity({ root: ROOT }).identity);
+  const artifact = path.join(out, identityName);
   assert.ok(fs.existsSync(artifact), built.out);
   const sums = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim();
   const [digest, bytes, name] = sums.split(/\s+/);
-  assert.equal(name, `seal-v${VERSION}-linux-x64`);
+  assert.equal(name, identityName);
   assert.equal(digest, sha256Hex(fs.readFileSync(artifact)));
   assert.equal(Number(bytes), fs.statSync(artifact).size);
   return { out, artifact, digest, bytes: Number(bytes) };
