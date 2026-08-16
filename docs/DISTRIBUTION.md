@@ -1,6 +1,6 @@
 # Distribution (roadmap 3D)
 
-Seal v0.1.1 ships **one** installable artifact, for **Linux x86-64 only**.
+Seal v0.2.0-rc.1 ships **one** installable artifact, for **Linux x86-64 only**.
 macOS, Windows, Linux ARM and other platforms are not supported in this
 release.
 
@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.1.1-linux-x64 --sha256 b53532d3ac1ad3972ebe6df683667625904588caae3da147fcdf36a850322879 --bytes 6126224 --prefix ~/.local
+./seal-v0.2.0-rc.1-linux-x64 --sha256 eef923946e1f9c24aa48b9428971f8b943a78a3e626afbb6d8f2f0904cb87846 --bytes 6126255 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and

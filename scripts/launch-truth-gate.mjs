@@ -64,7 +64,7 @@ const evaluator = readRequired('evaluator truth surface', evaluatorPath);
 const comparison = readRequired('guardrail comparison', comparisonPath);
 const landingPage = readRequired('landing page', landingPagePath);
 const version = readRequired('VERSION', new URL('../VERSION', import.meta.url)).trim();
-if (!/^\d+\.\d+\.\d+$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
+if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
 
 // --- README: the developer route, roadmap step 6 ---
 

@@ -23,7 +23,7 @@ test("the published pin matches a freshly built artifact", () => {
   const recorded = parsePin(fs.readFileSync(PIN, "utf8"));
   assert.match(recorded.sha256, /^[0-9a-f]{64}$/);
   assert.ok(Number.isInteger(recorded.bytes) && recorded.bytes > 0);
-  assert.match(recorded.name, /^seal-v\d+\.\d+\.\d+-linux-x64$/);
+  assert.match(recorded.name, /^seal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?-linux-x64$/);
 
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-dist-pin-"));
   const built = spawnSync(process.execPath, [BUILD, "--out", out], { encoding: "utf8" });
