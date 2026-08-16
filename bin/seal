@@ -175,14 +175,15 @@ async function fetchBytes(url) {
   let response;
   try {
     response = await fetch(url);
-  } catch {
-    const error = new Error("runtime download could not reach its source");
-    error.runtimeDownload = "no_network";
+  } catch (cause) {
+    const error = new Error(`runtime fetch failed: ${cause.name}: ${cause.message}`);
+    error.runtimeDownload = "failed";
     throw error;
   }
   if (!response.ok) {
     const error = new Error(`runtime download returned HTTP ${response.status}`);
     error.runtimeDownload = response.status === 404 ? "not_found" : "unavailable";
+    error.status = response.status;
     throw error;
   }
   return Buffer.from(await response.arrayBuffer());
@@ -200,7 +201,7 @@ async function ensureRuntime(receiptPath) {
       let got;
       try { got = sha256(fs.readFileSync(target)); }
       catch {
-        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or replace this runtime file.`);
+        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receiptPath}\`. Seal did not replace this runtime file.`);
       }
       if (got !== expected) throw new Error(`cached runtime hash mismatch for ${relative}: ${got}`);
       continue;
@@ -209,14 +210,14 @@ async function ensureRuntime(receiptPath) {
     let bytes;
     try { bytes = await fetchBytes(source); }
     catch (error) {
-      if (error.runtimeDownload === "no_network") {
-        throw runtimeRefusal("runtime_download_no_network", `Seal needed the pinned runtime file at ${target}; it could not reach ${source} because this machine has no network connection. Connect this machine to the network, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+      if (error.runtimeDownload === "failed") {
+        throw runtimeRefusal("runtime_download_failed", `Seal needed the pinned runtime file at ${target}; the fetch to ${source} failed (${error.message}). Check that source and its network path, then run \`seal verify ${receiptPath}\`. Seal did not write this runtime file.`);
       }
       if (error.runtimeDownload === "not_found") {
-        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; it was not found at ${source} (HTTP 404). Check that the pinned runtime revision is published, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP 404. Check that the pinned runtime revision is published, then run \`seal verify ${receiptPath}\`. Seal did not write this runtime file.`);
       }
       if (error.runtimeDownload === "unavailable") {
-        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} could not provide it. Check the runtime source, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP ${error.status}. Check the runtime source, then run \`seal verify ${receiptPath}\`. Seal did not write this runtime file.`);
       }
       throw error;
     }
@@ -256,7 +257,7 @@ async function verify(receiptPath) {
   let stat;
   try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
   if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
-  if ((stat.mode & 0o444) === 0) throw new Error(`receipt file permissions deny reading: ${absolute}`);
+  if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
   let text;
   try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
@@ -268,7 +269,7 @@ async function verify(receiptPath) {
   // than crash it through the kernel verifier as an "unrecognized" schema.
   if (parsed && parsed.receipt === "seal.spine/v1") {
     console.error(`seal: spine_receipt_use_separate_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
-    console.error(`Check it with the separate checker shipped in this artifact. It shares no code with this binary at runtime, but cannot protect against a replaced artifact: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
+    console.error(`Check it with the separate checker command: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
     process.exitCode = 2;
     return;
   }

@@ -47,12 +47,16 @@ function runtimeRefusalContext() {
   return { cache, dataHome, receipt, runtime };
 }
 
-test("verify names a pinned runtime unavailable without a network", async () => {
+test("verify reports a failed runtime fetch without diagnosing the machine or receipt", async () => {
   const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
 
   const unavailable = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: "http://127.0.0.1:9/runtime" });
   assert.equal(unavailable.code, 1);
-  assert.equal(unavailable.out, `seal: runtime_download_no_network: Seal needed the pinned runtime file at ${runtime}; it could not reach http://127.0.0.1:9/runtime/kernel/wasm/seal.js because this machine has no network connection. Connect this machine to the network, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or write this runtime file.\n`);
+  assert.match(unavailable.out, /^seal: runtime_download_failed: /);
+  assert.match(unavailable.out, new RegExp(`fetch to http://127\\.0\\.0\\.1:9/runtime/kernel/wasm/seal\\.js failed \\(runtime fetch failed: TypeError: fetch failed\\)`));
+  assert.match(unavailable.out, new RegExp(`pinned runtime file at ${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`));
+  assert.match(unavailable.out, /Seal did not write this runtime file\./);
+  assert.doesNotMatch(unavailable.out, /machine has no network connection|Seal did not inspect the receipt/);
 });
 
 test("verify names a pinned runtime absent from its source", async (t) => {
@@ -61,7 +65,25 @@ test("verify names a pinned runtime absent from its source", async (t) => {
   t.after(remote.close);
   const absent = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: remote.base });
   assert.equal(absent.code, 1);
-  assert.equal(absent.out, `seal: runtime_download_not_found: Seal needed the pinned runtime file at ${runtime}; it was not found at ${remote.base}/kernel/wasm/seal.js (HTTP 404). Check that the pinned runtime revision is published, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or write this runtime file.\n`);
+  assert.match(absent.out, /^seal: runtime_download_not_found: /);
+  assert.match(absent.out, new RegExp(`${remote.base.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}/kernel/wasm/seal\\.js responded HTTP 404`));
+  assert.match(absent.out, /Seal did not write this runtime file\./);
+  assert.doesNotMatch(absent.out, /Seal did not inspect the receipt/);
+});
+
+test("verify reports a non-404 runtime response without claiming the receipt was untouched", async (t) => {
+  const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
+  // This valid JSON receipt has passed verify's stat, read, and parse work by
+  // the time the forced runtime fetch refusal is emitted.
+  const remote = await refusingRuntimeServer(503);
+  t.after(remote.close);
+  const unavailable = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: remote.base });
+  assert.equal(unavailable.code, 1);
+  assert.match(unavailable.out, /^seal: runtime_download_unavailable: /);
+  assert.match(unavailable.out, new RegExp(`${remote.base.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}/kernel/wasm/seal\\.js responded HTTP 503`));
+  assert.match(unavailable.out, /Seal did not write this runtime file\./);
+  assert.doesNotMatch(unavailable.out, /Seal did not inspect the receipt/);
+  assert.ok(!fs.existsSync(runtime), "a failed download must not write the runtime file");
 });
 
 test("verify names an unreadable pinned runtime cache path", async () => {
@@ -69,7 +91,9 @@ test("verify names an unreadable pinned runtime cache path", async () => {
   fs.mkdirSync(runtime, { recursive: true });
   const unreadable = await runAsync(["verify", receipt], cache, dataHome);
   assert.equal(unreadable.code, 1);
-  assert.equal(unreadable.out, `seal: runtime_cache_unreadable: Seal needed the pinned runtime file at ${runtime}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or replace this runtime file.\n`);
+  assert.match(unreadable.out, /^seal: runtime_cache_unreadable: /);
+  assert.match(unreadable.out, /Seal did not replace this runtime file\./);
+  assert.doesNotMatch(unreadable.out, /Seal did not inspect the receipt/);
 });
 
 test("seal verify accepts a receipt copied away from all generating state", async () => {
@@ -125,7 +149,7 @@ test("verify distinguishes a non-file path from denied receipt permissions", () 
   fs.chmodSync(unreadable, 0o000);
   const denied = run(["verify", unreadable], cache, dataHome);
   assert.notEqual(denied.code, 0, denied.out);
-  assert.match(denied.out, new RegExp(`seal: receipt file permissions deny reading: ${unreadable}`));
+  assert.match(denied.out, new RegExp(`seal: receipt file has no read permission bits: ${unreadable}`));
 });
 
 test("verify refuses empty, malformed, and non-receipt JSON paths", async () => {
@@ -161,8 +185,7 @@ test("seal verify recognizes a self-contained real spine receipt and routes to t
   // Recognized coherently, not crashed as an unknown schema.
   assert.notEqual(result.code, 0, result.out);
   assert.match(result.out, /spine_receipt_use_separate_checker/);
-  assert.match(result.out, /shipped in this artifact/);
-  assert.match(result.out, /cannot protect against a replaced artifact/);
+  assert.match(result.out, /Check it with the separate checker command/);
   assert.match(result.out, /seal-receipt-check\.mjs/);
   // The old bug: verify treated a real product receipt as an unrecognized kernel receipt.
   assert.doesNotMatch(result.out, /unrecognized|no recognized version discriminator|verdict: undefined/);
