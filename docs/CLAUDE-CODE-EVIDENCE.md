@@ -160,11 +160,28 @@ not the label the observations produce. It also strictly parses the fixture's
 numbered digest chain, compares the complete log to the independent final
 boundary digest, length, and record count in `snapshots.json`, and derives the
 client executable identity from process ancestry the fixture read from `/proc`
-while the client and Seal proxy were alive.
+while the client and Seal proxy were alive. It also reads every recorded cast;
+a synthetic fixture banner in a cast is synthetic evidence, not ignored data.
+
+For a release claim, the operator must additionally supply the SHA-256 of the
+actual Claude Code executable they independently verified (not a hash copied
+out of the pack):
+
+```sh
+node scripts/check-cc-evidence.mjs evidence/claude-code --release \
+  --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> \
+  --client-executable-sha256 <independently-verified-claude-executable-digest>
+```
+
+The checker compares that supplied digest to the executable identity the live
+fixture recorded above Seal's proxy. Without it, a release pack is refused as
+`client_identity_expected_absent`; a file named `claude` or a client-reported
+version is not identity.
 
 The release workflow runs it against the exact artifact it just built. With no
 pack for that artifact, the release states the untested row and continues; with
-a pack, the pack must verify or the release fails.
+a pack, the pack and the operator-supplied executable digest must verify or the
+release fails.
 
 ## The honest label
 

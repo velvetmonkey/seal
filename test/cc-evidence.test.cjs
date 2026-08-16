@@ -16,6 +16,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { createHash } = require("node:crypto");
 
 const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
@@ -60,11 +61,11 @@ function copyOfPack() {
   return {
     dir,
     manifestPath: path.join(dir, "manifest.json"),
-    manifest: () => JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")),
+    manifest() { return JSON.parse(fs.readFileSync(path.join(this.dir, "manifest.json"), "utf8")); },
     rewriteManifest(edit) {
       const manifest = this.manifest();
       edit(manifest);
-      fs.writeFileSync(path.join(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+      fs.writeFileSync(path.join(this.dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     },
   };
 }
@@ -83,6 +84,39 @@ function rehash(copy, name) {
   });
 }
 
+function digest(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function rechainChildLog(copy, replacement) {
+  const childPath = path.join(copy.dir, "child.jsonl");
+  const records = fs.readFileSync(childPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  const previous = new Map();
+  for (const record of records) {
+    if (record.kind === "start") {
+      for (const step of record.ancestry || []) {
+        for (const identity of [step.executable, ...(step.argv_files || [])]) {
+          if (identity?.sha256) identity.sha256 = replacement;
+        }
+      }
+    }
+    record.previous_sha256 = previous.get(record.session) || "0".repeat(64);
+    const line = JSON.stringify(record);
+    previous.set(record.session, digest(Buffer.from(`${line}\n`, "utf8")));
+  }
+  const raw = `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+  fs.writeFileSync(childPath, raw);
+  const snapshotsPath = path.join(copy.dir, "snapshots.json");
+  const snapshots = JSON.parse(fs.readFileSync(snapshotsPath, "utf8"));
+  const final = snapshots.snapshots.find((entry) => entry.case === "unprotect" && entry.edge === "end").snapshot.child_log;
+  final.sha256 = digest(Buffer.from(raw, "utf8"));
+  final.bytes = Buffer.byteLength(raw);
+  final.lines = records.length;
+  fs.writeFileSync(snapshotsPath, `${JSON.stringify(snapshots, null, 2)}\n`);
+  rehash(copy, "child.jsonl");
+  rehash(copy, "snapshots.json");
+}
+
 function promotedSyntheticPack() {
   const copy = copyOfPack();
   fs.rmSync(path.join(copy.dir, "SYNTHETIC-NOT-A-REAL-RUN.txt"));
@@ -99,6 +133,7 @@ function promotedSyntheticPack() {
   fs.mkdirSync(path.dirname(correctlyNamed), { recursive: true });
   fs.renameSync(copy.dir, correctlyNamed);
   copy.dir = correctlyNamed;
+  copy.manifestPath = path.join(correctlyNamed, "manifest.json");
   return copy;
 }
 
@@ -219,6 +254,61 @@ test("the frisk's exact synthetic promotion is refused by fixture-observed proce
   assert.match(result.out, /^REFUSE synthetic_marker_conflict: this pack carries synthetic evidence \(fixture-observed stand-in process: true,/m, result.out);
   assert.match(result.out, /^REFUSE synthetic_pack_in_release_evidence: /m, result.out);
   assert.doesNotMatch(result.out, /^Claude Code 9\.9\.9 integration:$/m, result.out);
+});
+
+test("PATH 3 refuses an impostor named claude against the operator's trusted executable digest", () => {
+  const impostor = promotedSyntheticPack();
+  const trustedRealDigest = "a".repeat(64);
+  const result = check([
+    impostor.dir, "--release", "--artifact-sha256", pack().artifact,
+    "--client-executable-sha256", trustedRealDigest,
+  ]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE client_executable_identity_mismatch: /m, result.out);
+  assert.match(result.out, /^OK\s+terminal\.cast carries the synthetic fixture banner$/m, result.out);
+});
+
+test("a release pack without an operator-supplied client digest is refused by name", () => {
+  const promoted = promotedSyntheticPack();
+  const result = check([promoted.dir, "--release", "--artifact-sha256", pack().artifact]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE client_identity_expected_absent: /m, result.out);
+});
+
+test("PATH 2 refuses when the checker cannot read its local stand-in and fixture inputs", () => {
+  const promoted = promotedSyntheticPack();
+  const emptyTree = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-tree-"));
+  const result = check([
+    promoted.dir, "--release", "--artifact-sha256", pack().artifact,
+    "--client-executable-sha256", promoted.manifest().client.executable_sha256,
+    "--repo-root", emptyTree,
+  ]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE synthetic_client_identity_absent: /m, result.out);
+  assert.match(result.out, /^REFUSE fixture_revision_absent: /m, result.out);
+});
+
+test("PATH 1 refuses the frisk's rehashed provenance transcript because argv still names stub-bin", () => {
+  const forged = promotedSyntheticPack();
+  const forgedDigest = "b".repeat(64);
+  rechainChildLog(forged, forgedDigest);
+  forged.rewriteManifest((manifest) => {
+    manifest.client.executable_sha256 = forgedDigest;
+  });
+  const result = check([
+    forged.dir, "--release", "--artifact-sha256", pack().artifact,
+    "--client-executable-sha256", forgedDigest,
+  ]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE synthetic_client_argv_observed: fixture session .* names a stub-bin client/m, result.out);
+});
+
+test("a missing manifest in a populated pack is a named refusal, not untested", () => {
+  const copy = copyOfPack();
+  fs.rmSync(copy.manifestPath);
+  const result = check([copy.dir, "--release", "--artifact-sha256", pack().artifact]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE manifest_absent: /m, result.out);
 });
 
 test("a rehashed self-consistent tail truncation contradicts the separate boundary commitment", () => {

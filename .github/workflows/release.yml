@@ -52,9 +52,14 @@ jobs:
           # and only when it names THIS artifact: a pack whose recorded file
           # hashes or artifact identity do not hold fails the release, while an
           # absent pack states the untested row and continues.
+          client_identity_args=()
+          if [[ -n "${SEAL_CLAUDE_CODE_EXECUTABLE_SHA256:-}" ]]; then
+            client_identity_args=(--client-executable-sha256 "$SEAL_CLAUDE_CODE_EXECUTABLE_SHA256")
+          fi
           node scripts/check-cc-evidence.mjs evidence/claude-code \
             --release --artifact-sha256 "$digest" --artifact-bytes "$bytes" \
-            --label-out "$RUNNER_TEMP/claude-code-label.txt"
+            --label-out "$RUNNER_TEMP/claude-code-label.txt" \
+            "${client_identity_args[@]}"
 
       - name: Publish the immutable release
         env:

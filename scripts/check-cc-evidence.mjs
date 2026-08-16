@@ -183,14 +183,15 @@ function checkPackPath(packDir, manifest, report) {
   }
 }
 
-function checkSynthetic(packDir, manifest, report, { release, allowSynthetic }, processSynthetic) {
+function checkSynthetic(packDir, manifest, report, { release, allowSynthetic }, syntheticSignals) {
   const markerPresent = existsSync(join(packDir, SYNTHETIC_MARKER_FILE));
   const bannerInManifest = JSON.stringify(manifest).includes(SYNTHETIC_BANNER);
   const versionLooksSynthetic = /synthetic|stand-in/i.test(String(manifest.client?.version ?? ""));
   const declared = manifest.synthetic === true;
-  const synthetic = declared || markerPresent || bannerInManifest || versionLooksSynthetic || processSynthetic;
+  const { processSynthetic, castSynthetic } = syntheticSignals;
+  const synthetic = declared || markerPresent || bannerInManifest || versionLooksSynthetic || processSynthetic || castSynthetic;
   if (synthetic && !declared) {
-    report.refuse("synthetic_marker_conflict", `this pack carries synthetic evidence (fixture-observed stand-in process: ${processSynthetic}, marker file: ${markerPresent}, banner: ${bannerInManifest}, client version: ${manifest.client?.version}) but its manifest declares synthetic ${JSON.stringify(manifest.synthetic)}`);
+    report.refuse("synthetic_marker_conflict", `this pack carries synthetic evidence (fixture-observed stand-in process: ${processSynthetic}, cast banner: ${castSynthetic}, marker file: ${markerPresent}, banner: ${bannerInManifest}, client version: ${manifest.client?.version}) but its manifest declares synthetic ${JSON.stringify(manifest.synthetic)}`);
   }
   if (declared && !markerPresent) {
     report.refuse("synthetic_marker_conflict", `this pack declares itself synthetic but carries no ${SYNTHETIC_MARKER_FILE} beside its manifest`);
@@ -205,6 +206,40 @@ function checkSynthetic(packDir, manifest, report, { release, allowSynthetic }, 
     report.refuse("synthetic_pack_not_permitted", `${packDir} is a synthetic fixture pack; pass --allow-synthetic to check one deliberately`);
   }
   if (synthetic) report.ok("this pack is a SYNTHETIC fixture pack and is refused by release checking");
+  return synthetic;
+}
+
+// A recording is evidence only if the checker reads it.  The synthetic banner
+// is deliberately written into every fixture cast, so inspect the exact bytes
+// that the manifest commits to rather than trusting a manifest summary.
+function checkCasts(packDir, manifest, report) {
+  const recordings = manifest.environment?.recordings;
+  if (!Array.isArray(recordings) || recordings.length === 0) {
+    report.refuse("terminal_recordings_absent", "the manifest names no terminal recordings to examine");
+    return false;
+  }
+  let synthetic = false;
+  for (const recording of recordings) {
+    const name = recording?.file;
+    if (typeof name !== "string" || name.length === 0 || name.startsWith("/") || name.split("/").includes("..")) {
+      report.refuse("terminal_recording_name_invalid", `the manifest names an unusable terminal recording ${JSON.stringify(name)}`);
+      continue;
+    }
+    let bytes;
+    try {
+      bytes = readFileSync(join(packDir, name));
+    } catch (error) {
+      if (error.code === "ENOENT") report.refuse("terminal_recording_absent", `${name} is not present in the pack`);
+      else report.refuse("terminal_recording_unreadable", `${name} cannot be read: ${error.message}`);
+      continue;
+    }
+    if (bytes.includes(Buffer.from(SYNTHETIC_BANNER, "utf8"))) {
+      synthetic = true;
+      report.ok(`${name} carries the synthetic fixture banner`);
+    } else {
+      report.ok(`${name} was examined for the synthetic fixture banner`);
+    }
+  }
   return synthetic;
 }
 
@@ -386,11 +421,18 @@ function identityDigests(step) {
 // chain existed. The self-declared client hash must occur above the Seal proxy
 // in every start record, and the checked-in stand-in's hash is independently
 // recognized from those raw process identities.
-function checkProcessProvenance(records, manifest, report, { repoRoot }) {
+function checkProcessProvenance(records, manifest, report, { repoRoot, release, clientExecutableSha256 }) {
   const starts = records.filter((record) => record.kind === "start");
   const declared = manifest.client?.executable_sha256;
   let standInDigest = null;
-  try { standInDigest = sha256(readFileSync(join(repoRoot, "harness/claude-code/synthetic-client.cjs"))); } catch { /* fixture revision checks report tree drift */ }
+  const standInPath = join(repoRoot, "harness/claude-code/synthetic-client.cjs");
+  try { standInDigest = sha256(readFileSync(standInPath)); } catch (error) {
+    if (error.code === "ENOENT") report.refuse("synthetic_client_identity_absent", `${standInPath} is absent; the checker cannot identify the shipped synthetic client`);
+    else report.refuse("synthetic_client_identity_unreadable", `${standInPath} cannot be read: ${error.message}`);
+  }
+  if (release && typeof clientExecutableSha256 !== "string") {
+    report.refuse("client_identity_expected_absent", "release checking needs --client-executable-sha256 from the operator's independently verified Claude Code executable");
+  }
   let synthetic = false;
   let mediated = 0;
   for (const start of starts) {
@@ -406,6 +448,12 @@ function checkProcessProvenance(records, manifest, report, { repoRoot }) {
     const observed = aboveProxy.flatMap(identityDigests);
     if (typeof declared !== "string" || !observed.includes(declared)) {
       report.refuse("client_process_not_observed", `fixture session ${start.session} does not observe client executable sha256 ${declared} above the Seal proxy`);
+    }
+    if (release && typeof clientExecutableSha256 === "string" && !observed.includes(clientExecutableSha256)) {
+      report.refuse("client_executable_identity_mismatch", `fixture session ${start.session} observed no operator-approved client executable sha256 ${clientExecutableSha256} above the Seal proxy`);
+    }
+    if (manifest.synthetic !== true && aboveProxy.some((step) => Array.isArray(step.argv) && step.argv.some((word) => /(?:^|[/\\])stub-bin(?:[/\\]|$)/.test(word)))) {
+      report.refuse("synthetic_client_argv_observed", `fixture session ${start.session} names a stub-bin client in argv above the Seal proxy`);
     }
     if (standInDigest && observed.includes(standInDigest)) synthetic = true;
   }
@@ -424,11 +472,13 @@ function checkFixtureRevision(manifest, report, { release, repoRoot }) {
     return;
   }
   const inTree = join(repoRoot, declared);
-  if (!existsSync(inTree)) {
-    report.ok(`fixture ${declared} sha256 ${digest} (not present in this tree to compare)`);
+  let bytes;
+  try { bytes = readFileSync(inTree); } catch (error) {
+    if (error.code === "ENOENT") report.refuse("fixture_revision_absent", `${declared} is absent from this tree; the checker cannot compare the counting instrument`);
+    else report.refuse("fixture_revision_unreadable", `${inTree} cannot be read: ${error.message}`);
     return;
   }
-  const got = sha256(readFileSync(inTree));
+  const got = sha256(bytes);
   if (got === digest) {
     report.ok(`fixture ${declared} is the one in this tree: sha256 ${got}`);
     return;
@@ -462,8 +512,9 @@ function checkPack(packDir, options) {
   checkFiles(packDir, manifest, report);
   const observed = checkCases(manifest, report);
   const childRecords = checkChildLog(packDir, manifest, report);
+  const castSynthetic = checkCasts(packDir, manifest, report);
   const processSynthetic = checkProcessProvenance(childRecords, manifest, report, options);
-  checkSynthetic(packDir, manifest, report, options, processSynthetic);
+  checkSynthetic(packDir, manifest, report, options, { processSynthetic, castSynthetic });
   checkFixtureRevision(manifest, report, options);
   const derived = labelFor(manifest, observed);
   if (manifest.label !== derived) {
@@ -481,7 +532,7 @@ function findPacks(target) {
     if (depth > 6) return;
     let entries;
     try { entries = readdirSync(directory, { withFileTypes: true }); } catch { return; }
-    if (entries.some((entry) => entry.isFile() && entry.name === "manifest.json")) {
+    if (entries.some((entry) => entry.isFile() && (entry.name === "manifest.json" || REQUIRED_FILES.includes(entry.name)))) {
       packs.push(directory);
       return;
     }
@@ -496,7 +547,7 @@ function findPacks(target) {
 function usage(message) {
   process.stderr.write(`${message}\n`);
   process.stderr.write("usage: check-cc-evidence.mjs <pack-or-root> [--release] [--allow-synthetic]\n");
-  process.stderr.write("                             [--artifact-sha256 HEX] [--artifact-bytes N] [--repo-root DIR]\n");
+  process.stderr.write("                             [--artifact-sha256 HEX] [--artifact-bytes N] [--client-executable-sha256 HEX] [--repo-root DIR]\n");
   process.exit(2);
 }
 
@@ -516,6 +567,7 @@ function main(argv) {
     if (flag === "--allow-synthetic") { options.allowSynthetic = true; continue; }
     if (flag === "--artifact-sha256") { options.artifactSha256 = argv[++index]; continue; }
     if (flag === "--artifact-bytes") { options.artifactBytes = Number(argv[++index]); continue; }
+    if (flag === "--client-executable-sha256") { options.clientExecutableSha256 = argv[++index]; continue; }
     if (flag === "--repo-root") { options.repoRoot = resolve(argv[++index]); continue; }
     if (flag === "--label-out") { options.labelOut = argv[++index]; continue; }
     if (flag.startsWith("--")) usage(`unknown flag ${flag}`);
@@ -524,6 +576,7 @@ function main(argv) {
   if (positional.length !== 1) usage("name exactly one evidence pack directory or evidence root");
   if (options.release && options.allowSynthetic) usage("--release and --allow-synthetic contradict each other");
   if (options.release && !options.artifactSha256) usage("--release needs --artifact-sha256 <hex>: the release artifact the evidence must name");
+  if (options.clientExecutableSha256 !== undefined && !/^[0-9a-f]{64}$/.test(options.clientExecutableSha256)) usage("--client-executable-sha256 must be 64 lowercase hex characters");
   const target = resolve(positional[0]);
 
   if (!existsSync(target)) {
