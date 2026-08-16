@@ -388,7 +388,15 @@ function lockPathFor(projectRoot, env = process.env) {
 }
 
 function lockOwnerIsLive(owner) {
-  return owner && livePid(owner.pid) && owner.startWitness === processStartWitness(owner.pid);
+  if (!owner || !livePid(owner.pid)) return false;
+  const witness = processStartWitness(owner.pid);
+  if (witness === null) {
+    throw new ProtectionError(
+      "process_witness_unavailable",
+      `cannot establish process-start witness for live pid ${owner.pid}`,
+    );
+  }
+  return owner.startWitness === witness;
 }
 
 function leaseMatches(lease, token) {

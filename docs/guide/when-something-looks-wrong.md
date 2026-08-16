@@ -325,6 +325,13 @@ PID and process-start witness are no longer live and the next holder takes
 the next generation. This is a transient start event, not a persisted project
 status.
 
+### `process_witness_unavailable`
+
+Seal found a live PID for a stored lease or project lock but could not read a
+process-start witness for that PID. It refuses instead of guessing whether
+the owner is current or stale. Run on the supported Linux x86-64 path, where
+Seal can read `/proc/<pid>/stat`, or stop the recorded owner and retry.
+
 ### `drifted`
 
 The `.mcp.json` server entry changed between sessions, discovered at wrapper
