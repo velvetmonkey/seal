@@ -10,9 +10,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
+const GUIDE_SHA256 = "2f8efb1a4ee73afe7b2c455219122855ee1b3a87951dd9e981e3a7b26a69d1a5";
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
@@ -61,6 +63,12 @@ function sourceTokens() {
 
 function guideTokens() {
   const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
+  const digest = createHash("sha256").update(text).digest("hex");
+  assert.equal(
+    digest,
+    GUIDE_SHA256,
+    `${GUIDE}: content changed; review the whole guide and intentionally re-pin its sha256`,
+  );
   const occurrences = new Map();
   for (const match of text.matchAll(/^### `([a-z_]+)`/gm)) {
     const line = text.slice(0, match.index).split("\n").length;
