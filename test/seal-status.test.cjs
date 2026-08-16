@@ -44,6 +44,11 @@ function run(args, root, input = "", cwd = process.cwd()) {
   } catch (error) { return { code: error.status, out: `${error.stdout || ""}${error.stderr || ""}` }; }
 }
 
+function protectedStatusPrefix(statePath) {
+  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+    `Protection: PENDING RESTART db.write (${statePath})\n`;
+}
+
 test("status finds the shipped kernel runtime with an empty cache", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
@@ -73,6 +78,27 @@ test("status reads the protected project's recorded receipt directory", () => {
   assert.match(result.out, /^Most recent \(by write time\): APPROVE at receipt time 2026-08-16T12:00:00\.000Z \(approved\.json\)$/m);
 });
 
+test("status says an existing empty receipt directory has no recorded decision", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-existing-empty-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "empty-receipts", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: 0 stored in ${receiptDir}\n` +
+    "Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)\n");
+});
+
 test("status names a missing receipt directory as no receipt yet", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-empty-"));
   const project = path.join(root, "project");
@@ -86,10 +112,10 @@ test("status names a missing receipt directory as no receipt yet", () => {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
   });
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0);
-  assert.match(result.out, /^Runtime: present /m);
-  assert.match(result.out, /^Receipts: 0 stored in .* \(directory does not exist\)$/m);
-  assert.match(result.out, /^Most recent: no receipt yet \(receipt directory is missing\)$/m);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: 0 stored in ${receiptDir} (directory does not exist)\n` +
+    "Most recent: no receipt yet (receipt directory is missing)\n");
 });
 
 test("status names an unreadable receipt directory and its permission action", () => {
@@ -107,10 +133,33 @@ test("status names an unreadable receipt directory and its permission action", (
   });
   fs.chmodSync(receiptDir, 0o000);
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0);
-  assert.match(result.out, /^Receipts: unavailable in .* \(directory cannot be read\)$/m);
-  assert.match(result.out, /^Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions$/m);
   fs.chmodSync(receiptDir, 0o700);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: unavailable in ${receiptDir} (directory cannot be read)\n` +
+    "Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions\n");
+});
+
+test("status names a receipt path that is not a directory as misconfigured", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-receipts-file-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "receipts-file", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(path.dirname(receiptDir), { recursive: true });
+  fs.writeFileSync(receiptDir, "not a directory\n");
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: unavailable in ${receiptDir} (path is not a directory)\n` +
+    "Most recent: receipts cannot be stored because the receipt path is not a directory; check its configuration\n");
 });
 
 test("status names receipt files when none can be parsed", () => {
@@ -121,16 +170,18 @@ test("status names receipt files when none can be parsed", () => {
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "not-a-receipt.json"), "not json\n");
+  fs.writeFileSync(path.join(receiptDir, "not-a-receipt.json"), "{}\n");
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
   });
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0);
-  assert.match(result.out, /^Receipt unreadable: not-a-receipt\.json \(Unexpected token/m);
-  assert.match(result.out, /^Most recent: receipt files exist, but none could be read as a receipt$/m);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: 1 stored in ${receiptDir}\n` +
+    "Receipt unreadable: not-a-receipt.json (missing decision or receipt time)\n" +
+    "Most recent: receipt files exist, but none could be read as a receipt\n");
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {

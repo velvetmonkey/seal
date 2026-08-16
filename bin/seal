@@ -83,7 +83,12 @@ function status() {
   let entries;
   try {
     const directory = fs.statSync(receiptDir);
-    if (!directory.isDirectory() || (directory.mode & 0o444) === 0) throw new Error("receipt directory is unreadable");
+    if (!directory.isDirectory()) {
+      console.log(`Receipts: unavailable in ${receiptDir} (path is not a directory)`);
+      console.log("Most recent: receipts cannot be stored because the receipt path is not a directory; check its configuration");
+      return;
+    }
+    if ((directory.mode & 0o444) === 0) throw new Error("receipt directory is unreadable");
     entries = fs.readdirSync(receiptDir, { withFileTypes: true });
   }
   catch (error) {
@@ -99,6 +104,10 @@ function status() {
 
   const candidates = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink());
   console.log(`Receipts: ${candidates.length} stored in ${receiptDir}`);
+  if (candidates.length === 0) {
+    console.log("Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)");
+    return;
+  }
   const observed = [];
   for (const entry of entries) {
     const target = path.join(receiptDir, entry.name);
