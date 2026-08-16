@@ -7,7 +7,7 @@
 const readline = require("node:readline");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
-const { activationLease, beforeForwardFromState, ProtectionError } = require("./protection.cjs");
+const { activationLease, beforeForwardFromState, loadReceiptSigner, ProtectionError } = require("./protection.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 
 function parseArgs(argv) {
@@ -57,11 +57,13 @@ async function run(argv) {
   if (options.protectState) {
     try {
       const state = await activationLease(options.protectState, process.env);
+      const signer = loadReceiptSigner(process.env, (message) => process.stderr.write(message));
       if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
         guardTool: state.guardTool,
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
+        signer,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),

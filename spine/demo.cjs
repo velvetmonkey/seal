@@ -115,7 +115,7 @@ async function run(argv, sealBinPath) {
 
   const signer = generateSigner();
   const pubkeyPath = path.join(dir, "receipt-signer.pub");
-  fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o600 });
+  fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o644 });
 
   let proxy;
   try {
