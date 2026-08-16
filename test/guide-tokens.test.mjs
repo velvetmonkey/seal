@@ -61,9 +61,22 @@ function sourceTokens() {
 
 function guideTokens() {
   const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
-  const tokens = new Set();
-  for (const match of text.matchAll(/^### `([a-z_]+)`/gm)) tokens.add(match[1]);
-  return tokens;
+  const occurrences = new Map();
+  for (const match of text.matchAll(/^### `([a-z_]+)`/gm)) {
+    const line = text.slice(0, match.index).split("\n").length;
+    const locations = occurrences.get(match[1]) || [];
+    locations.push(`line ${line}`);
+    occurrences.set(match[1], locations);
+  }
+  const duplicates = [...occurrences]
+    .filter(([, locations]) => locations.length > 1)
+    .map(([token, locations]) => `### \`${token}\` (${locations.join(", ")})`);
+  assert.deepEqual(
+    duplicates,
+    [],
+    `${GUIDE}: refusal headings appear more than once:\n${duplicates.join("\n")}`,
+  );
+  return new Set(occurrences.keys());
 }
 
 test("every refusal token in the source is documented in the guide", () => {

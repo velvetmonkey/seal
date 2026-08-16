@@ -30,10 +30,28 @@ const REVIEWED_CLAIMS = [
   },
 ];
 
+function markerLocations(text, marker) {
+  const locations = [];
+  let from = 0;
+  while (true) {
+    const at = text.indexOf(marker, from);
+    if (at === -1) return locations;
+    const line = text.slice(0, at).split("\n").length;
+    locations.push(`line ${line}`);
+    from = at + marker.length;
+  }
+}
+
 function sectionText(text, heading, anchor) {
   const marker = anchor || (heading.startsWith("### ") ? heading : `## ${heading}`);
+  const locations = markerLocations(text, marker);
+  assert.notEqual(locations.length, 0, `guide heading missing: ${marker}`);
+  assert.equal(
+    locations.length,
+    1,
+    `guide heading appears more than once: ${marker} (${locations.join(", ")})`,
+  );
   const start = text.indexOf(marker);
-  assert.notEqual(start, -1, `guide heading missing: ${marker}`);
   const rest = text.slice(start + (anchor ? 0 : marker.length));
   const end = rest.search(/^#{1,2} /m);
   return (end === -1 ? rest : rest.slice(0, end)).trim();
@@ -44,6 +62,7 @@ function sentences(text) {
 }
 
 test("reviewed guide sections reject unreviewed explanatory claims", () => {
+  assert.ok(REVIEWED_CLAIMS.length > 0, "REVIEWED_CLAIMS must not be empty");
   const unreviewed = [];
   const missing = [];
   for (const entry of REVIEWED_CLAIMS) {
