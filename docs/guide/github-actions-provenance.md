@@ -39,19 +39,20 @@ archive shows the runner-made `demo-allow-receipt.json`, `checker-output.txt`,
 commit.
 
 The job itself runs this same verification immediately after attesting. It
-also makes a one-byte change to a separate local workflow copy and verifies
-the archive again. That verification still succeeds: `gh attestation verify`
-checks the attested archive and the workflow identity recorded in the
-attestation, not an arbitrary workflow file on the verifier's disk. Compare a
-candidate workflow to `recorded-workflow.yml` yourself when that is the
-question you need answered.
+also makes a one-byte change to a copy of the archive and requires
+verification to fail. Separately, it makes a one-byte change to a local
+workflow copy and verifies the original archive again. That second verification
+still succeeds: `gh attestation verify` checks the attested archive and the
+workflow identity recorded in the attestation, not an arbitrary workflow file
+on the verifier's disk. Compare a candidate workflow to
+`recorded-workflow.yml` yourself when that is the question you need answered.
 
 ## What this does not establish
 
-This is provenance, not review. It establishes where and when GitHub recorded
-the archive as produced, not whether the demo receipt's claims are true, not
-whether Seal behaved correctly, and not whether a human reviewed it. The
-receipt's own signer remains subject to its existing limitations; this job
-introduces no signer or second account.
+This establishes where and when GitHub recorded the archive as produced, not
+whether the demo receipt's claims are true, not
+whether Seal behaved correctly, and not whether anyone independently checked
+it. The receipt's own signer remains subject to its existing limitations; this
+job introduces no signer or second account.
 
 Next: [Knowing it worked](knowing-it-worked.md).

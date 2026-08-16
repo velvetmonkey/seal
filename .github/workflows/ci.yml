@@ -63,6 +63,24 @@ jobs:
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --source-digest "$GITHUB_SHA" \
             --deny-self-hosted-runners
+      - name: "Negative control: tampered evidence fails attestation verification"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tampered="$RUNNER_TEMP/demo-receipt-evidence.tampered.tgz"
+          cp "$RUNNER_TEMP/demo-receipt-evidence.tgz" "$tampered"
+          printf 'x' >> "$tampered"
+          if gh attestation verify "$tampered" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners; then
+            echo "::error::tampered evidence unexpectedly verified"
+            exit 1
+          fi
+          echo "EXPECTED: tampered evidence failed attestation verification."
       - name: "Negative control: a different local workflow is not checked by attestation verification"
         shell: bash
         env:

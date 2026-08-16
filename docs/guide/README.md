@@ -55,7 +55,7 @@ establishes self-consistency, not that the recorded decision happened.
 
 For the CI demo receipt, [GitHub Actions provenance](github-actions-provenance.md)
 lets a stranger verify the runner and workflow that produced a published
-evidence archive. It is not a review of the receipt's truth.
+evidence archive. It does not establish the receipt is true.
 
 ## The path through this guide
 
