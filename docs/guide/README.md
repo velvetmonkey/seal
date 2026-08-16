@@ -53,6 +53,10 @@ or reuses a machine-local signing key. A checker result is only as meaningful
 as the source of the public key you supply; a key taken from the same machine
 establishes self-consistency, not that the recorded decision happened.
 
+For the CI demo receipt, [GitHub Actions provenance](github-actions-provenance.md)
+lets a stranger verify the runner and workflow that produced a published
+evidence archive. It is not a review of the receipt's truth.
+
 ## The path through this guide
 
 Read these in order the first time; each one stands alone afterwards.
