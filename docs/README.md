@@ -18,7 +18,10 @@ the Node CLI this repository ships.
 3. [DISTRIBUTION.md](DISTRIBUTION.md) — what the one installable artifact is,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
-4. [ARCHITECTURE.md](ARCHITECTURE.md) — the shipped Node product path first,
+4. [VERSION-IDENTITY.md](VERSION-IDENTITY.md) — why a build off a release tag
+   names itself `-dev.g<commit>`, which check refuses which lie, and what the
+   pinned digest can and cannot say about an untagged build.
+5. [ARCHITECTURE.md](ARCHITECTURE.md) — the shipped Node product path first,
    followed by the wider family assurance lineage.
 
 ## I want to know what it does not do

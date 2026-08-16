@@ -29,7 +29,6 @@ const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
-const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
 // A PATH that cannot see docker, lake, elan, or python even if they exist
 // elsewhere on this machine. /usr/bin:/bin is enough for `sh` and `node`.
@@ -125,8 +124,8 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   });
   assert.equal(built.code, 0, built.out);
 
-  const artifact = path.join(distDir, `seal-v${VERSION}-linux-x64`);
   const sums = fs.readFileSync(path.join(distDir, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const artifact = path.join(distDir, sums[2]);
   const digest = sums[0];
   const bytes = sums[1];
   assert.equal(digest, crypto.createHash("sha256").update(fs.readFileSync(artifact)).digest("hex"));

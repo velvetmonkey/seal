@@ -10,9 +10,12 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
+const { productIdentity, artifactName, releaseArtifactName } = require("../scripts/product-identity.cjs");
+
 const ROOT = path.join(__dirname, "..");
 const PIN = path.join(ROOT, "SHA256SUMS");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
+const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
 function parsePin(text) {
   const [sha256, bytes, name] = text.trim().split(/\s+/);
@@ -23,14 +26,18 @@ test("the published pin matches a freshly built artifact", () => {
   const recorded = parsePin(fs.readFileSync(PIN, "utf8"));
   assert.match(recorded.sha256, /^[0-9a-f]{64}$/);
   assert.ok(Number.isInteger(recorded.bytes) && recorded.bytes > 0);
-  assert.match(recorded.name, /^seal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?-linux-x64$/);
+  // The pin is a claim about the bytes the RELEASE will publish, so it carries
+  // the release name even while HEAD is untagged. The build below is named for
+  // this commit; the two agree on bytes because the payload never carries one.
+  assert.equal(recorded.name, releaseArtifactName(VERSION));
 
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-dist-pin-"));
   const built = spawnSync(process.execPath, [BUILD, "--out", out], { encoding: "utf8" });
   assert.equal(built.status, 0, built.stdout + built.stderr);
 
-  const artifact = path.join(out, recorded.name);
-  assert.ok(fs.existsSync(artifact), `missing ${recorded.name}\n${built.stdout}`);
+  const builtName = artifactName(productIdentity({ root: ROOT }).identity);
+  const artifact = path.join(out, builtName);
+  assert.ok(fs.existsSync(artifact), `missing ${builtName}\n${built.stdout}`);
   const bytes = fs.readFileSync(artifact);
   const digest = crypto.createHash("sha256").update(bytes).digest("hex");
 
@@ -50,7 +57,9 @@ test("the published pin matches a freshly built artifact", () => {
 
   const distribution = fs.readFileSync(path.join(ROOT, "docs", "DISTRIBUTION.md"), "utf8");
   const guide = fs.readFileSync(path.join(ROOT, "docs", "guide", "README.md"), "utf8");
-  assert.ok(readme.includes(`./dist/${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
+  // README builds from source, where the filename carries the commit. The
+  // pasted command names the shape so it stays true one commit later.
+  assert.ok(readme.includes(`./dist/seal-v*-linux-x64 --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
   assert.ok(distribution.includes(`./${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
   assert.ok(guide.includes(`$ ./${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
   assert.doesNotMatch(guide, /After Ben publishes/);
