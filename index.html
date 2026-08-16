@@ -3,126 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Seal: a proven checkpoint for AI agents</title>
-<meta name="description" content="Seal is a proven checkpoint for AI agents: no matching approval record, no guarded action, with a record you can check yourself.">
+<title>Seal</title>
+<meta name="description" content="Seal puts an approval gate in front of one tool of one MCP server.">
 <style>
-  :root { --bg:#0d0d12; --panel:#15151d; --ink:#e8e8ef; --dim:#9aa0ad; --line:#26263340; --accent:#a855f7; }
+  :root { --bg:#0d0d12; --panel:#15151d; --ink:#e8e8ef; --dim:#a6a9b3; --line:#2b2b38; --accent:#a855f7; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  .wrap { max-width:920px; margin:0 auto; padding:64px 22px 96px; }
-  header h1 { font-size:2rem; margin:0 0 6px; letter-spacing:-.02em; }
-  .tag { color:var(--accent); font-weight:600; }
-  .lede { color:var(--dim); max-width:60ch; }
-  a { color:var(--accent); text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  .meta { color:var(--dim); font-size:.9rem; margin-top:10px; }
-  .context { margin:26px 0 8px; padding:18px 0 2px; color:var(--dim); max-width:72ch; }
-  .context p { margin:0 0 12px; }
-  .featured { display:block; margin:28px 0 8px; padding:16px 18px; background:var(--panel);
-    border:1px solid var(--line); border-radius:12px; }
-  .featured b { color:var(--ink); }
-  h2 { font-size:1.05rem; margin:40px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line);
-    text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
-  ul { list-style:none; margin:0; padding:0; }
-  li { padding:9px 0; border-bottom:1px solid var(--line); }
-  li .name { font-weight:600; }
-  li .desc { color:var(--dim); }
-  footer { margin-top:56px; color:var(--dim); font-size:.9rem; }
-  code { background:#ffffff10; padding:1px 5px; border-radius:4px; font-size:.85em; }
-  .logo { width:168px; height:168px; margin:0 0 18px;
-    background:url("assets/seal-logo.png") center/contain no-repeat; }
-  .thesis { color:var(--ink); max-width:64ch; font-size:1.08rem; margin:0 0 8px; }
-  .receipt { display:block; color:var(--dim); margin-top:2px; }
-  .path { color:var(--dim); }
-  .nonclaims { margin:0; padding:0; color:var(--dim); white-space:pre-wrap;
-    font:inherit; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:64px 22px 96px; }
+  .logo { width:144px; height:144px; margin-bottom:20px; background:url("assets/seal-logo.png") center/contain no-repeat; }
+  h1 { margin:0 0 12px; font-size:2.2rem; }
+  h2 { margin:42px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--line); font-size:1.15rem; }
+  p, li { max-width:72ch; }
+  .lede { font-size:1.12rem; }
+  .limit { color:var(--dim); }
+  a { color:var(--accent); }
+  .path { margin:24px 0; padding:20px; overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; color:var(--ink); font:600 1rem/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; }
+  .nonclaims { margin:0; color:var(--dim); white-space:pre-wrap; font:inherit; }
+  nav ul { padding-left:22px; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main>
   <header>
     <div class="logo" role="img" aria-label="Seal logo"></div>
     <h1>Seal</h1>
-    <p class="thesis">A proven checkpoint for AI agents: no matching approval record, no guarded action. And a record you can check yourself.</p>
-    <p class="lede">Seal sits at the MCP tool boundary, where model output becomes a real external effect.
-      It mediates the action, records the decision, and leaves a receipt a skeptic can rerun.</p>
-    <p class="meta">by <a href="https://github.com/velvetmonkey">velvetmonkey</a> ·
-      public product-family hub · claims need receipts.</p>
+    <p class="lede">Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.</p>
+    <p>Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.</p>
+    <p>Requires Node 20+, Git, and the <code>claude</code> command for Protect (check with <code>claude --version</code>). The install creates one command and one read-only store directory under <code>~/.local</code>.</p>
+    <p class="limit"><strong>Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.</strong></p>
   </header>
 
-  <section class="context" aria-label="The problem">
-    <p>AI agents are crossing the line from suggestion into action. They can send money,
-      delete data, update tickets, call vendors, and trigger production systems through
-      MCP tools.</p>
-    <p>That power is useful. It is also where a hallucination, prompt injection, stale
-      approval, or confused workflow becomes a real-world effect. Seal answers at the
-      point of effect: does a live approval record match this exact request? (Record
-      origin — that the approver is the human you intend — is a declared assumption.)</p>
+  <section>
+    <h2>Shipped product path</h2>
+    <pre class="path" aria-label="Shipped Node product path">Claude Code
+    → Node proxy
+    → TESTED state machine
+    → PROVED WASM authorization rule
+    → selected MCP server</pre>
+    <p>The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths.</p>
   </section>
 
-  <a class="featured" href="https://github.com/velvetmonkey/seal-live-demo">
-    Start with the demo &nbsp;·&nbsp; <b>watch an unapproved database delete get blocked</b>
-    &nbsp;<span style="color:var(--dim)">then verify the receipt →</span></a>
-
-  <h2>How it works</h2>
-  <ul>
-    <li><span class="name">Mediate every guarded action.</span> <span class="desc">A guarded MCP tool call forwards only when its target commitment has a live approval record.</span></li>
-    <li><span class="name">Record every decision.</span> <span class="desc">Allowed and blocked decisions produce receipts and tamper-evident record-chain evidence.</span></li>
-    <li><span class="name">Prove the rulebook.</span> <span class="desc">The kernel rules are machine-checked theorems in Lean 4.</span></li>
-    <li><span class="name">Check every body that runs it.</span> <span class="desc">The Rust host, browser wasm, and JavaScript checkers are byte-conformance-tested against the proven rulebook over a corpus; they are not themselves proved bug-free.</span></li>
-  </ul>
-
-  <h2>The family</h2>
-  <p class="path">The Seal fleet repositories are public; these links resolve for everyone. <code>witness-check</code> remains proprietary.</p>
-  <ul>
-    <li><a class="name" href="https://github.com/velvetmonkey/mcp-seal-dev">mcp-seal-dev</a>: <span class="desc">The rulebook, proven.</span>
-      <span class="receipt">Receipt: the Lean kernel plus the theorem sources for the approval automaton.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/crdt-lean">crdt-lean</a>: <span class="desc">Coordination-free authorization theorems in Lean.</span>
-      <span class="receipt">Receipt: the coordination-free no-double-spend theorems under the <a href="docs/AUTHORIZATION-MESH.md">authorization mesh</a>.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/seal-host">seal-host</a>: <span class="desc">The guard at the door.</span>
-      <span class="receipt">Receipt: the deployed Rust mediator, FFI surface, record chain, and conformance bridge.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/seal-check">seal-check</a>: <span class="desc">Don't trust. Verify.</span>
-      <span class="receipt">Receipt: a browser/WASM checker that re-runs the decision and compares emitted bytes.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/seal-live-demo">seal-live-demo</a>: <span class="desc">Watch it work.</span>
-      <span class="receipt">Receipt: a scripted attack replay that is blocked with Seal on and executes with Seal removed.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/seal-assurance-kit">seal-assurance-kit</a>: <span class="desc">Check your own boundary.</span>
-      <span class="receipt">Receipt: an enterprise CLI for receipts, conformance traces, policy coverage, finite monitor adequacy, and authorization-surface receipt diffs.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/witness-check">witness-check</a>: <span class="desc">The sufficiency analyzer. (private/proprietary)</span>
-      <span class="receipt">Receipt: a refinement check that either passes a field set or hands you the collision proving it insufficient.</span></li>
-    <li><a class="name" href="https://github.com/velvetmonkey/seal-verify-action">seal-verify-action</a>: <span class="desc">Gate receipts in CI.</span>
-      <span class="receipt">Receipt: the pinned seal-verify closure as a GitHub Action; an unverifiable receipt fails the build.</span></li>
-  </ul>
-
-  <h2>Choose your path</h2>
-  <ul>
-    <li><span class="name">Skeptic</span>: <span class="path">read <a href="docs/WHY-DIFFERENT.md">why a proof, not a prompt</a> — machine-checked default-deny vs LLM judges and prompt filters that can fail open, one page.</span></li>
-    <li><span class="name">Buyer or evaluator</span>: <span class="path">start with <a href="https://github.com/velvetmonkey/seal-live-demo">seal-live-demo</a>, then open the receipt in <a href="https://github.com/velvetmonkey/seal-check">seal-check</a>.</span></li>
-    <li><span class="name">Engineer</span>: <span class="path">start with <a href="https://github.com/velvetmonkey/seal-host">seal-host</a>, read the <a href="docs/ARCHITECTURE.md">family architecture map</a> and the host architecture docs, then run the conformance bridge.</span></li>
-    <li><span class="name">Auditor</span>: <span class="path">read the proved-vs-deployed map in <a href="EVALUATOR-START.md">EVALUATOR-START.md</a> and the one-table <a href="docs/CLAIMS-MATRIX.md">claims matrix</a> first, then start with <a href="https://github.com/velvetmonkey/seal-check">seal-check</a> and <a href="https://github.com/velvetmonkey/seal-assurance-kit">seal-assurance-kit</a>, then inspect the proof reference.</span></li>
-    <li><span class="name">Researcher</span>: <span class="path">start with <a href="https://github.com/velvetmonkey/mcp-seal-dev">mcp-seal-dev</a> for the kernel and <a href="https://github.com/velvetmonkey/seal-host">seal-host</a> for record, capability, non-interference, and replay properties.</span></li>
-  </ul>
-
-  <h2>What's proven</h2>
-  <ul>
-    <li><span class="name">Four-gate non-bypass.</span> <span class="desc">A guarded call that reaches the deployed step core cannot route forward without satisfying the mediation gates.</span></li>
-    <li><span class="name">Append-only, tamper-evident record.</span> <span class="desc">Decision logs are modeled as hash chains whose heads change on append and expose tampering under the stated hash-step assumptions.</span></li>
-    <li><span class="name">Unconditional capability adequacy.</span> <span class="desc">A held approval authorizes only its exact target for all runtime inputs, modulo the named SHA-256 collision-resistance assumption A-CR.</span></li>
-    <li><span class="name">Single-request non-interference.</span> <span class="desc">For one request, the observable decision and record depend on the relevant authorization view, not unrelated protected state.</span></li>
-    <li><span class="name">Cross-session replay isolation.</span> <span class="desc">Replay state is scoped so one session's replay bookkeeping does not silently authorize another session.</span></li>
-    <li><span class="name">Coordination-free single-use across a fleet.</span> <span class="desc">Across a network partition, a one-shot approval cannot be double-spent without a causal handoff; proven for an abstract authority system and transferred to the SealV2 gate model, scoped to within the approval's TTL, per concurrent replica. See the <a href="docs/AUTHORIZATION-MESH.md">authorization mesh</a>.</span></li>
-  </ul>
-
-  <section class="context" aria-label="How to verify">
-    <p>Axiom footprint: <code>{propext, Classical.choice, Quot.sound}</code>. How to cash the receipt:
-      run <code>lake build</code> and <code>lake exe axiom_check</code> in the Lean repos, then run the
-      conformance bridge in <code>seal-host</code>. The bridge checks
-      <span class="tag">model == native == wasm == deployed == JS</span> over the corpus.</p>
+  <section>
+    <h2>How the gate decides</h2>
+    <p>The demo and the protected path run the same proxy and rule. The authorization rule is PROVED. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.</p>
   </section>
 
-  <h2>Honest boundaries</h2>
-  <!-- claims:begin -->
-  <pre class="nonclaims">- Seal proves properties of the mediation KERNEL, not of the whole deployed system.
+  <section>
+    <h2>What Seal covers, and what it does not</h2>
+    <p>Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal.</p>
+    <p>Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override.</p>
+    <p>Only the demo signs receipts, using a key generated for that run. The protected path writes its receipts unsigned, and the shipped checker refuses those protected-path receipts as <code>REFUSE unsealed</code>.</p>
+  </section>
+
+  <nav aria-label="Product documentation">
+    <h2>Next</h2>
+    <ul>
+      <li><a href="README.md">Install, demo, protect, and remove</a></li>
+      <li><a href="docs/ARCHITECTURE.md">Architecture</a></li>
+      <li><a href="docs/guide/README.md">Operating guide</a></li>
+      <li><a href="docs/RELEASE-NOTES-v0.1.1.md">Release notes</a></li>
+    </ul>
+  </nav>
+
+  <section>
+    <h2>Honest boundaries</h2>
+    <!-- claims:begin -->
+    <pre class="nonclaims">- Seal proves properties of the mediation KERNEL, not of the whole deployed system.
 - Seal does NOT prove SHA-256 collision resistance in Lean; it is a named, scoped cryptographic assumption (A-CR).
 - The deployed Rust / wasm / JS are NOT proven bug-free; they are tied to the proof by byte-exact conformance testing over a corpus, not for every possible input.
 - Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal will execute it.
@@ -131,12 +77,8 @@
 - Seal does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
 - Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.
 - The axiom-footprint line is a per-theorem ceiling for theorems named in the family's axiom-pin gates; it is not a repository-wide census. Pin scope and named exceptions are indexed in the seal claims matrix (seal/docs/CLAIMS-MATRIX.md).</pre>
-  <!-- claims:end -->
-
-  <footer>
-    The rulebook is proven. Every body is checked against it.<br>
-    <a href="https://github.com/velvetmonkey">github.com/velvetmonkey</a>
-  </footer>
-</div>
+    <!-- claims:end -->
+  </section>
+</main>
 </body>
 </html>
