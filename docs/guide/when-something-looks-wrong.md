@@ -546,10 +546,9 @@ command.
 ### `unsealed`
 
 The receipt carries no seal block, so there is nothing to check it against.
-`seal demo` receipts are sealed, but the normal protected Claude Code path
-currently writes unsealed receipts because it has no operator signing key.
-For those genuine receipts the checker returns `REFUSE unsealed`; that result
-does not mean the receipt was damaged.
+Current demo and protected-path receipts carry a seal. This refusal can still
+describe an older receipt or a JSON file produced by something else; inspect
+its source before deciding what the missing seal means.
 
 ### `unknown_algorithm`
 

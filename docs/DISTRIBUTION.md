@@ -23,7 +23,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.2.0-rc.2-linux-x64 --sha256 6763b5d9f8f905e2ee713ffc30fdf7e6b3521fe55900fdcd6fc94ba410215a14 --bytes 6143529 --prefix ~/.local
+./seal-v0.2.0-rc.2-linux-x64 --sha256 de1adfb627cb84f988f866c63179a61cd73e9fddf8cb59c8698771202691ded8 --bytes 6143790 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
@@ -42,9 +42,9 @@ this release does not mint.
 equal the version in the artifact name and in the install record.
 
 The payload is the current product: `bin/seal`, the mediation and
-receipt components (including the receipt-sealing module, which only
-the demo path invokes today — the protected path writes unsigned
-receipts), the approval contract, and `checker/seal-receipt-check.mjs`.
+receipt components (including the receipt-sealing module used by both
+the demo and protected paths), the approval contract, and
+`checker/seal-receipt-check.mjs`.
 It also includes the pinned vendored kernel and the fail-closed Node adapter
 that invokes it. The authorization rule is PROVED. The state machine is
 TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config

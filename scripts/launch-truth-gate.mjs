@@ -93,10 +93,10 @@ if (platformCount !== 1) fail(`README must state the Linux x86-64-only platform 
 
 // The signed-receipt claim was the fifth false user-visible string in this
 // build: the demo signs receipts with a per-run key, the protected path
-// passes no signer (spine/proxy-cli.cjs) and the shipped checker refuses its
-// receipts. The README may only tell that story split by path.
-if (/writes a signed receipt/.test(readme)) fail('README claims the gate writes a signed receipt; only the demo path signs today, and the README must say which path');
-if (!readme.includes('REFUSE unsealed')) fail('README must disclose that the shipped checker refuses protected-path receipts (REFUSE unsealed) until an operator signing key exists');
+// Protected activation creates or loads a durable signer (spine/proxy-cli.cjs),
+// while the demo uses a key generated for that run. Keep both lifetimes plain.
+if (!readme.includes('protected path creates or reuses a machine-local signing key')) fail('README must disclose the protected path\'s durable machine-local receipt key');
+if (!readme.includes("demo's key is generated fresh for that run")) fail('README must distinguish the demo\'s temporary receipt key from the protected path\'s durable key');
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording

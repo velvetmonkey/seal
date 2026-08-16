@@ -101,11 +101,10 @@ of this page is for.
 When the gate can write its receipt directory, every decision — the prompt
 being offered, an allowed call, a refusal — writes one JSON file. `seal status`
 shows where they live and which is newest. A receipt records what the gate
-decided and about what. Only receipts
-with a seal and a public key you trust can be checked today: `seal demo`
-writes signed receipts, while the normal protected Claude Code path writes
-unsigned ones and the shipped checker returns `REFUSE unsealed` for them,
-even when they are genuine.
+decided and about what. Both `seal demo` and the protected Claude Code path
+write signed receipts. The demo generates a temporary key for its run; the
+protected path creates or reuses a machine-local key. In either case, the
+check is only as meaningful as the source of the public key you supply.
 
 This signed example is from `seal demo`:
 
@@ -130,7 +129,7 @@ shared there can make both agree on a wrong receipt.
 
 ```
 $ node …/checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
-ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match the sealed commitments
+ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
 
 Change one recorded fact — here, the decision — and the checker names what
