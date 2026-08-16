@@ -19,11 +19,23 @@ function rewrite(file, replacements) {
   fs.writeFileSync(target, text);
 }
 
-for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md"]) {
-  rewrite(file, [
-    [/--sha256 [0-9a-f]+(?: --bytes \d+)?/g, `--sha256 ${sha256} --bytes ${bytes}`],
-  ]);
-}
+// Materialize each copyable install command from the artifact that was just
+// built. The filename, digest and byte count are one generated unit.
+rewrite("README.md", [
+  [/^\.\/dist\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
+    `./dist/${artifact} --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
+]);
+rewrite("docs/DISTRIBUTION.md", [
+  [/^\.\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
+    `./${artifact} --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
+]);
+rewrite("docs/guide/README.md", [
+  [/^\$ curl -fLO https:\/\/github\.com\/velvetmonkey\/seal\/releases\/download\/v[^/]+\/seal-v[^ ]+-linux-x64$/m,
+    `$ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v${meta.version}/${artifact}`],
+  [/^\$ chmod \+x seal-v[^ ]+-linux-x64$/m, `$ chmod +x ${artifact}`],
+  [/^\$ \.\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+$/m,
+    `$ ./${artifact} --sha256 ${sha256} --bytes ${bytes}`],
+]);
 for (const file of ["README.md", "docs/guide/README.md"]) {
   rewrite(file, [
     [/^sha256 [0-9a-f]+$/gm, `sha256 ${sha256}`],

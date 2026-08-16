@@ -1,6 +1,6 @@
 {
   "name": "@velvetmonkey/seal",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0-rc.2",
   "description": "The Seal developer CLI",
   "bin": {
     "seal": "bin/seal"

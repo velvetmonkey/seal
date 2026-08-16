@@ -1,12 +1,12 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0-rc.1 ships **one** installable artifact, for **Linux x86-64 only**.
+Seal v0.2.0-rc.2 ships **one** installable artifact, for **Linux x86-64 only**.
 macOS, Windows, Linux ARM and other platforms are not supported in this
 release.
 
 ## The artifact
 
-`scripts/build-dist.cjs` writes `dist/seal-vVERSION-linux-x64`. That file
+`scripts/build-dist.cjs` writes the versioned `dist/seal-v<version>-linux-x64`. That file
 is the installer and the payload. The published pin lives in `SHA256SUMS`
 at the repository root (digest and byte length). That file is a pin, not
 a second product. `test/dist-pin.test.cjs` rebuilds the artifact and
@@ -20,7 +20,7 @@ the installer refuses.
 ## Install
 
 ```sh
-./seal-v0.2.0-rc.1-linux-x64 --sha256 4e67c0bad541c60e48c9e4697b210279dc7b0f4905e383d5282f3eb2b53af503 --bytes 6128588 --prefix ~/.local
+./seal-v0.2.0-rc.2-linux-x64 --sha256 b54d3541fde0d4415ef8c2ff644f380c4f5a7d4b5a14bedc85276275ade9a657 --bytes 6128588 --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and
