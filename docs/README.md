@@ -43,7 +43,10 @@ the Node CLI this repository ships.
 3. [test/demo-witness.test.cjs](../test/demo-witness.test.cjs) — the scope
    witness proved from files on disk (the child's count file, the receipts
    directory, the outside write), not from stdout.
-4. [checker/seal-receipt-check.mjs](../checker/seal-receipt-check.mjs) — the
+4. [CLAUDE-CODE-EVIDENCE.md](CLAUDE-CODE-EVIDENCE.md) — the client matrix, why
+   the Claude Code row is still untested, and the human-assisted acceptance
+   harness and checker that would close it.
+5. [checker/seal-receipt-check.mjs](../checker/seal-receipt-check.mjs) — the
    packaged receipt checker the demo hands you. It imports no Seal module at
    check time, but copies the producer's canonicalisation rule and uses the
    same Node crypto platform; read what that does and does not establish.
