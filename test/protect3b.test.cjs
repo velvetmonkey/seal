@@ -35,15 +35,17 @@ const path = require("node:path");
 const cwd = process.cwd();
 const home = process.env.HOME || cwd;
 const args = process.argv.slice(2);
-function key(name) { return crypto.createHash("sha256").update(cwd).digest("hex").slice(0, 16) + "-" + name + ".json"; }
-function localPath(name) { const dir = path.join(home, ".claude-local"); fs.mkdirSync(dir, { recursive: true }); return path.join(dir, key(name)); }
+function configPath() { return path.join(process.env.CLAUDE_CONFIG_DIR || home, ".claude.json"); }
+function readConfig() { try { return JSON.parse(fs.readFileSync(configPath(), "utf8")); } catch { return {}; } }
+function writeConfig(config) { fs.mkdirSync(path.dirname(configPath()), { recursive: true }); fs.writeFileSync(configPath(), JSON.stringify(config, null, 2) + "\\n"); }
+function localServer(name) { return readConfig().projects?.[cwd]?.mcpServers?.[name]; }
 function projectHas(name) {
   try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
 }
 if (args[0] !== "mcp") process.exit(2);
 if (args[1] === "get") {
   const name = args[2];
-  if (fs.existsSync(localPath(name))) {
+  if (localServer(name)) {
     console.log(name + ":\\n  Scope: Local config (private to you in this project)\\n  Type: stdio");
     process.exit(0);
   }
@@ -61,17 +63,24 @@ if (args[1] === "add") {
     process.exit(23);
   }
   const split = args.indexOf("--");
-  fs.writeFileSync(localPath(name), JSON.stringify({ command: args[split + 1], args: args.slice(split + 2) }));
+  const config = readConfig();
+  config.projects ||= {};
+  config.projects[cwd] ||= {};
+  config.projects[cwd].mcpServers ||= {};
+  config.projects[cwd].mcpServers[name] = { type: "stdio", command: args[split + 1], args: args.slice(split + 2), env: {} };
+  writeConfig(config);
   console.log("Added stdio MCP server " + name + " to local config");
   process.exit(0);
 }
 if (args[1] === "remove") {
   const name = args[4];
-  if (!fs.existsSync(localPath(name))) {
+  const config = readConfig();
+  if (!config.projects?.[cwd]?.mcpServers?.[name]) {
     console.error('No MCP server named "' + name + '" in local scope');
     process.exit(1);
   }
-  fs.unlinkSync(localPath(name));
+  delete config.projects[cwd].mcpServers[name];
+  writeConfig(config);
   console.log("Removed MCP server " + name + " from local config");
   process.exit(0);
 }
@@ -79,6 +88,10 @@ process.exit(2);
 `);
   fs.chmodSync(script, 0o755);
   return bin;
+}
+
+function fakeLocalOverridePath(root) {
+  return path.join(root, "home", ".claude.json");
 }
 
 function run(project, home, args, extraEnv = {}) {
@@ -137,6 +150,42 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash before unprotect: ${beforeHash}`));
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash after unprotect: ${beforeHash}`));
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
+});
+
+test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {
+  const root = tmpdir("seal-protect3b-owned-override-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "owned-data.txt")] });
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const overridePath = fakeLocalOverridePath(root);
+  assert.equal(fs.existsSync(overridePath), true, "protect must install the local override");
+
+  const developerBytes = Buffer.from(JSON.stringify({
+    projects: { [project]: { mcpServers: { db: {
+      type: "stdio", command: "developer-command", args: ["--developer-owned"], env: {},
+    } } } },
+  }, null, 2) + "\n");
+  fs.writeFileSync(overridePath, developerBytes);
+  const beforeHash = sha256(fs.readFileSync(overridePath));
+  const statusRun = run(project, home, ["status"], env);
+  assert.notEqual(statusRun.code, 0, statusRun.out);
+  assert.match(statusRun.out, /^REFUSED local_override_drifted$/m);
+  assert.equal(sha256(fs.readFileSync(overridePath)), beforeHash, "status must not alter the developer's override");
+  const unprotectedRun = run(project, home, ["unprotect", "db"], env);
+
+  assert.notEqual(unprotectedRun.code, 0, unprotectedRun.out);
+  assert.match(unprotectedRun.out, /^REFUSED local_override_drifted$/m);
+  assert.match(unprotectedRun.out, /^The current local override is not the one Seal installed\.$/m);
+  assert.match(unprotectedRun.out, /^No configuration was changed\.$/m);
+  assert.equal(fs.existsSync(overridePath), true, "the developer's override must remain present");
+  assert.equal(sha256(fs.readFileSync(overridePath)), beforeHash, "the developer's override must remain byte-identical");
 });
 
 test("protect names install-time refusals", () => {
@@ -248,7 +297,7 @@ test("unprotect refuses while an activation lease pid is live", () => {
   assert.match(result.out, /active_claude_session/);
 });
 
-test("unprotect unwedges BROKEN state when Claude reports the local override is absent", () => {
+test("unprotect refuses without installed ownership proof", () => {
   const root = tmpdir("seal-protect3b-unwedge-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
@@ -264,14 +313,53 @@ test("unprotect unwedges BROKEN state when Claude reports the local override is 
   const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   assert.equal(readState(statePath).state, "BROKEN");
 
-  const refusedProtect = run(project, home, ["protect", "db", "demo.mutate"], env);
-  assert.notEqual(refusedProtect.code, 0);
-  assert.match(refusedProtect.out, /already_protected: project is already BROKEN/);
+  assert.equal(readState(statePath).localOverride.installed, false);
+  const refused = run(project, home, ["unprotect", "db"], env);
+  assert.notEqual(refused.code, 0, refused.out);
+  assert.match(refused.out, /^REFUSED no_seal_owned_override$/m);
+});
 
+test("unprotect unwinds an absent override only when state proves Seal installed it", () => {
+  const root = tmpdir("seal-protect3b-owned-absent-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "absent-data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  assert.equal(readState(statePath).localOverride.installed, true);
+
+  const configPath = fakeLocalOverridePath(root);
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  delete config.projects[project].mcpServers.db;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   const unprotected = run(project, home, ["unprotect", "db"], env);
   assert.equal(unprotected.code, 0, unprotected.out);
   assert.equal(readState(statePath).state, "UNPROTECTED");
-  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+});
+
+test("unprotect refuses when no Seal state exists", () => {
+  const root = tmpdir("seal-protect3b-no-owned-state-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "no-state-data.txt")] });
+  execFileSync("claude", ["mcp", "add", "--scope", "local", "db", "--", "developer-command", "--owned-by-developer"], {
+    cwd: project,
+    env: { ...process.env, ...env, HOME: home },
+  });
+  const configPath = fakeLocalOverridePath(root);
+  const beforeHash = sha256(fs.readFileSync(configPath));
+  const result = run(project, home, ["unprotect", "db"], env);
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /^REFUSED no_seal_owned_override$/m);
+  assert.equal(sha256(fs.readFileSync(configPath)), beforeHash, "an override without Seal state must remain byte-identical");
 });
 
 test("unprotect still refuses when the Claude command is unavailable during remove", () => {

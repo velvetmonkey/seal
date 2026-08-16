@@ -37,29 +37,38 @@ function fakeClaudeBin(root) {
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const cwd = process.cwd();
-const home = process.env.HOME || cwd;
-const args = process.argv.slice(2);
-function key(name) { return crypto.createHash("sha256").update(cwd).digest("hex").slice(0, 16) + "-" + name + ".json"; }
-function localPath(name) { const dir = path.join(home, ".claude-local"); fs.mkdirSync(dir, { recursive: true }); return path.join(dir, key(name)); }
+	const cwd = process.cwd();
+	const home = process.env.HOME || cwd;
+	const args = process.argv.slice(2);
+	function configPath() { return path.join(process.env.CLAUDE_CONFIG_DIR || home, ".claude.json"); }
+	function readConfig() { try { return JSON.parse(fs.readFileSync(configPath(), "utf8")); } catch { return {}; } }
+	function writeConfig(config) { fs.mkdirSync(path.dirname(configPath()), { recursive: true }); fs.writeFileSync(configPath(), JSON.stringify(config, null, 2) + "\\n"); }
+	function localServer(name) { return readConfig().projects?.[cwd]?.mcpServers?.[name]; }
 function projectHas(name) {
   try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
 }
 if (args[0] !== "mcp") process.exit(2);
 if (args[1] === "get") {
   const name = args[2];
-  if (fs.existsSync(localPath(name))) { console.log(name + ":\\n  Scope: Local config (private to you in this project)\\n  Type: stdio"); process.exit(0); }
+	  if (localServer(name)) { console.log(name + ":\\n  Scope: Local config (private to you in this project)\\n  Type: stdio"); process.exit(0); }
   if (projectHas(name)) { console.log(name + ":\\n  Scope: Project config (shared via .mcp.json)\\n  Type: stdio"); process.exit(0); }
   process.exit(1);
 }
 if (args[1] === "add") {
-  const name = args[4];
-  const split = args.indexOf("--");
-  fs.writeFileSync(localPath(name), JSON.stringify({ command: args[split + 1], args: args.slice(split + 2) }));
-  process.exit(0);
-}
-if (args[1] === "remove") {
-  try { fs.unlinkSync(localPath(args[4])); } catch {}
+	  const name = args[4];
+	  const split = args.indexOf("--");
+	  const config = readConfig();
+	  config.projects ||= {};
+	  config.projects[cwd] ||= {};
+	  config.projects[cwd].mcpServers ||= {};
+	  config.projects[cwd].mcpServers[name] = { type: "stdio", command: args[split + 1], args: args.slice(split + 2), env: {} };
+	  writeConfig(config);
+	  process.exit(0);
+	}
+	if (args[1] === "remove") {
+	  const config = readConfig();
+	  if (config.projects?.[cwd]?.mcpServers?.[args[4]]) delete config.projects[cwd].mcpServers[args[4]];
+	  writeConfig(config);
   process.exit(0);
 }
 process.exit(2);
@@ -191,13 +200,14 @@ test("3 pre-existing overlay: local_override_exists, no .mcp.json write", () => 
 test("4a deleted overlay binary: no fallback, child count does not move", () => {
   const ctx = setup("f5-gone-overlay-");
   assert.equal(runSeal(ctx, ["protect", "db", "demo.mutate"]).code, 0);
-  const overlayDir = path.join(ctx.home, ".claude-local");
-  const recPath = path.join(overlayDir, fs.readdirSync(overlayDir)[0]);
-  const rec = JSON.parse(fs.readFileSync(recPath, "utf8"));
+  const configPath = path.join(ctx.home, ".claude.json");
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  const rec = config.projects[ctx.project].mcpServers.db;
   const gone = path.join(ctx.root, "seal-was-here");
   fs.writeFileSync(gone, "#!/usr/bin/env node\n");
   fs.chmodSync(gone, 0o755);
-  fs.writeFileSync(recPath, JSON.stringify({ command: gone, args: rec.args }));
+  rec.command = gone;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   fs.unlinkSync(gone);
   const before = snapshot(ctx);
   const attempt = spawnSync(process.execPath, [gone, ...(rec.args || [])], { encoding: "utf8" });

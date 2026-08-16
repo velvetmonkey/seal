@@ -51,8 +51,8 @@ function status() {
 
   let receiptDir;
   try {
-    const { filePath, state } = protection.stateWithProject(process.cwd(), process.env);
-    const view = protection.protectionView(state);
+    const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
+    const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
       console.log("Protection: - outside Seal");
       console.log("Receipts: unavailable outside a protected project");
@@ -71,6 +71,12 @@ function status() {
       }
     }
   } catch (error) {
+    if (error.ownershipRefusal) {
+      console.log(`REFUSED ${error.code}`);
+      if (error.message) console.log(error.message);
+      process.exitCode = 1;
+      return;
+    }
     console.log(`Protection: BROKEN (${error.message})`);
   }
 
@@ -300,6 +306,12 @@ function printHelp() {
   console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL\n                         install a local Claude Code override for one tool\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
 }
 main().catch((error) => {
+  if (error.ownershipRefusal) {
+    console.error(`REFUSED ${error.code}`);
+    if (error.message) console.error(error.message);
+    process.exitCode = 1;
+    return;
+  }
   const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";
   console.error(`seal: ${prefix}${error.message}`);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
