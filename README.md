@@ -4,7 +4,7 @@
 
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
-Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
+Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.
 
 Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.
 
@@ -21,18 +21,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 6763b5d9f8f905e2ee713ffc30fdf7e6b3521fe55900fdcd6fc94ba410215a14 --bytes 6143529 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 de1adfb627cb84f988f866c63179a61cd73e9fddf8cb59c8698771202691ded8 --bytes 6143790 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.g527b681-linux-x64
-sha256 6763b5d9f8f905e2ee713ffc30fdf7e6b3521fe55900fdcd6fc94ba410215a14
-bytes 6143529
-tree a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.g2d5641c-linux-x64
+sha256 de1adfb627cb84f988f866c63179a61cd73e9fddf8cb59c8698771202691ded8
+bytes 6143790
+tree 2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8
+tree 2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -113,25 +113,28 @@ A route that does not cross the gate is one Seal does not see. The demo closes b
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
+  Online: https://velvetmonkey.github.io/seal-check/ runs a supplied MCP tool-call in its browser kernel and reports its receipt checks. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
 ```
 
 The demo called its receipts claims, not proofs. Check one, with the printed command:
 
 ```sh
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
-ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments
+ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
+
+[Open seal-check](https://velvetmonkey.github.io/seal-check/) to run a supplied MCP tool-call in its browser kernel and inspect the receipt checks it reports. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 
 Change one recorded field and the same checker refuses:
 
 ```sh
 sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -174,7 +177,7 @@ State: /home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share/s
 
 `protect` reports how many of that server's tools remain outside Seal, naming at most 20 and counting the rest. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
-The protected proxy records every decision as a receipt file, but v0.2.0-rc.2 mints no operator signing key. Those receipts carry no signature, and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Where a durable operator key comes from is an open decision. Do not build anything on protected-path receipts passing the checker yet.
+The protected proxy records every decision as a signed receipt file. On first activation it creates a machine-local Ed25519 receipt key under the Seal data directory, prints the public key and its file path, and reuses that key on later activations. The shipped checker accepts a protected-path receipt when every recorded commitment and signature matches under the public key you supply. That result has the limits printed by the checker: it does not show that the recorded decision happened, and anyone able to use the machine's Seal key could sign a different story.
 
 Seal states its trust assumption:
 
@@ -238,7 +241,7 @@ Seal is deliberately narrow, and none of these edges is small print.
 
 ### What a receipt is worth today
 
-- Receipts from the protected path are unsigned today, and the shipped checker refuses them (`REFUSE unsealed`). Both paths write receipt files; only the demo signs them, with a key generated fresh for that run and gone with it. Until an operator signing key exists, a protected-path receipt is a plain local record, not checkable evidence.
+- Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments.
 - Checking a signed receipt is only as good as the key you check against. The checker never reads the key from the receipt, and a key stored next to the receipt establishes self-consistency only. Obtain the verifying key from a source you already trust.
 - The optional verification path fetches a separately pinned runtime from GitHub. Verification is therefore bounded by that external repository and the integrity of the fetched bytes.
 

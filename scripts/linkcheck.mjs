@@ -24,5 +24,31 @@ for (const f of files) {
     if (!existsSync(resolve(dirname(`${ROOT}/${f}`), link))) { console.log(`BROKEN  ${f} -> ${link}`); bad++; }
   }
 }
-console.log(`link-check: ${checked} internal links, ${bad} broken`);
+
+const requiredLiveLinks = new Map([
+  ["https://velvetmonkey.github.io/seal-check/", ["README.md", "spine/demo.cjs"]],
+]);
+let externalChecked = 0;
+for (const [link, carriers] of requiredLiveLinks) {
+  for (const carrier of carriers) {
+    if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
+      console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
+      bad++;
+    }
+  }
+  try {
+    const response = await fetch(link, { redirect: "follow", signal: AbortSignal.timeout(10000) });
+    externalChecked++;
+    if (!response.ok) {
+      console.log(`BROKEN  ${link} -> HTTP ${response.status}`);
+      bad++;
+    }
+    await response.body?.cancel();
+  } catch (error) {
+    console.log(`BROKEN  ${link} -> ${error.message}`);
+    bad++;
+  }
+}
+
+console.log(`link-check: ${checked} internal links, ${externalChecked} required live links, ${bad} broken`);
 process.exit(bad ? 1 : 0);

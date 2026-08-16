@@ -17,7 +17,7 @@ const SOURCES = [
 const NORMALIZED_SOURCES = SOURCES.replaceAll(/`([^`]+)`/g, "$1");
 
 const SOURCED_BLOCKS = [
-  "Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.",
+  "Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
   "Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.",
   "Requires Node 20+, Git, and the <code>claude</code> command for Protect (check with <code>claude --version</code>). The install creates one command and one read-only store directory under <code>~/.local</code>.",
   `Seal v${VERSION} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.`,
@@ -25,7 +25,7 @@ const SOURCED_BLOCKS = [
   "The demo and the protected path run the same proxy and rule. The authorization rule is PROVED. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.",
   "Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal.",
   "Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override.",
-  "Only the demo signs receipts, using a key generated for that run. The protected path writes its receipts unsigned, and the shipped checker refuses those protected-path receipts as <code>REFUSE unsealed</code>.",
+  "Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments.",
 ];
 
 function withoutHtmlCode(text) {

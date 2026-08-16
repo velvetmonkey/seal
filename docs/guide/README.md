@@ -34,11 +34,11 @@ with the digest and byte length recorded in `SHA256SUMS`:
 ```
 $ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.2/seal-v0.2.0-rc.2-linux-x64
 $ chmod +x seal-v0.2.0-rc.2-linux-x64
-$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 6763b5d9f8f905e2ee713ffc30fdf7e6b3521fe55900fdcd6fc94ba410215a14 --bytes 6143529
+$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 de1adfb627cb84f988f866c63179a61cd73e9fddf8cb59c8698771202691ded8 --bytes 6143790
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree a9ef27dc19371628f6716eba16d7932775c34aa9d13bbfc63385383e47ffc9b8
+tree 2deb206d3785019f20107a7723f04802a54bc3a13d396c3fe8622fdcabf52ca7
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
@@ -47,10 +47,11 @@ your `PATH`, then run `seal demo` once — it walks the whole approve-once,
 replay-blocked story in about a minute, against a harmless built-in server,
 and asks for nothing but a y/N.
 
-One limit to know before you rely on receipt checking: `seal demo` writes
-signed receipts, but the normal protected Claude Code path currently writes
-unsigned receipts because it has no operator signing key. The shipped checker
-therefore returns `REFUSE unsealed` for a genuine protected-path receipt.
+One limit to know before you rely on receipt checking: `seal demo` generates a
+temporary signing key for its run, while the protected Claude Code path creates
+or reuses a machine-local signing key. A checker result is only as meaningful
+as the source of the public key you supply; a key taken from the same machine
+establishes self-consistency, not that the recorded decision happened.
 
 ## The path through this guide
 

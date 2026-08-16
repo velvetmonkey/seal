@@ -68,6 +68,8 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
     "demo must state the runtime/process boundary, copied canonicalisation and shared crypto limit, and same-artifact limit",
   );
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call its same-artifact checker external");
+  assert.match(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must name the online browser instrument beside the checker command");
+  assert.match(run.out, /does not establish that this setup routes calls through Seal/, "demo must state the online page's setup limit");
 
   // FILE evidence 1: the write really happened, outside the gate.
   const outside = fs.readFileSync(path.join(dir, "outside.txt"), "utf8");

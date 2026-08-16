@@ -28,8 +28,8 @@ the Node CLI this repository ships.
 
 1. [“What Seal covers, and what it does not”](../README.md) — the boundary
    list at the end of the README is the current, tested statement. Gate, not
-   sandbox; one tool of one server; unsigned protected-path receipts; Linux
-   x86-64 only.
+   sandbox; one tool of one server; receipt-key custody limits; Linux x86-64
+   only.
 2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.2.md) —
    the same boundary with citations.
 
