@@ -61,7 +61,7 @@ jobs:
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --source-digest "$GITHUB_SHA" \
             --deny-self-hosted-runners
-      - name: Negative control: a different local workflow is not checked by attestation verification
+      - name: "Negative control: a different local workflow is not checked by attestation verification"
         shell: bash
         run: |
           set -euo pipefail
