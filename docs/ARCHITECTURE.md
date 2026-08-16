@@ -43,7 +43,7 @@ product path without weakening signature verification, but it is still
 demo-grade, self-authorized configuration signing—not an externally trusted
 production configuration key.
 
-## Assurance lineage — family architecture
+## Assurance lineage — Seal family architecture
 
 This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
