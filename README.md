@@ -21,18 +21,18 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 aea61b9ab2050d81c1e8248d02dfef002d90e66fba490673b972cfc9c8b46cfc --bytes 6136850 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 e0914f7c528b632d1d76aeeaa5a2f738456d7d9e7973fbe18c5fa543c9ac505e --bytes 6136834 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.g4707b98-linux-x64
-sha256 aea61b9ab2050d81c1e8248d02dfef002d90e66fba490673b972cfc9c8b46cfc
-bytes 6136850
-tree f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.ga427ac4-linux-x64
+sha256 e0914f7c528b632d1d76aeeaa5a2f738456d7d9e7973fbe18c5fa543c9ac505e
+bytes 6136834
+tree 792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636
+tree 792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -113,14 +113,14 @@ A route that does not cross the gate is one Seal does not see. The demo closes b
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 ```
 
 The demo called its receipts claims, not proofs. Check one, with the printed command:
 
 ```sh
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```
@@ -131,7 +131,7 @@ Change one recorded field and the same checker refuses:
 
 ```sh
 sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/f5283fb1f09887130902b2cd953ee48c1c09032606de4770c791128cb26ed636/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/792647251e48b9fb6de32cd00b59a1429267ef6fa1019e23cf8fb83a621e8fb1/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
 ```
 
 ```

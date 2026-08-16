@@ -560,7 +560,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
   }
-  if (state?.lease?.pid && livePid(state.lease.pid)) {
+  if (lockOwnerIsLive(state?.lease)) {
     throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
   }
   const before = readProjectConfig(root).hash;

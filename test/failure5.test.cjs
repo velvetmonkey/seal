@@ -13,7 +13,7 @@ const readline = require("node:readline");
 const test = require("node:test");
 
 const SEAL = path.join(__dirname, "../bin/seal");
-const { statePathFor, readState } = require("../spine/protection.cjs");
+const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -297,7 +297,7 @@ test("8 live session during unprotect: active_claude_session", () => {
   assert.equal(runSeal(ctx, ["protect", "db", "demo.mutate"]).code, 0);
   const statePath = statePathFor(ctx.project, ctx.env);
   const state = readState(statePath);
-  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid } }, null, 2));
+  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } }, null, 2));
   const before = snapshot(ctx);
   const result = runSeal(ctx, ["unprotect", "db"]);
   assert.notEqual(result.code, 0);

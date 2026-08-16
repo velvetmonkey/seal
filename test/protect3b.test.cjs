@@ -8,7 +8,7 @@ const readline = require("node:readline");
 const test = require("node:test");
 
 const SEAL = path.join(__dirname, "../bin/seal");
-const { statePathFor, readState } = require("../spine/protection.cjs");
+const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
 function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -290,11 +290,38 @@ test("unprotect refuses while an activation lease pid is live", () => {
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
-  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid } }, null, 2));
+  fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } }, null, 2));
 
   const result = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /active_claude_session/);
+});
+
+test("unprotect recovers a live recycled PID whose witness does not match", () => {
+  const root = tmpdir("seal-protect3b-recycled-pid-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "recycled-data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const state = readState(statePath);
+  const unrelated = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  try {
+    fs.writeFileSync(statePath, JSON.stringify({
+      ...state,
+      state: "ACTIVE",
+      lease: { pid: unrelated.pid, startWitness: "witness-from-the-recycled-process", generation: 9 },
+    }, null, 2));
+    const result = run(project, home, ["unprotect", "db"], env);
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /outside Seal/);
+  } finally {
+    unrelated.kill("SIGKILL");
+  }
 });
 
 test("unprotect refuses without installed ownership proof", () => {
