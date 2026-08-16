@@ -2,10 +2,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const http = require("node:http");
+const { execFile, execFileSync } = require("node:child_process");
+const { promisify } = require("node:util");
 const test = require("node:test");
 
 const CLI = path.join(__dirname, "../bin/seal");
+const execFileAsync = promisify(execFile);
 const env = (cache, dataHome) => ({ ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome });
 function run(args, cache, dataHome, input = "") {
   try {
@@ -13,7 +16,61 @@ function run(args, cache, dataHome, input = "") {
   } catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
 }
 
+async function runAsync(args, cache, dataHome, extraEnv = {}) {
+  try {
+    const result = await execFileAsync(process.execPath, [CLI, ...args], {
+      env: { ...env(cache, dataHome), ...extraEnv }, encoding: "utf8",
+    });
+    return { code: 0, out: `${result.stdout}${result.stderr}` };
+  } catch (error) { return { code: error.code, out: `${error.stdout}${error.stderr}` }; }
+}
+
+async function refusingRuntimeServer(statusCode) {
+  const server = http.createServer((request, response) => {
+    response.writeHead(statusCode, { "content-type": "text/plain" });
+    response.end("absent\n");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  return { base: `http://127.0.0.1:${address.port}/runtime`, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
 const { ensureRuntime, writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
+
+function runtimeRefusalContext() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-runtime-refusal-"));
+  const cache = path.join(root, "cache");
+  const dataHome = path.join(root, "data");
+  const receipt = path.join(root, "receipt.json");
+  fs.writeFileSync(receipt, "{}\n");
+  const runtime = path.join(cache, "runtime", require("../runtime-manifest.json").commit, "kernel/wasm/seal.js");
+  return { cache, dataHome, receipt, runtime };
+}
+
+test("verify names a pinned runtime unavailable without a network", async () => {
+  const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
+
+  const unavailable = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: "http://127.0.0.1:9/runtime" });
+  assert.equal(unavailable.code, 1);
+  assert.equal(unavailable.out, `seal: runtime_download_no_network: Seal needed the pinned runtime file at ${runtime}; it could not reach http://127.0.0.1:9/runtime/kernel/wasm/seal.js because this machine has no network connection. Connect this machine to the network, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or write this runtime file.\n`);
+});
+
+test("verify names a pinned runtime absent from its source", async (t) => {
+  const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
+  const remote = await refusingRuntimeServer(404);
+  t.after(remote.close);
+  const absent = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: remote.base });
+  assert.equal(absent.code, 1);
+  assert.equal(absent.out, `seal: runtime_download_not_found: Seal needed the pinned runtime file at ${runtime}; it was not found at ${remote.base}/kernel/wasm/seal.js (HTTP 404). Check that the pinned runtime revision is published, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or write this runtime file.\n`);
+});
+
+test("verify names an unreadable pinned runtime cache path", async () => {
+  const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
+  fs.mkdirSync(runtime, { recursive: true });
+  const unreadable = await runAsync(["verify", receipt], cache, dataHome);
+  assert.equal(unreadable.code, 1);
+  assert.equal(unreadable.out, `seal: runtime_cache_unreadable: Seal needed the pinned runtime file at ${runtime}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receipt}\`. Seal did not inspect the receipt or replace this runtime file.\n`);
+});
 
 test("seal verify accepts a receipt copied away from all generating state", async () => {
   const genCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-cache-"));

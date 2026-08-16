@@ -342,6 +342,35 @@ you. No approval should be trusted until the hook is removed.
 
 ## From `seal verify`
 
+The optional verifier needs a pinned runtime file before it can inspect a
+kernel receipt. Each runtime refusal below names the exact cache path and the
+source it tried, gives the next `seal verify` command, and means the receipt
+was not inspected.
+
+### `runtime_download_no_network`
+
+Seal could not reach the named pinned runtime source because this machine has
+no network connection. Connect it to the network, then run the printed `seal
+verify` command. Seal did not write the missing runtime file.
+
+### `runtime_download_not_found`
+
+The named pinned runtime file was absent from the source (HTTP 404). Check
+that the pinned runtime revision is published, then run the printed `seal
+verify` command. Seal did not write the missing runtime file.
+
+### `runtime_download_unavailable`
+
+The named runtime source responded but could not provide the pinned file for a
+reason other than not found. Check the runtime source, then run the printed
+`seal verify` command. Seal did not write the missing runtime file.
+
+### `runtime_cache_unreadable`
+
+Seal found the named cached runtime path but could not read it. Make that path
+readable, then run the printed `seal verify` command. Seal did not replace the
+cached runtime file.
+
 ### `spine_receipt_use_separate_checker`
 
 You pointed `seal verify` at one of the gate's own receipts. By design the

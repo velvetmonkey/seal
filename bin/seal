@@ -156,20 +156,54 @@ function verifyHint(receipt) {
   return shellWord(receipt);
 }
 async function fetchBytes(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`runtime download failed: ${response.status} ${url}`);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch {
+    const error = new Error("runtime download could not reach its source");
+    error.runtimeDownload = "no_network";
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error(`runtime download returned HTTP ${response.status}`);
+    error.runtimeDownload = response.status === 404 ? "not_found" : "unavailable";
+    throw error;
+  }
   return Buffer.from(await response.arrayBuffer());
 }
-async function ensureRuntime() {
+function runtimeRefusal(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+async function ensureRuntime(receiptPath) {
   for (const [relative, expected] of Object.entries(manifest.files)) {
     const target = path.join(cache, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     if (fs.existsSync(target)) {
-      const got = sha256(fs.readFileSync(target));
+      let got;
+      try { got = sha256(fs.readFileSync(target)); }
+      catch {
+        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or replace this runtime file.`);
+      }
       if (got !== expected) throw new Error(`cached runtime hash mismatch for ${relative}: ${got}`);
       continue;
     }
-    const bytes = await fetchBytes(`${runtimeBase}/${relative}`);
+    const source = `${runtimeBase}/${relative}`;
+    let bytes;
+    try { bytes = await fetchBytes(source); }
+    catch (error) {
+      if (error.runtimeDownload === "no_network") {
+        throw runtimeRefusal("runtime_download_no_network", `Seal needed the pinned runtime file at ${target}; it could not reach ${source} because this machine has no network connection. Connect this machine to the network, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+      }
+      if (error.runtimeDownload === "not_found") {
+        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; it was not found at ${source} (HTTP 404). Check that the pinned runtime revision is published, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+      }
+      if (error.runtimeDownload === "unavailable") {
+        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} could not provide it. Check the runtime source, then run \`seal verify ${receiptPath}\`. Seal did not inspect the receipt or write this runtime file.`);
+      }
+      throw error;
+    }
     const got = sha256(bytes);
     if (got !== expected) throw new Error(`downloaded runtime hash mismatch for ${relative}: ${got}`);
     const temporary = `${target}.download-${process.pid}`;
@@ -222,7 +256,7 @@ async function verify(receiptPath) {
     process.exitCode = 2;
     return;
   }
-  const runtime = await ensureRuntime();
+  const runtime = await ensureRuntime(absolute);
   const verifier = require(path.join(runtime, "src/verify.cjs"));
   const result = await verifier.verifyDetailed(absolute);
   if (result.ok) {
