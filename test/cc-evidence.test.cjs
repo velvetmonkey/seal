@@ -176,6 +176,21 @@ test("the checker refuses a manifest referencing a file that is absent", () => {
   assert.match(result.out, /^REFUSE evidence_file_absent: manifest names terminal\.cast, which is not present in the pack$/m, result.out);
 });
 
+test("the checker refuses an empty terminal recording by name", () => {
+  const copy = copyOfPack();
+  const castPath = path.join(copy.dir, "terminal.cast");
+  fs.writeFileSync(castPath, "");
+  copy.rewriteManifest((manifest) => {
+    const entry = manifest.files.find((file) => file.path === "terminal.cast");
+    entry.sha256 = digest(Buffer.alloc(0));
+    entry.bytes = 0;
+  });
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE evidence_file_empty: terminal\.cast is empty$/m, result.out);
+  assert.match(result.out, /^REFUSE terminal_recording_empty: terminal\.cast is empty$/m, result.out);
+});
+
 test("the checker refuses evidence added beside the manifest", () => {
   const copy = copyOfPack();
   fs.writeFileSync(path.join(copy.dir, "extra-evidence.txt"), "added after the run\n");
@@ -388,6 +403,19 @@ test("the Claude Code row stays untested until a checked pack exists", () => {
     !document.includes("| Claude Code | PASS"),
     "the Claude Code row may only claim PASS from a pack the checker accepts",
   );
+});
+
+test("the anti-forgery limit is present in both docs and checker output", () => {
+  const document = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  assert.match(document, /does \*\*not\*\* establish that a real Claude Code process produced it/);
+  assert.match(document, /determined author with local file access can produce a passing pack/);
+  assert.match(document, /instrument against mistakes, not against forgery/);
+  assert.match(document, /That row is the honest claim;\s+the\s+checker's exit code is not/);
+
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-honesty-"));
+  const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack\. A determined author with local file access can produce a passing pack\. It is an instrument against mistakes, not against forgery\.$/m, result.out);
 });
 
 test.after(() => {

@@ -37,6 +37,7 @@ const EVIDENCE_ROOT_NAME = "claude-code";
 const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
 const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code call not observed";
+const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
 const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
 
 const REQUIRED_CASES = [
@@ -82,6 +83,10 @@ function readManifest(packDir, report) {
   } catch (error) {
     if (error.code === "ENOENT") report.refuse("manifest_absent", `${packDir} holds no manifest.json`);
     else report.refuse("manifest_unreadable", `${manifestPath} cannot be read: ${error.message}`);
+    return null;
+  }
+  if (text.length === 0) {
+    report.refuse("manifest_empty", `${manifestPath} is empty`);
     return null;
   }
   let manifest;
@@ -142,6 +147,10 @@ function checkFiles(packDir, manifest, report) {
     } catch (error) {
       if (error.code === "ENOENT") report.refuse("evidence_file_absent", `manifest names ${name}, which is not present in the pack`);
       else report.refuse("evidence_file_unreadable", `${name} cannot be read: ${error.message}`);
+      continue;
+    }
+    if (bytes.length === 0) {
+      report.refuse("evidence_file_empty", `${name} is empty`);
       continue;
     }
     const digest = sha256(bytes);
@@ -233,6 +242,10 @@ function checkCasts(packDir, manifest, report) {
       else report.refuse("terminal_recording_unreadable", `${name} cannot be read: ${error.message}`);
       continue;
     }
+    if (bytes.length === 0) {
+      report.refuse("terminal_recording_empty", `${name} is empty`);
+      continue;
+    }
     if (bytes.includes(Buffer.from(SYNTHETIC_BANNER, "utf8"))) {
       synthetic = true;
       report.ok(`${name} carries the synthetic fixture banner`);
@@ -301,6 +314,9 @@ function checkChildLog(packDir, manifest, report) {
     raw = readFileSync(join(packDir, "child.jsonl"), "utf8");
   } catch {
     return []; // already refused as an absent or unreadable evidence file
+  }
+  if (raw.length === 0) {
+    report.refuse("child_log_empty", "child.jsonl is empty");
   }
   if (!raw.endsWith("\n")) {
     report.refuse("child_log_truncated", "child.jsonl does not end at a newline-delimited record boundary");
@@ -397,7 +413,13 @@ function checkChildLog(packDir, manifest, report) {
 // manifest therefore cannot make a careful truncation self-consistent.
 function checkChildLogCommitment(packDir, raw, lines, report) {
   let snapshots;
-  try { snapshots = JSON.parse(readFileSync(join(packDir, "snapshots.json"), "utf8")); } catch { return; }
+  let snapshotText;
+  try { snapshotText = readFileSync(join(packDir, "snapshots.json"), "utf8"); } catch { return; }
+  if (snapshotText.length === 0) {
+    report.refuse("snapshots_empty", "snapshots.json is empty");
+    return;
+  }
+  try { snapshots = JSON.parse(snapshotText); } catch { return; }
   const final = (snapshots.snapshots || []).find((entry) => entry?.case === "unprotect" && entry?.edge === "end")?.snapshot?.child_log;
   if (!final) {
     report.refuse("child_log_commitment_absent", "snapshots.json carries no unprotect.end child-log commitment");
@@ -429,6 +451,9 @@ function checkProcessProvenance(records, manifest, report, { repoRoot, release, 
   try { standInDigest = sha256(readFileSync(standInPath)); } catch (error) {
     if (error.code === "ENOENT") report.refuse("synthetic_client_identity_absent", `${standInPath} is absent; the checker cannot identify the shipped synthetic client`);
     else report.refuse("synthetic_client_identity_unreadable", `${standInPath} cannot be read: ${error.message}`);
+  }
+  if (standInDigest === sha256(Buffer.alloc(0))) {
+    report.refuse("synthetic_client_identity_empty", `${standInPath} is empty; the checker cannot identify the shipped synthetic client`);
   }
   if (release && typeof clientExecutableSha256 !== "string") {
     report.refuse("client_identity_expected_absent", "release checking needs --client-executable-sha256 from the operator's independently verified Claude Code executable");
@@ -476,6 +501,10 @@ function checkFixtureRevision(manifest, report, { release, repoRoot }) {
   try { bytes = readFileSync(inTree); } catch (error) {
     if (error.code === "ENOENT") report.refuse("fixture_revision_absent", `${declared} is absent from this tree; the checker cannot compare the counting instrument`);
     else report.refuse("fixture_revision_unreadable", `${inTree} cannot be read: ${error.message}`);
+    return;
+  }
+  if (bytes.length === 0) {
+    report.refuse("fixture_revision_empty", `${declared} is empty; the checker cannot compare the counting instrument`);
     return;
   }
   const got = sha256(bytes);
@@ -555,6 +584,7 @@ function usage(message) {
 // without parsing the rest of this output.
 function emitLabel(options, label) {
   process.stdout.write(`${label}\n`);
+  process.stdout.write(`${HONESTY_LABEL}\n`);
   if (options.labelOut) writeFileSync(options.labelOut, `${label}\n`);
 }
 

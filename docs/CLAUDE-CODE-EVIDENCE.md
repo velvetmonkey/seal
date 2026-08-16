@@ -10,6 +10,18 @@ observes the real client doing any of it.**
 This page is the client matrix, the acceptance run that closes the gap, and the
 machinery that makes such a run checkable instead of anecdotal.
 
+## The honest limit
+
+This checker establishes that a recorded run is internally consistent, that its
+inputs were present and readable, and that the pack was not casually relabelled.
+It does **not** establish that a real Claude Code process produced it. A
+determined author with local file access can produce a passing pack. This is an
+instrument against mistakes, not against forgery.
+
+The Claude Code matrix row stays `UNTESTED — real Claude Code call not observed`
+until an operator's real run fills it. That row is the honest claim; the
+checker's exit code is not.
+
 ## The release-gating client matrix
 
 | Client | What is exercised | Status |
