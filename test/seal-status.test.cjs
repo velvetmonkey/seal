@@ -7,6 +7,33 @@ const test = require("node:test");
 
 const CLI = path.join(__dirname, "../bin/seal");
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../runtime-manifest.json"), "utf8"));
+const { projectId } = require("../spine/protection.cjs");
+const { requireMatchingVersion } = require("../spine/version.cjs");
+
+function writeOwnedState(root, project, statePath, fields) {
+  const projectRoot = fs.realpathSync(project);
+  const definition = { type: "stdio", command: "/seal", args: ["__proxy", "--protect-state", statePath], env: {} };
+  fs.writeFileSync(path.join(root, ".claude.json"), JSON.stringify({
+    projects: { [projectRoot]: { mcpServers: { db: definition } } },
+  }, null, 2) + "\n");
+  fs.writeFileSync(statePath, JSON.stringify({
+    schema: "seal.protect/v1",
+    sealVersion: requireMatchingVersion(),
+    projectRoot,
+    projectId: projectId(projectRoot),
+    serverName: "db",
+    localOverride: {
+      installed: true,
+      scope: "local",
+      serverName: "db",
+      projectRoot,
+      projectId: projectId(projectRoot),
+      definition,
+    },
+    ...fields,
+  }));
+}
+
 function run(args, root, input = "", cwd = process.cwd()) {
   try {
     return { code: 0, out: execFileSync(process.execPath, [CLI, ...args], {
@@ -36,10 +63,9 @@ test("status reads the protected project's recorded receipt directory", () => {
   fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ decision: "APPROVE", at: "2026-08-16T12:00:00.000Z" }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify({
-    schema: "seal.protect/v1", sealVersion: require("../spine/version.cjs").requireMatchingVersion(),
-    state: "PENDING RESTART", serverName: "db", guardTool: "write", receiptsDir: receiptDir,
-  }));
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
@@ -56,10 +82,9 @@ test("status names a missing receipt directory as no receipt yet", () => {
   fs.mkdirSync(project);
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify({
-    schema: "seal.protect/v1", sealVersion: require("../spine/version.cjs").requireMatchingVersion(),
-    state: "PENDING RESTART", serverName: "db", guardTool: "write", receiptsDir: receiptDir,
-  }));
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0);
   assert.match(result.out, /^Runtime: present /m);
@@ -77,10 +102,9 @@ test("status names an unreadable receipt directory and its permission action", (
   fs.mkdirSync(receiptDir, { recursive: true });
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify({
-    schema: "seal.protect/v1", sealVersion: require("../spine/version.cjs").requireMatchingVersion(),
-    state: "PENDING RESTART", serverName: "db", guardTool: "write", receiptsDir: receiptDir,
-  }));
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
   fs.chmodSync(receiptDir, 0o000);
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0);
@@ -100,10 +124,9 @@ test("status names receipt files when none can be parsed", () => {
   fs.writeFileSync(path.join(receiptDir, "not-a-receipt.json"), "not json\n");
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify({
-    schema: "seal.protect/v1", sealVersion: require("../spine/version.cjs").requireMatchingVersion(),
-    state: "PENDING RESTART", serverName: "db", guardTool: "write", receiptsDir: receiptDir,
-  }));
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0);
   assert.match(result.out, /^Receipt unreadable: not-a-receipt\.json \(Unexpected token/m);

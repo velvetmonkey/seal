@@ -137,6 +137,67 @@ function writeState(statePath, state) {
   fs.renameSync(temporary, statePath);
 }
 
+function ownershipRefusal(code, message = "") {
+  const error = new ProtectionError(code, message);
+  error.ownershipRefusal = true;
+  return error;
+}
+
+function claudeConfigPath(env = process.env) {
+  const directory = env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir();
+  return path.join(directory, ".claude.json");
+}
+
+function currentLocalOverride(projectRoot, serverName, env = process.env) {
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(claudeConfigPath(env), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw ownershipRefusal(
+      "local_override_drifted",
+      "The current local override is not the one Seal installed.\nNo configuration was changed.",
+    );
+  }
+  return config?.projects?.[realProjectRoot(projectRoot)]?.mcpServers?.[serverName] || null;
+}
+
+function installedLocalOverride({ root, serverName, sealBin, statePath }) {
+  return {
+    installed: false,
+    scope: "local",
+    serverName,
+    projectRoot: root,
+    projectId: projectId(root),
+    definition: {
+      type: "stdio",
+      command: sealBin,
+      args: ["__proxy", "--protect-state", statePath],
+      env: {},
+    },
+  };
+}
+
+function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = process.env, { allowAbsent = false } = {}) {
+  const root = realProjectRoot(projectRoot);
+  const owned = state?.localOverride;
+  if (!state || state.state === STATES.UNPROTECTED || !owned || owned.installed !== true ||
+      owned.scope !== "local" || owned.serverName !== serverName || owned.projectRoot !== root ||
+      owned.projectId !== projectId(root) || state.serverName !== serverName ||
+      state.projectRoot !== root || state.projectId !== projectId(root)) {
+    throw ownershipRefusal("no_seal_owned_override");
+  }
+  const current = currentLocalOverride(root, serverName, env);
+  if (current === null && allowAbsent) return { absent: true };
+  if (current === null || canonical(current) !== canonical(owned.definition)) {
+    throw ownershipRefusal(
+      "local_override_drifted",
+      "The current local override is not the one Seal installed.\nNo configuration was changed.",
+    );
+  }
+  return { absent: false };
+}
+
 function runClaude(args, env = process.env, cwd = process.cwd()) {
   const result = spawnSync("claude", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return { code: result.status === null ? 1 : result.status, stdout: result.stdout || "", stderr: result.stderr || "", error: result.error };
@@ -310,8 +371,9 @@ function stateWithProject(projectRoot, env = process.env) {
   return { root, filePath, state: readState(filePath) };
 }
 
-function protectionView(state) {
+function protectionView(state, projectRoot, env = process.env) {
   if (!state || state.state === STATES.UNPROTECTED) return { state: STATES.UNPROTECTED };
+  assertSealOwnedLocalOverride(state, projectRoot, state.serverName, env);
   if (state.state === STATES.ACTIVE && !livePid(state.lease?.pid)) {
     return {
       ...state,
@@ -383,6 +445,7 @@ async function protect({
     protectedAt: new Date().toISOString(),
     lease: null,
   };
+  state.localOverride = installedLocalOverride({ root, serverName, sealBin, statePath });
   writeState(statePath, state);
 
   const install = runClaude([
@@ -393,7 +456,12 @@ async function protect({
     writeState(statePath, { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() });
     throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}`);
   }
-  return { statePath, beforeHash: project.hash, state, toolNames };
+  const installedState = {
+    ...state,
+    localOverride: { ...state.localOverride, installed: true, installedAt: new Date().toISOString() },
+  };
+  writeState(statePath, installedState);
+  return { statePath, beforeHash: project.hash, state: installedState, toolNames };
 }
 
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
@@ -401,6 +469,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   const state = readState(statePath);
+  assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
   if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
   }
