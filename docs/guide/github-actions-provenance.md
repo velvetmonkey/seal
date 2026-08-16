@@ -37,7 +37,15 @@ gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz \
   --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml \
   --source-digest "$RUN_SHA" \
   --deny-self-hosted-runners
+gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz \
+  --repo velvetmonkey/seal \
+  --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml \
+  --source-digest "$RUN_SHA" \
+  --deny-self-hosted-runners --format json \
+  --jq '.[].verificationResult.statement.subject[].digest.sha256'
 ```
+
+The two SHA-256 values printed above must match.
 
 Success means the downloaded archive's digest has a GitHub Actions provenance
 attestation from this repository and this workflow, for that source commit,
