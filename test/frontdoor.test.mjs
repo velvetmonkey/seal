@@ -36,7 +36,7 @@ test("the repository landing page uses only frisked product prose", () => {
     assert.ok(INDEX.includes(block), `index.html is missing sourced block: ${block}`);
     assert.ok(NORMALIZED_SOURCES.includes(withoutHtmlCode(block)), `README/docs do not contain landing-page block: ${block}`);
   }
-  assert.doesNotMatch(INDEX, /public product-family hub|github\.com\/velvetmonkey\/seal-live-demo|github\.com\/velvetmonkey\/seal-host/);
+  assert.doesNotMatch(INDEX, /public product-family hub|seal-live-demo|(?:deployed\s+)?Rust\s+host/i);
 });
 
 test("the first architecture diagram is the shipped Node path", () => {
