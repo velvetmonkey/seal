@@ -72,9 +72,12 @@ test("every emitted release identity derives from VERSION", () => {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${VERSION} linux-x64`));
   }
-  for (const file of ["README.md", "docs/DISTRIBUTION.md", `docs/RELEASE-NOTES-v${VERSION}.md`, "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs", ".github/workflows/release.yml"]) {
+  for (const file of ["README.md", "docs/DISTRIBUTION.md", `docs/RELEASE-NOTES-v${VERSION}.md`, "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`Seal v${VERSION}`));
   }
+  const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");
+  assert.match(releaseWorkflow, /Seal v\$\{version\}/);
+  assert.doesNotMatch(releaseWorkflow, /seal-vVERSION/);
   assert.match(pinnedDigest, /^[0-9a-f]{64}$/);
   assert.match(pinnedBytes, /^\d+$/);
   assert.equal(pinnedName, artifactName);

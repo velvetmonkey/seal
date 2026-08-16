@@ -47,19 +47,26 @@ jobs:
           fi
           version="$(tr -d '\n' < VERSION)"
           artifact="$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
+          artifact_name="$(basename "$artifact")"
+          read -r digest bytes checksum_name < "$RUNNER_TEMP/dist/SHA256SUMS"
+          test "$checksum_name" = "$artifact_name"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
-            'Seal v0.2.0-rc.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.' \
+            "Seal v${version} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release." \
             '' \
-            'The installable artifact is the single file `seal-vVERSION-linux-x64`.' \
-            'Pin it with the digest and byte length in `SHA256SUMS`, then:' \
+            "The installable artifact is the single file \`${artifact_name}\`." \
+            'Its command is generated from the built artifact and `SHA256SUMS`:' \
             '' \
-            '    ./seal-vVERSION-linux-x64 --sha256 HEX --bytes N --prefix ~/.local' \
+            "    ./${artifact_name} --sha256 ${digest} --bytes ${bytes} --prefix ~/.local" \
             '' \
             'Altered bytes refuse. A missing, truncated or unreadable file refuses by name.' \
             'This file is not a signature and not a compiled native binary. Node >= 20 is required.' > "$notes"
+          prerelease=()
+          if [[ "$version" == *rc* ]]; then
+            prerelease+=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" \
             "$artifact" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
+            "${prerelease[@]}" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
-

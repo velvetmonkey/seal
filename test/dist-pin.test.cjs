@@ -47,4 +47,11 @@ test("the published pin matches a freshly built artifact", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   assert.ok(readme.includes(`--sha256 ${recorded.sha256}`), "README.md install command must carry the published sha256");
   assert.ok(readme.includes(`--bytes ${recorded.bytes}`), "README.md install command must carry the published byte count");
+
+  const distribution = fs.readFileSync(path.join(ROOT, "docs", "DISTRIBUTION.md"), "utf8");
+  const guide = fs.readFileSync(path.join(ROOT, "docs", "guide", "README.md"), "utf8");
+  assert.ok(readme.includes(`./dist/${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
+  assert.ok(distribution.includes(`./${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
+  assert.ok(guide.includes(`$ ./${recorded.name} --sha256 ${recorded.sha256} --bytes ${recorded.bytes}`));
+  assert.doesNotMatch(guide, /After Ben publishes/);
 });

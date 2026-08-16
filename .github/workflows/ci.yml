@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Require one released version to identify one commit
+        run: node scripts/check-version-identity.cjs
       - name: Expose the selected Node to the installed-artifact test
         shell: bash
         run: |
@@ -38,7 +40,7 @@ jobs:
 
           gate_status=0
           expected_zero=0
-          minimum_tests=127
+          minimum_tests=148
           if (( node_status != 0 )); then
             echo "::error::node --test exited $node_status"
             gate_status=1

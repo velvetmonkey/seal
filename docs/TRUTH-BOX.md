@@ -1,6 +1,6 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
 > The authorization rule is PROVED. The state machine is TESTED.
-> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.1.md](RELEASE-NOTES-v0.2.0-rc.1.md) and the [README](../README.md).
+> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../README.md).
 
 # Truth box (canonical)
 
