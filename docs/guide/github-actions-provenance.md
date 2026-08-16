@@ -46,6 +46,9 @@ still succeeds: `gh attestation verify` checks the attested archive and the
 workflow identity recorded in the attestation, not an arbitrary workflow file
 on the verifier's disk. Compare a candidate workflow to
 `recorded-workflow.yml` yourself when that is the question you need answered.
+Before the real OIDC request, a negative control removes both runner OIDC
+variables and requires the same availability guard to fail; unavailable OIDC
+cannot become a skipped or passing provenance job.
 
 ## What this does not establish
 

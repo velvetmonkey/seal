@@ -19,6 +19,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: "Negative control: unavailable OIDC fails rather than skips"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
+            bash -c 'set -euo pipefail; test -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN"; test -n "$ACTIONS_ID_TOKEN_REQUEST_URL"'; then
+            echo "::error::the absent-OIDC guard unexpectedly passed"
+            exit 1
+          fi
+          echo "EXPECTED: absent OIDC credentials fail before evidence production."
       - name: Require a GitHub Actions OIDC token
         shell: bash
         run: |
