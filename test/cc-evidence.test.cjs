@@ -184,6 +184,25 @@ test("stripping one synthetic marker does not launder a synthetic pack", () => {
   assert.match(scrubbedResult.out, /SYNTHETIC-NOT-A-REAL-RUN\.txt/, scrubbedResult.out);
 });
 
+test("the checker refuses a pack filed under a path that contradicts its manifest", () => {
+  const copy = copyOfPack();
+  const misfiled = path.join(path.dirname(copy.dir), "f".repeat(64));
+  fs.renameSync(copy.dir, misfiled);
+  const result = check([misfiled, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE pack_path_mismatch: the manifest names artifact sha256 [0-9a-f]{64} but the pack sits under f{64}$/m, result.out);
+});
+
+test("a release refuses evidence counted by a fixture this tree no longer ships", () => {
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-fixture-drift-"));
+  const fixture = path.join(elsewhere, "harness", "claude-code");
+  fs.mkdirSync(fixture, { recursive: true });
+  fs.writeFileSync(path.join(fixture, "fixture-server.cjs"), "// a different instrument\n");
+  const result = check([pack().dir, "--release", "--artifact-sha256", pack().artifact, "--repo-root", elsewhere]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE fixture_revision_mismatch: harness\/claude-code\/fixture-server\.cjs in this tree is sha256 /m, result.out);
+});
+
 test("a release with no evidence pack reports the untested state instead of passing", () => {
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-"));
   const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
