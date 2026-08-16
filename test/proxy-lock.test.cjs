@@ -8,6 +8,7 @@ const test = require("node:test");
 const {
   acquireProjectLock,
   lockPathFor,
+  lockOwnerIsLive,
   processStartWitness,
 } = require("../spine/protection.cjs");
 
@@ -86,4 +87,10 @@ test("a live PID with a different process-start witness is stale", () => {
 test("the witness is Linux /proc stat field 22", () => {
   assert.equal(typeof processStartWitness(process.pid), "string");
   assert.ok(processStartWitness(process.pid).length > 0);
+});
+
+test("the shared owner predicate reads live and dead Linux owners correctly", () => {
+  const liveOwner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  assert.equal(lockOwnerIsLive(liveOwner), true);
+  assert.equal(lockOwnerIsLive({ pid: 999999, startWitness: "dead" }), false);
 });

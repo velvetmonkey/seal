@@ -702,6 +702,7 @@ module.exports = {
   localOverrideExists,
   listServerTools,
   lockPathFor,
+  lockOwnerIsLive,
   processStartWitness,
   protect,
   protectionView,

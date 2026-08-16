@@ -12,6 +12,7 @@ const {
   protectionView,
   statePathFor,
 } = require("../spine/protection.cjs");
+const { createJournal, openJournal } = require("../spine/store.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
 const SCRATCH = path.join(
@@ -118,6 +119,25 @@ test("direct acquireProjectLock refuses when the live lock witness is unavailabl
 
     assert.throws(
       () => acquireProjectLock(ctx.project, ctx.env),
+      (error) => error.code === "process_witness_unavailable" &&
+        /cannot establish process-start witness/.test(error.message),
+    );
+  });
+});
+
+test("journal lock refuses when a live owner has no process-start witness", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("journal-lock");
+    const journalPath = path.join(ctx.root, "approval.ndjson");
+    createJournal(journalPath);
+    fs.writeFileSync(
+      `${journalPath}.lock`,
+      JSON.stringify({ pid: process.pid, startWitness: null }) + "\n",
+      { mode: 0o600 },
+    );
+
+    assert.throws(
+      () => openJournal(journalPath).withLock(() => assert.fail("journal lock must refuse before its callback")),
       (error) => error.code === "process_witness_unavailable" &&
         /cannot establish process-start witness/.test(error.message),
     );

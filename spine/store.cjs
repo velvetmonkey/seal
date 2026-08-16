@@ -10,6 +10,7 @@
 // caller exits non-zero and never approves over it.
 const fs = require("node:fs");
 const path = require("node:path");
+const { lockOwnerIsLive, processStartWitness } = require("./protection.cjs");
 
 class StoreError extends Error {}
 
@@ -50,24 +51,6 @@ function readEvents(filePath) {
   return events;
 }
 
-function processStartWitness(pid) {
-  if (!Number.isInteger(pid) || pid <= 0 || process.platform !== "linux") return null;
-  try {
-    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-    const close = stat.lastIndexOf(")");
-    if (close < 0) return null;
-    return stat.slice(close + 2).trim().split(/\s+/)[19] || null;
-  } catch {
-    return null;
-  }
-}
-
-function liveLockOwner(owner) {
-  if (!owner || !Number.isInteger(owner.pid) || owner.pid <= 0) return false;
-  try { process.kill(owner.pid, 0); } catch { return false; }
-  return owner.startWitness === processStartWitness(owner.pid);
-}
-
 function withFileLock(filePath, callback) {
   const lockPath = `${filePath}.lock`;
   const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
@@ -85,7 +68,7 @@ function withFileLock(filePath, callback) {
       if (error.code !== "EEXIST") throw error;
       let existing;
       try { existing = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { existing = null; }
-      if (!liveLockOwner(existing)) {
+      if (!lockOwnerIsLive(existing)) {
         try { fs.unlinkSync(lockPath); } catch (unlinkError) {
           if (unlinkError.code !== "ENOENT") throw unlinkError;
         }
