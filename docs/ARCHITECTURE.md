@@ -1,8 +1,51 @@
-> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
+> Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.
 > The authorization rule is PROVED. The state machine is TESTED.
 > For the truth about what you installed, read [docs/RELEASE-NOTES-v0.1.1.md](RELEASE-NOTES-v0.1.1.md) and the [README](../README.md).
 
-# Seal family architecture — one picture
+# Architecture
+
+## Shipped Node product path
+
+```mermaid
+flowchart LR
+    claude["Claude Code\n(MCP client)"]
+    proxy["Node proxy\nspine/proxy.cjs"]
+    state["TESTED state machine\nhandle · freshness · protocol · one-use"]
+    wasm["PROVED WASM authorization rule\npinned vendored WASM; load-bearing"]
+    server["Selected MCP server\none selected tool"]
+
+    claude --> proxy
+    proxy --> state
+    state --> wasm
+    wasm --> server
+```
+
+The shipped Node CLI keeps continuation state in Node and sends only the
+authorization sub-question through the vendored WASM. A guarded retry follows
+`spine/proxy.cjs` → `contract/contract.cjs` →
+`contract/kernel-authorization.cjs` →
+`runtime/kernel/runner.cjs` → `seal_decide`. The WASM
+answer is load-bearing: BLOCK, unreadable output, a hash mismatch, or a
+Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
+
+Node still owns opaque-handle lookup, status and expiry, connection-epoch
+currency, the `inputResponses` protocol shape, and journal-before-forward
+one-use consumption. The kernel checks the exact tool-and-arguments
+authorization target. Node tests project, server, continuation, expiry and
+response context before presenting that authorization state to the kernel.
+Therefore the accurate product claim is exactly: The authorization rule is
+PROVED. The state machine is TESTED.
+
+The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
+stub envelope. It generates an Ed25519 key inside the kernel worker and signs
+the config immediately before `seal_init`. That gets the real kernel onto the
+product path without weakening signature verification, but it is still
+demo-grade, self-authorized configuration signing—not an externally trusted
+production configuration key.
+
+## Assurance lineage — Seal family architecture
+
+This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
 One diagram, five roles: **decision core** (proven), **enforcement** (deployed), **receipt**
 (evidence), **conformance** (ties bodies to the proof), **coverage** (audits the policy).
@@ -81,28 +124,3 @@ flowchart LR
 Claim-status per box: [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
 Fleet links are public and resolve for everyone; `witness-check` remains proprietary.
-
-## Shipped Node bridge
-
-The shipped Node CLI keeps continuation state in Node and sends only the
-authorization sub-question through the vendored WASM. A guarded retry follows
-`spine/proxy.cjs` → `contract/contract.cjs` →
-`contract/kernel-authorization.cjs` →
-`runtime/kernel/runner.cjs` → `seal_decide`. The WASM
-answer is load-bearing: BLOCK, unreadable output, a hash mismatch, or a
-Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
-
-Node still owns opaque-handle lookup, status and expiry, connection-epoch
-currency, the `inputResponses` protocol shape, and journal-before-forward
-one-use consumption. The kernel checks the exact tool-and-arguments
-authorization target. Node tests project, server, continuation, expiry and
-response context before presenting that authorization state to the kernel.
-Therefore the accurate product claim is exactly: The authorization rule is
-PROVED. The state machine is TESTED.
-
-The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
-stub envelope. It generates an Ed25519 key inside the kernel worker and signs
-the config immediately before `seal_init`. That gets the real kernel onto the
-product path without weakening signature verification, but it is still
-demo-grade, self-authorized configuration signing—not an externally trusted
-production configuration key.

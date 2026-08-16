@@ -18,6 +18,8 @@ the Node CLI this repository ships.
 3. [DISTRIBUTION.md](DISTRIBUTION.md) — what the one installable artifact is,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
+4. [ARCHITECTURE.md](ARCHITECTURE.md) — the shipped Node product path first,
+   followed by the wider family assurance lineage.
 
 ## I want to know what it does not do
 
@@ -98,7 +100,6 @@ a verifier fleet) rather than the Node CLI in this repository, whose gate is a
 JavaScript approval contract. Do not read them as claims about this product.
 Their disposition is an open ruling.
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — the family architecture diagram.
 - [AUTHORIZATION-MESH.md](AUTHORIZATION-MESH.md) — fleet coordination
   theorems; no fleet exists in this repository.
 - [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md) — the family's proven/tested/assumed

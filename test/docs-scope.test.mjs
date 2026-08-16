@@ -12,12 +12,15 @@ const FAMILY_PRODUCT_SCOPE_BLOCK = [
   "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.",
   ...COMMON_SCOPE_LINES,
 ].join("\n");
+const PRODUCT_THEN_FAMILY_SCOPE_BLOCK = [
+  "> Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.",
+  ...COMMON_SCOPE_LINES,
+].join("\n");
 const POSITION_PAPER_SCOPE_BLOCK = [
   "> Scope: This document argues a Seal family product position accepted on 2026-07-25; it does not describe the Node CLI shipped by this repository.",
   ...COMMON_SCOPE_LINES,
 ].join("\n");
 const FAMILY_PRODUCT_FILES = [
-  "ARCHITECTURE.md",
   "AUTHORIZATION-MESH.md",
   "CLAIMS-MATRIX.md",
   "LIMITATIONS.md",
@@ -28,6 +31,7 @@ const FAMILY_PRODUCT_FILES = [
 test("each scoped document carries its exact scope signpost", () => {
   const expectedBlocks = new Map([
     ...FAMILY_PRODUCT_FILES.map((name) => [name, FAMILY_PRODUCT_SCOPE_BLOCK]),
+    ["ARCHITECTURE.md", PRODUCT_THEN_FAMILY_SCOPE_BLOCK],
     ["WHAT-SEAL-IS.md", POSITION_PAPER_SCOPE_BLOCK],
   ]);
 

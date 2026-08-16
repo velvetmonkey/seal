@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function demoRun() {
   const child = spawn(process.execPath, [SEAL, "demo"], { stdio: ["pipe", "pipe", "pipe"] });
@@ -32,7 +37,10 @@ function demoRun() {
 test("demo announces and retains its checker directory, and Remove explains its cleanup", async (t) => {
   const demo = demoRun();
   await demo.waitFor(/Approve\? \[y\/N\]/);
-  const announced = demo.output().match(/temporary demo directory: (\/tmp\/seal-demo-[^\s]+) \(remains after the demo for the printed checker command\)/);
+  const demoPrefix = path.join(os.tmpdir(), "seal-demo-");
+  const announced = demo.output().match(new RegExp(
+    `temporary demo directory: (${escapeRegex(demoPrefix)}[^\\s]+) \\(remains after the demo for the printed checker command\\)`,
+  ));
   assert.ok(announced, demo.output());
   const directory = announced[1];
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
