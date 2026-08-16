@@ -23,6 +23,8 @@ const SCRATCH = path.join(
   "seal-proxy-lock-nonlinux",
 );
 
+test.after(() => fs.rmSync(SCRATCH, { recursive: true, force: true }));
+
 function withSimulatedDarwin(fn) {
   const previousPlatform = process.env.SEAL_SPINE_PLATFORM;
   const previousArch = process.env.SEAL_SPINE_ARCH;

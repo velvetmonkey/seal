@@ -396,9 +396,10 @@ cached runtime file.
 
 ### `spine_receipt_use_separate_checker`
 
-You pointed `seal verify` at one of the gate's own receipts. By design the
-binary does not verify its own receipts; the message hands you the separate
-checker command to run instead. Nothing is wrong with the receipt.
+You pointed `seal verify` at one of the gate's own receipts. The format is
+recognized, but this binary does not verify its own receipts; the message
+hands you the separate checker command to run instead. Use that checker to
+learn whether the receipt is valid.
 
 ## Platform and version refusals
 
