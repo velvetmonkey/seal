@@ -8,7 +8,7 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-check.mjs");
-const SCRATCH = "/home/monkey/scratch/receiptkey";
+const SCRATCH = process.env.RUNNER_TEMP || "/home/monkey/scratch/receiptkey";
 const { createJournal } = require("../spine/store.cjs");
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
 
