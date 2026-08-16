@@ -3,8 +3,17 @@
 //
 // This is deliberately a whole-file pin, not a marker-located section parser:
 // a heading, its whitespace, or a later heading cannot redirect what is being
-// checked. Any edit to either reviewed file needs an intentional review and
-// re-pin of the digest below.
+// checked. This pin catches accidental and incidental changes, but cannot stop
+// a determined author: that author can change both the text and this mutable
+// digest. Re-pinning is correct only after a human confirms the new text is
+// TRUE; the pin cannot check truth. Stopping a determined author needs a
+// protected review rule and a reviewer attestation signed by a key the author
+// does not hold.
+//
+// truediag7 records why this is locally unwinnable: a deterministic checker
+// sees only final repository bytes, so an author who can change a legitimate
+// edit and its pin can make the same local changes for a false edit. The
+// external reviewer boundary above is what would close that gap.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,7 +25,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const REVIEWED_GUIDES = [
   {
     file: "docs/guide/when-something-looks-wrong.md",
-    sha256: "2f8efb1a4ee73afe7b2c455219122855ee1b3a87951dd9e981e3a7b26a69d1a5",
+    sha256: "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd",
     claims: [
       "You pointed `seal verify` at one of the gate's own receipts.",
       "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
@@ -46,7 +55,7 @@ function assertPinned(entry, text) {
   assert.equal(
     sha256(text),
     entry.sha256,
-    `${entry.file}: content changed; review the whole file and intentionally re-pin its sha256`,
+    `${entry.file}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
   );
 }
 

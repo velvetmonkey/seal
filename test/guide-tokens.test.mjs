@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "2f8efb1a4ee73afe7b2c455219122855ee1b3a87951dd9e981e3a7b26a69d1a5";
+const GUIDE_SHA256 = "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd";
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
@@ -67,7 +67,7 @@ function guideTokens() {
   assert.equal(
     digest,
     GUIDE_SHA256,
-    `${GUIDE}: content changed; review the whole guide and intentionally re-pin its sha256`,
+    `${GUIDE}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
   );
   const occurrences = new Map();
   for (const match of text.matchAll(/^### `([a-z_]+)`/gm)) {
