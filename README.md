@@ -6,13 +6,13 @@
 
 Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a receipt of the decision. Today only the demo signs its receipts, with a key it generates for that run; the protected path writes its receipts unsigned.
 
-Most MCP tools are harmless. One is not: the SQL runner, the refund, the pull-request merge. Seal gates that one tool and passes the rest through.
+Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.
 
-You need Node 20+, Git, and the `claude` command for Protect (check with `claude --version`).
+Requires Node 20+, Git, and the `claude` command for Protect (check with `claude --version`). The install creates one command and one read-only store directory under `~/.local`.
 
 **Seal v0.1.1 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
-Every command below ran in this order, printing these outputs.
+Every command below ran in this order against the [`SHA256SUMS`](SHA256SUMS)-pinned bytes. Each printed the output shown.
 
 ## 1. Install
 
@@ -43,7 +43,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 2. Demo
 
-The demo builds a working gate in miniature, in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
+The demo builds a working gate in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
 
 ```sh
 seal demo
@@ -107,7 +107,7 @@ DIRECT WRITE SUCCEEDED
 Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts: 3 before the write, 3 after)
 ```
 
-A route that does not cross the gate is a route Seal does not see. The demo closes by handing you a checker command:
+A route that does not cross the gate is one Seal does not see. The demo closes by handing you a checker command:
 
 ```
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
@@ -172,7 +172,7 @@ Protection scope: 0 other tools OUTSIDE Seal
 State: /home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share/seal/projects/4198aa21a911c2c7e9899c24a49e6b28/state.json
 ```
 
-`protect` reports how many of that server's tools remain outside Seal, naming at most 20 and counting the rest. It then invokes Claude Code's `claude mcp add` to install a local override routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+`protect` reports how many of that server's tools remain outside Seal, naming at most 20 and counting the rest. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
 The protected proxy records every decision as a receipt file, but v0.1.1 mints no operator signing key. Those receipts carry no signature, and the shipped checker refuses them: `REFUSE unsealed: receipt carries no seal; it cannot be checked`. Where a durable operator key comes from is an open decision. Do not build anything on protected-path receipts passing the checker yet.
 
@@ -211,7 +211,7 @@ rm ~/.local/bin/seal
 chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
 ```
 
-Receipts and per-project state remain under `~/.local/share/seal/`. Delete them with `rm -r ~/.local/share/seal` if you want nothing left. The demo's temporary directory — the `/tmp/seal-demo-*` path it printed — also remains after the walk. It holds the run's evidence, including the key the printed checker command needs. After you run that command, remove the exact directory the demo printed with `rm -r`.
+Receipts and per-project state remain under `~/.local/share/seal/`. Delete them with `rm -r ~/.local/share/seal` to leave nothing. The demo's temporary directory — the `/tmp/seal-demo-*` path it printed — also remains after the walk. It holds the run's evidence, including the key the printed checker command needs. After you run that command, remove the exact directory the demo printed with `rm -r`.
 
 In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> demo.mutate`.
 
