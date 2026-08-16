@@ -99,6 +99,10 @@ function status() {
 
   const candidates = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink());
   console.log(`Receipts: ${candidates.length} stored in ${receiptDir}`);
+  if (candidates.length === 0) {
+    console.log("Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)");
+    return;
+  }
   const observed = [];
   for (const entry of entries) {
     const target = path.join(receiptDir, entry.name);
