@@ -12,6 +12,8 @@ const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",
   ACTIVE: "ACTIVE",
+  STALE: "STALE",
+  CONFLICT: "CONFLICT",
   DRIFTED: "DRIFTED",
   BROKEN: "BROKEN",
 });
@@ -387,6 +389,11 @@ function lockOwnerIsLive(owner) {
   return owner && livePid(owner.pid) && owner.startWitness === processStartWitness(owner.pid);
 }
 
+function leaseMatches(lease, token) {
+  return lease && token && lease.pid === token.pid &&
+    lease.startWitness === token.startWitness && lease.generation === token.generation;
+}
+
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
   const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
@@ -439,11 +446,18 @@ function stateWithProject(projectRoot, env = process.env) {
 function protectionView(state, projectRoot, env = process.env) {
   if (!state || state.state === STATES.UNPROTECTED) return { state: STATES.UNPROTECTED };
   assertSealOwnedLocalOverride(state, projectRoot, state.serverName, env);
-  if (state.state === STATES.ACTIVE && !livePid(state.lease?.pid)) {
+  if (state.state === STATES.ACTIVE && !lockOwnerIsLive(state.lease)) {
     return {
       ...state,
-      state: STATES.PENDING_RESTART,
-      detail: "previous wrapper lease pid is not live; restart Claude Code to activate the local override",
+      state: STATES.STALE,
+      detail: `previous wrapper lease is not live (generation ${state.lease?.generation ?? "unknown"}); restart Claude Code to replace it`,
+    };
+  }
+  if (state.state === STATES.ACTIVE && lockOwnerIsLive(state.lease?.conflict)) {
+    return {
+      ...state,
+      state: STATES.CONFLICT,
+      detail: `another live proxy is attempting to write generation ${state.lease.generation}; only the lease holder may consume approvals`,
     };
   }
   return state;
@@ -572,10 +586,12 @@ function markBroken(statePath, state, error) {
 }
 
 async function activationLease(statePath, env = process.env) {
-  const state = readState(statePath);
-  if (!state) throw new ProtectionError("state_broken", "protection state is absent");
-  const lock = acquireProjectLock(state.projectRoot, env);
+  const initial = readState(statePath);
+  if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
+  const lock = acquireProjectLock(initial.projectRoot, env);
   try {
+    const state = readState(statePath);
+    if (!state) throw new ProtectionError("state_broken", "protection state is absent");
     const childCommand = state.childArgv && state.childArgv[0];
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
@@ -606,13 +622,41 @@ async function activationLease(statePath, env = process.env) {
       markBroken(statePath, state, error);
       throw error;
     }
+    const existingLease = state.lease;
+    if (lockOwnerIsLive(existingLease)) {
+      const contender = {
+        pid: process.pid,
+        startWitness: processStartWitness(process.pid),
+        generation: existingLease.generation,
+        detectedAt: new Date().toISOString(),
+      };
+      const next = {
+        ...state,
+        state: STATES.ACTIVE,
+        lease: { ...existingLease, conflict: contender },
+      };
+      writeState(statePath, next);
+      lock.release();
+      Object.defineProperty(next, "leaseHolder", { value: false });
+      Object.defineProperty(next, "leaseToken", { value: contender });
+      Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+      return next;
+    }
+    const generation = Number.isInteger(existingLease?.generation) ? existingLease.generation + 1 : 1;
     const next = {
       ...state,
       state: STATES.ACTIVE,
-      lease: { pid: process.pid, startedAt: new Date().toISOString() },
+      lease: {
+        pid: process.pid,
+        startWitness: processStartWitness(process.pid),
+        generation,
+        startedAt: new Date().toISOString(),
+      },
     };
     writeState(statePath, next);
-    Object.defineProperty(next, "releaseLock", { value: lock.release });
+    lock.release();
+    Object.defineProperty(next, "leaseHolder", { value: true });
+    Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
     return next;
   } catch (error) {
@@ -621,10 +665,13 @@ async function activationLease(statePath, env = process.env) {
   }
 }
 
-function beforeForwardFromState(statePath) {
+function beforeForwardFromState(statePath, leaseToken) {
   return () => {
     const state = readState(statePath);
     if (!state) return { ok: false, refusal: "state_absent", detail: "protection state is absent" };
+    if (leaseToken && !leaseMatches(state.lease, leaseToken)) {
+      return { ok: false, refusal: "lease_generation_mismatch", detail: "this proxy no longer owns the active lease generation" };
+    }
     const got = currentDigestForState(state);
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);

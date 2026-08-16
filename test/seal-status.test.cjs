@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const CLI = path.join(__dirname, "../bin/seal");
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../runtime-manifest.json"), "utf8"));
-const { projectId } = require("../spine/protection.cjs");
+const { processStartWitness, projectId } = require("../spine/protection.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
 function writeOwnedState(root, project, statePath, fields) {
@@ -55,6 +55,34 @@ test("status finds the shipped kernel runtime with an empty cache", () => {
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
   assert.ok(!fs.existsSync(path.join(root, ".cache", "seal", "runtime")), "status must not create a cache as a side effect");
+});
+
+test("status distinguishes ACTIVE, STALE, and CONFLICT lease states", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-lease-states-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  const liveLease = { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 3 };
+
+  writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: liveLease });
+  let result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Protection: ACTIVE db\.write /m);
+  assert.match(result.out, /^Protection lease: pid \d+ generation 3$/m);
+
+  writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: { pid: 999999, startWitness: "dead", generation: 4 } });
+  result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Protection: STALE db\.write /m);
+
+  const conflict = { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 3 };
+  writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: { ...liveLease, conflict } });
+  result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Protection: CONFLICT db\.write /m);
 });
 
 test("status reads the protected project's recorded receipt directory", () => {

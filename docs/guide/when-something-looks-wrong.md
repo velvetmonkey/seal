@@ -275,6 +275,12 @@ first if you want to protect a different tool.
 Stop that session first. Taking the gate down under a live session is
 exactly the kind of silent change Seal exists to prevent.
 
+### `lease_generation_mismatch`
+
+The proxy's durable lease generation changed while it was evaluating an
+approval. Seal refuses at the consume boundary; the journal remains
+authoritative, and the retry must be issued by the current lease holder.
+
 ### `claude_install_failed`
 
 The `claude mcp add` step reported failure, and Seal recorded the state as

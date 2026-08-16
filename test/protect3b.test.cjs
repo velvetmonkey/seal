@@ -403,7 +403,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   assert.match(refused.out, /Human approval origin cannot be assumed/);
 });
 
-test("status renders a dead activation lease as pending restart, not active", () => {
+test("status renders a dead activation lease as STALE, not active", () => {
   const root = tmpdir("seal-protect3b-dead-lease-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
@@ -419,12 +419,12 @@ test("status renders a dead activation lease as pending restart, not active", ()
 
   const status = run(project, home, ["status"], env);
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
-  assert.match(status.out, /previous wrapper lease pid is not live/);
+  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
+  assert.match(status.out, /previous wrapper lease is not live/);
   assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });
 
-test("status downgrades to pending restart after a REAL wrapper lease exits naturally", () => {
+test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
   // Route B (the real-world case): a genuine `seal __proxy --protect-state`
   // wrapper activates the lease, then exits as any Claude session does. The
   // stored state stays ACTIVE with the now-dead wrapper pid; status must
@@ -463,6 +463,6 @@ test("status downgrades to pending restart after a REAL wrapper lease exits natu
 
   const status = run(project, home, ["status"], { PATH: env.PATH });
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: PENDING RESTART db\.demo\.mutate /m);
+  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
   assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
 });

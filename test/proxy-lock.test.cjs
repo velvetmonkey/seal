@@ -22,7 +22,7 @@ function waitForExit(child) {
   return new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));
 }
 
-test("two concurrent proxies: the second refuses and the first keeps working", async () => {
+test("two concurrent writers: the second writer lock refuses while the first keeps working", async () => {
   const { root } = project();
   const first = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});

@@ -52,6 +52,7 @@ const REFUSALS = Object.freeze({
   KERNEL_MANIFEST_REFUSED: "kernel_manifest_refused",
   KERNEL_EXECUTION_REFUSED: "kernel_execution_refused",
   KERNEL_OUTPUT_REFUSED: "kernel_output_refused",
+  LEASE_GENERATION_MISMATCH: "lease_generation_mismatch",
 });
 
 function createApprovalContract({
@@ -62,13 +63,16 @@ function createApprovalContract({
   serverId = "default-server",
   store,
   kernelAdapter = createKernelAuthorizationAdapter(),
+  leaseFence,
 } = {}) {
   // A fresh random epoch per construction: pendings from any earlier epoch
   // are invalid by definition — a restart forces a fresh call.
   const connectionEpoch = crypto.randomBytes(8).toString("hex");
   const recordsByHash = new Map(); // handle_hash -> the contract's OWN copy
 
-  if (store) {
+  function loadStore() {
+    if (!store) return;
+    recordsByHash.clear();
     for (const event of store.events) {
       if (event.type === "issued") {
         recordsByHash.set(event.handle_hash, {
@@ -103,6 +107,8 @@ function createApprovalContract({
     }
   }
 
+  loadStore();
+
   function refuse(refusal, detail) {
     return { kind: "refuse", refusal, detail };
   }
@@ -115,7 +121,7 @@ function createApprovalContract({
     record.status = status;
   }
 
-  function begin({ tool, args }) {
+  function beginUnlocked({ tool, args }) {
     const rendered = renderApprovalMessage(tool, args, { terminalWidth, ttlMs });
     if (!rendered.ok) return refuse(REFUSALS.UNRENDERABLE, rendered.reason);
 
@@ -177,7 +183,7 @@ function createApprovalContract({
   // + fsync before the in-memory transition, and before any forwarding by
   // the caller); step 8 is the shape of every refusal here: the child is
   // never touched.
-  function retry({ tool, args, requestState, inputResponses, projectId: retryProject, serverId: retryServer }) {
+  function retryUnlocked({ tool, args, requestState, inputResponses, projectId: retryProject, serverId: retryServer }) {
     // 1. Look up the handle by hash.
     if (typeof requestState !== "string" || !HANDLE_PATTERN.test(requestState)) {
       return refuse(REFUSALS.STATE_MALFORMED, "requestState is not a handle this contract ever issues");
@@ -242,6 +248,10 @@ function createApprovalContract({
     }
 
     const nodeAuthorized = contextMatches && toolMatches && argumentsMatch;
+    if (leaseFence) {
+      const fence = leaseFence();
+      if (!fence?.ok) return refuse(REFUSALS.LEASE_GENERATION_MISMATCH, fence?.detail || "this proxy no longer owns the active lease generation");
+    }
     let kernel;
     try {
       kernel = kernelAdapter.authorize({
@@ -274,6 +284,13 @@ function createApprovalContract({
     }
 
     // 7. Atomically consume BEFORE the caller may forward anything.
+    // Re-check the durable lease after authorization and immediately before
+    // consumption. A stale process may evaluate, but it may never consume.
+    if (leaseFence) {
+      const fence = leaseFence();
+      if (!fence?.ok) return refuse(REFUSALS.LEASE_GENERATION_MISMATCH, fence?.detail || "this proxy no longer owns the active lease generation");
+    }
+
     setStatus(record, "consumed");
     record.consumed_at = now();
 
@@ -301,6 +318,22 @@ function createApprovalContract({
           "a client holding the correct handle can fabricate an acceptance; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property",
       },
     };
+  }
+
+  function begin(input) {
+    if (!store) return beginUnlocked(input);
+    return store.withLock(() => {
+      loadStore();
+      return beginUnlocked(input);
+    });
+  }
+
+  function retry(input) {
+    if (!store) return retryUnlocked(input);
+    return store.withLock(() => {
+      loadStore();
+      return retryUnlocked(input);
+    });
   }
 
   return { begin, retry, REFUSALS, connectionEpoch };

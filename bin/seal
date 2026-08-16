@@ -60,6 +60,9 @@ function status() {
       return;
     } else {
       console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
+      if (view.lease?.pid && view.lease?.generation !== undefined) {
+        console.log(`Protection lease: pid ${view.lease.pid} generation ${view.lease.generation}`);
+      }
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
