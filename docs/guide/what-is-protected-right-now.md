@@ -194,15 +194,14 @@ approval itself rests on:
 ```
 $ seal doctor
 ASSUMPTION
-  Claude Code presents approval requests to a human and faithfully returns
-  the response. Seal cannot distinguish a human click from client-generated
-  acceptance.
+  Seal has not established whether this Claude Code configuration can
+  automatically answer elicitation requests.
 ```
 
 That is the trust boundary stated plainly: Seal binds the approval to the
-exact call, but it cannot prove a human clicked. And if Claude Code is
-configured to answer elicitation prompts automatically, doctor refuses
-loudly:
+exact call, but it cannot prove a human clicked or determine the client's
+elicitation configuration. If an auto-response signal is set in the process
+environment, doctor refuses loudly:
 
 ```
 $ SEAL_ELICITATION_AUTO_RESPONSE=1 seal doctor
@@ -212,7 +211,9 @@ REFUSED
 REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed
 ```
 
-If you see that, an auto-response hook is set in your environment; remove it
-before trusting any approval prompt in that session.
+If you see that, an auto-response signal is set in your environment; remove it
+before trusting any approval prompt in that session. If you do not see it,
+Seal has not established whether Claude Code itself can answer elicitation
+requests automatically.
 
 Next: [Knowing it worked](knowing-it-worked.md).

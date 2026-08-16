@@ -394,7 +394,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   const doctor = run(project, home, ["doctor"]);
   assert.equal(doctor.code, 0);
   assert.match(doctor.out, /^ASSUMPTION$/m);
-  assert.match(doctor.out, /Claude Code presents approval requests to a human and faithfully returns\n  the response/);
+  assert.match(doctor.out, /Seal has not established whether this Claude Code configuration can\n  automatically answer elicitation requests/);
   assert.doesNotMatch(doctor.out, /✓/);
 
   const refused = run(project, home, ["doctor"], { SEAL_ELICITATION_AUTO_RESPONSE: "accept" });
