@@ -30,8 +30,8 @@ flowchart LR
 
     receipt["Decision receipt (v2)\nSHA-256 hashes, tamper-evident"]
     gw --> receipt
-    receipt -.-> verify["seal verify — CLI\n(seal-assurance-kit)"]
-    receipt -.-> browser["seal-check\nbrowser wasm verifier"]
+    receipt -.-> verify["seal verify — CLI\n(seal-assurance-kit;\nshared kernel wasm)"]
+    receipt -.-> browser["seal-check — browser\nshared kernel wasm"]
     receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
     verify -.-> action["seal-verify-action:\ndownstream-stricter fork of\nthe verify closure, as a CI gate"]
 
@@ -52,7 +52,14 @@ flowchart LR
   **TCB** (trusted, not proven); it is tied to the proof by conformance testing.
 - **Receipt** — every decision emits a v2 receipt (normative spec:
   the host's [authorization decision schema](https://github.com/velvetmonkey/seal-host/blob/main/docs/AUTHORIZATION-DECISION-SCHEMA.md) §11) with derived SHA-256 hashes. Tamper-**evident**,
-  not tamper-impossible. Two independent checkers: `seal verify` (CLI) and `seal-check` (browser).
+  not tamper-impossible. `seal verify` (CLI) and `seal-check` (browser) are two
+  interfaces over a shared verification lineage, not two implementations that
+  can be expected to catch one another's faults: their current published
+  artifacts use byte-identical kernel WASM and common receipt-format semantics.
+  `seal-verify-action` is derived from the CLI closure as a downstream-stricter
+  fork. Agreement between these surfaces is useful conformance evidence, but a
+  defect in shared kernel or format logic can make them agree on the same wrong
+  answer.
 - **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
   deployed bodies (Rust, wasm, JS) agree with the proven kernel byte-for-byte over a corpus.
   Evidence, not a universal theorem.

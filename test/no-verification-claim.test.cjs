@@ -16,6 +16,28 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const BANNED = ["PASS" + " VERIFIED", "independ" + "ent"];
+const DOC_BANNED_CLAIMS = [
+  {
+    label: "two-checker independence claim",
+    pattern: new RegExp(`\\btwo\\s+${BANNED[1]}\\s+checkers?\\b`, "i"),
+  },
+  {
+    label: "published-checker independence claim",
+    pattern: new RegExp(`\\b${BANNED[1]}\\s+checking\\s+belongs\\s+to\\s+separately\\s+published\\s+checker\\s+surfaces\\b`, "i"),
+  },
+  {
+    label: "product receipt-independence claim",
+    pattern: new RegExp(`product(?:'s)?[^\\n]{0,120}${BANNED[1]}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
+  },
+  {
+    label: "seal-verify independence claim",
+    pattern: new RegExp(`seal verify[^\\n]{0,80}${BANNED[1]}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
+  },
+  {
+    label: "receipt verification-independence claim",
+    pattern: new RegExp(`receipt[^\\n]{0,80}verify ${BANNED[1]}ly`, "i"),
+  },
+];
 
 function scan(dir, hits) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -32,17 +54,35 @@ function scan(dir, hits) {
   }
 }
 
-test("no banned verification claim survives in bin/ spine/ contract/ test/ README.md", () => {
+function scanDocs(dir, hits) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) { scanDocs(full, hits); continue; }
+    if (!entry.isFile()) continue;
+    const text = fs.readFileSync(full, "utf8");
+    for (const { label, pattern } of DOC_BANNED_CLAIMS) {
+      const matches = new RegExp(pattern.source, `${pattern.flags}g`);
+      for (const match of text.matchAll(matches)) {
+        const line = text.slice(0, match.index).split("\n").length;
+        hits.push(`${path.relative(ROOT, full)}:${line}: ${label}: ${match[0].replace(/\s+/g, " ")}`);
+      }
+    }
+  }
+}
+
+test("no banned verification claim survives in product surfaces or docs/", () => {
   const hits = [];
   for (const dir of ["bin", "spine", "contract", "test"]) scan(path.join(ROOT, dir), hits);
-  // Step 0 is repository-wide for the *product claim*. README was the hole:
-  // this guard used to skip it. Historical docs/ still say "independently"
-  // in non-verification senses and are not this scan.
   const readme = path.join(ROOT, "README.md");
   const text = fs.readFileSync(readme, "utf8");
   for (const needle of BANNED) {
     if (text.includes(needle)) hits.push(`README.md: ${needle}`);
   }
+  // Keep the original broad product-surface bans above. Docs use the broader
+  // word legitimately in unrelated historical and design material,
+  // so scan every docs/ file for the receipt-verification claims at issue.
+  // This is a semantic scope, not a path exemption: no docs file is skipped.
+  scanDocs(path.join(ROOT, "docs"), hits);
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
 });
 
