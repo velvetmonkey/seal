@@ -9,25 +9,32 @@ archive before it attests. Uploading the archive afterwards makes the
 runner-produced evidence available to a stranger; it is not an input to the
 job.
 
-GitHub recorded this file came from this workflow on this version, and that
-public record cannot be quietly deleted. That is not a second person checking
-the file is true.
+GitHub's provenance attestation binds the downloaded archive's digest to this
+workflow and source commit while GitHub retains the attestation. A repository
+can delete its attestations, so this is not a permanent public record or a
+second person checking the file is true.
 
 ## Verify a run as a stranger
 
-Install a current [GitHub CLI](https://cli.github.com/), choose a successful
-`Docs & claims consistency` run, and download its
-`demo-receipt-provenance` artifact. Substitute the run's commit SHA for
-`RUN_SHA`:
+Install a current [GitHub CLI](https://cli.github.com/). The commands below
+select the most recent successful `Docs & claims consistency` run, reject it
+unless its job list includes a successful `demo receipt provenance` job, and
+then download its `demo-receipt-provenance` artifact:
 
 ```sh
 mkdir demo-receipt-provenance
-gh run download RUN_ID --repo velvetmonkey/seal \
+RUN_ID="$(gh run list --repo velvetmonkey/seal --workflow ci.yml --status success \
+  --limit 1 --json databaseId --jq '.[0].databaseId')"
+test -n "$RUN_ID"
+test "$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json jobs \
+  --jq '[.jobs[] | select(.name == "demo receipt provenance" and .conclusion == "success")] | length')" = 1
+RUN_SHA="$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json headSha --jq .headSha)"
+gh run download "$RUN_ID" --repo velvetmonkey/seal \
   --name demo-receipt-provenance --dir demo-receipt-provenance
 gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz \
   --repo velvetmonkey/seal \
   --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml \
-  --source-digest RUN_SHA \
+  --source-digest "$RUN_SHA" \
   --deny-self-hosted-runners
 ```
 
