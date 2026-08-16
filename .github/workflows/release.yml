@@ -29,8 +29,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # Publishing is the one act that cannot be undone, so it fails closed.
+      # If origin cannot answer for its release tags, this refuses; ordinary
+      # product tests do not, because they consume the single version-identity
+      # job in ci.yml instead of asking origin themselves.
+      - name: Refuse to publish when release tags cannot be read
+        run: node scripts/check-version-identity.cjs
       - name: Build the one Linux x86-64 install artifact
         run: node scripts/build-dist.cjs --out "$RUNNER_TEMP/dist"
+      - name: Require the artifact name to be the released identity
+        run: node scripts/check-artifact-identity.cjs --dist "$RUNNER_TEMP/dist"
       - name: Require the artifact version to match the tag
         run: |
           version="$(tr -d '\n' < VERSION)"

@@ -21,11 +21,11 @@ cd /tmp
 git clone https://github.com/velvetmonkey/seal
 cd seal
 node scripts/build-dist.cjs
-./dist/seal-v0.2.0-rc.2-linux-x64 --sha256 b54d3541fde0d4415ef8c2ff644f380c4f5a7d4b5a14bedc85276275ade9a657 --bytes 6128588 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 b54d3541fde0d4415ef8c2ff644f380c4f5a7d4b5a14bedc85276275ade9a657 --bytes 6128588 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-linux-x64
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.gad2fed0-linux-x64
 sha256 b54d3541fde0d4415ef8c2ff644f380c4f5a7d4b5a14bedc85276275ade9a657
 bytes 6128588
 tree da757d7fb7d3f0bfea5ceb0e2e6f2259634d1a40ecef2859e82afd57c42bdc4d
@@ -35,7 +35,7 @@ command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
 tree da757d7fb7d3f0bfea5ceb0e2e6f2259634d1a40ecef2859e82afd57c42bdc4d
 ```
 
-Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
+A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
