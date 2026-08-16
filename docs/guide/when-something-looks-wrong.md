@@ -364,28 +364,29 @@ you. No approval should be trusted until the hook is removed.
 
 ## From `seal verify`
 
-The optional verifier needs a pinned runtime file before it can inspect a
-kernel receipt. Each runtime refusal below names the exact cache path and the
-source it tried, gives the next `seal verify` command, and means the receipt
-was not inspected.
+The optional verifier reads and parses the receipt before it obtains the
+pinned runtime needed to re-derive a kernel receipt. Each runtime refusal
+below names the exact cache path and source it tried, gives the next `seal
+verify` command, and says whether the runtime file was changed.
 
-### `runtime_download_no_network`
+### `runtime_download_failed`
 
-Seal could not reach the named pinned runtime source because this machine has
-no network connection. Connect it to the network, then run the printed `seal
-verify` command. Seal did not write the missing runtime file.
+The fetch to the named pinned runtime source failed; the refusal includes the
+underlying fetch error. This does not establish why it failed or whether the
+machine is offline. Check the source and its network path, then run the
+printed `seal verify` command. Seal did not write the missing runtime file.
 
 ### `runtime_download_not_found`
 
-The named pinned runtime file was absent from the source (HTTP 404). Check
-that the pinned runtime revision is published, then run the printed `seal
-verify` command. Seal did not write the missing runtime file.
+The named source responded HTTP 404 for the pinned runtime file. Check that
+the pinned runtime revision is published, then run the printed `seal verify`
+command. Seal did not write the missing runtime file.
 
 ### `runtime_download_unavailable`
 
-The named runtime source responded but could not provide the pinned file for a
-reason other than not found. Check the runtime source, then run the printed
-`seal verify` command. Seal did not write the missing runtime file.
+The named runtime source responded with the HTTP status in the refusal. Check
+the runtime source, then run the printed `seal verify` command. Seal did not
+write the missing runtime file.
 
 ### `runtime_cache_unreadable`
 
@@ -395,9 +396,10 @@ cached runtime file.
 
 ### `spine_receipt_use_separate_checker`
 
-You pointed `seal verify` at one of the gate's own receipts. By design the
-binary does not verify its own receipts; the message hands you the separate
-checker command to run instead. Nothing is wrong with the receipt.
+You pointed `seal verify` at one of the gate's own receipts. The format is
+recognized, but this binary does not verify its own receipts; the message
+hands you the separate checker command to run instead. Use that checker to
+learn whether the receipt is valid.
 
 ## Platform and version refusals
 

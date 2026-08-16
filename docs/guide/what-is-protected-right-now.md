@@ -188,10 +188,9 @@ again.
 
 One honest wrinkle: `seal verify` can leave a *kernel* receipt (a different
 format) in the same directory, and `seal status` then prints
-`Receipt unreadable: … (missing decision or receipt time)` for it. The file
-is not damaged — it is a format this listing deliberately does not parse.
-That wording is misleading and is recorded as an open finding; if the named
-file is one `seal verify` accepts, nothing is wrong.
+`Receipt unreadable: … (missing decision or receipt time)` for it. That line
+means only that this listing does not parse the kernel format; use `seal verify`
+to check a named kernel receipt.
 
 ## `seal doctor`
 
