@@ -67,7 +67,7 @@ function guideTokens() {
   assert.equal(
     digest,
     GUIDE_SHA256,
-    `${GUIDE}: content changed; review the whole guide and intentionally re-pin its sha256`,
+    `${GUIDE}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
   );
   const occurrences = new Map();
   for (const match of text.matchAll(/^### `([a-z_]+)`/gm)) {
