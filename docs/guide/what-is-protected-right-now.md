@@ -12,9 +12,9 @@ A healthy protected project, while a Claude Code session is running:
 ```
 $ seal status
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
-Protection: ACTIVE notes.delete_all_notes (/home/monkey/scratch/opguide-run/home/.local/share/seal/projects/9852104386c7756d6abbd76408f7014b/state.json)
-Receipts: 6 stored in /home/monkey/scratch/opguide-run/home/.local/share/seal/receipts
-Most recent (by write time): BLOCK at receipt time 1786795258224 (receipt-1786795258224-3152203-0002-BLOCK.json)
+Protection: PENDING RESTART db.write (/tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/ba09bb02a004f37efa3c3b76280c7d23/state.json)
+Receipts: 1 stored in /tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/guide-example/receipts
+Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
 ```
 
 Three parts, always in this order:
@@ -151,8 +151,8 @@ Three states:
 ## The Receipts lines
 
 ```
-Receipts: 6 stored in /home/monkey/scratch/opguide-run/home/.local/share/seal/receipts
-Most recent (by write time): BLOCK at receipt time 1786795258224 (receipt-1786795258224-3152203-0002-BLOCK.json)
+Receipts: 1 stored in /tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/guide-example/receipts
+Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
 ```
 
 "Most recent (by write time)" is exactly that: the newest receipt file, not a
