@@ -45,6 +45,22 @@ jobs:
           test "$GITHUB_REF_NAME" = "v$version"
           test -f "$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
           grep -F "seal-v${version}-linux-x64" "$RUNNER_TEMP/dist/SHA256SUMS"
+      - name: Claude Code evidence must name this exact artifact
+        run: |
+          read -r digest bytes name < "$RUNNER_TEMP/dist/SHA256SUMS"
+          # Manual acceptance evidence gates the release only when it exists,
+          # and only when it names THIS artifact: a pack whose recorded file
+          # hashes or artifact identity do not hold fails the release, while an
+          # absent pack states the untested row and continues.
+          client_identity_args=()
+          if [[ -n "${SEAL_CLAUDE_CODE_EXECUTABLE_SHA256:-}" ]]; then
+            client_identity_args=(--client-executable-sha256 "$SEAL_CLAUDE_CODE_EXECUTABLE_SHA256")
+          fi
+          node scripts/check-cc-evidence.mjs evidence/claude-code \
+            --release --artifact-sha256 "$digest" --artifact-bytes "$bytes" \
+            --label-out "$RUNNER_TEMP/claude-code-label.txt" \
+            "${client_identity_args[@]}"
+
       - name: Publish the immutable release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,7 +84,11 @@ jobs:
             "    ./${artifact_name} --sha256 ${digest} --bytes ${bytes} --prefix ~/.local" \
             '' \
             'Altered bytes refuse. A missing, truncated or unreadable file refuses by name.' \
-            'This file is not a signature and not a compiled native binary. Node >= 20 is required.' > "$notes"
+            'This file is not a signature and not a compiled native binary. Node >= 20 is required.' \
+            '' \
+            'Claude Code integration status for this artifact:' \
+            '' > "$notes"
+          sed 's/^/    /' "$RUNNER_TEMP/claude-code-label.txt" >> "$notes"
           prerelease=()
           if [[ "$version" == *rc* ]]; then
             prerelease+=(--prerelease)
