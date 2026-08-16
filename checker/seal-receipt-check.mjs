@@ -145,7 +145,7 @@ function main(argv) {
   try {
     const pubKeyHex = resolvePubkey(args[keyIndex + 1]);
     const result = checkReceipt(receipt, pubKeyHex);
-    process.stdout.write(`ACCEPT ${result.decision} ${result.tool} — decision, tool, arguments and signature all match the sealed commitments\n`);
+    process.stdout.write(`ACCEPT ${result.decision} ${result.tool} — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.\n`);
     process.exit(0);
   } catch (error) {
     if (error instanceof Refusal) {

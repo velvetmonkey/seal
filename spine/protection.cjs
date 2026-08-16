@@ -17,6 +17,19 @@ const STATES = Object.freeze({
   DRIFTED: "DRIFTED",
   BROKEN: "BROKEN",
 });
+const RECEIPT_KEY_CODES = Object.freeze({
+  directoryInvalid: "receipt_key_directory_invalid",
+  directoryPermissions: "receipt_key_directory_permissions",
+  directoryUnreadable: "receipt_key_directory_unreadable",
+  empty: "receipt_key_empty",
+  generationFailed: "receipt_key_generation_failed",
+  incomplete: "receipt_key_incomplete",
+  invalid: "receipt_key_invalid",
+  mismatch: "receipt_key_mismatch",
+  notRegular: "receipt_key_not_regular",
+  permissions: "receipt_key_permissions",
+  unreadable: "receipt_key_unreadable",
+});
 
 function sealVersion() {
   return require("./version.cjs").requireMatchingVersion();
@@ -49,6 +62,150 @@ function realProjectRoot(projectRoot) {
 
 function dataHome(env = process.env) {
   return env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+}
+
+function receiptKeyPaths(env = process.env) {
+  const directory = path.join(dataHome(env), "seal", "keys");
+  return {
+    directory,
+    privateKey: path.join(directory, "receipt-ed25519"),
+    publicKey: path.join(directory, "receipt-ed25519.pub"),
+  };
+}
+
+function receiptKeyStat(filePath, label) {
+  let stat;
+  try {
+    stat = fs.lstatSync(filePath);
+  } catch (error) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.unreadable, `${label} receipt key cannot be inspected: ${filePath}: ${error.message}`);
+  }
+  if (!stat.isFile()) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.notRegular, `${label} receipt key is not a regular file: ${filePath}`);
+  }
+  return stat;
+}
+
+function receiptKeyExists(filePath, label) {
+  try {
+    fs.lstatSync(filePath);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw new ProtectionError(RECEIPT_KEY_CODES.unreadable, `${label} receipt key cannot be inspected: ${filePath}: ${error.message}`);
+  }
+}
+
+function readReceiptKey(filePath, label, expectedMode) {
+  const stat = receiptKeyStat(filePath, label);
+  const mode = stat.mode & 0o777;
+  if ((mode & 0o400) === 0) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.unreadable, `${label} receipt key is unreadable: ${filePath}`);
+  }
+  if (mode !== expectedMode) {
+    throw new ProtectionError(
+      RECEIPT_KEY_CODES.permissions,
+      `${label} receipt key has mode ${mode.toString(8).padStart(4, "0")}; required ${expectedMode.toString(8).padStart(4, "0")}: ${filePath}`,
+    );
+  }
+  let bytes;
+  try {
+    bytes = fs.readFileSync(filePath);
+  } catch (error) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.unreadable, `${label} receipt key cannot be read: ${filePath}: ${error.message}`);
+  }
+  if (bytes.length === 0 || bytes.toString("utf8").trim() === "") {
+    throw new ProtectionError(RECEIPT_KEY_CODES.empty, `${label} receipt key is empty: ${filePath}`);
+  }
+  return bytes;
+}
+
+function writeNewReceiptKey(filePath, bytes, mode) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "wx", mode);
+    fs.fchmodSync(fd, mode);
+    fs.writeFileSync(fd, bytes);
+    fs.fsyncSync(fd);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+function loadReceiptSigner(env = process.env, announce = () => {}) {
+  const locations = receiptKeyPaths(env);
+  let directoryExisted;
+  let directory;
+  try {
+    directoryExisted = fs.existsSync(locations.directory);
+    fs.mkdirSync(locations.directory, { recursive: true, mode: 0o700 });
+    if (!directoryExisted) fs.chmodSync(locations.directory, 0o700);
+    directory = fs.lstatSync(locations.directory);
+  } catch (error) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.directoryUnreadable, `receipt key directory cannot be used: ${locations.directory}: ${error.message}`);
+  }
+  if (!directory.isDirectory()) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.directoryInvalid, `receipt key directory is not a directory: ${locations.directory}`);
+  }
+  const directoryMode = directory.mode & 0o777;
+  if (directoryMode !== 0o700) {
+    throw new ProtectionError(
+      RECEIPT_KEY_CODES.directoryPermissions,
+      `receipt key directory has mode ${directoryMode.toString(8).padStart(4, "0")}; required 0700: ${locations.directory}`,
+    );
+  }
+
+  const privateExists = receiptKeyExists(locations.privateKey, "private");
+  const publicExists = receiptKeyExists(locations.publicKey, "public");
+  if (privateExists !== publicExists) {
+    throw new ProtectionError(
+      RECEIPT_KEY_CODES.incomplete,
+      `receipt signing key is incomplete; both files must exist or both must be absent: ${locations.privateKey}, ${locations.publicKey}`,
+    );
+  }
+
+  if (!privateExists) {
+    const signer = require("./receipt-seal.cjs").generateSigner();
+    const privatePem = signer.privateKey.export({ type: "pkcs8", format: "pem" });
+    try {
+      writeNewReceiptKey(locations.privateKey, privatePem, 0o600);
+      writeNewReceiptKey(locations.publicKey, `${signer.publicKeyHex}\n`, 0o644);
+      const directoryFd = fs.openSync(locations.directory, "r");
+      try { fs.fsyncSync(directoryFd); } finally { fs.closeSync(directoryFd); }
+    } catch (error) {
+      if (error instanceof ProtectionError) throw error;
+      throw new ProtectionError(RECEIPT_KEY_CODES.generationFailed, `receipt signing key could not be created: ${error.message}`);
+    }
+    announce([
+      "SEAL RECEIPT SIGNING KEY CREATED",
+      `Public key: ${signer.publicKeyHex}`,
+      `Public key file: ${locations.publicKey}`,
+      "Record this public key somewhere this machine cannot rewrite.",
+      "There is no private-key backup: losing it affects future signatures only. Never copy the private key to another machine.",
+    ].join("\n") + "\n");
+    return signer;
+  }
+
+  const privateBytes = readReceiptKey(locations.privateKey, "private", 0o600);
+  const publicBytes = readReceiptKey(locations.publicKey, "public", 0o644);
+  const publicHex = publicBytes.toString("utf8").trim();
+  if (!/^[0-9a-f]{64}$/.test(publicHex)) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.invalid, `public receipt key is not 32-byte lowercase hex: ${locations.publicKey}`);
+  }
+  let privateKey;
+  let publicKey;
+  let derivedHex;
+  try {
+    privateKey = crypto.createPrivateKey(privateBytes);
+    publicKey = crypto.createPublicKey(privateKey);
+    derivedHex = require("./receipt-seal.cjs").publicKeyHex(publicKey);
+  } catch (error) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.invalid, `private receipt key is invalid: ${locations.privateKey}: ${error.message}`);
+  }
+  if (derivedHex !== publicHex) {
+    throw new ProtectionError(RECEIPT_KEY_CODES.mismatch, "public receipt key does not match the private receipt key");
+  }
+  return { privateKey, publicKey, publicKeyHex: publicHex };
 }
 
 function projectId(projectRoot) {
@@ -701,6 +858,7 @@ module.exports = {
   doctor,
   localOverrideExists,
   listServerTools,
+  loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
   processStartWitness,
@@ -710,6 +868,7 @@ module.exports = {
   projectId,
   readProjectServer,
   readState,
+  receiptKeyPaths,
   realProjectRoot,
   statePathFor,
   stateWithProject,
