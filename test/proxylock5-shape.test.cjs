@@ -8,6 +8,11 @@ const storePath = path.join(__dirname, "../spine/store.cjs");
 
 const productRoots = ["spine", "bin", "contract"];
 
+// This is a deliberately partial common-spelling regression guard. It keeps
+// the ordinary direct and optional-chaining spellings visible; the tests below
+// pin the known forms and the inventoried product-root boundary that it does
+// not cover.
+
 function productSources() {
   const files = [];
   for (const root of productRoots) {
@@ -75,6 +80,11 @@ function withoutComments(source) {
   return result;
 }
 
+function rawProcessKillReferences(source) {
+  const stripped = withoutComments(source);
+  return [...stripped.matchAll(/\bprocess\s*(?:\.\s*|\?\.\s*)kill\b/g)];
+}
+
 function functionRange(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert.ok(start >= 0, `${name} must exist`);
@@ -88,7 +98,7 @@ function functionRange(source, name) {
   assert.fail(`${name} must have a complete body`);
 }
 
-test("every protection liveness verdict is witness-gated", () => {
+test("current protection liveness verdicts use the witness gate", () => {
   const source = withoutComments(fs.readFileSync(protectionPath, "utf8"));
   const livePidUses = [...source.matchAll(/\blivePid\s*\(/g)].map((match) => match.index);
   assert.equal(livePidUses.length, 2, "livePid must remain private to its definition and guarded predicate");
@@ -100,12 +110,12 @@ test("every protection liveness verdict is witness-gated", () => {
   assert.doesNotMatch(source, /if \([^\n]*livePid\([^\n]*\)[^\n]*\)\s*\{[\s\S]*?active_claude_session/);
 });
 
-test("raw process liveness primitives stay centralized behind the witness predicate", () => {
+test("the common-spelling guard covers direct and optional process.kill", () => {
   const references = [];
   const destructures = [];
   for (const file of productSources()) {
     const source = withoutComments(fs.readFileSync(file, "utf8"));
-    for (const match of source.matchAll(/\bprocess\s*\.\s*kill\b/g)) references.push({ file, index: match.index });
+    for (const match of rawProcessKillReferences(source)) references.push({ file, index: match.index });
     for (const match of source.matchAll(/\{[^{}]*\bkill\b(?:\s*:\s*[A-Za-z_$][\w$]*)?[^{}]*\}\s*=\s*(?:process\b|require\s*\(\s*["'](?:node:)?process["']\s*\))/g)) {
       destructures.push({ file, index: match.index });
     }
@@ -118,6 +128,34 @@ test("raw process liveness primitives stay centralized behind the witness predic
   const [livePidStart, livePidEnd] = functionRange(protectionSource, "livePid");
   assert.ok(references[0].index > livePidStart && references[0].index < livePidEnd,
     "the process.kill primitive must remain inside private livePid");
+  assert.equal(rawProcessKillReferences("try { process?.kill(pid, 0); } catch {} ").length, 1,
+    "the common optional-chaining spelling must remain covered");
+});
+
+test("known raw-liveness blind spots remain outside the common-spelling guard", () => {
+  const blindSpots = {
+    "computed property": "process[\"kill\"](pid, 0);",
+    "dynamic property": "const method = \"kill\"; process[method](pid, 0);",
+    "Reflect.get": "Reflect.get(process, \"kill\")(pid, 0);",
+    "whole-object alias": "const proc = process; proc.kill(pid, 0);",
+    "node:process namespace": "const nodeProcess = require(\"node:process\"); nodeProcess.kill(pid, 0);",
+    "/proc existence predicate": "fs.existsSync(`/proc/${pid}`);",
+    "spawnSync kill -0": "spawnSync(\"kill\", [\"-0\", String(pid)]);",
+  };
+
+  for (const [name, source] of Object.entries(blindSpots)) {
+    assert.equal(rawProcessKillReferences(source).length, 0, `${name} must remain outside the guard`);
+  }
+});
+
+test("the guard does not scan the test-support scope", () => {
+  const supportEscape = "function supportEscape(pid) { try { process[\"kill\"](pid, 0); return true; } catch { return false; } }";
+  assert.equal(rawProcessKillReferences(supportEscape).length, 0,
+    "the test-support fixture is a known lexical blind spot");
+  assert.ok(rawProcessKillReferences(supportEscape.replace("process[\"kill\"]", "process.kill")).length === 1,
+    "the support fixture still demonstrates a raw liveness spelling");
+  assert.equal(productSources().some((file) => file.includes(`${path.sep}test-support${path.sep}`)), false,
+    "test-support must remain outside the inventoried product roots");
 });
 
 test("store has no raw liveness predicate around the shared guarded one", () => {
