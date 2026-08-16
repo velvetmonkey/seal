@@ -40,7 +40,7 @@ jobs:
 
           gate_status=0
           expected_zero=0
-          minimum_tests=148
+          minimum_tests=172
           if (( node_status != 0 )); then
             echo "::error::node --test exited $node_status"
             gate_status=1
@@ -120,3 +120,11 @@ jobs:
         run: node --test --test-name-pattern 'no banned verification claim' test/no-verification-claim.test.cjs
       - name: Published dist pin must match a freshly built artifact
         run: node --test test/dist-pin.test.cjs
+      - name: Any committed Claude Code evidence must verify
+        shell: bash
+        run: |
+          if find evidence/claude-code -type f -name manifest.json 2>/dev/null | grep -q .; then
+            node scripts/check-cc-evidence.mjs evidence/claude-code
+          else
+            echo "no Claude Code evidence pack in this tree; the client row stays UNTESTED"
+          fi
