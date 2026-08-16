@@ -102,7 +102,12 @@ node harness/claude-code/cc-harness.cjs next --run-dir /tmp/cc-acceptance
 
 `next` is the whole run: it takes the machine readings, prints what the human
 must do, launches the recorded session, and stops. Repeat it until it says the
-run is complete; the last step writes the pack. Run it in a terminal at least
+run is complete; the last step writes the pack under `<run-dir>/pack`. To write
+it straight into a checkout instead, name the destination:
+
+```sh
+node harness/claude-code/cc-harness.cjs finish --run-dir /tmp/cc-acceptance --out .
+``` Run it in a terminal at least
 80 columns wide — the approval dialog is measured at 80, and a narrower
 terminal would wrap the effect out of the recording.
 
