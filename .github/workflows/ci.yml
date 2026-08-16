@@ -62,7 +62,7 @@ jobs:
         uses: actions/attest@v4
         with:
           subject-path: ${{ runner.temp }}/demo-receipt-evidence.tgz
-      - name: Verify the attestation as a stranger would
+      - name: Verify the attestation with the GitHub Actions token
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,7 +110,7 @@ jobs:
             --source-digest "$GITHUB_SHA" \
             --deny-self-hosted-runners
           echo "EXPECTED: verification does not inspect an unrelated local workflow copy."
-      - name: Upload runner-produced evidence for stranger verification
+      - name: Upload runner-produced evidence for signed-in reader download
         uses: actions/upload-artifact@v4
         with:
           name: demo-receipt-provenance

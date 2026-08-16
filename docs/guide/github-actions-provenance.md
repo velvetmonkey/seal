@@ -6,20 +6,29 @@ The `demo receipt provenance` job in
 inside that runner, archives them there, and then asks GitHub to attest the
 archive. The job does not download a receipt, checker transcript, or evidence
 archive before it attests. Uploading the archive afterwards makes the
-runner-produced evidence available to a stranger; it is not an input to the
-job.
+runner-produced evidence available to a signed-in GitHub reader with access to
+download Actions artifacts; it is not an input to the job.
 
 GitHub's provenance attestation binds the downloaded archive's digest to this
-workflow and source commit while GitHub retains the attestation. A repository
-can delete its attestations, so this is not a permanent public record or a
-second person checking the file is true.
+workflow and source commit while GitHub retains the attestation. GitHub lets a
+repository [delete its own copy](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/manage-attestations),
+which can remove the GitHub API verification route used below. For a public
+repository, GitHub also writes a copy to
+Sigstore's [immutable, publicly readable transparency
+log](https://docs.github.com/en/actions/concepts/security/artifact-attestations).
+An attestation does not say whether the archive's contents are correct; it
+binds the artifact to build provenance.
 
-## Verify a run as a stranger
+## Verify a run with a GitHub account
 
-Install a current [GitHub CLI](https://cli.github.com/). The commands below
-select the most recent successful `Docs & claims consistency` run, reject it
-unless its job list includes a successful `demo receipt provenance` job, and
-then download its `demo-receipt-provenance` artifact:
+You need a GitHub account and must authenticate the current
+[GitHub CLI](https://cli.github.com/) with `gh auth login` before the first
+command: GitHub's [artifact download endpoint requires
+authentication](https://docs.github.com/en/rest/actions/artifacts#download-an-artifact),
+including for artifacts from this public repository. The commands below select
+the most recent successful `Docs & claims consistency` run, reject it unless
+its job list includes a successful `demo receipt provenance` job, and then
+download its `demo-receipt-provenance` artifact:
 
 ```sh
 mkdir demo-receipt-provenance

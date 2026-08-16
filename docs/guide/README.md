@@ -54,8 +54,8 @@ as the source of the public key you supply; a key taken from the same machine
 establishes self-consistency, not that the recorded decision happened.
 
 For the CI demo receipt, [GitHub Actions provenance](github-actions-provenance.md)
-lets a stranger verify the runner and workflow that produced a published
-evidence archive. It does not establish the receipt is true.
+lets a signed-in GitHub reader check the runner and workflow that produced a
+published evidence archive. It does not establish the receipt is true.
 
 ## The path through this guide
 
