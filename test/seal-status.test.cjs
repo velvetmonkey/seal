@@ -34,11 +34,11 @@ function writeOwnedState(root, project, statePath, fields) {
   }));
 }
 
-function run(args, root, input = "", cwd = process.cwd()) {
+function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
   try {
     return { code: 0, out: execFileSync(process.execPath, [CLI, ...args], {
       cwd,
-      env: { ...process.env, HOME: root, XDG_DATA_HOME: path.join(root, ".local", "share"), SEAL_CACHE_DIR: path.join(root, ".cache", "seal") },
+      env: { ...process.env, HOME: root, XDG_DATA_HOME: path.join(root, ".local", "share"), SEAL_CACHE_DIR: path.join(root, ".cache", "seal"), ...extraEnv },
       input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
     }) };
   } catch (error) { return { code: error.status, out: `${error.stdout || ""}${error.stderr || ""}` }; }
@@ -78,6 +78,34 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Protection: STALE db\.write /m);
 
+});
+
+test("status refuses non-Linux before a null-witness lease liveness comparison", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-non-linux-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "ACTIVE",
+    guardTool: "write",
+    receiptsDir: path.dirname(statePath),
+    // On the simulated host processStartWitness returns null. Without bin/seal's
+    // status gate, this live PID and null === null would be reported ACTIVE.
+    lease: { pid: process.pid, startWitness: null, generation: 5 },
+  });
+
+  const result = run(["status"], root, "", project, {
+    SEAL_SPINE_PLATFORM: "darwin",
+    SEAL_SPINE_ARCH: "arm64",
+  });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
+  assert.match(result.out, /^REFUSE unsupported_platform: this is darwin-arm64$/m);
+  assert.doesNotMatch(result.out, /^Protection: (?:ACTIVE|STALE) /m);
+  assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
 
 test("status reads the protected project's recorded receipt directory", () => {

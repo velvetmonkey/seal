@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { platformSupport } = require("./platform.cjs");
 const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
@@ -367,7 +368,9 @@ function livePid(pid) {
 }
 
 function processStartWitness(pid) {
-  if (!Number.isInteger(pid) || pid <= 0 || process.platform !== "linux") return null;
+  // platformSupport's test-only override lets product-path tests exercise the
+  // same unavailable witness that a real non-Linux host would produce.
+  if (!Number.isInteger(pid) || pid <= 0 || platformSupport().platform !== "linux") return null;
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
     const close = stat.lastIndexOf(")");
