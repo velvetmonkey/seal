@@ -54,6 +54,8 @@ jobs:
           subject-path: ${{ runner.temp }}/demo-receipt-evidence.tgz
       - name: Verify the attestation as a stranger would
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh attestation verify "$RUNNER_TEMP/demo-receipt-evidence.tgz" \
@@ -63,6 +65,8 @@ jobs:
             --deny-self-hosted-runners
       - name: "Negative control: a different local workflow is not checked by attestation verification"
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           altered="$RUNNER_TEMP/ci.yml.altered"
