@@ -15,13 +15,13 @@ const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.js
 const runtimeBase = process.env.SEAL_RUNTIME_BASE_URL ||
   `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
 const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
-const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
-const receiptDir = path.join(dataHome, "seal", "receipts");
+const shippedRuntime = path.join(ROOT, "runtime");
+const shippedRuntimeFiles = Object.entries(manifest.files).filter(([relative]) => relative.startsWith("kernel/"));
 
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
-function inspectRuntime() {
-  for (const [relative, expected] of Object.entries(manifest.files)) {
-    const target = path.join(cache, relative);
+function inspectRuntimeAt(directory, files) {
+  for (const [relative, expected] of files) {
+    const target = path.join(directory, relative);
     try {
       if (!fs.statSync(target).isFile()) return { present: false, state: "absent", reason: `${relative} is not a file` };
       const got = sha256(fs.readFileSync(target));
@@ -32,25 +32,43 @@ function inspectRuntime() {
   }
   return { present: true };
 }
+function inspectRuntime() {
+  // The installed artifact ships the kernel, while src/verify.cjs is fetched
+  // into the cache for the optional verification command. Never treat a bad
+  // shipped kernel as a reason to use an unchecked fallback.
+  const shipped = inspectRuntimeAt(shippedRuntime, shippedRuntimeFiles);
+  if (shipped.present || shipped.state === "integrity check failed") return shipped;
+  return inspectRuntimeAt(cache, Object.entries(manifest.files));
+}
 function status() {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
     ? `Runtime: present seal-assurance-kit@${manifest.commit}`
     : runtime.state === "integrity check failed"
-      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; cached bytes do not match the published runtime)`
+      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
       : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
 
+  let receiptDir;
   try {
     const { filePath, state } = protection.stateWithProject(process.cwd(), process.env);
     const view = protection.protectionView(state);
     if (!view || view.state === "UNPROTECTED") {
       console.log("Protection: - outside Seal");
+      console.log("Receipts: unavailable outside a protected project");
+      console.log("Most recent: no project receipt directory is recorded");
+      return;
     } else {
       console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
+      if (typeof state.receiptsDir === "string") receiptDir = state.receiptsDir;
+      else {
+        console.log("Receipts: unavailable (protected project has no recorded receipt directory)");
+        console.log("Most recent: no project receipt directory is recorded");
+        return;
+      }
     }
   } catch (error) {
     console.log(`Protection: BROKEN (${error.message})`);
