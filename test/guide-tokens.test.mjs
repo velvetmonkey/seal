@@ -34,7 +34,7 @@ const SOURCES = [
   { file: "spine/platform.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "unsupported_platform" },
   { file: "spine/integrity.cjs", patterns: [/\.code = "([a-z_]+)"/g, /\bcode: "([a-z_]+)"/g], sentinel: "artifact_truncated" },
   { file: "spine/version.cjs", patterns: [/error\.code = "([a-z_]+)"/g], sentinel: "version_mismatch" },
-  { file: "bin/seal", patterns: [/\b(spine_receipt_use_separate_checker)\b/g], sentinel: "spine_receipt_use_separate_checker" },
+  { file: "bin/seal", patterns: [/\b(spine_receipt_use_separate_checker)\b/g, /runtimeRefusal\("([a-z_]+)"/g], sentinel: "spine_receipt_use_separate_checker" },
   { file: "scripts/install.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "pin_missing" },
   { file: "scripts/seal-launch.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "install_record_missing" },
   { file: "scripts/build-dist.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "node_missing" },
