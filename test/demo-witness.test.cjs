@@ -11,7 +11,15 @@ const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
 const test = require("node:test");
 
+const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(__dirname, "..", "bin", "seal");
+
+// Match the repository's existing path.relative(ROOT, ...) convention used by
+// output and inventory diagnostics: semantic output assertions must not depend
+// on the checkout's absolute filesystem location.
+function repositoryRelativeOutput(text) {
+  return text.replaceAll(ROOT, ".");
+}
 
 function runSeal(args, input) {
   try {
@@ -47,6 +55,8 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   await run.waitFor(/Approve\? \[y\/N\]/);
   child.stdin.write("y\n");
   const code = await run.exit;
+  run.out = repositoryRelativeOutput(run.out);
+  run.err = repositoryRelativeOutput(run.err);
   assert.equal(code, 0, run.out + run.err);
 
   // Printed witness, in the specified shape.
