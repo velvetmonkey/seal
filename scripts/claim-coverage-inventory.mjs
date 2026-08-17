@@ -67,6 +67,11 @@ function main() {
       rows.push({ file: rel, kind });
     }
   }
+  if (rows.length === 0) {
+    console.error("ERROR family claim-bearing population is empty; refusing to treat silence as complete claim coverage");
+    process.exitCode = 1;
+    return;
+  }
   const counts = Object.fromEntries(["full", "substring", "uncovered"].map((kind) => [kind, rows.filter((row) => row.kind === kind).length]));
   const actualUncovered = rows.filter((row) => row.kind === "uncovered").map((row) => row.file).sort();
   const listed = [...allowlist].sort();
