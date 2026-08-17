@@ -30,6 +30,13 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 
+// Match the repository's existing path.relative(ROOT, ...) convention used by
+// output and inventory diagnostics: semantic command assertions must not
+// depend on the checkout's absolute filesystem location.
+function repositoryRelativeOutput(text) {
+  return text.replaceAll(ROOT, ".");
+}
+
 // A PATH that cannot see docker, lake, elan, or python even if they exist
 // elsewhere on this machine. /usr/bin:/bin is enough for `sh` and `node`.
 function strangerPath(extraBins) {
@@ -97,7 +104,7 @@ process.exit(2);
 }
 
 function assertNoForbiddenTool(command, args) {
-  const text = [command, ...args].join(" ");
+  const text = repositoryRelativeOutput([command, ...args].join(" "));
   assert.doesNotMatch(text, /\bdocker\b/i, `path invoked docker: ${text}`);
   assert.doesNotMatch(text, /\blake\b/, `path invoked lake: ${text}`);
   assert.doesNotMatch(text, /\blean\b/i, `path invoked lean: ${text}`);
