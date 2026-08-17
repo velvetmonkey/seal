@@ -17,9 +17,10 @@ Every command below ran in this order against the [`SHA256SUMS`](SHA256SUMS)-pin
 ## 1. Install
 
 ```sh
-cd /tmp
-git clone https://github.com/velvetmonkey/seal
-cd seal
+SEAL_REPO_DIR="$(mktemp -d "${TMPDIR:-/tmp}/seal-readme.XXXXXX")"
+rmdir "$SEAL_REPO_DIR"
+git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
+cd "$SEAL_REPO_DIR"
 node scripts/build-dist.cjs
 ./dist/seal-v*-linux-x64 --sha256 2896283f07c9fb60fcb64514239421be304f92b5ecb061ccba52a411ad805c53 --bytes 6143605 --prefix ~/.local
 ```
@@ -46,7 +47,10 @@ export PATH="$HOME/.local/bin:$PATH"
 The demo builds a working gate in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
 
 ```sh
-seal demo
+export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
+set -o pipefail
+seal demo | tee "$SEAL_DEMO_LOG"
+export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
 ```
 
 ```
@@ -118,10 +122,12 @@ receipts are claims, not proofs. Check one with the separate-process checker (V1
   Online: https://velvetmonkey.github.io/seal-check/ runs a supplied MCP tool-call in its browser kernel and reports its receipt checks. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
 ```
 
-The demo called its receipts claims, not proofs. Check one, with the printed command:
+The demo called its receipts claims, not proofs. Use the exact checker command your own demo run just printed; the absolute paths in the transcript above belong to that run and will not exist on your machine. The fence below resolves that same command from the demo directory you just created and the store your install wrote:
 
 ```sh
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+SEAL_CHECKER="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
+node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
 
 ```
@@ -133,8 +139,9 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded field and the same checker refuses:
 
 ```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json > /home/monkey/scratch/docsland-reader-walk-run/tampered.json
-node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c/checker/seal-receipt-check.mjs" /home/monkey/scratch/docsland-reader-walk-run/tampered.json --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
+node "$SEAL_CHECKER" "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+test "$?" -eq 1
 ```
 
 ```
@@ -148,24 +155,25 @@ REFUSE decision_binding_mismatch: the recorded decision does not match its seale
 `seal protect` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check. The `.mcp.json` below is a stand-in, pointing at Seal's demo server in this transcript's scratch run.
 
 ```sh
-mkdir -p /home/monkey/scratch/toolexists-readme-20260815/final-project
-cd /home/monkey/scratch/toolexists-readme-20260815/final-project
+export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
+mkdir -p "$SEAL_PROTECT_PROJECT" &&
+cd "$SEAL_PROTECT_PROJECT" &&
+{
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
     "db": {
-      "command": "/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal",
+      "command": "seal",
       "args": [
         "__demo-server",
-        "/home/monkey/scratch/toolexists-readme-20260815/final-project/data.txt"
+        "./data.txt"
       ]
     }
   }
 }
 EOF
-HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home \
-XDG_DATA_HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share \
-/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal protect db demo.mutate
+} &&
+seal protect db demo.mutate
 ```
 
 ```
@@ -195,10 +203,8 @@ ASSUMPTION
 ## 4. Remove
 
 ```sh
-cd /home/monkey/scratch/toolexists-readme-20260815/final-project
-HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home \
-XDG_DATA_HOME=/home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share \
-/home/monkey/scratch/toolexists-readme-20260815/prefix-final/bin/seal unprotect db
+cd "$SEAL_PROTECT_PROJECT"
+seal unprotect db
 ```
 
 ```
@@ -210,7 +216,7 @@ Protection: - outside Seal
 The project file is byte-identical before and after. `unprotect` invokes Claude Code's `claude mcp remove` to remove only the local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain. The store is read-only, so make it writable before removing Seal itself:
 
 ```sh
-rm ~/.local/bin/seal
+chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
 chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
 ```
 
