@@ -183,64 +183,7 @@ jobs:
           fi
       - name: Run and count the complete product suite
         shell: bash
-        run: |
-          output_file="$RUNNER_TEMP/seal-node-test.tap"
-          set +e
-          node --test 2>&1 | tee "$output_file"
-          node_status=${PIPESTATUS[0]}
-          set -e
-
-          gate_status=0
-          expected_zero=0
-          minimum_tests=174
-          if (( node_status != 0 )); then
-            echo "::error::node --test exited $node_status"
-            gate_status=1
-          fi
-
-          summary_value() {
-            local field="$1"
-            local count
-            count="$(grep -Ec "^# $field [0-9]+$" "$output_file")"
-            if (( count != 1 )); then
-              return 1
-            fi
-            sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$output_file"
-          }
-
-          declare -A summary summary_status
-          for field in tests pass fail skipped todo; do
-            set +e
-            summary[$field]="$(summary_value "$field")"
-            summary_status[$field]=$?
-            set -e
-            if (( summary_status[$field] != 0 )); then
-              echo "::error::node --test did not report exactly one canonical '# $field N' summary"
-              gate_status=1
-            fi
-          done
-
-          if (( summary_status[fail] == 0 && summary[fail] != expected_zero )); then
-            echo "::error::node --test reported ${summary[fail]} failures, expected ${expected_zero}"
-            gate_status=1
-          fi
-          if (( summary_status[skipped] == 0 && summary[skipped] != expected_zero )); then
-            echo "::error::node --test reported ${summary[skipped]} skipped tests, expected ${expected_zero}"
-            gate_status=1
-          fi
-          if (( summary_status[todo] == 0 && summary[todo] != expected_zero )); then
-            echo "::error::node --test reported ${summary[todo]} todo tests, expected ${expected_zero}"
-            gate_status=1
-          fi
-          if (( summary_status[tests] == 0 && summary[tests] < minimum_tests )); then
-            echo "::error::node --test ran ${summary[tests]} tests, expected at least ${minimum_tests}"
-            gate_status=1
-          fi
-          if (( summary_status[pass] == 0 && summary_status[tests] == 0 && summary[pass] != summary[tests] )); then
-            echo "::error::node --test reported ${summary[pass]} passes for ${summary[tests]} tests"
-            gate_status=1
-          fi
-          exit "$gate_status"
+        run: scripts/run-complete-product-suite.sh
 
   # demoteci4: this local job observes only values and artefacts it controls.
   # It usefully exercises the demo path, but cannot prove to itself that its
