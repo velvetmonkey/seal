@@ -716,10 +716,17 @@ gate of `Seal/SignedPolicy.lean`.
 Before signing, the signer answers `k ≈ 5` forced-choice questions
 (allow / approve / deny), generated from the policy's actual decision boundary
 and graded by **running the kernel** — there is no hand-authored answer key to
-drift from the policy. Failure does not block signing; it stamps the receipt
-`signed-without-comprehension-evidence`, permanently, and the failed boundary
-is quizzed first at the next renewal. The enemy is the reflex signature, not
-the assisted one; the record is the point. This connects to
+drift from the policy. Failure blocks signing unless the signer performs a
+signed, recorded override. A failed teach-back cannot still produce a green
+ordinary signing path: by Seal's own doctrine, a control is only real if it
+cannot be violated while still getting green. The override exists so a solo
+operator cannot wedge himself, but the override is itself a signed recorded act.
+
+Superseded default, replaced by Ben's 2026-08-09 ruling: failure did not block
+signing; it stamped the receipt `signed-without-comprehension-evidence`,
+permanently, and the failed boundary was quizzed first at the next renewal. The
+enemy in that position was the reflex signature, not the assisted one; the
+record was the point. This connects to
 `COMPREHENSION-CHECK.md` and North Star V3.3 criterion 3: the receipt records
 what the human demonstrably understood, not merely that a click happened.
 
@@ -941,8 +948,15 @@ code, are recorded in §12.4 with the same discipline.
 - **U-spec-5**: whether teach-back stamping (never blocking) is the right
   default for a single-operator deployment, where the signer and the
   policy author are the same person and the stamp shames nobody. Settled by
-  Ben's call; blocking is a one-line change and the spec takes no position
-  it can't defend.
+  Ben on 2026-08-09: block with a recorded override. His accepted argument was
+  that Seal's own doctrine says a control is only real if you cannot violate it
+  and still get a green, so a stamp you can sign through is injected rather than
+  enforced. The superseded stamp-through default remains recorded in §6 for
+  provenance. A bare block would be a one-line change; block-with-recorded-
+  override is not. It needs a receipt schema, a grant lifetime, a reversion
+  path, an escalation ladder for repeat use, and a redemption record. The real
+  cost is a subsystem, not a line, and this specification does not invent a
+  lines-of-code estimate it cannot defend.
 
 ---
 
