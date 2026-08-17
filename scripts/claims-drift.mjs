@@ -17,13 +17,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const BLOCKS = [
-  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->",
+  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/LIMITATIONS.md; CLAIM-COVERAGE: index.html
     canonical: "docs/LIMITATIONS.md", mirrors: ["index.html"] },
 ];
 
 const CLAIM_MANIFEST = [
   ["docs/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
-  ["docs/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"],
+  ["docs/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/TRUTH-BOX.md
 ];
 
 // FAMILY-SHARED:BEGIN core

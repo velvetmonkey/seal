@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const GUARD = resolve(ROOT, "scripts/claims-drift.mjs");
+const GUARD = resolve(ROOT, "scripts/claims-drift.mjs"); // CLAIM-COVERAGE: docs/LIMITATIONS.md; CLAIM-COVERAGE: docs/TRUTH-BOX.md; CLAIM-COVERAGE: index.html
 const README = resolve(ROOT, "README.md");
 const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->")
   ? README

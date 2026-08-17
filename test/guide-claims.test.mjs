@@ -24,7 +24,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 
 const REVIEWED_GUIDES = [
   {
-    file: "docs/guide/when-something-looks-wrong.md",
+    file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
     sha256: "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd",
     claims: [
       "You pointed `seal verify` at one of the gate's own receipts.",
@@ -33,7 +33,7 @@ const REVIEWED_GUIDES = [
     ],
   },
   {
-    file: "docs/guide/what-is-protected-right-now.md",
+    file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
     sha256: "1e6efc9349cc4770d3e1eaeaba9212e92cef3903dcfc0ddbc47ea514eb2eae92",
     claims: [
       "One honest wrinkle: `seal verify` can leave a *kernel* receipt (a different format) in the same directory, and `seal status` then prints `Receipt unreadable: … (missing decision or receipt time)` for it.",

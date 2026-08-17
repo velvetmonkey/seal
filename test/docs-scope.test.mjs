@@ -31,9 +31,9 @@ const FAMILY_PRODUCT_FILES = [
 
 test("each scoped document carries its exact scope signpost", () => {
   const expectedBlocks = new Map([
-    ...FAMILY_PRODUCT_FILES.map((name) => [name, FAMILY_PRODUCT_SCOPE_BLOCK]),
-    ["ARCHITECTURE.md", PRODUCT_THEN_FAMILY_SCOPE_BLOCK],
-    ["WHAT-SEAL-IS.md", POSITION_PAPER_SCOPE_BLOCK],
+    ...FAMILY_PRODUCT_FILES.map((name) => [name, FAMILY_PRODUCT_SCOPE_BLOCK]), // CLAIM-COVERAGE: docs/AUTHORIZATION-MESH.md; CLAIM-COVERAGE: docs/CLAIMS-MATRIX.md
+    ["ARCHITECTURE.md", PRODUCT_THEN_FAMILY_SCOPE_BLOCK], // CLAIM-COVERAGE: docs/ARCHITECTURE.md
+    ["WHAT-SEAL-IS.md", POSITION_PAPER_SCOPE_BLOCK], // CLAIM-COVERAGE: docs/WHAT-SEAL-IS.md
   ]);
 
   for (const [name, expectedBlock] of expectedBlocks) {
