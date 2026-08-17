@@ -14,6 +14,12 @@ Requires Node 20+, Git, and the `claude` command for Protect (check with `claude
 
 Every command below ran in this order against the [`SHA256SUMS`](SHA256SUMS)-pinned bytes. Each printed the output shown.
 
+## How it works
+
+1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
+2. **Approve per call.** Seal shows the exact guarded call. The pinned WASM answer is required before forwarding, and one-use consumption means the call will not run twice; the server's other tools remain outside Seal.
+3. **Keep the receipt.** Seal writes a signed receipt for every decision. Keep it with a public key obtained from a source you trust, then use the shipped checker or seal-check with the limits stated below.
+
 ![Seal process diagram: one exact tool call passes through the gate; unrelated routes remain outside](assets/seal-flow.svg)
 
 ## 1. Install

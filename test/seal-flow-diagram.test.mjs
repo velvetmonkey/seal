@@ -13,51 +13,67 @@ test("README places the process graphic immediately before Install", () => {
   assert.match(readme, /!\[[^\]]*\]\(assets\/seal-flow\.svg\)\n\n## 1\. Install/);
 });
 
+test("README presents the approved three-step explanation", () => {
+  assert.match(
+    readme,
+    /## How it works\n\n1\. \*\*Protect once\.\*\*[\s\S]*2\. \*\*Approve per call\.\*\*[\s\S]*3\. \*\*Keep the receipt\.\*\*/,
+  );
+});
+
 test("critical diagram labels remain searchable SVG text", () => {
   const labels = [
     "AGENT",
-    "CONFIG · READ, NOT OWNED",
+    "CONFIG",
+    "DRIFT",
     "SEAL",
+    "one tool of one server",
+    "THE GATE",
     "pinned WASM decides.",
     "Node cannot overrule",
-    "REPLAY blocked · counter stays 1",
+    "ONE USE",
+    "REPLAY REFUSED",
+    "FORWARDED",
     "MCP SERVER",
     "demo.mutate",
     "db.read",
     "fs.list",
-    "call really runs",
-    "UNPROTECTED MCP",
+    "THE REAL EFFECT",
+    "PROTECTED PATH",
+    "UNPROTECTED PATH",
   ];
   for (const label of labels) {
     assert.match(svg, new RegExp(`<text[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`));
   }
 });
 
-test("one guarded and two bypass routes terminate on the three server bars", () => {
-  assert.match(svg, /d="M866 167h244" class="accent-stroke" marker-end="url\(#arrow-accent\)"/);
-  assert.match(svg, /d="M88 122V24H1062V221H1110" class="muted-stroke" marker-end="url\(#arrow-muted\)"/);
-  assert.match(svg, /d="M126 212V640H1422V276H1296" class="muted-stroke" marker-end="url\(#arrow-muted\)"/);
-  assert.match(svg, /<rect x="1110" y="143" width="184" height="46" rx="8" class="accent-stroke"/);
-  assert.match(svg, /<rect x="1110" y="198" width="184" height="46" rx="8" class="muted-stroke"/);
-  assert.match(svg, /<rect x="1110" y="253" width="184" height="46" rx="8" class="muted-stroke"/);
+test("one guarded and two bypass routes terminate at the approved server bars", () => {
+  assert.match(svg, /d="M1177 331h142" class="accent" marker-end="url\(#arrow-accent\)"/);
+  assert.match(svg, /d="M166 368c37 0 56 6 56 43v198c0 24 12 35 39 35h1278c27 0 36-11 36-36V336h-63" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /d="M166 392c21 0 31 12 31 39v171c0 21 13 31 36 31h1306c27 0 36-11 36-36V455h-63" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /<rect x="1344" y="188" width="168" height="39" fill="#a23e22"/);
+  assert.match(svg, /<rect x="1344" y="316" width="168" height="41" fill="#66645f"/);
+  assert.match(svg, /<rect x="1344" y="434" width="168" height="42" fill="#66645f"/);
 });
 
 test("the resource effect is one and explicitly outside the gate", () => {
-  assert.match(svg, /<text x="1320" y="151"[^>]*>1<\/text>/);
-  assert.match(svg, />call really runs<\/text>/);
+  assert.match(svg, /<text x="1717" y="309"[^>]*>1<\/text>/);
+  assert.match(svg, />THE REAL EFFECT<\/text>/);
+  assert.match(svg, />changes, once\.<\/text>/);
   assert.match(svg, />outside Seal<\/text>/);
+  assert.doesNotMatch(svg, /class="muted"[^>]*marker-end[^>]*M1512 208/);
 });
 
-test("receipt mark is neutral and the pin is a drawing pin", () => {
-  assert.match(svg, /<text x="840" y="402"[^>]*>S<\/text>/);
+test("receipt uses a neutral wax seal and kernel uses an anchor", () => {
+  assert.match(svg, /<circle cx="1108" cy="404" r="14" fill="#a23e22"/);
   assert.doesNotMatch(svg, /M1007 240l9 9 18-22/);
   assert.doesNotMatch(svg, /♀/);
-  assert.match(svg, /M615 121h25M620 121v10l-6 7h28l-6-7v-10M628 138v20/);
+  assert.match(svg, /M731 358c0 17 30 17 30 0/);
 });
 
 test("configuration ownership and non-sandbox limits stay explicit", () => {
-  for (const label of ["Seal reads", "+ hashes", "Claude Code", "writes", "entry changed:", "REFUSE"]) {
+  for (const label of ["Seal read it", "and hashed it.", "never edits it", "Claude Code", "override."]) {
     assert.match(svg, new RegExp(`>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`));
   }
-  assert.match(svg, /ALSO OUTSIDE SEAL: Bash · network · subprocesses · other tools · other servers/);
+  assert.match(svg, />REFUSE<\/tspan>/);
+  assert.match(svg, /never touches Seal/);
 });
