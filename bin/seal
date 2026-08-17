@@ -201,7 +201,7 @@ async function ensureRuntime(receiptPath) {
       let got;
       try { got = sha256(fs.readFileSync(target)); }
       catch {
-        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`seal verify ${receiptPath}\`. Seal did not replace this runtime file.`);
+        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`${verifyHint(receiptPath)}\`. Seal did not replace this runtime file.`);
       }
       if (got !== expected) throw new Error(`cached runtime hash mismatch for ${relative}: ${got}`);
       continue;
@@ -214,10 +214,10 @@ async function ensureRuntime(receiptPath) {
         throw runtimeRefusal("runtime_download_failed", `Seal needs the pinned runtime file at ${target}, but it is not cached and the fetch from ${source} failed (${error.message}). Verification cannot continue without this runtime file. Restore access to that source, then run: \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
       }
       if (error.runtimeDownload === "not_found") {
-        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP 404. Check that the pinned runtime revision is published, then run \`seal verify ${receiptPath}\`. Seal did not write this runtime file.`);
+        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP 404. Check that the pinned runtime revision is published, then run \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
       }
       if (error.runtimeDownload === "unavailable") {
-        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP ${error.status}. Check the runtime source, then run \`seal verify ${receiptPath}\`. Seal did not write this runtime file.`);
+        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP ${error.status}. Check the runtime source, then run \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
       }
       throw error;
     }

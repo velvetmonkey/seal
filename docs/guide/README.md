@@ -34,11 +34,11 @@ with the digest and byte length recorded in `SHA256SUMS`:
 ```
 $ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.2/seal-v0.2.0-rc.2-linux-x64
 $ chmod +x seal-v0.2.0-rc.2-linux-x64
-$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 e4932a1962f3066dd361db372d558634b9dcfd55937e1c5c3ac64cac300eee73 --bytes 6146222
+$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546 --bytes 6146222
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/34232421d9f20709e352d8604472c5db60ae81ca2f0fcdf9839f98ceb0700b1c
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree 06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f
+tree 34232421d9f20709e352d8604472c5db60ae81ca2f0fcdf9839f98ceb0700b1c
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are

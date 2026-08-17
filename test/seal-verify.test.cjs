@@ -38,7 +38,7 @@ async function refusingRuntimeServer(statusCode) {
 const { ensureRuntime, writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
 function runtimeRefusalContext() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-runtime-refusal-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal verify runtime refusal-"));
   const cache = path.join(root, "cache");
   const dataHome = path.join(root, "data");
   const receipt = path.join(root, "receipt.json");
@@ -56,7 +56,7 @@ test("verify tells the reader how to retry when an uncached runtime fetch fails"
   assert.match(unavailable.out, new RegExp(`pinned runtime file at ${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}, but it is not cached`));
   assert.match(unavailable.out, /runtime fetch failed: [A-Za-z]+:/);
   assert.match(unavailable.out, /Verification cannot continue without this runtime file\./);
-  assert.ok(unavailable.out.includes(`Restore access to that source, then run: \`${CLI} verify ${receipt}\`.`));
+  assert.ok(unavailable.out.includes(`Restore access to that source, then run: \`${CLI} verify '${receipt}'\`.`));
   assert.ok(!fs.existsSync(runtime), "a failed fetch must leave the runtime absent");
   assert.doesNotMatch(unavailable.out, /machine has no network connection|Seal did not inspect the receipt/);
 });
@@ -80,6 +80,7 @@ test("verify names a pinned runtime absent from its source", async (t) => {
   assert.equal(absent.code, 1);
   assert.match(absent.out, /^seal: runtime_download_not_found: /);
   assert.match(absent.out, new RegExp(`${remote.base.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}/kernel/wasm/seal\\.js responded HTTP 404`));
+  assert.ok(absent.out.includes(`then run \`${CLI} verify '${receipt}'\`.`));
   assert.match(absent.out, /runtime_download_not_found/);
   assert.doesNotMatch(absent.out, /Seal did not inspect the receipt/);
 });
@@ -94,6 +95,7 @@ test("verify reports a non-404 runtime response without claiming the receipt was
   assert.equal(unavailable.code, 1);
   assert.match(unavailable.out, /^seal: runtime_download_unavailable: /);
   assert.match(unavailable.out, new RegExp(`${remote.base.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}/kernel/wasm/seal\\.js responded HTTP 503`));
+  assert.ok(unavailable.out.includes(`then run \`${CLI} verify '${receipt}'\`.`));
   assert.ok(!fs.existsSync(runtime), "a failed download must not write the runtime file");
   assert.doesNotMatch(unavailable.out, /Seal did not inspect the receipt/);
 });
@@ -105,6 +107,7 @@ test("verify names an unreadable pinned runtime cache path", async () => {
   assert.equal(unreadable.code, 1);
   assert.match(unreadable.out, /^seal: runtime_cache_unreadable: /);
   assert.match(unreadable.out, new RegExp(`runtime_cache_unreadable: .*${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}`));
+  assert.ok(unreadable.out.includes(`then run \`${CLI} verify '${receipt}'\`.`));
   assert.doesNotMatch(unreadable.out, /Seal did not inspect the receipt/);
 });
 
