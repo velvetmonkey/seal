@@ -15,6 +15,10 @@ if (result.status !== 0) {
   process.exit(2);
 }
 const repos = JSON.parse(result.stdout).filter((repo) => !repo.isPrivate && !repo.isFork && repo.name !== "seal");
+if (repos.length === 0) {
+  console.error("ERROR public sibling population is empty; refusing to treat silence as a complete navigation inventory");
+  process.exit(1);
+}
 // Roadmap step 6: the developer README links no sibling repository. Every
 // public sibling must therefore discharge with a stated reason, and a family
 // repository appearing in the README is a failure, not a success.
