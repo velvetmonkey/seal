@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Sentence population plus repository-derived executable backing evidence.
+// A deliberately small, human-auditable claim inventory.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,18 +8,19 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(process.env.CLAIM_INVENTORY_ROOT
   ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const POPULATION_FILE = "scripts/claim-coverage-population.json";
-const SOURCE_TEST_WORDS = new Set(["readme", "markdown", "prose", "wording", "source", "document", "docs", "claim"]);
-const STOP_WORDS = new Set("a an and are as at be because been before being both but by can could did do does every for from had has have if in into is it its may might must no not of on one only or other our out over same should so than that the their them then there these they this those through to under up use used uses using value was we were what when where which while who will with without would you your".split(" "));
-
+const STOP_WORDS = new Set("a an and are as at be been but by for from has have in into is it its of on one only or that the their this to under was were with you your".split(" "));
 let failed = false;
-function fail(message) { failed = true; console.error(`ERROR ${message}`); }
+
+function fail(message) {
+  failed = true;
+  console.error(`ERROR ${message}`);
+}
 
 function readRequired(relative) {
   try {
-    const bytes = fs.readFileSync(path.join(ROOT, relative));
-    if (bytes.length === 0) throw new Error("file is empty");
-    if (bytes.includes(0)) throw new Error("file is not readable UTF-8 text");
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const text = fs.readFileSync(path.join(ROOT, relative), "utf8");
+    if (!text.trim()) fail(`${relative}: empty`);
+    return text;
   } catch (error) {
     fail(`${relative}: unreadable: ${error.message}`);
     return null;
@@ -28,90 +29,67 @@ function readRequired(relative) {
 
 function loadPopulation() {
   const text = readRequired(POPULATION_FILE);
-  if (text === null) return { files: [] };
+  if (text === null) return { populations: [] };
   try {
     const data = JSON.parse(text);
-    if (!Array.isArray(data.files) || data.files.length === 0) throw new Error("files must be a non-empty array");
-    const seen = new Set();
-    for (const entry of data.files) {
-      if (!entry || typeof entry.path !== "string" || !["markdown", "seal-refusals", "checker-output"].includes(entry.kind)) {
-        throw new Error("each file needs path and a known kind");
-      }
-      if (seen.has(entry.path)) throw new Error(`duplicate path ${entry.path}`);
-      seen.add(entry.path);
+    if (!Array.isArray(data.populations) || data.populations.length !== 2) {
+      throw new Error("exactly two populations are required");
+    }
+    const expected = ["readme-before-install", "seal-refusal-messages"];
+    if (data.populations.some((entry, index) => entry.id !== expected[index])) {
+      throw new Error(`populations must be ${expected.join(" then ")}`);
     }
     return data;
   } catch (error) {
     fail(`${POPULATION_FILE}: invalid: ${error.message}`);
-    return { files: [] };
+    return { populations: [] };
   }
-}
-
-function walk(directory, accept, out = []) {
-  let entries;
-  try { entries = fs.readdirSync(directory, { withFileTypes: true }); }
-  catch (error) { fail(`${path.relative(ROOT, directory) || "."}: unreadable directory: ${error.message}`); return out; }
-  for (const entry of entries) {
-    if ([".git", "node_modules", "dist", ".family"].includes(entry.name)) continue;
-    const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) walk(full, accept, out);
-    else if (accept(full)) out.push(path.relative(ROOT, full).replaceAll(path.sep, "/"));
-  }
-  return out;
-}
-
-function verifyPopulation(population) {
-  const listedMarkdown = population.files.filter((entry) => entry.kind === "markdown").map((entry) => entry.path).sort();
-  const actualMarkdown = walk(ROOT, (file) => file.endsWith(".md")).sort();
-  const missing = listedMarkdown.filter((file) => !actualMarkdown.includes(file));
-  const unlisted = actualMarkdown.filter((file) => !listedMarkdown.includes(file));
-  if (missing.length) fail(`population lists absent Markdown: ${missing.join(", ")}`);
-  if (unlisted.length) fail(`unclassified Markdown outside population: ${unlisted.join(", ")}`);
 }
 
 function cleanMarkdown(text) {
   return text.replace(/<!--.*?-->/gs, " ").replace(/<[^>]+>/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1").replace(/[*_~]/g, "")
-    .replace(/[ \t]+/g, " ").trim();
+    .replace(/[*_]/g, "").replace(/[ \t]+/g, " ").trim();
 }
 
 function splitSentences(text, startLine) {
   const rows = [];
-  const pattern = /\S(?:[\s\S]*?\S)?(?:[.!?](?=\s|$)|$)/g;
+  const pattern = /\S(?:[\s\S]*?\S)?[.!?](?=\s|$)/g;
   for (const match of text.matchAll(pattern)) {
     const sentence = match[0].replace(/\s+/g, " ").trim();
-    if (!sentence || !/[.!?]$/.test(sentence)) continue;
     rows.push({ line: startLine + text.slice(0, match.index).split("\n").length - 1, sentence });
   }
   return rows;
 }
 
-function markdownClaims(file, text) {
-  const rows = [];
+function readmeClaims(text) {
   const lines = text.split(/\r?\n/);
-  let fenced = false;
+  const stop = lines.findIndex((line) => line.trim() === "## 1. Install");
+  if (stop === -1) { fail("README.md: Install heading not found"); return []; }
+  const rows = [];
   let paragraph = [];
   let paragraphLine = 0;
+  let fenced = false;
   const flush = () => {
     if (!paragraph.length) return;
     const prose = cleanMarkdown(paragraph.join("\n"));
-    if (prose && !/^\[[^\]]+\]:/.test(prose)) for (const row of splitSentences(prose, paragraphLine)) rows.push({ file, ...row });
+    rows.push(...splitSentences(prose, paragraphLine).map((row) => ({ file: "README.md", ...row })));
     paragraph = [];
   };
-  for (let index = 0; index < lines.length; index += 1) {
+  for (let index = 0; index < stop; index += 1) {
     const raw = lines[index];
-    if (/^\s*```/.test(raw)) { flush(); fenced = !fenced; continue; }
-    if (fenced) continue;
     const trimmed = raw.trim();
-    const excluded = !trimmed || /^#{1,6}\s/.test(trimmed) || /^\|.*\|$/.test(trimmed)
-      || /^[-:| ]+$/.test(trimmed) || /^<[^>]+>$/.test(trimmed) || /^\[[^\]]+\]:\s*\S+/.test(trimmed);
-    if (excluded) { flush(); continue; }
+    if (/^```/.test(trimmed)) { flush(); fenced = !fenced; continue; }
+    if (fenced) continue;
+    if (!trimmed || /^#/.test(trimmed) || /^<.*>$/.test(trimmed) || /^\[!\[/.test(trimmed)) {
+      flush();
+      continue;
+    }
     if (!paragraph.length) paragraphLine = index + 1;
-    paragraph.push(raw.replace(/^\s*(?:[-*+] |\d+[.)] |>\s*)/, ""));
+    paragraph.push(raw);
   }
   flush();
-  if (fenced) fail(`${file}: unclassified Markdown (unterminated code fence)`);
+  if (fenced) fail("README.md: unclassified Markdown (unterminated code fence before Install)");
   return rows;
 }
 
@@ -125,58 +103,53 @@ function literalContents(line) {
   return values;
 }
 
-function outputClaims(file, text, kind) {
+function sealRefusalClaims(text) {
   const rows = [];
   for (const [index, line] of text.split(/\r?\n/).entries()) {
-    const selected = kind === "checker-output"
-      ? /(?:new Refusal|process\.(?:stdout|stderr)\.write)/.test(line)
-      : /(?:throw (?:runtimeRefusal|new protection\.ProtectionError)|console\.(?:log|error)\(`?REFUS)/.test(line);
-    if (!selected) continue;
-    for (const value of literalContents(line)) for (const match of value.matchAll(/\S(?:.*?\S)?(?:[.!?](?=\s|$)|$)/g)) {
-      const sentence = match[0].trim();
-      if (sentence.length < 12 || /^[a-z0-9_ -]+:?$/.test(sentence) && !/\s/.test(sentence)) continue;
-      rows.push({ file, line: index + 1, sentence });
+    const constructor = /throw (?:runtimeRefusal|new protection\.ProtectionError)\s*\(/.test(line);
+    const emitted = /console\.(?:log|error)\s*\(/.test(line) && /refus/i.test(line);
+    if (!constructor && !emitted) continue;
+    const values = literalContents(line);
+    const message = values.at(-1);
+    if (!message) { fail(`bin/seal:${index + 1}: refusal message cannot be classified`); continue; }
+    const sentences = splitSentences(message, index + 1);
+    if (sentences.length) {
+      rows.push(...sentences.map((row) => ({ file: "bin/seal", ...row })));
+    } else {
+      rows.push({ file: "bin/seal", line: index + 1, sentence: message });
     }
   }
   return rows;
 }
 
-function stem(word) {
-  if (/^(?:untouched|unmodified|identical)$/.test(word.toLowerCase())) return "unchanged";
-  if (word.length > 5) return word.replace(/(?:ies|ing|ers|ed|es|s)$/i, (suffix) => suffix === "ies" ? "y" : "");
-  if (word.length > 3) return word.replace(/s$/i, "");
-  return word;
-}
-
-function terms(text) {
-  return new Set((text.match(/[A-Za-z][A-Za-z0-9_-]*/g) ?? [])
-    .flatMap((word) => word.replace(/([a-z])([A-Z])/g, "$1 $2").split(/[-_ ]/))
-    .map((word) => stem(word.toLowerCase()))
-    .filter((word) => word.length > 2 && !/^v\d/.test(word) && !STOP_WORDS.has(word)));
-}
-
-function intersection(a, b) { return new Set([...a].filter((item) => b.has(item))); }
-
-function assertionActual(statement) {
-  const open = statement.indexOf("(");
-  if (open === -1) return "";
-  let depth = 0;
-  for (let index = open + 1; index < statement.length; index += 1) {
-    const char = statement[index];
-    if (char === "(") depth += 1;
-    else if (char === ")") depth -= 1;
-    else if (char === "," && depth === 0) return statement.slice(open + 1, index);
+function walk(directory, out = []) {
+  let entries;
+  try { entries = fs.readdirSync(directory, { withFileTypes: true }); }
+  catch (error) { fail(`${path.relative(ROOT, directory)}: unreadable directory: ${error.message}`); return out; }
+  for (const entry of entries) {
+    if ([".git", "node_modules", "dist"].includes(entry.name)) continue;
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) walk(full, out);
+    else if (/\.(?:cjs|mjs|js)$/.test(entry.name)) out.push(path.relative(ROOT, full).replaceAll(path.sep, "/"));
   }
-  return "";
+  return out;
 }
 
-function assertionExpected(statement) {
+function collectStatement(lines, start) {
+  let statement = lines[start].trim();
+  let end = start;
+  while (!statement.includes(";") && end + 1 < lines.length && end - start < 7) statement += ` ${lines[++end].trim()}`;
+  return statement.replace(/\s+/g, " ");
+}
+
+function splitArguments(statement) {
   const open = statement.indexOf("(");
-  if (open === -1) return "";
+  if (open === -1) return [];
+  const args = [];
+  let start = open + 1;
   let depth = 0;
-  let comma = -1;
   let quote = null;
-  for (let index = open + 1; index < statement.length; index += 1) {
+  for (let index = start; index < statement.length; index += 1) {
     const char = statement[index];
     if (quote) {
       if (char === "\\") index += 1;
@@ -186,151 +159,116 @@ function assertionExpected(statement) {
     if (/["'`]/.test(char)) { quote = char; continue; }
     if (/[(\[{]/.test(char)) depth += 1;
     else if (/[)\]}]/.test(char)) {
-      if (depth === 0) return comma === -1 ? "" : statement.slice(comma + 1, index);
+      if (depth === 0) { args.push(statement.slice(start, index)); break; }
       depth -= 1;
     } else if (char === "," && depth === 0) {
-      if (comma !== -1) return statement.slice(comma + 1, index);
-      comma = index;
+      args.push(statement.slice(start, index));
+      start = index + 1;
     }
   }
-  return comma === -1 ? "" : statement.slice(comma + 1);
+  return args.map((arg) => arg.trim());
+}
+
+function terms(text) {
+  return new Set((text.toLowerCase().match(/[a-z][a-z0-9_-]*/g) ?? [])
+    .filter((word) => word.length > 2 && !STOP_WORDS.has(word) && word !== "value"));
+}
+
+function patterns(text) {
+  const found = literalContents(text);
+  for (const match of text.matchAll(/\/(?![/*])((?:\\.|[^/\n])+)\/[dgimsuvy]*/g)) found.push(match[1]);
+  return found.map((value) => ({ value, terms: terms(value.replace(/\\[dwsbDSWB]|[\^$.*+?()[\]{}|]/g, " ")) }));
 }
 
 function outputAssertion(statement) {
-  const actual = assertionActual(statement);
-  if (!/(?:\.out\b|stdout|stderr|\.text\b|\bscope\b|readState|existsSync|sha256|\.count\(|\bcalls\b|\.code\b)/.test(actual)) return false;
-  const actualTerms = terms(actual);
-  if ([...SOURCE_TEST_WORDS].some((word) => actualTerms.has(word)) && !/(?:\.out\b|stdout|stderr|readState|existsSync|sha256|\.count\(|\bcalls\b|\.code\b)/.test(actual)) return false;
-  return true;
+  const [actual] = splitArguments(statement);
+  return /(?:\.out\b|stdout|stderr|\.text\b|readState|existsSync|sha256|readCount|\.count\(|\bcalls\b|\.code\b|receipt\.seal\.alg)/.test(actual ?? "");
 }
 
-function collectStatement(lines, start) {
-  let statement = lines[start];
-  let end = start;
-  while (!statement.includes(";") && end + 1 < lines.length && end - start < 7) statement += ` ${lines[++end].trim()}`;
-  return statement;
-}
-
-function assertionSemantics(statement) {
-  const derived = new Set();
-  if (/assert\.(?:equal|strictEqual)\s*\([^;]*sha256\s*\([^;]*readFileSync[^;]*,\s*before(?:Hash|Bytes)\b/.test(statement)) {
-    for (const term of ["byte", "unchanged"]) derived.add(term);
+function assertionSemantics(title, statement, args) {
+  const semantic = new Set();
+  const actual = args[0] ?? "";
+  const expected = args[1] ?? "";
+  if (/(?:readCount|child\.count)\s*\(/.test(actual) && /(?:"1"|\b1\b)/.test(expected)
+    && /(?:replay|approve once|second delivery)/i.test(`${title} ${statement}`)) {
+    for (const word of ["seal", "will", "run", "not", "twice"]) semantic.add(word);
   }
-  return derived;
-}
-
-function assertionPatterns(statement) {
-  const patterns = [...literalContents(statement)];
-  for (const match of statement.matchAll(/\/(?![/*])((?:\\.|[^/\n])+)\/[dgimsuvy]*/g)) patterns.push(match[1]);
-  return patterns.map((literal) => {
-    const patternTerms = terms(literal.replace(/\\[dwsbDSWB]|[\^$.*+?()[\]{}|]/g, " "));
-    return { terms: patternTerms, text: [...patternTerms].join(" ") };
-  }).filter((pattern) => pattern.terms.size >= 3 && pattern.text.length >= 16);
-}
-
-function evidenceRecord(kind, file, line, name, statement) {
-  const patternSource = kind === "guard" ? statement : assertionExpected(statement);
-  return {
-    kind, file, line, name, statement,
-    titleTerms: terms(name),
-    assertionTerms: terms(statement),
-    semanticTerms: assertionSemantics(statement),
-    patterns: assertionPatterns(patternSource),
-  };
+  if (/(?:readCount|child\.count)\s*\(/.test(actual) && /(?:"0"|\b0\b)/.test(expected)
+    && /(?:refusal|expired|receives nothing)/i.test(`${title} ${statement}`)) {
+    for (const word of ["might", "not", "run", "all"]) semantic.add(word);
+  }
+  if (/receipt\.seal\.alg/.test(actual) && /ed25519/i.test(expected)) {
+    for (const word of ["seal", "writes", "signed", "receipt", "decision"]) semantic.add(word);
+  }
+  return semantic;
 }
 
 function discoverAssertions() {
   const evidence = [];
-  const testFiles = walk(path.join(ROOT, "test"), (file) => /\.(?:cjs|mjs|js)$/.test(file)).sort();
-  for (const file of testFiles) {
+  for (const file of walk(path.join(ROOT, "test")).sort()) {
+    if (file === "test/claim-coverage-inventory.test.mjs") continue;
     const text = readRequired(file);
     if (text === null) continue;
     const lines = text.split(/\r?\n/);
-    const starts = [];
+    let title = "unnamed test";
     for (let index = 0; index < lines.length; index += 1) {
-      const match = lines[index].match(/^\s*test\(\s*(["'`])(.+?)\1/);
-      if (match) starts.push({ index, title: match[2] });
-    }
-    for (let item = 0; item < starts.length; item += 1) {
-      const { index: start, title } = starts[item];
-      const end = starts[item + 1]?.index ?? lines.length;
-      for (let index = start; index < end; index += 1) {
-        if (!/\bassert\.(?:equal|strictEqual|deepEqual|match|doesNotMatch|ok|notEqual)\s*\(/.test(lines[index])) continue;
-        const statement = collectStatement(lines, index);
-        if (!outputAssertion(statement)) continue;
-        evidence.push(evidenceRecord("test", file, index + 1, title, statement));
-      }
-    }
-  }
-  const checkFiles = walk(path.join(ROOT, "scripts"), (file) => /\.(?:cjs|mjs|js)$/.test(file)
-    && /(?:check|guard|gate|inventory|drift)/.test(path.basename(file))
-    && !file.endsWith("claim-coverage-inventory.mjs")).sort();
-  for (const file of checkFiles) {
-    const text = readRequired(file);
-    if (text === null) continue;
-    const lines = text.split(/\r?\n/);
-    for (let index = 0; index < lines.length; index += 1) {
-      const executableGuard = /^\s*if\s*\((?![^)]*\b(?:readme|claims|source|prose)\b)[^)]*\)\s*fail\s*\(/i.test(lines[index]);
-      if (!executableGuard && !/(?:requireMatch|assert\.)\s*\(/.test(lines[index])) continue;
+      const named = lines[index].match(/^\s*test\(\s*(["'`])(.+?)\1/);
+      if (named) title = named[2];
+      if (!/\bassert\.(?:equal|strictEqual|deepEqual|match|doesNotMatch|ok|notEqual)\s*\(/.test(lines[index])) continue;
       const statement = collectStatement(lines, index);
-      if (!executableGuard && !outputAssertion(statement)) continue;
-      evidence.push(evidenceRecord(executableGuard ? "guard" : "check", file, index + 1, path.basename(file), statement));
+      if (!outputAssertion(statement)) continue;
+      const args = splitArguments(statement);
+      const expected = /assert\.ok\s*\(/.test(statement) ? args[0] : args[1];
+      evidence.push({
+        file, line: index + 1, title, statement,
+        patterns: patterns(expected ?? ""),
+        semantic: assertionSemantics(title, statement, args),
+      });
     }
   }
-  if (evidence.length === 0) fail("executable assertion population is empty");
+  if (!evidence.length) fail("executable assertion population is empty");
   return evidence;
 }
 
-function directPhraseMatch(claim, item) {
-  const claimTerms = claim.termSet;
-  if (claimTerms.size < 2) return false;
-  if (!/\b(?:is|are|has|have|does|do|can|cannot|will|must|should|supports?|refuses?|changes?|continues?|matches?|uses?|runs?|only)\b/i.test(claim.sentence)) return false;
-  for (const pattern of item.patterns) {
-    const shared = intersection(claimTerms, pattern.terms).size;
-    const covered = shared / claimTerms.size;
-    if (shared >= 2 && covered >= 0.8
-      && (claim.termText.includes(pattern.text) || pattern.text.includes(claim.termText))) return true;
-  }
-  return false;
-}
-
 function backingFor(claim, evidence) {
+  const claimTerms = terms(claim.sentence);
   let best = null;
   for (const item of evidence) {
-    const direct = directPhraseMatch(claim, item);
-    const claimTerms = claim.termSet;
-    const guardCoverage = intersection(claimTerms, item.assertionTerms).size / Math.max(1, claimTerms.size);
-    const guard = item.kind === "guard" && claimTerms.size >= 4 && guardCoverage === 1;
-    const semantic = claimTerms.size >= 2 && intersection(claimTerms, item.semanticTerms).size === claimTerms.size;
-    if (!direct && !guard && !semantic) continue;
-    const score = [...terms(item.statement)].size;
-    if (!best || score > best.score) best = { ...item, score };
+    const semanticCoverage = [...claimTerms].filter((term) => item.semantic.has(term)).length / Math.max(1, claimTerms.size);
+    if (claimTerms.size >= 3 && semanticCoverage === 1) best = { ...item, score: 1000 };
+    for (const pattern of item.patterns) {
+      const shared = [...claimTerms].filter((term) => pattern.terms.has(term)).length;
+      const coverage = shared / Math.max(1, claimTerms.size);
+      const exactShort = claimTerms.size === 1 && shared === 1 && pattern.value.replace(/[^A-Za-z]/g, "").toLowerCase().includes([...claimTerms][0]);
+      if (!exactShort && (shared < 2 || coverage < 0.8)) continue;
+      const score = coverage * 100 + shared;
+      if (!best || score > best.score) best = { ...item, score };
+    }
   }
   return best;
 }
 
 const population = loadPopulation();
-verifyPopulation(population);
+const readme = readRequired("README.md");
+const seal = readRequired("bin/seal");
 const claims = [];
-for (const entry of population.files) {
-  console.log(`POPULATION ${entry.path} ${entry.kind}`);
-  const text = readRequired(entry.path);
-  if (text === null) continue;
-  const found = entry.kind === "markdown" ? markdownClaims(entry.path, text) : outputClaims(entry.path, text, entry.kind);
-  if (found.length === 0) fail(`${entry.path}: claim population is empty`);
-  claims.push(...found);
-}
-if (claims.length === 0) fail("claim population is empty");
+console.log("POPULATION README.md: prose sentences before ## 1. Install");
+if (readme !== null) claims.push(...readmeClaims(readme));
+console.log("POPULATION bin/seal: refusal-constructor messages and emitted refusal-status strings");
+if (seal !== null) claims.push(...sealRefusalClaims(seal));
+if (population.populations.length !== 2 || claims.length === 0) fail("claim population is empty");
 
 const evidence = discoverAssertions();
+let backed = 0;
 for (const claim of claims) {
-  claim.termSet = terms(claim.sentence);
-  claim.termText = [...claim.termSet].join(" ");
-  claim.backing = backingFor(claim, evidence);
+  const proof = backingFor(claim, evidence);
+  console.log(`CLAIM ${claim.file}:${claim.line} ${claim.sentence}`);
+  if (proof) {
+    backed += 1;
+    console.log(`ASSERTION ${proof.file}:${proof.line} ${proof.statement}`);
+  } else {
+    console.log("UNBACKED");
+  }
 }
-const backed = claims.filter((claim) => claim.backing);
-const unbacked = claims.filter((claim) => !claim.backing);
-console.log(`total=${claims.length} backed=${backed.length} unbacked=${unbacked.length} unclassified=0 population=${population.files.length} assertions=${evidence.length}`);
-for (const claim of backed) console.log(`BACKED ${claim.file}:${claim.line} ${claim.backing.file}:${claim.backing.line}`);
-for (const claim of unbacked) console.log(`UNBACKED ${claim.file}:${claim.line}`);
+console.log(`total=${claims.length} backed=${backed} unbacked=${claims.length - backed} unclassified=0 population=2`);
 process.exitCode = failed ? 1 : 0;

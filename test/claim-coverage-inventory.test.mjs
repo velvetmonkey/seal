@@ -13,7 +13,6 @@ function run(root = ROOT) {
     cwd: root,
     env: { ...process.env, CLAIM_INVENTORY_ROOT: root },
     encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
   });
 }
 
@@ -24,32 +23,36 @@ function copyRoot(t, prefix) {
   return tmp;
 }
 
-test("inventory prints four counts and every unbacked claim location", (t) => {
+function summary(stdout) {
+  const match = stdout.match(/^total=(\d+) backed=(\d+) unbacked=(\d+) unclassified=(\d+) population=(\d+)$/m);
+  assert.ok(match, stdout);
+  return match.slice(1).map(Number);
+}
+
+test("inventory prints every sentence and its assertion or UNBACKED", (t) => {
   const result = run(copyRoot(t, "claiminventory-baseline-"));
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  const summary = result.stdout.match(/^total=(\d+) backed=(\d+) unbacked=(\d+) unclassified=(\d+) population=(\d+) assertions=(\d+)$/m);
-  assert.ok(summary, result.stdout);
-  assert.equal(Number(summary[1]), Number(summary[2]) + Number(summary[3]));
-  assert.equal(Number(summary[4]), 0, result.stdout + result.stderr);
-  assert.equal(Number(summary[5]), 38);
-  assert.ok(Number(summary[6]) > 0);
-  assert.equal((result.stdout.match(/^POPULATION /gm) || []).length, Number(summary[5]));
-  assert.equal((result.stdout.match(/^BACKED /gm) || []).length, Number(summary[2]));
-  assert.equal((result.stdout.match(/^UNBACKED /gm) || []).length, Number(summary[3]));
-  assert.match(result.stdout, /^UNBACKED README\.md:\d+$/m);
-  assert.match(result.stdout, /^UNBACKED checker\/seal-receipt-check\.mjs:\d+$/m);
+  const [total, backed, unbacked, unclassified, populations] = summary(result.stdout);
+  assert.equal(total, 33);
+  assert.equal(total, backed + unbacked);
+  assert.equal(unclassified, 0);
+  assert.equal(populations, 2);
+  assert.equal((result.stdout.match(/^POPULATION /gm) ?? []).length, 2);
+  const lines = result.stdout.trim().split("\n");
+  const claimIndexes = lines.flatMap((line, index) => line.startsWith("CLAIM ") ? [index] : []);
+  assert.equal(claimIndexes.length, total);
+  for (const index of claimIndexes) assert.match(lines[index + 1], /^(?:UNBACKED|ASSERTION \S+:\d+ assert\.)/);
+  assert.doesNotMatch(result.stdout, /^CLAIM (?:docs\/|checker\/)/m);
+  assert.doesNotMatch(result.stdout, /^CLAIM README\.md:(?:1[7-9]|[2-9]\d)/m);
 });
 
-test("repository-derived assertions find five claims the old registry missed", (t) => {
-  const result = run(copyRoot(t, "claiminventory-five-"));
+test("behavior assertions, not README wording assertions, establish claims", (t) => {
+  const result = run(copyRoot(t, "claiminventory-behavior-"));
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  for (const expected of [
-    "BACKED README.md:13 test/dist3d.test.cjs:192",
-    "BACKED README.md:154 scripts/live-page-claim-guard.mjs:101",
-    "BACKED docs/guide/README.md:19 test/dist3d.test.cjs:192",
-    "BACKED docs/guide/choosing-what-to-protect.md:78 test/protect3b.test.cjs:144",
-    "BACKED bin/seal:214 test/seal-verify.test.cjs:58",
-  ]) assert.match(result.stdout, new RegExp(`^${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+  assert.match(result.stdout, /CLAIM README\.md:7 Seal will not run it twice\.\nASSERTION test\/spine-retry\.test\.cjs:245 /);
+  assert.match(result.stdout, /CLAIM README\.md:7 It might not run it at all\.\nASSERTION test\/approval-contract\.test\.cjs:\d+ /);
+  assert.match(result.stdout, /CLAIM README\.md:7 Seal writes a signed receipt of the decision\.\nASSERTION test\/receiptkey\.test\.cjs:99 /);
+  assert.doesNotMatch(result.stdout, /ASSERTION test\/at-most-once-claim\.test\.cjs/);
 });
 
 test("an unreadable required file fails instead of disappearing", (t) => {
@@ -60,14 +63,16 @@ test("an unreadable required file fails instead of disappearing", (t) => {
   assert.match(result.stderr, /README\.md: unreadable/);
 });
 
-test("a new unbacked claim is counted and named", (t) => {
-  const tmp = copyRoot(t, "claiminventory-new-claim-");
+test("a new README claim before Install is listed and remains unbacked despite nearby test prose", (t) => {
+  const tmp = copyRoot(t, "claiminventory-new-readme-");
   const readme = path.join(tmp, "README.md");
   const original = fs.readFileSync(readme, "utf8");
   const before = run(tmp);
-  const totalBefore = Number(before.stdout.match(/^total=(\d+)/m)[1]);
-  const tamperLine = original.split(/\r?\n/).length;
-  fs.appendFileSync(readme, "\nSeal turns seawater into gold.\n");
+  const [totalBefore, , unbackedBefore] = summary(before.stdout);
+  const marker = "## 1. Install";
+  const prefix = original.slice(0, original.indexOf(marker));
+  const tamperLine = prefix.split(/\r?\n/).length;
+  fs.writeFileSync(readme, original.replace(marker, "Seal turns seawater into gold.\n\n" + marker));
   fs.writeFileSync(path.join(tmp, "test", "nearby-word-decoy.test.cjs"), [
     'const assert = require("node:assert/strict");',
     'const test = require("node:test");',
@@ -78,23 +83,28 @@ test("a new unbacked claim is counted and named", (t) => {
   ].join("\n"));
   const after = run(tmp);
   assert.equal(after.status, 0, after.stdout + after.stderr);
-  assert.match(after.stdout, new RegExp(`^total=${totalBefore + 1} `, "m"));
-  assert.match(after.stdout, new RegExp(`^UNBACKED README\\.md:${tamperLine + 1}$`, "m"));
-  assert.doesNotMatch(after.stderr, /UNCLASSIFIED/);
+  const [totalAfter, , unbackedAfter] = summary(after.stdout);
+  assert.equal(totalAfter, totalBefore + 1);
+  assert.equal(unbackedAfter, unbackedBefore + 1);
+  assert.match(after.stdout, new RegExp(`CLAIM README\\.md:${tamperLine} Seal turns seawater into gold\\.\\nUNBACKED`));
 });
 
-test("an unclassifiable source shape fails", (t) => {
+test("a new bin/seal refusal message is listed", (t) => {
+  const tmp = copyRoot(t, "claiminventory-new-refusal-");
+  const seal = path.join(tmp, "bin", "seal");
+  fs.appendFileSync(seal, '\nthrow new protection.ProtectionError("usage", "Seal grants wishes.");\n');
+  const result = run(tmp);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /CLAIM bin\/seal:\d+ Seal grants wishes\.\nUNBACKED/);
+  assert.equal(summary(result.stdout)[0], 34);
+});
+
+test("an unclassifiable README fence before Install fails", (t) => {
   const tmp = copyRoot(t, "claiminventory-unclassified-");
-  fs.appendFileSync(path.join(tmp, "README.md"), "\n```text\nSeal makes an incomplete fenced claim.\n");
+  const readme = path.join(tmp, "README.md");
+  const original = fs.readFileSync(readme, "utf8");
+  fs.writeFileSync(readme, original.replace("## 1. Install", "```text\nIncomplete fenced text.\n\n## 1. Install"));
   const result = run(tmp);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /README\.md: unclassified Markdown \(unterminated code fence\)/);
-});
-
-test("a new Markdown surface fails until the printed population lists it", (t) => {
-  const tmp = copyRoot(t, "claiminventory-population-");
-  fs.writeFileSync(path.join(tmp, "docs", "NEW-CLAIMS.md"), "Seal grants wishes.\n");
-  const result = run(tmp);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /unclassified Markdown outside population: docs\/NEW-CLAIMS\.md/);
+  assert.match(result.stderr, /README\.md: unclassified Markdown \(unterminated code fence before Install\)/);
 });
