@@ -101,6 +101,18 @@ test("three distinct mutation sites each produce a distinct refusal", async () =
   assert.equal(new Set(codes).size, 3, `refusals must be distinct, got ${codes.join(", ")}`);
 });
 
+test("a nested argument mutation does not guess that its enclosing field line changed", async () => {
+  const { receiptPath, pubkeyPath } = await makeRealReceipt();
+  const mutated = mutateReceipt(receiptPath, (r) => { r.arguments.line = "nested value changed"; });
+  const lines = fs.readFileSync(mutated, "utf8").split("\n");
+  assert.match(lines[6], /"line": "nested value changed"/, "physical tamper must be on receipt line 7");
+
+  const result = runChecker(mutated, pubkeyPath);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE arguments_binding_mismatch: cannot identify one changed receipt line: the arguments commitment covers a structured value/m);
+  assert.doesNotMatch(result.out, /receipt line \d+/);
+});
+
 test("a failed signature says when the checker cannot attribute one changed line", async () => {
   const { receiptPath, pubkeyPath } = await makeRealReceipt();
   const result = runChecker(mutateReceipt(receiptPath, (r) => {
