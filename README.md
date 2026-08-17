@@ -22,18 +22,18 @@ rmdir "$SEAL_REPO_DIR"
 git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
 cd "$SEAL_REPO_DIR"
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 aa73744e9f32d0a190938ca90bbb246883e16acfed18855e66aba30d711609af --bytes 6143644 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 2896283f07c9fb60fcb64514239421be304f92b5ecb061ccba52a411ad805c53 --bytes 6143605 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.gc08d76e-linux-x64
-sha256 aa73744e9f32d0a190938ca90bbb246883e16acfed18855e66aba30d711609af
-bytes 6143644
-tree 2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
+sha256 2896283f07c9fb60fcb64514239421be304f92b5ecb061ccba52a411ad805c53
+bytes 6143605
+tree e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree 2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
+tree e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -44,7 +44,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 2. Demo
 
+<!-- live-page-claims:begin -->
 [![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
+<!-- live-page-claims:end -->
 
 The demo builds a working gate in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
 
@@ -138,9 +140,9 @@ node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-sign
 ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
 
+<!-- live-page-claims:begin -->
 > **Receipt in hand?** [Paste it into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 
-<!-- live-page-claims:begin -->
 [Open seal-check](https://velvetmonkey.github.io/seal-check/) to re-check a supplied Seal decision receipt in its browser kernel and inspect the receipt checks it reports. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 <!-- live-page-claims:end -->
 
