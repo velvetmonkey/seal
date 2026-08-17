@@ -119,19 +119,19 @@ export function checkReceipt(receipt, pubKeyHex, receiptText) {
 
   // 1. decision commitment
   if (sha256Hex(String(receipt.decision)) !== seal.decision_sha256) {
-    throw fieldMismatch("decision_binding_mismatch", "decision", receipt.decision, receiptText);
+    throw new Refusal("decision_binding_mismatch", fieldMismatch("decision_binding_mismatch", "decision", receipt.decision, receiptText).message);
   }
   // 2. tool commitment
   if (sha256Hex(String(receipt.tool)) !== seal.tool_sha256) {
-    throw fieldMismatch("tool_binding_mismatch", "tool", receipt.tool, receiptText);
+    throw new Refusal("tool_binding_mismatch", fieldMismatch("tool_binding_mismatch", "tool", receipt.tool, receiptText).message);
   }
   // 3. arguments commitment
   if (sha256Hex(canonical(receipt.arguments)) !== seal.args_sha256) {
-    throw fieldMismatch("arguments_binding_mismatch", "arguments", receipt.arguments, receiptText);
+    throw new Refusal("arguments_binding_mismatch", fieldMismatch("arguments_binding_mismatch", "arguments", receipt.arguments, receiptText).message);
   }
   // 4. combined effect commitment (defence in depth)
   if (sha256Hex(canonical({ args: receipt.arguments, tool: receipt.tool })) !== seal.effect_sha256) {
-    throw fieldMismatch("effect_binding_mismatch", "tool and arguments", { tool: receipt.tool, arguments: receipt.arguments }, receiptText);
+    throw new Refusal("effect_binding_mismatch", fieldMismatch("effect_binding_mismatch", "tool and arguments", { tool: receipt.tool, arguments: receipt.arguments }, receiptText).message);
   }
   // 5. signature backstop — makes every commitment above unforgeable
   const { sig, ...sealWithoutSig } = seal;
