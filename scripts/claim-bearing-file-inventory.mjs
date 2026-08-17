@@ -10,12 +10,21 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = "scripts/claim-bearing-files.json";
 
-// A text file is claim-bearing when it names a Seal product entity and makes a
-// decidable assertion about it.  This is deliberately content-shaped: product
-// claims can be comments or string literals in source files just as readily as
-// Markdown prose.  Binary artifacts remain outside the population below.
+// A text file is claim-bearing when it contains a declarative, present-tense
+// sentence whose subject is a Seal product entity. This is deliberately
+// language-shaped, not a list of known product nouns or verbs: a new sentence
+// such as "Seal intercepts requests" is inventory-bearing even when its
+// behaviour verb has never appeared in this repository. Product claims can be
+// comments or string literals in source files just as readily as Markdown
+// prose. Binary artifacts remain outside the population below.
 const PRODUCT_ENTITY = /\b(?:seal(?:-check)?|seal[- ]?(?:demo|protect|checker|kernel)|approval gate|guarded (?:tool|path|action)|receipt checker|landing page)\b/i;
 const ASSERTION = /\b(?:is|are|was|were|has|have|does|do|will|would|can|cannot|can't|must|should|supports?|requires?|runs?|executes?|checks?|verifies?|writes?|creates?|refuses?|gates?|protects?|controls?|proves?|prevents?|allows?|denies?|blocks?|forwards?|ships?|uses?|works?|matches?|transforms?|turns?|converts?|makes?|renders?|serves?|starts?|stops?|sends?|receives?|calls?|invokes?|launches?|installs?|downloads?|publishes?|signs?|encrypts?|decrypts?)\b/i;
+// Present-tense declaratives conventionally put a third-person verb after the
+// subject. We use that grammatical shape in addition to the legacy predicate
+// list above, so coverage cannot depend on whether a particular verb was
+// anticipated when this script was written. Limiting it to sentence subjects
+// avoids treating an incidental object mention of Seal as a behaviour claim.
+const DIRECT_BEHAVIOUR = /^(?:the\s+)?(?:seal(?:-check)?|seal[- ]?(?:demo|protect|checker|kernel)|approval gate|guarded (?:tool|path|action)|receipt checker|landing page)\s+(?:(?:automatically|always|never|reliably|silently|directly|securely|fully|only)\s+){0,3}(?:is|are|has|does|can|cannot|can't|will|would|must|should|[a-z][a-z'-]*(?:s|es))\b/i;
 // These are byte artifacts, not text that can contain a human-facing claim.
 // Keep this list small and explicit; source extensions are intentionally absent.
 const EXCLUDED_BINARY_PATHS = new Map([
@@ -51,11 +60,18 @@ function carriesClaim(text) {
     ? [...text.matchAll(/(?:\/\/|\/\*+|\*|#)\s*(.*)|(?:"([^"\n]{12,}[.!?])"|'([^'\n]{12,}[.!?])')/g)]
       .map((match) => match[1] ?? match[2] ?? match[3] ?? "")
     : text.split(/[.!?\n]+/);
-  // Keep the entity and predicate in one human-language unit.  The predicate
-  // set is intentionally broad enough to catch lexical rewrites such as
-  // "Seal transforms ...", without making every Seal mention a claim.
-  return units.some((unit) => PRODUCT_ENTITY.test(unit) && ASSERTION.test(unit)
-    && (!codeShaped || /\b(?:every|all|only|never|always|browser|human|operator|user)\b/i.test(unit)));
+  // Keep the entity and predicate in one human-language unit. The direct
+  // sentence-subject branch catches novel behaviour verbs, while the existing
+  // entity-plus-predicate branch retains coverage for statements that phrase
+  // the product as an object or otherwise invert the sentence.
+  return units.some((unit) => {
+    // Comment-only snippets are still human-facing language even when they do
+    // not otherwise look like a complete source file.
+    const sentence = unit.replace(/^\s*(?:\/\/|#|\*+)\s*/, "");
+    return DIRECT_BEHAVIOUR.test(sentence)
+    || (PRODUCT_ENTITY.test(sentence) && ASSERTION.test(sentence)
+      && (!codeShaped || /\b(?:every|all|only|never|always|browser|human|operator|user)\b/i.test(unit)));
+  });
 }
 function readText(path) {
   const bytes = readFileSync(resolve(ROOT, path));
