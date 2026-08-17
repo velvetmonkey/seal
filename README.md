@@ -22,18 +22,18 @@ rmdir "$SEAL_REPO_DIR"
 git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
 cd "$SEAL_REPO_DIR"
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 2896283f07c9fb60fcb64514239421be304f92b5ecb061ccba52a411ad805c53 --bytes 6143605 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 aa73744e9f32d0a190938ca90bbb246883e16acfed18855e66aba30d711609af --bytes 6143644 --prefix ~/.local
 ```
 
 ```
 /home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.gc08d76e-linux-x64
-sha256 2896283f07c9fb60fcb64514239421be304f92b5ecb061ccba52a411ad805c53
-bytes 6143605
-tree e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
+sha256 aa73744e9f32d0a190938ca90bbb246883e16acfed18855e66aba30d711609af
+bytes 6143644
+tree 2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c
+tree 2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -43,6 +43,8 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ## 2. Demo
+
+[![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
 
 The demo builds a working gate in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
 
@@ -117,9 +119,9 @@ A route that does not cross the gate is one Seal does not see. The demo closes b
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/2f9b36d295384028da8d2a60fc4e1a22f5fab6bb559992761a91a9f21fce5816/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
-  Online: https://velvetmonkey.github.io/seal-check/ runs a supplied MCP tool-call in its browser kernel and reports its receipt checks. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
+  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
 ```
 
 The demo called its receipts claims, not proofs. Use the exact checker command your own demo run just printed; the absolute paths in the transcript above belong to that run and will not exist on your machine. The fence below resolves that same command from the demo directory you just created and the store your install wrote:
@@ -134,7 +136,9 @@ node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-sign
 ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
 
-[Open seal-check](https://velvetmonkey.github.io/seal-check/) to run a supplied MCP tool-call in its browser kernel and inspect the receipt checks it reports. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+> **Receipt in hand?** [Paste it into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser, with no backend, accounts, or telemetry. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+
+[Open seal-check](https://velvetmonkey.github.io/seal-check/) to re-check a decision receipt you paste in your browser and inspect the receipt checks it reports. The page has no backend, accounts, or telemetry; it does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 
 Change one recorded field and the same checker refuses:
 
