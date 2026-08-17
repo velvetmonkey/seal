@@ -27,3 +27,20 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
     rmSync(worktree, { recursive: true, force: true });
   }
 });
+
+test("a bare contextual component reference remains outside the subject-keyed rule", () => {
+  const worktree = mkdtempSync(join(tmpdir(), "seal-claim-inventory-bare-"));
+  try {
+    mkdirSync(join(worktree, "scripts"));
+    writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
+    writeFileSync(join(worktree, "scripts", "claim-bearing-files.json"), '{"files":{}}\n');
+    writeFileSync(join(worktree, "context.md"), "The kernel calibrates the receipt clock before evaluation.\n");
+    spawnSync("git", ["init", "-q"], { cwd: worktree });
+    spawnSync("git", ["add", "."], { cwd: worktree });
+    const result = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], { cwd: worktree, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /^context\.md\t/m);
+  } finally {
+    rmSync(worktree, { recursive: true, force: true });
+  }
+});
