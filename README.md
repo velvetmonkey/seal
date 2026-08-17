@@ -22,18 +22,18 @@ rmdir "$SEAL_REPO_DIR"
 git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
 cd "$SEAL_REPO_DIR"
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 13ec667bd73a0082c1033f3647d6cbdb6f125044a246642c3ababe47a4074f5c --bytes 6146189 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 e4932a1962f3066dd361db372d558634b9dcfd55937e1c5c3ac64cac300eee73 --bytes 6146222 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.ge45e57d-linux-x64
-sha256 13ec667bd73a0082c1033f3647d6cbdb6f125044a246642c3ababe47a4074f5c
-bytes 6146189
-tree b5685213060ecf662eedfa3559e225bd11cddd1d49df06c6cad4f09a60f705aa
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.g8341421-linux-x64
+sha256 e4932a1962f3066dd361db372d558634b9dcfd55937e1c5c3ac64cac300eee73
+bytes 6146222
+tree 06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/b5685213060ecf662eedfa3559e225bd11cddd1d49df06c6cad4f09a60f705aa
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree b5685213060ecf662eedfa3559e225bd11cddd1d49df06c6cad4f09a60f705aa
+tree 06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -129,7 +129,7 @@ A route that does not cross the gate is one Seal does not see. The demo closes b
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/b5685213060ecf662eedfa3559e225bd11cddd1d49df06c6cad4f09a60f705aa/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/06da1f27c0d1f0ddb935a23aedd41b1bbc85750e5f323d36abbcc43c67ec1d4f/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   <!-- live-page-claims:begin -->
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that this setup routes calls through Seal, and it is not the checker command above.

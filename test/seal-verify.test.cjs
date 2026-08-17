@@ -56,7 +56,7 @@ test("verify tells the reader how to retry when an uncached runtime fetch fails"
   assert.match(unavailable.out, new RegExp(`pinned runtime file at ${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}, but it is not cached`));
   assert.match(unavailable.out, /runtime fetch failed: [A-Za-z]+:/);
   assert.match(unavailable.out, /Verification cannot continue without this runtime file\./);
-  assert.ok(unavailable.out.includes(`Restore access to that source, then run exactly: \`seal verify ${receipt}\`.`));
+  assert.ok(unavailable.out.includes(`Restore access to that source, then run: \`${CLI} verify ${receipt}\`.`));
   assert.ok(!fs.existsSync(runtime), "a failed fetch must leave the runtime absent");
   assert.doesNotMatch(unavailable.out, /machine has no network connection|Seal did not inspect the receipt/);
 });
