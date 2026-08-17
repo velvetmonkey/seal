@@ -346,6 +346,9 @@ jobs:
           docs/WHY-DIFFERENT.md
           index.html
       - run: node scripts/linkcheck.mjs
+      - name: Check live seal-check landing-page claims against served bytes
+        run: node scripts/live-page-claim-guard.mjs
+      - run: node --test test/live-page-claim-guard.test.mjs
       - run: node scripts/readme-navigation.mjs
         env:
           GH_TOKEN: ${{ github.token }}

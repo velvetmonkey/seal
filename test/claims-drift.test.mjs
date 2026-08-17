@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = resolve(ROOT, "scripts/claims-drift.mjs");
 const README = resolve(ROOT, "README.md");
-const DRIFT_FILE = readFileSync(README, "utf8").includes(":begin -->")
+const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->")
   ? README
   : resolve(ROOT, "index.html");
 const UNREADABLE = resolve(ROOT, "docs/.claims-drift-unreadable");
