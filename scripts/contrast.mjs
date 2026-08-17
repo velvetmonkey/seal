@@ -30,10 +30,23 @@ function ratio(foreground, background) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+function composite(foreground, background, alpha) {
+  const channels = (hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+  const fg = channels(foreground);
+  const bg = channels(background);
+  return "#" + fg.map((value, index) =>
+    Math.round(value * alpha + bg[index] * (1 - alpha)).toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+TOKENS["muted-tint"] = composite(TOKENS.muted, TOKENS.bg, 0.12);
+
 const PAIRS = [
   ["ink", "bg", "all charcoal labels and body text"],
   ["accent", "bg", "Seal, selected-path, replay, and refusal text"],
   ["muted", "bg", "unguarded-path, config, and outside-Seal text"],
+  ["bg", "accent", "demo.mutate reversed label"],
+  ["ink", "muted-tint", "db.read and fs.list labels on 12% grey tint"],
 ];
 const MIN = 4.5;
 let failed = 0;

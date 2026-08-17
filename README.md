@@ -17,6 +17,12 @@ release. If you download a binary, verify it against the `SHA256SUMS` asset
 attached to the same release before installing. The repository root does not
 carry a hand-maintained copy.
 
+## How it works
+
+1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
+2. **Approve per call.** Seal shows the exact guarded call. The pinned WASM answer is required before forwarding, and one-use consumption means the call will not run twice; the server's other tools remain outside Seal.
+3. **Keep the receipt.** Seal writes a signed receipt for every decision. Keep it with a public key obtained from a source you trust, then use the shipped checker or seal-check with the limits stated below.
+
 ![Seal process diagram: one exact tool call passes through the gate; unrelated routes remain outside](assets/seal-flow.svg)
 
 ## 1. Install
