@@ -1,87 +1,203 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Family claim-surface accounting. This names uncovered prose as debt; it
-// does not pretend the debt is covered.
+// Claim coverage is sentence accounting, not a keyword search.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ALLOWLIST = path.join(process.env.FAMILY_SEAL_ROOT ?? ROOT, "scripts/claim-coverage-allowlist.json");
-const REPOS = [
-  ["seal", process.env.FAMILY_SEAL_ROOT ?? ROOT],
-  ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? path.join(ROOT, ".family/seal-check")],
-  ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? path.join(ROOT, ".family/seal-demo")],
-  ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? path.join(ROOT, ".family/seal-live-demo")],
-  ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? path.join(ROOT, ".family/seal-verify-action")],
-  ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? path.join(ROOT, ".family/seal-assurance-kit")],
-  ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? path.join(ROOT, ".family/mcp-seal-dev")],
+const ROOT = path.resolve(process.env.CLAIM_INVENTORY_ROOT
+  ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
+const MARKDOWN = [
+  "README.md",
+  "docs/guide/README.md",
+  "docs/guide/choosing-what-to-protect.md",
+  "docs/guide/github-actions-provenance.md",
+  "docs/guide/knowing-it-worked.md",
+  "docs/guide/what-is-protected-right-now.md",
+  "docs/guide/when-something-looks-wrong.md",
 ];
-// Sibling repositories are supplied separately through REPOS. Do not recurse
-// into their CI checkout parent while walking the Seal checkout.
-const SKIP = new Set([".git", ".family", "node_modules", "test", "fixtures", "vendor"]);
-const CLAIM_WORDS = /what (it )?proves|proven|tested|not claimed|non-claim|claim:|claims|truth box|limitation|assurance|guarantee|does not/i;
-const ENTRY_NAMES = /^(README\.md|EVALUATOR-START\.md|CLAIMS\.md|LIMITATIONS\.md|TRUTH-BOX\.md|index\.html)$/i;
+const PROGRAM_OUTPUT = ["bin/seal", "checker/seal-receipt-check.mjs"];
 
-function walk(root, dir = root, out = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(root, full, out);
-    else if (/\.(md|html)$/i.test(entry.name)) {
-      const text = fs.readFileSync(full, "utf8");
-      if (ENTRY_NAMES.test(entry.name) || CLAIM_WORDS.test(text)) out.push(full);
-    }
-  }
-  return out;
+// Population rule: every complete prose sentence outside headings, tables,
+// code/transcript fences, HTML, and link-only navigation in the named Markdown
+// files, plus every static refusal sentence in bin/seal and every static CLI
+// output/refusal sentence in the receipt checker. Source comments, examples,
+// commands, headings, tables, dynamic error text, and fragments are excluded.
+
+// A backing is deliberately specific: the cited assertion executes the named
+// behaviour. A test that merely contains related prose is not listed here.
+const BACKINGS = [
+  {
+    file: "README.md",
+    sentence: "Seal will not run it twice.",
+    check: "test/spine-retry.test.cjs:78",
+    assertion: "assert.equal(readCount(countFile), \"1\"",
+  },
+  {
+    file: "README.md",
+    sentence: "It might not run it at all.",
+    check: "test/approval-contract.test.cjs:129",
+    assertion: "assert.equal(child.count(), \"0\")",
+  },
+  {
+    file: "README.md",
+    sentence: "The project file is byte-identical before and after.",
+    check: "test/protect3b.test.cjs:152",
+    assertion: "assert.equal(fs.readFileSync(path.join(project, \".mcp.json\"), \"utf8\"), beforeBytes)",
+  },
+];
+
+let failed = false;
+function fail(message) {
+  failed = true;
+  console.error(`ERROR ${message}`);
 }
 
-function guardCoverage(repo, root) {
-  const scriptPath = path.join(root, "scripts/claims-drift.mjs");
-  const source = fs.readFileSync(scriptPath, "utf8");
-  const full = new Set();
-  for (const match of source.matchAll(/canonical:\s*["']([^"']+)["']\s*,\s*mirrors:\s*\[([^\]]*)\]/g)) {
-    full.add(match[1]);
-    for (const mirror of match[2].matchAll(/["']([^"']+)["']/g)) full.add(mirror[1]);
+function readRequired(relative) {
+  try {
+    const bytes = fs.readFileSync(path.join(ROOT, relative));
+    if (bytes.length === 0) throw new Error("file is empty");
+    if (bytes.includes(0)) throw new Error("file is not readable UTF-8 text");
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error) {
+    fail(`${relative}: unreadable: ${error.message}`);
+    return null;
   }
-  const substring = new Set();
-  const manifest = source.match(/const CLAIM_MANIFEST = \[([\s\S]*?)\];/);
-  for (const match of (manifest?.[1] ?? "").matchAll(/\[\s*["']([^"']+)["']/g)) substring.add(match[1]);
-  return { repo, full, substring };
 }
 
-function main() {
-  const allowlist = JSON.parse(fs.readFileSync(ALLOWLIST, "utf8")).uncovered;
-  if (!Array.isArray(allowlist) || new Set(allowlist).size !== allowlist.length) throw new Error("allowlist must be a unique array");
+function cleanMarkdown(text) {
+  return text
+    .replace(/<!--.*?-->/gs, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
+    .replace(/[*_~]/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function splitSentences(text, startLine) {
   const rows = [];
-  for (const [repo, root] of REPOS) {
-    if (!fs.existsSync(root)) {
-      console.error(`FINDING required family checkout missing: ${repo} (${root})`);
-      process.exitCode = 1;
-      return;
+  const pattern = /\S(?:[\s\S]*?\S)?(?:[.!?](?=\s|$)|$)/g;
+  for (const match of text.matchAll(pattern)) {
+    const sentence = match[0].replace(/\s+/g, " ").trim();
+    if (!sentence) continue;
+    const line = startLine + text.slice(0, match.index).split("\n").length - 1;
+    // A punctuation-free fragment is outside the stated sentence population.
+    if (/[.!?]$/.test(sentence)) rows.push({ line, sentence });
+  }
+  return rows;
+}
+
+function markdownClaims(file, text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/);
+  let fenced = false;
+  let paragraph = [];
+  let paragraphLine = 0;
+  const flush = () => {
+    if (!paragraph.length) return;
+    const prose = cleanMarkdown(paragraph.join("\n"));
+    if (prose && !/^\[[^\]]+\]:/.test(prose)) {
+      for (const row of splitSentences(prose, paragraphLine)) rows.push({ file, ...row });
     }
-    const coverage = guardCoverage(repo, root);
-    for (const file of walk(root)) {
-      const rel = `${repo}/${path.relative(root, file).replaceAll(path.sep, "/")}`;
-      const kind = coverage.full.has(path.relative(root, file)) ? "full" : coverage.substring.has(path.relative(root, file)) ? "substring" : "uncovered";
-      rows.push({ file: rel, kind });
+    paragraph = [];
+  };
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    if (/^\s*```/.test(raw)) { flush(); fenced = !fenced; continue; }
+    if (fenced) continue;
+    const trimmed = raw.trim();
+    const excluded = !trimmed || /^#{1,6}\s/.test(trimmed) || /^\|.*\|$/.test(trimmed)
+      || /^[-:| ]+$/.test(trimmed) || /^<[^>]+>$/.test(trimmed)
+      || /^\[[^\]]+\]:\s*\S+/.test(trimmed);
+    if (excluded) { flush(); continue; }
+    if (!paragraph.length) paragraphLine = index + 1;
+    paragraph.push(raw.replace(/^\s*(?:[-*+] |\d+[.)] |>\s*)/, ""));
+  }
+  flush();
+  if (fenced) fail(`${file}: unclassified Markdown (unterminated code fence)`);
+  return rows;
+}
+
+function literalContents(line) {
+  const values = [];
+  for (const match of line.matchAll(/(["'`])((?:\\.|(?!\1).)*)\1/g)) {
+    const value = match[2]
+      .replace(/\\n/g, " ")
+      .replace(/\\(["'`])/g, "$1")
+      .replace(/\$\{[^}]+\}/g, "<value>")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (value) values.push(value);
+  }
+  return values;
+}
+
+function outputClaims(file, text) {
+  const rows = [];
+  for (const [index, line] of text.split(/\r?\n/).entries()) {
+    const checker = file.startsWith("checker/") && /(?:new Refusal|process\.(?:stdout|stderr)\.write)/.test(line);
+    const sealRefusal = file === "bin/seal" && /(?:throw (?:runtimeRefusal|new protection\.ProtectionError)|console\.(?:log|error)\(`?REFUS)/.test(line);
+    if (!checker && !sealRefusal) continue;
+    for (const value of literalContents(line)) {
+      // Codes and field names are not sentences shown to a user. An emitted
+      // line without terminal punctuation is still one CLI sentence.
+      for (const match of value.matchAll(/\S(?:.*?\S)?(?:[.!?](?=\s|$)|$)/g)) {
+        const sentence = match[0].trim();
+        if (sentence.length < 12 || /^[a-z0-9_ -]+:?$/.test(sentence) && !/\s/.test(sentence)) continue;
+        rows.push({ file, line: index + 1, sentence });
+      }
     }
   }
-  if (rows.length === 0) {
-    console.error("ERROR family claim-bearing population is empty; refusing to treat silence as complete claim coverage");
-    process.exitCode = 1;
+  return rows;
+}
+
+function validateBacking(backing, claims) {
+  const matches = claims.filter((claim) => claim.file === backing.file && claim.sentence === backing.sentence);
+  if (matches.length !== 1) {
+    fail(`backing target must match exactly one claim: ${backing.file} ${JSON.stringify(backing.sentence)} (found ${matches.length})`);
     return;
   }
-  const counts = Object.fromEntries(["full", "substring", "uncovered"].map((kind) => [kind, rows.filter((row) => row.kind === kind).length]));
-  const actualUncovered = rows.filter((row) => row.kind === "uncovered").map((row) => row.file).sort();
-  const listed = [...allowlist].sort();
-  const missing = actualUncovered.filter((file) => !allowlist.includes(file));
-  const stale = allowlist.filter((file) => !actualUncovered.includes(file));
-  console.log(`CLAIM COVERAGE: full=${counts.full} substring=${counts.substring} uncovered=${counts.uncovered} allowlisted=${allowlist.length}`);
-  if (missing.length) console.error(`FAIL uncovered claim-bearing files not allowlisted: ${missing.join(", ")}`);
-  if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
-  if (missing.length || stale.length) process.exitCode = 1;
-  else console.log("PASS every uncovered claim-bearing file is explicitly allowlisted");
+  const match = /^(.*):(\d+)$/.exec(backing.check);
+  if (!match) { fail(`invalid check reference ${backing.check}`); return; }
+  const proof = readRequired(match[1]);
+  if (proof === null) return;
+  const line = proof.split(/\r?\n/)[Number(match[2]) - 1];
+  if (line === undefined || !line.includes("assert.") || !line.includes(backing.assertion)) {
+    fail(`${backing.check}: cited line is not the named executable assertion`);
+    return;
+  }
+  matches[0].backedBy = backing.check;
 }
 
-main();
+const claims = [];
+for (const file of MARKDOWN) {
+  const text = readRequired(file);
+  if (text !== null) {
+    const found = markdownClaims(file, text);
+    if (found.length === 0) fail(`${file}: claim population is empty`);
+    claims.push(...found);
+  }
+}
+for (const file of PROGRAM_OUTPUT) {
+  const text = readRequired(file);
+  if (text !== null) {
+    const found = outputClaims(file, text);
+    if (found.length === 0) fail(`${file}: claim population is empty`);
+    claims.push(...found);
+  }
+}
+for (const backing of BACKINGS) validateBacking(backing, claims);
+
+if (claims.length === 0) fail("claim population is empty");
+const unclassified = claims.filter((claim) => claim.unclassified);
+const backed = claims.filter((claim) => claim.backedBy);
+const unbacked = claims.filter((claim) => !claim.backedBy);
+console.log(`total=${claims.length} backed=${backed.length} unbacked=${unbacked.length} unclassified=${unclassified.length}`);
+for (const claim of backed) console.log(`BACKED ${claim.file}:${claim.line} ${claim.backedBy}`);
+for (const claim of unbacked) console.log(`UNBACKED ${claim.file}:${claim.line}`);
+if (unclassified.length) for (const claim of unclassified) console.error(`UNCLASSIFIED ${claim.file}:${claim.line}`);
+if (unclassified.length) failed = true;
+process.exitCode = failed ? 1 : 0;

@@ -2,100 +2,68 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/claim-coverage-inventory.mjs");
-const REPOS = ["seal", "seal-check", "seal-demo", "seal-live-demo", "seal-verify-action", "seal-assurance-kit", "mcp-seal-dev"];
 
-function fixture() {
-  const family = fs.mkdtempSync(path.join(os.tmpdir(), "claiminventory-"));
-  const roots = Object.fromEntries(REPOS.map((repo) => [repo, path.join(family, repo)]));
-  for (const root of Object.values(roots)) fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
-  for (const root of Object.values(roots)) fs.writeFileSync(path.join(root, "scripts/claims-drift.mjs"), "");
-  fs.writeFileSync(path.join(roots.seal, "scripts/claims-drift.mjs"), [
-    'const CLAIM_MANIFEST = [["substring.md", "fixture"]];',
-    'const COPY = { canonical: "covered.md", mirrors: [] };',
-  ].join("\n"));
-  fs.writeFileSync(path.join(roots.seal, "scripts/claim-coverage-allowlist.json"), JSON.stringify({
-    version: 1,
-    uncovered: ["seal/README.md", "seal-check/CLAIMS.md"],
-  }));
-  fs.writeFileSync(path.join(roots.seal, "covered.md"), "covered claims");
-  fs.writeFileSync(path.join(roots.seal, "substring.md"), "substring claims");
-  fs.writeFileSync(path.join(roots.seal, "README.md"), "fixture overview");
-  fs.writeFileSync(path.join(roots["seal-check"], "CLAIMS.md"), "fixture claim ledger");
-  return { family, roots };
+function run(root = ROOT) {
+  return spawnSync(process.execPath, [SCRIPT], {
+    cwd: root,
+    env: { ...process.env, CLAIM_INVENTORY_ROOT: root },
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
 }
 
-function run(roots, extra = {}) {
-  const env = { ...process.env };
-  for (const [repo, root] of Object.entries(roots)) env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = root;
-  for (const [repo, root] of Object.entries(extra)) env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = root;
-  try { return { code: 0, out: execFileSync(process.execPath, [SCRIPT], { cwd: ROOT, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) }; }
-  catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
+function copyRoot(t, prefix) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  fs.cpSync(ROOT, tmp, { recursive: true, filter: (source) => !source.includes(`${path.sep}.git`) });
+  return tmp;
 }
 
-test("inventory reports fixture three-way accounting", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  const result = run(roots);
-  assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /full=1 substring=1 uncovered=2 allowlisted=2/);
+test("inventory prints four counts and every unbacked claim location", (t) => {
+  const result = run(copyRoot(t, "claiminventory-baseline-"));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const summary = result.stdout.match(/^total=(\d+) backed=(\d+) unbacked=(\d+) unclassified=(\d+)$/m);
+  assert.ok(summary, result.stdout);
+  assert.equal(Number(summary[1]), Number(summary[2]) + Number(summary[3]));
+  assert.equal(Number(summary[4]), 0, result.stdout + result.stderr);
+  assert.equal((result.stdout.match(/^BACKED /gm) || []).length, Number(summary[2]));
+  assert.equal((result.stdout.match(/^UNBACKED /gm) || []).length, Number(summary[3]));
+  assert.match(result.stdout, /^UNBACKED README\.md:\d+$/m);
+  assert.match(result.stdout, /^UNBACKED checker\/seal-receipt-check\.mjs:\d+$/m);
 });
 
-test("an uncovered claim-bearing file fails until allowlisted", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(roots.seal, "new-claim.md"), "This is proven and tested.");
-  const result = run(roots);
-  if (process.env.CLAIM_INVENTORY_EVIDENCE) console.log(`NEW_FILE_EVIDENCE\n${result.out}`);
-  assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /seal\/new-claim\.md/);
+test("an unreadable required file fails instead of disappearing", (t) => {
+  const tmp = copyRoot(t, "claiminventory-unreadable-");
+  fs.rmSync(path.join(tmp, "README.md"));
+  const result = run(tmp);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /README\.md: unreadable/);
 });
 
-test("removing an uncovered file from the allowlist fails", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  const allow = path.join(roots.seal, "scripts/claim-coverage-allowlist.json");
-  const data = JSON.parse(fs.readFileSync(allow, "utf8"));
-  data.uncovered = data.uncovered.filter((file) => file !== "seal/README.md");
-  fs.writeFileSync(allow, JSON.stringify(data));
-  const result = run(roots);
-  if (process.env.CLAIM_INVENTORY_EVIDENCE) console.log(`REMOVED_ALLOWLIST_EVIDENCE\n${result.out}`);
-  assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /seal\/README\.md/);
+test("a new unbacked claim is counted and named", (t) => {
+  const tmp = copyRoot(t, "claiminventory-new-claim-");
+  const readme = path.join(tmp, "README.md");
+  const original = fs.readFileSync(readme, "utf8");
+  const before = run(tmp);
+  const totalBefore = Number(before.stdout.match(/^total=(\d+)/m)[1]);
+  const tamperLine = original.split(/\r?\n/).length;
+  fs.appendFileSync(readme, "\nSeal turns seawater into gold.\n");
+  const after = run(tmp);
+  assert.equal(after.status, 0, after.stdout + after.stderr);
+  assert.match(after.stdout, new RegExp(`^total=${totalBefore + 1} `, "m"));
+  assert.match(after.stdout, new RegExp(`^UNBACKED README\\.md:${tamperLine + 1}$`, "m"));
+  assert.doesNotMatch(after.stderr, /UNCLASSIFIED/);
 });
 
-test("a non-claim-bearing file does not fail the inventory", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(roots.seal, "ordinary-notes.md"), "A list of shell aliases.");
-  const result = run(roots);
-  assert.equal(result.code, 0, result.out);
-  assert.doesNotMatch(result.out, /ordinary-notes/);
-});
-
-test("a missing sibling is a named finding, never a skip", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  fs.rmSync(roots["seal-check"], { recursive: true, force: true });
-  const result = run(roots);
-  assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /FINDING required family checkout missing: seal-check/);
-});
-
-test("an empty family claim-bearing population is a refusal, not complete coverage", (t) => {
-  const { family, roots } = fixture();
-  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
-  for (const root of Object.values(roots)) {
-    for (const entry of fs.readdirSync(root)) fs.rmSync(path.join(root, entry), { recursive: true, force: true });
-    fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(root, "scripts/claims-drift.mjs"), "");
-  }
-  fs.writeFileSync(path.join(roots.seal, "scripts/claim-coverage-allowlist.json"), JSON.stringify({ version: 1, uncovered: [] }));
-  const result = run(roots);
-  assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /family claim-bearing population is empty/);
+test("an unclassifiable source shape fails", (t) => {
+  const tmp = copyRoot(t, "claiminventory-unclassified-");
+  fs.appendFileSync(path.join(tmp, "README.md"), "\n```text\nSeal makes an incomplete fenced claim.\n");
+  const result = run(tmp);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /README\.md: unclassified Markdown \(unterminated code fence\)/);
 });
