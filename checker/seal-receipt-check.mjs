@@ -68,9 +68,11 @@ class Refusal extends Error {
 }
 
 // The commitments identify fields, not source offsets.  When invoked as the
-// command-line checker, retain the receipt text as well, so a direct field
-// commitment can point the reader at that field's line.  This deliberately
-// does not try to reconstruct an expected value from a digest.
+// command-line checker, retain the receipt text as well, so a direct scalar
+// field commitment can point the reader at that field's line. A commitment to
+// a structured value proves only that some part of that structure changed; it
+// cannot justify naming any nested source line. This deliberately does not
+// try to reconstruct an expected value from a digest.
 function lineForDirectField(receiptText, field) {
   if (typeof receiptText !== "string") return null;
   let depth = 0;
@@ -98,6 +100,9 @@ function shownValue(value) {
 }
 
 function fieldMismatch(code, field, value, receiptText) {
+  if (value !== null && typeof value === "object") {
+    return new Refusal(code, `cannot identify one changed receipt line: the ${field} commitment covers a structured value, so it establishes that the value changed but not which nested line changed (committed value withheld)`);
+  }
   const line = lineForDirectField(receiptText, field);
   const where = line === null ? `field ${field} (source line unavailable)` : `receipt line ${line}, field ${field}`;
   return new Refusal(code, `${where}: recorded value ${shownValue(value)} does not match its sealed commitment (committed value withheld)`);
