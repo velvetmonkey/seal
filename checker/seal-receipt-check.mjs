@@ -67,11 +67,47 @@ class Refusal extends Error {
   constructor(code, reason) { super(reason); this.code = code; }
 }
 
+// The commitments identify fields, not source offsets.  When invoked as the
+// command-line checker, retain the receipt text as well, so a direct field
+// commitment can point the reader at that field's line.  This deliberately
+// does not try to reconstruct an expected value from a digest.
+function lineForDirectField(receiptText, field) {
+  if (typeof receiptText !== "string") return null;
+  let depth = 0;
+  for (let i = 0; i < receiptText.length; i += 1) {
+    if (receiptText[i] === "{") { depth += 1; continue; }
+    if (receiptText[i] === "}") { depth -= 1; continue; }
+    if (receiptText[i] !== "\"") continue;
+    const start = i;
+    for (i += 1; i < receiptText.length; i += 1) {
+      if (receiptText[i] === "\\") { i += 1; continue; }
+      if (receiptText[i] === "\"") break;
+    }
+    let after = i + 1;
+    while (/\s/.test(receiptText[after])) after += 1;
+    if (depth === 1 && receiptText[after] === ":" && JSON.parse(receiptText.slice(start, i + 1)) === field) {
+      return receiptText.slice(0, start).split("\n").length;
+    }
+  }
+  return null;
+}
+
+function shownValue(value) {
+  const text = typeof value === "string" ? JSON.stringify(value) : canonical(value);
+  return text.length <= 240 ? text : `${text.slice(0, 237)}...`;
+}
+
+function fieldMismatch(code, field, value, receiptText) {
+  const line = lineForDirectField(receiptText, field);
+  const where = line === null ? `field ${field} (source line unavailable)` : `receipt line ${line}, field ${field}`;
+  return new Refusal(code, `${where}: recorded value ${shownValue(value)} does not match its sealed commitment (committed value withheld)`);
+}
+
 // The check. Returns { accepted, checks } or throws Refusal. Order matters:
 // the per-field commitments are checked first so a single-field mutation is
 // named specifically; the signature is the unforgeable backstop that also
 // catches any field a commitment does not cover (e.g. a repaired commitment).
-export function checkReceipt(receipt, pubKeyHex) {
+export function checkReceipt(receipt, pubKeyHex, receiptText) {
   if (receipt === null || typeof receipt !== "object") throw new Refusal("not_a_receipt", "input is not a JSON object");
   if (receipt.receipt !== "seal.spine/v1") throw new Refusal("unknown_format", `unknown receipt format: ${receipt.receipt}`);
   const seal = receipt.seal;
@@ -83,19 +119,19 @@ export function checkReceipt(receipt, pubKeyHex) {
 
   // 1. decision commitment
   if (sha256Hex(String(receipt.decision)) !== seal.decision_sha256) {
-    throw new Refusal("decision_binding_mismatch", "the recorded decision does not match its sealed commitment");
+    throw fieldMismatch("decision_binding_mismatch", "decision", receipt.decision, receiptText);
   }
   // 2. tool commitment
   if (sha256Hex(String(receipt.tool)) !== seal.tool_sha256) {
-    throw new Refusal("tool_binding_mismatch", "the recorded tool does not match its sealed commitment");
+    throw fieldMismatch("tool_binding_mismatch", "tool", receipt.tool, receiptText);
   }
   // 3. arguments commitment
   if (sha256Hex(canonical(receipt.arguments)) !== seal.args_sha256) {
-    throw new Refusal("arguments_binding_mismatch", "the recorded arguments do not match their sealed commitment");
+    throw fieldMismatch("arguments_binding_mismatch", "arguments", receipt.arguments, receiptText);
   }
   // 4. combined effect commitment (defence in depth)
   if (sha256Hex(canonical({ args: receipt.arguments, tool: receipt.tool })) !== seal.effect_sha256) {
-    throw new Refusal("effect_binding_mismatch", "the recorded effect does not match its sealed commitment");
+    throw fieldMismatch("effect_binding_mismatch", "tool and arguments", { tool: receipt.tool, arguments: receipt.arguments }, receiptText);
   }
   // 5. signature backstop — makes every commitment above unforgeable
   const { sig, ...sealWithoutSig } = seal;
@@ -108,7 +144,7 @@ export function checkReceipt(receipt, pubKeyHex) {
   } catch (error) {
     throw new Refusal("pubkey_invalid", `the supplied public key is unusable: ${error.message}`);
   }
-  if (!ok) throw new Refusal("signature_invalid", "the seal signature does not verify against the supplied public key");
+  if (!ok) throw new Refusal("signature_invalid", "cannot identify one changed receipt line: every direct field commitment matched, but the signature does not verify. The changed byte may be the signature or any signed field without a direct commitment.");
 
   return {
     accepted: true,
@@ -136,15 +172,17 @@ function main(argv) {
     process.exit(2);
   }
   let receipt;
+  let receiptText;
   try {
-    receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
+    receiptText = readFileSync(receiptPath, "utf8");
+    receipt = JSON.parse(receiptText);
   } catch (error) {
     process.stdout.write(`REFUSE unreadable_receipt: ${error.message}\n`);
     process.exit(1);
   }
   try {
     const pubKeyHex = resolvePubkey(args[keyIndex + 1]);
-    const result = checkReceipt(receipt, pubKeyHex);
+    const result = checkReceipt(receipt, pubKeyHex, receiptText);
     process.stdout.write(`ACCEPT ${result.decision} ${result.tool} — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.\n`);
     process.exit(0);
   } catch (error) {
