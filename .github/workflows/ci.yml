@@ -337,6 +337,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-check
+          ref: master
+          path: .family/seal-check
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-demo
+          ref: main
+          path: .family/seal-demo
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-live-demo
+          ref: master
+          path: .family/seal-live-demo
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-verify-action
+          ref: main
+          path: .family/seal-verify-action
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/seal-assurance-kit
+          ref: main
+          path: .family/seal-assurance-kit
+      - uses: actions/checkout@v4
+        with:
+          repository: velvetmonkey/mcp-seal-dev
+          ref: main
+          path: .family/mcp-seal-dev
       - name: Check badge and launch-claim truth
         run: >-
           node scripts/launch-truth-gate.mjs
@@ -357,6 +387,7 @@ jobs:
         run: node scripts/claim-bearing-file-inventory.mjs
       - run: node --test test/claim-bearing-file-inventory.test.mjs
       - run: node scripts/claims-drift.mjs
+      - run: node scripts/claim-coverage-inventory.mjs
       - run: node --test test/claims-drift.test.mjs
       # Required CI compares the local claim block against the committed hash only; live sibling comparison is in family-claims-live.yml.
       - run: node scripts/claims-drift-family.mjs
