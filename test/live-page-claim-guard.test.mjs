@@ -18,7 +18,7 @@ async function withPage(body, fn) {
   try { return await fn(`http://127.0.0.1:${server.address().port}/`); }
   finally { await new Promise((done) => server.close(done)); }
 }
-function run(url, readme = originalReadme, pinBody = "<html></html>") {
+function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined) {
   const dir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
@@ -26,6 +26,7 @@ function run(url, readme = originalReadme, pinBody = "<html></html>") {
     ...process.env, LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
     LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
     LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
+    ...(provenanceUrl ? { LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl } : {}),
   }});
   let stdout = "", stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -53,12 +54,25 @@ test("fails and names a fetched button disagreement", async () => {
   });
 });
 
-test("fails and names a served-byte disagreement with the release pin", async () => {
-  await withPage("<html>new release</html>", async (url) => {
-    const result = await run(url);
+test("fails with pinned provenance and a changed-region diagnostic", async () => {
+  await withPage("<html></html>", async (provenanceUrl) => {
+    await withPage("<html>new release</html>", async (url) => {
+    const result = await run(url, originalReadme, "<html></html>", provenanceUrl);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /served landing page differs from seal-check@a67abf7/);
-    assert.match(result.stderr, /To repin after reviewing a deliberate seal-check release/);
+    assert.match(result.stderr, /Confirm the candidate release's provenance before repinning/);
+    assert.match(result.stderr, /DIFF  first changed region near byte/);
+    assert.match(result.stderr, /- pinned/);
+    assert.match(result.stderr, /\+ served/);
+    });
+  });
+});
+
+test("fails closed when pinned release provenance is unreachable", async () => {
+  await withPage("<html>new release</html>", async (url) => {
+    const result = await run(url, originalReadme, "<html></html>", "http://127.0.0.1:1/");
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE UNREACHABLE/);
   });
 });
 

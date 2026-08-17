@@ -120,7 +120,7 @@ receipts are claims, not proofs. Check one with the separate-process checker (V1
   node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/e27068c63e7f5dcf5a9e3478cb53d3a90b89326ba6250a13251b46fd7616a07c/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   <!-- live-page-claims:begin -->
-  Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls** and does not run MCP tool-calls. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
+  Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
   <!-- live-page-claims:end -->
 ```
 
@@ -137,7 +137,7 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 ```
 
 <!-- live-page-claims:begin -->
-[Open seal-check](https://velvetmonkey.github.io/seal-check/) to re-check a supplied Seal decision receipt in its browser kernel and inspect the receipt checks it reports. The landing page has **zero `<button>` controls** and does not run MCP tool-calls. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+[Open seal-check](https://velvetmonkey.github.io/seal-check/) to re-check a supplied Seal decision receipt in its browser kernel and inspect the receipt checks it reports. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 <!-- live-page-claims:end -->
 
 Change one recorded field and the same checker refuses:
