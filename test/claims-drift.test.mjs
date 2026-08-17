@@ -44,3 +44,20 @@ test("fatal manifest read first still reports later drift", () => {
     rmSync(UNREADABLE, { recursive: true, force: true });
   }
 });
+
+test("an empty claims-drift block population is a refusal", () => {
+  const guard = readFileSync(GUARD, "utf8");
+  const empty = guard.replace(
+    /const BLOCKS = \[[\s\S]*?\n\];/,
+    "const BLOCKS = [];",
+  );
+  assert.notEqual(empty, guard, "test must replace the block population");
+  writeFileSync(GUARD, empty);
+  try {
+    const run = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(run.status, 1, `${run.stdout}${run.stderr}`);
+    assert.match(run.stderr, /claims-drift block population is empty/);
+  } finally {
+    writeFileSync(GUARD, guard);
+  }
+});

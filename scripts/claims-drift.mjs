@@ -26,6 +26,11 @@ const CLAIM_MANIFEST = [
   ["docs/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/TRUTH-BOX.md
 ];
 
+if (BLOCKS.length === 0) {
+  console.error("ERROR claims-drift block population is empty; refusing to treat silence as complete claim synchronization");
+  process.exit(1);
+}
+
 // FAMILY-SHARED:BEGIN core
 let fatal = false;
 

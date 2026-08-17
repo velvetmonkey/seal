@@ -76,6 +76,11 @@ for (let index = 0; index < lines.length; index++) {
 }
 emitParagraph();
 
+if (units.length === 0) {
+  console.error("ERROR README source population is empty; refusing to treat silence as a complete claim inventory");
+  process.exit(1);
+}
+
 let failures = 0;
 let legacyText = "";
 if (auditLegacy) {

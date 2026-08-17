@@ -85,3 +85,17 @@ test("a missing sibling is a named finding, never a skip", (t) => {
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /FINDING required family checkout missing: seal-check/);
 });
+
+test("an empty family claim-bearing population is a refusal, not complete coverage", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  for (const root of Object.values(roots)) {
+    for (const entry of fs.readdirSync(root)) fs.rmSync(path.join(root, entry), { recursive: true, force: true });
+    fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(root, "scripts/claims-drift.mjs"), "");
+  }
+  fs.writeFileSync(path.join(roots.seal, "scripts/claim-coverage-allowlist.json"), JSON.stringify({ version: 1, uncovered: [] }));
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /family claim-bearing population is empty/);
+});
