@@ -16,7 +16,12 @@ const MANIFEST = "scripts/claim-bearing-files.json";
 // such as "Seal intercepts requests" is inventory-bearing even when its
 // behaviour verb has never appeared in this repository. Product claims can be
 // comments or string literals in source files just as readily as Markdown
-// prose. Binary artifacts remain outside the population below.
+// prose. Bare contextual references are deliberately outside this subject-keyed
+// rule: for example, "The kernel refuses a stale receipt" is not inventory-
+// bearing unless it names Seal as its subject. That limit avoids treating a
+// generic component noun as a product entity merely because a nearby document
+// happens to make the referent clear. Binary artifacts remain outside the
+// population below.
 const PRODUCT_ENTITY = /\b(?:seal(?:-check)?|seal[- ]?(?:demo|protect|checker|kernel)|approval gate|guarded (?:tool|path|action)|receipt checker|landing page)\b/i;
 const ASSERTION = /\b(?:is|are|was|were|has|have|does|do|will|would|can|cannot|can't|must|should|supports?|requires?|runs?|executes?|checks?|verifies?|writes?|creates?|refuses?|gates?|protects?|controls?|proves?|prevents?|allows?|denies?|blocks?|forwards?|ships?|uses?|works?|matches?|transforms?|turns?|converts?|makes?|renders?|serves?|starts?|stops?|sends?|receives?|calls?|invokes?|launches?|installs?|downloads?|publishes?|signs?|encrypts?|decrypts?)\b/i;
 // Present-tense declaratives conventionally put a third-person verb after the
