@@ -265,7 +265,7 @@ async function run(argv, sealBinPath) {
   console.log("receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:");
   console.log(`  node ${JSON.stringify(checkerPath)} ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
-  console.log("  Online: https://velvetmonkey.github.io/seal-check/ runs a supplied MCP tool-call in its browser kernel and reports its receipt checks. It does not establish that this setup routes calls through Seal, and it is not the checker command above.");
+  console.log("  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.");
   process.exit(0);
 }
 
