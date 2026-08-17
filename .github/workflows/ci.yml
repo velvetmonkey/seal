@@ -181,10 +181,6 @@ jobs:
           else
             sudo ln -s "$selected_node" /usr/bin/node
           fi
-      - name: Provision the enumcanon control scratch
-        shell: bash
-        run: |
-          sudo install -d -o "$(id -u)" -g "$(id -g)" /home/monkey/scratch/enumcanon
       - name: Run and count the complete product suite
         shell: bash
         run: scripts/run-complete-product-suite.sh

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { enumerate } from "../scripts/executable-population.mjs";
@@ -10,9 +11,7 @@ const ENUMERATOR = join(ROOT, "scripts/executable-population.mjs");
 const ANTI_ROLL = join(ROOT, "scripts/check-executable-population-callers.mjs");
 
 function fixture() {
-  const scratch = "/home/monkey/scratch/enumcanon";
-  mkdirSync(scratch, { recursive: true });
-  const root = mkdtempSync(join(scratch, "fixture-"));
+  const root = mkdtempSync(join(tmpdir(), "seal-enumcanon-"));
   execFileSync("git", ["init", "-q", root]);
   execFileSync("git", ["-C", root, "config", "user.email", "enumcanon@example.invalid"]);
   execFileSync("git", ["-C", root, "config", "user.name", "enumcanon"]);
