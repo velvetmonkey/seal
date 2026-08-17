@@ -55,7 +55,11 @@ function main() {
   if (!Array.isArray(allowlist) || new Set(allowlist).size !== allowlist.length) throw new Error("allowlist must be a unique array");
   const rows = [];
   for (const [repo, root] of REPOS) {
-    if (!fs.existsSync(root)) throw new Error(`${repo} checkout is missing: ${root}`);
+    if (!fs.existsSync(root)) {
+      console.error(`FINDING required family checkout missing: ${repo} (${root})`);
+      process.exitCode = 1;
+      return;
+    }
     const coverage = guardCoverage(repo, root);
     for (const file of walk(root)) {
       const rel = `${repo}/${path.relative(root, file).replaceAll(path.sep, "/")}`;
