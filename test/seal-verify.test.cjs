@@ -47,15 +47,29 @@ function runtimeRefusalContext() {
   return { cache, dataHome, receipt, runtime };
 }
 
-test("verify reports a failed runtime fetch without diagnosing the machine or receipt", async () => {
+test("verify tells the reader how to retry when an uncached runtime fetch fails", async () => {
   const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
 
   const unavailable = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: "http://127.0.0.1:9/runtime" });
   assert.equal(unavailable.code, 1);
   assert.match(unavailable.out, /^seal: runtime_download_failed: /);
-  assert.match(unavailable.out, new RegExp(`pinned runtime file at ${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`));
+  assert.match(unavailable.out, new RegExp(`pinned runtime file at ${runtime.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}, but it is not cached`));
   assert.match(unavailable.out, /runtime fetch failed: [A-Za-z]+:/);
+  assert.match(unavailable.out, /Verification cannot continue without this runtime file\./);
+  assert.ok(unavailable.out.includes(`Restore access to that source, then run exactly: \`seal verify ${receipt}\`.`));
+  assert.ok(!fs.existsSync(runtime), "a failed fetch must leave the runtime absent");
   assert.doesNotMatch(unavailable.out, /machine has no network connection|Seal did not inspect the receipt/);
+});
+
+test("verify distinguishes a corrupt cached runtime from an absent runtime and failed fetch", async () => {
+  const { cache, dataHome, receipt, runtime } = runtimeRefusalContext();
+  fs.mkdirSync(path.dirname(runtime), { recursive: true });
+  fs.writeFileSync(runtime, "corrupt runtime\n");
+
+  const corrupt = await runAsync(["verify", receipt], cache, dataHome, { SEAL_RUNTIME_BASE_URL: "http://127.0.0.1:9/runtime" });
+  assert.equal(corrupt.code, 1);
+  assert.match(corrupt.out, /^seal: cached runtime hash mismatch for kernel\/wasm\/seal\.js:/);
+  assert.doesNotMatch(corrupt.out, /runtime_download_failed|not cached|fetch from/);
 });
 
 test("verify names a pinned runtime absent from its source", async (t) => {
