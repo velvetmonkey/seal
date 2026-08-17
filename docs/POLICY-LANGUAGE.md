@@ -719,8 +719,10 @@ and graded by **running the kernel** — there is no hand-authored answer key to
 drift from the policy. Failure blocks signing unless the signer performs a
 signed, recorded override. A failed teach-back cannot still produce a green
 ordinary signing path: by Seal's own doctrine, a control is only real if it
-cannot be violated while still getting green. The override exists so a solo
-operator cannot wedge himself, but the override is itself a signed recorded act.
+cannot be violated while still getting green. The specified behaviour is BLOCK
+WITH A RECORDED OVERRIDE, and it is not implemented at this revision; this
+section records the rule Ben chose and does not claim an override mechanism
+exists.
 
 Superseded default, replaced by Ben's 2026-08-09 ruling: failure did not block
 signing; it stamped the receipt `signed-without-comprehension-evidence`,
