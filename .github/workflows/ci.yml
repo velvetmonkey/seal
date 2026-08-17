@@ -242,6 +242,92 @@ jobs:
           fi
           exit "$gate_status"
 
+  # demoteci4: this local job observes only values and artefacts it controls.
+  # It usefully exercises the demo path, but cannot prove to itself that its
+  # checker ran instead of being staged; that requires external evidence.
+  demo-receipt-checker:
+    name: demo receipt checker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and install the demo artifact
+        shell: bash
+        run: |
+          dist="$RUNNER_TEMP/demo-receipt-dist"
+          prefix="$RUNNER_TEMP/demo-receipt-prefix"
+          node scripts/build-dist.cjs --out "$dist"
+          read -r digest bytes artifact < "$dist/SHA256SUMS"
+          "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix"
+          test -x "$prefix/bin/seal"
+      - name: Run the demo and check its emitted receipt
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/demo-receipt-prefix"
+          export PATH="$prefix/bin:$PATH"
+          demo_log="$RUNNER_TEMP/seal-demo.log"
+
+          printf 'y\n' | seal demo 2>&1 | tee "$demo_log"
+          demo_dir="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo.*$/\1/p' "$demo_log")"
+          if [[ -z "$demo_dir" || ! -d "$demo_dir/receipts" ]]; then
+            echo '::error::seal demo produced no receipt directory'
+            exit 1
+          fi
+          receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
+          pubkey="$demo_dir/receipt-signer.pub"
+          if [[ -z "$receipt" || ! -f "$pubkey" ]]; then
+            echo '::error::seal demo did not write the BLOCK receipt and public key required for checking'
+            exit 1
+          fi
+
+          checker="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")/checker/seal-receipt-check.mjs"
+          if [[ ! -f "$checker" ]]; then
+            echo '::error::installed artifact has no receipt checker'
+            exit 1
+          fi
+
+          challenge="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          accept_result="$RUNNER_TEMP/demo-receipt-check-$challenge.json"
+          tamper_result="$RUNNER_TEMP/tampered-receipt-check-$challenge.json"
+          evidence_checker=".github/workflows/receipt-check-evidence.mjs"
+
+          set +e
+          node "$evidence_checker" check "$checker" "$receipt" "$pubkey" "$challenge" "$accept_result"
+          accept_status=$?
+          set -e
+          if [[ "$accept_status" -ne 0 ]]; then
+            echo "::error::live receipt checker exited $accept_status"
+            exit 1
+          fi
+
+          tampered="$RUNNER_TEMP/tampered-receipt.json"
+          node -e '
+            const fs = require("node:fs");
+            const [source, target] = process.argv.slice(1);
+            const receipt = JSON.parse(fs.readFileSync(source, "utf8"));
+            receipt.decision = "ALLOW";
+            fs.writeFileSync(target, `${JSON.stringify(receipt, null, 2)}\n`);
+          ' "$receipt" "$tampered"
+
+          set +e
+          node "$evidence_checker" check "$checker" "$tampered" "$pubkey" "$challenge" "$tamper_result"
+          tamper_status=$?
+          set -e
+          if [[ "$tamper_status" -eq 0 ]]; then
+            echo '::error::tampered receipt was accepted'
+            exit 1
+          fi
+          echo "tamper checker exited $tamper_status as expected"
+          node "$evidence_checker" validate "$receipt" "$tampered" "$challenge" "$accept_result" "$tamper_result"
+          echo "LIMIT: This job shows the demo path with a key generated for this run; it does not prove a stranger's setup works, and it cannot prove to itself that the checker ran rather than being staged."
+
   docs-claims:
     runs-on: ubuntu-latest
     steps:
