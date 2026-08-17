@@ -353,6 +353,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - run: node scripts/readme-claim-inventory.mjs
+      - name: Inventory every claim-bearing prose file
+        run: node scripts/claim-bearing-file-inventory.mjs
+      - run: node --test test/claim-bearing-file-inventory.test.mjs
       - run: node scripts/claims-drift.mjs
       - run: node --test test/claims-drift.test.mjs
       # Required CI compares the local claim block against the committed hash only; live sibling comparison is in family-claims-live.yml.
