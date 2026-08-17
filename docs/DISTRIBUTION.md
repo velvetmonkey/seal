@@ -57,8 +57,10 @@ Node authorization.
 The demo prints the absolute path of that packaged checker. The launcher
 never searches `PATH` for another `seal`. The checker imports no Seal module
 at check time, but copies the receipt canonicalisation rule and uses the same
-Node crypto platform as the producer. It detects receipt mutation under a
-trusted supplied key, not defects in those shared implementation choices.
+Node crypto platform as the producer. It detects mutation of the receipt's
+canonical parsed value under a trusted supplied key; semantically irrelevant
+JSON formatting differences are not distinguished. It does not detect defects
+in those shared implementation choices.
 
 For `seal protect`, MCP discovery has a 5000ms deadline per phase by
 default. Slow but legitimate servers can use

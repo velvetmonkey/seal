@@ -24,7 +24,7 @@ Protect mediates a stdio MCP server entry. Other transport shapes are outside th
 
 Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM, and other platforms are not supported in this release. ([README.md](../README.md); [platform implementation](../spine/platform.cjs); [distribution test](../test/dist3d.test.cjs))
 
-Only the demo signs receipts, using a key generated for that run. The protected path writes its receipts unsigned, and the shipped checker refuses those protected-path receipts as `REFUSE unsealed`. ([README.md](../README.md); [distribution notes](DISTRIBUTION.md); [truth gate](../scripts/launch-truth-gate.mjs); [checker implementation](../checker/seal-receipt-check.mjs))
+Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments. ([README.md](../README.md); [distribution notes](DISTRIBUTION.md); [truth gate](../scripts/launch-truth-gate.mjs); [checker implementation](../checker/seal-receipt-check.mjs))
 
 The checker ships inside the same install artifact. It does not import Seal at check time, but its canonicalisation is a copy of the product-side implementation; it is therefore not an independently obtained check. ([artifact payload](../scripts/build-dist.cjs); [checker limits](../checker/seal-receipt-check.mjs); [checker test](../test/receipt-checker.test.cjs); merged [18bba8e](https://github.com/velvetmonkey/seal/commit/18bba8ea230ead9fb605cd61d352a0e894c256d5))
 
