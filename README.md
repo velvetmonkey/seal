@@ -17,6 +17,8 @@ release. If you download a binary, verify it against the `SHA256SUMS` asset
 attached to the same release before installing. The repository root does not
 carry a hand-maintained copy.
 
+![Seal process diagram: one exact tool call passes through the gate; unrelated routes remain outside](assets/seal-flow.svg)
+
 ## 1. Install
 
 ```sh
