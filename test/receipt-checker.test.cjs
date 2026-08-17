@@ -93,11 +93,33 @@ test("three distinct mutation sites each produce a distinct refusal", async () =
 
   for (const r of [decision, tool, argument]) assert.equal(r.code, 1, r.out);
   assert.match(decision.out, /^REFUSE decision_binding_mismatch:/m);
+  assert.match(decision.out, /receipt line 4, field decision: recorded value "BLOCK" does not match its sealed commitment \(committed value withheld\)/);
   assert.match(tool.out, /^REFUSE tool_binding_mismatch:/m);
   assert.match(argument.out, /^REFUSE arguments_binding_mismatch:/m);
 
   const codes = [decision, tool, argument].map((r) => r.out.match(/REFUSE (\w+):/)[1]);
   assert.equal(new Set(codes).size, 3, `refusals must be distinct, got ${codes.join(", ")}`);
+});
+
+test("a nested argument mutation does not guess that its enclosing field line changed", async () => {
+  const { receiptPath, pubkeyPath } = await makeRealReceipt();
+  const mutated = mutateReceipt(receiptPath, (r) => { r.arguments.line = "nested value changed"; });
+  const lines = fs.readFileSync(mutated, "utf8").split("\n");
+  assert.match(lines[6], /"line": "nested value changed"/, "physical tamper must be on receipt line 7");
+
+  const result = runChecker(mutated, pubkeyPath);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE arguments_binding_mismatch: cannot identify one changed receipt line: the arguments commitment covers a structured value/m);
+  assert.doesNotMatch(result.out, /receipt line \d+/);
+});
+
+test("a failed signature says when the checker cannot attribute one changed line", async () => {
+  const { receiptPath, pubkeyPath } = await makeRealReceipt();
+  const result = runChecker(mutateReceipt(receiptPath, (r) => {
+    r.seal.sig = `${r.seal.sig.slice(0, -1)}${r.seal.sig.endsWith("0") ? "1" : "0"}`;
+  }), pubkeyPath);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE signature_invalid: cannot identify one changed receipt line:/m);
 });
 
 test("the signature is the unforgeable backstop: repairing commitments still refuses", async () => {
