@@ -66,10 +66,12 @@ function scan(dir, hits) {
 }
 
 function scanDocs(dir, claims, hits) {
+  let scanned = 0;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) { scanDocs(full, claims, hits); continue; }
+    if (entry.isDirectory()) { scanned += scanDocs(full, claims, hits); continue; }
     if (!entry.isFile()) continue;
+    scanned++;
     const text = fs.readFileSync(full, "utf8");
     for (const { label, pattern } of claims) {
       const matches = new RegExp(pattern.source, `${pattern.flags}g`);
@@ -79,6 +81,7 @@ function scanDocs(dir, claims, hits) {
       }
     }
   }
+  return scanned;
 }
 
 test("no banned verification claim survives in product surfaces or docs/", () => {
@@ -93,13 +96,15 @@ test("no banned verification claim survives in product surfaces or docs/", () =>
   // word legitimately in unrelated historical and design material,
   // so scan every docs/ file for the receipt-verification claims at issue.
   // This is a semantic scope, not a path exemption: no docs file is skipped.
-  scanDocs(path.join(ROOT, "docs"), DOC_BANNED_CLAIMS, hits);
+  const scanned = scanDocs(path.join(ROOT, "docs"), DOC_BANNED_CLAIMS, hits);
+  assert.ok(scanned > 0, "docs claim scan examined no files");
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
 });
 
 test("no stale doctor or kernel allocation claim survives in docs/", () => {
   const hits = [];
-  scanDocs(path.join(ROOT, "docs"), DOC_BANNED_OVERCLAIMS, hits);
+  const scanned = scanDocs(path.join(ROOT, "docs"), DOC_BANNED_OVERCLAIMS, hits);
+  assert.ok(scanned > 0, "docs overclaim scan examined no files");
   assert.deepEqual(hits, [], `banned overclaims found:\n${hits.join("\n")}`);
 });
 
