@@ -13,7 +13,15 @@ const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
 const test = require("node:test");
 
-const SEAL = path.join(__dirname, "..", "bin", "seal");
+const ROOT = path.join(__dirname, "..");
+const SEAL = path.join(ROOT, "bin", "seal");
+
+// Match the repository's existing path.relative(ROOT, ...) convention used by
+// output and inventory diagnostics: semantic output assertions must not depend
+// on the checkout's absolute filesystem location.
+function repositoryRelativeOutput(text) {
+  return text.replaceAll(ROOT, ".");
+}
 
 function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -63,6 +71,8 @@ test("seal demo: input_required, approve once, replay refused; counts from the c
 
   child.stdin.write("y\n");
   const code = await run.exit;
+  run.out = repositoryRelativeOutput(run.out);
+  run.err = repositoryRelativeOutput(run.err);
   assert.equal(code, 0, `demo exited ${code}\n--- stdout:\n${run.out}\n--- stderr:\n${run.err}`);
 
   assert.equal(readCount(countFile), "1", "child must have observed exactly one call after approve + replay");
