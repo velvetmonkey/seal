@@ -74,7 +74,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   assert.match(run.out, /a gate, not a sandbox/);
   assert.match(
     run.out,
-    /receipts are claims, not proofs\. Check one with the separate-process checker \(V11-RECEIPT-01\)\. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform\. It can detect a changed receipt against your trusted key; it cannot detect a defect shared by that rule or platform\. It ships in this same artifact, so it also cannot protect against a replaced artifact:/,
+    /receipts are claims, not proofs\. Check one with the separate-process checker \(V11-RECEIPT-01\)\. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform\. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished\. It cannot detect a defect shared by that rule or platform\. It ships in this same artifact, so it also cannot protect against a replaced artifact:/,
     "demo must state the runtime/process boundary, copied canonicalisation and shared crypto limit, and same-artifact limit",
   );
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call its same-artifact checker external");

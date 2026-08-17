@@ -9,12 +9,13 @@ const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const NOTES = path.join(ROOT, "docs", `RELEASE-NOTES-v${VERSION}.md`);
 
-test("release notes state the platform and unsigned protected-receipt limits", () => {
+test("release notes state the platform and protected-receipt signing boundary", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
   assert.match(notes, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 only\\.`));
-  assert.match(notes, /The protected path writes its receipts unsigned/);
-  assert.match(notes, /REFUSE unsealed/);
+  assert.match(notes, /Both paths write signed receipt files/);
+  assert.match(notes, /the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory/);
+  assert.match(notes, /The checker accepts a receipt only against the public key you supply/);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {

@@ -33,8 +33,8 @@
 //   node checker/seal-receipt-check.mjs RECEIPT.json --pubkey (HEX | FILE)
 //
 // Exit 0 and "ACCEPT ..." on a genuine receipt; non-zero and "REFUSE <code>:
-// <reason>" on a mutated or malformed one. It never prints "verified" as a
-// bare adjective and it makes no claim beyond what it recomputed.
+// <reason>" on a semantically mutated or malformed one. It never prints
+// "verified" as a bare adjective and it makes no claim beyond what it recomputed.
 
 import { readFileSync } from "node:fs";
 import { createHash, verify as edVerify, createPublicKey } from "node:crypto";
@@ -188,7 +188,7 @@ function main(argv) {
   try {
     const pubKeyHex = resolvePubkey(args[keyIndex + 1]);
     const result = checkReceipt(receipt, pubKeyHex, receiptText);
-    process.stdout.write(`ACCEPT ${result.decision} ${result.tool} — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt is exactly what Seal on that machine signed and has not changed since. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.\n`);
+    process.stdout.write(`ACCEPT ${result.decision} ${result.tool} — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt has the same canonical parsed value that this key signed. Semantically irrelevant JSON formatting differences are not distinguished. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.\n`);
     process.exit(0);
   } catch (error) {
     if (error instanceof Refusal) {
