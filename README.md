@@ -14,6 +14,8 @@ Requires Node 20+, Git, and the `claude` command for Protect (check with `claude
 
 Every command below ran in this order against the [`SHA256SUMS`](SHA256SUMS)-pinned bytes. Each printed the output shown.
 
+![Seal process diagram: one exact tool call passes through the gate; unrelated routes remain outside](assets/seal-flow.svg)
+
 ## 1. Install
 
 ```sh
