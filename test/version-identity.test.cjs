@@ -7,14 +7,13 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { productIdentity, artifactName, releaseArtifactName } = require("../scripts/product-identity.cjs");
+const { productIdentity, artifactName } = require("../scripts/product-identity.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 // Two names, because they answer two questions. The built name identifies the
 // tree this build came from; the released name identifies the published bytes.
 const builtName = artifactName(productIdentity({ root: ROOT }).identity);
-const releasedName = releaseArtifactName(VERSION);
 // Named search surface for the stale-version check below: all Markdown readers
 // can receive release copy, including the top-level README and every guide.
 const READER_FACING_VERSION_SEARCH_ROOTS = ["README.md", "docs/**/*.md"];
@@ -68,18 +67,12 @@ test("every emitted release identity derives from VERSION", () => {
   assert.equal(installed.code, 0, installed.stderr);
   assert.equal(installed.stdout.trim(), VERSION);
 
-  const [pinnedDigest, pinnedBytes, pinnedName] = fs.readFileSync(path.join(ROOT, "SHA256SUMS"), "utf8").trim().split(/\s+/);
-  // DISTRIBUTION and the guide install a downloaded release, so they name the
-  // released artifact. The README builds from source, where the name carries
-  // the commit, so it pastes the shape instead of a name that goes stale.
-  for (const file of ["docs/DISTRIBUTION.md", "docs/guide/README.md"]) {
+  // Downloaded releases carry their authoritative SHA256SUMS asset. The
+  // repository root is intentionally empty between releases.
+  for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md", "docs/VERSION-IDENTITY.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, new RegExp(`${releasedName} --sha256 ${pinnedDigest}`));
+    assert.match(text, /release asset|release's `SHA256SUMS` asset|co-published `SHA256SUMS`|`SHA256SUMS`\s+asset\s+attached to the same release/i);
   }
-  assert.match(
-    fs.readFileSync(path.join(ROOT, "README.md"), "utf8"),
-    new RegExp(`\\./dist/seal-v\\*-linux-x64 --sha256 ${pinnedDigest}`),
-  );
   for (const file of ["README.md", "docs/guide/README.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${VERSION} linux-x64`));
@@ -90,9 +83,7 @@ test("every emitted release identity derives from VERSION", () => {
   const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");
   assert.match(releaseWorkflow, /Seal v\$\{version\}/);
   assert.doesNotMatch(releaseWorkflow, /seal-vVERSION/);
-  assert.match(pinnedDigest, /^[0-9a-f]{64}$/);
-  assert.match(pinnedBytes, /^\d+$/);
-  assert.equal(pinnedName, releasedName);
+  assert.equal(fs.readFileSync(path.join(ROOT, "SHA256SUMS"), "utf8").trim(), "");
 });
 
 test("sync leaves no old product version in the named reader-facing search surface", () => {

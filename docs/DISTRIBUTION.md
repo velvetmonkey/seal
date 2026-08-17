@@ -10,20 +10,22 @@ release.
 identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
 otherwise `<version>-dev.g<commit>` — see
 [VERSION-IDENTITY.md](VERSION-IDENTITY.md). That file
-is the installer and the payload. The published pin lives in `SHA256SUMS`
-at the repository root (digest and byte length). That file is a pin, not
-a second product. `test/dist-pin.test.cjs` rebuilds the artifact and
-fails if `SHA256SUMS` does not match, so a hand-copied hash cannot rot
-the next time a payload file is added.
+is the installer and the payload. The published pin lives in the `SHA256SUMS`
+release asset alongside the artifact (digest and byte length). The repository
+root intentionally has no hand-maintained copy. `test/dist-pin.test.cjs`
+refuses a root entry for an artifact that is not a published release, while
+an absent or empty root file is the defined between-releases state.
 
-There is no signing-key ceremony. The operator supplies `--sha256` (and
-optionally `--bytes`) from a source they already trust. Without that pin
-the installer refuses.
+There is no signing-key ceremony. Download the binary and the `SHA256SUMS`
+asset attached to the same release, then supply that asset's `--sha256` (and
+optionally `--bytes`) values. Without that pin the installer refuses.
 
 ## Install
 
 ```sh
-./seal-v0.2.0-rc.2-linux-x64 --sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546 --bytes 6146222 --prefix ~/.local
+read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
+chmod +x "$SEAL_ARTIFACT"
+"./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and

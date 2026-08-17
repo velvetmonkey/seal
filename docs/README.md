@@ -35,8 +35,10 @@ the Node CLI this repository ships.
 
 ## I want to check the evidence myself
 
-1. [SHA256SUMS](../SHA256SUMS) and [scripts/build-dist.cjs](../scripts/build-dist.cjs)
-   — rebuild the artifact and compare the digest and byte count yourself.
+1. The [`SHA256SUMS` release asset](https://github.com/velvetmonkey/seal/releases)
+   and [scripts/build-dist.cjs](../scripts/build-dist.cjs) — download a binary
+   and the `SHA256SUMS` asset attached to the same release, then compare the
+   digest and byte count yourself.
 2. [test/four-beats.test.cjs](../test/four-beats.test.cjs) — the acceptance
    walk: install, demo, check, protect, unprotect, from the installed
    artifact, on a PATH that cannot see Docker, Lean or Python.

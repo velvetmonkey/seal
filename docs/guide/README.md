@@ -28,13 +28,13 @@ $ claude --version
 2.1.233 (Claude Code)
 ```
 
-Download the `v0.2.0-rc.2` release artifact and run it
-with the digest and byte length recorded in `SHA256SUMS`:
+Download a binary and the `SHA256SUMS` asset attached to the same release,
+then run the binary with that asset's digest and byte length:
 
 ```
-$ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.2/seal-v0.2.0-rc.2-linux-x64
-$ chmod +x seal-v0.2.0-rc.2-linux-x64
-$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546 --bytes 6146222
+$ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
+$ chmod +x "$SEAL_ARTIFACT"
+$ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
 installed seal 0.2.0-rc.2 linux-x64
 store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/34232421d9f20709e352d8604472c5db60ae81ca2f0fcdf9839f98ceb0700b1c
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal

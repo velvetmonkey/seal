@@ -35,19 +35,9 @@ rewrite("README.md", [
     `./dist/seal-v*-linux-x64 --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
   [/^(\/\S*\/dist\/)seal-v[^ /]+-linux-x64$/m, `$1${artifact}`],
 ]);
-// These two install a downloaded release, which is the one place the bare
-// release name is the truth.
-rewrite("docs/DISTRIBUTION.md", [
-  [/^\.\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
-    `./${released} --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
-]);
-rewrite("docs/guide/README.md", [
-  [/^\$ curl -fLO https:\/\/github\.com\/velvetmonkey\/seal\/releases\/download\/v[^/]+\/seal-v[^ ]+-linux-x64$/m,
-    `$ curl -fLO https://github.com/velvetmonkey/seal/releases/download/v${meta.version}/${released}`],
-  [/^\$ chmod \+x seal-v[^ ]+-linux-x64$/m, `$ chmod +x ${released}`],
-  [/^\$ \.\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+$/m,
-    `$ ./${released} --sha256 ${sha256} --bytes ${bytes}`],
-]);
+// Download instructions derive their filename, digest, and byte count from
+// the SHA256SUMS asset attached to the same release; do not materialize a
+// release-specific command here.
 for (const file of ["README.md", "docs/guide/README.md"]) {
   rewrite(file, [
     [/^sha256 [0-9a-f]+$/gm, `sha256 ${sha256}`],

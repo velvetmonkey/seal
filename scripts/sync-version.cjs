@@ -51,7 +51,7 @@ for (const file of ["README.md", "docs/DISTRIBUTION.md", path.join("docs", relea
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
-for (const file of ["README.md", path.join("docs", "guide", "README.md"), path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+for (const file of ["README.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, `v${version}`);
 }
 
@@ -63,9 +63,11 @@ function renameArtifact(match) {
   const development = match.match(/-dev\.g([0-9a-f]{7,40})-linux-x64$/);
   return development ? `seal-v${version}-dev.g${development[1]}-linux-x64` : `seal-v${version}-linux-x64`;
 }
-for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md"]) {
-  replace(file, ARTIFACT_NAME, renameArtifact);
-}
+replace("README.md", ARTIFACT_NAME, renameArtifact);
+// Download instructions derive the artifact name from the checksum asset from
+// the same release, so these guides intentionally have no versioned filename.
+replaceIfPresent("docs/DISTRIBUTION.md", ARTIFACT_NAME, renameArtifact);
+replaceIfPresent("docs/guide/README.md", ARTIFACT_NAME, renameArtifact);
 
 for (const file of ["README.md", "docs/guide/README.md"]) {
   replaceIfPresent(file, /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);

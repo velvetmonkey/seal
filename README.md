@@ -12,7 +12,10 @@ Requires Node 20+, Git, and the `claude` command for Protect (check with `claude
 
 **Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
-Every command below ran in this order against the [`SHA256SUMS`](SHA256SUMS)-pinned bytes. Each printed the output shown.
+Every command below ran in this order against the bytes published with a
+release. If you download a binary, verify it against the `SHA256SUMS` asset
+attached to the same release before installing. The repository root does not
+carry a hand-maintained copy.
 
 ## 1. Install
 
@@ -36,7 +39,7 @@ command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
 tree 34232421d9f20709e352d8604472c5db60ae81ca2f0fcdf9839f98ceb0700b1c
 ```
 
-A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Your build must reproduce the published pin in [`SHA256SUMS`](SHA256SUMS) or the installer refuses. It also refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
+A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
