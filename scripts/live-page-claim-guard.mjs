@@ -39,7 +39,7 @@ function claimRegions(readme) {
     if (begin === -1) break;
     const end = readme.indexOf(END, begin + BEGIN.length);
     if (end === -1) { fail(`README live-page claim block beginning at byte ${begin} has no end marker`); break; }
-    regions.push({ begin, end: end + END.length, text: readme.slice(begin + BEGIN.length, end) });
+    regions.push({ begin, end: end + END.length, text: readme.slice(begin + BEGIN.length, end) }); // CLAIM-COVERAGE: README.md
     offset = end + END.length;
   }
   if (regions.length === 0) fail("README has no checked live-page claim block");
