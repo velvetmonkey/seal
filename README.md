@@ -52,7 +52,7 @@ The demo builds a working gate in about a minute. Watch one number: the child's 
 
 ```sh
 export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
-(set -o pipefail; seal demo | tee "$SEAL_DEMO_LOG")
+(set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
 SEAL_DEMO_STATUS="$?"
 if test "$SEAL_DEMO_STATUS" -ne 0; then
   echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
@@ -213,9 +213,8 @@ seal doctor
 
 ```
 ASSUMPTION
-  Claude Code presents approval requests to a human and faithfully returns
-  the response. Seal cannot distinguish a human click from client-generated
-  acceptance.
+  Seal has not established whether this Claude Code configuration can
+  automatically answer elicitation requests.
 ```
 
 ## 4. Remove
