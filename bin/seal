@@ -313,7 +313,7 @@ async function protectCommand(args) {
   const outside = result.toolNames.filter((name) => name !== guardTool);
   const shownOutside = outside.slice(0, 20);
   const hiddenOutside = outside.length - shownOutside.length;
-  console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} OUTSIDE Seal${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
+  console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} NOT APPROVAL-GATED (they pass through Seal)${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
   console.log(`State: ${result.statePath}`);
 }
 

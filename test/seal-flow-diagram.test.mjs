@@ -18,6 +18,9 @@ test("README presents the approved three-step explanation", () => {
     readme,
     /## How it works\n\n1\. \*\*Protect once\.\*\*[\s\S]*2\. \*\*Approve per call\.\*\*[\s\S]*3\. \*\*Keep the receipt\.\*\*/,
   );
+  assert.match(readme, /Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks\./);
+  assert.match(readme, /Seal writes a signed receipt for every guarded decision\./);
+  assert.doesNotMatch(readme, /other tools remain outside Seal|other tools OUTSIDE Seal/);
 });
 
 test("critical diagram labels remain searchable SVG text", () => {
@@ -39,17 +42,19 @@ test("critical diagram labels remain searchable SVG text", () => {
     "fs.list",
     "THE REAL EFFECT",
     "PROTECTED PATH",
-    "UNPROTECTED PATH",
+    "NOT APPROVAL-GATED",
   ];
   for (const label of labels) {
     assert.match(svg, new RegExp(`<text[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`));
   }
 });
 
-test("one guarded and two bypass routes terminate at the approved server bars", () => {
+test("one guarded and two not-approval-gated routes pass through Seal to the server bars", () => {
   assert.match(svg, /d="M1177 331h142" class="accent" marker-end="url\(#arrow-accent\)"/);
-  assert.match(svg, /d="M166 368c37 0 56 6 56 43v198c0 24 12 35 39 35h1278c27 0 36-11 36-36V336h-63" class="muted" marker-end="url\(#arrow-muted\)"/);
-  assert.match(svg, /d="M166 392c21 0 31 12 31 39v171c0 21 13 31 36 31h1306c27 0 36-11 36-36V455h-63" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /d="M166 368c37 0 56 6 56 43v38c0 24 12 35 39 35h209" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /d="M497 484h680v-148h142" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /d="M166 392c21 0 31 12 31 39v100c0 21 13 31 36 31h239" class="muted" marker-end="url\(#arrow-muted\)"/);
+  assert.match(svg, /d="M497 562h680v-107h142" class="muted" marker-end="url\(#arrow-muted\)"/);
   assert.match(svg, /<rect x="1344" y="188" width="168" height="39" fill="#a23e22"/);
   assert.match(svg, /<rect x="1344" y="316" width="168" height="41" fill="#66645f"/);
   assert.match(svg, /<rect x="1344" y="434" width="168" height="42" fill="#66645f"/);
@@ -75,5 +80,7 @@ test("configuration ownership and non-sandbox limits stay explicit", () => {
     assert.match(svg, new RegExp(`>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`));
   }
   assert.match(svg, />REFUSE<\/tspan>/);
-  assert.match(svg, /never touches Seal/);
+  assert.match(svg, /NOT APPROVAL-GATED/);
+  assert.match(svg, /passes through Seal/);
+  assert.doesNotMatch(svg, /never sees Seal|never touches Seal/);
 });

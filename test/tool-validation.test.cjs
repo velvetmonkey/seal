@@ -48,12 +48,12 @@ test("protect refuses a misspelled tool and names every observed tool", () => {
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
 });
 
-test("an observed tool protects end to end and reports every other tool outside Seal", async () => {
+test("an observed tool protects end to end and reports every other tool as not approval-gated", async () => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.match(protectedRun.out, /Protection: PENDING RESTART db\.db\.drop_table/);
-  assert.match(protectedRun.out, /Protection scope: 1 other tool OUTSIDE Seal: db\.read/);
+  assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.read/);
   const statePath = statePathFor(ctx.project, ctx.env);
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], { cwd: ctx.project, env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
   const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
@@ -129,7 +129,7 @@ test("protection scope caps a large tool inventory and reports the omitted count
   const result = run(ctx, ["protect", "db", "db.tool_0"]);
   assert.equal(result.code, 0, result.out);
   const scope = result.out.split("\n").find((line) => line.startsWith("Protection scope:"));
-  assert.match(scope, /^Protection scope: 19999 other tools OUTSIDE Seal: /);
+  assert.match(scope, /^Protection scope: 19999 other tools NOT APPROVAL-GATED \(they pass through Seal\): /);
   assert.match(scope, /\(\+19979 more\)$/);
   assert.ok(scope.length < 500, `scope line was ${scope.length} characters`);
 });
