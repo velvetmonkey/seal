@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // A released version names one commit. A feature branch inherits main's
 // published version unless it changes VERSION and thereby introduces a claim.
-const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
@@ -21,19 +20,22 @@ function output(result) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
-let version;
-try {
-  version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-} catch (error) {
-  fail(`version identity ambiguity: unreadable VERSION\n${error.message}`);
-}
-const tag = `v${version}`;
-
 const headResult = git(["rev-parse", "--verify", "HEAD^{commit}"]);
 if (headResult.status !== 0 || !output(headResult)) {
   fail(`version identity ambiguity: unresolved HEAD\n${headResult.stderr || ""}`);
 }
 const head = headResult.stdout.trim();
+
+// The claim under judgement is the one the commit carries. Reading the working
+// tree would let an uncommitted edit hide a committed collision, or invent one.
+const versionResult = git(["show", `${head}:VERSION`]);
+if (versionResult.status !== 0 || !output(versionResult)) {
+  fail(
+    `version identity ambiguity: unreadable VERSION at ${head}\n${versionResult.stderr || ""}`,
+  );
+}
+const version = versionResult.stdout.trim();
+const tag = `v${version}`;
 
 // A missing base is evidence that the checkout cannot answer this gate, not an
 // invitation to repair its inputs. Full-history CI checkouts provide this ref.
@@ -44,22 +46,30 @@ if (mainRef.status !== 0) {
 
 // A failed merge-base is ambiguous, including in a shallow checkout.  Do not
 // fetch or otherwise repair history here: CI must supply a complete base.
-const baseResult = git(["merge-base", "HEAD", "origin/main"]);
+// --all because a criss-cross history has more than one merge base, and which
+// single one git would have named is not a fact this gate may lean on.
+const baseResult = git(["merge-base", "--all", "HEAD", "origin/main"]);
 if (baseResult.status !== 0 || !output(baseResult)) {
   fail(
     `base ambiguity: could not establish merge-base between HEAD and origin/main\n${baseResult.stderr || ""}`,
   );
 }
-const base = baseResult.stdout.trim();
+const bases = baseResult.stdout.trim().split("\n").map((line) => line.trim()).filter(Boolean);
 
-const baseVersionResult = git(["show", `${base}:VERSION`]);
-if (baseVersionResult.status !== 0 || !output(baseVersionResult)) {
-  fail(
-    `version identity ambiguity: unreadable merge-base VERSION at ${base}\n${baseVersionResult.stderr || ""}`,
-  );
-}
-const baseVersion = baseVersionResult.stdout.trim();
-const claimIntroduced = version !== baseVersion;
+const baseVersions = bases.map((candidate) => {
+  const baseVersionResult = git(["show", `${candidate}:VERSION`]);
+  if (baseVersionResult.status !== 0 || !output(baseVersionResult)) {
+    fail(
+      `version identity ambiguity: unreadable merge-base VERSION at ${candidate}\n${baseVersionResult.stderr || ""}`,
+    );
+  }
+  return baseVersionResult.stdout.trim();
+});
+
+// A version is inherited only when every merge base already carries it. Matching
+// one base out of several is a new claim standing behind whichever base git
+// happened to name first.
+const claimIntroduced = baseVersions.some((baseVersion) => baseVersion !== version);
 
 const remoteTags = git(["ls-remote", "--tags", "origin"]);
 if (remoteTags.status !== 0) {
@@ -89,6 +99,6 @@ if (taggedCommit === head) {
   process.stdout.write(`version identity exact: ${tag} identifies HEAD\n`);
 } else {
   process.stdout.write(
-    `version identity inherited: ${tag} identifies ${taggedCommit}; VERSION unchanged from merge-base ${base}\n`,
+    `version identity inherited: ${tag} identifies ${taggedCommit}; VERSION unchanged from merge-base ${bases.join(", ")}\n`,
   );
 }

@@ -51,7 +51,7 @@ above.
 
 | check | question | needs origin |
 | --- | --- | --- |
-| `scripts/check-version-identity.cjs` | does `v$VERSION` already identify a *different* commit? | yes |
+| `scripts/check-version-identity.cjs` | does a *newly claimed* `v$VERSION` already identify a different commit? | yes |
 | `scripts/check-artifact-identity.cjs` | does this build wear the released name without being the release? | no |
 | `release.yml` tag step | does the tag identify this exact commit? | no |
 
@@ -83,6 +83,15 @@ form is small:
 
 Step 3 is a proposal, never a push. **This is written down and left unwired on
 purpose.** Automation that moves `main` by itself is Ben's ruling to make, not
-this repository's to assume; `main` is protected, and the collision gate
-already refuses the state this transition would prevent, so nothing here is
-load-bearing while it stays unwired.
+this repository's to assume; `main` is protected, so nothing here moves without
+a reviewed pull request.
+
+The collision gate does **not** stand in for this transition. It refuses a
+*newly introduced* claim: a commit whose `VERSION` differs from the version at
+every merge base with `origin/main`, naming a tag that already identifies a
+different commit. `main` continuing to wear `v$VERSION` after that version is
+published introduces nothing, so the gate reports `version identity inherited`
+and exits 0. That is deliberate — the earlier reading refused every branch in
+the repository for carrying a version it had merely inherited — but it means
+the state this transition would end is a state the gate accepts. Until the
+transition is wired, nothing mechanical retires a published version from `main`.

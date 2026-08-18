@@ -58,9 +58,67 @@ function gate(repo) {
 test("version identity gate rejects a collision", () => {
   const { repo } = fixture();
   writeVersion(repo, "0.2.0-rc.1");
+  git(repo, "commit", "-am", "claim a released version");
   const result = gate(repo);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /version identity collision: v0\.2\.0-rc\.1/);
+});
+
+test("version identity gate judges the commit, not a dirty working tree", () => {
+  const { repo } = fixture();
+  writeVersion(repo, "0.2.0-rc.1");
+  git(repo, "commit", "-am", "claim a released version");
+  writeVersion(repo, "0.2.0-rc.2");
+  assert.equal(git(repo, "status", "--porcelain", "--", "VERSION"), "M VERSION");
+  const result = gate(repo);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /version identity collision: v0\.2\.0-rc\.1/);
+});
+
+test("version identity gate ignores a dirty working tree that invents a claim", () => {
+  const { repo } = fixture();
+  git(repo, "tag", "v0.2.0-rc.2", git(repo, "rev-parse", "HEAD~1"));
+  git(repo, "push", "origin", "v0.2.0-rc.2");
+  writeVersion(repo, "0.2.0-rc.1");
+  assert.equal(git(repo, "status", "--porcelain", "--", "VERSION"), "M VERSION");
+  const result = gate(repo);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /version identity inherited: v0\.2\.0-rc\.2 identifies/);
+});
+
+test("version identity gate refuses a claim inherited from only one merge base", () => {
+  const { repo, released, next } = fixture();
+  git(repo, "checkout", "-b", "topic", released);
+  writeVersion(repo, "1.1.0-rc.1");
+  git(repo, "commit", "-am", "claim 1.1.0-rc.1");
+  const topic = git(repo, "rev-parse", "HEAD");
+  git(repo, "tag", "v1.1.0-rc.1", released);
+  git(repo, "push", "origin", "v1.1.0-rc.1");
+
+  // M1 takes the topic's history but keeps main's VERSION; M2 takes main's
+  // history but keeps the topic's claim. merge-base --all names both parents.
+  git(repo, "checkout", "main");
+  run("git", ["merge", "--no-commit", "--no-ff", topic], repo);
+  writeVersion(repo, "0.2.0-rc.2");
+  git(repo, "add", "VERSION");
+  git(repo, "commit", "-m", "M1: merge topic, keep 0.2.0-rc.2");
+  const m1 = git(repo, "rev-parse", "HEAD");
+
+  // `next`, not `main`: main now points at M1, and merging that would make M1
+  // itself the single merge base instead of leaving the two tips crossed.
+  git(repo, "checkout", "topic");
+  run("git", ["merge", "--no-commit", "--no-ff", next], repo);
+  writeVersion(repo, "1.1.0-rc.1");
+  git(repo, "add", "VERSION");
+  git(repo, "commit", "-m", "M2: merge main, keep 1.1.0-rc.1");
+
+  git(repo, "update-ref", "refs/remotes/origin/main", m1);
+  const allBases = git(repo, "merge-base", "--all", "HEAD", "origin/main").split("\n");
+  assert.equal(allBases.length, 2, `expected a criss-cross, got ${allBases.join(" ")}`);
+
+  const result = gate(repo);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stderr, /version identity collision: v1\.1\.0-rc\.1/);
 });
 
 test("version identity gate accepts an exact remote tag", () => {
