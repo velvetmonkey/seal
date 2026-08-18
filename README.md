@@ -28,23 +28,22 @@ carry a hand-maintained copy.
 ## 1. Install
 
 ```sh
-SEAL_REPO_DIR="$(mktemp -d "${TMPDIR:-/tmp}/seal-readme.XXXXXX")"
-rmdir "$SEAL_REPO_DIR"
-git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
-cd "$SEAL_REPO_DIR"
-node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546 --bytes 6146222 --prefix ~/.local
+SEAL_VERSION=v0.2.0-rc.2
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
+chmod +x "seal-$SEAL_VERSION-linux-x64"
+./seal-v0.2.0-rc.2-linux-x64 --sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347 --bytes 6146418 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.gc865148-linux-x64
-sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546
-bytes 6146222
-tree 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+./seal-v0.2.0-rc.2-linux-x64
+sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347
+bytes 6146418
+tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/you/.local/bin/seal
+tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
