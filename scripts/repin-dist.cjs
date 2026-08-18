@@ -28,13 +28,15 @@ function rewrite(file, replacements) {
 
 // Materialize each copyable install command from the artifact that was just
 // built. The filename, digest and byte count are one generated unit.
-// The README builds from source, so the file it produces is named for whatever
-// commit the reader is standing on. The command names the shape; the printed
-// transcript names the commit this repin ran at.
+// The README transcript is release copy, not a record of this builder's
+// checkout. Give it the tag-time filename with no local-directory prefix;
+// development builds still identify their own commits in dist/SHA256SUMS.
 rewrite("README.md", [
   [/^\.\/dist\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
     `./dist/seal-v*-linux-x64 --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
-  [/^(\/\S*\/dist\/)seal-v[^ /]+-linux-x64$/m, `$1${artifact}`],
+  [/^(?:\/\S*\/dist\/)?seal-v[^ /]+-linux-x64$/m, releaseArtifactName(meta.version)],
+  [/^A build off a release tag names itself `-dev\.g<commit>`; the bare release name is reserved for the tag\./m,
+    `At the exact release tag, your build writes \`${releaseArtifactName(meta.version)}\` in your own \`dist/\` directory; other commits add \`-dev.g<commit>\` to their filenames.`],
 ]);
 // Download instructions derive their filename, digest, and byte count from
 // the SHA256SUMS asset attached to the same release; do not materialize a
