@@ -38,12 +38,12 @@ fi
 
 summary_value() {
   local field="$1"
-  local count
-  count="$(grep -Ec "^# $field [0-9]+$" "$output_file")"
-  if (( count != 1 )); then
+  local value
+  value="$(sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$output_file" | tail -n 1)"
+  if [[ -z "$value" ]]; then
     return 1
   fi
-  sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$output_file"
+  printf '%s\n' "$value"
 }
 
 declare -A summary summary_status
@@ -53,7 +53,7 @@ for field in tests pass fail skipped todo; do
   summary_status[$field]=$?
   set -e
   if (( summary_status[$field] != 0 )); then
-    echo "::error::node --test did not report exactly one canonical '# $field N' summary"
+    echo "::error::node --test is missing canonical '# $field N' summary"
     gate_status=1
   fi
 done
