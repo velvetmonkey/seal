@@ -11,7 +11,6 @@ import test from "node:test";
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "scripts/live-page-claim-guard.mjs");
 const originalReadme = readFileSync(join(ROOT, "README.md"), "utf8");
-// The test owns every pinned value, so a production pin refresh cannot break it.
 const PIN_COMMIT = "fixturecommit";
 
 async function withPage(body, fn) {
@@ -20,17 +19,23 @@ async function withPage(body, fn) {
   try { return await fn(`http://127.0.0.1:${server.address().port}/`); }
   finally { await new Promise((done) => server.close(done)); }
 }
-function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined) {
+function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined, { productionPin = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
-  const child = spawn(process.execPath, [GUARD], { env: {
-    ...process.env, LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
-    LIVE_CLAIM_GUARD_COMMIT: PIN_COMMIT,
-    LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
-    LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
-    ...(provenanceUrl ? { LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl } : {}),
-  }});
+  const env = { ...process.env };
+  if (productionPin) {
+    for (const name of ["LIVE_CLAIM_GUARD_URL", "LIVE_CLAIM_GUARD_README", "LIVE_CLAIM_GUARD_COMMIT", "LIVE_CLAIM_GUARD_BYTES", "LIVE_CLAIM_GUARD_SHA256", "LIVE_CLAIM_GUARD_PROVENANCE_URL"]) delete env[name];
+  } else {
+    Object.assign(env, {
+      LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
+      LIVE_CLAIM_GUARD_COMMIT: PIN_COMMIT,
+      LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
+      LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
+      LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl ?? url,
+    });
+  }
+  const child = spawn(process.execPath, [GUARD], { env });
   let stdout = "", stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -46,6 +51,12 @@ test("passes when fetched controls, README population, and pin agree", async () 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`PASS  served bytes match pinned seal-check@${PIN_COMMIT}`));
   });
+});
+
+test("passes against the real production pin without environment overrides [network required]", async () => {
+  const result = await run(undefined, undefined, undefined, undefined, { productionPin: true });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /PASS  served bytes match pinned seal-check@e152a053637845600e1eceaee70cea873801c609/);
 });
 
 test("fails and names a fetched button disagreement", async () => {
