@@ -21,29 +21,45 @@ function output(result) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
-const version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+let version;
+try {
+  version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+} catch (error) {
+  fail(`version identity ambiguity: unreadable VERSION\n${error.message}`);
+}
 const tag = `v${version}`;
 
-const headResult = git(["rev-parse", "HEAD"]);
-if (headResult.status !== 0) {
-  fail(headResult.stderr || "could not resolve HEAD");
+const headResult = git(["rev-parse", "--verify", "HEAD^{commit}"]);
+if (headResult.status !== 0 || !output(headResult)) {
+  fail(`version identity ambiguity: unresolved HEAD\n${headResult.stderr || ""}`);
 }
 const head = headResult.stdout.trim();
 
-// CI checkouts may omit origin/main or the history needed to find its merge
-// base. Fetch those inputs before deciding; ambiguity is never a pass.
+// A missing base is evidence that the checkout cannot answer this gate, not an
+// invitation to repair its inputs. Full-history CI checkouts provide this ref.
+const mainRef = git(["show-ref", "--verify", "--quiet", "refs/remotes/origin/main"]);
+if (mainRef.status !== 0) {
+  fail("base ambiguity: refs/remotes/origin/main is absent");
+}
+
+// If the ref exists but a shallow checkout cannot reach a merge base, fetching
+// more history is allowed. Every failed repair still refuses by name.
 let baseResult = git(["merge-base", "HEAD", "origin/main"]);
 if (baseResult.status !== 0 || !output(baseResult)) {
   const fetchMain = git(["fetch", "origin", "main"]);
   if (fetchMain.status !== 0) {
-    fail(`base ambiguity: could not fetch origin/main\n${fetchMain.stderr || ""}`);
+    fail(`base ambiguity: failed fetch origin main\n${fetchMain.stderr || ""}`);
   }
 
-  const shallow = output(git(["rev-parse", "--is-shallow-repository"]));
+  const shallowResult = git(["rev-parse", "--is-shallow-repository"]);
+  if (shallowResult.status !== 0 || !output(shallowResult)) {
+    fail(`base ambiguity: could not determine whether history is shallow\n${shallowResult.stderr || ""}`);
+  }
+  const shallow = output(shallowResult);
   if (shallow === "true") {
     const unshallow = git(["fetch", "--unshallow", "origin"]);
     if (unshallow.status !== 0) {
-      fail(`base ambiguity: shallow history prevented establishing merge-base\n${unshallow.stderr || ""}`);
+      fail(`base ambiguity: failed --unshallow while establishing merge-base\n${unshallow.stderr || ""}`);
     }
   }
 
@@ -57,15 +73,17 @@ if (baseResult.status !== 0 || !output(baseResult)) {
 const base = baseResult.stdout.trim();
 
 const baseVersionResult = git(["show", `${base}:VERSION`]);
-if (baseVersionResult.status !== 0) {
-  fail(`could not determine VERSION at merge-base ${base}\n${baseVersionResult.stderr || ""}`);
+if (baseVersionResult.status !== 0 || !output(baseVersionResult)) {
+  fail(
+    `version identity ambiguity: unreadable merge-base VERSION at ${base}\n${baseVersionResult.stderr || ""}`,
+  );
 }
 const baseVersion = baseVersionResult.stdout.trim();
 const claimIntroduced = version !== baseVersion;
 
 const remoteTags = git(["ls-remote", "--tags", "origin"]);
 if (remoteTags.status !== 0) {
-  fail(remoteTags.stderr || "could not inspect release tags on origin");
+  fail(`release identity ambiguity: failed ls-remote --tags origin\n${remoteTags.stderr || ""}`);
 }
 
 const refs = new Map(
