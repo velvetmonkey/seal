@@ -81,25 +81,30 @@ for (const file of ["README.md", "docs/guide/README.md"]) {
 // to a pin over reviewed bytes with exactly one generated release-version slot
 // canonicalized. This migration is deliberately one-shot: later syncs must not
 // silently re-pin any other guide edit.
-const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike: Seal\n)v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?= supports Linux x86-64 only, refuses everything else, and changes no\nfiles when it refuses\.$)`;
+const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike: Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?= supports Linux x86-64 only, refuses everything else, and changes no\nfiles when it refuses\.$)`;
 const generatedVersionSlot = new RegExp(generatedVersionSlotSource, "gm");
 const guidePath = path.join(ROOT, "docs", "guide", "when-something-looks-wrong.md");
 const guideText = fs.readFileSync(guidePath, "utf8");
 if ([...guideText.matchAll(generatedVersionSlot)].length !== 1) throw new Error("reviewed guide must contain exactly one generated version slot");
 const reviewedGuideSha256 = crypto.createHash("sha256").update(guideText.replace(generatedVersionSlot, "v<generated-version>")).digest("hex");
 
-function migrateGuideFreezeTest(file, transform) {
+function installGuideFreezeTest(file, transform) {
   const target = path.join(ROOT, file);
   const before = fs.readFileSync(target, "utf8");
-  if (before.includes("const GENERATED_VERSION_SLOT =")) return;
-  const after = transform(before);
-  if (after === before) throw new Error(`guide freeze migration marker not found in ${file}`);
-  fs.writeFileSync(target, after);
+  let after = before;
+  const needsMigration = !after.includes("const GENERATED_VERSION_SLOT =");
+  if (needsMigration) after = transform(after);
+  after = after.replace(
+    /const VERSIONED_GUIDE = "docs\/guide\/when-something-looks-wrong\.md";\n(?:const EXPECTED_RELEASE_VERSION = .*?;\n)?const GENERATED_VERSION_SLOT = new RegExp\([\s\S]*?\n}\n/,
+    canonicalizer.trimStart(),
+  );
+  if (needsMigration && after === before) throw new Error(`guide freeze migration marker not found in ${file}`);
+  if (after !== before) fs.writeFileSync(target, after);
 }
 
-const canonicalizer = `\nconst VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";\nconst GENERATED_VERSION_SLOT = new RegExp(${JSON.stringify(generatedVersionSlotSource)}, "gm");\n\nfunction canonicalReviewedGuide(file, text) {\n  if (file !== VERSIONED_GUIDE) return text;\n  const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];\n  assert.equal(matches.length, 1, \`${"${file}"}: expected exactly one generated release-version slot\`);\n  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");\n}\n`;
+const canonicalizer = `\nconst VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";\nconst EXPECTED_RELEASE_VERSION = \`v\${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}\`;\nconst GENERATED_VERSION_SLOT = new RegExp(${JSON.stringify(generatedVersionSlotSource)}, "gm");\n\nfunction canonicalReviewedGuide(file, text) {\n  if (file !== VERSIONED_GUIDE) return text;\n  const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];\n  assert.equal(matches.length, 1, \`${"${file}"}: expected exactly one generated release-version slot containing \${EXPECTED_RELEASE_VERSION}\`);\n  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");\n}\n`;
 
-migrateGuideFreezeTest("test/guide-claims.test.mjs", (text) => text
+installGuideFreezeTest("test/guide-claims.test.mjs", (text) => text
   .replace('const ROOT = resolve(import.meta.dirname, "..");\n', `const ROOT = resolve(import.meta.dirname, "..");\n${canonicalizer}`)
   .replace('sha256: "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd"', `sha256: "${reviewedGuideSha256}"`)
   .replace("    sha256(text),\n", "    sha256(canonicalReviewedGuide(entry.file, text)),\n")
@@ -107,7 +112,7 @@ migrateGuideFreezeTest("test/guide-claims.test.mjs", (text) => text
   .replace('test("whole-file pin rejects locator defeats and earlier claim tampering",', 'test("reviewed-prose pin rejects locator defeats and earlier claim tampering",')
 );
 
-migrateGuideFreezeTest("test/guide-tokens.test.mjs", (text) => text
+installGuideFreezeTest("test/guide-tokens.test.mjs", (text) => text
   .replace('const GUIDE_SHA256 = "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd";\n', `const GUIDE_SHA256 = "${reviewedGuideSha256}";\n${canonicalizer}`)
   .replace('  const digest = createHash("sha256").update(text).digest("hex");\n', '  const digest = createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex");\n')
 );

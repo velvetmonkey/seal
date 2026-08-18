@@ -37,7 +37,7 @@ node scripts/build-dist.cjs
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.3-dev.g1f8f3f8-linux-x64
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.3-dev.gd92c0f1-linux-x64
 sha256 eeae5866f44ba4ca5db9aa69d7014ddc70f0277bef2032fee8409b3890776d8e
 bytes 6146418
 tree efe0283c8b77b2fa539b2c4be631c041620306dc94b14cb5cbf0310fd64b062e
