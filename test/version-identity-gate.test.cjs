@@ -46,7 +46,8 @@ function fixture() {
   git(repo, "add", "VERSION");
   git(repo, "commit", "-m", "next version");
   const next = git(repo, "rev-parse", "HEAD");
-  git(repo, "push", "origin", "HEAD", "--tags");
+  git(repo, "branch", "-M", "main");
+  git(repo, "push", "origin", "main", "--tags");
   return { remote, repo, released, next };
 }
 
@@ -70,6 +71,15 @@ test("version identity gate accepts an exact remote tag", () => {
   assert.match(result.stdout, /version identity exact: v0\.2\.0-rc\.1 identifies HEAD/);
 });
 
+test("version identity gate accepts an inherited published version", () => {
+  const { repo, released } = fixture();
+  git(repo, "tag", "v0.2.0-rc.2", released);
+  git(repo, "push", "origin", "v0.2.0-rc.2");
+  const result = gate(repo);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /version identity inherited: v0\.2\.0-rc\.2 identifies/);
+});
+
 test("version identity gate accepts an absent tag when other remote tags exist", () => {
   const { repo } = fixture();
   const result = gate(repo);
@@ -77,15 +87,26 @@ test("version identity gate accepts an absent tag when other remote tags exist",
   assert.match(result.stdout, /version identity available: v0\.2\.0-rc\.2 has not been released/);
 });
 
-test("version identity gate rejects a remote with zero tags", () => {
+test("version identity gate accepts a remote with zero tags", () => {
   const { repo, next } = fixture();
   const emptyRemote = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-empty-origin-"));
   git(emptyRemote, "init", "--bare", ".");
   git(repo, "remote", "set-url", "origin", emptyRemote);
   git(repo, "push", "origin", `${next}:refs/heads/main`);
   const result = gate(repo);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /v0\.2\.0-rc\.2 has not been released/);
+});
+
+test("version identity gate refuses ambiguous base history", () => {
+  const { repo } = fixture();
+  const emptyRemote = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-empty-origin-"));
+  git(emptyRemote, "init", "--bare", ".");
+  git(repo, "remote", "set-url", "origin", emptyRemote);
+  git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+  const result = gate(repo);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /origin returned no tags/);
+  assert.match(result.stderr, /base ambiguity/);
 });
 
 test("version identity gate rejects a remote tag lookup error", () => {
