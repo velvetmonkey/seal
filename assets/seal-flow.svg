@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1775 970" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1775" height="970" viewBox="0 0 1775 970" role="img" aria-labelledby="title desc">
   <title id="title">How one MCP tool call passes through Seal</title>
   <desc id="desc">An agent reads pinned configuration, then sends one protected MCP tool through Seal's human gate, pinned WebAssembly kernel, and one-use counter. Seal forwards demo.mutate to the MCP server and records a signed receipt. Two other tools from the protected server are not approval-gated, but pass through Seal's forwarding checks. The protected call changes that resource once.</desc>
   <defs>

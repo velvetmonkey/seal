@@ -11,7 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const target = resolve(root, "assets/seal-flow.svg");
 const LAYOUT_SOURCE = "fe9216f1d18c9df1c2ffdcfbd28cf67ee2b467fa:assets/seal-flow.svg";
 const replacements = [
-  ['viewBox="0 0 1775 887"', 'viewBox="0 0 1775 970"'],
+  ['viewBox="0 0 1775 887"', 'width="1775" height="970" viewBox="0 0 1775 970"'],
   ['<rect width="1775" height="887" fill="#f7f1e5"/>', '<rect width="1775" height="970" fill="#f7f1e5"/>'],
   ["Two other tools from the same server bypass Seal and never touch the real resource.", "Two other tools from the protected server are not approval-gated, but pass through Seal's forwarding checks."],
   ["MCP server with one guarded and two unprotected tools", "Protected MCP server with one guarded and two not-approval-gated tools"],
