@@ -71,6 +71,7 @@
     <text x="355" y="435" text-anchor="middle" class="label accent-text">REFUSED</text>
     <path d="M272 478c0 18 13 27 47 27" class="accent" stroke-dasharray="8 7" marker-end="url(#arrow-accent)"/>
     <path d="M374 489l24 24M398 489l-24 24" class="accent"/>
+    <text x="355" y="565" text-anchor="middle" class="tiny">LOCAL ACTOR: CONFIG BYPASS</text>
   </g>
   <path d="M480 327h21" class="accent" marker-end="url(#arrow-accent)"/>
 
