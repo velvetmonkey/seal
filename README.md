@@ -10,7 +10,7 @@ Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through
 
 Requires Node 20+, Git, and the `claude` command for Protect (check with `claude --version`). The install creates one command and one read-only store directory under `~/.local`.
 
-**Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**Seal v0.2.0-rc.3 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
 
 Every command below ran in this order against the bytes published with a
 release. If you download a binary, verify it against the `SHA256SUMS` asset
@@ -33,18 +33,18 @@ rmdir "$SEAL_REPO_DIR"
 git clone https://github.com/velvetmonkey/seal "$SEAL_REPO_DIR"
 cd "$SEAL_REPO_DIR"
 node scripts/build-dist.cjs
-./dist/seal-v*-linux-x64 --sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546 --bytes 6146222 --prefix ~/.local
+./dist/seal-v*-linux-x64 --sha256 eeae5866f44ba4ca5db9aa69d7014ddc70f0277bef2032fee8409b3890776d8e --bytes 6146418 --prefix ~/.local
 ```
 
 ```
-/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.2-dev.gc865148-linux-x64
-sha256 59c4ee34377aab485d1e3c58cdc9b50d8ec2eaf1ea051e47deb4da552b84a546
-bytes 6146222
-tree 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+/home/monkey/wt/demodir/dist/seal-v0.2.0-rc.3-dev.g1f8f3f8-linux-x64
+sha256 eeae5866f44ba4ca5db9aa69d7014ddc70f0277bef2032fee8409b3890776d8e
+bytes 6146418
+tree efe0283c8b77b2fa539b2c4be631c041620306dc94b14cb5cbf0310fd64b062e
+installed seal 0.2.0-rc.3 linux-x64
+store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/efe0283c8b77b2fa539b2c4be631c041620306dc94b14cb5cbf0310fd64b062e
 command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+tree efe0283c8b77b2fa539b2c4be631c041620306dc94b14cb5cbf0310fd64b062e
 ```
 
 A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
@@ -140,7 +140,7 @@ A route that does not cross the gate is one Seal does not see. The demo closes b
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/efe0283c8b77b2fa539b2c4be631c041620306dc94b14cb5cbf0310fd64b062e/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   <!-- live-page-claims:begin -->
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
@@ -283,7 +283,7 @@ Seal is deliberately narrow, and none of these edges is small print.
 
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix. Another process running as that user can replace the entry point before the next run. The packaged store is read-only and integrity-checked; the entry point is not.
-- Seal v0.2.0-rc.2 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
+- Seal v0.2.0-rc.3 is Linux x86-64 only. On any other platform the installer refuses before changing anything.
 
 The [full documentation index](docs/README.md) links the operating guide, evidence, limitations, and design history.
 

@@ -1,4 +1,4 @@
-# Seal v0.2.0-rc.2 release notes
+# Seal v0.2.0-rc.3 release notes
 
 ## What Seal is
 
@@ -22,7 +22,7 @@ Seal is a gate, not a sandbox. It controls the path through it, and only that pa
 
 Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override. ([README boundary list](../README.md); [Protect test](../test/protect3b.test.cjs); merged [37fefe4](https://github.com/velvetmonkey/seal/commit/37fefe440af778f03b416798583a3a3e64f69094))
 
-Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM, and other platforms are not supported in this release. ([README.md](../README.md); [platform implementation](../spine/platform.cjs); [distribution test](../test/dist3d.test.cjs))
+Seal v0.2.0-rc.3 supports Linux x86-64 only. macOS, Windows, Linux ARM, and other platforms are not supported in this release. ([README.md](../README.md); [platform implementation](../spine/platform.cjs); [distribution test](../test/dist3d.test.cjs))
 
 Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments. ([README.md](../README.md); [distribution notes](DISTRIBUTION.md); [truth gate](../scripts/launch-truth-gate.mjs); [checker implementation](../checker/seal-receipt-check.mjs))
 

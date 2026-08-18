@@ -14,7 +14,17 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd";
+const GUIDE_SHA256 = "3cbc419903128913477f99d4d6989f93b9ef82056c48576064585e6c823385db";
+
+const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike: Seal\\n)v\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?= supports Linux x86-64 only, refuses everything else, and changes no\\nfiles when it refuses\\.$)", "gm");
+
+function canonicalReviewedGuide(file, text) {
+  if (file !== VERSIONED_GUIDE) return text;
+  const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];
+  assert.equal(matches.length, 1, `${file}: expected exactly one generated release-version slot`);
+  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
+}
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
@@ -63,7 +73,7 @@ function sourceTokens() {
 
 function guideTokens() {
   const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
-  const digest = createHash("sha256").update(text).digest("hex");
+  const digest = createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex");
   assert.equal(
     digest,
     GUIDE_SHA256,

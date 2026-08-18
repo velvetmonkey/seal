@@ -1,7 +1,8 @@
 // The refusal-token inventory says nothing about explanatory prose. These two
 // guide files contain reviewed claims whose meaning must not drift silently.
 //
-// This is deliberately a whole-file pin, not a marker-located section parser:
+// This pins the whole reviewed guide after canonicalizing one exact generated
+// release-version slot, not a marker-located section:
 // a heading, its whitespace, or a later heading cannot redirect what is being
 // checked. This pin catches accidental and incidental changes, but cannot stop
 // a determined author: that author can change both the text and this mutable
@@ -22,10 +23,20 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
+const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike: Seal\\n)v\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?= supports Linux x86-64 only, refuses everything else, and changes no\\nfiles when it refuses\\.$)", "gm");
+
+function canonicalReviewedGuide(file, text) {
+  if (file !== VERSIONED_GUIDE) return text;
+  const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];
+  assert.equal(matches.length, 1, `${file}: expected exactly one generated release-version slot`);
+  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
+}
+
 const REVIEWED_GUIDES = [
   {
     file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
-    sha256: "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd",
+    sha256: "3cbc419903128913477f99d4d6989f93b9ef82056c48576064585e6c823385db",
     claims: [
       "You pointed `seal verify` at one of the gate's own receipts.",
       "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
@@ -53,7 +64,7 @@ function occurrences(text, claim) {
 function assertPinned(entry, text) {
   assert.ok(entry.claims.length > 0, `${entry.file}: reviewed claim inventory must not be empty`);
   assert.equal(
-    sha256(text),
+    sha256(canonicalReviewedGuide(entry.file, text)),
     entry.sha256,
     `${entry.file}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
   );
@@ -70,7 +81,7 @@ test("reviewed guide files are content-addressed and retain each reviewed claim 
   }
 });
 
-test("whole-file pin rejects locator defeats and earlier claim tampering", () => {
+test("reviewed-prose pin rejects locator defeats and earlier claim tampering", () => {
   const entry = REVIEWED_GUIDES[0];
   const text = readFileSync(resolve(ROOT, entry.file), "utf8");
   const heading = "### `spine_receipt_use_separate_checker`";
