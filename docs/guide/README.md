@@ -36,9 +36,9 @@ $ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
 $ chmod +x "$SEAL_ARTIFACT"
 $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
 installed seal 0.2.0-rc.2 linux-x64
-store: /tmp/seal-demodir-prefix.Ju6uoy/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /tmp/seal-demodir-prefix.Ju6uoy/bin/seal
-tree 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/you/.local/bin/seal
+tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
