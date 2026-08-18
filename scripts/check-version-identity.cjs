@@ -42,29 +42,9 @@ if (mainRef.status !== 0) {
   fail("base ambiguity: refs/remotes/origin/main is absent");
 }
 
-// If the ref exists but a shallow checkout cannot reach a merge base, fetching
-// more history is allowed. Every failed repair still refuses by name.
-let baseResult = git(["merge-base", "HEAD", "origin/main"]);
-if (baseResult.status !== 0 || !output(baseResult)) {
-  const fetchMain = git(["fetch", "origin", "main"]);
-  if (fetchMain.status !== 0) {
-    fail(`base ambiguity: failed fetch origin main\n${fetchMain.stderr || ""}`);
-  }
-
-  const shallowResult = git(["rev-parse", "--is-shallow-repository"]);
-  if (shallowResult.status !== 0 || !output(shallowResult)) {
-    fail(`base ambiguity: could not determine whether history is shallow\n${shallowResult.stderr || ""}`);
-  }
-  const shallow = output(shallowResult);
-  if (shallow === "true") {
-    const unshallow = git(["fetch", "--unshallow", "origin"]);
-    if (unshallow.status !== 0) {
-      fail(`base ambiguity: failed --unshallow while establishing merge-base\n${unshallow.stderr || ""}`);
-    }
-  }
-
-  baseResult = git(["merge-base", "HEAD", "origin/main"]);
-}
+// A failed merge-base is ambiguous, including in a shallow checkout.  Do not
+// fetch or otherwise repair history here: CI must supply a complete base.
+const baseResult = git(["merge-base", "HEAD", "origin/main"]);
 if (baseResult.status !== 0 || !output(baseResult)) {
   fail(
     `base ambiguity: could not establish merge-base between HEAD and origin/main\n${baseResult.stderr || ""}`,
