@@ -17,6 +17,14 @@ release. If you download a binary, verify it against the `SHA256SUMS` asset
 attached to the same release before installing. The repository root does not
 carry a hand-maintained copy.
 
+## How it works
+
+1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
+2. **Approve per call.** Seal shows the exact guarded call. The pinned WASM answer is required before forwarding, and one-use consumption means the call will not run twice. Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
+3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the shipped checker or seal-check with the limits stated below.
+
+![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)
+
 ## 1. Install
 
 ```sh
@@ -200,11 +208,11 @@ seal protect db demo.mutate
 ```
 Project .mcp.json hash before protect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Protection: PENDING RESTART db.demo.mutate
-Protection scope: 0 other tools OUTSIDE Seal
+Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 State: /home/monkey/scratch/toolexists-readme-20260815/final-home/.local/share/seal/projects/4198aa21a911c2c7e9899c24a49e6b28/state.json
 ```
 
-`protect` reports how many of that server's tools remain outside Seal, naming at most 20 and counting the rest. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
+`protect` reports how many of that server's tools are not approval-gated, naming at most 20 and counting the rest. Those calls still route through Seal's proxy, where live server-entry drift or a lease-generation mismatch can refuse forwarding. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name. If the server entry in `.mcp.json` changes after protect, forwarding refuses instead of forwarding a drifted call.
 
 The protected proxy records every decision as a signed receipt file. On first activation it creates a machine-local Ed25519 receipt key under the Seal data directory, prints the public key and its file path, and reuses that key on later activations. The shipped checker accepts a protected-path receipt when every recorded commitment and signature matches under the public key you supply. That result has the limits printed by the checker: it does not show that the recorded decision happened, and anyone able to use the machine's Seal key could sign a different story.
 
@@ -255,7 +263,7 @@ Seal is deliberately narrow, and none of these edges is small print.
 ### Where the gate's authority ends
 
 - Seal is a gate, not a sandbox. It controls the path through it, and only that path. The demo ends by writing a file outside the gate and reporting zero Seal decisions for it.
-- One project, one server, one selected tool. Everything else — Bash, network, subprocesses, other tools and other servers — is outside Seal, and other controls may or may not exist there.
+- One project, one server, one selected tool. Bash, network, subprocesses and other servers are outside Seal. Other tools on the protected server are not approval-gated, but pass through Seal's forwarding checks; other controls may or may not exist outside Seal.
 - Protect mediates only a stdio MCP server entry; other MCP transport shapes are outside the protected path.
 
 ### What your approval does and does not mean
