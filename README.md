@@ -58,9 +58,14 @@ export PATH="$HOME/.local/bin:$PATH"
 [![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
 <!-- live-page-claims:end -->
 
-The demo builds a working gate in about a minute. Watch one number: the child's call counter moves only when the guarded tool actually runs.
-
+**Command — run the demo**
 ```sh
+seal demo
+```
+The gate starts in about a minute; the child-call counter moves only when the guarded tool runs.
+
+**Command — transcript-capture instrumentation (not a demo step).** Repository checks use this instead of `seal demo` to capture paths for later examples; do not run both.
+```bash
 export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
 (set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
 SEAL_DEMO_STATUS="$?"
@@ -74,18 +79,16 @@ if test -z "$SEAL_DEMO_DIR"; then
   exit 1
 fi
 ```
-
-```
+**Output — the gate starts with zero child calls**
+```text
 seal demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
 child     seal __demo-server (this same binary) mutating /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt
 temporary demo directory: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2 (remains after the demo for the printed checker command)
 child calls observed: 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 ```
-
-The client asks for the guarded tool. The proxy runs nothing and shows the request:
-
-```
+**Output — the guarded request is blocked pending approval**
+```text
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -95,12 +98,14 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Outside Seal: Bash, network, subprocesses, other tools and servers.
 child calls observed: still 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count) — approval shown, nothing executed
 ```
+`Scope` limits this yes to the identical call, at most once, for two minutes on the untrusted local clock. Failure before forwarding can spend it. `Outside Seal` lists what it does not cover.
 
-`Scope` is how narrow your yes is: this identical call, at most one run, two minutes. At most one run is literal — a failure before forwarding can spend the approval with no run. The two minutes follow the local wall clock; Seal has no trusted time. `Outside Seal` is what your yes does not cover.
-
-Type `y`: the call runs once, the demo replays it, and the replay is refused. Your `y` is consumed by the prompt, so the child's reply lands on the question's line.
-
+**Input — type this at `Approve? [y/N]`**
+```text
+y
 ```
+**Output — the call runs once and its replay is refused**
+```text
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 replaying the identical retry with the same requestState…
@@ -110,10 +115,8 @@ receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJv
 receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452631-3115472-0002-ALLOW.json
 receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json
 ```
-
-Next the demo states its own boundary:
-
-```
+**Output — the demo states its boundary**
+```text
 
 SCOPE WITNESS
 
@@ -122,20 +125,16 @@ Seal controlled this path:
 
 If a route to the same effect does not pass through the printed Seal path, Seal did not control it.
 ```
-
-Then it proves the rule by breaking it. The write below does not cross the gate:
-
-```
+**Output — a direct write that does not cross the gate is outside Seal**
+```text
 Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
 Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts: 3 before the write, 3 after)
 ```
-
-A route that does not cross the gate is one Seal does not see. The demo closes by handing you a checker command:
-
-```
+**Output — the demo summarizes the boundary and prints a checker command**
+```text
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
@@ -145,16 +144,14 @@ receipts are claims, not proofs. Check one with the separate-process checker (V1
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
   <!-- live-page-claims:end -->
 ```
-
-The demo called its receipts claims, not proofs. Use the exact checker command your own demo run just printed; the absolute paths in the transcript above belong to that run and will not exist on your machine. The fence below resolves that same command from the demo directory you just created and the store your install wrote:
-
+**Command — check the blocked receipt.** Receipts are claims, not proofs. Use the command your run printed, or these commands after using the transcript harness:
 ```sh
 SEAL_CHECKER="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
 SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
 node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
-
-```
+**Output — the receipt matches its sealed commitments**
+```text
 ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt has the same canonical parsed value that this key signed. Semantically irrelevant JSON formatting differences are not distinguished. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
 
@@ -163,16 +160,14 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 
 [Open seal-check](https://velvetmonkey.github.io/seal-check/) to re-check a supplied Seal decision receipt in its browser kernel and inspect the receipt checks it reports. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. The page does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 <!-- live-page-claims:end -->
-
-Change one recorded field and the same checker refuses:
-
+**Command — change one recorded field and check again**
 ```sh
 sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
 node "$SEAL_CHECKER" "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 test "$?" -eq 1
 ```
-
-```
+**Output — the changed receipt is refused**
+```text
 REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
 ```
 
