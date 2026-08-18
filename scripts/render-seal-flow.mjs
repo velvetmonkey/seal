@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Deterministically render the public process diagram from its stable SVG
 // layout, replacing the claim-bearing labels as a single generated surface.
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const target = resolve(root, "assets/seal-flow.svg");
-const LAYOUT_SOURCE = "fe9216f1d18c9df1c2ffdcfbd28cf67ee2b467fa:assets/seal-flow.svg";
+const layoutSource = resolve(root, "scripts/seal-flow-layout.svg");
 const replacements = [
   ['viewBox="0 0 1775 887"', 'width="1775" height="970" viewBox="0 0 1775 970"'],
   ['<rect width="1775" height="887" fill="#f7f1e5"/>', '<rect width="1775" height="970" fill="#f7f1e5"/>'],
@@ -230,9 +229,10 @@ const replacements = [
   ['<text x="315" y="792" class="small">(through Seal)</text>', '<text x="335" y="867" class="small">(through Seal)</text>'],
 ];
 
-// Start from the reviewed layout, never from a hand-edited rendered file.
-// This also makes regeneration restore the artifact after a local tamper.
-let svg = execFileSync("git", ["show", LAYOUT_SOURCE], { cwd: root, encoding: "utf8" });
+// Start from the committed reviewed layout, never from a hand-edited rendered
+// file. Keeping this source in-tree makes regeneration work from any checkout,
+// including shallow clones that do not contain historical Git objects.
+let svg = readFileSync(layoutSource, "utf8");
 for (const [from, to] of replacements) {
   if (!svg.includes(from)) throw new Error(`layout source no longer contains required fragment: ${from.slice(0, 80)}`);
   svg = svg.replaceAll(from, to);

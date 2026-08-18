@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1775 887" role="img" aria-labelledby="title desc">
+  <title id="title">How one MCP tool call passes through Seal</title>
+  <desc id="desc">An agent reads pinned configuration, then sends one protected MCP tool through Seal's human gate, pinned WebAssembly kernel, and one-use counter. Seal forwards demo.mutate to the MCP server and records a signed receipt. Two other tools from the same server bypass Seal and never touch the real resource. The protected call changes that resource once.</desc>
+  <defs>
+    <style>
+      :root { --bg: #f7f1e5; --ink: #282622; --accent: #a23e22; --muted: #66645f; }
+      text { fill: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .h1 { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+      .h2 { font-size: 20px; font-weight: 800; letter-spacing: .7px; }
+      .label { font-size: 17px; font-weight: 800; }
+      .body { font-size: 15px; font-weight: 600; }
+      .small { font-size: 13px; font-weight: 600; }
+      .tiny { font-size: 11px; font-weight: 600; }
+      .accent-text { fill: var(--accent); }
+      .muted-text { fill: var(--muted); }
+      .ink { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .accent { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .muted { fill: none; stroke: var(--muted); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+    <marker id="arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1l8 4-8 4z" fill="#a23e22"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1l8 4-8 4z" fill="#66645f"/>
+    </marker>
+    <marker id="arrow-ink" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1l8 4-8 4z" fill="#282622"/>
+    </marker>
+  </defs>
+
+  <rect width="1775" height="887" fill="#f7f1e5"/>
+
+  <!-- AGENT -->
+  <g aria-label="Agent terminal">
+    <rect x="38" y="245" width="128" height="158" rx="8" class="ink"/>
+    <path d="M38 273h128" class="ink"/>
+    <circle cx="55" cy="260" r="3" class="ink"/>
+    <circle cx="70" cy="260" r="3" class="ink"/>
+    <circle cx="85" cy="260" r="3" class="ink"/>
+    <text x="102" y="310" text-anchor="middle" class="h2">AGENT</text>
+    <text x="102" y="341" text-anchor="middle" class="body">Claude Code</text>
+    <path d="M61 359l13 12-13 12M82 384h19" class="ink"/>
+  </g>
+
+  <!-- Protected wire enters config, then Seal. -->
+  <path d="M166 327h96" class="accent" marker-end="url(#arrow-accent)"/>
+
+  <!-- CONFIG -->
+  <g aria-label="Configuration pinned at protect time">
+    <rect x="271" y="40" width="161" height="539" rx="8" class="ink"/>
+    <text x="351" y="78" text-anchor="middle" class="h2">CONFIG</text>
+    <text x="351" y="106" text-anchor="middle" class="body">pinned at</text>
+    <text x="351" y="127" text-anchor="middle" class="body">protect time</text>
+
+    <path d="M286 147h18l10 10v29h-28zM304 147v10h10" class="ink"/>
+    <text x="321" y="175" class="body">.mcp.json</text>
+    <text x="316" y="202" class="small">Seal read it</text>
+    <text x="316" y="220" class="small">and hashed it.</text>
+    <text x="316" y="238" class="small">never edits it</text>
+
+    <path d="M286 260h18l10 10v29h-28zM304 260v10h10" class="ink"/>
+    <text x="321" y="287" class="small">~/.claude.json</text>
+    <text x="316" y="313" class="small">Claude Code</text>
+    <text x="316" y="331" class="small">wrote the</text>
+    <text x="316" y="349" class="small">override.</text>
+    <text x="316" y="367" class="small">Seal asked</text>
+
+    <path d="M284 390h136" class="ink" stroke-dasharray="8 8"/>
+    <text x="351" y="420" text-anchor="middle" class="label">DRIFT</text>
+    <text x="351" y="445" text-anchor="middle" class="small">entry no longer</text>
+    <text x="351" y="463" text-anchor="middle" class="small">matches the</text>
+    <text x="351" y="481" text-anchor="middle" class="small">recorded hash</text>
+    <text x="351" y="504" text-anchor="middle" class="small">-&gt; <tspan class="accent-text">REFUSE</tspan></text>
+    <path d="M321 519c0 21 13 31 51 31" class="accent" stroke-dasharray="8 7" marker-end="url(#arrow-accent)"/>
+    <path d="M382 539l22 22M404 539l-22 22" class="accent"/>
+  </g>
+  <path d="M432 327h55" class="accent" marker-end="url(#arrow-accent)"/>
+
+  <!-- SEAL -->
+  <g aria-label="Seal protects one tool of one server">
+    <rect x="497" y="39" width="680" height="539" rx="12" class="ink"/>
+    <text x="520" y="79" class="h1">SEAL</text>
+    <text x="520" y="107" class="body">one tool of one server</text>
+
+    <!-- THE GATE -->
+    <text x="571" y="166" text-anchor="middle" class="h2">THE GATE</text>
+    <text x="571" y="191" text-anchor="middle" class="small">approve this</text>
+    <text x="571" y="210" text-anchor="middle" class="small">exact call?</text>
+    <path d="M530 250v165M542 250v165M603 250v165M615 250v165" class="ink"/>
+    <circle cx="572" cy="316" r="10" class="ink"/>
+    <path d="M555 347c1-17 8-26 17-26s16 9 17 26z" class="ink"/>
+    <path d="M487 331h37" class="accent" marker-end="url(#arrow-accent)"/>
+    <path d="M615 331h52" class="accent" marker-end="url(#arrow-accent)"/>
+
+    <!-- KERNEL -->
+    <text x="747" y="166" text-anchor="middle" class="h2">KERNEL</text>
+    <text x="747" y="189" text-anchor="middle" class="small">pinned WASM decides.</text>
+    <text x="747" y="208" text-anchor="middle" class="small">Node cannot overrule</text>
+    <text x="747" y="227" text-anchor="middle" class="small">a refusal</text>
+    <path d="M708 269h75l32 62-32 68h-75l-31-68z" class="ink"/>
+    <text x="746" y="321" text-anchor="middle" class="label">KERNEL</text>
+    <!-- Anchor glyph, deliberately neutral and distinct from a pin/Venus symbol. -->
+    <circle cx="746" cy="339" r="6" class="ink"/>
+    <path d="M746 345v27M731 357h30M731 358c0 17 30 17 30 0M736 372h20" class="ink"/>
+    <path d="M815 331h47" class="accent" marker-end="url(#arrow-accent)"/>
+
+    <!-- ONE USE -->
+    <text x="925" y="166" text-anchor="middle" class="h2">ONE USE</text>
+    <text x="925" y="190" text-anchor="middle" class="small">counter 0 -&gt; 1.</text>
+    <text x="925" y="209" text-anchor="middle" class="small">replay refused</text>
+    <circle cx="885" cy="331" r="21" class="ink"/>
+    <text x="885" y="339" text-anchor="middle" class="label">0</text>
+    <path d="M909 331h23" class="ink" marker-end="url(#arrow-ink)"/>
+    <circle cx="959" cy="331" r="21" class="ink"/>
+    <text x="959" y="339" text-anchor="middle" class="label">1</text>
+    <path d="M982 331h46" class="accent" marker-end="url(#arrow-accent)"/>
+
+    <!-- RECEIPT -->
+    <text x="1090" y="166" text-anchor="middle" class="h2">RECEIPT</text>
+    <text x="1090" y="190" text-anchor="middle" class="small">signed. the only</text>
+    <text x="1090" y="209" text-anchor="middle" class="small">thing Seal keeps</text>
+    <path d="M1038 257h76l24 24v137h-100zM1114 257v24h24" class="ink"/>
+    <text x="1088" y="320" text-anchor="middle" class="label">RECEIPT</text>
+    <path d="M1055 342h63M1055 359h46M1055 376h27" class="ink"/>
+    <!-- Neutral wax seal: no approval tick. -->
+    <path d="M1094 386l7-6 8 2 7-2 7 6 2 8 5 6-3 8 1 8-7 5-4 8-9-1-7 4-7-6-8-2-3-8-5-6 3-8-1-8z" class="accent"/>
+    <circle cx="1108" cy="404" r="14" fill="#a23e22"/>
+
+    <!-- STORE -->
+    <path d="M1003 494c0-7 9-11 20-11s20 4 20 11v34c0 7-9 11-20 11s-20-4-20-11z" class="ink"/>
+    <path d="M1003 494c0 7 9 11 20 11s20-4 20-11M1003 511c0 7 9 11 20 11s20-4 20-11" class="ink"/>
+    <text x="1053" y="513" class="label">STORE</text>
+    <text x="1053" y="535" class="tiny">~/.local/share/seal</text>
+    <path d="M1086 419v57h-43" class="ink" marker-end="url(#arrow-ink)"/>
+
+    <!-- REPLAY: dashed curve above, label clear below. -->
+    <path d="M1040 420c-8 29-25 43-62 43H626c-38 0-57-18-57-54" class="accent" stroke-dasharray="9 8" marker-end="url(#arrow-accent)"/>
+    <path d="M779 449l28 28M807 449l-28 28" class="accent"/>
+    <text x="793" y="515" text-anchor="middle" class="label accent-text">REPLAY REFUSED</text>
+  </g>
+
+  <!-- FORWARDED gap -->
+  <text x="1249" y="234" text-anchor="middle" class="h2">FORWARDED</text>
+  <text x="1249" y="261" text-anchor="middle" class="small">Seal does not</text>
+  <text x="1249" y="280" text-anchor="middle" class="small">run the call,</text>
+  <text x="1249" y="299" text-anchor="middle" class="small">it lets it</text>
+  <text x="1249" y="318" text-anchor="middle" class="small">through</text>
+  <path d="M1177 331h142" class="accent" marker-end="url(#arrow-accent)"/>
+
+  <!-- MCP SERVER -->
+  <g aria-label="MCP server with one guarded and two unprotected tools">
+    <rect x="1328" y="130" width="199" height="422" rx="8" class="ink"/>
+    <text x="1428" y="166" text-anchor="middle" class="h2">MCP SERVER</text>
+
+    <rect x="1344" y="188" width="168" height="39" fill="#a23e22"/>
+    <text x="1428" y="214" text-anchor="middle" class="label" fill="#f7f1e5" style="fill:#f7f1e5">demo.mutate</text>
+    <text x="1428" y="251" text-anchor="middle" class="small accent-text">GUARDED.</text>
+    <text x="1428" y="271" text-anchor="middle" class="small accent-text">arrives only</text>
+    <text x="1428" y="291" text-anchor="middle" class="small accent-text">through Seal</text>
+
+    <rect x="1344" y="316" width="168" height="41" fill="#66645f" fill-opacity="0.12"/>
+    <text x="1428" y="343" text-anchor="middle" class="label">db.read</text>
+    <text x="1428" y="384" text-anchor="middle" class="small">UNPROTECTED.</text>
+    <text x="1428" y="404" text-anchor="middle" class="small">never sees Seal</text>
+
+    <rect x="1344" y="434" width="168" height="42" fill="#66645f" fill-opacity="0.12"/>
+    <text x="1428" y="462" text-anchor="middle" class="label">fs.list</text>
+    <text x="1428" y="504" text-anchor="middle" class="small">UNPROTECTED.</text>
+    <text x="1428" y="524" text-anchor="middle" class="small">never sees Seal</text>
+  </g>
+
+  <!-- Real effect: only the accent route reaches it. -->
+  <path d="M1512 208h66v84h52" class="accent" marker-end="url(#arrow-accent)"/>
+  <g aria-label="The real effect happens once outside Seal">
+    <path d="M1637 274c0-8 14-13 32-13s32 5 32 13v51c0 8-14 13-32 13s-32-5-32-13z" class="ink"/>
+    <path d="M1637 274c0 8 14 13 32 13s32-5 32-13M1637 300c0 8 14 13 32 13s32-5 32-13" class="ink"/>
+    <text x="1717" y="309" class="label accent-text">1</text>
+    <text x="1669" y="382" text-anchor="middle" class="h2">THE REAL EFFECT</text>
+    <text x="1669" y="411" text-anchor="middle" class="body">the resource</text>
+    <text x="1669" y="432" text-anchor="middle" class="body">changes, once.</text>
+    <text x="1669" y="453" text-anchor="middle" class="body">outside Seal</text>
+  </g>
+
+  <!-- Two unprotected paths leave Agent, stay below Seal, and rise into grey bars. -->
+  <path d="M166 368c37 0 56 6 56 43v198c0 24 12 35 39 35h1278c27 0 36-11 36-36V336h-63" class="muted" marker-end="url(#arrow-muted)"/>
+  <path d="M166 392c21 0 31 12 31 39v171c0 21 13 31 36 31h1306c27 0 36-11 36-36V455h-63" class="muted" marker-end="url(#arrow-muted)"/>
+
+  <!-- Receipt checking below Seal. -->
+  <path d="M970 579v50c0 15-7 24-22 24h-75v22" class="ink" marker-end="url(#arrow-ink)"/>
+  <g aria-label="seal verify local re-derivation">
+    <rect x="820" y="681" width="107" height="85" rx="6" class="ink"/>
+    <path d="M820 704h107" class="ink"/>
+    <circle cx="834" cy="692" r="2" class="ink"/>
+    <circle cx="844" cy="692" r="2" class="ink"/>
+    <circle cx="854" cy="692" r="2" class="ink"/>
+    <path d="M846 723l13 12-13 12M867 748h17" class="ink"/>
+    <text x="874" y="798" text-anchor="middle" class="label">seal verify</text>
+    <text x="874" y="825" text-anchor="middle" class="small">local re-derivation</text>
+  </g>
+
+  <path d="M1068 579v50c0 15 7 24 22 24h49v22" class="ink" marker-end="url(#arrow-ink)"/>
+  <g aria-label="seal-check browser paste a receipt">
+    <rect x="1090" y="681" width="105" height="85" rx="6" class="ink"/>
+    <path d="M1090 704h105" class="ink"/>
+    <circle cx="1103" cy="692" r="2" class="ink"/>
+    <circle cx="1113" cy="692" r="2" class="ink"/>
+    <circle cx="1123" cy="692" r="2" class="ink"/>
+    <circle cx="1142" cy="736" r="22" class="ink"/>
+    <path d="M1120 736h44M1142 714c10 12 10 32 0 44M1142 714c-10 12-10 32 0 44" class="ink"/>
+    <text x="1143" y="798" text-anchor="middle" class="label">seal-check</text>
+    <text x="1143" y="823" text-anchor="middle" class="small">browser.</text>
+    <text x="1143" y="843" text-anchor="middle" class="small">paste a receipt</text>
+  </g>
+
+  <!-- Legend -->
+  <g aria-label="Path legend">
+    <path d="M42 725h75" class="accent" marker-end="url(#arrow-accent)"/>
+    <text x="136" y="734" class="label">PROTECTED PATH</text>
+    <text x="281" y="734" class="small">(through Seal)</text>
+    <path d="M42 783h75" class="muted" marker-end="url(#arrow-muted)"/>
+    <text x="136" y="792" class="label">UNPROTECTED PATH</text>
+    <text x="315" y="792" class="small">(never touches Seal)</text>
+  </g>
+</svg>
