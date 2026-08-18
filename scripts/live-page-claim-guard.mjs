@@ -18,9 +18,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const URL = process.env.LIVE_CLAIM_GUARD_URL ?? "https://velvetmonkey.github.io/seal-check/";
 const README = process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, "README.md");
 const PIN = Object.freeze({
-  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "a67abf7",
-  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "12453"),
-  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "26a06e2b93d73b222e3b19fc04c64d9326d62392ecb84fb7d9b449d1308c46ef",
+  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "e152a053637845600e1eceaee70cea873801c609",
+  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "10459"),
+  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "e3afe8e2d8f8181279068900a7e2b0e832c7c48ecca40edbb586d53c6475064e",
 });
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;

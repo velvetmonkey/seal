@@ -11,6 +11,8 @@ import test from "node:test";
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "scripts/live-page-claim-guard.mjs");
 const originalReadme = readFileSync(join(ROOT, "README.md"), "utf8");
+// The test owns every pinned value, so a production pin refresh cannot break it.
+const PIN_COMMIT = "fixturecommit";
 
 async function withPage(body, fn) {
   const server = createServer((_request, response) => response.end(body));
@@ -24,6 +26,7 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
   writeFileSync(path, readme);
   const child = spawn(process.execPath, [GUARD], { env: {
     ...process.env, LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
+    LIVE_CLAIM_GUARD_COMMIT: PIN_COMMIT,
     LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
     LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
     ...(provenanceUrl ? { LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl } : {}),
@@ -41,7 +44,7 @@ test("passes when fetched controls, README population, and pin agree", async () 
   await withPage("<html></html>", async (url) => {
     const result = await run(url);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /PASS  served bytes match pinned seal-check@a67abf7/);
+    assert.match(result.stdout, new RegExp(`PASS  served bytes match pinned seal-check@${PIN_COMMIT}`));
   });
 });
 
@@ -59,7 +62,7 @@ test("fails with pinned provenance and a changed-region diagnostic", async () =>
     await withPage("<html>new release</html>", async (url) => {
     const result = await run(url, originalReadme, "<html></html>", provenanceUrl);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /served landing page differs from seal-check@a67abf7/);
+    assert.match(result.stderr, new RegExp(`served landing page differs from seal-check@${PIN_COMMIT}`));
     assert.match(result.stderr, /Confirm the candidate release's provenance before repinning/);
     assert.match(result.stderr, /DIFF  first changed region near byte/);
     assert.match(result.stderr, /- pinned/);
