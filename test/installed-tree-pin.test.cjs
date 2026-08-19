@@ -9,84 +9,25 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { sha256Hex, treeDigest, unpackPayload } = require("../spine/integrity.cjs");
+const {
+  formatInstalledTreeRefusal,
+  scanInstalledTreeRegions,
+} = require("../scripts/installed-tree-pin-regions.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
-const TREE = /\btree:?\s+([0-9a-f]{64})\b/g;
-const STORE = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
-const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?$/;
-const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const MARKER = "\n// --SEAL-PAYLOAD--\n";
 
 function scratchRoot() {
   return process.env.RUNNER_TEMP || os.tmpdir();
 }
 
-function lineNumber(text, index) {
-  return text.slice(0, index).split("\n").length;
-}
-
-function fencedBlocks(text) {
-  const lines = text.split("\n");
-  const blocks = [];
-  let offset = 0;
-  let open = null;
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].replace(/\r$/, "");
-    const width = lines[index].length + (index < lines.length - 1 ? 1 : 0);
-    if (/^```/.test(line)) {
-      if (open === null) {
-        open = {
-          start: offset,
-          end: text.length,
-          markerLine: index > 0 ? lines[index - 1].replace(/\r$/, "") : "",
-          markerLineNumber: index,
-        };
-      } else {
-        open.end = offset + width;
-        blocks.push(open);
-        open = null;
-      }
-    }
-    offset += width;
-  }
-  if (open !== null) blocks.push(open);
-  return blocks;
-}
-
-function declaredHashRole(text, index, file, blocks) {
-  const line = lineNumber(text, index);
-  const block = blocks.find((candidate) => index >= candidate.start && index < candidate.end);
-  const marker = block ? block.markerLine.match(ROLE_MARKER) : null;
-  if (!marker) {
-    refuse(
-      "role_marker_absent",
-      `${file}:${line} store hash has no role marker; add ` +
-        "**Seal installed-tree pin role:** `published-asset` or " +
-        "**Seal installed-tree pin role:** `fresh-build` immediately before its fenced block",
-    );
-  }
-  const role = marker[1];
-  if (!KNOWN_ROLES.has(role)) {
-    refuse(
-      "role_marker_unknown",
-      `${file}:${block.markerLineNumber} unknown store-hash role ${JSON.stringify(role)} for hash at line ${line}`,
-    );
-  }
-  return { role, line };
-}
-
 function quotedTreeHashHits(text, file = "<memory>") {
-  const blocks = fencedBlocks(text);
-  return [...text.matchAll(TREE), ...text.matchAll(STORE)].map((match) => {
-    const declared = declaredHashRole(text, match.index, file, blocks);
-    return {
-      hash: match[1],
-      index: match.index,
-      role: declared.role,
-      line: declared.line,
-    };
-  });
+  const scanned = scanInstalledTreeRegions(text, file);
+  if (scanned.issues.length > 0) {
+    assert.fail(scanned.issues.map(formatInstalledTreeRefusal).join("\n"));
+  }
+  return scanned.hits;
 }
 
 function trackedFiles() {
@@ -277,13 +218,16 @@ function downloadToFile(url, dest) {
   }
 }
 
-function publishedTreeSha256FromRelease() {
-  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const match = readme.match(/^\$ SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
-  if (!match) {
-    refuse("published_tag_absent", "README.md has no release version command");
+function publishedTreeSha256FromRelease(tagOverride = null) {
+  let tag = tagOverride;
+  if (tag === null) {
+    const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+    const match = readme.match(/^\$ SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+    if (!match) {
+      refuse("published_tag_absent", "README.md has no release version command");
+    }
+    tag = match[1];
   }
-  const tag = match[1];
   const name = `seal-${tag}-linux-x64`;
   const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-published-tree-"));
   try {
@@ -328,6 +272,39 @@ function rewriteMetadata(out, mutate) {
   const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
   mutate(meta, metaPath);
   fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+}
+
+const silenceProbe = process.env.SEAL_INSTALLED_TREE_PIN_SILENCE_PROBE;
+if (silenceProbe) {
+  test(`silence probe: ${silenceProbe}`, (t) => {
+    if (silenceProbe === "release_unreachable") {
+      publishedTreeSha256FromRelease("v999999.0.0-pinconflict-unreachable");
+      return;
+    }
+
+    const { out, built, identity } = buildDist();
+    t.after(() => removeScratch(out));
+    const artifact = namedArtifact(out, built.stdout);
+    if (silenceProbe === "artifact_missing") {
+      fs.rmSync(artifact);
+    } else if (silenceProbe === "artifact_empty") {
+      fs.rmSync(artifact);
+      fs.writeFileSync(artifact, Buffer.alloc(0), { mode: 0o555 });
+    } else if (silenceProbe === "artifact_unreadable") {
+      fs.chmodSync(artifact, 0);
+    } else if (silenceProbe === "locator_absent") {
+      rewriteMetadata(out, (meta) => {
+        delete meta.artifact;
+      });
+    } else if (silenceProbe === "meta_unreadable") {
+      const metaName = fs.readdirSync(out).find((name) => name.endsWith(".meta.json"));
+      assert.ok(metaName, "build did not write metadata");
+      fs.chmodSync(path.join(out, metaName), 0);
+    } else {
+      assert.fail(`unknown silence probe ${JSON.stringify(silenceProbe)}`);
+    }
+    treeSha256FromBuiltArtifact(out, built.stdout, identity);
+  });
 }
 
 test("published-asset markers govern four download shapes without prose inference", () => {
@@ -386,6 +363,33 @@ test("an unrecognised store-hash role is a named refusal", () => {
   assert.throws(() => quotedTreeHashHits(text, "unknown.md"), /unknown\.md:1 unknown store-hash role "release-cache"/);
 });
 
+test("conflicting role markers refuse regardless of order or count", () => {
+  const cases = [
+    ["published-asset", "fresh-build"],
+    ["fresh-build", "published-asset"],
+    ["published-asset", "fresh-build", "published-asset"],
+  ];
+  for (const roles of cases) {
+    const text = [
+      ...roles.map((role) => `**Seal installed-tree pin role:** \`${role}\``),
+      "```output",
+      `tree: ${"e".repeat(64)}`,
+      "```",
+    ].join("\n");
+    assertNamedRefuse(() => quotedTreeHashHits(text, "conflict.md"), "role_marker_conflict");
+  }
+});
+
+test("tree colon without following whitespace is a named refusal", () => {
+  const text = [
+    "**Seal installed-tree pin role:** `fresh-build`",
+    "```output",
+    `tree:${"e".repeat(64)}`,
+    "```",
+  ].join("\n");
+  assertNamedRefuse(() => quotedTreeHashHits(text, "nospace.md"), "tree_hash_spacing");
+});
+
 function markedBlockBytes(text, role) {
   const marker = `**Seal installed-tree pin role:** \`${role}\``;
   const blocks = [];
@@ -402,15 +406,90 @@ function markedBlockBytes(text, role) {
   }
 }
 
-test("repin refuses published-asset blocks by name and changes only marked fresh-build hashes", (t) => {
-  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-role-"));
-  t.after(() => removeScratch(copy));
+function copyForRepin(prefix) {
+  const copy = fs.mkdtempSync(path.join(scratchRoot(), prefix));
   fs.cpSync(ROOT, copy, {
     recursive: true,
     filter(source) {
       return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
     },
   });
+  return copy;
+}
+
+function repinTrackedSnapshot(copy) {
+  return new Map(
+    ["README.md", "docs/guide/README.md", "SHA256SUMS"].map((relative) => [
+      relative,
+      fs.readFileSync(path.join(copy, relative)),
+    ]),
+  );
+}
+
+function assertRepinSnapshotUnchanged(copy, before) {
+  for (const [relative, bytes] of before) {
+    assert.deepEqual(fs.readFileSync(path.join(copy, relative)), bytes, `${relative} changed`);
+  }
+  assert.equal(fs.existsSync(path.join(copy, "dist")), false, "repin built dist before structural refusal");
+}
+
+test("repin refuses conflicting role markers before touching files regardless of order or count", () => {
+  const cases = [
+    ["published-asset", "fresh-build"],
+    ["fresh-build", "published-asset"],
+    ["published-asset", "fresh-build", "published-asset"],
+  ];
+  for (const roles of cases) {
+    const copy = copyForRepin("seal-repin-conflict-");
+    const readmePath = path.join(copy, "README.md");
+    const savedReadme = fs.readFileSync(readmePath);
+    try {
+      const marker = "**Seal installed-tree pin role:** `published-asset`";
+      const stack = roles.map((role) => `**Seal installed-tree pin role:** \`${role}\``).join("\n");
+      const original = savedReadme.toString("utf8");
+      assert.equal(original.split(marker).length - 1, 1, "README published marker count changed");
+      fs.writeFileSync(readmePath, original.replace(marker, stack));
+      const before = repinTrackedSnapshot(copy);
+      const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+        cwd: copy,
+        encoding: "utf8",
+      });
+      assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+      assert.match(repin.stderr, /REFUSE role_marker_conflict: README\.md:\d+ conflicting installed-tree role markers/);
+      assertRepinSnapshotUnchanged(copy, before);
+    } finally {
+      fs.writeFileSync(readmePath, savedReadme);
+      removeScratch(copy);
+    }
+  }
+});
+
+test("repin refuses tree colon without whitespace before touching files", () => {
+  const copy = copyForRepin("seal-repin-nospace-");
+  const readmePath = path.join(copy, "README.md");
+  const savedReadme = fs.readFileSync(readmePath);
+  try {
+    const original = savedReadme.toString("utf8");
+    const tampered = original.replace(/^(tree:) ([0-9a-f]{64})$/m, "$1$2");
+    assert.notEqual(tampered, original, "README carried no tree: HASH line to tamper");
+    fs.writeFileSync(readmePath, tampered);
+    const before = repinTrackedSnapshot(copy);
+    const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+      cwd: copy,
+      encoding: "utf8",
+    });
+    assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+    assert.match(repin.stderr, /REFUSE tree_hash_spacing: README\.md:\d+ tree hash must contain whitespace/);
+    assertRepinSnapshotUnchanged(copy, before);
+  } finally {
+    fs.writeFileSync(readmePath, savedReadme);
+    removeScratch(copy);
+  }
+});
+
+test("repin refuses published-asset blocks by name and changes only marked fresh-build hashes", (t) => {
+  const copy = copyForRepin("seal-repin-role-");
+  t.after(() => removeScratch(copy));
 
   const files = ["README.md", "docs/guide/README.md"];
   const before = new Map();
