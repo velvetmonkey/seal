@@ -53,9 +53,9 @@ $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
 
 ```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/e6f9563687cb469fd2015b448f659ecdb57c21ce281e6bed3b26908c2e38df7d
+store: /home/you/.local/lib/seal/store/5181f37e602959bfde93b29b0c8b72ac6d1d5c3572f3486cce5dfcc047d75f6c
 command: /home/you/.local/bin/seal
-tree: e6f9563687cb469fd2015b448f659ecdb57c21ce281e6bed3b26908c2e38df7d
+tree: 5181f37e602959bfde93b29b0c8b72ac6d1d5c3572f3486cce5dfcc047d75f6c
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
