@@ -9,11 +9,14 @@ const test = require("node:test");
 const README = path.join(__dirname, "..", "README.md");
 
 function demoFence(text) {
-  const start = text.indexOf('export SEAL_DEMO_LOG=');
-  assert.notEqual(start, -1, "README must contain the demo walk fence");
-  const end = text.indexOf("\n```", start);
-  assert.notEqual(end, -1, "README demo walk fence must close");
-  return text.slice(start, end);
+  for (const match of text.matchAll(/```bash\n([\s\S]*?)\n```/g)) {
+    if (!match[1].includes("export SEAL_DEMO_LOG=")) continue;
+    return match[1].split("\n").map((line) => {
+      assert.match(line, /^\$ /, "README demo command line must carry a visible prompt");
+      return line.slice(2);
+    }).join("\n");
+  }
+  assert.fail("README must contain the demo walk fence");
 }
 
 function run(script, cwd) {

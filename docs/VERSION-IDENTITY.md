@@ -21,7 +21,7 @@ anything else                  ->  product identity = $VERSION-dev.g<short-commi
 `scripts/product-identity.cjs` implements it and prints it:
 
 ```bash
-node scripts/product-identity.cjs     # seal $VERSION-dev.g<short-commit>
+$ node scripts/product-identity.cjs     # seal $VERSION-dev.g<short-commit>
 ```
 
 A tree that cannot read its own commit at all reports `$VERSION-dev.gunknown`.

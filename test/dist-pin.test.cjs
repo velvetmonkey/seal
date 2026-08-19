@@ -43,7 +43,7 @@ test("an unreadable root pin refuses by name", () => {
 });
 
 function readmeInstallCommand(text) {
-  const commandPattern = /^(?<artifact>\.\/seal-(?<tag>v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)-linux-x64) --sha256 (?<sha256>[0-9a-f]{64}) --bytes (?<bytes>\d+) --prefix ~\/\.local$/m;
+  const commandPattern = /^\$ (?<artifact>\.\/seal-(?<tag>v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)-linux-x64) --sha256 (?<sha256>[0-9a-f]{64}) --bytes (?<bytes>\d+) --prefix ~\/\.local$/m;
   const match = text.match(commandPattern);
   if (!match) return { code: 1, stderr: "REFUSE readme_install_command_absent: README.md has no concrete published install command\n" };
   return { code: 0, ...match.groups };
@@ -143,7 +143,7 @@ test("README published installer command installs the downloaded release asset",
   assert.match(wrongBytes.stderr, /^REFUSE artifact_digest_mismatch: installer is \d+ bytes, published length is \d+$/m);
   t.diagnostic(`README byte count altered by one digit (exit ${wrongBytes.code}): ${wrongBytes.stderr.trim()}`);
 
-  const absentCommand = runDocumentedInstaller(readme.replace(/^\.\/seal-.* --prefix ~\/\.local$/m, ""), artifactBytes, tempRoot);
+  const absentCommand = runDocumentedInstaller(readme.replace(/^\$ \.\/seal-.* --prefix ~\/\.local$/m, ""), artifactBytes, tempRoot);
   assert.equal(absentCommand.code, 1, absentCommand.stdout + absentCommand.stderr);
   assert.equal(absentCommand.stderr, "REFUSE readme_install_command_absent: README.md has no concrete published install command\n");
   t.diagnostic(`README install command removed entirely (exit ${absentCommand.code}): ${absentCommand.stderr.trim()}`);

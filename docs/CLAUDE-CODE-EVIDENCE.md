@@ -106,10 +106,8 @@ How each one is established from files rather than from the operator's memory:
 ## Running the acceptance walk
 
 ```bash
-node harness/claude-code/cc-harness.cjs init \
-  --artifact ./seal-vX.Y.Z-linux-x64 --sha256 <digest> --bytes <length> \
-  --run-dir /tmp/cc-acceptance
-node harness/claude-code/cc-harness.cjs next --run-dir /tmp/cc-acceptance
+$ node harness/claude-code/cc-harness.cjs init --artifact ./seal-vX.Y.Z-linux-x64 --sha256 <digest> --bytes <length> --run-dir /tmp/cc-acceptance
+$ node harness/claude-code/cc-harness.cjs next --run-dir /tmp/cc-acceptance
 ```
 
 `next` is the whole run: it takes the machine readings, prints what the human
@@ -118,8 +116,10 @@ run is complete; the last step writes the pack under `<run-dir>/pack`. To write
 it straight into a checkout instead, name the destination:
 
 ```bash
-node harness/claude-code/cc-harness.cjs finish --run-dir /tmp/cc-acceptance --out .
-``` Run it in a terminal at least
+$ node harness/claude-code/cc-harness.cjs finish --run-dir /tmp/cc-acceptance --out .
+```
+
+Run it in a terminal at least
 80 columns wide — the approval dialog is measured at 80, and a narrower
 terminal would wrap the effect out of the recording.
 
@@ -157,7 +157,7 @@ observed, and the SHA-256 and byte length of every other file in the pack.
 ## The checker
 
 ```bash
-node scripts/check-cc-evidence.mjs evidence/claude-code
+$ node scripts/check-cc-evidence.mjs evidence/claude-code
 ```
 
 [`scripts/check-cc-evidence.mjs`](../scripts/check-cc-evidence.mjs) accepts a
@@ -180,9 +180,7 @@ actual Claude Code executable they independently verified (not a hash copied
 out of the pack):
 
 ```bash
-node scripts/check-cc-evidence.mjs evidence/claude-code --release \
-  --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> \
-  --client-executable-sha256 <independently-verified-claude-executable-digest>
+$ node scripts/check-cc-evidence.mjs evidence/claude-code --release --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> --client-executable-sha256 <independently-verified-claude-executable-digest>
 ```
 
 The checker compares that supplied digest to the executable identity the live

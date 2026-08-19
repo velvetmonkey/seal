@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// Fail closed: every Markdown fence in the supplied file or directory must
-// declare a language. Guide examples additionally keep commands and product
-// output in separate, role-named fences. This is intentionally a small
-// command-line guard so it can be run before the product suite as well as from
-// its declared test.
+// Fail closed: every Markdown fence in the supplied files or directories must
+// declare a language. Command and product-print roles must also be visible in
+// the rendered block content: bash command lines carry "$ ", while output and
+// text lines never do. This is intentionally a small command-line guard so it
+// can be run before the product suite as well as from its declared test.
 import { accessSync, constants, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 
-const target = resolve(process.argv[2] ?? "docs");
+const targets = process.argv.length > 2
+  ? process.argv.slice(2).map((target) => resolve(target))
+  : [resolve("README.md"), resolve("docs")];
 const errors = [];
 
 function readable(path) {
@@ -74,19 +76,27 @@ function scan(path) {
       return;
     }
     if (marker[0] === fence.marker && marker.length >= fence.length && !info.trim()) {
-      if (resolve(path).includes(`${join("docs", "guide")}/`)) {
-        const body = lines.slice(fence.line + 1, index);
-        if (fence.language === "bash" && body.some((entry) => /^(?:Protection|Runtime|Receipts|Most recent|ASSUMPTION|REFUSED|REFUSE|ACCEPT|BLOCKED|child calls observed|installed seal|store:|command:|tree:|Project \.mcp\.json hash|State:)/.test(entry.trim()))) {
-          errors.push(`${path}:${fence.line + 1}: bash fence contains product output; use an output fence`);
-        }
+      const body = lines.slice(fence.line + 1, index);
+      if (fence.language === "sh") {
+        errors.push(`${path}:${fence.line + 1}: command fence uses sh; use bash`);
       }
+      body.forEach((entry, bodyIndex) => {
+        if (!entry.trim()) return;
+        const bodyLineNumber = fence.line + bodyIndex + 2;
+        if (fence.language === "bash" && !entry.startsWith("$ ")) {
+          errors.push(`${path}:${bodyLineNumber}: bash command line must start with "$ "`);
+        }
+        if ((fence.language === "output" || fence.language === "text") && entry.startsWith("$ ")) {
+          errors.push(`${path}:${bodyLineNumber}: ${fence.language} product-print line must not start with "$ "`);
+        }
+      });
       fence = null;
     }
   });
   if (fence) errors.push(`${path}: unterminated fenced block`);
 }
 
-const files = markdownFiles(target);
+const files = [...new Set(targets.flatMap((target) => markdownFiles(target)))];
 for (const file of files) scan(file);
 if (errors.length) {
   for (const error of errors) console.error(`ERROR docs fence guard: ${error}`);

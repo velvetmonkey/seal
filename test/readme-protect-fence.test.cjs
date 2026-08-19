@@ -9,15 +9,17 @@ const test = require("node:test");
 const README = path.join(__dirname, "..", "README.md");
 
 function shellFences(text) {
-  const fences = [];
-  const parts = text.split("```sh\n").slice(1);
-  for (const part of parts) fences.push(part.split("\n```", 1)[0]);
-  return fences;
+  return [...text.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((match) => (
+    match[1].split("\n").map((line) => {
+      assert.match(line, /^\$ /, "README command line must carry a visible prompt");
+      return line.slice(2);
+    }).join("\n")
+  ));
 }
 
 test("README protect fence stops before writing .mcp.json if its target directory cannot be entered", () => {
   const readme = fs.readFileSync(README, "utf8");
-  const protectFence = shellFences(readme)[5];
+  const protectFence = shellFences(readme).find((fence) => fence.includes("seal protect db demo.mutate"));
   assert.ok(protectFence, "README must contain the protect fence");
 
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-protect-"));
