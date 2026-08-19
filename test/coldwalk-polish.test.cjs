@@ -43,7 +43,10 @@ test("demo announces and retains its checker directory, and Remove explains its 
   ));
   assert.ok(announced, demo.output());
   const directory = announced[1];
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => {
+    if (process.env.KEEP_TMP === "1" || process.env.KEEP_TMP === "true") return;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
 
   demo.child.stdin.write("y\n");
   assert.equal(await demo.exit, 0, demo.output());
