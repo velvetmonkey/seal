@@ -8,7 +8,11 @@ export default async function* productSuiteTapReporter(source) {
 
   const executed = new Set(
     events
-      .filter((event) => event.type === "test:summary" && event.data?.file)
+      .filter((event) =>
+        event.type === "test:complete" &&
+        event.data?.file &&
+        event.data.name === event.data.file
+      )
       .map((event) => event.data.file),
   );
   for (const file of [...executed].sort()) {
