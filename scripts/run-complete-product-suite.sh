@@ -325,6 +325,7 @@ if (( ${#declared_without_cases[@]} > 0 )); then
   gate_status=1
 fi
 
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 critical_proof_failures=()
 for index in "${!critical_properties[@]}"; do
   property="${critical_properties[$index]}"
