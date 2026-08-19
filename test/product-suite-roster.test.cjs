@@ -25,6 +25,7 @@ function run(driver, tests, roster) {
     ...process.env,
     RUNNER_TEMP: tmpdir(),
     SEAL_PRODUCT_TEST_ROOT: tests,
+    SEAL_PRODUCT_TEST_DIR: tests,
     SEAL_PRODUCT_TEST_ROSTER: roster,
   };
   delete env.NODE_TEST_CONTEXT;
@@ -41,6 +42,26 @@ test("the suite driver reports its runtime declared roster", (t) => {
   const result = run(DRIVER, space.tests, space.roster);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PASS  product suite ran all 3 declared test files/);
+});
+
+test("a failing present but undeclared test is a red finding", (t) => {
+  const space = fixture();
+  const omitted = join(space.tests, "omitted.test.cjs");
+  writeFileSync(omitted, "require('node:test')('omitted failure', () => { throw new Error('intentional'); });\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`present but undeclared: .*${omitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+});
+
+test("a passing present but undeclared test is also a red finding", (t) => {
+  const space = fixture();
+  const omitted = join(space.tests, "omitted.test.cjs");
+  writeFileSync(omitted, "require('node:test')('omitted pass', () => {});\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`present but undeclared: .*${omitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
 test("a strict subset of the declared roster is a red finding", (t) => {
@@ -67,11 +88,37 @@ test("an unreadable declared roster is a red finding", (t) => {
   assert.match(result.stdout, /cannot read declared product-test roster/);
 });
 
+test("an empty declared roster is a named red finding", (t) => {
+  const space = fixture();
+  writeFileSync(space.roster, "");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /declared product-test roster under .* is empty/);
+});
+
+test("a mode-000 declared roster is a named red finding", (t) => {
+  const space = fixture();
+  chmodSync(space.roster, 0o000);
+  t.after(() => {
+    chmodSync(space.roster, 0o600);
+    rmSync(space.root, { recursive: true, force: true });
+  });
+  const result = run(DRIVER, space.tests, space.roster);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /declared product-test roster is unreadable .*mode 000 has no read permissions/);
+});
+
 test("an absent operator-supplied RUNNER_TEMP is refused without creating it", (t) => {
   const space = fixture();
   const absent = join(space.root, "operator-typo");
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
-  const env = { ...process.env, RUNNER_TEMP: absent, SEAL_PRODUCT_TEST_ROOT: space.tests };
+  const env = {
+    ...process.env,
+    RUNNER_TEMP: absent,
+    SEAL_PRODUCT_TEST_ROOT: space.tests,
+    SEAL_PRODUCT_TEST_DIR: space.tests,
+  };
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync("bash", [DRIVER], { cwd: ROOT, encoding: "utf8", env });
   assert.equal(result.status, 1, result.stdout + result.stderr);

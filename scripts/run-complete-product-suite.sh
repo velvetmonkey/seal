@@ -17,9 +17,24 @@ if [[ ! -d "$test_root" || ! -r "$test_root" ]]; then
   exit 1
 fi
 test_root="$(cd "$test_root" && pwd)"
+test_directory="${SEAL_PRODUCT_TEST_DIR:-$script_root/test}"
+if [[ ! -d "$test_directory" || ! -r "$test_directory" ]]; then
+  echo "::error::cannot read product test directory at $test_directory"
+  exit 1
+fi
+test_directory="$(cd "$test_directory" && pwd)"
 
 roster_file="${SEAL_PRODUCT_TEST_ROSTER:-$script_root/scripts/product-test-roster.txt}"
-if [[ ! -f "$roster_file" || ! -r "$roster_file" ]]; then
+if [[ ! -f "$roster_file" ]]; then
+  echo "::error::cannot read declared product-test roster at $roster_file"
+  exit 1
+fi
+printf -v roster_mode '%03d' "$(stat -c '%a' -- "$roster_file")"
+if [[ "$roster_mode" == "000" ]]; then
+  echo "::error::declared product-test roster is unreadable at $roster_file: mode $roster_mode has no read permissions"
+  exit 1
+fi
+if [[ ! -r "$roster_file" ]]; then
   echo "::error::cannot read declared product-test roster at $roster_file"
   exit 1
 fi
@@ -50,6 +65,42 @@ fi
 if (( ${#roster_failures[@]} > 0 )); then
   echo "FAIL  product suite roster: declared test files are not runnable"
   printf 'FAIL  product suite roster: declared test file %s\n' "${roster_failures[@]}"
+  exit 1
+fi
+
+declare -A declared_set
+for file in "${declared_tests[@]}"; do
+  declared_set["$file"]=1
+done
+
+# A test file is a regular file directly under test_directory whose basename
+# matches *.test.*. Directories, hidden files, backups, disabled files, and
+# other names are not product-suite test files.
+mapfile -t present_tests < <(find "$test_directory" -mindepth 1 -maxdepth 1 -type f -name '*.test.*' -print | sort)
+declare -A present_set
+for file in "${present_tests[@]}"; do
+  present_set["$file"]=1
+done
+present_not_declared=()
+for file in "${present_tests[@]}"; do
+  if [[ -z "${declared_set[$file]+x}" ]]; then
+    present_not_declared+=("$file")
+  fi
+done
+declared_not_present=()
+for file in "${declared_tests[@]}"; do
+  if [[ -z "${present_set[$file]+x}" ]]; then
+    declared_not_present+=("$file")
+  fi
+done
+if (( ${#present_not_declared[@]} > 0 || ${#declared_not_present[@]} > 0 )); then
+  echo "::error::product suite roster disagrees with test directory"
+  if (( ${#declared_not_present[@]} > 0 )); then
+    printf '::error::declared but absent from test directory: %s\n' "${declared_not_present[*]}"
+  fi
+  if (( ${#present_not_declared[@]} > 0 )); then
+    printf '::error::present but undeclared: %s\n' "${present_not_declared[*]}"
+  fi
   exit 1
 fi
 
@@ -98,10 +149,7 @@ if (( summary_status[todo] == 0 && summary[todo] != 0 )); then
 fi
 mapfile -t executed_tests < <(sed -n 's/^# product-suite-executed-file //p' "$output_file" | sort -u)
 
-declare -A declared_set executed_set
-for file in "${declared_tests[@]}"; do
-  declared_set["$file"]=1
-done
+declare -A executed_set
 for file in "${executed_tests[@]}"; do
   executed_set["$file"]=1
 done
