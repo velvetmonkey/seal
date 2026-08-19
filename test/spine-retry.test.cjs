@@ -12,6 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -21,10 +22,6 @@ const SEAL = path.join(ROOT, "bin", "seal");
 // on the checkout's absolute filesystem location.
 function repositoryRelativeOutput(text) {
   return text.replaceAll(ROOT, ".");
-}
-
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
 function readCount(countFile) {

@@ -7,6 +7,8 @@ import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import test from "node:test";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, track } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "scripts/live-page-claim-guard.mjs");
@@ -20,7 +22,7 @@ async function withPage(body, fn) {
   finally { await new Promise((done) => server.close(done)); }
 }
 function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined, { productionPin = false, cacheDir = undefined, commit = PIN_COMMIT } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-"));
+  const dir = makeTmp("live-page-claim-guard-");
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
   const runnerTemp = cacheDir ?? join(dir, "cache");
@@ -128,7 +130,7 @@ test("uses the commit-keyed pinned-source cache without a second provenance fetc
   const body = "<html></html>";
   const server = createServer((_request, response) => { requests += 1; response.end(body); });
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
-  const cacheDir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-cache-"));
+  const cacheDir = makeTmp("live-page-claim-guard-cache-");
   try {
     const url = `http://127.0.0.1:${server.address().port}/`;
     const first = await run(url, originalReadme, body, url, { cacheDir });
@@ -145,7 +147,7 @@ test("uses the commit-keyed pinned-source cache without a second provenance fetc
 
 test("fails closed on poisoned cache bytes under the right commit key", async () => {
   const body = "<html></html>";
-  const cacheDir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-cache-"));
+  const cacheDir = makeTmp("live-page-claim-guard-cache-");
   const cachePath = join(cacheDir, "live-page-claim-guard", `${encodeURIComponent(PIN_COMMIT)}.index.html`);
   mkdirSync(join(cacheDir, "live-page-claim-guard"), { recursive: true });
   writeFileSync(cachePath, "poisoned bytes");

@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
@@ -25,7 +26,7 @@ function trackedFiles() {
 }
 
 test("quoted installed-tree hashes match a freshly built artifact", () => {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-installed-tree-pin-"));
+  const out = tmpdir("seal-installed-tree-pin-");
   const built = spawnSync(process.execPath, [BUILD, "--out", out], { encoding: "utf8" });
   assert.equal(built.status, 0, built.stdout + built.stderr);
 

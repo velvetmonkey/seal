@@ -9,10 +9,7 @@ const test = require("node:test");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
-
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");

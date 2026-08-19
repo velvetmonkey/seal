@@ -15,11 +15,12 @@ const {
   statePathFor,
 } = require("../spine/protection.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 
 function setupLeaseState() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-generation-"));
+  const root = tmpdir("seal-generation-");
   const project = path.join(root, "project");
   const dataHome = path.join(root, "data");
   fs.mkdirSync(project);
@@ -76,7 +77,7 @@ test("a live lease is not replaced and a second starter is refused", async () =>
 });
 
 test("stale in-memory contract refuses to consume after the lease generation moves", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-generation-contract-"));
+  const dir = tmpdir("seal-generation-contract-");
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
   let generation = 4;
@@ -101,7 +102,7 @@ test("stale in-memory contract refuses to consume after the lease generation mov
 });
 
 test("a single proxy restart cannot replay a consumed approval", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-generation-restart-"));
+  const dir = tmpdir("seal-generation-restart-");
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
   const options = { kernelAdapter: { authorize: () => ({ verdict: "ALLOW", raw: "test" }) } };

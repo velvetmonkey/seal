@@ -11,6 +11,7 @@ const {
   createKernelAuthorizationAdapter,
   DEFAULT_KERNEL_ROOT,
 } = require("../contract/kernel-authorization.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -27,7 +28,7 @@ test("the production kernel has one runtime location and the retired fixture pat
 });
 
 test("a valid kernel placed only at the retired fixture path cannot satisfy the adapter", (t) => {
-  const product = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-old-path-only-"));
+  const product = tmpdir("seal-kernel-old-path-only-");
   t.after(() => fs.rmSync(product, { recursive: true, force: true }));
   fs.mkdirSync(path.join(product, "contract"), { recursive: true });
   fs.mkdirSync(path.dirname(path.join(product, "test-support", "runtime-fixture", "kernel")), { recursive: true });
@@ -54,7 +55,7 @@ function acceptedRetry(contract, state, overrides = {}) {
 }
 
 function proxyHarness(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-real-path-"));
+  const dir = tmpdir("seal-kernel-real-path-");
   const store = path.join(dir, "approvals.journal");
   const receipts = path.join(dir, "receipts");
   const data = path.join(dir, "data.txt");
@@ -148,7 +149,7 @@ test("Node state rows refuse without consulting the authorization kernel", () =>
 });
 
 test("physical wasm corruption refuses by name with no JavaScript fallback", (t) => {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-corrupt-"));
+  const scratch = tmpdir("seal-kernel-corrupt-");
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   fs.cpSync(DEFAULT_KERNEL_ROOT, scratch, { recursive: true });
   const wasm = path.join(scratch, "wasm", "seal.wasm");

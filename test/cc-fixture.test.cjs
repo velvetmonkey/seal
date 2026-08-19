@@ -14,11 +14,12 @@ const path = require("node:path");
 const readline = require("node:readline");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const FIXTURE = path.join(__dirname, "..", "harness", "claude-code", "fixture-server.cjs");
 
 function workspace() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-fixture-"));
+  const dir = tmpdir("seal-cc-fixture-");
   return { dir, log: path.join(dir, "child.jsonl"), effect: path.join(dir, "effect.txt") };
 }
 

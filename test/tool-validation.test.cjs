@@ -12,9 +12,10 @@ const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
 const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
 const { readState, statePathFor } = require("../spine/protection.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 function setup(mode = "ok", source) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-tool-validation-"));
+  const root = tmpdir("seal-tool-validation-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const bin = path.join(root, "bin");

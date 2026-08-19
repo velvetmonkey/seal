@@ -5,12 +5,14 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, track } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCRIPT = fileURLToPath(new URL("../scripts/readme-navigation.mjs", import.meta.url));
 
 test("an empty public-sibling population is a refusal, not a complete inventory", (t) => {
-  const bin = mkdtempSync(join(tmpdir(), "seal-navigation-empty-"));
+  const bin = makeTmp("seal-navigation-empty-");
   t.after(() => rmSync(bin, { recursive: true, force: true }));
   const gh = join(bin, "gh");
   writeFileSync(gh, "#!/usr/bin/env node\nprocess.stdout.write('[]\\n');\n");

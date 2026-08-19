@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SCRATCH_ROOT = path.join(os.tmpdir(), "seal-reinstall-tests");
@@ -18,7 +19,7 @@ function run(command, args) {
 
 function buildArtifact() {
   fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
-  const out = fs.mkdtempSync(path.join(SCRATCH_ROOT, "seal-reinstall-test-"));
+  const out = track(fs.mkdtempSync(path.join(SCRATCH_ROOT, "seal-reinstall-test-")));
   const built = run(process.execPath, [BUILD, "--out", out]);
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
   const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);

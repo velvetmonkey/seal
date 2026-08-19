@@ -14,6 +14,7 @@ const {
 } = require("../spine/protection.cjs");
 const { createJournal, openJournal } = require("../spine/store.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const SCRATCH = path.join(
   process.env.SEAL_TEST_SCRATCH ||
@@ -49,7 +50,7 @@ function withSimulatedDarwin(fn) {
 
 function workspace(prefix) {
   fs.mkdirSync(SCRATCH, { recursive: true, mode: 0o700 });
-  const root = fs.mkdtempSync(path.join(SCRATCH, `${prefix}-`));
+  const root = track(fs.mkdtempSync(path.join(SCRATCH, `${prefix}-`)));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const dataHome = path.join(root, "data");

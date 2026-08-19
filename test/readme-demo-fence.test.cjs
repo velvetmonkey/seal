@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const README = path.join(__dirname, "..", "README.md");
 
@@ -25,7 +26,7 @@ function run(script, cwd) {
 
 test("README demo fence stops when tee masks a failing seal demo", () => {
   const fence = demoFence(fs.readFileSync(README, "utf8"));
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-demo-"));
+  const work = tmpdir("seal-readme-demo-");
   const fakeSeal = "seal() { printf 'tampered demo step\\n'; return 37; }";
 
   // The published walk deliberately takes its answer from the reader's

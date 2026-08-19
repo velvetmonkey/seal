@@ -13,10 +13,11 @@ const SCRATCH = process.env.RUNNER_TEMP
   : "/home/monkey/scratch/receiptkey";
 const { createJournal } = require("../spine/store.cjs");
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 function fixture() {
   fs.mkdirSync(SCRATCH, { recursive: true });
-  const root = fs.mkdtempSync(path.join(SCRATCH, "test-"));
+  const root = track(fs.mkdtempSync(path.join(SCRATCH, "test-")));
   const project = path.join(root, "project");
   const dataHome = path.join(root, "data-home");
   const receiptsDir = path.join(root, "receipts");
@@ -112,7 +113,7 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
 
 test("receipt key absence generates, while ambiguous private-key states refuse by name", () => {
   fs.mkdirSync(SCRATCH, { recursive: true });
-  const env = { XDG_DATA_HOME: fs.mkdtempSync(path.join(SCRATCH, "ambiguity-")) };
+  const env = { XDG_DATA_HOME: track(fs.mkdtempSync(path.join(SCRATCH, "ambiguity-"))) };
   let announcements = 0;
   loadReceiptSigner(env, () => { announcements += 1; });
   const keys = receiptKeyPaths(env);

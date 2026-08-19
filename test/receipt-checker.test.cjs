@@ -9,6 +9,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync, execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -37,7 +38,7 @@ test("receipt canonicaliser refuses an absent value by name and the caller exits
 
 // Run seal demo once; return the ALLOW receipt path and the pubkey sidecar.
 function makeRealReceipt() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-r3c-"));
+  const dir = tmpdir("seal-r3c-");
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
     let out = "";
@@ -167,7 +168,7 @@ test("the checker runs with the seal binary absent (copied to a clean dir)", asy
   const { receiptPath, pubkeyPath } = await makeRealReceipt();
   // Copy ONLY the checker into a fresh directory with no seal repo near it,
   // then run it there. If it needed bin/seal/spine/contract it would fail.
-  const clean = fs.mkdtempSync(path.join(os.tmpdir(), "seal-r3c-isolated-"));
+  const clean = tmpdir("seal-r3c-isolated-");
   const isolatedChecker = path.join(clean, "seal-receipt-check.mjs");
   fs.copyFileSync(CHECKER, isolatedChecker);
   fs.copyFileSync(receiptPath, path.join(clean, "receipt.json"));

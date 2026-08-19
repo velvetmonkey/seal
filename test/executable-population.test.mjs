@@ -5,13 +5,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { enumerate } from "../scripts/executable-population.mjs";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, track } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const ENUMERATOR = join(ROOT, "scripts/executable-population.mjs");
 const ANTI_ROLL = join(ROOT, "scripts/check-executable-population-callers.mjs");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-enumcanon-"));
+  const root = makeTmp("seal-enumcanon-");
   execFileSync("git", ["init", "-q", root]);
   execFileSync("git", ["-C", root, "config", "user.email", "enumcanon@example.invalid"]);
   execFileSync("git", ["-C", root, "config", "user.name", "enumcanon"]);

@@ -14,12 +14,10 @@ const test = require("node:test");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
-}
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 function countOf(dataFile) {
   const file = `${dataFile}.count`;

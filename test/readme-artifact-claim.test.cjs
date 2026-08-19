@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const README = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
@@ -13,7 +14,7 @@ const artifact = `seal-v${VERSION}-linux-x64`;
 const CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
 
 function check(text) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-artifact-claim-"));
+  const dir = tmpdir("seal-readme-artifact-claim-");
   const file = path.join(dir, "README.md");
   fs.writeFileSync(file, text);
   return spawnSync(process.execPath, [CHECK], {

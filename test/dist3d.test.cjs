@@ -11,14 +11,11 @@ const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { productIdentity, artifactName } = require("../scripts/product-identity.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
 
 function sha256Hex(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");

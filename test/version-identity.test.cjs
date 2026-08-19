@@ -8,6 +8,7 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { productIdentity, artifactName } = require("../scripts/product-identity.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
@@ -47,7 +48,7 @@ test("every emitted release identity derives from VERSION", () => {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`\\bv${VERSION}\\b`), `${file} must carry bare v${VERSION}`);
   }
 
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-identity-"));
+  const out = tmpdir("seal-version-identity-");
   const build = run(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", out]);
   assert.equal(build.code, 0, build.stderr);
   const artifact = path.join(out, builtName);
@@ -88,7 +89,7 @@ test("every emitted release identity derives from VERSION", () => {
 
 test("sync leaves no old product version in the named reader-facing search surface", () => {
   const oldVersion = VERSION;
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-stale-"));
+  const scratch = tmpdir("seal-version-stale-");
   fs.cpSync(ROOT, scratch, {
     recursive: true,
     filter(source) {

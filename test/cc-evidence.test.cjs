@@ -17,6 +17,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { createHash } = require("node:crypto");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
@@ -32,7 +33,7 @@ let sharedPack = null;
 // the stand-in client and writes a pack.
 function pack() {
   if (sharedPack) return sharedPack;
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-evidence-"));
+  const workspace = tmpdir("seal-cc-evidence-");
   const runDir = path.join(workspace, "run");
   const built = spawnSync(process.execPath, [SYNTHETIC_RUN, "--run-dir", runDir], { encoding: "utf8" });
   assert.equal(built.status, 0, `synthetic run failed:\n${built.stdout}\n${built.stderr}`);
@@ -54,7 +55,7 @@ function pack() {
 // into another test's evidence.
 function copyOfPack() {
   const original = pack();
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-copy-"));
+  const workspace = tmpdir("seal-cc-copy-");
   fs.cpSync(original.evidence, path.join(workspace, "evidence"), { recursive: true });
   const relative = path.relative(original.evidence, original.dir);
   const dir = path.join(workspace, "evidence", relative);
@@ -292,7 +293,7 @@ test("a release pack without an operator-supplied client digest is refused by na
 
 test("PATH 2 refuses when the checker cannot read its local stand-in and fixture inputs", () => {
   const promoted = promotedSyntheticPack();
-  const emptyTree = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-tree-"));
+  const emptyTree = tmpdir("seal-cc-empty-tree-");
   const result = check([
     promoted.dir, "--release", "--artifact-sha256", pack().artifact,
     "--client-executable-sha256", promoted.manifest().client.executable_sha256,
@@ -350,7 +351,7 @@ test("the checker refuses a pack filed under a path that contradicts its manifes
 });
 
 test("a release refuses evidence counted by a fixture this tree no longer ships", () => {
-  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-fixture-drift-"));
+  const elsewhere = tmpdir("seal-cc-fixture-drift-");
   const fixture = path.join(elsewhere, "harness", "claude-code");
   fs.mkdirSync(fixture, { recursive: true });
   fs.writeFileSync(path.join(fixture, "fixture-server.cjs"), "// a different instrument\n");
@@ -360,7 +361,7 @@ test("a release refuses evidence counted by a fixture this tree no longer ships"
 });
 
 test("a release with no evidence pack reports the untested state instead of passing", () => {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-"));
+  const empty = tmpdir("seal-cc-empty-");
   const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Claude Code integration: UNTESTED — real Claude Code call not observed$/m, result.out);
@@ -412,7 +413,7 @@ test("the anti-forgery limit is present in both docs and checker output", () => 
   assert.match(document, /instrument against mistakes, not against forgery/);
   assert.match(document, /That row is the honest claim;\s+the\s+checker's exit code is not/);
 
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-honesty-"));
+  const empty = tmpdir("seal-cc-honesty-");
   const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack\. A determined author with local file access can produce a passing pack\. It is an instrument against mistakes, not against forgery\.$/m, result.out);

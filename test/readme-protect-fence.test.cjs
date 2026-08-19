@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const README = path.join(__dirname, "..", "README.md");
 
@@ -22,7 +23,7 @@ test("README protect fence stops before writing .mcp.json if its target director
   const protectFence = shellFences(readme).find((fence) => fence.includes("seal protect db demo.mutate"));
   assert.ok(protectFence, "README must contain the protect fence");
 
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-protect-"));
+  const work = tmpdir("seal-readme-protect-");
   const sentinel = path.join(work, "sentinel.txt");
   fs.writeFileSync(sentinel, "sentinel\n");
 

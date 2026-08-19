@@ -1,15 +1,16 @@
 const assert = require("node:assert/strict");
 const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } = require("node:fs");
-const { tmpdir } = require("node:os");
+const { tmpdir: osTmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir } = require("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const DRIVER = join(ROOT, "scripts", "run-complete-product-suite.sh");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-product-suite-roster-"));
+  const root = tmpdir("seal-product-suite-roster-");
   const tests = join(root, "tests");
   mkdirSync(tests);
   for (const name of ["one", "two", "three"]) {
@@ -19,7 +20,7 @@ function fixture() {
 }
 
 function run(driver, tests) {
-  const env = { ...process.env, RUNNER_TEMP: tmpdir(), SEAL_PRODUCT_TEST_ROOT: tests };
+  const env = { ...process.env, RUNNER_TEMP: osTmpdir(), SEAL_PRODUCT_TEST_ROOT: tests };
   delete env.NODE_TEST_CONTEXT;
   return spawnSync("bash", [driver], {
     cwd: ROOT,

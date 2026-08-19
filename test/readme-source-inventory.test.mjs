@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, track } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SCRIPT = join(ROOT, "scripts/readme-source-inventory.mjs");
 
 test("an empty README source population is a refusal", (t) => {
-  const bin = mkdtempSync(join(tmpdir(), "seal-readme-source-empty-"));
+  const bin = makeTmp("seal-readme-source-empty-");
   t.after(() => rmSync(bin, { recursive: true, force: true }));
   const git = join(bin, "git");
   writeFileSync(git, "#!/usr/bin/env bash\nexit 0\n");

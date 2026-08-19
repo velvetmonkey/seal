@@ -11,11 +11,12 @@ const {
   lockOwnerIsLive,
   processStartWitness,
 } = require("../spine/protection.cjs");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
-const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "seal-proxy-lock-"));
+const SCRATCH = tmpdir("seal-proxy-lock-");
 
 function project() {
-  const root = fs.mkdtempSync(path.join(SCRATCH, "test-"));
+  const root = track(fs.mkdtempSync(path.join(SCRATCH, "test-")));
   return { root, lockPath: lockPathFor(root) };
 }
 

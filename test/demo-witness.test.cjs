@@ -10,6 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(__dirname, "..", "bin", "seal");
@@ -48,7 +49,7 @@ function attach(child) {
 // --- the scope witness ------------------------------------------------------
 
 test("the scope witness: the direct write happened and the proxy emitted zero decisions for it", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-"));
+  const dir = tmpdir("seal-witness-");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
   t.after(run.kill);
@@ -112,7 +113,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
 });
 
 test("the scope rule appears between the printed path and the direct write", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-order-"));
+  const dir = tmpdir("seal-witness-order-");
   const result = runSeal(["demo", "--dir", dir], "y\n");
   assert.equal(result.code, 0, result.out + result.err);
 

@@ -12,6 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -110,8 +111,8 @@ test("no stale doctor or kernel allocation claim survives in docs/", () => {
 
 test("seal verify output claims re-derivation, never an outside verification", async () => {
   const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-noclaim-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-noclaim-data-"));
+  const cache = tmpdir("seal-noclaim-cache-");
+  const dataHome = tmpdir("seal-noclaim-data-");
   const receipt = await writeKernelReceipt(cache, dataHome);
   const out = execFileSync(process.execPath, [SEAL, "verify", receipt], {
     env: { ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome }, encoding: "utf8",

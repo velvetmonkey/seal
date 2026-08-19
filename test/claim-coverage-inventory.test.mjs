@@ -4,13 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
+import { createRequire } from "node:module";
+const { tmpdir } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/claim-coverage-inventory.mjs");
 const REPOS = ["seal", "seal-check", "seal-demo", "seal-live-demo", "seal-verify-action", "seal-assurance-kit", "mcp-seal-dev"];
 
 function fixture() {
-  const family = fs.mkdtempSync(path.join(os.tmpdir(), "claiminventory-"));
+  const family = tmpdir("claiminventory-");
   const roots = Object.fromEntries(REPOS.map((repo) => [repo, path.join(family, repo)]));
   for (const root of Object.values(roots)) fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const root of Object.values(roots)) fs.writeFileSync(path.join(root, "scripts/claims-drift.mjs"), "");

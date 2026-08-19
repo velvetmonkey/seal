@@ -6,6 +6,7 @@ const http = require("node:http");
 const { execFile, execFileSync } = require("node:child_process");
 const { promisify } = require("node:util");
 const test = require("node:test");
+const { tmpdir, track } = require("../test-support/tmpdir.cjs");
 
 const CLI = path.join(__dirname, "../bin/seal");
 const execFileAsync = promisify(execFile);
@@ -38,7 +39,7 @@ async function refusingRuntimeServer(statusCode) {
 const { ensureRuntime, writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 
 function runtimeRefusalContext() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal verify runtime refusal-"));
+  const root = tmpdir("seal verify runtime refusal-");
   const cache = path.join(root, "cache");
   const dataHome = path.join(root, "data");
   const receipt = path.join(root, "receipt.json");
@@ -112,16 +113,16 @@ test("verify names an unreadable pinned runtime cache path", async () => {
 });
 
 test("seal verify accepts a receipt copied away from all generating state", async () => {
-  const genCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-cache-"));
-  const genData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-gen-data-"));
+  const genCache = tmpdir("seal-portable-gen-cache-");
+  const genData = tmpdir("seal-portable-gen-data-");
   const original = await writeKernelReceipt(genCache, genData);
-  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-copy-"));
+  const fresh = tmpdir("seal-portable-copy-");
   const copied = path.join(fresh, "carried-receipt.json");
   fs.copyFileSync(original, copied);
   fs.rmSync(genCache, { recursive: true, force: true });
   fs.rmSync(genData, { recursive: true, force: true });
-  const verifyCache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-cache-"));
-  const verifyData = fs.mkdtempSync(path.join(os.tmpdir(), "seal-portable-verify-data-"));
+  const verifyCache = tmpdir("seal-portable-verify-cache-");
+  const verifyData = tmpdir("seal-portable-verify-data-");
   await ensureRuntime(verifyCache);
   const result = run(["verify", copied], verifyCache, verifyData);
   assert.equal(result.code, 0, result.out);
@@ -129,8 +130,8 @@ test("seal verify accepts a receipt copied away from all generating state", asyn
 });
 
 test("verify re-derives a saved kernel receipt in place", async () => {
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-context-data-"));
+  const cache = tmpdir("seal-verify-context-cache-");
+  const dataHome = tmpdir("seal-verify-context-data-");
   const receipt = await writeKernelReceipt(cache, dataHome);
   const verified = run(["verify", receipt], cache, dataHome);
   assert.equal(verified.code, 0, verified.out);
@@ -138,9 +139,9 @@ test("verify re-derives a saved kernel receipt in place", async () => {
 });
 
 test("verify distinguishes an uninspectable path from unreadable receipt contents", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-inputs-"));
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-data-"));
+  const root = tmpdir("seal-verify-inputs-");
+  const cache = tmpdir("seal-verify-cache-");
+  const dataHome = tmpdir("seal-verify-data-");
   const absent = path.join(root, "absent.json");
   const result = run(["verify", absent], cache, dataHome);
   assert.notEqual(result.code, 0, result.out);
@@ -153,9 +154,9 @@ test("verify distinguishes an uninspectable path from unreadable receipt content
 });
 
 test("verify distinguishes a non-file path from denied receipt permissions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-kind-"));
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-file-data-"));
+  const root = tmpdir("seal-verify-file-kind-");
+  const cache = tmpdir("seal-verify-file-cache-");
+  const dataHome = tmpdir("seal-verify-file-data-");
   const directory = path.join(root, "directory");
   fs.mkdirSync(directory);
   const nonFile = run(["verify", directory], cache, dataHome);
@@ -173,9 +174,9 @@ test("verify distinguishes a non-file path from denied receipt permissions", () 
 });
 
 test("verify refuses empty, malformed, and non-receipt JSON paths", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-"));
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-data-"));
+  const root = tmpdir("seal-verify-invalid-");
+  const cache = tmpdir("seal-verify-invalid-cache-");
+  const dataHome = tmpdir("seal-verify-invalid-data-");
   await ensureRuntime(cache);
   for (const [name, pattern] of [["empty.json", /receipt is empty/], ["bad.json", /not valid JSON/], ["not-a-receipt.json", /receipt verification failed|not a valid receipt|schema valid/]]) {
     const target = path.join(root, name);
@@ -192,8 +193,8 @@ test("seal verify recognizes a self-contained real spine receipt and routes to t
   // A spine receipt produced the way a user produces one: run the demo. The
   // demo's fabricated, temporarily-signed receipts live beside its key, not
   // in the durable data store supplied to this process.
-  const cache = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-cache-"));
-  const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-spine-data-"));
+  const cache = tmpdir("seal-verify-spine-cache-");
+  const dataHome = tmpdir("seal-verify-spine-data-");
   const demo = run(["demo"], cache, dataHome, "y\n");
   assert.equal(demo.code, 0, demo.out);
   const receiptPaths = [...demo.out.matchAll(/^receipt written: (.+)$/gm)].map((match) => match[1]);

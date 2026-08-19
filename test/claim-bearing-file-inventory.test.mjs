@@ -4,6 +4,8 @@ import { resolve, join } from "node:path";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import test from "node:test";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, track } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = resolve(ROOT, "scripts/claim-bearing-file-inventory.mjs");
@@ -12,7 +14,7 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^README\.md\tCOVERED by /m);
-  const worktree = mkdtempSync(join(tmpdir(), "seal-claim-inventory-"));
+  const worktree = makeTmp("seal-claim-inventory-");
   try {
     mkdirSync(join(worktree, "scripts"));
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
@@ -29,7 +31,7 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
 });
 
 test("a bare contextual component reference remains outside the subject-keyed rule", () => {
-  const worktree = mkdtempSync(join(tmpdir(), "seal-claim-inventory-bare-"));
+  const worktree = makeTmp("seal-claim-inventory-bare-");
   try {
     mkdirSync(join(worktree, "scripts"));
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
