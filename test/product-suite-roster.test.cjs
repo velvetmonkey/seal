@@ -58,3 +58,16 @@ test("an unreadable declared roster is a red finding", (t) => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /cannot read declared product-test roster/);
 });
+
+test("an absent operator-supplied RUNNER_TEMP is refused without creating it", (t) => {
+  const space = fixture();
+  const absent = join(space.root, "operator-typo");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const env = { ...process.env, RUNNER_TEMP: absent, SEAL_PRODUCT_TEST_ROOT: space.tests };
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync("bash", [DRIVER], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`RUNNER_TEMP operator-supplied path does not exist: ${absent}`));
+  assert.match(result.stdout, /suite will not create it/);
+  assert.equal(require("node:fs").existsSync(absent), false);
+});
