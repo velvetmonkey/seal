@@ -16,13 +16,14 @@ from yours.
 
 ## How examples are labeled
 
-- `bash` means a command the reader runs. Commands use `bash` consistently.
-- `console` means input the reader types at a prompt.
-- `text` means output Seal prints, or a non-runnable specification, diagram,
-  transcript, or formal notation. It is for reading, not copying as a command.
+- `bash` is a command the reader runs.
+- `console` is input the reader types at a prompt.
+- `output` is text the product prints.
 
-The fence language carries the role so a skim does not require a separate
-legend; these languages are rendered by GitHub.
+Each command, input, and product output has its own fence, and these three
+role labels are used consistently. Other fences retain their language because
+they show specifications or data rather than something to run, type, or read
+as product output.
 
 ## Before you start
 
@@ -35,6 +36,9 @@ Check the last one first:
 
 ```bash
 $ claude --version
+```
+
+```output
 2.1.233 (Claude Code)
 ```
 
@@ -45,6 +49,9 @@ then run the binary with that asset's digest and byte length:
 $ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
 $ chmod +x "$SEAL_ARTIFACT"
 $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
+```
+
+```output
 installed seal 0.2.0-rc.2 linux-x64
 store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 command: /home/you/.local/bin/seal

@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Fail closed: every Markdown fence in the supplied file or directory must
-// declare a language. This is intentionally a small command-line guard so it
-// can be run before the product suite as well as from its declared test.
+// declare a language. Guide examples additionally keep commands and product
+// output in separate, role-named fences. This is intentionally a small
+// command-line guard so it can be run before the product suite as well as from
+// its declared test.
 import { accessSync, constants, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 
@@ -59,18 +61,29 @@ function scan(path) {
     return;
   }
 
-  let fenced = false;
-  source.split(/\r?\n/).forEach((line, index) => {
-    if (!line.startsWith("```")) return;
+  const lines = source.split(/\r?\n/);
+  let fence = null;
+  lines.forEach((line, index) => {
+    const match = line.match(/^( {0,3})(`{3,}|~{3,})(.*)$/);
+    if (!match) return;
     const lineNumber = index + 1;
-    if (!fenced) {
-      if (line.trim() === "```") errors.push(`${path}:${lineNumber}: fenced block has no language`);
-      fenced = true;
-    } else {
-      fenced = false;
+    const [, , marker, info] = match;
+    if (!fence) {
+      if (!info.trim()) errors.push(`${path}:${lineNumber}: fenced block has no language`);
+      fence = { marker: marker[0], length: marker.length, language: info.trim().split(/\s+/)[0] || "", line: index };
+      return;
+    }
+    if (marker[0] === fence.marker && marker.length >= fence.length && !info.trim()) {
+      if (resolve(path).includes(`${join("docs", "guide")}/`)) {
+        const body = lines.slice(fence.line + 1, index);
+        if (fence.language === "bash" && body.some((entry) => /^(?:Protection|Runtime|Receipts|Most recent|ASSUMPTION|REFUSED|REFUSE|ACCEPT|BLOCKED|child calls observed|installed seal|store:|command:|tree:|Project \.mcp\.json hash|State:)/.test(entry.trim()))) {
+          errors.push(`${path}:${fence.line + 1}: bash fence contains product output; use an output fence`);
+        }
+      }
+      fence = null;
     }
   });
-  if (fenced) errors.push(`${path}: unterminated fenced block`);
+  if (fence) errors.push(`${path}: unterminated fenced block`);
 }
 
 const files = markdownFiles(target);
