@@ -18,8 +18,24 @@ if [[ ! -d "$test_root" || ! -r "$test_root" ]]; then
 fi
 test_root="$(cd "$test_root" && pwd)"
 
+# Choke point: never let the suite inherit the OS default /tmp. Honour a
+# caller-owned TMPDIR; otherwise use <repo>/.tmp. Cleanup runs on EXIT
+# (success and failure) unless KEEP_TMP=1. Never remove anything under /tmp.
+TMPGUARD_RUN_ROOT="$(node "$script_root/scripts/temp-root.cjs" --make "$script_root" s)"
+export TMPGUARD_RUN_ROOT
+export TMPDIR="$TMPGUARD_RUN_ROOT"
+export TMP="$TMPGUARD_RUN_ROOT"
+export TEMP="$TMPGUARD_RUN_ROOT"
+export GIT_CEILING_DIRECTORIES="${GIT_CEILING_DIRECTORIES:-$TMPGUARD_RUN_ROOT}"
+cleanup_tmpguard() {
+  node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
+}
+
 declaration_file="$(mktemp)"
-trap 'rm -f "$declaration_file"' EXIT
+# Snapshot lives beside the run root so a nested suite cannot delete it
+# by cleaning its own child of TMPDIR.
+tmp_before="${TMPGUARD_RUN_ROOT}.tmpguard-before.json"
+trap 'rm -f "$declaration_file" "$tmp_before"; cleanup_tmpguard' EXIT
 if ! find "$test_root" -type f -name '*test.*' -print0 | sort -z >"$declaration_file"; then
   echo "::error::cannot determine declared product-test roster under $test_root"
   exit 1
@@ -32,7 +48,9 @@ if (( ${#declared_tests[@]} == 0 )); then
 fi
 
 run_tests=("${declared_tests[@]}")
-output_file="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/seal-node-test.tap"
+output_file="${RUNNER_TEMP:-${TMPDIR:-$TMPGUARD_RUN_ROOT}}/seal-node-test.tap"
+node -e 'const fs=require("node:fs"); const {snapshotTmp}=require(process.argv[1]); fs.writeFileSync(process.argv[2], JSON.stringify(snapshotTmp()));' \
+  "$script_root/scripts/check-no-tmp-leaks.cjs" "$tmp_before"
 set +e
 node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"
 node_status=${PIPESTATUS[0]}
@@ -126,6 +144,31 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); t
   gate_status=1
 else
   echo "PASS  product suite ran all ${#declared_tests[@]} declared test files"
+fi
+
+set +e
+node -e '
+  const fs = require("node:fs");
+  const { newTmpNames, reportLeaks } = require(process.argv[1]);
+  let before;
+  try {
+    before = new Set(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
+  } catch (error) {
+    console.error(`TEMP LEAK CHECK: cannot read /tmp snapshot: ${error.message}`);
+    process.exit(2);
+  }
+  const names = newTmpNames(before);
+  reportLeaks(names);
+  process.exit(names.length ? 1 : 0);
+' "$script_root/scripts/check-no-tmp-leaks.cjs" "$tmp_before"
+leak_status=$?
+set -e
+if (( leak_status == 2 )); then
+  echo "::error::/tmp snapshot unreadable; silence is a finding"
+  gate_status=1
+elif (( leak_status != 0 )); then
+  echo "::error::test run created names directly under /tmp"
+  gate_status=1
 fi
 
 exit "$gate_status"
