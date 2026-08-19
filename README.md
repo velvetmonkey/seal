@@ -35,7 +35,7 @@ Run these commands to download, verify against `SHA256SUMS`, and install the Lin
 $ SEAL_VERSION=v0.2.0-rc.2
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-$ sha256sum --check --status SHA256SUMS
+$ (if ! read -r expected_digest expected_bytes expected_name < SHA256SUMS || test -z "$expected_digest" || test -z "$expected_bytes" || test -z "$expected_name"; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi; test "$expected_name" = "seal-$SEAL_VERSION-linux-x64" || { echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; }; actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; actual_bytes="$(wc -c < "$expected_name")"; test "$actual_digest" = "$expected_digest" && test "$actual_bytes" = "$expected_bytes" || { echo "release artifact does not match SHA256SUMS" >&2; exit 1; })
 $ chmod +x "seal-$SEAL_VERSION-linux-x64"
 $ ./seal-v0.2.0-rc.2-linux-x64 --sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347 --bytes 6146418 --prefix ~/.local
 ```
