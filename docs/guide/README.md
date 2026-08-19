@@ -51,6 +51,7 @@ $ chmod +x "$SEAL_ARTIFACT"
 $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
 ```
 
+<!-- seal-store-hash-role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
 store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3

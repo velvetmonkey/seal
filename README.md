@@ -55,6 +55,7 @@ $ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --pre
 
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
+<!-- seal-store-hash-role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
 store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
@@ -216,6 +217,7 @@ Seal decisions emitted: 0 (receipts in /home/monkey/scratch/readmefalse-capture/
 <!-- live-page-claims:begin -->
 **Captured transcript:** The absolute paths, temporary directory name, and receipt id below vary per run.
 
+<!-- seal-store-hash-role: fresh-build -->
 ```text
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
