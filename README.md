@@ -57,9 +57,9 @@ You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
 ```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/monkey/.local/lib/seal/store/5181f37e602959bfde93b29b0c8b72ac6d1d5c3572f3486cce5dfcc047d75f6c
+store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 command: /home/monkey/.local/bin/seal
-tree: 5181f37e602959bfde93b29b0c8b72ac6d1d5c3572f3486cce5dfcc047d75f6c
+tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
 The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
