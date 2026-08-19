@@ -23,6 +23,8 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
   const dir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
+  const runnerTemp = cacheDir ?? join(dir, "cache");
+  mkdirSync(runnerTemp, { recursive: true });
   const env = { ...process.env };
   if (productionPin) {
     for (const name of ["LIVE_CLAIM_GUARD_URL", "LIVE_CLAIM_GUARD_README", "LIVE_CLAIM_GUARD_COMMIT", "LIVE_CLAIM_GUARD_BYTES", "LIVE_CLAIM_GUARD_SHA256", "LIVE_CLAIM_GUARD_PROVENANCE_URL"]) delete env[name];
@@ -33,7 +35,7 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
       LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
       LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
       LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl ?? url,
-      RUNNER_TEMP: cacheDir ?? join(dir, "cache"),
+      RUNNER_TEMP: runnerTemp,
     });
   }
   const child = spawn(process.execPath, [GUARD], { env });

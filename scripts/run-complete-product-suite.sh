@@ -4,6 +4,12 @@
 # or filter between discovery and invocation.
 set -uo pipefail
 
+if [[ -v RUNNER_TEMP && ! -e "$RUNNER_TEMP" ]]; then
+  supplied_runner_temp="$(realpath -m -- "$RUNNER_TEMP")"
+  echo "::error::RUNNER_TEMP operator-supplied path does not exist: $supplied_runner_temp; the suite will not create it"
+  exit 1
+fi
+
 test_root="${SEAL_PRODUCT_TEST_ROOT:-test}"
 if [[ ! -d "$test_root" || ! -r "$test_root" ]]; then
   echo "::error::cannot read declared product-test roster at $test_root"

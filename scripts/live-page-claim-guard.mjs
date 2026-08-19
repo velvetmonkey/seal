@@ -10,7 +10,7 @@
 // app.js or wasm/seal.js. A green result cannot show that the page executes
 // nothing, or that no MCP tool-call runs.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,12 @@ const PIN = Object.freeze({
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;
 const PROVENANCE_PAGE = `https://github.com/velvetmonkey/seal-check/commit/${PIN.commit}`;
-const CACHE_DIR = resolve(process.env.RUNNER_TEMP ?? tmpdir(), "live-page-claim-guard");
+const RUNNER_TEMP = process.env.RUNNER_TEMP;
+if (RUNNER_TEMP !== undefined && !existsSync(RUNNER_TEMP)) {
+  console.error(`ERROR  RUNNER_TEMP operator-supplied path does not exist: ${resolve(RUNNER_TEMP)}; the live-page guard will not create it`);
+  process.exit(2);
+}
+const CACHE_DIR = resolve(RUNNER_TEMP ?? tmpdir(), "live-page-claim-guard");
 // The cache key is exactly the pinned Git commit. Git commits are immutable, so
 // a source file cached under this key cannot become stale for this pin.
 const CACHE_PATH = resolve(CACHE_DIR, `${encodeURIComponent(PIN.commit)}.index.html`);
