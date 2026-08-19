@@ -9,7 +9,7 @@ state those two commands can print, from real runs.
 
 A healthy protected project, while a Claude Code session is running:
 
-```
+```text
 $ seal status
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
 Protection: PENDING RESTART db.write (/tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/ba09bb02a004f37efa3c3b76280c7d23/state.json)
@@ -31,7 +31,7 @@ Three parts, always in this order:
 
 ### `- outside Seal`
 
-```
+```bash
 Protection: - outside Seal
 ```
 
@@ -41,7 +41,7 @@ still remain on disk.
 
 ### `PENDING RESTART`
 
-```
+```text
 Protection: PENDING RESTART notes.delete_all_notes (…/state.json)
 ```
 
@@ -49,7 +49,7 @@ The gate is installed but no running Claude Code session has picked it up
 yet. Calls made before the restart are **not** gated. Restart Claude Code in
 this project. You will see `STALE`, with a detail line, after a session ends:
 
-```
+```text
 Protection: STALE notes.delete_all_notes (…/state.json)
 Protection lease: pid 4127 generation 6
 Protection detail: previous wrapper lease is not live (generation 6); restart Claude Code to replace it
@@ -60,7 +60,7 @@ and the next session will raise the gate again on start.
 
 ### `ACTIVE`
 
-```
+```text
 Protection: ACTIVE notes.delete_all_notes (…/state.json)
 Protection lease: pid 4127 generation 6
 ```
@@ -77,7 +77,7 @@ project status and does not persist a conflict mode.
 
 ### `DRIFTED`
 
-```
+```text
 Protection: DRIFTED notes.delete_all_notes (…/state.json)
 Protection detail: project .mcp.json server changed since protect; forwarding refused
 ```
@@ -103,14 +103,14 @@ matching entry.
 
 `BROKEN` means the recorded state itself cannot be trusted. Two real forms:
 
-```
+```text
 Protection: BROKEN (stored protection state is unreadable: Unexpected token 'g', "garbage{
 ```
 
 The state file is damaged (here it was deliberately corrupted). Seal refuses
 to guess what it used to say.
 
-```
+```text
 Protection: BROKEN notes.delete_all_notes (…/state.json)
 Protection detail: simulated: cannot write local config
 ```
@@ -128,7 +128,7 @@ finish. The working recovery, exercised for real, is in
 
 A related message you can see here:
 
-```
+```text
 Protection: BROKEN (stored protection state is from another binary version)
 ```
 
@@ -138,7 +138,7 @@ than reinterpret another binary's records.
 
 ## The Runtime line
 
-```
+```text
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
 ```
 
@@ -157,7 +157,7 @@ Three states:
 
 ## The Receipts lines
 
-```
+```text
 Receipts: 1 stored in /tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/guide-example/receipts
 Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
 ```
@@ -169,7 +169,7 @@ not of something going wrong. Open the named file to see which call it was.
 
 Two less happy forms, both from real runs:
 
-```
+```text
 Receipts: 0 stored in …/seal/receipts (directory does not exist)
 Most recent: no receipt yet (receipt directory is missing)
 ```
@@ -178,7 +178,7 @@ On a fresh install before the first demo or protected call, nothing has yet
 been decided, and status looks like this. A missing directory by itself does
 not prove that history: an earlier receipt directory may have been removed.
 
-```
+```text
 Receipts: unavailable in …/seal/receipts (directory cannot be read)
 Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions
 ```
@@ -197,7 +197,7 @@ to check a named kernel receipt.
 `seal status` tells you what is protected; `seal doctor` tells you what the
 approval itself rests on:
 
-```
+```bash
 $ seal doctor
 ASSUMPTION
   Seal has not established whether this Claude Code configuration can
@@ -209,7 +209,7 @@ exact call, but it cannot prove a human clicked or determine the client's
 elicitation configuration. If an auto-response signal is set in the process
 environment, doctor refuses loudly:
 
-```
+```bash
 $ SEAL_ELICITATION_AUTO_RESPONSE=1 seal doctor
 REFUSED
   Claude Code can automatically answer elicitation requests.

@@ -183,7 +183,7 @@ which emit a signed coverage artifact.
 
 The deliverable is a signed document of the shape:
 
-```
+```text
 This agent has N enumerated path records.
   BROKERED (3):    postgres.query, fs.write, deploy.hook
   UNBROKERED (5):  outbound HTTP, shell, scheduler, 2 in-process tool handles

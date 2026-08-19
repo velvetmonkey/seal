@@ -14,6 +14,16 @@ blocks marked with an ellipsis or explanatory text are excerpts. The outputs
 were captured in a scratch project on 2026-08-15, so paths in them will differ
 from yours.
 
+## How examples are labeled
+
+- `bash` means a command the reader runs. Commands use `bash` consistently.
+- `console` means input the reader types at a prompt.
+- `text` means output Seal prints, or a non-runnable specification, diagram,
+  transcript, or formal notation. It is for reading, not copying as a command.
+
+The fence language carries the role so a skim does not require a separate
+legend; these languages are rendered by GitHub.
+
 ## Before you start
 
 - Linux x86-64 only. On anything else, `seal` refuses and changes nothing.
@@ -23,7 +33,7 @@ from yours.
 
 Check the last one first:
 
-```
+```bash
 $ claude --version
 2.1.233 (Claude Code)
 ```
@@ -31,7 +41,7 @@ $ claude --version
 Download a binary and the `SHA256SUMS` asset attached to the same release,
 then run the binary with that asset's digest and byte length:
 
-```
+```bash
 $ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
 $ chmod +x "$SEAL_ARTIFACT"
 $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"

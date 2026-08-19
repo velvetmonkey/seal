@@ -30,7 +30,7 @@ the most recent successful `Docs & claims consistency` run, reject it unless
 its job list includes a successful `demo receipt provenance` job, and then
 download its `demo-receipt-provenance` artifact:
 
-```sh
+```bash
 mkdir demo-receipt-provenance
 RUN_ID="$(gh run list --repo velvetmonkey/seal --workflow ci.yml --status success \
   --limit 1 --json databaseId --jq '.[0].databaseId')"

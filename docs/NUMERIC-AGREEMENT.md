@@ -15,7 +15,7 @@ signed shape and is off the clock.
 
 Vector `i_number_neg_int_huge_exp.json`, one wire line, one approval:
 
-```
+```text
 Lean CanonicalAction :  external.json_corpus([-10^9999])   exact, 10,000 digits
 Node extraction      :  external.json_corpus([-Infinity])
 ```
@@ -30,7 +30,7 @@ two readings differ, and the approval is bound to the kernel's.
 
 Independently reproduced, so this is not a Node quirk:
 
-```
+```text
 node   JSON.parse("[-1e9999]")  ->  -Infinity   (typeof number, isFinite false)
 python json.loads("[-1e9999]")  ->  -inf
 ```

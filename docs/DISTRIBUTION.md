@@ -22,7 +22,7 @@ optionally `--bytes`) values. Without that pin the installer refuses.
 
 ## Install
 
-```sh
+```bash
 read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
 chmod +x "$SEAL_ARTIFACT"
 "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix ~/.local

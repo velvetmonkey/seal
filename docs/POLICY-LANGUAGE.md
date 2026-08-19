@@ -114,7 +114,7 @@ canonical form has semantics; the pretty syntax is an untrusted projection.
 
 ### 2.1 Schema language
 
-```
+```text
 schema postgres.query v7 {
   universe table-universe { orders, customers, refunds, users, ... }   # full enumeration, closed
 
@@ -156,7 +156,7 @@ Rules:
 
 ### 2.2 Policy language
 
-```
+```text
 policy analyst-readonly v1  for schema postgres.query v7
 
 # Semantics (fixed by the language, not configurable):
@@ -303,7 +303,7 @@ default-deny.
 
 ### 3.1 The verdict lattice
 
-```
+```text
         allow          (execute without a human in the loop)
           |
         approve        (execute only after human approval of this request's digest)
@@ -323,7 +323,7 @@ A total order, `deny < approve < allow`. `meet` is minimum:
 
 For request record `r` and policy `P`:
 
-```
+```text
 verdict(P, r) = meet { rule.verdict | rule ∈ P.rules, matches(rule, r) }
               = deny                 if no rule matches   (closed world)
 ```
@@ -581,7 +581,7 @@ Scenario: the analyst agent may SELECT from three production tables during
 Chicago business hours; every query is human-approved; it can never write;
 approval traffic is capped. Previous policy: deny-all.
 
-```
+```text
 ════════════════════════════════════════════════════════════════════
  POLICY BUNDLE — analyst-readonly v1
  core:       sha256:a3f81c…  (canonical form, 412 bytes)

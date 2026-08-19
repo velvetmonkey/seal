@@ -14,7 +14,7 @@ When a healthy gate receives a fresh protected call it can render, it holds
 the call before forwarding and sends this approval request (captured from a
 live gated call):
 
-```
+```text
 Approval required
 Tool: delete_all_notes
 Arguments:
@@ -35,7 +35,7 @@ Outside Seal: Bash, network, subprocesses, other tools and servers.
 
 Approve, and the call runs — once:
 
-```
+```text
 delete_all_notes first call: input_required; approval message shown to the user:
     (the prompt above)
 retry with accept: notes.txt deleted
@@ -45,7 +45,7 @@ identical retry replayed: REFUSED -> approval refused: already_consumed — this
 The same approval presented a second time did not run the tool a second time.
 Decline instead, and the denial is terminal for that request:
 
-```
+```text
 retry with decline: REFUSED -> approval refused: declined — the answer was decline; denial is terminal for this request
 retry again after the decline: REFUSED -> approval refused: terminally_declined — this request was declined; denial is terminal
 ```
@@ -57,7 +57,7 @@ protected project to see it. `seal demo` runs the same gate against a
 harmless built-in server that counts every call it actually receives, and
 every count printed is read back from that server's own count file:
 
-```
+```console
 child calls observed: 0 (read from …/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     (the six-line prompt)
@@ -79,7 +79,7 @@ states.
 
 A retry refusal from the approval contract has this shape:
 
-```
+```text
 approval refused: <token> — <plain-language detail>
 ```
 
@@ -127,7 +127,7 @@ key you already trust as input. Its canonicalisation is nevertheless a
 byte-identical copy of the producer's rule, and both use Node crypto: a defect
 shared there can make both agree on a wrong receipt.
 
-```
+```bash
 $ node …/checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
 ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt has the same canonical parsed value that this key signed. Semantically irrelevant JSON formatting differences are not distinguished. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
 ```
@@ -135,7 +135,7 @@ ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match t
 Change one recorded fact — here, the decision — and the checker names what
 was touched:
 
-```
+```bash
 $ node …/checker/seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
 REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
 ```

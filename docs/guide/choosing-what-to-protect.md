@@ -45,7 +45,7 @@ Two constraints to know before you choose:
 
 Run it in the project directory, naming the server and the tool:
 
-```
+```bash
 $ seal protect notes delete_all_notes
 Project .mcp.json hash before protect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
 Protection: PENDING RESTART notes.delete_all_notes
@@ -101,7 +101,7 @@ This is most of the answer, and it is deliberate.
 
 ## Taking the gate down
 
-```
+```bash
 $ seal unprotect notes
 Project .mcp.json hash before unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
 Project .mcp.json hash after unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023

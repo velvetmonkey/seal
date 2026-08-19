@@ -105,7 +105,7 @@ How each one is established from files rather than from the operator's memory:
 
 ## Running the acceptance walk
 
-```sh
+```bash
 node harness/claude-code/cc-harness.cjs init \
   --artifact ./seal-vX.Y.Z-linux-x64 --sha256 <digest> --bytes <length> \
   --run-dir /tmp/cc-acceptance
@@ -117,7 +117,7 @@ must do, launches the recorded session, and stops. Repeat it until it says the
 run is complete; the last step writes the pack under `<run-dir>/pack`. To write
 it straight into a checkout instead, name the destination:
 
-```sh
+```bash
 node harness/claude-code/cc-harness.cjs finish --run-dir /tmp/cc-acceptance --out .
 ``` Run it in a terminal at least
 80 columns wide — the approval dialog is measured at 80, and a narrower
@@ -156,7 +156,7 @@ observed, and the SHA-256 and byte length of every other file in the pack.
 
 ## The checker
 
-```sh
+```bash
 node scripts/check-cc-evidence.mjs evidence/claude-code
 ```
 
@@ -179,7 +179,7 @@ For a release claim, the operator must additionally supply the SHA-256 of the
 actual Claude Code executable they independently verified (not a hash copied
 out of the pack):
 
-```sh
+```bash
 node scripts/check-cc-evidence.mjs evidence/claude-code --release \
   --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> \
   --client-executable-sha256 <independently-verified-claude-executable-digest>

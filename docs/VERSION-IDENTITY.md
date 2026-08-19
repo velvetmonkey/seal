@@ -13,14 +13,14 @@ to answer to an immutable name.
 
 ## The rule
 
-```
+```text
 HEAD is exactly tag v$VERSION  ->  product identity = $VERSION
 anything else                  ->  product identity = $VERSION-dev.g<short-commit>
 ```
 
 `scripts/product-identity.cjs` implements it and prints it:
 
-```sh
+```bash
 node scripts/product-identity.cjs     # seal $VERSION-dev.g<short-commit>
 ```
 

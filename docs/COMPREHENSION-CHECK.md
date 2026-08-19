@@ -7,7 +7,7 @@ Priority 0, ruled by Ben 2026-07-25. A core product pivot, not a UI tweak.
 Seal's interactive approval prompt is, verbatim
 (`rust/src/providers.rs:540`):
 
-```
+```text
 seal-host: approve target {target}? [y/N]
 ```
 
@@ -197,7 +197,7 @@ The renderer identity is `seal.renderR/v1`. Let `P` be the kernel's one
 canonical parse operation over an exact, finite request frame `b`. `P` must
 return a lossless, coupled outcome:
 
-```
+```text
 Accepted {
   wireBytes, wireScope, wireSha256,
   canonicalAction,
@@ -224,7 +224,7 @@ serializer owned by the display path.
 
 The function is:
 
-```
+```text
 R : ApprovalSurfaceState -> ParseOutcome -> {
   rendererIdentity,
   approvalSurfaceIdentity,
@@ -286,7 +286,7 @@ different requests.
 The derivation theorem is therefore about the coupled result, not two calls
 which happen to use the same parser:
 
-```
+```text
 P(b) = Accepted(o)
   -> o.canonicalAction = canonicalParse(b)
   /\ o.targetDigest = sha256(o.targetPreimage)
@@ -307,7 +307,7 @@ particular font.”
 
 The full digest-agreement theorem is:
 
-```
+```text
 P(b1) = Accepted(o1)
 /\ P(b2) = Accepted(o2)
 /\ R(s1, o1).displayBytes = R(s2, o2).displayBytes
@@ -318,7 +318,7 @@ Every display produced from an accepted parse, including a length refusal,
 contains the target digest, so this implication is a projection theorem. On
 the approval-available subdomain the required stronger theorem is:
 
-```
+```text
 R(s1, o1).disposition = APPROVAL_AVAILABLE
 /\ R(s2, o2).disposition = APPROVAL_AVAILABLE
 /\ R(s1, o1).displayBytes = R(s2, o2).displayBytes
@@ -354,7 +354,7 @@ ordinary prompt.
 
 For `Refused`, `R` always emits a bounded, ASCII-only display containing:
 
-```
+```text
 seal.renderR/v1
 APPROVAL REFUSED -- NO APPROVAL INPUT WILL BE READ
 reason: <closed reason code>
@@ -405,7 +405,7 @@ this function cannot prove them away.
 
 The v1 security parameters are:
 
-```
+```text
 MAX_APPROVABLE_WIRE_BYTES    = 4096
 MAX_APPROVABLE_DISPLAY_BYTES = 16384
 ```
