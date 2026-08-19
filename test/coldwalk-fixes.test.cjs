@@ -32,7 +32,9 @@ test("the first screen requires Claude Code for Protect and provides its availab
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const firstScreen = readme.slice(0, readme.indexOf("## 1. Install"));
 
-  assert.match(firstScreen, /the `claude` command for Protect \(check with `claude --version`\)/);
+  assert.match(firstScreen, /the `claude` command for Protect\./);
+  assert.match(firstScreen, /Check that the Claude Code command is available before Protect:\n\n```bash\n\$ claude --version\n```/);
+  assert.doesNotMatch(firstScreen, /Protect \(check with `claude --version`\)/);
 });
 
 test("the removal beat leaves the demo authority path fresh in the reader's memory", () => {
