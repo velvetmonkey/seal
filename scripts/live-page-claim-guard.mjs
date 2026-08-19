@@ -11,6 +11,7 @@
 // nothing, or that no MCP tool-call runs.
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,8 +26,7 @@ const PIN = Object.freeze({
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;
 const PROVENANCE_PAGE = `https://github.com/velvetmonkey/seal-check/commit/${PIN.commit}`;
-const CACHE_DIR = process.env.LIVE_CLAIM_GUARD_CACHE_DIR
-  ?? resolve(ROOT, ".cache", "live-page-claim-guard");
+const CACHE_DIR = resolve(process.env.RUNNER_TEMP ?? tmpdir(), "live-page-claim-guard");
 // The cache key is exactly the pinned Git commit. Git commits are immutable, so
 // a source file cached under this key cannot become stale for this pin.
 const CACHE_PATH = resolve(CACHE_DIR, `${encodeURIComponent(PIN.commit)}.index.html`);
