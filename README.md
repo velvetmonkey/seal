@@ -46,7 +46,9 @@ command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
-A build off a release tag names itself `-dev.g<commit>`; the bare release name is reserved for the tag. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
+seal-v0.2.0-rc.2-linux-x64
+
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; other commits add `-dev.g<commit>` to their filenames. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
