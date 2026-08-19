@@ -243,9 +243,13 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 
 **Receipt in hand?** Use the shipped checker from the repository root:
 
+<!-- live-page-claims:begin -->
+The landing page has **zero `<button>` controls**. The public browser route is not the checker for Seal's `seal.spine/v1` receipt.
+
 ```sh
 node checker/seal-receipt-check.mjs RECEIPT.json --pubkey (HEX | FILE)
 ```
+<!-- live-page-claims:end -->
 
 
 ### Step 10: Change the recorded decision and check again

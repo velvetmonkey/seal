@@ -321,6 +321,8 @@ jobs:
           docs/WHY-DIFFERENT.md
           index.html
       - run: node scripts/linkcheck.mjs
+      - name: Refuse public seal-check dead-end for Spine receipts
+        run: node scripts/no-spine-receipt-seal-check-deadend.test.mjs
       - name: Check live seal-check landing-page claims against served bytes
         run: node scripts/live-page-claim-guard.mjs
       - run: node --test test/live-page-claim-guard.test.mjs
