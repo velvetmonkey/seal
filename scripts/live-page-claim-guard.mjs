@@ -100,27 +100,33 @@ function changedRegion(expected, actual) {
 
 if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; README claims zero`);
 else console.log("PASS  landing-page control count agrees with README: zero <button> controls");
-if (body.length !== PIN.bytes || sha256 !== PIN.sha256) {
+
+console.log(`INFO  Fetching pinned seal-check@${PIN.commit} source: ${PROVENANCE_URL}`);
+let pinnedSource;
+try {
+  const response = await fetch(PROVENANCE_URL, { redirect: "follow", signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  pinnedSource = Buffer.from(await response.arrayBuffer());
+} catch (error) {
+  console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE UNREACHABLE for ${PIN.commit}: ${error.message}`);
+  console.error("ERROR  refusing a green result because pinned commit bytes were not checked");
+  process.exit(2);
+}
+
+const sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
+if (pinnedSource.length !== PIN.bytes || sourceSha256 !== PIN.sha256) {
+  const byteCheck = pinnedSource.length === PIN.bytes ? "bytes match" : `bytes ${pinnedSource.length} != pin ${PIN.bytes}`;
+  const digestCheck = sourceSha256 === PIN.sha256 ? "sha256 matches" : `sha256 ${sourceSha256} != pin ${PIN.sha256}`;
+  console.error(`ERROR  pinned provenance source for seal-check@${PIN.commit} does not match this guard's frozen pin: ${byteCheck}; ${digestCheck}`);
+  process.exit(2);
+}
+if (!pinnedSource.equals(body)) {
   fail(`served landing page differs from seal-check@${PIN.commit}: expected ${PIN.bytes} bytes sha256 ${PIN.sha256}; got ${body.length} bytes sha256 ${sha256}`);
   console.error(`INFO  Confirm the candidate release's provenance before repinning: ${PROVENANCE_PAGE}`);
-  console.error(`INFO  Fetching the pinned seal-check@${PIN.commit} source for a changed-region diagnostic: ${PROVENANCE_URL}`);
-  let pinnedSource;
-  try {
-    const response = await fetch(PROVENANCE_URL, { redirect: "follow", signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    pinnedSource = Buffer.from(await response.arrayBuffer());
-  } catch (error) {
-    console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE UNREACHABLE for ${PIN.commit}: ${error.message}`);
-    console.error("ERROR  refusing a diagnosable pass: confirm the pinned release provenance before updating PIN");
-    process.exit(2);
-  }
-  const sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
-  if (pinnedSource.length !== PIN.bytes || sourceSha256 !== PIN.sha256) {
-    console.error(`ERROR  pinned provenance source for seal-check@${PIN.commit} does not match this guard's frozen pin: ${pinnedSource.length} bytes sha256 ${sourceSha256}`);
-    process.exit(2);
-  }
   console.error(`DIFF  ${changedRegion(pinnedSource.toString("utf8"), text)}`);
   console.error("INFO  After reviewing that provenance and this changed region, update the commit, byte count, and sha256 together in scripts/live-page-claim-guard.mjs.");
+} else if (body.length !== PIN.bytes || sha256 !== PIN.sha256) {
+  fail(`served landing page differs from seal-check@${PIN.commit}: expected ${PIN.bytes} bytes sha256 ${PIN.sha256}; got ${body.length} bytes sha256 ${sha256}`);
 } else {
   console.log(`PASS  served bytes match pinned seal-check@${PIN.commit}`);
 }
