@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+const { tmpdir: makeTmp, keep } = createRequire(import.meta.url)("../test-support/tmpdir.cjs");
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "docs", "check-fenced-languages.mjs");
@@ -19,8 +20,8 @@ test("README and docs expose command and product-print roles in block content", 
 });
 
 test("an unlabeled fence names its file and line", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "before\n```\noutput\n```\n");
   const result = run(file);
@@ -29,8 +30,8 @@ test("an unlabeled fence names its file and line", (t) => {
 });
 
 test("an indented unlabeled fence names its file and line", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "before\n  ```\noutput\n  ```\n");
   const result = run(file);
@@ -39,8 +40,8 @@ test("an indented unlabeled fence names its file and line", (t) => {
 });
 
 test("a bash command without a visible prompt names its file and line", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "```bash\nseal status\n```\n");
   const result = run(file);
@@ -49,8 +50,8 @@ test("a bash command without a visible prompt names its file and line", (t) => {
 });
 
 test("an output block with a visible command prompt names its file and line", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "```output\n$ seal status\n```\n");
   const result = run(file);
@@ -59,8 +60,8 @@ test("an output block with a visible command prompt names its file and line", (t
 });
 
 test("a text block with a visible command prompt names its file and line", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "```text\n$ seal status\n```\n");
   const result = run(file);
@@ -69,8 +70,8 @@ test("a text block with a visible command prompt names its file and line", (t) =
 });
 
 test("the retired sh command-fence spelling is a named failure", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const file = join(root, "example.md");
   writeFileSync(file, "```sh\n$ seal status\n```\n");
   const result = run(file);
@@ -79,8 +80,8 @@ test("the retired sh command-fence spelling is a named failure", (t) => {
 });
 
 test("an absent directory is a named failure", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const absent = join(root, "absent");
   const result = run(absent);
   assert.equal(result.status, 1, result.stdout + result.stderr);
@@ -88,8 +89,8 @@ test("an absent directory is a named failure", (t) => {
 });
 
 test("an empty file is a named failure", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = makeTmp("seal-doc-fence-");
+  t.after(() => { if (!keep()) rmSync(root, { recursive: true, force: true }); });
   const empty = join(root, "empty.md");
   writeFileSync(empty, "");
   const result = run(empty);
@@ -98,13 +99,13 @@ test("an empty file is a named failure", (t) => {
 });
 
 test("an unreadable file is a named failure", (t) => {
-  const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
+  const root = makeTmp("seal-doc-fence-");
   const unreadable = join(root, "unreadable.md");
   writeFileSync(unreadable, "```text\noutput\n```\n");
   chmodSync(unreadable, 0o000);
   t.after(() => {
     chmodSync(unreadable, 0o600);
-    rmSync(root, { recursive: true, force: true });
+    if (!keep()) rmSync(root, { recursive: true, force: true });
   });
   const result = run(unreadable);
   assert.equal(result.status, 1, result.stdout + result.stderr);
