@@ -45,6 +45,12 @@ report_unreconciled_exit() {
   if [[ -n "${record_snapshot_file:-}" ]]; then
     rm -f -- "$record_snapshot_file"
   fi
+  if [[ -n "${tmp_before:-}" ]]; then
+    rm -f -- "$tmp_before"
+  fi
+  if [[ -n "${TMPGUARD_RUN_ROOT:-}" && -n "${script_root:-}" ]]; then
+    node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
+  fi
   if (( roster_reported == 0 )); then
     echo "ROSTER: unknown; driver exited $status before reconciliation"
   fi
@@ -93,6 +99,25 @@ if [[ ! -d "$test_directory" || ! -r "$test_directory" ]]; then
   exit 1
 fi
 test_directory="$(cd "$test_directory" && pwd)"
+
+# Choke point: never let the suite inherit the OS default /tmp. Honour a
+# caller-owned TMPDIR; otherwise use an owned parent outside the repository.
+# The EXIT handler removes this root after success, failure, or a thrown test.
+if ! TMPGUARD_RUN_ROOT="$(node "$script_root/scripts/temp-root.cjs" --make "$script_root" seal-suite)"; then
+  echo "::error::cannot create the suite temporary root"
+  exit 1
+fi
+export TMPGUARD_RUN_ROOT
+export TMPDIR="$TMPGUARD_RUN_ROOT"
+export TMP="$TMPGUARD_RUN_ROOT"
+export TEMP="$TMPGUARD_RUN_ROOT"
+export GIT_CEILING_DIRECTORIES="${GIT_CEILING_DIRECTORIES:-$TMPGUARD_RUN_ROOT}"
+tmp_before="${TMPGUARD_RUN_ROOT}.tmpguard-before.json"
+if ! node -e 'const fs=require("node:fs"); const {snapshotTmp}=require(process.argv[1]); fs.writeFileSync(process.argv[2], JSON.stringify(snapshotTmp()));' \
+  "$script_root/scripts/check-no-tmp-leaks.cjs" "$tmp_before"; then
+  echo "::error::cannot snapshot temporary-directory names"
+  exit 1
+fi
 
 roster_file="${SEAL_PRODUCT_TEST_ROSTER:-$script_root/scripts/product-test-roster.txt}"
 if [[ ! -f "$roster_file" ]]; then
@@ -320,7 +345,7 @@ if (( ${#present_not_declared[@]} > 0 || ${#declared_not_present[@]} > 0 )); the
 fi
 
 run_tests=("${declared_tests[@]}")
-record_directory="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+record_directory="$TMPGUARD_RUN_ROOT"
 output_file="$record_directory/seal-node-test.$$.tap"
 record_snapshot_file="$output_file.snapshot"
 if [[ ! -d "$record_directory" ]]; then
@@ -577,6 +602,31 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 || ${
   gate_status=1
 else
   report_roster_line "ROSTER: ${#roster_executed_tests[@]} of ${#declared_tests[@]} declared test files ran"
+fi
+
+set +e
+node -e '
+  const fs = require("node:fs");
+  const { newTmpNames, reportLeaks } = require(process.argv[1]);
+  let before;
+  try {
+    before = new Set(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
+  } catch (error) {
+    console.error(`TEMP LEAK CHECK: cannot read /tmp snapshot: ${error.message}`);
+    process.exit(2);
+  }
+  const names = newTmpNames(before);
+  reportLeaks(names);
+  process.exit(names.length ? 1 : 0);
+' "$script_root/scripts/check-no-tmp-leaks.cjs" "$tmp_before"
+leak_status=$?
+set -e
+if (( leak_status == 2 )); then
+  echo "::error::/tmp snapshot unreadable; silence is a finding"
+  gate_status=1
+elif (( leak_status != 0 )); then
+  echo "::error::test run created names directly under /tmp"
+  gate_status=1
 fi
 
 exit "$gate_status"
