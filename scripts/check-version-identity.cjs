@@ -29,12 +29,15 @@ const head = headResult.stdout.trim();
 // The claim under judgement is the one the commit carries. Reading the working
 // tree would let an uncommitted edit hide a committed collision, or invent one.
 const versionResult = git(["show", `${head}:VERSION`]);
-if (versionResult.status !== 0 || !output(versionResult)) {
+if (versionResult.status !== 0) {
   fail(
-    `version identity ambiguity: unreadable VERSION at ${head}\n${versionResult.stderr || ""}`,
+    `version identity ambiguity: absent committed VERSION at ${head}\n${versionResult.stderr || ""}`,
   );
 }
 const version = versionResult.stdout.trim();
+if (!version) {
+  fail(`version identity ambiguity: empty committed VERSION at ${head}`);
+}
 const tag = `v${version}`;
 
 // A missing base is evidence that the checkout cannot answer this gate, not an
@@ -66,10 +69,11 @@ const baseVersions = bases.map((candidate) => {
   return baseVersionResult.stdout.trim();
 });
 
-// A version is inherited only when every merge base already carries it. Matching
-// one base out of several is a new claim standing behind whichever base git
-// happened to name first.
-const claimIntroduced = baseVersions.some((baseVersion) => baseVersion !== version);
+// The ordinary inheritance case remains unchanged: every merge base already
+// carries the version. A criss-cross can also inherit through one base, but only
+// when that base is the commit that owns the published name; matching a base by
+// version alone would reopen the introduction hole.
+const differsFromSomeBase = baseVersions.some((baseVersion) => baseVersion !== version);
 
 const remoteTags = git(["ls-remote", "--tags", "origin"]);
 if (remoteTags.status !== 0) {
@@ -88,6 +92,11 @@ if (!taggedCommit) {
   process.stdout.write(`version identity available: ${tag} has not been released\n`);
   process.exit(0);
 }
+
+const tagTargetIsMatchingBase = bases.some(
+  (candidate, index) => candidate === taggedCommit && baseVersions[index] === version,
+);
+const claimIntroduced = differsFromSomeBase && !tagTargetIsMatchingBase;
 
 if (taggedCommit !== head && claimIntroduced) {
   fail(

@@ -121,6 +121,60 @@ test("version identity gate refuses a claim inherited from only one merge base",
   assert.match(result.stderr, /version identity collision: v1\.1\.0-rc\.1/);
 });
 
+test("version identity gate accepts an inherited claim through multiple merge bases", () => {
+  const { repo, released, next } = fixture();
+  git(repo, "checkout", "-b", "topic", released);
+  writeVersion(repo, "1.1.0-rc.1");
+  git(repo, "commit", "-am", "claim 1.1.0-rc.1");
+  const topic = git(repo, "rev-parse", "HEAD");
+  git(repo, "tag", "v1.1.0-rc.1", topic);
+  git(repo, "push", "origin", "v1.1.0-rc.1");
+
+  // M1 takes the topic's history but keeps main's VERSION; M2 inherits the
+  // published topic claim. The tag target identifies which matching base owns
+  // that claim instead of treating version presence alone as inheritance.
+  git(repo, "checkout", "main");
+  run("git", ["merge", "--no-commit", "--no-ff", topic], repo);
+  writeVersion(repo, "0.2.0-rc.2");
+  git(repo, "add", "VERSION");
+  git(repo, "commit", "-m", "M1: merge topic, keep 0.2.0-rc.2");
+  const m1 = git(repo, "rev-parse", "HEAD");
+
+  git(repo, "checkout", "topic");
+  run("git", ["merge", "--no-commit", "--no-ff", next], repo);
+  writeVersion(repo, "1.1.0-rc.1");
+  git(repo, "add", "VERSION");
+  git(repo, "commit", "-m", "M2: merge main, inherit 1.1.0-rc.1");
+
+  git(repo, "update-ref", "refs/remotes/origin/main", m1);
+  const allBases = git(repo, "merge-base", "--all", "HEAD", "origin/main").split("\n");
+  assert.equal(allBases.length, 2, `expected a criss-cross, got ${allBases.join(" ")}`);
+
+  const result = gate(repo);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /version identity inherited: v1\.1\.0-rc\.1 identifies/);
+});
+
+test("version identity gate distinguishes an absent committed VERSION", () => {
+  const { repo } = fixture();
+  fs.unlinkSync(path.join(repo, "VERSION"));
+  git(repo, "add", "-u", "VERSION");
+  git(repo, "commit", "-m", "remove committed VERSION");
+  const result = gate(repo);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /absent committed VERSION/);
+});
+
+test("version identity gate distinguishes an empty committed VERSION", () => {
+  const { repo } = fixture();
+  writeVersion(repo, "");
+  git(repo, "add", "VERSION");
+  git(repo, "commit", "-m", "empty committed VERSION");
+  const result = gate(repo);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /empty committed VERSION/);
+});
+
 test("version identity gate accepts an exact remote tag", () => {
   const { repo, released } = fixture();
   git(repo, "checkout", "--detach", released);
