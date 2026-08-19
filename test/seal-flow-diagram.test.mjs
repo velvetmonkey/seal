@@ -6,12 +6,20 @@ import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
 // CLAIM-COVERAGE: assets/seal-flow.svg
+// CLAIM-COVERAGE: scripts/seal-flow-layout.svg
 const SVG_PATH = resolve(ROOT, "assets/seal-flow.svg");
 const svg = readFileSync(SVG_PATH, "utf8");
 const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
 test("README places the process graphic immediately before Install", () => {
   assert.match(readme, /!\[[^\]]*\]\(assets\/seal-flow\.svg\)\n\n## 1\. Install/);
+});
+
+test("renderer reproduces the committed SVG bytes", () => {
+  const before = readFileSync(SVG_PATH);
+  const result = spawnSync(process.execPath, [resolve(ROOT, "scripts/render-seal-flow.mjs")], { encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.deepEqual(readFileSync(SVG_PATH), before);
 });
 
 test("README presents the approved three-step explanation", () => {

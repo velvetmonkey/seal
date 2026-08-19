@@ -1,6 +1,7 @@
 {
   "files": {
     "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
+    "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:9"] },
     "EVALUATOR-START.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:120"] },
     "FINDINGS.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
     "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52", "scripts/launch-truth-gate.mjs:85"] },
