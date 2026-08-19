@@ -10,8 +10,12 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { sha256Hex, treeDigest, unpackPayload } = require("../spine/integrity.cjs");
 const {
+  REGION_BOUNDARY,
+  INSTALLED_TREE_PIN_FILES,
   formatInstalledTreeRefusal,
+  listInstalledTreePinFiles,
   scanInstalledTreeRegions,
+  scanInstalledTreePinFiles,
 } = require("../scripts/installed-tree-pin-regions.cjs");
 
 const ROOT = path.join(__dirname, "..");
@@ -34,6 +38,17 @@ function trackedFiles() {
   const listed = spawnSync("git", ["-C", ROOT, "ls-files"], { encoding: "utf8" });
   assert.equal(listed.status, 0, listed.stdout + listed.stderr);
   return listed.stdout.trim().split("\n").filter(Boolean);
+}
+
+function stackedMarkers(betweenLines = [], upperSuffix = "") {
+  return [
+    `**Seal installed-tree pin role:** \`published-asset\`${upperSuffix}`,
+    ...betweenLines,
+    "**Seal installed-tree pin role:** `fresh-build`",
+    "```output",
+    `tree: ${"e".repeat(64)}`,
+    "```",
+  ].join("\n");
 }
 
 function removeScratch(dir) {
@@ -380,6 +395,64 @@ test("conflicting role markers refuse regardless of order or count", () => {
   }
 });
 
+test("conflicting role markers refuse when separated inside the declaration region", () => {
+  assert.equal(REGION_BOUNDARY, "previous-fence-or-start-of-file");
+  const cases = [
+    stackedMarkers(["<!-- spacer -->"]),
+    stackedMarkers([""]),
+    stackedMarkers([], "   "),
+    stackedMarkers([
+      "",
+      "This paragraph is ordinary prose in the same declaration region as both markers.",
+      "A blocklist of spacers would miss it; the region scan must not.",
+      "",
+    ]),
+    stackedMarkers(["  "], "\t"),
+    [
+      "  **Seal installed-tree pin role:** `published-asset`",
+      "**Seal installed-tree pin role:** `fresh-build`",
+      "```output",
+      `tree: ${"e".repeat(64)}`,
+      "```",
+    ].join("\n"),
+  ];
+  for (const text of cases) {
+    assertNamedRefuse(() => quotedTreeHashHits(text, "conflict.md"), "role_marker_conflict");
+  }
+});
+
+test("a role marker on the far side of the previous fence is not this fence's declaration", () => {
+  const published = "a".repeat(64);
+  const text = [
+    "**Seal installed-tree pin role:** `fresh-build`",
+    "```bash",
+    "$ echo hi",
+    "```",
+    "",
+    "**Seal installed-tree pin role:** `published-asset`",
+    "```output",
+    `store: /store/${published}`,
+    "```",
+  ].join("\n");
+  const hits = quotedTreeHashHits(text, "boundary.md");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].role, "published-asset");
+  assert.equal(hits[0].hash, published);
+});
+
+test("an indented single role marker is a marker, not an absence", () => {
+  const published = "a".repeat(64);
+  const text = [
+    "  **Seal installed-tree pin role:** `published-asset`",
+    "```output",
+    `store: /store/${published}`,
+    "```",
+  ].join("\n");
+  const hits = quotedTreeHashHits(text, "indented.md");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].role, "published-asset");
+});
+
 test("tree colon without following whitespace is a named refusal", () => {
   const text = [
     "**Seal installed-tree pin role:** `fresh-build`",
@@ -419,7 +492,7 @@ function copyForRepin(prefix) {
 
 function repinTrackedSnapshot(copy) {
   return new Map(
-    ["README.md", "docs/guide/README.md", "SHA256SUMS"].map((relative) => [
+    [...listInstalledTreePinFiles(), "SHA256SUMS"].map((relative) => [
       relative,
       fs.readFileSync(path.join(copy, relative)),
     ]),
@@ -431,6 +504,26 @@ function assertRepinSnapshotUnchanged(copy, before) {
     assert.deepEqual(fs.readFileSync(path.join(copy, relative)), bytes, `${relative} changed`);
   }
   assert.equal(fs.existsSync(path.join(copy, "dist")), false, "repin built dist before structural refusal");
+}
+
+function runRepinConflict(copy, relative, original, replacement) {
+  const target = path.join(copy, relative);
+  fs.writeFileSync(target, original.replace(
+    "**Seal installed-tree pin role:** `published-asset`",
+    replacement,
+  ));
+  const before = repinTrackedSnapshot(copy);
+  const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+    cwd: copy,
+    encoding: "utf8",
+  });
+  assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+  assert.match(
+    repin.stderr,
+    new RegExp(`REFUSE role_marker_conflict: ${relative.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\d+ conflicting installed-tree role markers`),
+  );
+  assertRepinSnapshotUnchanged(copy, before);
+  return repin;
 }
 
 test("repin refuses conflicting role markers before touching files regardless of order or count", () => {
@@ -448,19 +541,114 @@ test("repin refuses conflicting role markers before touching files regardless of
       const stack = roles.map((role) => `**Seal installed-tree pin role:** \`${role}\``).join("\n");
       const original = savedReadme.toString("utf8");
       assert.equal(original.split(marker).length - 1, 1, "README published marker count changed");
-      fs.writeFileSync(readmePath, original.replace(marker, stack));
-      const before = repinTrackedSnapshot(copy);
-      const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
-        cwd: copy,
-        encoding: "utf8",
-      });
-      assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-      assert.match(repin.stderr, /REFUSE role_marker_conflict: README\.md:\d+ conflicting installed-tree role markers/);
-      assertRepinSnapshotUnchanged(copy, before);
+      runRepinConflict(copy, "README.md", original, stack);
     } finally {
       fs.writeFileSync(readmePath, savedReadme);
       removeScratch(copy);
     }
+  }
+});
+
+test("repin refuses role markers separated inside the declaration region before touching files", () => {
+  const replacements = [
+    "**Seal installed-tree pin role:** `published-asset`\n<!-- spacer -->\n**Seal installed-tree pin role:** `fresh-build`",
+    "**Seal installed-tree pin role:** `published-asset`\n\n**Seal installed-tree pin role:** `fresh-build`",
+    "**Seal installed-tree pin role:** `published-asset`   \n**Seal installed-tree pin role:** `fresh-build`",
+    [
+      "**Seal installed-tree pin role:** `published-asset`",
+      "",
+      "This paragraph is ordinary prose in the same declaration region as both markers.",
+      "A blocklist of spacers would miss it; the region scan must not.",
+      "",
+      "**Seal installed-tree pin role:** `fresh-build`",
+    ].join("\n"),
+  ];
+  for (const replacement of replacements) {
+    const copy = copyForRepin("seal-repin-region-");
+    const readmePath = path.join(copy, "README.md");
+    const savedReadme = fs.readFileSync(readmePath);
+    try {
+      runRepinConflict(copy, "README.md", savedReadme.toString("utf8"), replacement);
+    } finally {
+      fs.writeFileSync(readmePath, savedReadme);
+      removeScratch(copy);
+    }
+  }
+});
+
+test("repin refuses a conflict in COMPREHENSION-CHECK.md, which both consumers read from one file set", () => {
+  assert.deepEqual(
+    [...listInstalledTreePinFiles()],
+    ["README.md", "docs/guide/README.md", "docs/COMPREHENSION-CHECK.md"],
+  );
+  assert.ok(
+    INSTALLED_TREE_PIN_FILES.includes("docs/COMPREHENSION-CHECK.md"),
+    "the I3 file must be in the shared file set even when it currently quotes no store hash",
+  );
+  const copy = copyForRepin("seal-repin-fileset-");
+  const target = path.join(copy, "docs/COMPREHENSION-CHECK.md");
+  const saved = fs.readFileSync(target);
+  try {
+    const planted = [
+      saved.toString("utf8").replace(/\s*$/, ""),
+      "",
+      "**Seal installed-tree pin role:** `published-asset`",
+      "<!-- spacer -->",
+      "**Seal installed-tree pin role:** `fresh-build`",
+      "```output",
+      `store: /store/${"e".repeat(64)}`,
+      "```",
+      "",
+    ].join("\n");
+    fs.writeFileSync(target, planted);
+    const before = repinTrackedSnapshot(copy);
+    const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+      cwd: copy,
+      encoding: "utf8",
+    });
+    assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+    assert.match(
+      repin.stderr,
+      /REFUSE role_marker_conflict: docs\/COMPREHENSION-CHECK\.md:\d+ conflicting installed-tree role markers/,
+    );
+    assertRepinSnapshotUnchanged(copy, before);
+    assertNamedRefuse(
+      () => quotedTreeHashHits(planted, "docs/COMPREHENSION-CHECK.md"),
+      "role_marker_conflict",
+    );
+  } finally {
+    fs.writeFileSync(target, saved);
+    removeScratch(copy);
+  }
+});
+
+test("repin does not treat markers on opposite sides of the previous fence as a conflict", () => {
+  const copy = copyForRepin("seal-repin-boundary-");
+  const readmePath = path.join(copy, "README.md");
+  const savedReadme = fs.readFileSync(readmePath);
+  try {
+    const original = savedReadme.toString("utf8");
+    const fence = "```bash\n$ SEAL_VERSION=v0.2.0-rc.2\n";
+    assert.ok(original.includes(fence), "README install bash fence not found");
+    const tampered = original.replace(
+      fence,
+      "**Seal installed-tree pin role:** `fresh-build`\n" + fence,
+    );
+    assert.notEqual(tampered, original);
+    fs.writeFileSync(readmePath, tampered);
+    const beforePublished = markedBlockBytes(tampered, "published-asset");
+    const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+      cwd: copy,
+      encoding: "utf8",
+    });
+    assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+    assert.match(repin.stderr, /REFUSE published_asset_pin: README\.md:\d+ role published-asset/);
+    assert.doesNotMatch(repin.stderr, /role_marker_conflict/);
+    const afterPublished = markedBlockBytes(fs.readFileSync(readmePath, "utf8"), "published-asset");
+    assert.deepEqual(afterPublished, beforePublished, "README published-asset blocks changed");
+  } finally {
+    fs.writeFileSync(readmePath, savedReadme);
+    removeScratch(copy);
   }
 });
 
@@ -520,6 +708,34 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
   assert.doesNotMatch(fs.readFileSync(path.join(copy, "README.md"), "utf8"), new RegExp("f{64}"));
 });
 
+test("the pin and repin share one region scanner and one file list", () => {
+  const pinSource = fs.readFileSync(__filename, "utf8");
+  const repinSource = fs.readFileSync(path.join(ROOT, "scripts", "repin-dist.cjs"), "utf8");
+  const regionsSource = fs.readFileSync(path.join(ROOT, "scripts", "installed-tree-pin-regions.cjs"), "utf8");
+  assert.match(pinSource, /scanInstalledTreePinFiles/);
+  assert.match(repinSource, /scanInstalledTreePinFiles/);
+  assert.match(pinSource, /scanInstalledTreeRegions/);
+  assert.doesNotMatch(repinSource, /ROLE_MARKER/);
+  assert.doesNotMatch(repinSource, /function fencedRegions/);
+  assert.doesNotMatch(repinSource, /function scanInstalledTreeRegions/);
+  assert.match(regionsSource, /REGION BOUNDARY: previous fence, else start of file/);
+  assert.equal(REGION_BOUNDARY, "previous-fence-or-start-of-file");
+});
+
+test("a tracked file with an installed-tree hash cannot sit outside the shared file set", () => {
+  const shared = new Set(listInstalledTreePinFiles());
+  assert.ok(shared.has("docs/COMPREHENSION-CHECK.md"));
+  const strays = [];
+  for (const relative of trackedFiles()) {
+    if (shared.has(relative)) continue;
+    const scanned = scanInstalledTreeRegions(fs.readFileSync(path.join(ROOT, relative), "utf8"), relative);
+    if (scanned.hits.length > 0 || scanned.issues.length > 0) {
+      strays.push(`${relative} hits=${scanned.hits.length} issues=${scanned.issues.map((issue) => issue.code).join(",")}`);
+    }
+  }
+  assert.deepEqual(strays, []);
+});
+
 test("quoted installed-tree hashes match a freshly built artifact", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
@@ -532,8 +748,16 @@ test("quoted installed-tree hashes match a freshly built artifact", (t) => {
   let quoted = 0;
   let quotedPublished = 0;
   let quotedFresh = 0;
-  for (const relative of trackedFiles()) {
-    const hits = quotedTreeHashHits(fs.readFileSync(path.join(ROOT, relative), "utf8"), relative);
+  const scannedFiles = scanInstalledTreePinFiles(ROOT);
+  assert.deepEqual(
+    scannedFiles.map((entry) => entry.file),
+    [...listInstalledTreePinFiles()],
+  );
+  for (const entry of scannedFiles) {
+    if (entry.scanned.issues.length > 0) {
+      assert.fail(entry.scanned.issues.map(formatInstalledTreeRefusal).join("\n"));
+    }
+    const hits = entry.scanned.hits;
     for (const hit of hits) {
       quoted += 1;
       const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
@@ -542,7 +766,7 @@ test("quoted installed-tree hashes match a freshly built artifact", (t) => {
       assert.equal(
         hit.hash,
         expected,
-        `${relative}:${hit.line} ${hit.role} installed-tree hash mismatch: ` +
+        `${entry.file}:${hit.line} ${hit.role} installed-tree hash mismatch: ` +
           `quoted ${hit.hash}, ${hit.role} ${expected}`,
       );
     }

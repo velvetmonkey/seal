@@ -1,5 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
-const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?$/;
+const fs = require("node:fs");
+const path = require("node:path");
+
+// REGION BOUNDARY: previous fence, else start of file.
+// A role marker declares the fence it sits above, so this fence's declaration
+// region is every line after the previous fence (or from the start of the file
+// when there is no previous fence). The previous fence is the boundary because
+// a marker above an earlier fence already declared that earlier fence; anything
+// between — comment, blank line, prose, padding — is still this fence's
+// preamble and cannot hide a marker.
+const REGION_BOUNDARY = "previous-fence-or-start-of-file";
+
+// Shared file set. Both the pin and repin read exactly these paths, from this
+// one array. docs/COMPREHENSION-CHECK.md is included even though it currently
+// quotes no store hash, so a conflict planted there cannot be visible to only
+// one consumer.
+const INSTALLED_TREE_PIN_FILES = Object.freeze([
+  "README.md",
+  "docs/guide/README.md",
+  "docs/COMPREHENSION-CHECK.md",
+]);
+
+// Leading and trailing whitespace are stripped before matching. Padding is not
+// part of the declaration: trailing spaces must not hide a marker, and an
+// indented marker in the region is still a marker, not an absence.
+const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`$/;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const TREE_HASH = /\btree:?\s+([0-9a-f]{64})\b/g;
 const TREE_HASH_WITHOUT_SPACE = /\btree:([0-9a-f]{64})\b/g;
@@ -7,6 +32,18 @@ const STORE_HASH = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
 
 function lineNumber(text, index) {
   return text.slice(0, index).split("\n").length;
+}
+
+function matchRoleMarker(line) {
+  return line.replace(/\r$/, "").trim().match(ROLE_MARKER);
+}
+
+function isFenceLine(line) {
+  return /^```/.test(line.replace(/\r$/, ""));
+}
+
+function listInstalledTreePinFiles() {
+  return INSTALLED_TREE_PIN_FILES;
 }
 
 function fencedRegions(text) {
@@ -21,14 +58,20 @@ function fencedRegions(text) {
   const regions = [];
   let open = null;
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].replace(/\r$/, "");
-    if (!/^```/.test(line)) continue;
+    if (!isFenceLine(lines[index])) continue;
     if (open === null) {
+      let regionBegin = 0;
+      for (let previous = index - 1; previous >= 0; previous -= 1) {
+        if (isFenceLine(lines[previous])) {
+          regionBegin = previous + 1;
+          break;
+        }
+      }
       const markers = [];
-      for (let markerIndex = index - 1; markerIndex >= 0; markerIndex -= 1) {
-        const marker = lines[markerIndex].replace(/\r$/, "").match(ROLE_MARKER);
-        if (!marker) break;
-        markers.unshift({
+      for (let markerIndex = regionBegin; markerIndex < index; markerIndex += 1) {
+        const marker = matchRoleMarker(lines[markerIndex]);
+        if (!marker) continue;
+        markers.push({
           role: marker[1],
           line: markerIndex + 1,
           start: offsets[markerIndex],
@@ -110,7 +153,8 @@ function scanInstalledTreeRegions(text, file = "<memory>") {
         reason:
           "store hash has no role marker; add " +
           "**Seal installed-tree pin role:** `published-asset` or " +
-          "**Seal installed-tree pin role:** `fresh-build` immediately before its fenced block",
+          "**Seal installed-tree pin role:** `fresh-build` in the declaration region above its fenced block " +
+          "(every line after the previous fence, or from the start of the file if there is no previous fence)",
       });
       continue;
     }
@@ -136,7 +180,58 @@ function scanInstalledTreeRegions(text, file = "<memory>") {
   return { regions, hits: validHits, issues };
 }
 
+function readInstalledTreePinFile(root, file) {
+  const target = path.join(root, file);
+  try {
+    const stat = fs.statSync(target);
+    if ((stat.mode & 0o444) === 0) {
+      return {
+        file,
+        text: "",
+        scanned: {
+          regions: [],
+          hits: [],
+          issues: [{
+            code: "pin_file_unreadable",
+            file,
+            line: 1,
+            index: 0,
+            reason: `installed-tree pin file unreadable: ${file}: file has no read bits`,
+          }],
+        },
+      };
+    }
+    const text = fs.readFileSync(target, "utf8");
+    return { file, text, scanned: scanInstalledTreeRegions(text, file) };
+  } catch (error) {
+    const code = error && error.code === "ENOENT" ? "pin_file_missing" : "pin_file_unreadable";
+    return {
+      file,
+      text: "",
+      scanned: {
+        regions: [],
+        hits: [],
+        issues: [{
+          code,
+          file,
+          line: 1,
+          index: 0,
+          reason: `cannot read installed-tree pin file ${file}: ${error.message}`,
+        }],
+      },
+    };
+  }
+}
+
+function scanInstalledTreePinFiles(root) {
+  return listInstalledTreePinFiles().map((file) => readInstalledTreePinFile(root, file));
+}
+
 module.exports = {
+  REGION_BOUNDARY,
+  INSTALLED_TREE_PIN_FILES,
   formatInstalledTreeRefusal,
+  listInstalledTreePinFiles,
   scanInstalledTreeRegions,
+  scanInstalledTreePinFiles,
 };

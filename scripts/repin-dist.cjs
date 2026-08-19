@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const {
   formatInstalledTreeRefusal,
-  scanInstalledTreeRegions,
+  scanInstalledTreePinFiles,
 } = require("./installed-tree-pin-regions.cjs");
 const { releaseArtifactName } = require("./product-identity.cjs");
 
@@ -19,15 +19,13 @@ function applyReplacements(text, replacements) {
   return text;
 }
 
-function inspectRoleMarkedPins(file) {
-  const target = path.join(ROOT, file);
-  const original = fs.readFileSync(target, "utf8");
-  return {
-    file,
-    target,
-    original,
-    scanned: scanInstalledTreeRegions(original, file),
-  };
+function inspectRoleMarkedPins() {
+  return scanInstalledTreePinFiles(ROOT).map((entry) => ({
+    file: entry.file,
+    target: path.join(ROOT, entry.file),
+    original: entry.text,
+    scanned: entry.scanned,
+  }));
 }
 
 function rewriteRoleMarkedPins(inspected, values, outsideReplacements, refusals) {
@@ -65,10 +63,7 @@ function rewriteRoleMarkedPins(inspected, values, outsideReplacements, refusals)
 }
 
 function main() {
-  const inspected = [
-    inspectRoleMarkedPins("README.md"),
-    inspectRoleMarkedPins("docs/guide/README.md"),
-  ];
+  const inspected = inspectRoleMarkedPins();
   const structuralRefusals = inspected.flatMap(({ scanned }) =>
     scanned.issues.map(formatInstalledTreeRefusal));
   if (structuralRefusals.length > 0) {
@@ -96,12 +91,18 @@ function main() {
   // Download instructions derive their filename, digest, and byte count from
   // the SHA256SUMS asset attached to the same release; do not materialize a
   // release-specific command here.
-  rewriteRoleMarkedPins(inspected[0], values, [
-    [/^\.\/dist\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
-      `./dist/seal-v*-linux-x64 --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
-    [/^(\/\S*\/dist\/)seal-v[^ /]+-linux-x64$/m, `$1${artifact}`],
-  ], refusals);
-  rewriteRoleMarkedPins(inspected[1], values, [], refusals);
+  const extraReplacements = {
+    "README.md": [
+      [/^\.\/dist\/seal-v[^ ]+-linux-x64 --sha256 [0-9a-f]+ --bytes \d+ --prefix ~\/\.local$/m,
+        `./dist/seal-v*-linux-x64 --sha256 ${sha256} --bytes ${bytes} --prefix ~/.local`],
+      [/^(\/\S*\/dist\/)seal-v[^ /]+-linux-x64$/m, `$1${artifact}`],
+    ],
+  };
+  for (const item of inspected) {
+    const extras = extraReplacements[item.file] || [];
+    if (item.scanned.hits.length === 0 && extras.length === 0) continue;
+    rewriteRoleMarkedPins(item, values, extras, refusals);
+  }
 
   if (refusals.length > 0) {
     process.stderr.write(`${refusals.join("\n")}\n`);
