@@ -183,10 +183,10 @@ if (( ${#roster_failures[@]} > 0 || ${#critical_manifest_failures[@]} > 0 )); th
   exit 1
 fi
 
-# A test file is a regular file directly under test_directory whose basename
-# matches *.test.*. Directories, hidden files, backups, disabled files, and
-# other names are not product-suite test files.
-mapfile -t present_tests < <(find "$test_directory" -mindepth 1 -maxdepth 1 -type f -name '*.test.*' -print | sort)
+# Discovery rule: Every regular file recursively below test_directory whose basename
+# matches *.test.* is a product-suite test file and must appear in the declared
+# roster.
+mapfile -t present_tests < <(find "$test_directory" -mindepth 1 -type f -name '*.test.*' -print | sort)
 declare -A present_set
 for file in "${present_tests[@]}"; do
   present_set["$file"]=1

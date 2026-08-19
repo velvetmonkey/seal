@@ -1,5 +1,6 @@
 # Critical product properties and their executable proofs.
 # Format: property<TAB>test file<TAB>exact node:test case name
+# Honest limit: The floor does not stop cs8frisk probe 2, where a history rewrite makes the reduced manifest its first version, or cs8frisk probe 3, where editing the runner disables the floor, because repository-local history and checker code are mutable; closing either gap requires an external reviewer boundary rather than more local code.
 a checksum naming a different artifact is refused by name	test/artifact-identity.test.cjs	a checksum file naming a different artifact is refused
 an untagged build cannot wear the bare release identity	test/artifact-identity.test.cjs	an untagged build wearing the bare release name is refused by name
 altered receipt fields produce distinct named refusals	test/receipt-checker.test.cjs	three distinct mutation sites each produce a distinct refusal

@@ -74,6 +74,57 @@ test("a passing present but undeclared test is also a red finding", (t) => {
   assert.match(result.stdout, new RegExp(`present but undeclared: .*${omitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
+test("a failing nested present but undeclared test is a red finding", (t) => {
+  const space = fixture();
+  const nested = join(space.tests, "nested");
+  mkdirSync(nested);
+  const omitted = join(nested, "omitted.test.cjs");
+  writeFileSync(omitted, "require('node:test')('nested omitted failure', () => { throw new Error('intentional'); });\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`present but undeclared: .*${omitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+});
+
+test("a passing nested present but undeclared test is also a red finding", (t) => {
+  const space = fixture();
+  const nested = join(space.tests, "nested");
+  mkdirSync(nested);
+  const omitted = join(nested, "omitted.test.cjs");
+  writeFileSync(omitted, "require('node:test')('nested omitted pass', () => {});\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`present but undeclared: .*${omitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+});
+
+test("a declared nested test is reconciled and runs", (t) => {
+  const space = fixture();
+  const nested = join(space.tests, "nested");
+  mkdirSync(nested);
+  const relative = join("nested", "declared.test.cjs");
+  writeFileSync(join(space.tests, relative), "require('node:test')('nested declared ran', () => {});\n");
+  writeFileSync(space.roster, readFileSync(space.roster, "utf8") + `${relative}\n`);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /nested declared ran/);
+});
+
+test("a declared nested non-candidate is absent from the discovered test set", (t) => {
+  const space = fixture();
+  const nested = join(space.tests, "nested");
+  mkdirSync(nested);
+  const relative = join("nested", "declared.cjs");
+  const declared = join(space.tests, relative);
+  writeFileSync(declared, "require('node:test')('not a candidate', () => {});\n");
+  writeFileSync(space.roster, readFileSync(space.roster, "utf8") + `${relative}\n`);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`declared but absent from test directory: .*${declared.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+});
+
 test("a strict subset of the declared roster is a red finding", (t) => {
   const space = fixture();
   const copy = join(space.root, "driver.sh");
