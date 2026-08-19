@@ -35,17 +35,22 @@ Run these commands to download, verify against `SHA256SUMS`, and install the Lin
 $ SEAL_VERSION=v0.2.0-rc.2
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-$ (if ! read -r expected_digest expected_bytes expected_name < SHA256SUMS || test -z "$expected_digest" || test -z "$expected_bytes" || test -z "$expected_name"; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi; test "$expected_name" = "seal-$SEAL_VERSION-linux-x64" || { echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; }; actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; actual_bytes="$(wc -c < "$expected_name")"; test "$actual_digest" = "$expected_digest" && test "$actual_bytes" = "$expected_bytes" || { echo "release artifact does not match SHA256SUMS" >&2; exit 1; })
-$ chmod +x "seal-$SEAL_VERSION-linux-x64"
-$ ./seal-v0.2.0-rc.2-linux-x64 --sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347 --bytes 6146418 --prefix ~/.local
+$ if [ ! -r SHA256SUMS ] || [ ! -s SHA256SUMS ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
+$ read -r expected_digest expected_bytes expected_name < SHA256SUMS
+$ if [ -z "$expected_digest" ] || [ -z "$expected_bytes" ] || [ -z "$expected_name" ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
+$ if [ "$expected_name" != "seal-$SEAL_VERSION-linux-x64" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
+$ actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
+$ if [ "$actual_digest" != "$expected_digest" ]; then echo "release artifact digest does not match SHA256SUMS" >&2; exit 1; fi
+$ actual_bytes="$(wc -c < "$expected_name")"
+$ if [ "$actual_bytes" != "$expected_bytes" ]; then echo "release artifact byte count does not match SHA256SUMS" >&2; exit 1; fi
+$ chmod +x "$expected_name"
+$ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
 ```output
 ./seal-v0.2.0-rc.2-linux-x64
-sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347
-bytes 6146418
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 installed seal 0.2.0-rc.2 linux-x64
 store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
