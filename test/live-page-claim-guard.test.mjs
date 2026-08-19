@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -19,7 +19,7 @@ async function withPage(body, fn) {
   try { return await fn(`http://127.0.0.1:${server.address().port}/`); }
   finally { await new Promise((done) => server.close(done)); }
 }
-function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined, { productionPin = false } = {}) {
+function run(url, readme = originalReadme, pinBody = "<html></html>", provenanceUrl = undefined, { productionPin = false, cacheDir = undefined, commit = PIN_COMMIT } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
@@ -29,10 +29,11 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
   } else {
     Object.assign(env, {
       LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
-      LIVE_CLAIM_GUARD_COMMIT: PIN_COMMIT,
+      LIVE_CLAIM_GUARD_COMMIT: commit,
       LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
       LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
       LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl ?? url,
+      RUNNER_TEMP: cacheDir ?? join(dir, "cache"),
     });
   }
   const child = spawn(process.execPath, [GUARD], { env });
@@ -86,8 +87,76 @@ test("fails closed when pinned release provenance is unreachable", async () => {
   await withPage("<html>new release</html>", async (url) => {
     const result = await run(url, originalReadme, "<html></html>", "http://127.0.0.1:1/");
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE UNREACHABLE/);
+    assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE TRANSIENTLY UNREACHABLE/);
   });
+});
+
+test("names a wrong pinned commit as a substantive provenance mismatch", async () => {
+  const server = createServer((_request, response) => { response.statusCode = 404; response.end("not found"); });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  try {
+    await withPage("<html></html>", async (url) => {
+      const provenanceUrl = `http://127.0.0.1:${server.address().port}/`;
+      const result = await run(url, originalReadme, "<html></html>", provenanceUrl, { commit: "forgedcommit" });
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE MISMATCH/);
+    });
+  } finally {
+    await new Promise((done) => server.close(done));
+  }
+});
+
+test("names HTTP 429 as transient provenance uncertainty", async () => {
+  const server = createServer((_request, response) => { response.statusCode = 429; response.end("rate limited"); });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  try {
+    await withPage("<html></html>", async (url) => {
+      const provenanceUrl = `http://127.0.0.1:${server.address().port}/`;
+      const result = await run(url, originalReadme, "<html></html>", provenanceUrl);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE TRANSIENTLY UNREACHABLE.*HTTP 429/);
+    });
+  } finally {
+    await new Promise((done) => server.close(done));
+  }
+});
+
+test("uses the commit-keyed pinned-source cache without a second provenance fetch", async () => {
+  let requests = 0;
+  const body = "<html></html>";
+  const server = createServer((_request, response) => { requests += 1; response.end(body); });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const cacheDir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-cache-"));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/`;
+    const first = await run(url, originalReadme, body, url, { cacheDir });
+    const second = await run(url, originalReadme, body, url, { cacheDir });
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(requests, 3, "second run must fetch only the live page, not pinned provenance");
+    assert.match(second.stdout, /Pinned source cache hit.*no provenance fetch/);
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+    await new Promise((done) => server.close(done));
+  }
+});
+
+test("fails closed on poisoned cache bytes under the right commit key", async () => {
+  const body = "<html></html>";
+  const cacheDir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-cache-"));
+  const cachePath = join(cacheDir, "live-page-claim-guard", `${encodeURIComponent(PIN_COMMIT)}.index.html`);
+  mkdirSync(join(cacheDir, "live-page-claim-guard"), { recursive: true });
+  writeFileSync(cachePath, "poisoned bytes");
+  try {
+    await withPage(body, async (url) => {
+      const result = await run(url, originalReadme, body, url, { cacheDir });
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE MISMATCH.*poisoned cache/);
+      assert.doesNotMatch(result.stdout, /Fetching pinned seal-check/);
+    });
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
 });
 
 test("fails when a README behaviour sentence is outside the checked population", async () => {

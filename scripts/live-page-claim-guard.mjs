@@ -10,7 +10,8 @@
 // app.js or wasm/seal.js. A green result cannot show that the page executes
 // nothing, or that no MCP tool-call runs.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,6 +26,10 @@ const PIN = Object.freeze({
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;
 const PROVENANCE_PAGE = `https://github.com/velvetmonkey/seal-check/commit/${PIN.commit}`;
+const CACHE_DIR = resolve(process.env.RUNNER_TEMP ?? tmpdir(), "live-page-claim-guard");
+// The cache key is exactly the pinned Git commit. Git commits are immutable, so
+// a source file cached under this key cannot become stale for this pin.
+const CACHE_PATH = resolve(CACHE_DIR, `${encodeURIComponent(PIN.commit)}.index.html`);
 const BEGIN = "<!-- live-page-claims:begin -->";
 const END = "<!-- live-page-claims:end -->";
 
@@ -101,24 +106,57 @@ function changedRegion(expected, actual) {
 if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; README claims zero`);
 else console.log("PASS  landing-page control count agrees with README: zero <button> controls");
 
-console.log(`INFO  Fetching pinned seal-check@${PIN.commit} source: ${PROVENANCE_URL}`);
 let pinnedSource;
+let sourceSha256;
 try {
-  const response = await fetch(PROVENANCE_URL, { redirect: "follow", signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  pinnedSource = Buffer.from(await response.arrayBuffer());
+  pinnedSource = readFileSync(CACHE_PATH);
+  sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
+  if (pinnedSource.length !== PIN.bytes || sourceSha256 !== PIN.sha256) {
+    const byteCheck = pinnedSource.length === PIN.bytes ? "bytes match" : `bytes ${pinnedSource.length} != pin ${PIN.bytes}`;
+    const digestCheck = sourceSha256 === PIN.sha256 ? "sha256 matches" : `sha256 ${sourceSha256} != pin ${PIN.sha256}`;
+    console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE MISMATCH for ${PIN.commit}: poisoned cache ${CACHE_PATH}; ${byteCheck}; ${digestCheck}`);
+    process.exit(2);
+  } else {
+    console.log(`INFO  Pinned source cache hit for seal-check@${PIN.commit}; no provenance fetch`);
+  }
 } catch (error) {
-  console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE UNREACHABLE for ${PIN.commit}: ${error.message}`);
-  console.error("ERROR  refusing a green result because pinned commit bytes were not checked");
-  process.exit(2);
+  if (error.code !== "ENOENT") console.error(`WARN  cannot read pinned source cache ${CACHE_PATH}: ${error.message}`);
 }
 
-const sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
+if (!pinnedSource) {
+  console.log(`INFO  Fetching pinned seal-check@${PIN.commit} source: ${PROVENANCE_URL}`);
+  try {
+    const response = await fetch(PROVENANCE_URL, { redirect: "follow", signal: AbortSignal.timeout(15000) });
+    if (!response.ok) {
+      const failure = new Error(`HTTP ${response.status}`);
+      failure.provenanceClass = response.status === 429 || response.status >= 500 ? "transient" : "substantive";
+      throw failure;
+    }
+    pinnedSource = Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    const headline = error.provenanceClass === "substantive"
+      ? "PINNED SEAL-CHECK PROVENANCE MISMATCH"
+      : "PINNED SEAL-CHECK PROVENANCE TRANSIENTLY UNREACHABLE";
+    console.error(`ERROR  ${headline} for ${PIN.commit}: ${error.message}`);
+    console.error("ERROR  refusing a green result because pinned commit bytes were not checked");
+    process.exit(2);
+  }
+  sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
+}
+
 if (pinnedSource.length !== PIN.bytes || sourceSha256 !== PIN.sha256) {
   const byteCheck = pinnedSource.length === PIN.bytes ? "bytes match" : `bytes ${pinnedSource.length} != pin ${PIN.bytes}`;
   const digestCheck = sourceSha256 === PIN.sha256 ? "sha256 matches" : `sha256 ${sourceSha256} != pin ${PIN.sha256}`;
-  console.error(`ERROR  pinned provenance source for seal-check@${PIN.commit} does not match this guard's frozen pin: ${byteCheck}; ${digestCheck}`);
+  console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE MISMATCH for ${PIN.commit}: ${byteCheck}; ${digestCheck}`);
   process.exit(2);
+}
+try {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  const temporaryPath = `${CACHE_PATH}.${process.pid}.tmp`;
+  writeFileSync(temporaryPath, pinnedSource);
+  renameSync(temporaryPath, CACHE_PATH);
+} catch (error) {
+  console.error(`WARN  cannot write pinned source cache ${CACHE_PATH}: ${error.message}`);
 }
 if (!pinnedSource.equals(body)) {
   fail(`served landing page differs from seal-check@${PIN.commit}: expected ${PIN.bytes} bytes sha256 ${PIN.sha256}; got ${body.length} bytes sha256 ${sha256}`);
