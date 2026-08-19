@@ -49,9 +49,11 @@ the Node CLI this repository ships.
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
 5. [checker/seal-receipt-check.mjs](../checker/seal-receipt-check.mjs) — the
-   packaged receipt checker the demo hands you. It imports no Seal module at
-   check time, but copies the producer's canonicalisation rule and uses the
-   same Node crypto platform; read what that does and does not establish.
+   receipt checker published beside the install artifact, with its own digest
+   in the release `SHA256SUMS`. It is not covered by the artifact's digest.
+   It imports no Seal module at check time, but copies the producer's
+   canonicalisation rule and uses the same Node crypto platform; read what
+   that does and does not establish.
 6. [guide/github-actions-provenance.md](guide/github-actions-provenance.md) —
    download and verify the GitHub-hosted runner's attested demo-receipt
    evidence, and read the boundary of that provenance claim.

@@ -45,8 +45,7 @@ equal the version in the artifact name and in the install record.
 
 The payload is the current product: `bin/seal`, the mediation and
 receipt components (including the receipt-sealing module used by both
-the demo and protected paths), the approval contract, and
-`checker/seal-receipt-check.mjs`.
+the demo and protected paths), and the approval contract.
 It also includes the pinned vendored kernel and the fail-closed Node adapter
 that invokes it. The authorization rule is PROVED. The state machine is
 TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
@@ -56,13 +55,17 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 5000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
-The demo prints the absolute path of that packaged checker. The launcher
-never searches `PATH` for another `seal`. The checker imports no Seal module
-at check time, but copies the receipt canonicalisation rule and uses the same
-Node crypto platform as the producer. It detects mutation of the receipt's
-canonical parsed value under a trusted supplied key; semantically irrelevant
-JSON formatting differences are not distinguished. It does not detect defects
-in those shared implementation choices.
+`checker/seal-receipt-check.mjs` is not in the payload. It is published
+beside the install artifact on the same release, with its own digest in
+the release `SHA256SUMS`; that digest is not covered by the artifact's
+digest. The demo tells you to download that file and check its digest
+before running it. The launcher never searches `PATH` for another `seal`.
+The checker imports no Seal module at check time, but copies the receipt
+canonicalisation rule and uses the same Node crypto platform as the
+producer. It detects mutation of the receipt's canonical parsed value
+under a trusted supplied key; semantically irrelevant JSON formatting
+differences are not distinguished. It does not detect defects in those
+shared implementation choices.
 
 For `seal protect`, MCP discovery has a 5000ms deadline per phase by
 default. Slow but legitimate servers can use

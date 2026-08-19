@@ -72,8 +72,14 @@ jobs:
           version="$(tr -d '\n' < VERSION)"
           artifact="$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
           artifact_name="$(basename "$artifact")"
+          checker="$RUNNER_TEMP/dist/seal-receipt-check.mjs"
+          cp checker/seal-receipt-check.mjs "$checker"
+          checker_digest="$(sha256sum "$checker" | awk '{ print $1 }')"
+          checker_bytes="$(wc -c < "$checker" | tr -d ' ')"
+          printf '%s  %s  %s\n' "$checker_digest" "$checker_bytes" "seal-receipt-check.mjs" >> "$RUNNER_TEMP/dist/SHA256SUMS"
           read -r digest bytes checksum_name < "$RUNNER_TEMP/dist/SHA256SUMS"
           test "$checksum_name" = "$artifact_name"
+          grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
             "Seal v${version} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release." \
@@ -95,6 +101,7 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             "$artifact" \
+            "$checker" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
             "${prerelease[@]}" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
