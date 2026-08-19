@@ -120,7 +120,8 @@ Then press Enter.
 **Output:**
 
 ```text
-Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+Approve? [y/N]
+child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 ```
 
@@ -194,11 +195,11 @@ Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk
 ```text
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
-receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but it carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
+receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
   node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   <!-- live-page-claims:begin -->
-  Online: https://velvetmonkey.github.io/seal-check/ re-checks a supplied Seal decision receipt in its browser kernel and reports those receipt checks. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
+  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
   <!-- live-page-claims:end -->
 ```
 
@@ -279,7 +280,7 @@ test "$?" -eq 1
 **Output:**
 
 ```text
-REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
+REFUSE decision_binding_mismatch: receipt line 4, field decision: recorded value "ALLOW" does not match its sealed commitment (committed value withheld)
 ```
 
 **Look at:** `REFUSE decision_binding_mismatch`. Changing the recorded decision broke its sealed commitment, so the same checker rejected the copy.
