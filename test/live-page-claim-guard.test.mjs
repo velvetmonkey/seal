@@ -33,7 +33,7 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
       LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
       LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
       LIVE_CLAIM_GUARD_PROVENANCE_URL: provenanceUrl ?? url,
-      LIVE_CLAIM_GUARD_CACHE_DIR: cacheDir ?? join(dir, "cache"),
+      RUNNER_TEMP: cacheDir ?? join(dir, "cache"),
     });
   }
   const child = spawn(process.execPath, [GUARD], { env });
