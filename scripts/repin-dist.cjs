@@ -11,7 +11,7 @@ const ROOT = path.join(__dirname, "..");
 const dist = path.join(ROOT, "dist");
 const STORE_HASH = /(?:\btree:?\s+|\/store\/)[0-9a-f]{64}\b/g;
 const MARKED_FENCE =
-  /^(<!-- seal-store-hash-role: ([A-Za-z0-9][A-Za-z0-9-]*) -->\r?\n)(```[^\n]*\r?\n)([\s\S]*?)(^```\s*$)/gm;
+  /^(\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?\n)(```[^\n]*\r?\n)([\s\S]*?)(^```\s*$)/gm;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const refusals = [];
 execFileSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", dist], { stdio: "inherit" });

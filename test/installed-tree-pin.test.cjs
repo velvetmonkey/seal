@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const TREE = /\btree:?\s+([0-9a-f]{64})\b/g;
 const STORE = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
-const ROLE_MARKER = /^<!-- seal-store-hash-role: ([A-Za-z0-9][A-Za-z0-9-]*) -->\r?$/;
+const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?$/;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const MARKER = "\n// --SEAL-PAYLOAD--\n";
 
@@ -62,8 +62,8 @@ function declaredHashRole(text, index, file, blocks) {
     refuse(
       "role_marker_absent",
       `${file}:${line} store hash has no role marker; add ` +
-        "<!-- seal-store-hash-role: published-asset --> or " +
-        "<!-- seal-store-hash-role: fresh-build --> immediately before its fenced block",
+        "**Seal installed-tree pin role:** `published-asset` or " +
+        "**Seal installed-tree pin role:** `fresh-build` immediately before its fenced block",
     );
   }
   const role = marker[1];
@@ -341,7 +341,7 @@ test("published-asset markers govern four download shapes without prose inferenc
   for (const prose of shapes) {
     const text = [
       prose,
-      "<!-- seal-store-hash-role: published-asset -->",
+      "**Seal installed-tree pin role:** `published-asset`",
       "```output",
       `store: /home/x/.local/lib/seal/store/${publishedShape}`,
       "```",
@@ -356,7 +356,7 @@ test("a fresh-build marker wins when prose incidentally mentions releases/downlo
   const freshShape = "b".repeat(64);
   const text = [
     "Unlike releases/download/, this builds the checkout.",
-    "<!-- seal-store-hash-role: fresh-build -->",
+    "**Seal installed-tree pin role:** `fresh-build`",
     "```text",
     `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-check.mjs" receipt.json`,
     "```",
@@ -371,13 +371,13 @@ test("an unmarked store hash is a named refusal with file, line, and required ma
   assertNamedRefuse(() => quotedTreeHashHits(text, "unmarked.md"), "role_marker_absent");
   assert.throws(
     () => quotedTreeHashHits(text, "unmarked.md"),
-    /unmarked\.md:2.*seal-store-hash-role: published-asset.*seal-store-hash-role: fresh-build/,
+    /unmarked\.md:2.*Seal installed-tree pin role:.*published-asset.*Seal installed-tree pin role:.*fresh-build/,
   );
 });
 
 test("an unrecognised store-hash role is a named refusal", () => {
   const text = [
-    "<!-- seal-store-hash-role: release-cache -->",
+    "**Seal installed-tree pin role:** `release-cache`",
     "```output",
     `tree: ${"d".repeat(64)}`,
     "```",
@@ -387,7 +387,7 @@ test("an unrecognised store-hash role is a named refusal", () => {
 });
 
 function markedBlockBytes(text, role) {
-  const marker = `<!-- seal-store-hash-role: ${role} -->`;
+  const marker = `**Seal installed-tree pin role:** \`${role}\``;
   const blocks = [];
   let from = 0;
   while (true) {
@@ -419,7 +419,7 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
     let text = fs.readFileSync(target, "utf8");
     if (relative === "README.md") {
       text = text.replace(
-        /(<!-- seal-store-hash-role: fresh-build -->[\s\S]*?\/store\/)[0-9a-f]{64}/,
+        /(\*\*Seal installed-tree pin role:\*\* `fresh-build`[\s\S]*?\/store\/)[0-9a-f]{64}/,
         `$1${"f".repeat(64)}`,
       );
       fs.writeFileSync(target, text);
