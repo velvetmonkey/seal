@@ -134,6 +134,7 @@ async function main() {
       env: { ...process.env, HOME: home },
     });
     if (result.status !== 0) fail(`installer exited ${result.status}: ${(result.stderr || "").trim()}`);
+    if (result.stderr) fail(`installer wrote unexpected stderr on success: ${JSON.stringify(result.stderr)}`);
     const expected = normalizeTranscript(transcript.body);
     const actual = normalizeTranscript(result.stdout);
     if (actual !== expected) {
