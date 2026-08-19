@@ -21,8 +21,20 @@ const fs = require("node:fs");
 const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
+const { sha256Hex } = require("../contract/canonical.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
+
+const HANDLE_PATTERN = /^seal-rs1\.[0-9a-f]{64}$/;
+const RECEIPT_CORRELATION_MISSING = "receipt_correlation_missing";
+const TERMINAL_REFUSALS = new Set([
+  "already_consumed",
+  "terminally_declined",
+  "cancelled",
+  "expired",
+  "restart_invalidated",
+  "declined",
+]);
 
 function createProxy(options) {
   const {
@@ -52,13 +64,21 @@ function createProxy(options) {
   const receiptCorrelations = new Map();
 
   function receiptCorrelation(requestState) {
-    return receiptCorrelations.get(requestState);
+    return receiptCorrelations.get(sha256Hex(requestState));
   }
 
   function mintReceiptCorrelation(requestState) {
     const correlation = `seal-receipt-correlation/v1.${randomBytes(32).toString("hex")}`;
-    receiptCorrelations.set(requestState, correlation);
+    receiptCorrelations.set(sha256Hex(requestState), correlation);
     return correlation;
+  }
+
+  function discardReceiptCorrelation(requestState) {
+    receiptCorrelations.delete(sha256Hex(requestState));
+  }
+
+  function isTerminalDecision(decision) {
+    return decision.kind === "allow" || (decision.kind === "refuse" && TERMINAL_REFUSALS.has(decision.refusal));
   }
 
   const childCommand = childArgv[0];
@@ -148,12 +168,29 @@ function createProxy(options) {
 
     // The retry: client-supplied state and answer, judged only against the
     // contract's own record.
-    const correlation = receiptCorrelation(requestState);
-    const approvalRequest = correlation === undefined ? undefined : { correlation };
+    // A malformed state is contract-owned and has no map key. For every
+    // handle-shaped retry, the proxy must also have its correlation before
+    // the retry may reach the child.
+    const correlation = typeof requestState === "string" && HANDLE_PATTERN.test(requestState)
+      ? receiptCorrelation(requestState)
+      : undefined;
     const decision = contract.retry({ tool, args, requestState, inputResponses });
+    if (correlation === undefined) {
+      if (decision.kind === "refuse") {
+        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        return;
+      }
+      const detail = "no receipt correlation matches this continuation; retry refused before forwarding";
+      emitReceipt("BLOCK", frame, { refusal: RECEIPT_CORRELATION_MISSING, detail });
+      respond(frame.id, refusalResult(RECEIPT_CORRELATION_MISSING, detail));
+      return;
+    }
+    const approvalRequest = { correlation };
+    if (isTerminalDecision(decision)) discardReceiptCorrelation(requestState);
     if (decision.kind === "refuse") {
       const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
-      if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+      receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra);
       respond(frame.id, refusalResult(decision.refusal, decision.detail));
       return;
@@ -162,7 +199,7 @@ function createProxy(options) {
     // before we forward: a crash here loses an approval, never gains a call.
     if (!canForward(frame)) return;
     const receiptExtra = { evidence: decision.evidence };
-    if (approvalRequest !== undefined) receiptExtra.approvalRequest = approvalRequest;
+    receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra);
     child.stdin.write(JSON.stringify({
       jsonrpc: "2.0", id: frame.id, method: frame.method,
