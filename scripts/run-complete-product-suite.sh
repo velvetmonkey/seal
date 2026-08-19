@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The declared product-suite roster is the test files present at runtime.  Keep
-# it separate from run_tests: the comparison below must catch any later slice
-# or filter between discovery and invocation.
+# The declared product-suite roster is versioned separately from runtime
+# discovery. Keep it separate from run_tests so missing files cannot shrink the
+# expectation that the roster line compares against.
 set -uo pipefail
 
 if [[ -v RUNNER_TEMP && ! -e "$RUNNER_TEMP" ]]; then
@@ -10,24 +10,46 @@ if [[ -v RUNNER_TEMP && ! -e "$RUNNER_TEMP" ]]; then
   exit 1
 fi
 
-test_root="${SEAL_PRODUCT_TEST_ROOT:-test}"
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+test_root="${SEAL_PRODUCT_TEST_ROOT:-.}"
 if [[ ! -d "$test_root" || ! -r "$test_root" ]]; then
   echo "::error::cannot read declared product-test roster at $test_root"
   exit 1
 fi
 test_root="$(cd "$test_root" && pwd)"
 
-declaration_file="$(mktemp)"
-trap 'rm -f "$declaration_file"' EXIT
-if ! find "$test_root" -type f -name '*test.*' -print0 | sort -z >"$declaration_file"; then
-  echo "::error::cannot determine declared product-test roster under $test_root"
+roster_file="${SEAL_PRODUCT_TEST_ROSTER:-$script_root/scripts/product-test-roster.txt}"
+if [[ ! -f "$roster_file" || ! -r "$roster_file" ]]; then
+  echo "::error::cannot read declared product-test roster at $roster_file"
   exit 1
 fi
 
-mapfile -d '' -t declared_tests <"$declaration_file"
+mapfile -t declared_names <"$roster_file"
+declared_tests=()
+roster_failures=()
+for name in "${declared_names[@]}"; do
+  [[ -z "$name" ]] && continue
+  if [[ "$name" = /* ]]; then
+    file="$name"
+  else
+    file="$test_root/$name"
+  fi
+  declared_tests+=("$file")
+  if [[ ! -e "$file" ]]; then
+    roster_failures+=("missing: $file")
+  elif [[ ! -f "$file" || ! -r "$file" ]]; then
+    roster_failures+=("unreadable: $file")
+  elif [[ ! -s "$file" ]]; then
+    roster_failures+=("empty: $file")
+  fi
+done
 if (( ${#declared_tests[@]} == 0 )); then
   echo "::error::declared product-test roster under $test_root is empty"
+  exit 1
+fi
+if (( ${#roster_failures[@]} > 0 )); then
+  echo "FAIL  product suite roster: declared test files are not runnable"
+  printf 'FAIL  product suite roster: declared test file %s\n' "${roster_failures[@]}"
   exit 1
 fi
 

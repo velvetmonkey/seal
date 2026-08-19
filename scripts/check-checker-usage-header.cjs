@@ -10,8 +10,11 @@ const ROOT = path.join(__dirname, "..");
 const DEFAULT = path.join(ROOT, "checker", "seal-receipt-check.mjs");
 const PUBLISHED_NAME = "seal-receipt-check.mjs";
 
-function fail(code, message) {
-  process.stderr.write(`FAIL  ${code}: ${message}\n`);
+let checkedFile;
+
+function fail(code, message, line = 1) {
+  const file = checkedFile || checkerPath();
+  process.stderr.write(`FAIL  ${code}: ${file}:${line}: ${message}\n`);
   process.exit(1);
 }
 
@@ -47,27 +50,37 @@ function usageCommand(text, file) {
   }
   const match = text.match(/^\/\/ Usage:\s*\n\/\/\s+(\S.*)$/m);
   if (!match) {
-    fail("usage_header_command_absent", `Usage header has no command line: ${file}`);
+    const headerLine = text.search(/^\/\/ Usage:\s*$/m);
+    fail(
+      "usage_header_command_absent",
+      `Usage header has no command line: ${file}`,
+      text.slice(0, headerLine).split("\n").length,
+    );
   }
-  return match[1].trim();
+  return {
+    command: match[1].trim(),
+    line: text.slice(0, match.index).split("\n").length + 1,
+  };
 }
 
-function scriptFromCommand(command) {
+function scriptFromCommand(command, line) {
   const match = command.match(/^node\s+(\S+)/);
   if (!match) {
-    fail("usage_header_command_absent", `Usage header is not a node invocation: ${command}`);
+    fail("usage_header_command_absent", `Usage header is not a node invocation: ${command}`, line);
   }
   return match[1];
 }
 
 const file = checkerPath();
+checkedFile = file;
 const text = readChecker(file);
-const command = usageCommand(text, file);
-const script = scriptFromCommand(command);
+const usage = usageCommand(text, file);
+const script = scriptFromCommand(usage.command, usage.line);
 if (script.includes("/") || script.includes("\\") || script !== PUBLISHED_NAME) {
   fail(
     "usage_header_unresolvable_path",
     `Usage header names ${script}, which would not resolve for a reader who downloaded the asset alone`,
+    usage.line,
   );
 }
 

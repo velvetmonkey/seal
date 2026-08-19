@@ -15,11 +15,18 @@ function fixture() {
   for (const name of ["one", "two", "three"]) {
     writeFileSync(join(tests, `${name}.test.cjs`), "require('node:test')('fixture', () => {});\n");
   }
-  return { root, tests };
+  const roster = join(root, "roster.txt");
+  writeFileSync(roster, "one.test.cjs\ntwo.test.cjs\nthree.test.cjs\n");
+  return { root, tests, roster };
 }
 
-function run(driver, tests) {
-  const env = { ...process.env, RUNNER_TEMP: tmpdir(), SEAL_PRODUCT_TEST_ROOT: tests };
+function run(driver, tests, roster) {
+  const env = {
+    ...process.env,
+    RUNNER_TEMP: tmpdir(),
+    SEAL_PRODUCT_TEST_ROOT: tests,
+    SEAL_PRODUCT_TEST_ROSTER: roster,
+  };
   delete env.NODE_TEST_CONTEXT;
   return spawnSync("bash", [driver], {
     cwd: ROOT,
@@ -31,7 +38,7 @@ function run(driver, tests) {
 test("the suite driver reports its runtime declared roster", (t) => {
   const space = fixture();
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
-  const result = run(DRIVER, space.tests);
+  const result = run(DRIVER, space.tests, space.roster);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PASS  product suite ran all 3 declared test files/);
 });
@@ -45,7 +52,7 @@ test("a strict subset of the declared roster is a red finding", (t) => {
   ));
   chmodSync(copy, 0o755);
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
-  const result = run(copy, space.tests);
+  const result = run(copy, space.tests, space.roster);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /product suite roster disagrees with executed test files/);
   assert.match(result.stdout, /declared but not executed: .*three\.test\.cjs/);

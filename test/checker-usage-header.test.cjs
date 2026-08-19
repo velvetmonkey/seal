@@ -35,7 +35,7 @@ test("an absent checker file is a named refusal, not a pass", () => {
   const missing = path.join(dir, "seal-receipt-check.mjs");
   const result = run(missing);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /^FAIL  checker_file_absent: published checker is absent: /);
+  assert.match(result.stderr, /^FAIL  checker_file_absent: .*:1: published checker is absent: /);
   assert.ok(result.stderr.includes(missing));
 });
 
@@ -45,7 +45,7 @@ test("an empty checker file is a named refusal, not a pass", () => {
   fs.writeFileSync(empty, "");
   const result = run(empty);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /^FAIL  checker_file_empty: published checker is empty: /);
+  assert.match(result.stderr, /^FAIL  checker_file_empty: .*:1: published checker is empty: /);
   assert.ok(result.stderr.includes(empty));
 });
 
@@ -55,7 +55,7 @@ test("a checker with no Usage header is a named refusal, not a pass", () => {
   fs.writeFileSync(file, "// SPDX-License-Identifier: Apache-2.0\nexport {};\n");
   const result = run(file);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /^FAIL  usage_header_absent: published checker has no Usage header: /);
+  assert.match(result.stderr, /^FAIL  usage_header_absent: .*:1: published checker has no Usage header: /);
   assert.ok(result.stderr.includes(file));
 });
 
@@ -71,6 +71,8 @@ test("a Usage header naming checker/ would not resolve for a standalone download
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(
     result.stderr,
-    /^FAIL  usage_header_unresolvable_path: Usage header names checker\/seal-receipt-check\.mjs, which would not resolve for a reader who downloaded the asset alone/,
+    new RegExp(
+      `^FAIL  usage_header_unresolvable_path: ${file}:33: Usage header names checker/seal-receipt-check\\.mjs, which would not resolve for a reader who downloaded the asset alone`,
+    ),
   );
 });
