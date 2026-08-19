@@ -9,33 +9,35 @@ const test = require("node:test");
 const ROOT = resolve(__dirname, "..");
 const GUARD = join(ROOT, "scripts", "readme-demo-transcript-guard.mjs");
 const README = join(ROOT, "README.md");
+const DEMO_OUTPUT = join(ROOT, "test", "fixtures", "readme-demo-output.txt");
+const CHECKER_OUTPUT = join(ROOT, "test", "fixtures", "readme-demo-checker-output.txt");
 
 function fixture() {
-  const readme = readFileSync(README, "utf8");
-  const start = readme.indexOf("## 2. Demo");
-  const end = readme.indexOf("### Repository transcript instrumentation", start);
-  const demo = readme.slice(start, end);
-  const transcript = [...demo.matchAll(/\*\*Output:\*\*\s*\n```text\n([\s\S]*?)\n```/g)]
-    .map((match) => match[1])
-    .join("\n");
   const root = mkdtempSync(join(tmpdir(), "seal-readme-transcript-"));
   const transcriptPath = join(root, "demo.txt");
-  writeFileSync(transcriptPath, transcript);
-  return { root, transcriptPath, transcript };
+  const checkerPath = join(root, "checker.txt");
+  writeFileSync(transcriptPath, readFileSync(DEMO_OUTPUT));
+  writeFileSync(checkerPath, readFileSync(CHECKER_OUTPUT));
+  return { root, transcriptPath, checkerPath, transcript: readFileSync(DEMO_OUTPUT, "utf8") };
 }
 
-function run(transcriptPath, readmePath = README) {
+function run(transcriptPath, readmePath = README, checkerPath = CHECKER_OUTPUT) {
   return spawnSync(process.execPath, [GUARD], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, SEAL_DEMO_TRANSCRIPT: transcriptPath, SEAL_DEMO_README: readmePath },
+    env: {
+      ...process.env,
+      SEAL_DEMO_TRANSCRIPT: transcriptPath,
+      SEAL_DEMO_CHECKER_TRANSCRIPT: checkerPath,
+      SEAL_DEMO_README: readmePath,
+    },
   });
 }
 
 test("README demo fences agree with the supplied transcript", (t) => {
   const space = fixture();
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
-  const result = run(space.transcriptPath);
+  const result = run(space.transcriptPath, README, space.checkerPath);
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
@@ -62,4 +64,17 @@ test("a changed product transcript is detected against the README", (t) => {
   const result = run(space.transcriptPath);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
+});
+
+test("a deleted Output fence is detected", (t) => {
+  const space = fixture();
+  const changedReadme = join(space.root, "README.md");
+  writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
+    "**Output:**\n\n```text\nREFUSE decision_binding_mismatch:",
+    "**Output:**\n\nREFUSE decision_binding_mismatch:",
+  ));
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(space.transcriptPath, changedReadme, space.checkerPath);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_OUTPUT_FENCE|OUTPUT_FENCE_COUNT/);
 });

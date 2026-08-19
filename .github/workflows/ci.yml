@@ -54,6 +54,9 @@ jobs:
           test -n "$receipt"
           node checker/seal-receipt-check.mjs "$receipt" --pubkey "$demo_dir/receipt-signer.pub" \
             | tee "$evidence_dir/checker-output.txt"
+          SEAL_DEMO_TRANSCRIPT="$evidence_dir/demo-output.txt" \
+          SEAL_DEMO_CHECKER_TRANSCRIPT="$evidence_dir/checker-output.txt" \
+            node scripts/readme-demo-transcript-guard.mjs
           cp "$receipt" "$evidence_dir/demo-allow-receipt.json"
           cp "$demo_dir/receipt-signer.pub" "$evidence_dir/demo-receipt-signer.pub"
           git show "$GITHUB_SHA:.github/workflows/ci.yml" > "$evidence_dir/recorded-workflow.yml"

@@ -94,7 +94,7 @@ Leave it running until `Approve? [y/N]`, then type `y` and press Enter. This is 
 seal demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
 child     seal __demo-server (this same binary) mutating /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt
-temporary demo directory: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2 (remains after the demo for the printed checker command)
+demo directory: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2 (remains after the demo for the printed checker command)
 child calls observed: 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 ```
 
@@ -114,7 +114,7 @@ child calls observed: still 0 (read from /home/monkey/scratch/docsland-reader-wa
 **Output:**
 
 ```text
-Approve? [y/N]
+Approve? [y/N] y
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
 ```
