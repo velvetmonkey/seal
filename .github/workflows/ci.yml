@@ -280,6 +280,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Refuse version drift
+        run: node scripts/check-version-drift.cjs
+      - name: Refuse claims about nonexistent releases
+        run: node scripts/check-published-claim.cjs
       - name: Refuse independently rolled executable populations
         run: node scripts/check-executable-population-callers.mjs
       - uses: actions/checkout@v4
