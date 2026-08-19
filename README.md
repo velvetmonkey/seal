@@ -50,13 +50,13 @@ $ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --pre
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
 ```output
-./seal-v0.2.0-rc.2-linux-x64
-tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /home/you/.local/bin/seal
+store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/monkey/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
+
+The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
 
 Add `~/.local/bin` to PATH before continuing:
 
