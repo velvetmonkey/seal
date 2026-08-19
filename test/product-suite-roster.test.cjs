@@ -47,7 +47,8 @@ test("a strict subset of the declared roster is a red finding", (t) => {
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(copy, space.tests);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /product suite ran 2 declared test files, but 3 were declared/);
+  assert.match(result.stdout, /product suite roster disagrees with executed test files/);
+  assert.match(result.stdout, /declared but not executed: .*three\.test\.cjs/);
 });
 
 test("an unreadable declared roster is a red finding", (t) => {
