@@ -34,7 +34,7 @@ const REVIEWED_GUIDES = [
   },
   {
     file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
-    sha256: "1e6efc9349cc4770d3e1eaeaba9212e92cef3903dcfc0ddbc47ea514eb2eae92",
+    sha256: "5258514f1078852c11ffc6e08ab2b17dd44fe4dc7c015710afce06ecf3eccd1d",
     claims: [
       "One honest wrinkle: `seal verify` can leave a *kernel* receipt (a different format) in the same directory, and `seal status` then prints `Receipt unreadable: … (missing decision or receipt time)` for it.",
       "That line means only that this listing does not parse the kernel format; use `seal verify` to check a named kernel receipt.",

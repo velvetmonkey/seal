@@ -14,6 +14,17 @@ blocks marked with an ellipsis or explanatory text are excerpts. The outputs
 were captured in a scratch project on 2026-08-15, so paths in them will differ
 from yours.
 
+## How examples are labeled
+
+- `bash` is a command the reader runs.
+- `console` is input the reader types at a prompt.
+- `output` is text the product prints.
+
+Each command, input, and product output has its own fence, and these three
+role labels are used consistently. Other fences retain their language because
+they show specifications or data rather than something to run, type, or read
+as product output.
+
 ## Before you start
 
 - Linux x86-64 only. On anything else, `seal` refuses and changes nothing.
@@ -23,18 +34,24 @@ from yours.
 
 Check the last one first:
 
-```
+```bash
 $ claude --version
+```
+
+```output
 2.1.233 (Claude Code)
 ```
 
 Download a binary and the `SHA256SUMS` asset attached to the same release,
 then run the binary with that asset's digest and byte length:
 
-```
+```bash
 $ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
 $ chmod +x "$SEAL_ARTIFACT"
 $ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
+```
+
+```output
 installed seal 0.2.0-rc.2 linux-x64
 store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 command: /home/you/.local/bin/seal

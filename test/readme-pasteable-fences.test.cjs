@@ -6,7 +6,7 @@ const test = require("node:test");
 
 const README = path.join(__dirname, "..", "README.md");
 
-function shellFences(text) {
+function commandFences(text) {
   const lines = text.split("\n");
   const fences = [];
   let current = null;
@@ -22,17 +22,17 @@ function shellFences(text) {
       current.lines.push({ number: i + 1, text: line });
       continue;
     }
-    if (line === "```sh") current = { start: i + 1, lines: [] };
+    if (line === "```bash") current = { start: i + 1, lines: [] };
   }
 
   return fences;
 }
 
-test("README pasteable fences do not embed /home/ absolutes", () => {
+test("README command fences do not embed /home/ absolutes", () => {
   const readme = fs.readFileSync(README, "utf8");
   const offenders = [];
 
-  for (const fence of shellFences(readme)) {
+  for (const fence of commandFences(readme)) {
     for (const line of fence.lines) {
       if (line.text.includes("/home/")) offenders.push(`README.md:${line.number}: ${line.text}`);
     }
@@ -41,6 +41,6 @@ test("README pasteable fences do not embed /home/ absolutes", () => {
   assert.deepEqual(
     offenders,
     [],
-    `pasteable README fences must not embed build-machine /home/ paths:\n${offenders.join("\n")}`,
+    `README command fences must not embed build-machine /home/ paths:\n${offenders.join("\n")}`,
   );
 });

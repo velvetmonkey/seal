@@ -340,6 +340,8 @@ jobs:
         run: node --test --test-name-pattern 'no banned verification claim' test/no-verification-claim.test.cjs
       - name: README install pin must match published release asset
         run: node --test test/dist-pin.test.cjs
+      - name: README installer success transcript must match published release asset
+        run: node scripts/check-readme-install-transcript.cjs
       - name: Any committed Claude Code evidence must verify
         shell: bash
         run: |

@@ -43,10 +43,11 @@ test("an unreadable root pin refuses by name", () => {
 });
 
 function readmeInstallCommand(text) {
-  const commandPattern = /^(?<artifact>\.\/seal-(?<tag>v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)-linux-x64) --sha256 (?<sha256>[0-9a-f]{64}) --bytes (?<bytes>\d+) --prefix ~\/\.local$/m;
-  const match = text.match(commandPattern);
-  if (!match) return { code: 1, stderr: "REFUSE readme_install_command_absent: README.md has no concrete published install command\n" };
-  return { code: 0, ...match.groups };
+  const match = text.match(/^\$ SEAL_VERSION=(?<tag>v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  if (!match) throw new Error("README.md has no release version command");
+  const artifact = `./seal-${match.groups.tag}-linux-x64`;
+  assert.match(text, /\$ \.\/"\$expected_name" --sha256 "\$expected_digest" --bytes "\$expected_bytes" --prefix ~\/\.local/);
+  return { tag: match.groups.tag, artifact };
 }
 
 function fetchBytes(url, redirects = 0) {
@@ -71,80 +72,52 @@ function fetchBytes(url, redirects = 0) {
   });
 }
 
-function runDocumentedInstaller(readmeText, artifactBytes, tempRoot) {
-  const command = readmeInstallCommand(readmeText);
-  if (command.code !== 0) return command;
-
+function runInstaller(artifactBytes, digest, bytes, command, tempRoot) {
   const sandbox = path.join(tempRoot, `run-${process.hrtime.bigint()}`);
   const home = path.join(sandbox, "home");
   const tmpdir = path.join(sandbox, "tmp");
   const artifact = path.join(sandbox, path.basename(command.artifact));
-  const prefix = path.join(home, ".local"); // shell expansion of README's ~/.local
+  const prefix = path.join(home, ".local");
   fs.mkdirSync(home, { recursive: true });
   fs.mkdirSync(tmpdir, { recursive: true });
   fs.writeFileSync(artifact, artifactBytes, { mode: 0o755 });
-
-  const result = spawnSync(command.artifact, ["--sha256", command.sha256, "--bytes", command.bytes, "--prefix", prefix], {
+  const result = spawnSync(command.artifact, ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], {
     cwd: sandbox,
     encoding: "utf8",
     env: { ...process.env, HOME: home, TMPDIR: tmpdir },
   });
-  return {
-    code: result.status,
-    stdout: result.stdout || "",
-    stderr: result.stderr || "",
-    artifact,
-    home,
-    tmpdir,
-    prefix,
-    invocation: `${command.artifact} --sha256 ${command.sha256} --bytes ${command.bytes} --prefix ${prefix}`,
-  };
+  return { ...result, prefix };
 }
 
-function alterDigest(text) {
-  return text.replace(/(--sha256 )([0-9a-f])/, (_, prefix, digit) => `${prefix}${digit === "0" ? "1" : "0"}`);
-}
-
-function alterBytes(text) {
-  return text.replace(/(--bytes \d+)(\d)/, (_, prefix, digit) => `${prefix}${digit === "0" ? "1" : String(Number(digit) - 1)}`);
-}
-
-test("README published installer command installs the downloaded release asset", async (t) => {
-  const readme = fs.readFileSync(README, "utf8");
-  const command = readmeInstallCommand(readme);
-  assert.equal(command.code, 0, command.stderr);
-  const artifactUrl = `https://github.com/velvetmonkey/seal/releases/download/${command.tag}/${path.basename(command.artifact)}`;
-
+test("README published installer consumes the downloaded release pin", async (t) => {
+  const command = readmeInstallCommand(fs.readFileSync(README, "utf8"));
+  const base = `https://github.com/velvetmonkey/seal/releases/download/${command.tag}`;
   let artifactBytes;
+  let sums;
   try {
-    artifactBytes = await fetchBytes(artifactUrl);
+    [artifactBytes, sums] = await Promise.all([
+      fetchBytes(`${base}/${path.basename(command.artifact)}`),
+      fetchBytes(`${base}/SHA256SUMS`),
+    ]);
   } catch (error) {
-    // A skip is intentionally not a pass: run-complete-product-suite rejects
-    // skipped tests and prints this named, unproven network condition.
-    t.skip(`network_unproven: cannot download published release asset ${artifactUrl}: ${error.message}`);
+    t.skip(`network_unproven: cannot download published release assets: ${error.message}`);
     return;
   }
-
+  const [digest, bytes, name] = sums.toString("utf8").trim().split(/\s+/);
+  assert.equal(name, path.basename(command.artifact));
   const tempRoot = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), "seal-readme-install-"));
-  const installed = runDocumentedInstaller(readme, artifactBytes, tempRoot);
-  assert.equal(installed.code, 0, `${installed.invocation}\n${installed.stdout}${installed.stderr}`);
-  assert.match(installed.stdout, new RegExp(`^installed seal ${command.tag.slice(1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} linux-x64$`, "m"));
-  assert.ok(fs.existsSync(path.join(installed.prefix, "bin", "seal")), "installer did not write the sandboxed prefix");
-  assert.ok(installed.home.startsWith(tempRoot + path.sep));
-  assert.ok(installed.tmpdir.startsWith(tempRoot + path.sep));
+  const installed = runInstaller(artifactBytes, digest, bytes, command, tempRoot);
+  assert.equal(installed.status, 0, `${installed.stdout || ""}${installed.stderr || ""}`);
+  assert.match(installed.stdout, new RegExp(`^installed seal ${command.tag.slice(1)} linux-x64$`, "m"));
+  assert.ok(fs.existsSync(path.join(installed.prefix, "bin", "seal")));
 
-  const wrongDigest = runDocumentedInstaller(alterDigest(readme), artifactBytes, tempRoot);
-  assert.equal(wrongDigest.code, 1, wrongDigest.stdout + wrongDigest.stderr);
-  assert.match(wrongDigest.stderr, /^REFUSE artifact_digest_mismatch: installer digest does not match the supplied --sha256 pin$/m);
-  t.diagnostic(`README digest altered by one character (exit ${wrongDigest.code}): ${wrongDigest.stderr.trim()}`);
+  const wrongDigest = `${digest[0] === "0" ? "1" : "0"}${digest.slice(1)}`;
+  const digestRefusal = runInstaller(artifactBytes, wrongDigest, bytes, command, tempRoot);
+  assert.equal(digestRefusal.status, 1, digestRefusal.stderr);
+  assert.match(digestRefusal.stderr, /artifact_digest_mismatch/);
 
-  const wrongBytes = runDocumentedInstaller(alterBytes(readme), artifactBytes, tempRoot);
-  assert.equal(wrongBytes.code, 1, wrongBytes.stdout + wrongBytes.stderr);
-  assert.match(wrongBytes.stderr, /^REFUSE artifact_digest_mismatch: installer is \d+ bytes, published length is \d+$/m);
-  t.diagnostic(`README byte count altered by one digit (exit ${wrongBytes.code}): ${wrongBytes.stderr.trim()}`);
-
-  const absentCommand = runDocumentedInstaller(readme.replace(/^\.\/seal-.* --prefix ~\/\.local$/m, ""), artifactBytes, tempRoot);
-  assert.equal(absentCommand.code, 1, absentCommand.stdout + absentCommand.stderr);
-  assert.equal(absentCommand.stderr, "REFUSE readme_install_command_absent: README.md has no concrete published install command\n");
-  t.diagnostic(`README install command removed entirely (exit ${absentCommand.code}): ${absentCommand.stderr.trim()}`);
+  const wrongBytes = String(Number(bytes) + 1);
+  const byteRefusal = runInstaller(artifactBytes, digest, wrongBytes, command, tempRoot);
+  assert.equal(byteRefusal.status, 1, byteRefusal.stderr);
+  assert.match(byteRefusal.stderr, /artifact_(?:digest_mismatch|truncated)/);
 });

@@ -27,7 +27,7 @@ rule and a fact.
 
 Today the agent holds the credential:
 
-```
+```text
 [agent]  POSTGRES_PASSWORD in its environment  --->  [postgres]
 ```
 
@@ -38,7 +38,7 @@ indifferent to seal's existence.
 
 Under the broker:
 
-```
+```text
 [agent]   holds no credential, only a socket
     |  request + capability
     v

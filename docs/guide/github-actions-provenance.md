@@ -30,28 +30,16 @@ the most recent successful `Docs & claims consistency` run, reject it unless
 its job list includes a successful `demo receipt provenance` job, and then
 download its `demo-receipt-provenance` artifact:
 
-```sh
-mkdir demo-receipt-provenance
-RUN_ID="$(gh run list --repo velvetmonkey/seal --workflow ci.yml --status success \
-  --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$RUN_ID"
-test "$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json jobs \
-  --jq '[.jobs[] | select(.name == "demo receipt provenance" and .conclusion == "success")] | length')" = 1
-RUN_SHA="$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json headSha --jq .headSha)"
-gh run download "$RUN_ID" --repo velvetmonkey/seal \
-  --name demo-receipt-provenance --dir demo-receipt-provenance
-sha256sum demo-receipt-provenance/demo-receipt-evidence.tgz
-gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz \
-  --repo velvetmonkey/seal \
-  --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml \
-  --source-digest "$RUN_SHA" \
-  --deny-self-hosted-runners
-gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz \
-  --repo velvetmonkey/seal \
-  --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml \
-  --source-digest "$RUN_SHA" \
-  --deny-self-hosted-runners --format json \
-  --jq '.[].verificationResult.statement.subject[].digest.sha256'
+```bash
+$ mkdir demo-receipt-provenance
+$ RUN_ID="$(gh run list --repo velvetmonkey/seal --workflow ci.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+$ test -n "$RUN_ID"
+$ test "$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json jobs --jq '[.jobs[] | select(.name == "demo receipt provenance" and .conclusion == "success")] | length')" = 1
+$ RUN_SHA="$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json headSha --jq .headSha)"
+$ gh run download "$RUN_ID" --repo velvetmonkey/seal --name demo-receipt-provenance --dir demo-receipt-provenance
+$ sha256sum demo-receipt-provenance/demo-receipt-evidence.tgz
+$ gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz --repo velvetmonkey/seal --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml --source-digest "$RUN_SHA" --deny-self-hosted-runners
+$ gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz --repo velvetmonkey/seal --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml --source-digest "$RUN_SHA" --deny-self-hosted-runners --format json --jq '.[].verificationResult.statement.subject[].digest.sha256'
 ```
 
 The two SHA-256 values printed above must match.

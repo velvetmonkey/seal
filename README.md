@@ -27,31 +27,49 @@ carry a hand-maintained copy.
 
 ## 1. Install
 
-```sh
-SEAL_VERSION=v0.2.0-rc.2
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-chmod +x "seal-$SEAL_VERSION-linux-x64"
-./seal-v0.2.0-rc.2-linux-x64 --sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347 --bytes 6146418 --prefix ~/.local
+Install Seal on Linux x86-64 only with a shell and `curl`.
+
+Run these commands to download, verify against `SHA256SUMS`, and install the Linux x86-64 release under `~/.local`:
+
+```bash
+$ SEAL_VERSION=v0.2.0-rc.2
+$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
+$ if [ ! -r SHA256SUMS ] || [ ! -s SHA256SUMS ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
+$ read -r expected_digest expected_bytes expected_name < SHA256SUMS
+$ if [ -z "$expected_digest" ] || [ -z "$expected_bytes" ] || [ -z "$expected_name" ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
+$ if [ "$expected_name" != "seal-$SEAL_VERSION-linux-x64" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
+$ actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
+$ if [ "$actual_digest" != "$expected_digest" ]; then echo "release artifact digest does not match SHA256SUMS" >&2; exit 1; fi
+$ actual_bytes="$(wc -c < "$expected_name")"
+$ if [ "$actual_bytes" != "$expected_bytes" ]; then echo "release artifact byte count does not match SHA256SUMS" >&2; exit 1; fi
+$ chmod +x "$expected_name"
+$ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-```
-./seal-v0.2.0-rc.2-linux-x64
-sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347
-bytes 6146418
-tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
+
+```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /home/you/.local/bin/seal
+store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/monkey/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
+The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
+
+Add `~/.local/bin` to PATH before continuing:
+
+```bash
+$ export PATH="$HOME/.local/bin:$PATH"
+```
+
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above.
+
+Read this filename only if you build from source:
+
+```text
 seal-v0.2.0-rc.2-linux-x64
-
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; other commits add `-dev.g<commit>` to their filenames. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ## 2. Demo
@@ -64,8 +82,8 @@ export PATH="$HOME/.local/bin:$PATH"
 
 **Run:**
 
-```sh
-seal demo
+```bash
+$ seal demo
 ```
 
 **Do:** Nothing yet. Leave this command running until it asks `Approve? [y/N]`. The demo starts a sample tool behind Seal; the “child” is that real sample tool, and its call counter records how many times the tool actually ran.
@@ -211,7 +229,7 @@ Receipts are claims, not proofs. The demo-generated key below proves only that t
 **Run:**
 
 ```bash
-read -r -p "Paste the temporary demo directory: " SEAL_DEMO_DIR
+$ read -r -p "Paste the temporary demo directory: " SEAL_DEMO_DIR
 ```
 
 **Do:** Copy only the path after `temporary demo directory:` in Step 1, paste it at this prompt, and press Enter.
@@ -222,20 +240,20 @@ read -r -p "Paste the temporary demo directory: " SEAL_DEMO_DIR
 
 **Run — locate the checker installed in Step 1 of this README:**
 
-```sh
-SEAL_CHECKER="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+```bash
+$ SEAL_CHECKER="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
 ```
 
 **Run — locate the blocked receipt from your demo:**
 
 ```bash
-SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
+$ SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
 ```
 
 **Run — check it against the demo's public key:**
 
 ```bash
-node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ node "$SEAL_CHECKER" "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
 
 **Do:** Run those three commands in order. You do not type any input after starting them.
@@ -258,20 +276,20 @@ ACCEPT BLOCK demo.mutate — decision, tool, arguments and signature all match t
 
 **Run — write a copy with `BLOCK` changed to `ALLOW`:**
 
-```sh
-sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
+```bash
+$ sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
 ```
 
 **Run — check the changed copy:**
 
 ```bash
-node "$SEAL_CHECKER" "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ node "$SEAL_CHECKER" "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
 
 **Run — confirm that refusal was the expected exit status:**
 
 ```bash
-test "$?" -eq 1
+$ test "$?" -eq 1
 ```
 
 **Do:** Run the three commands in order, with nothing between the last two because `test` checks the preceding command's status. You do not edit the original receipt.
@@ -291,47 +309,47 @@ REFUSE decision_binding_mismatch: the recorded decision does not match its seale
 The repository's reproducibility check runs the demo through this harness to capture its output and recover its generated directory. Readers following the ten steps above do not run it.
 
 ```bash
-export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
-(set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
-SEAL_DEMO_STATUS="$?"
-if test "$SEAL_DEMO_STATUS" -ne 0; then
-  echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
-  exit "$SEAL_DEMO_STATUS"
-fi
-export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
-if test -z "$SEAL_DEMO_DIR"; then
-  echo "README walk stopped: seal demo printed no temporary demo directory" >&2
-  exit 1
-fi
+$ export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
+$ (set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
+$ SEAL_DEMO_STATUS="$?"
+$ if test "$SEAL_DEMO_STATUS" -ne 0; then
+$   echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
+$   exit "$SEAL_DEMO_STATUS"
+$ fi
+$ export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
+$ if test -z "$SEAL_DEMO_DIR"; then
+$   echo "README walk stopped: seal demo printed no temporary demo directory" >&2
+$   exit 1
+$ fi
 ```
 
 ## 3. Protect
 
 `seal protect` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check. The `.mcp.json` below is a stand-in, pointing at Seal's demo server in this transcript's scratch run.
 
-```sh
-export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
-mkdir -p "$SEAL_PROTECT_PROJECT" &&
-cd "$SEAL_PROTECT_PROJECT" &&
-{
-cat > .mcp.json <<EOF
-{
-  "mcpServers": {
-    "db": {
-      "command": "seal",
-      "args": [
-        "__demo-server",
-        "./data.txt"
-      ]
-    }
-  }
-}
-EOF
-} &&
-seal protect db demo.mutate
+```bash
+$ export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
+$ mkdir -p "$SEAL_PROTECT_PROJECT" &&
+$ cd "$SEAL_PROTECT_PROJECT" &&
+$ {
+$ cat > .mcp.json <<EOF
+$ {
+$   "mcpServers": {
+$     "db": {
+$       "command": "seal",
+$       "args": [
+$         "__demo-server",
+$         "./data.txt"
+$       ]
+$     }
+$   }
+$ }
+$ EOF
+$ } &&
+$ seal protect db demo.mutate
 ```
 
-```
+```output
 Project .mcp.json hash before protect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
@@ -344,11 +362,11 @@ The protected proxy records every decision as a signed receipt file. On first ac
 
 Seal states its trust assumption:
 
-```sh
-seal doctor
+```bash
+$ seal doctor
 ```
 
-```
+```output
 ASSUMPTION
   Seal has not established whether this Claude Code configuration can
   automatically answer elicitation requests.
@@ -356,12 +374,12 @@ ASSUMPTION
 
 ## 4. Remove
 
-```sh
-cd "$SEAL_PROTECT_PROJECT"
-seal unprotect db
+```bash
+$ cd "$SEAL_PROTECT_PROJECT"
+$ seal unprotect db
 ```
 
-```
+```output
 Project .mcp.json hash before unprotect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Project .mcp.json hash after unprotect: 23435a951a3532cbca051f1fe8b978d153f5dc38ade8c6cb3942954406cb84e2
 Protection: - outside Seal
@@ -369,9 +387,9 @@ Protection: - outside Seal
 
 The project file is byte-identical before and after. `unprotect` invokes Claude Code's `claude mcp remove` to remove only the local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain. The store is read-only, so make it writable before removing Seal itself:
 
-```sh
-chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
-chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
+```bash
+$ chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
+$ chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
 ```
 
 Receipts and per-project state remain under `~/.local/share/seal/`. Delete them with `rm -r ~/.local/share/seal` to leave nothing. The demo's temporary directory — the `/tmp/seal-demo-*` path it printed — also remains after the walk. It holds the run's evidence, including the key the printed checker command needs. After you run that command, remove the exact directory the demo printed with `rm -r`.
