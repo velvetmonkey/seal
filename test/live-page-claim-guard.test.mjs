@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -138,6 +138,24 @@ test("uses the commit-keyed pinned-source cache without a second provenance fetc
   } finally {
     rmSync(cacheDir, { recursive: true, force: true });
     await new Promise((done) => server.close(done));
+  }
+});
+
+test("fails closed on poisoned cache bytes under the right commit key", async () => {
+  const body = "<html></html>";
+  const cacheDir = mkdtempSync(join(tmpdir(), "live-page-claim-guard-cache-"));
+  const cachePath = join(cacheDir, "live-page-claim-guard", `${encodeURIComponent(PIN_COMMIT)}.index.html`);
+  mkdirSync(join(cacheDir, "live-page-claim-guard"), { recursive: true });
+  writeFileSync(cachePath, "poisoned bytes");
+  try {
+    await withPage(body, async (url) => {
+      const result = await run(url, originalReadme, body, url, { cacheDir });
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /PINNED SEAL-CHECK PROVENANCE MISMATCH.*poisoned cache/);
+      assert.doesNotMatch(result.stdout, /Fetching pinned seal-check/);
+    });
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
   }
 });
 

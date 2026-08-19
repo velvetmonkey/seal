@@ -10,7 +10,7 @@
 // app.js or wasm/seal.js. A green result cannot show that the page executes
 // nothing, or that no MCP tool-call runs.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,8 +112,10 @@ try {
   pinnedSource = readFileSync(CACHE_PATH);
   sourceSha256 = createHash("sha256").update(pinnedSource).digest("hex");
   if (pinnedSource.length !== PIN.bytes || sourceSha256 !== PIN.sha256) {
-    unlinkSync(CACHE_PATH);
-    pinnedSource = undefined;
+    const byteCheck = pinnedSource.length === PIN.bytes ? "bytes match" : `bytes ${pinnedSource.length} != pin ${PIN.bytes}`;
+    const digestCheck = sourceSha256 === PIN.sha256 ? "sha256 matches" : `sha256 ${sourceSha256} != pin ${PIN.sha256}`;
+    console.error(`ERROR  PINNED SEAL-CHECK PROVENANCE MISMATCH for ${PIN.commit}: poisoned cache ${CACHE_PATH}; ${byteCheck}; ${digestCheck}`);
+    process.exit(2);
   } else {
     console.log(`INFO  Pinned source cache hit for seal-check@${PIN.commit}; no provenance fetch`);
   }
