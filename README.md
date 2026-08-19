@@ -27,13 +27,20 @@ carry a hand-maintained copy.
 
 ## 1. Install
 
+Install Seal on Linux x86-64 only with a shell and `curl`.
+
+Run these commands to download, verify against `SHA256SUMS`, and install the Linux x86-64 release under `~/.local`:
+
 ```bash
 $ SEAL_VERSION=v0.2.0-rc.2
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
+$ sha256sum --check --status SHA256SUMS
 $ chmod +x "seal-$SEAL_VERSION-linux-x64"
 $ ./seal-v0.2.0-rc.2-linux-x64 --sha256 c652f47f82778bda978725837ec77f182229872f13c12fd5a1f8619149666347 --bytes 6146418 --prefix ~/.local
 ```
+
+You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
 ```output
 ./seal-v0.2.0-rc.2-linux-x64
@@ -46,12 +53,18 @@ command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
-seal-v0.2.0-rc.2-linux-x64
-
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; other commits add `-dev.g<commit>` to their filenames. Download the artifact and its `SHA256SUMS` asset from the same release, then verify the artifact against that asset before installing. The installer refuses without a pin, and refuses altered bytes by name (`artifact_digest_mismatch`). The pin protects the install, not the file's future: `~/.local/bin` stays user-writable, so another process running as you can replace `seal` there later. Add `~/.local/bin` to PATH before continuing:
+Add `~/.local/bin` to PATH before continuing:
 
 ```bash
 $ export PATH="$HOME/.local/bin:$PATH"
+```
+
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above.
+
+Read this filename only if you build from source:
+
+```text
+seal-v0.2.0-rc.2-linux-x64
 ```
 
 ## 2. Demo
