@@ -12,7 +12,7 @@ the Node CLI this repository ships.
 1. [The README walk](../README.md) — install from a pinned artifact, run the
    demo, protect one tool in a Claude Code project, remove it all. Start here;
    everything below is secondary.
-2. [RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) — what v0.2.0-rc.2 contains and
+2. [RELEASE-NOTES-v0.2.0-rc.3.md](RELEASE-NOTES-v0.2.0-rc.3.md) — what v0.2.0-rc.3 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
 3. [DISTRIBUTION.md](DISTRIBUTION.md) — what the one installable artifact is,
@@ -30,7 +30,7 @@ the Node CLI this repository ships.
    list at the end of the README is the current, tested statement. Gate, not
    sandbox; one tool of one server; receipt-key custody limits; Linux x86-64
    only.
-2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.2.md) —
+2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
    the same boundary with citations.
 
 ## I want to check the evidence myself
@@ -72,7 +72,7 @@ the Node CLI this repository ships.
 
 ## I want the design history
 
-Dated records of how v0.2.0-rc.2 got its shape. Several describe designs that were
+Dated records of how v0.2.0-rc.3 got its shape. Several describe designs that were
 ruled on and explicitly never built; each says so in its opening lines.
 
 - [ROADMAP-KERNEL-OUTWARD.md](ROADMAP-KERNEL-OUTWARD.md) — the working order

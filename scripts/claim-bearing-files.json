@@ -43,7 +43,7 @@
     "docs/OPEN-FINDINGS.md": { "allowlistReason": "This is an open-issues ledger; its entries explicitly await external investigation and therefore have no settled repository-local oracle." },
     "docs/PUBLIC-FLIP-CHECKLIST.md": { "allowlistReason": "This release-readiness checklist depends on human publication decisions and external service state, neither available to a repository-local check." },
     "docs/README.md": { "allowlistReason": "The only Seal-language in this index is the stated scope of links to named manuals; link destinations are checked by scripts/linkcheck.mjs, while suitability of that navigation is an editorial decision rather than a product-behavior claim." },
-    "docs/RELEASE-NOTES-v0.2.0-rc.2.md": { "allowlistReason": "Release notes are a dated historical record; their shipped-release assertions require release provenance outside a source-tree behavior test." },
+    "docs/RELEASE-NOTES-v0.2.0-rc.3.md": { "allowlistReason": "Release notes are a dated historical record; their shipped-release assertions require release provenance outside a source-tree behavior test." },
     "docs/REPO-TOPOLOGY.md": { "allowlistReason": "The topology maps a wider Seal family of repositories, most of which are not present here, so local code cannot check its relationship claims." },
     "docs/ROADMAP-KERNEL-OUTWARD.md": { "allowlistReason": "The roadmap contains planned milestones and explicit unverified work; future commitments are not executable claims with a local test oracle." },
     "docs/TRUTH-BOX.md": { "coveredBy": ["test/claims-drift.test.mjs:11"] },

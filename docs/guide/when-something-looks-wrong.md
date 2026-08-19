@@ -406,7 +406,7 @@ learn whether the receipt is valid.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike: Seal
-v0.2.0-rc.2 supports Linux x86-64 only, refuses everything else, and changes no
+v0.2.0-rc.3 supports Linux x86-64 only, refuses everything else, and changes no
 files when it refuses.
 
 ### `node_missing`
