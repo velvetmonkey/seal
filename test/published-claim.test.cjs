@@ -96,6 +96,16 @@ test("BOM-marked UTF-16 text is scanned rather than skipped as binary", (t) => {
   assert.match(result.stderr, new RegExp(`docs/install\\.ps1:1: unpublished version token ${unpublished.replaceAll(".", "\\.")}`));
 });
 
+test("NUL-free legacy single-byte text is scanned", (t) => {
+  const unpublished = ["v8", "7", "6-beta", "5"].join(".");
+  const latin1 = Buffer.concat([Buffer.from(`Install Seal ${unpublished}; caf`, "ascii"), Buffer.from([0xe9, 0x0a])]);
+  const repo = fixture({ INSTALL: latin1 });
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  const result = runGate(repo);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, new RegExp(`INSTALL:1: unpublished version token ${unpublished.replaceAll(".", "\\.")}`));
+});
+
 test("an unpublished prerelease VERSION has no bypass", (t) => {
   const repo = fixture();
   const unpublished = ["9", "9", "9-rc", "1"].join(".");

@@ -14,6 +14,7 @@ const VERSION_TOKEN = /(?<![0-9A-Za-z.])v?\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
 const UTF16LE = new TextDecoder("utf-16le", { fatal: true });
 const UTF16BE = new TextDecoder("utf-16be", { fatal: true });
+const LATIN1 = new TextDecoder("latin1");
 const versionValue = (...parts) => parts.join(".");
 
 // This is the only exemption list. Every version exemption names an exact
@@ -258,13 +259,26 @@ function emptyFileIsDeclared(file) {
 }
 
 function decodeText(bytes) {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return UTF16LE.decode(bytes.subarray(2));
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return UTF16BE.decode(bytes.subarray(2));
+  if (bytes.includes(0)) {
+    const pairs = Math.floor(bytes.length / 2);
+    let evenNuls = 0;
+    let oddNuls = 0;
+    for (let index = 0; index < pairs * 2; index += 2) {
+      if (bytes[index] === 0) evenNuls += 1;
+      if (bytes[index + 1] === 0) oddNuls += 1;
+    }
+    if (pairs > 0 && oddNuls / pairs >= 0.4 && evenNuls / pairs <= 0.1) return UTF16LE.decode(bytes);
+    if (pairs > 0 && evenNuls / pairs >= 0.4 && oddNuls / pairs <= 0.1) return UTF16BE.decode(bytes);
+    return null;
+  }
   try {
-    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return UTF16LE.decode(bytes.subarray(2));
-    if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return UTF16BE.decode(bytes.subarray(2));
-    if (bytes.includes(0)) return null;
     return UTF8.decode(bytes);
   } catch {
-    return null;
+    // A NUL-free legacy single-byte document is still text for this check.
+    // Latin-1 preserves every ASCII version token while decoding every byte.
+    return LATIN1.decode(bytes);
   }
 }
 
