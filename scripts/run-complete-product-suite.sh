@@ -12,6 +12,8 @@ fi
 
 test_root="${SEAL_PRODUCT_TEST_ROOT:-test}"
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export TMPDIR="${TMPDIR:-$script_root/.tmp}"
+mkdir -p "$TMPDIR"
 if [[ ! -d "$test_root" || ! -r "$test_root" ]]; then
   echo "::error::cannot read declared product-test roster at $test_root"
   exit 1
@@ -32,9 +34,12 @@ if (( ${#declared_tests[@]} == 0 )); then
 fi
 
 run_tests=("${declared_tests[@]}")
-output_file="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/seal-node-test.tap"
+output_file="${RUNNER_TEMP:-$TMPDIR}/seal-node-test.tap"
+tmp_snapshot="$TMPDIR/.tmpfix-tmp-before-${BASHPID}"
+node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify(require("node:fs").readdirSync("/tmp")))' "$tmp_snapshot"
+trap 'rm -f "$declaration_file" "$tmp_snapshot"' EXIT
 set +e
-node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"
+node --require="$script_root/test/temp-root.cjs" --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"
 node_status=${PIPESTATUS[0]}
 set -e
 
@@ -126,6 +131,17 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); t
   gate_status=1
 else
   echo "PASS  product suite ran all ${#declared_tests[@]} declared test files"
+fi
+
+mapfile -t tmp_leaks < <(node - "$tmp_snapshot" <<'NODE'
+const fs = require("node:fs");
+const before = new Set(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
+for (const name of fs.readdirSync("/tmp")) if (!before.has(name)) console.log(`/tmp/${name}`);
+NODE
+)
+if (( ${#tmp_leaks[@]} > 0 )); then
+  printf '::error::test created directly under /tmp: %s\n' "${tmp_leaks[*]}"
+  gate_status=1
 fi
 
 exit "$gate_status"

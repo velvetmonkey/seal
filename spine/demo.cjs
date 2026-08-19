@@ -9,7 +9,6 @@
 // Every count printed is read back from the child's count file, never
 // assumed from flow.
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
 
@@ -18,6 +17,7 @@ const { generateSigner } = require("./receipt-seal.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { TOOL } = require("./demo-server.cjs");
+const { makeTempRoot } = require("../scripts/temp-root.cjs");
 
 const DEMO_LINE = process.env.SEAL_DEMO_LINE || "seal demo wrote this line";
 
@@ -99,7 +99,7 @@ async function run(argv, sealBinPath) {
     dir = refuseRealReceiptStore(dir);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   } else {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
+    dir = makeTempRoot(path.join(__dirname, ".."), "seal-demo");
     demoCreatedDirectory = true;
   }
   const dataFile = path.join(dir, "child", "data.txt");
@@ -173,7 +173,7 @@ async function run(argv, sealBinPath) {
     console.log(`tool      ${tool.name}  ${tool.name === TOOL ? "guarded" : "—"}`);
   }
   console.log(`child     seal __demo-server (this same binary) mutating ${dataFile}`);
-  console.log(`${demoCreatedDirectory ? "temporary demo directory" : "demo directory"}: ${dir} (remains after the demo for the printed checker command)`);
+  console.log(`${demoCreatedDirectory ? "temporary demo directory" : "demo directory"}: ${dir}${demoCreatedDirectory ? " (removed when the demo exits)" : ""}`);
 
   const before = readCount(countFile);
   if (before !== "0") fail(`expected a fresh child at 0 observed calls, count file reads ${before}`);
