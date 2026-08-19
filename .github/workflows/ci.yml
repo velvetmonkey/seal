@@ -207,6 +207,13 @@ jobs:
           read -r digest bytes artifact < "$dist/SHA256SUMS"
           "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix"
           test -x "$prefix/bin/seal"
+          # The checker is a separate release asset, same shape as release.yml.
+          checker="$dist/seal-receipt-check.mjs"
+          cp checker/seal-receipt-check.mjs "$checker"
+          checker_digest="$(sha256sum "$checker" | awk '{ print $1 }')"
+          checker_bytes="$(wc -c < "$checker" | tr -d ' ')"
+          printf '%s  %s  %s\n' "$checker_digest" "$checker_bytes" "seal-receipt-check.mjs" >> "$dist/SHA256SUMS"
+          grep -F "seal-receipt-check.mjs" "$dist/SHA256SUMS"
       - name: Run the demo and check its emitted receipt
         shell: bash
         env:
@@ -230,9 +237,26 @@ jobs:
             exit 1
           fi
 
-          checker="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")/checker/seal-receipt-check.mjs"
+          store="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")"
+          if [[ -f "$store/checker/seal-receipt-check.mjs" ]]; then
+            echo '::error::installed artifact must not contain the receipt checker'
+            exit 1
+          fi
+
+          checker="$RUNNER_TEMP/demo-receipt-dist/seal-receipt-check.mjs"
+          sums="$RUNNER_TEMP/demo-receipt-dist/SHA256SUMS"
           if [[ ! -f "$checker" ]]; then
-            echo '::error::installed artifact has no receipt checker'
+            echo '::error::published checker is absent'
+            exit 1
+          fi
+          if [[ ! -s "$checker" ]]; then
+            echo '::error::published checker is empty'
+            exit 1
+          fi
+          pin="$(awk '$3 == "seal-receipt-check.mjs" { print $1; exit }' "$sums")"
+          got="$(sha256sum "$checker" | awk '{ print $1 }')"
+          if [[ -z "$pin" || "$got" != "$pin" ]]; then
+            echo '::error::published checker digest does not match SHA256SUMS'
             exit 1
           fi
 

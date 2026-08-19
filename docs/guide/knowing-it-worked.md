@@ -134,7 +134,7 @@ byte-identical copy of the producer's rule, and both use Node crypto: a defect
 shared there can make both agree on a wrong receipt.
 
 ```bash
-$ node …/checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
 ```
 
 ```output
@@ -145,7 +145,7 @@ Change one recorded fact — here, the decision — and the checker names what
 was touched:
 
 ```bash
-$ node …/checker/seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
 ```
 
 ```output
