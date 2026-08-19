@@ -30,7 +30,7 @@
 //      receipt. This program cannot tell a trusted key from an attacker's.
 //
 // Usage:
-//   node checker/seal-receipt-check.mjs RECEIPT.json --pubkey (HEX | FILE)
+//   node seal-receipt-check.mjs RECEIPT.json --pubkey (HEX | FILE)
 //
 // Exit 0 and "ACCEPT ..." on a genuine receipt; non-zero and "REFUSE <code>:
 // <reason>" on a semantically mutated or malformed one. It never prints

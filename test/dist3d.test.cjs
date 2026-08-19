@@ -315,15 +315,17 @@ process.exit(2);
   const store = path.join(prefix, record.store);
   assert.ok(fs.existsSync(path.join(store, "spine", "receipt-seal.cjs")), "3C sealer must be in the payload");
   const packagedChecker = path.join(store, "checker", "seal-receipt-check.mjs");
-  assert.ok(fs.existsSync(packagedChecker), "3C checker must be in the payload");
+  assert.equal(fs.existsSync(packagedChecker), false, "3C checker must not be in the payload");
+  const publishedChecker = path.join(ROOT, "checker", "seal-receipt-check.mjs");
   const allow = fs.readdirSync(path.join(demoDir, "receipts")).find((name) => name.includes("-ALLOW.json"));
   assert.ok(allow, out);
   const checked = runNode([
-    packagedChecker,
+    publishedChecker,
     path.join(demoDir, "receipts", allow),
     "--pubkey", path.join(demoDir, "receipt-signer.pub"),
   ], { cwd: built.out });
   assert.equal(checked.code, 0, checked.out);
   assert.match(checked.stdout, /^ACCEPT ALLOW demo\.mutate/);
-  assert.match(out, new RegExp(packagedChecker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(out, /Download seal-receipt-check\.mjs from the same release page/);
+  assert.doesNotMatch(out, /checker\/seal-receipt-check\.mjs/);
 });

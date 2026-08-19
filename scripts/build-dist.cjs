@@ -39,7 +39,6 @@ const PAYLOAD_PATHS = [
   "runtime/kernel/runner.cjs",
   "runtime/kernel/wasm/seal.js",
   "runtime/kernel/wasm/seal.wasm",
-  "checker/seal-receipt-check.mjs",
   "scripts/seal-launch.cjs",
 ];
 

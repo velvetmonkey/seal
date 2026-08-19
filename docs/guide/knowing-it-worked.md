@@ -134,7 +134,7 @@ byte-identical copy of the producer's rule, and both use Node crypto: a defect
 shared there can make both agree on a wrong receipt.
 
 ```bash
-$ node …/checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
 ```
 
 ```output
@@ -145,7 +145,7 @@ Change one recorded fact — here, the decision — and the checker names what
 was touched:
 
 ```bash
-$ node …/checker/seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
 ```
 
 ```output
@@ -158,8 +158,9 @@ whole meaning of the check:
 - The key must come from a source you already trust, not from beside the
   receipt. Checking a receipt against the sealer's own key (as the demo does)
   proves only self-consistency — a hostile sealer could sign its own.
-- The checker ships in the same artifact as Seal, so it cannot protect
-  against a wholesale replaced artifact.
+- The checker is published beside the install artifact with its own digest
+  in the release `SHA256SUMS`; that digest is not covered by the artifact's
+  digest. Verify the checker's digest before running it.
 - The checker is runtime-separate, not implementation-independent: it copies
   the producer's canonicalisation rule and shares the Node crypto platform.
   It cannot expose a defect common to those parts.
