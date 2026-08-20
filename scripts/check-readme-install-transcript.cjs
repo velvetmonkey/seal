@@ -52,7 +52,7 @@ function documentedTranscript(readme) {
 }
 
 function documentedTag(readme) {
-  const match = readme.match(/^\$ SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  const match = readme.match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
   if (!match) fail(`README release version command absent: ${README}`);
   return match[1];
 }

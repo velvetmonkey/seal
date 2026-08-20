@@ -43,10 +43,10 @@ test("an unreadable root pin refuses by name", () => {
 });
 
 function readmeInstallCommand(text) {
-  const match = text.match(/^\$ SEAL_VERSION=(?<tag>v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  const match = text.match(/^(?:\$ )?SEAL_VERSION=(?<tag>v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
   if (!match) throw new Error("README.md has no release version command");
   const artifact = `./seal-${match.groups.tag}-linux-x64`;
-  assert.match(text, /\$ \.\/"\$expected_name" --sha256 "\$expected_digest" --bytes "\$expected_bytes" --prefix ~\/\.local/);
+  assert.match(text, /(?:\$ )?\.\/"\$expected_name" --sha256 "\$expected_digest" --bytes "\$expected_bytes" --prefix ~\/\.local/);
   return { tag: match.groups.tag, artifact };
 }
 

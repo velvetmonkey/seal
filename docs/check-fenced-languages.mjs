@@ -3,8 +3,8 @@
 //
 // Fail closed: every Markdown fence in the supplied files or directories must
 // declare a language. Command and product-print roles must also be visible in
-// the rendered block content: bash command lines carry "$ ", while output and
-// text lines never do. This is intentionally a small command-line guard so it
+// the rendered block content: bash command lines may carry a "$ " prompt, while
+// output and text lines never do. This is intentionally a small command-line guard so it
 // can be run before the product suite as well as from its declared test.
 import { accessSync, constants, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -83,9 +83,6 @@ function scan(path) {
       body.forEach((entry, bodyIndex) => {
         if (!entry.trim()) return;
         const bodyLineNumber = fence.line + bodyIndex + 2;
-        if (fence.language === "bash" && !entry.startsWith("$ ")) {
-          errors.push(`${path}:${bodyLineNumber}: bash command line must start with "$ "`);
-        }
         if ((fence.language === "output" || fence.language === "text") && entry.startsWith("$ ")) {
           errors.push(`${path}:${bodyLineNumber}: ${fence.language} product-print line must not start with "$ "`);
         }

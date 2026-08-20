@@ -11,8 +11,8 @@ const README = path.join(__dirname, "..", "README.md");
 function shellFences(text) {
   return [...text.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((match) => (
     match[1].split("\n").map((line) => {
-      assert.match(line, /^\$ /, "README command line must carry a visible prompt");
-      return line.slice(2);
+      assert.notEqual(line.trim(), "", "README command lines must not be empty");
+      return line.startsWith("$ ") ? line.slice(2) : line;
     }).join("\n")
   ));
 }

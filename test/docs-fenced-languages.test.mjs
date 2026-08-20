@@ -38,14 +38,13 @@ test("an indented unlabeled fence names its file and line", (t) => {
   assert.match(result.stderr, new RegExp(`${file}:2: fenced block has no language`));
 });
 
-test("a bash command without a visible prompt names its file and line", (t) => {
+test("a bash command without a visible prompt is accepted", (t) => {
   const root = mkdtempSync(join(tmpdir(), "seal-doc-fence-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = join(root, "example.md");
   writeFileSync(file, "```bash\nseal status\n```\n");
   const result = run(file);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.ok(result.stderr.includes(`${file}:2: bash command line must start with "$ "`), result.stderr);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 test("an output block with a visible command prompt names its file and line", (t) => {

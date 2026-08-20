@@ -35,16 +35,16 @@ Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary a
 These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
 
 ```bash
-$ SEAL_VERSION=v0.2.0-rc.2
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-$ read -r expected_digest expected_bytes expected_name < SHA256SUMS
-$ actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
-$ test "$actual_digest" = "$expected_digest"
-$ actual_bytes="$(wc -c < "$expected_name")"
-$ test "$actual_bytes" = "$expected_bytes"
-$ chmod +x "$expected_name"
-$ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
+SEAL_VERSION=v0.2.0-rc.2
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
+read -r expected_digest expected_bytes expected_name < SHA256SUMS
+actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
+test "$actual_digest" = "$expected_digest"
+actual_bytes="$(wc -c < "$expected_name")"
+test "$actual_bytes" = "$expected_bytes"
+chmod +x "$expected_name"
+./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:

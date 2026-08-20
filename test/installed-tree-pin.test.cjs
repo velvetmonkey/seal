@@ -279,7 +279,7 @@ function downloadToFile(url, dest) {
 
 function publishedTreeSha256FromRelease() {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const match = readme.match(/^\$ SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  const match = readme.match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
   if (!match) {
     refuse("published_tag_absent", "README.md has no release version command");
   }
