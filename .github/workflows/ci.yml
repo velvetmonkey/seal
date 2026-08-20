@@ -4,6 +4,32 @@ on:
   push:
   pull_request:
 jobs:
+  protected-path-human-ruling:
+    name: protected path human ruling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse protected artifact edits pending a human ruling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
+            base="$(git rev-parse HEAD^)"
+            head="$GITHUB_SHA"
+          else
+            base="${{ github.event.before }}"
+            head="$GITHUB_SHA"
+          fi
+          node scripts/check-protected-paths.cjs --base "$base" --head "$head"
+
   installed-tree-pin-manifest-human-review:
     name: installed-tree pin manifest human review
     runs-on: ubuntu-latest
