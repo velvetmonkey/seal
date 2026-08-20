@@ -45,13 +45,13 @@ replaceIfPresent("index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:
 replaceIfPresent("docs/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
 replaceIfPresent("docs/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
 
-for (const file of ["README.md", "docs/DISTRIBUTION.md", path.join("docs", releaseNotes), "index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/install.md", path.join("docs", releaseNotes), "index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
-for (const file of ["README.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+for (const file of ["README.md", "docs/install.md", "docs/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, `v${version}`);
 }
 
@@ -69,6 +69,6 @@ replace("README.md", ARTIFACT_NAME, renameArtifact);
 replaceIfPresent("docs/DISTRIBUTION.md", ARTIFACT_NAME, renameArtifact);
 replaceIfPresent("docs/guide/README.md", ARTIFACT_NAME, renameArtifact);
 
-for (const file of ["README.md", "docs/guide/README.md"]) {
+for (const file of ["README.md", "docs/guide/README.md", "docs/install.md"]) {
   replaceIfPresent(file, /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
 }

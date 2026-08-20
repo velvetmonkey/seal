@@ -1,27 +1,32 @@
 # Seal docs — where to start, by what you came for
 
-The product's front door is the [repository README](../README.md): install,
-demo, protect, remove, each command shown with the output it printed. This
-`docs/README.md` page maps everything else in `docs/`, grouped by reader.
+The product's front door is the [repository README](../README.md):
+requirements, a short install, `seal demo`, protect / status / unprotect,
+and a five-bullet boundary list. This `docs/README.md` page maps everything
+else in `docs/`, grouped by reader.
 Files in the last two groups describe the Seal *family* of research repositories
 or a past design state — they are kept for the record and are not claims about
 the Node CLI this repository ships.
 
 ## I want to use this
 
-1. [The README walk](../README.md) — install from a pinned artifact, run the
-   demo, protect one tool in a Claude Code project, remove it all. Start here;
-   everything below is secondary.
-2. [RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) — what v0.2.0-rc.2 contains and
+1. [The README](../README.md) — requirements, short install, demo, protect,
+   status, unprotect. Start here; everything below is secondary.
+2. [install.md](install.md) — the SHA256SUMS verification wall moved off the
+   front page: digest, byte count, and named refusals before the installer runs.
+3. [evaluator-walk.md](evaluator-walk.md) — the forensic receipt check after
+   `seal demo`, using the separately published checker, with no captured
+   transcript.
+4. [RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) — what v0.2.0-rc.2 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
-3. [DISTRIBUTION.md](DISTRIBUTION.md) — what the one installable artifact is,
+5. [DISTRIBUTION.md](DISTRIBUTION.md) — what the one installable artifact is,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
-4. [VERSION-IDENTITY.md](VERSION-IDENTITY.md) — why a build off a release tag
+6. [VERSION-IDENTITY.md](VERSION-IDENTITY.md) — why a build off a release tag
    names itself `-dev.g<commit>`, which check refuses which lie, and what the
    pinned digest can and cannot say about an untagged build.
-5. [ARCHITECTURE.md](ARCHITECTURE.md) — the shipped Node product path first,
+7. [ARCHITECTURE.md](ARCHITECTURE.md) — the shipped Node product path first,
    followed by the wider family assurance lineage.
 
 ## I want to know what it does not do

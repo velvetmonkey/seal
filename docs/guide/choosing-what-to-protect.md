@@ -26,7 +26,7 @@ deletes the file. One of those is worth an approval prompt.
     "notes": {
       "type": "stdio",
       "command": "node",
-      "args": ["/home/monkey/scratch/opguide-run/project/notes-server.cjs"]
+      "args": ["/home/you/project/notes-server.cjs"]
     }
   }
 }
@@ -52,7 +52,7 @@ $ seal protect notes delete_all_notes
 ```output
 Project .mcp.json hash before protect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
 Protection: PENDING RESTART notes.delete_all_notes
-State: /home/monkey/scratch/opguide-run/home/.local/share/seal/projects/9852104386c7756d6abbd76408f7014b/state.json
+State: /home/you/.local/share/seal/projects/9852104386c7756d6abbd76408f7014b/state.json
 ```
 
 The three user-visible changes are:
