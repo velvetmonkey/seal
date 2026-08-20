@@ -51,7 +51,6 @@ $ SEAL_SHA256="$(awk '{print $1}' SHA256SUMS)"
 $ chmod +x "seal-$SEAL_VERSION-linux-x64"
 $ "./seal-$SEAL_VERSION-linux-x64" --sha256 "$SEAL_SHA256"
 ```
-
 **Seal installed-tree pin role:** `published-asset`
 ```output
 installed seal 0.2.0-rc.2 linux-x64

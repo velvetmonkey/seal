@@ -29,6 +29,11 @@ chmod +x "seal-$SEAL_VERSION-linux-x64"
 ./"seal-$SEAL_VERSION-linux-x64" --sha256 "$expected_digest" --prefix ~/.local
 ```
 
+
+
+
+
+
 Success prints `installed seal 0.2.0-rc.2 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
 The tree hash of the published v0.2.0-rc.2 asset is pinned here:

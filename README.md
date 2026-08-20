@@ -45,6 +45,8 @@ chmod +x "seal-$SEAL_VERSION-linux-x64"
 ./"seal-$SEAL_VERSION-linux-x64" --sha256 "$expected_digest" --prefix ~/.local
 ```
 
+
+
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 
 **Seal installed-tree pin role:** `published-asset`
