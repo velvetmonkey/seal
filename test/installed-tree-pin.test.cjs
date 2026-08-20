@@ -11,7 +11,6 @@ const test = require("node:test");
 const {
   buildDist,
   namedArtifact,
-  publishedTreeSha256FromRelease,
   quotedTreeHashHits,
   removeScratch,
   trackedFiles,
@@ -19,6 +18,9 @@ const {
 } = require("../scripts/installed-tree-pin.cjs");
 
 const ROOT = path.join(__dirname, "..");
+const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
+const PAYLOAD_MAGIC = "SEALPAY1\n";
+const PAYLOAD_DATA = "--DATA--\n";
 
 function scratchRoot() {
   return process.env.RUNNER_TEMP || os.tmpdir();
@@ -33,6 +35,71 @@ function assertNamedRefuse(fn, code) {
   }
   assert.ok(failed, `expected REFUSE ${code}, but the pin accepted the artifact`);
   assert.match(String(failed.message), new RegExp(`^REFUSE ${code}:`));
+}
+
+// This is intentionally an external tree-hash route.
+// It reads the artifact payload format directly and delegates every SHA-256
+// operation to sha256sum; it does not import integrity.cjs or a hash helper
+// from the generator's installed-tree-pin module.
+function sha256sum(bytes) {
+  const result = spawnSync("sha256sum", [], { input: bytes, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const match = result.stdout.match(/^([0-9a-f]{64})\s/);
+  assert.ok(match, `sha256sum produced an unrecognised result: ${result.stdout}`);
+  return match[1];
+}
+
+function externalExtractPayloadFiles(artifactBytes) {
+  const markerAt = artifactBytes.indexOf(PAYLOAD_MARKER);
+  assert.notEqual(markerAt, -1, "built artifact carries no payload");
+  const payload = artifactBytes.subarray(markerAt + PAYLOAD_MARKER.length);
+  const dataAt = payload.indexOf(Buffer.from(PAYLOAD_DATA, "utf8"), PAYLOAD_MAGIC.length);
+  assert.ok(dataAt >= 0, "payload is missing the data marker");
+  const header = payload.subarray(PAYLOAD_MAGIC.length, dataAt).toString("utf8").trim();
+  assert.ok(payload.subarray(0, PAYLOAD_MAGIC.length).equals(Buffer.from(PAYLOAD_MAGIC, "utf8")), "payload has an unknown format");
+  const manifest = JSON.parse(header);
+  assert.ok(Array.isArray(manifest.files), "payload manifest has no files list");
+  let offset = dataAt + Buffer.byteLength(PAYLOAD_DATA);
+  const files = manifest.files.map((file) => {
+    assert.equal(typeof file.path, "string", "payload file has no path");
+    assert.equal(Number.isSafeInteger(file.bytes), true, `payload file ${file.path} has an invalid byte count`);
+    const end = offset + file.bytes;
+    assert.ok(end <= payload.length, `payload ends before ${file.path}`);
+    const data = payload.subarray(offset, end);
+    offset = end;
+    return { path: file.path, bytes: data.length, sha256: sha256sum(data) };
+  });
+  assert.equal(offset, payload.length, "payload has trailing bytes");
+  return files;
+}
+
+function externalTreeSha256FromArtifact(artifactPath) {
+  const files = externalExtractPayloadFiles(fs.readFileSync(artifactPath));
+  const lines = files
+    .map((file) => `${file.sha256}  ${file.bytes}  ${file.path}\n`)
+    .join("");
+  const sorted = spawnSync("sort", ["-k3,3"], {
+    input: lines,
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C" },
+  });
+  assert.equal(sorted.status, 0, sorted.stdout + sorted.stderr);
+  return sha256sum(Buffer.from(sorted.stdout, "utf8"));
+}
+
+function externalPublishedTreeSha256() {
+  const version = fs.readFileSync(path.join(ROOT, "README.md"), "utf8").match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  assert.ok(version, "README.md has no release version command");
+  const name = `seal-${version[1]}-linux-x64`;
+  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-external-published-tree-"));
+  try {
+    const artifact = path.join(scratch, name);
+    const download = spawnSync("curl", ["-fsSL", "--max-time", "30", "-o", artifact, `https://github.com/velvetmonkey/seal/releases/download/${version[1]}/${name}`], { encoding: "utf8" });
+    assert.equal(download.status, 0, download.stdout + download.stderr);
+    return externalTreeSha256FromArtifact(artifact);
+  } finally {
+    removeScratch(scratch);
+  }
 }
 
 function rewriteMetadata(out, mutate) {
@@ -159,9 +226,9 @@ test("quoted installed-tree hashes match a freshly built artifact", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
 
-  const freshExpected = treeSha256FromBuiltArtifact(out, built.stdout, identity);
+  const freshExpected = externalTreeSha256FromArtifact(namedArtifact(out, built.stdout));
   assert.match(freshExpected, /^[0-9a-f]{64}$/);
-  const publishedExpected = publishedTreeSha256FromRelease();
+  const publishedExpected = externalPublishedTreeSha256();
   assert.match(publishedExpected, /^[0-9a-f]{64}$/);
 
   let quoted = 0;

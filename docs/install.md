@@ -72,3 +72,15 @@ That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
 packs from this tree. It is not a captured command transcript. It will
 change when a payload member changes; it does not change when only docs
 change.
+
+### Installed-tree hash definition
+
+The installed tree is exactly the regular payload files named by the artifact's
+payload manifest (the build excludes `checker/seal-receipt-check.mjs` for a
+fresh build). Order those relative slash-separated paths by bytewise
+lexicographic path order. For each file, SHA-256 its exact payload bytes and
+form one UTF-8 line: `<file-sha256><two spaces><decimal byte count><two
+spaces><path><newline>`. Concatenate those lines without another separator and
+SHA-256 the resulting UTF-8 byte sequence. That final digest is the
+installed-tree hash. The same definition applies to a published asset; its
+payload manifest, rather than this checkout, selects its file set.
