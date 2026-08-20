@@ -1,5 +1,5 @@
 > Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.
-> The authorization rule is PROVED. The state machine is TESTED.
+> The state machine is TESTED.
 > For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../README.md).
 
 # Architecture
@@ -11,7 +11,7 @@ flowchart LR
     claude["Claude Code\n(MCP client)"]
     proxy["Node proxy\nspine/proxy.cjs"]
     state["TESTED state machine\nhandle · freshness · protocol · one-use"]
-    wasm["PROVED WASM authorization rule\npinned vendored WASM; load-bearing"]
+    wasm["pinned vendored WASM; load-bearing"]
     server["Selected MCP server\none selected tool"]
 
     claude --> proxy

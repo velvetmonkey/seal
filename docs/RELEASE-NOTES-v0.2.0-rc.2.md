@@ -6,7 +6,7 @@ Seal puts an approval gate in front of one selected tool of one MCP server. An a
 
 The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths. ([approval-contract test](../test/approval-contract.test.cjs); [retry-continuation test](../test/spine-retry.test.cjs); merged [00176cd](https://github.com/velvetmonkey/seal/commit/00176cd88e8a20e50239342c05f2eafa3830520f) and [4228744](https://github.com/velvetmonkey/seal/commit/42287448e51f75f43250782faec59bcb23f1d7b8))
 
-The authorization rule is PROVED. The state machine is TESTED. The Node
+The state machine is TESTED. The Node
 product now calls the pinned vendored WASM for the exact-call authorization
 sub-question and refuses its BLOCK, failure, integrity mismatch, or
 disagreement with Node. Handle lifetime, retry protocol state, and durable

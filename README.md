@@ -6,9 +6,7 @@
 
 Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.
 
-Most MCP tools are harmless. Seal gates the dangerous one; the rest pass through.
-
-Requires Node 20+, Git, and the `claude` command for Protect. The install creates one command and one read-only store directory under `~/.local`.
+Requires Node 20+ and the `claude` command for Protect. The install creates one command and one read-only store directory under `~/.local`.
 
 Check that the Claude Code command is available before Protect:
 
@@ -419,7 +417,7 @@ In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> dem
 
 ## How the gate decides
 
-The demo and the protected path run the same proxy and rule. The authorization rule is PROVED. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.
+The demo and the protected path run the same proxy and rule. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.
 
 ## What Seal covers, and what it does not
 

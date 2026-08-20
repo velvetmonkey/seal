@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "..");
 const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const COMMON_SCOPE_LINES = [
-  "> The authorization rule is PROVED. The state machine is TESTED.",
+  "> The state machine is TESTED.",
   `> For the truth about what you installed, read [docs/RELEASE-NOTES-v${VERSION}.md](RELEASE-NOTES-v${VERSION}.md) and the [README](../README.md).`,
 ];
 const FAMILY_PRODUCT_SCOPE_BLOCK = [
@@ -39,5 +39,6 @@ test("each scoped document carries its exact scope signpost", () => {
   for (const [name, expectedBlock] of expectedBlocks) {
     const text = readFileSync(resolve(ROOT, "docs", name), "utf8");
     assert.equal(text.startsWith(`${expectedBlock}\n\n`), true, `${name} is missing its scope block at the top`);
+    assert.equal(text.includes("The authorization rule is PROVED."), false, `${name} contains cut claim: The authorization rule is PROVED.`);
   }
 });

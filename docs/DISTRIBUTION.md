@@ -47,7 +47,7 @@ The payload is the current product: `bin/seal`, the mediation and
 receipt components (including the receipt-sealing module used by both
 the demo and protected paths), and the approval contract.
 It also includes the pinned vendored kernel and the fail-closed Node adapter
-that invokes it. The authorization rule is PROVED. The state machine is
+that invokes it. The state machine is
 TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
 accepted by `seal_init`; this is demo-grade self-authorization, not a
 production config-signing trust root. Corrupt or unpinned WASM refuses and has
