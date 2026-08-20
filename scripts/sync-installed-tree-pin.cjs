@@ -14,6 +14,8 @@ const {
   treeSha256FromBuiltArtifact,
 } = require("./installed-tree-pin.cjs");
 
+const SITE_MANIFEST = path.join(ROOT, "scripts", "installed-tree-pin-sites.json");
+
 function refuse(code, reason) {
   throw new Error(`REFUSE ${code}: ${reason}`);
 }
@@ -54,6 +56,32 @@ function rewriteHits(text, hits, hashes) {
   return rewritten;
 }
 
+function siteKey(site) {
+  return `${site.file}:${site.line}:${site.column} ${site.kind} ${site.role}`;
+}
+
+function declaredSites() {
+  const sites = JSON.parse(fs.readFileSync(SITE_MANIFEST, "utf8"));
+  if (!Array.isArray(sites) || sites.length === 0) {
+    refuse("pin_population_manifest_invalid", "installed-tree pin site manifest must be a non-empty array");
+  }
+  const keys = sites.map(siteKey);
+  if (new Set(keys).size !== keys.length) {
+    refuse("pin_population_manifest_invalid", "installed-tree pin site manifest contains duplicate sites");
+  }
+  return new Set(keys);
+}
+
+function assertDeclaredPopulation(discovered) {
+  const declared = declaredSites();
+  for (const key of declared) {
+    if (!discovered.has(key)) refuse("pin_population_mismatch", `generator missing declared site ${key}`);
+  }
+  for (const key of discovered) {
+    if (!declared.has(key)) refuse("pin_population_mismatch", `generator found undeclared site ${key}`);
+  }
+}
+
 function main() {
   // build-dist loads sync-version, which also consumes this file. Validate it
   // here so missing content cannot escape as an anonymous dependency error.
@@ -77,18 +105,29 @@ function main() {
   // absent, unreadable, empty, or malformed inputs cannot cause partial output.
   const originals = new Map();
   const rewrites = new Map();
+  const discoveredSites = new Set();
   let freshHits = 0;
   let publishedHits = 0;
   for (const relative of trackedFiles()) {
     const text = relative === "docs/install.md" ? installText : readConsumedFile(relative);
     const hits = quotedTreeHashHits(text, relative);
     for (const hit of hits) {
+      const lineStart = text.lastIndexOf("\n", hit.index - 1) + 1;
+      const kind = text.slice(hit.index).startsWith("tree") ? "tree" : "store";
+      discoveredSites.add(siteKey({
+        file: relative,
+        line: hit.line,
+        column: hit.index - lineStart + 1,
+        kind,
+        role: hit.role,
+      }));
       if (hit.role === "fresh-build") freshHits += 1;
       else publishedHits += 1;
     }
     originals.set(relative, text);
     rewrites.set(relative, rewriteHits(text, hits, hashes));
   }
+  assertDeclaredPopulation(discoveredSites);
   if (freshHits === 0) refuse("fresh_build_pin_absent", "no fresh-build installed-tree hash is quoted");
   if (publishedHits === 0) refuse("published_asset_pin_absent", "no published-asset installed-tree hash is quoted");
 

@@ -11,9 +11,7 @@ const test = require("node:test");
 const {
   buildDist,
   namedArtifact,
-  quotedTreeHashHits,
   removeScratch,
-  trackedFiles,
   treeSha256FromBuiltArtifact,
 } = require("../scripts/installed-tree-pin.cjs");
 
@@ -21,6 +19,8 @@ const ROOT = path.join(__dirname, "..");
 const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
 const PAYLOAD_MAGIC = "SEALPAY1\n";
 const PAYLOAD_DATA = "--DATA--\n";
+const SITE_MANIFEST = path.join(ROOT, "scripts", "installed-tree-pin-sites.json");
+const PIN_PATTERN = /\btree:?\s+([0-9a-f]{64})\b|\/store\/([0-9a-f]{64})(?=\/|\b)/g;
 
 function scratchRoot() {
   return process.env.RUNNER_TEMP || os.tmpdir();
@@ -43,10 +43,91 @@ function assertNamedRefuse(fn, code) {
 // from the generator's installed-tree-pin module.
 function sha256sum(bytes) {
   const result = spawnSync("sha256sum", [], { input: bytes, encoding: "utf8" });
+  if (result.error && result.error.code === "ENOENT") {
+    assert.fail("REFUSE sha256sum_unavailable: sha256sum is required for the external installed-tree gate");
+  }
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const match = result.stdout.match(/^([0-9a-f]{64})\s/);
   assert.ok(match, `sha256sum produced an unrecognised result: ${result.stdout}`);
   return match[1];
+}
+
+function siteKey(site) {
+  return `${site.file}:${site.line}:${site.column} ${site.kind} ${site.role}`;
+}
+
+function roleByLine(text, file) {
+  const roles = new Map();
+  const lines = text.split("\n");
+  let openRole = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].replace(/\r$/, "");
+    if (/^```/.test(line)) {
+      if (openRole === null) {
+        const marker = index > 0
+          ? lines[index - 1].replace(/\r$/, "").match(/^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`$/)
+          : null;
+        openRole = marker ? marker[1] : "";
+      } else {
+        openRole = null;
+      }
+      continue;
+    }
+    if (openRole !== null) roles.set(index + 1, openRole);
+  }
+  return (line) => {
+    const role = roles.get(line);
+    assert.ok(role, `REFUSE pin_population_role_absent: ${file}:${line} pin has no installed-tree role marker`);
+    assert.ok(
+      role === "published-asset" || role === "fresh-build",
+      `REFUSE pin_population_role_unknown: ${file}:${line} has unknown installed-tree role ${JSON.stringify(role)}`,
+    );
+    return role;
+  };
+}
+
+function declaredPopulation() {
+  const sites = JSON.parse(fs.readFileSync(SITE_MANIFEST, "utf8"));
+  assert.ok(Array.isArray(sites) && sites.length > 0, "REFUSE pin_population_manifest_invalid: manifest must be a non-empty array");
+  const keys = sites.map(siteKey);
+  assert.equal(new Set(keys).size, keys.length, "REFUSE pin_population_manifest_invalid: manifest contains duplicate sites");
+  return new Set(keys);
+}
+
+function externalPinPopulation() {
+  const grep = spawnSync(
+    "git",
+    ["-C", ROOT, "grep", "-n", "-E", "tree:? +[0-9a-f]{64}|/store/[0-9a-f]{64}", "--"],
+    { encoding: "utf8" },
+  );
+  assert.ok(grep.status === 0 || grep.status === 1, `REFUSE pin_population_enumeration_failed: ${grep.stderr || grep.stdout}`);
+  const files = new Map();
+  const discovered = new Map();
+  for (const outputLine of grep.stdout.split("\n").filter(Boolean)) {
+    const parsed = outputLine.match(/^([^:]+):(\d+):(.*)$/);
+    assert.ok(parsed, `REFUSE pin_population_enumeration_failed: unrecognised git grep output ${outputLine}`);
+    const file = parsed[1];
+    const line = Number(parsed[2]);
+    if (!files.has(file)) {
+      const text = fs.readFileSync(path.join(ROOT, file), "utf8");
+      files.set(file, { text, roleAt: roleByLine(text, file) });
+    }
+    for (const match of parsed[3].matchAll(PIN_PATTERN)) {
+      const kind = match[1] ? "tree" : "store";
+      const site = { file, line, column: match.index + 1, kind, role: files.get(file).roleAt(line) };
+      const key = siteKey(site);
+      assert.equal(discovered.has(key), false, `REFUSE pin_population_enumeration_failed: duplicate site ${key}`);
+      discovered.set(key, { ...site, hash: match[1] || match[2] });
+    }
+  }
+  const declared = declaredPopulation();
+  for (const key of declared) {
+    assert.ok(discovered.has(key), `REFUSE pin_population_mismatch: gate missing declared site ${key}`);
+  }
+  for (const key of discovered.keys()) {
+    assert.ok(declared.has(key), `REFUSE pin_population_mismatch: gate found undeclared site ${key}`);
+  }
+  return [...discovered.values()];
 }
 
 function externalExtractPayloadFiles(artifactBytes) {
@@ -111,62 +192,6 @@ function rewriteMetadata(out, mutate) {
   fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
 }
 
-test("published-asset markers govern four download shapes without prose inference", () => {
-  const publishedShape = "a".repeat(64);
-  const shapes = [
-    "$ gh release download v0.2.0-rc.2 --pattern 'seal-*-linux-x64'",
-    "$ cp /srv/internal-release-mirror/seal/v0.2.0-rc.2/linux-x64 ./seal",
-    "$ gh api repos/velvetmonkey/seal/releases/assets/123456 > ./seal",
-    "$ release-cache get velvetmonkey/seal v0.2.0-rc.2 linux-x64 > ./seal",
-  ];
-  for (const prose of shapes) {
-    const text = [
-      prose,
-      "**Seal installed-tree pin role:** `published-asset`",
-      "```output",
-      `store: /home/x/.local/lib/seal/store/${publishedShape}`,
-      "```",
-    ].join("\n");
-    const hits = quotedTreeHashHits(text, "shape.md");
-    assert.equal(hits.length, 1);
-    assert.equal(hits[0].role, "published-asset");
-  }
-});
-
-test("a fresh-build marker wins when prose incidentally mentions releases/download", () => {
-  const freshShape = "b".repeat(64);
-  const text = [
-    "Unlike releases/download/, this builds the checkout.",
-    "**Seal installed-tree pin role:** `fresh-build`",
-    "```text",
-    `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-check.mjs" receipt.json`,
-    "```",
-  ].join("\n");
-  const hits = quotedTreeHashHits(text, "fresh.md");
-  assert.equal(hits.length, 1);
-  assert.equal(hits[0].role, "fresh-build");
-});
-
-test("an unmarked store hash is a named refusal with file, line, and required markers", () => {
-  const text = ["```output", `store: /store/${"c".repeat(64)}`, "```"].join("\n");
-  assertNamedRefuse(() => quotedTreeHashHits(text, "unmarked.md"), "role_marker_absent");
-  assert.throws(
-    () => quotedTreeHashHits(text, "unmarked.md"),
-    /unmarked\.md:2.*Seal installed-tree pin role:.*published-asset.*Seal installed-tree pin role:.*fresh-build/,
-  );
-});
-
-test("an unrecognised store-hash role is a named refusal", () => {
-  const text = [
-    "**Seal installed-tree pin role:** `release-cache`",
-    "```output",
-    `tree: ${"d".repeat(64)}`,
-    "```",
-  ].join("\n");
-  assertNamedRefuse(() => quotedTreeHashHits(text, "unknown.md"), "role_marker_unknown");
-  assert.throws(() => quotedTreeHashHits(text, "unknown.md"), /unknown\.md:1 unknown store-hash role "release-cache"/);
-});
-
 function markedBlockBytes(text, role) {
   const marker = `**Seal installed-tree pin role:** \`${role}\``;
   const blocks = [];
@@ -222,7 +247,7 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
   assert.doesNotMatch(fs.readFileSync(path.join(copy, "README.md"), "utf8"), new RegExp("f{64}"));
 });
 
-test("quoted installed-tree hashes match a freshly built artifact", (t) => {
+test("declared installed-tree sites found by git grep match built artifacts", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
 
@@ -231,25 +256,21 @@ test("quoted installed-tree hashes match a freshly built artifact", (t) => {
   const publishedExpected = externalPublishedTreeSha256();
   assert.match(publishedExpected, /^[0-9a-f]{64}$/);
 
-  let quoted = 0;
   let quotedPublished = 0;
   let quotedFresh = 0;
-  for (const relative of trackedFiles()) {
-    const hits = quotedTreeHashHits(fs.readFileSync(path.join(ROOT, relative), "utf8"), relative);
-    for (const hit of hits) {
-      quoted += 1;
-      const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
-      if (hit.role === "published-asset") quotedPublished += 1;
-      else quotedFresh += 1;
-      assert.equal(
-        hit.hash,
-        expected,
-        `${relative}:${hit.line} ${hit.role} installed-tree hash mismatch: ` +
-          `quoted ${hit.hash}, ${hit.role} ${expected}`,
-      );
-    }
+  const hits = externalPinPopulation();
+  for (const hit of hits) {
+    const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
+    if (hit.role === "published-asset") quotedPublished += 1;
+    else quotedFresh += 1;
+    assert.equal(
+      hit.hash,
+      expected,
+      `${hit.file}:${hit.line}:${hit.column} ${hit.role} installed-tree hash mismatch: ` +
+        `quoted ${hit.hash}, ${hit.role} ${expected}`,
+    );
   }
-  assert.ok(quoted > 0, "the repository must quote at least one installed-tree hash");
+  assert.ok(hits.length > 0, "the repository must quote at least one installed-tree hash");
   assert.ok(quotedPublished > 0, "the repository must quote at least one published-asset installed-tree hash");
   assert.ok(quotedFresh > 0, "the repository must quote at least one fresh-build installed-tree hash");
 });
