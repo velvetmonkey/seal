@@ -1,19 +1,15 @@
 # Evaluator walk
 
-This is the forensic receipt walk that used to live on the README. It is a
-procedure you run against the tagged v0.2.0-rc.2 artefact. It does not embed a
-captured transcript: three attempts to keep a hand-maintained transcript
-honest on a moving branch already failed. Run the commands; read what they
-print.
+This is the forensic receipt walk for a source build of this checkout. It is
+not the path for the published GitHub release `v0.2.0-rc.2`, whose payload
+includes the receipt checker. It does not embed a captured transcript: three
+attempts to keep a hand-maintained transcript honest on a moving branch already
+failed. Run the commands; read what they print.
 
-The checker is **not** in the installed store. `scripts/build-dist.cjs`
-excludes `checker/seal-receipt-check.mjs` from the payload. Download
-`seal-receipt-check.mjs` from the same GitHub release page as the install
-artifact and check its digest in that release `SHA256SUMS` before running
-it; that digest is not covered by the artifact's digest. `seal demo`
-prints this same instruction. Do not look for the checker under
-`~/.local/lib/seal/store/`. If you have this repository checkout, the
-same file is `checker/seal-receipt-check.mjs`.
+The checker is **not** in a source-built installed store.
+`scripts/build-dist.cjs` excludes `checker/seal-receipt-check.mjs` from that
+payload. Run the copy from the checkout that you built; do not look for it
+under `~/.local/lib/seal/store/`.
 
 ## After `seal demo`
 
@@ -28,8 +24,7 @@ $ read -r -p "Paste the temporary demo directory: " SEAL_DEMO_DIR
 Copy only the path after `temporary demo directory:` from the demo output.
 
 Name the blocked receipt from the demo directory, then check it against
-the demo's key with the downloaded (or checkout) checker sitting in the
-current directory:
+the demo's key with the checkout checker in the current directory:
 
 ```bash
 $ SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"

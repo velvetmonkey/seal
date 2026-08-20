@@ -158,9 +158,9 @@ whole meaning of the check:
 - The key must come from a source you already trust, not from beside the
   receipt. Checking a receipt against the sealer's own key (as the demo does)
   proves only self-consistency — a hostile sealer could sign its own.
-- The checker is published beside the install artifact with its own digest
-  in the release `SHA256SUMS`; that digest is not covered by the artifact's
-  digest. Verify the checker's digest before running it.
+- The published release includes the checker in its payload, so it is not an
+  independent check of that payload. A source build excludes it; use the
+  checkout copy for that secondary path.
 - The checker is runtime-separate, not implementation-independent: it copies
   the producer's canonicalisation rule and shares the Node crypto platform.
   It cannot expose a defect common to those parts.

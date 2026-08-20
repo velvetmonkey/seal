@@ -14,8 +14,8 @@ the Node CLI this repository ships.
    status, unprotect. Start here; everything below is secondary.
 2. [install.md](install.md) — the SHA256SUMS verification wall moved off the
    front page: digest, byte count, and named refusals before the installer runs.
-3. [evaluator-walk.md](evaluator-walk.md) — the forensic receipt check after
-   `seal demo`, using the separately published checker, with no captured
+3. [evaluator-walk.md](evaluator-walk.md) — the forensic receipt check for a
+   source build after `seal demo`, using the checkout checker, with no captured
    transcript.
 4. [RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) — what v0.2.0-rc.2 contains and
    what it deliberately does not, with each claim citing the test or commit
@@ -54,8 +54,8 @@ the Node CLI this repository ships.
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
 5. [checker/seal-receipt-check.mjs](../checker/seal-receipt-check.mjs) — the
-   receipt checker published beside the install artifact, with its own digest
-   in the release `SHA256SUMS`. It is not covered by the artifact's digest.
+   receipt checker included in the published release payload. It is not an
+   independent check of that payload.
    It imports no Seal module at check time, but copies the producer's
    canonicalisation rule and uses the same Node crypto platform; read what
    that does and does not establish.

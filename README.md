@@ -8,6 +8,8 @@ Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and r
 
 Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.
 
+A build from this checkout is a separate, source-build path; its differences are called out where they matter.
+
 Requires Node 20+ and the `claude` command for Protect. The install creates one command and one read-only store directory under `~/.local`.
 
 Check that the Claude Code command is available before Protect:
@@ -19,22 +21,26 @@ $ claude --version
 ## How it works
 
 1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
-2. **Approve per call.** Seal shows the exact guarded call. The pinned authorization kernel (vendored WASM) answer is required before forwarding, and one-use consumption means the call will not run twice. Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
-3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the separately published checker or seal-check with the limits stated below. That separately published checker is current main. The published GitHub release `v0.2.0-rc.2` still ships the checker in the same artifact.
+2. **Approve per call.** Seal shows the exact guarded call. Its authorization kernel is a small decision program bundled as WebAssembly (WASM); Seal pins its bytes and requires its answer before forwarding. One-use consumption means the call will not run twice. Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
+3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the release's included checker or seal-check with the limits stated below. The release checker is in the installed payload, so it cannot establish that the payload itself was not replaced.
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
 ## 1. Install
 
-Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check them with your own `sha256sum`, then run the installer with that pin. The [full SHA256SUMS verification](docs/install.md) is the copy-paste wall; the short form below is the same install.
+Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that pin. The [full SHA256SUMS verification](docs/install.md) is the copy-paste wall; the short form below is the same install.
 
-The check means something only if you fetch `SHA256SUMS` from a source the installer did not give you, and you check the binary with the OS `sha256sum` tool before you execute it. The installer's `--sha256` and `--bytes` flags confirm that the bytes you already chose to run match the digest you passed them. That is integrity of transfer, not provenance: a replaced installer would still report that its own bytes match a digest it was given.
+These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
 
 ```bash
 $ SEAL_VERSION=v0.2.0-rc.2
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 $ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 $ read -r expected_digest expected_bytes expected_name < SHA256SUMS
+$ actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
+$ test "$actual_digest" = "$expected_digest"
+$ actual_bytes="$(wc -c < "$expected_name")"
+$ test "$actual_bytes" = "$expected_bytes"
 $ chmod +x "$expected_name"
 $ ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
@@ -51,7 +57,7 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 
 The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
 
-If the `tree:` line in your install output matches the published-asset `tree:` in the block above, you installed the published GitHub release `v0.2.0-rc.2`, not current main. They share the version string `v0.2.0-rc.2`. They are different bytes. That published artifact's payload contains `checker/seal-receipt-check.mjs`. It ships in this same artifact, so it also cannot protect against a replaced artifact: checking with a copy taken from that store cannot tell you the store was not replaced. That release page attaches only `seal-v0.2.0-rc.2-linux-x64` and `SHA256SUMS`; there is no separate checker asset. Current main, which this README describes, excludes the checker from the payload. A build of this checkout is a different artifact; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md).
+If the `tree:` line in your install output matches the published-asset `tree:` in the block above, your installed payload matches that release artifact. This is a payload-identity check, not proof of GitHub provenance: a local build of the same payload has the same tree digest. The published release payload contains `checker/seal-receipt-check.mjs`; because that checker ships in the same artifact, it cannot show that the artifact was not replaced. That release page attaches only `seal-v0.2.0-rc.2-linux-x64` and `SHA256SUMS`; there is no separate checker asset.
 
 Add `~/.local/bin` to PATH before continuing:
 
@@ -59,7 +65,9 @@ Add `~/.local/bin` to PATH before continuing:
 $ export PATH="$HOME/.local/bin:$PATH"
 ```
 
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above.
+### Source-build path (secondary)
+
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above. A build of this checkout excludes `checker/seal-receipt-check.mjs` from its payload; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md).
 
 Read this filename only if you build from source:
 
@@ -75,7 +83,7 @@ The repository root does not carry a hand-maintained `SHA256SUMS` copy. Use the 
 $ seal demo
 ```
 
-Leave it running until `Approve? [y/N]`, then type `y` and press Enter. Expected sequence, not a captured transcript:
+Leave it running until `Approve? [y/N]`, then type `y` and press Enter. This is the expected sequence, not a captured transcript: the first four lines show the protected path; the final line is the deliberately unprotected direct-write scope witness after it.
 
 ```text
 child calls observed: 0
@@ -87,11 +95,14 @@ DIRECT WRITE SUCCEEDED; Seal decisions emitted: 0
 
 The demo directory remains after the walk so you can check a receipt.
 
-Which checker you have depends on which artifact you installed. If you installed the published GitHub release `v0.2.0-rc.2` (the install command above, whose `tree:` matches the published-asset block), the checker is inside that artifact, and that release does not attach a separate `seal-receipt-check.mjs`. If you built from current main, the checker is not inside the installed store; use `checker/seal-receipt-check.mjs` from this checkout, or a later release that actually attaches the checker as its own asset, and follow [the evaluator walk](docs/evaluator-walk.md).
+The published release installed above includes its checker in the payload. If you took the secondary source-build path, its store does not include the checker; use `checker/seal-receipt-check.mjs` from that checkout and follow [the source-build evaluator walk](docs/evaluator-walk.md).
 
 ## 3. Protect
 
 `seal protect SERVER TOOL` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them.
+
+This is a shell transcript: `$ ` marks each command line. Do not paste the
+markers; remove them before running the block.
 
 ```bash
 $ export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"

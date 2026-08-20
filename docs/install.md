@@ -53,8 +53,9 @@ $ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Further distribution detail, including what the payload does and does not
-contain, is in [DISTRIBUTION.md](DISTRIBUTION.md). The receipt checker is
-not in the payload; see [evaluator-walk.md](evaluator-walk.md).
+contain, is in [DISTRIBUTION.md](DISTRIBUTION.md). The published release
+payload includes the receipt checker. A source build of this checkout excludes
+it; see [evaluator-walk.md](evaluator-walk.md) for that secondary path.
 
 ## Source-build tree pin
 
