@@ -20,13 +20,15 @@ $ claude --version
 
 1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
 2. **Approve per call.** Seal shows the exact guarded call. The pinned authorization kernel (vendored WASM) answer is required before forwarding, and one-use consumption means the call will not run twice. Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
-3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the separately published checker or seal-check with the limits stated below.
+3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the separately published checker or seal-check with the limits stated below. That separately published checker is current main. The published GitHub release `v0.2.0-rc.2` still ships the checker in the same artifact.
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
 ## 1. Install
 
 Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check them with your own `sha256sum`, then run the installer with that pin. The [full SHA256SUMS verification](docs/install.md) is the copy-paste wall; the short form below is the same install.
+
+The check means something only if you fetch `SHA256SUMS` from a source the installer did not give you, and you check the binary with the OS `sha256sum` tool before you execute it. The installer's `--sha256` and `--bytes` flags confirm that the bytes you already chose to run match the digest you passed them. That is integrity of transfer, not provenance: a replaced installer would still report that its own bytes match a digest it was given.
 
 ```bash
 $ SEAL_VERSION=v0.2.0-rc.2
@@ -48,6 +50,8 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
 The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
+
+If the `tree:` line in your install output matches the published-asset `tree:` in the block above, you installed the published GitHub release `v0.2.0-rc.2`, not current main. They share the version string `v0.2.0-rc.2`. They are different bytes. That published artifact's payload contains `checker/seal-receipt-check.mjs`. It ships in this same artifact, so it also cannot protect against a replaced artifact: checking with a copy taken from that store cannot tell you the store was not replaced. That release page attaches only `seal-v0.2.0-rc.2-linux-x64` and `SHA256SUMS`; there is no separate checker asset. Current main, which this README describes, excludes the checker from the payload. A build of this checkout is a different artifact; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md).
 
 Add `~/.local/bin` to PATH before continuing:
 
@@ -81,7 +85,9 @@ replay refused; child calls observed: still 1
 DIRECT WRITE SUCCEEDED; Seal decisions emitted: 0
 ```
 
-The demo directory remains after the walk so you can check a receipt. The checker is not inside the installed store; download `seal-receipt-check.mjs` from the same release and follow [the evaluator walk](docs/evaluator-walk.md).
+The demo directory remains after the walk so you can check a receipt.
+
+Which checker you have depends on which artifact you installed. If you installed the published GitHub release `v0.2.0-rc.2` (the install command above, whose `tree:` matches the published-asset block), the checker is inside that artifact, and that release does not attach a separate `seal-receipt-check.mjs`. If you built from current main, the checker is not inside the installed store; use `checker/seal-receipt-check.mjs` from this checkout, or a later release that actually attaches the checker as its own asset, and follow [the evaluator walk](docs/evaluator-walk.md).
 
 ## 3. Protect
 
@@ -156,7 +162,7 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 
 - Seal is a gate, not a sandbox. It controls the path through it, and only that path. Protect mediates only a stdio MCP server entry; other MCP transport shapes are outside the protected path. Bash, network, subprocesses, other servers, and a direct local write are outside Seal. Other tools on the protected server are not approval-gated, but pass through Seal's forwarding checks.
 - One approval covers the displayed call only. Seal will not run it twice, and a failure before forwarding can spend the approval without running it at all. Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal executes it. Seal binds a client's retry to the displayed request. It cannot establish that a human, rather than the client or an automatic elicitation hook, supplied the approval. Approval expiry follows the local wall clock; Seal provides no trusted-time guarantee.
-- Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. Checking a signed receipt is only as good as the key you check against. A key stored next to the receipt establishes self-consistency only. The optional verification path fetches a separately pinned runtime from GitHub. That is demo-grade key custody, not an externally trusted production key; a production-grade path would verify against a key you obtained from a source you already trust.
+- Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. Checking a signed receipt is only as good as the key you check against. A key stored next to the receipt establishes self-consistency only. The optional verification path fetches a separately pinned runtime from GitHub. Verification is therefore bounded by that external repository and the integrity of the fetched bytes. That is demo-grade key custody, not an externally trusted production key; a production-grade path would verify against a key you obtained from a source you already trust.
 - Protect delegates its local override to Claude Code, whose configuration and backups remain after Unprotect.
 - The installed command sits in a user-writable prefix. Another process running as that user can replace the entry point before the next run. The packaged store is read-only and integrity-checked; the entry point is not. Seal v0.2.0-rc.2 is Linux x86-64 only.
 
@@ -170,7 +176,7 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 - [Install verification](docs/install.md)
 
 <!-- live-page-claims:begin -->
-[Paste a receipt into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The landing page has **zero `<button>` controls**. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+[Paste a receipt into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 <!-- live-page-claims:end -->
 
 ## License
