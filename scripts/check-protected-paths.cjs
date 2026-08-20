@@ -16,7 +16,7 @@ function usage() {
 
 function protectedArtifact(relativePath) {
   const normalized = relativePath.replaceAll("\\\\", "/").replace(/^\.\//, "");
-  if (normalized === PIN_MANIFEST || normalized === CONTROL_DOCUMENT) return true;
+  if (normalized === PIN_MANIFEST || normalized === CONTROL_DOCUMENT || normalized === "scripts/check-protected-paths.cjs" || normalized === "scripts/resolve-ci-diff-range.cjs") return true;
   const components = normalized.toLowerCase().split("/").filter(Boolean);
   const basename = components.at(-1) || "";
   return components.some((component) => PROTECTED_COMPONENTS.has(component))
