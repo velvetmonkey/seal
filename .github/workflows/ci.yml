@@ -352,6 +352,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - run: node scripts/readme-claim-inventory.mjs
+      - name: Check release mentions against VERSION
+        run: node scripts/check-version-drift.cjs
+      - name: Check documented release tags are published
+        run: node scripts/check-published-claim.cjs
       - name: Inventory every claim-bearing prose file
         run: node scripts/claim-bearing-file-inventory.mjs
       - run: node --test test/claim-bearing-file-inventory.test.mjs
