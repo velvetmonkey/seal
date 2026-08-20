@@ -12,6 +12,8 @@ A build from this checkout is a separate, source-build path; its differences are
 
 Requires Node 20+ and the `claude` command for Protect. The install creates one command and one read-only store directory under `~/.local`.
 
+**Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+
 Check that the Claude Code command is available before Protect:
 
 ```bash
@@ -183,7 +185,7 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 ## Links
 
 - [Operating guide](docs/guide/README.md)
-- [Assurance / release notes](docs/RELEASE-NOTES-v0.2.0-rc.2.md)
+- [Assurance / release notes](docs/RELEASE-NOTES-v0.2.0-rc.2)
 - [Limitations](docs/LIMITATIONS.md)
 - [Evaluator walk](docs/evaluator-walk.md)
 - [Full documentation index](docs/README.md)
