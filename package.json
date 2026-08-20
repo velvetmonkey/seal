@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "check-installed-tree-pin-manifest-review": "node scripts/check-installed-tree-pin-manifest-review.cjs",
     "prepack": "node scripts/sync-version.cjs",
     "sync-installed-tree-pin": "node scripts/sync-installed-tree-pin.cjs"
   }
