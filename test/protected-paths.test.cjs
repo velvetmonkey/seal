@@ -6,7 +6,10 @@ const test = require("node:test");
 
 const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-protected-paths.cjs");
-const SCRATCH_ROOT = "/home/monkey/scratch";
+// Local evidence stays under the required scratch root. GitHub-hosted CI has
+// no /home/monkey, so it supplies its own runner-managed scratch directory.
+const SCRATCH_ROOT = process.env.SEAL_PINPROTECT_TEST_ROOT
+  || (process.env.GITHUB_ACTIONS ? process.env.RUNNER_TEMP : "/home/monkey/scratch");
 
 function git(root, args) {
   const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
