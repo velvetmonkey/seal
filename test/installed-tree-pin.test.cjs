@@ -8,306 +8,22 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
-const { sha256Hex, treeDigest, unpackPayload } = require("../spine/integrity.cjs");
+const {
+  buildDist,
+  namedArtifact,
+  removeScratch,
+  treeSha256FromBuiltArtifact,
+} = require("../scripts/installed-tree-pin.cjs");
 
 const ROOT = path.join(__dirname, "..");
-const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
-const TREE = /\btree:?\s+([0-9a-f]{64})\b/g;
-const STORE = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
-const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?$/;
-const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
-const MARKER = "\n// --SEAL-PAYLOAD--\n";
+const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
+const PAYLOAD_MAGIC = "SEALPAY1\n";
+const PAYLOAD_DATA = "--DATA--\n";
+const SITE_MANIFEST = path.join(ROOT, "scripts", "installed-tree-pin-sites.json");
+const PIN_PATTERN = /\btree:?\s+([0-9a-f]{64})\b|\/store\/([0-9a-f]{64})(?=\/|\b)/g;
 
 function scratchRoot() {
   return process.env.RUNNER_TEMP || os.tmpdir();
-}
-
-function lineNumber(text, index) {
-  return text.slice(0, index).split("\n").length;
-}
-
-function fencedBlocks(text) {
-  const lines = text.split("\n");
-  const blocks = [];
-  let offset = 0;
-  let open = null;
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].replace(/\r$/, "");
-    const width = lines[index].length + (index < lines.length - 1 ? 1 : 0);
-    if (/^```/.test(line)) {
-      if (open === null) {
-        open = {
-          start: offset,
-          end: text.length,
-          markerLine: index > 0 ? lines[index - 1].replace(/\r$/, "") : "",
-          markerLineNumber: index,
-        };
-      } else {
-        open.end = offset + width;
-        blocks.push(open);
-        open = null;
-      }
-    }
-    offset += width;
-  }
-  if (open !== null) blocks.push(open);
-  return blocks;
-}
-
-function declaredHashRole(text, index, file, blocks) {
-  const line = lineNumber(text, index);
-  const block = blocks.find((candidate) => index >= candidate.start && index < candidate.end);
-  const marker = block ? block.markerLine.match(ROLE_MARKER) : null;
-  if (!marker) {
-    refuse(
-      "role_marker_absent",
-      `${file}:${line} store hash has no role marker; add ` +
-        "**Seal installed-tree pin role:** `published-asset` or " +
-        "**Seal installed-tree pin role:** `fresh-build` immediately before its fenced block",
-    );
-  }
-  const role = marker[1];
-  if (!KNOWN_ROLES.has(role)) {
-    refuse(
-      "role_marker_unknown",
-      `${file}:${block.markerLineNumber} unknown store-hash role ${JSON.stringify(role)} for hash at line ${line}`,
-    );
-  }
-  return { role, line };
-}
-
-function quotedTreeHashHits(text, file = "<memory>") {
-  const blocks = fencedBlocks(text);
-  return [...text.matchAll(TREE), ...text.matchAll(STORE)].map((match) => {
-    const declared = declaredHashRole(text, match.index, file, blocks);
-    return {
-      hash: match[1],
-      index: match.index,
-      role: declared.role,
-      line: declared.line,
-    };
-  });
-}
-
-function trackedFiles() {
-  const listed = spawnSync("git", ["-C", ROOT, "ls-files"], { encoding: "utf8" });
-  assert.equal(listed.status, 0, listed.stdout + listed.stderr);
-  return listed.stdout.trim().split("\n").filter(Boolean);
-}
-
-function removeScratch(dir) {
-  spawnSync("chmod", ["-R", "u+w", dir], { encoding: "utf8" });
-  fs.rmSync(dir, { recursive: true, force: true });
-}
-
-function buildDist() {
-  const out = fs.mkdtempSync(path.join(scratchRoot(), "seal-installed-tree-pin-"));
-  const built = spawnSync(process.execPath, [BUILD, "--out", out], { encoding: "utf8" });
-  assert.equal(built.status, 0, built.stdout + built.stderr);
-  const artifact = namedArtifact(out, built.stdout);
-  let stat;
-  try {
-    stat = fs.lstatSync(artifact, { bigint: true });
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      refuse("artifact_missing", `built artifact absent: ${artifact}`);
-    }
-    refuse("artifact_unreadable", `built artifact unreadable: ${artifact}: ${error.message}`);
-  }
-  if (stat.isSymbolicLink()) {
-    refuse("artifact_identity_mismatch", `build emitted a symbolic-link alias: ${artifact}`);
-  }
-  if (!stat.isFile()) {
-    refuse("artifact_missing", `built artifact absent: ${artifact}`);
-  }
-  return {
-    out,
-    built,
-    identity: { dev: stat.dev, ino: stat.ino, nlink: stat.nlink },
-  };
-}
-
-function refuse(code, reason) {
-  assert.fail(`REFUSE ${code}: ${reason}`);
-}
-
-function insideOutputDir(out, candidate) {
-  const outRoot = path.resolve(out);
-  const resolved = path.resolve(candidate);
-  const rel = path.relative(outRoot, resolved);
-  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
-function emittedArtifactPath(out, buildStdout) {
-  const firstLine = String(buildStdout || "").split("\n")[0].trim();
-  if (!firstLine) {
-    refuse("locator_unbound", "build did not print the emitted artifact path");
-  }
-  const emitted = path.resolve(firstLine);
-  if (!insideOutputDir(out, emitted)) {
-    refuse("locator_unbound", `build printed an artifact path outside the output directory: ${firstLine}`);
-  }
-  return emitted;
-}
-
-function readMetadata(out, buildStdout) {
-  const metaName = fs.readdirSync(out).find((name) => name.endsWith(".meta.json"));
-  assert.ok(metaName, `build did not write metadata\n${buildStdout || ""}`);
-  const metaPath = path.join(out, metaName);
-  let raw;
-  try {
-    const stat = fs.statSync(metaPath);
-    if ((stat.mode & 0o444) === 0) {
-      refuse("meta_unreadable", `metadata unreadable: ${metaPath}: file has no read bits`);
-    }
-    raw = fs.readFileSync(metaPath, "utf8");
-  } catch (error) {
-    if (String(error && error.message).startsWith("REFUSE meta_unreadable:")) throw error;
-    refuse("meta_unreadable", `metadata unreadable: ${metaPath}: ${error.message}`);
-  }
-  try {
-    return { meta: JSON.parse(raw), metaPath };
-  } catch (error) {
-    refuse("meta_unreadable", `metadata unreadable: ${metaPath}: ${error.message}`);
-  }
-}
-
-function namedArtifact(out, buildStdout) {
-  const emitted = emittedArtifactPath(out, buildStdout);
-  const { meta } = readMetadata(out, buildStdout);
-  if (typeof meta.artifact !== "string" || !/\S/.test(meta.artifact)) {
-    refuse("locator_absent", "metadata does not name the artifact");
-  }
-  if (meta.artifact !== path.basename(meta.artifact)) {
-    refuse("locator_escape", `metadata artifact escapes output directory: ${meta.artifact}`);
-  }
-  const located = path.resolve(out, meta.artifact);
-  if (!insideOutputDir(out, located)) {
-    refuse("locator_escape", `metadata artifact escapes output directory: ${meta.artifact}`);
-  }
-  if (located !== emitted) {
-    refuse(
-      "locator_mismatch",
-      `metadata artifact ${meta.artifact} is not the emitted artifact ${path.basename(emitted)}`,
-    );
-  }
-  return emitted;
-}
-
-function readArtifactBytes(artifactPath, expectedIdentity) {
-  let physical;
-  try {
-    physical = fs.lstatSync(artifactPath, { bigint: true });
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      refuse("artifact_missing", `built artifact absent: ${artifactPath}`);
-    }
-    refuse("artifact_unreadable", `built artifact unreadable: ${artifactPath}: ${error.message}`);
-  }
-  if (physical.isSymbolicLink()) {
-    refuse("artifact_identity_mismatch", `built artifact is a symbolic-link alias: ${artifactPath}`);
-  }
-  let stat;
-  try {
-    stat = fs.statSync(artifactPath, { bigint: true });
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      refuse("artifact_missing", `built artifact absent: ${artifactPath}`);
-    }
-    refuse("artifact_unreadable", `built artifact unreadable: ${artifactPath}: ${error.message}`);
-  }
-  if (!stat.isFile()) {
-    refuse("artifact_missing", `built artifact absent: ${artifactPath}`);
-  }
-  if (stat.size === 0n) {
-    refuse("artifact_empty", `built artifact is empty: ${artifactPath}`);
-  }
-  if ((stat.mode & 0o444n) === 0n) {
-    refuse("artifact_unreadable", `built artifact unreadable: ${artifactPath}: file has no read bits`);
-  }
-  if (
-    stat.dev !== expectedIdentity.dev ||
-    stat.ino !== expectedIdentity.ino ||
-    stat.nlink !== expectedIdentity.nlink
-  ) {
-    refuse(
-      "artifact_identity_mismatch",
-      `built artifact physical identity changed: ${artifactPath}; ` +
-        `expected dev=${expectedIdentity.dev} ino=${expectedIdentity.ino} nlink=${expectedIdentity.nlink}, ` +
-        `found dev=${stat.dev} ino=${stat.ino} nlink=${stat.nlink}`,
-    );
-  }
-  let bytes;
-  try {
-    bytes = fs.readFileSync(artifactPath);
-  } catch (error) {
-    refuse("artifact_unreadable", `built artifact unreadable: ${artifactPath}: ${error.message}`);
-  }
-  if (bytes.length === 0) {
-    refuse("artifact_empty", `built artifact is empty: ${artifactPath}`);
-  }
-  return bytes;
-}
-
-function treeSha256FromArtifactBytes(bytes) {
-  const marker = Buffer.from(MARKER, "utf8");
-  const at = bytes.indexOf(marker);
-  if (at < 0) {
-    refuse("artifact_malformed", "built artifact carries no payload");
-  }
-  const { files } = unpackPayload(bytes.subarray(at + marker.length));
-  return treeDigest(files.map((file) => ({
-    path: file.path,
-    bytes: file.data.length,
-    sha256: sha256Hex(file.data),
-  })));
-}
-
-function treeSha256FromBuiltArtifact(out, buildStdout, expectedIdentity) {
-  return treeSha256FromArtifactBytes(readArtifactBytes(namedArtifact(out, buildStdout), expectedIdentity));
-}
-
-function downloadToFile(url, dest) {
-  const result = spawnSync("curl", ["-fsSL", "--max-time", "30", "-o", dest, url], { encoding: "utf8" });
-  if (result.status !== 0) {
-    refuse(
-      "published_asset_unreadable",
-      `cannot download ${url}: ${(result.stderr || result.stdout || "").trim() || `exit ${result.status}`}`,
-    );
-  }
-}
-
-function publishedTreeSha256FromRelease() {
-  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const match = readme.match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
-  if (!match) {
-    refuse("published_tag_absent", "README.md has no release version command");
-  }
-  const tag = match[1];
-  const name = `seal-${tag}-linux-x64`;
-  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-published-tree-"));
-  try {
-    const artifactPath = path.join(scratch, name);
-    const sumsPath = path.join(scratch, "SHA256SUMS");
-    const base = `https://github.com/velvetmonkey/seal/releases/download/${tag}`;
-    downloadToFile(`${base}/SHA256SUMS`, sumsPath);
-    downloadToFile(`${base}/${name}`, artifactPath);
-    const [digest, count, named] = fs.readFileSync(sumsPath, "utf8").trim().split(/\s+/);
-    if (named !== name) {
-      refuse("published_asset_unreadable", `SHA256SUMS names ${named}, expected ${name}`);
-    }
-    const bytes = fs.readFileSync(artifactPath);
-    if (String(bytes.length) !== String(count)) {
-      refuse("published_asset_unreadable", `published artifact is ${bytes.length} bytes, SHA256SUMS says ${count}`);
-    }
-    const actual = sha256Hex(bytes);
-    if (actual !== digest) {
-      refuse("published_asset_unreadable", `published artifact digest ${actual} does not match SHA256SUMS ${digest}`);
-    }
-    return treeSha256FromArtifactBytes(bytes);
-  } finally {
-    removeScratch(scratch);
-  }
 }
 
 function assertNamedRefuse(fn, code) {
@@ -321,6 +37,152 @@ function assertNamedRefuse(fn, code) {
   assert.match(String(failed.message), new RegExp(`^REFUSE ${code}:`));
 }
 
+// This is intentionally an external tree-hash route.
+// It reads the artifact payload format directly and delegates every SHA-256
+// operation to sha256sum; it does not import integrity.cjs or a hash helper
+// from the generator's installed-tree-pin module.
+function sha256sum(bytes) {
+  const result = spawnSync("sha256sum", [], { input: bytes, encoding: "utf8" });
+  if (result.error && result.error.code === "ENOENT") {
+    assert.fail("REFUSE sha256sum_unavailable: sha256sum is required for the external installed-tree gate");
+  }
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const match = result.stdout.match(/^([0-9a-f]{64})\s/);
+  assert.ok(match, `sha256sum produced an unrecognised result: ${result.stdout}`);
+  return match[1];
+}
+
+function siteKey(site) {
+  return `${site.file}:${site.line}:${site.column} ${site.kind} ${site.role}`;
+}
+
+function roleByLine(text, file) {
+  const roles = new Map();
+  const lines = text.split("\n");
+  let openRole = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].replace(/\r$/, "");
+    if (/^```/.test(line)) {
+      if (openRole === null) {
+        const marker = index > 0
+          ? lines[index - 1].replace(/\r$/, "").match(/^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`$/)
+          : null;
+        openRole = marker ? marker[1] : "";
+      } else {
+        openRole = null;
+      }
+      continue;
+    }
+    if (openRole !== null) roles.set(index + 1, openRole);
+  }
+  return (line) => {
+    const role = roles.get(line);
+    assert.ok(role, `REFUSE pin_population_role_absent: ${file}:${line} pin has no installed-tree role marker`);
+    assert.ok(
+      role === "published-asset" || role === "fresh-build",
+      `REFUSE pin_population_role_unknown: ${file}:${line} has unknown installed-tree role ${JSON.stringify(role)}`,
+    );
+    return role;
+  };
+}
+
+function declaredPopulation() {
+  const sites = JSON.parse(fs.readFileSync(SITE_MANIFEST, "utf8"));
+  assert.ok(Array.isArray(sites) && sites.length > 0, "REFUSE pin_population_manifest_invalid: manifest must be a non-empty array");
+  const keys = sites.map(siteKey);
+  assert.equal(new Set(keys).size, keys.length, "REFUSE pin_population_manifest_invalid: manifest contains duplicate sites");
+  return new Set(keys);
+}
+
+function externalPinPopulation() {
+  const grep = spawnSync(
+    "git",
+    ["-C", ROOT, "grep", "-n", "-E", "tree:? +[0-9a-f]{64}|/store/[0-9a-f]{64}", "--"],
+    { encoding: "utf8" },
+  );
+  assert.ok(grep.status === 0 || grep.status === 1, `REFUSE pin_population_enumeration_failed: ${grep.stderr || grep.stdout}`);
+  const files = new Map();
+  const discovered = new Map();
+  for (const outputLine of grep.stdout.split("\n").filter(Boolean)) {
+    const parsed = outputLine.match(/^([^:]+):(\d+):(.*)$/);
+    assert.ok(parsed, `REFUSE pin_population_enumeration_failed: unrecognised git grep output ${outputLine}`);
+    const file = parsed[1];
+    const line = Number(parsed[2]);
+    if (!files.has(file)) {
+      const text = fs.readFileSync(path.join(ROOT, file), "utf8");
+      files.set(file, { text, roleAt: roleByLine(text, file) });
+    }
+    for (const match of parsed[3].matchAll(PIN_PATTERN)) {
+      const kind = match[1] ? "tree" : "store";
+      const site = { file, line, column: match.index + 1, kind, role: files.get(file).roleAt(line) };
+      const key = siteKey(site);
+      assert.equal(discovered.has(key), false, `REFUSE pin_population_enumeration_failed: duplicate site ${key}`);
+      discovered.set(key, { ...site, hash: match[1] || match[2] });
+    }
+  }
+  const declared = declaredPopulation();
+  for (const key of declared) {
+    assert.ok(discovered.has(key), `REFUSE pin_population_mismatch: gate missing declared site ${key}`);
+  }
+  for (const key of discovered.keys()) {
+    assert.ok(declared.has(key), `REFUSE pin_population_mismatch: gate found undeclared site ${key}`);
+  }
+  return [...discovered.values()];
+}
+
+function externalExtractPayloadFiles(artifactBytes) {
+  const markerAt = artifactBytes.indexOf(PAYLOAD_MARKER);
+  assert.notEqual(markerAt, -1, "built artifact carries no payload");
+  const payload = artifactBytes.subarray(markerAt + PAYLOAD_MARKER.length);
+  const dataAt = payload.indexOf(Buffer.from(PAYLOAD_DATA, "utf8"), PAYLOAD_MAGIC.length);
+  assert.ok(dataAt >= 0, "payload is missing the data marker");
+  const header = payload.subarray(PAYLOAD_MAGIC.length, dataAt).toString("utf8").trim();
+  assert.ok(payload.subarray(0, PAYLOAD_MAGIC.length).equals(Buffer.from(PAYLOAD_MAGIC, "utf8")), "payload has an unknown format");
+  const manifest = JSON.parse(header);
+  assert.ok(Array.isArray(manifest.files), "payload manifest has no files list");
+  let offset = dataAt + Buffer.byteLength(PAYLOAD_DATA);
+  const files = manifest.files.map((file) => {
+    assert.equal(typeof file.path, "string", "payload file has no path");
+    assert.equal(Number.isSafeInteger(file.bytes), true, `payload file ${file.path} has an invalid byte count`);
+    const end = offset + file.bytes;
+    assert.ok(end <= payload.length, `payload ends before ${file.path}`);
+    const data = payload.subarray(offset, end);
+    offset = end;
+    return { path: file.path, bytes: data.length, sha256: sha256sum(data) };
+  });
+  assert.equal(offset, payload.length, "payload has trailing bytes");
+  return files;
+}
+
+function externalTreeSha256FromArtifact(artifactPath) {
+  const files = externalExtractPayloadFiles(fs.readFileSync(artifactPath));
+  const lines = files
+    .map((file) => `${file.sha256}  ${file.bytes}  ${file.path}\n`)
+    .join("");
+  const sorted = spawnSync("sort", ["-k3,3"], {
+    input: lines,
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C" },
+  });
+  assert.equal(sorted.status, 0, sorted.stdout + sorted.stderr);
+  return sha256sum(Buffer.from(sorted.stdout, "utf8"));
+}
+
+function externalPublishedTreeSha256() {
+  const version = fs.readFileSync(path.join(ROOT, "README.md"), "utf8").match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
+  assert.ok(version, "README.md has no release version command");
+  const name = `seal-${version[1]}-linux-x64`;
+  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-external-published-tree-"));
+  try {
+    const artifact = path.join(scratch, name);
+    const download = spawnSync("curl", ["-fsSL", "--max-time", "30", "-o", artifact, `https://github.com/velvetmonkey/seal/releases/download/${version[1]}/${name}`], { encoding: "utf8" });
+    assert.equal(download.status, 0, download.stdout + download.stderr);
+    return externalTreeSha256FromArtifact(artifact);
+  } finally {
+    removeScratch(scratch);
+  }
+}
+
 function rewriteMetadata(out, mutate) {
   const metaName = fs.readdirSync(out).find((name) => name.endsWith(".meta.json"));
   assert.ok(metaName, "build did not write metadata");
@@ -329,62 +191,6 @@ function rewriteMetadata(out, mutate) {
   mutate(meta, metaPath);
   fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
 }
-
-test("published-asset markers govern four download shapes without prose inference", () => {
-  const publishedShape = "a".repeat(64);
-  const shapes = [
-    "$ gh release download v0.2.0-rc.2 --pattern 'seal-*-linux-x64'",
-    "$ cp /srv/internal-release-mirror/seal/v0.2.0-rc.2/linux-x64 ./seal",
-    "$ gh api repos/velvetmonkey/seal/releases/assets/123456 > ./seal",
-    "$ release-cache get velvetmonkey/seal v0.2.0-rc.2 linux-x64 > ./seal",
-  ];
-  for (const prose of shapes) {
-    const text = [
-      prose,
-      "**Seal installed-tree pin role:** `published-asset`",
-      "```output",
-      `store: /home/x/.local/lib/seal/store/${publishedShape}`,
-      "```",
-    ].join("\n");
-    const hits = quotedTreeHashHits(text, "shape.md");
-    assert.equal(hits.length, 1);
-    assert.equal(hits[0].role, "published-asset");
-  }
-});
-
-test("a fresh-build marker wins when prose incidentally mentions releases/download", () => {
-  const freshShape = "b".repeat(64);
-  const text = [
-    "Unlike releases/download/, this builds the checkout.",
-    "**Seal installed-tree pin role:** `fresh-build`",
-    "```text",
-    `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-check.mjs" receipt.json`,
-    "```",
-  ].join("\n");
-  const hits = quotedTreeHashHits(text, "fresh.md");
-  assert.equal(hits.length, 1);
-  assert.equal(hits[0].role, "fresh-build");
-});
-
-test("an unmarked store hash is a named refusal with file, line, and required markers", () => {
-  const text = ["```output", `store: /store/${"c".repeat(64)}`, "```"].join("\n");
-  assertNamedRefuse(() => quotedTreeHashHits(text, "unmarked.md"), "role_marker_absent");
-  assert.throws(
-    () => quotedTreeHashHits(text, "unmarked.md"),
-    /unmarked\.md:2.*Seal installed-tree pin role:.*published-asset.*Seal installed-tree pin role:.*fresh-build/,
-  );
-});
-
-test("an unrecognised store-hash role is a named refusal", () => {
-  const text = [
-    "**Seal installed-tree pin role:** `release-cache`",
-    "```output",
-    `tree: ${"d".repeat(64)}`,
-    "```",
-  ].join("\n");
-  assertNamedRefuse(() => quotedTreeHashHits(text, "unknown.md"), "role_marker_unknown");
-  assert.throws(() => quotedTreeHashHits(text, "unknown.md"), /unknown\.md:1 unknown store-hash role "release-cache"/);
-});
 
 function markedBlockBytes(text, role) {
   const marker = `**Seal installed-tree pin role:** \`${role}\``;
@@ -441,34 +247,30 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
   assert.doesNotMatch(fs.readFileSync(path.join(copy, "README.md"), "utf8"), new RegExp("f{64}"));
 });
 
-test("quoted installed-tree hashes match a freshly built artifact", (t) => {
+test("declared installed-tree sites found by git grep match built artifacts", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
 
-  const freshExpected = treeSha256FromBuiltArtifact(out, built.stdout, identity);
+  const freshExpected = externalTreeSha256FromArtifact(namedArtifact(out, built.stdout));
   assert.match(freshExpected, /^[0-9a-f]{64}$/);
-  const publishedExpected = publishedTreeSha256FromRelease();
+  const publishedExpected = externalPublishedTreeSha256();
   assert.match(publishedExpected, /^[0-9a-f]{64}$/);
 
-  let quoted = 0;
   let quotedPublished = 0;
   let quotedFresh = 0;
-  for (const relative of trackedFiles()) {
-    const hits = quotedTreeHashHits(fs.readFileSync(path.join(ROOT, relative), "utf8"), relative);
-    for (const hit of hits) {
-      quoted += 1;
-      const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
-      if (hit.role === "published-asset") quotedPublished += 1;
-      else quotedFresh += 1;
-      assert.equal(
-        hit.hash,
-        expected,
-        `${relative}:${hit.line} ${hit.role} installed-tree hash mismatch: ` +
-          `quoted ${hit.hash}, ${hit.role} ${expected}`,
-      );
-    }
+  const hits = externalPinPopulation();
+  for (const hit of hits) {
+    const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
+    if (hit.role === "published-asset") quotedPublished += 1;
+    else quotedFresh += 1;
+    assert.equal(
+      hit.hash,
+      expected,
+      `${hit.file}:${hit.line}:${hit.column} ${hit.role} installed-tree hash mismatch: ` +
+        `quoted ${hit.hash}, ${hit.role} ${expected}`,
+    );
   }
-  assert.ok(quoted > 0, "the repository must quote at least one installed-tree hash");
+  assert.ok(hits.length > 0, "the repository must quote at least one installed-tree hash");
   assert.ok(quotedPublished > 0, "the repository must quote at least one published-asset installed-tree hash");
   assert.ok(quotedFresh > 0, "the repository must quote at least one fresh-build installed-tree hash");
 });

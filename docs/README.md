@@ -62,6 +62,9 @@ the Node CLI this repository ships.
 6. [guide/github-actions-provenance.md](guide/github-actions-provenance.md) —
    download and verify the GitHub-hosted runner's attested demo-receipt
    evidence, and read the boundary of that provenance claim.
+7. [INSTALLED-TREE-PIN-CONTROL.md](INSTALLED-TREE-PIN-CONTROL.md) — the
+   INJECTED human-control boundary for the hand-maintained installed-tree pin
+   site manifest.
 
 ## I want to operate Seal day to day
 

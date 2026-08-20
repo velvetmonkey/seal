@@ -24,6 +24,8 @@ test/frontdoor.test.mjs
 test/guide-claims.test.mjs
 test/guide-tokens.test.mjs
 test/identity-wiring.test.cjs
+test/installed-tree-pin-generator.test.cjs
+test/installed-tree-pin-manifest-review.test.cjs
 test/installed-tree-pin.test.cjs
 test/kernel-bridge.test.cjs
 test/lease-generation.test.cjs
