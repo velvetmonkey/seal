@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 // The release asset is authoritative. A root pin is permitted only when it
-// names the exact asset and bytes of a published release; an absent or empty
+// names the exact asset of a published release; an absent or empty
 // root file is the intentional between-releases state.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -34,10 +34,10 @@ const lines = text.split(/\r?\n/).map((line, index) => ({ line, number: index + 
 if (lines.length !== 1) refuse(`expected one non-empty line, found ${lines.length}`);
 const entry = lines[0];
 const fields = entry.line.trim().split(/\s+/);
-if (fields.length !== 3 || !/^[0-9a-f]{64}$/.test(fields[0]) || !/^\d+$/.test(fields[1]) || !fields[2]) {
+if (fields.length !== 2 || !/^[0-9a-f]{64}$/.test(fields[0]) || !fields[1]) {
   refuse(`offending line ${entry.number}: ${entry.line}`);
 }
-const [digest, bytes, name] = fields;
+const [digest, name] = fields;
 
 function repository() {
   const remote = spawnSync("git", ["config", "--get", "remote.origin.url"], { cwd: ROOT, encoding: "utf8" });
@@ -58,5 +58,4 @@ const asset = releases.flatMap((release) => release.assets.map((candidate) => ({
 if (!asset) refuse(`offending line ${entry.number} names unpublished artifact ${name}`);
 const publishedDigest = asset.candidate.digest?.replace(/^sha256:/, "");
 if (publishedDigest && publishedDigest !== digest) refuse(`offending line ${entry.number} digest differs from published asset ${name}`);
-if (Number(asset.candidate.size) !== Number(bytes)) refuse(`offending line ${entry.number} byte count differs from published asset ${name}`);
 process.stdout.write(`PASS root release pin names published asset ${name} from ${asset.release.tag_name}\n`);

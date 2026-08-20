@@ -15,13 +15,14 @@ const MARKED_FENCE =
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const refusals = [];
 execFileSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", dist], { stdio: "inherit" });
-const [sha256, bytes, artifact] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+const [sha256, artifact] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
 const meta = JSON.parse(fs.readFileSync(path.join(dist, `${artifact}.meta.json`), "utf8"));
+const bytes = meta.bytes;
 // The build just made is named for THIS commit. The pin is a claim about the
 // bytes the release will publish, so it carries the release name. The two
 // agree because the payload is named by VERSION and never by the commit.
 const released = releaseArtifactName(meta.version);
-fs.writeFileSync(path.join(ROOT, "SHA256SUMS"), `${sha256}  ${bytes}  ${released}\n`);
+fs.writeFileSync(path.join(ROOT, "SHA256SUMS"), `${sha256}  ${released}\n`);
 
 function applyReplacements(text, replacements) {
   for (const [expression, value] of replacements) text = text.replace(expression, value);

@@ -86,7 +86,7 @@ function main() {
     if (fs.existsSync(dest)) fs.rmSync(dest, { force: true });
     fs.writeFileSync(dest, artifact, { mode: 0o555 });
     const digest = sha256Hex(artifact);
-    const sums = `${digest}  ${artifact.length}  ${name}\n`;
+    const sums = `${digest}  ${name}\n`;
     fs.writeFileSync(path.join(outDir, "SHA256SUMS"), sums);
     const meta = {
       schema: "seal.dist/v1",

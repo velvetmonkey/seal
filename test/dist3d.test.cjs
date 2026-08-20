@@ -62,11 +62,10 @@ function buildArtifact() {
   const artifact = path.join(out, identityName);
   assert.ok(fs.existsSync(artifact), built.out);
   const sums = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim();
-  const [digest, bytes, name] = sums.split(/\s+/);
+  const [digest, name] = sums.split(/\s+/);
   assert.equal(name, identityName);
   assert.equal(digest, sha256Hex(fs.readFileSync(artifact)));
-  assert.equal(Number(bytes), fs.statSync(artifact).size);
-  return { out, artifact, digest, bytes: Number(bytes) };
+  return { out, artifact, digest, bytes: fs.statSync(artifact).size };
 }
 
 function installOk(built, prefix) {

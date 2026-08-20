@@ -30,21 +30,19 @@ $ claude --version
 
 ## 1. Install
 
-Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that pin. For the longer verification procedure, see [full SHA256SUMS verification](docs/install.md).
+Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that digest pin. For the longer verification procedure, see [full SHA256SUMS verification](docs/install.md).
 
-These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
+These commands fetch both files from the same release page. The digest check establishes transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest with release information you obtained through a separate channel before executing the binary.
 
 ```bash
 SEAL_VERSION=v0.2.0-rc.2
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-read -r expected_digest expected_bytes expected_name < SHA256SUMS
-actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
-test "$actual_digest" = "$expected_digest"
-actual_bytes="$(wc -c < "$expected_name")"
-test "$actual_bytes" = "$expected_bytes"
-chmod +x "$expected_name"
-./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
+base="https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION"
+curl -fsSLO "$base/SHA256SUMS" -O "$base/seal-$SEAL_VERSION-linux-x64"
+if [ ! -r SHA256SUMS ] || ! grep -q '[^[:space:]]' SHA256SUMS; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
+sha256sum -c SHA256SUMS
+expected_digest="$(awk '{print $1}' SHA256SUMS)"
+chmod +x "seal-$SEAL_VERSION-linux-x64"
+./"seal-$SEAL_VERSION-linux-x64" --sha256 "$expected_digest" --prefix ~/.local
 ```
 
 You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:

@@ -103,8 +103,8 @@ async function releaseAsset(tag) {
   const base = `https://github.com/velvetmonkey/seal/releases/download/${tag}`;
   const artifactName = `seal-${tag}-linux-x64`;
   const [bytes, sums] = await Promise.all([fetchBytes(`${base}/${artifactName}`), fetchBytes(`${base}/SHA256SUMS`)]);
-  const [digest, count, name] = sums.toString("utf8").trim().split(/\s+/);
-  if (name !== artifactName || Number(count) !== bytes.length || crypto.createHash("sha256").update(bytes).digest("hex") !== digest) {
+  const [digest, name] = sums.toString("utf8").trim().split(/\s+/);
+  if (name !== artifactName || crypto.createHash("sha256").update(bytes).digest("hex") !== digest) {
     fail(`published release asset does not match SHA256SUMS for ${artifactName}`);
   }
   return { bytes, name, digest };
@@ -128,7 +128,7 @@ async function main() {
     const home = path.join(sandbox, "home");
     const prefix = path.join(home, ".local");
     fs.writeFileSync(artifact, asset.bytes, { mode: 0o755 });
-    const result = spawnSync(artifact, ["--sha256", asset.digest, "--bytes", String(asset.bytes.length), "--prefix", prefix], {
+    const result = spawnSync(artifact, ["--sha256", asset.digest, "--prefix", prefix], {
       cwd: sandbox,
       encoding: "utf8",
       env: { ...process.env, HOME: home },

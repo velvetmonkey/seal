@@ -83,12 +83,11 @@ jobs:
           mkdir -p "$evidence_dir" "$release_dir"
           gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$release_dir" \
             --pattern SHA256SUMS --pattern "$artifact_name"
-          read -r expected_digest expected_bytes expected_name < "$release_dir/SHA256SUMS"
+          read -r expected_digest expected_name < "$release_dir/SHA256SUMS"
           test "$expected_name" = "$artifact_name"
           test "$(sha256sum "$release_dir/$artifact_name" | cut -d' ' -f1)" = "$expected_digest"
-          test "$(wc -c < "$release_dir/$artifact_name" | tr -d ' ')" = "$expected_bytes"
           chmod +x "$release_dir/$artifact_name"
-          "$release_dir/$artifact_name" --sha256 "$expected_digest" --bytes "$expected_bytes" \
+          "$release_dir/$artifact_name" --sha256 "$expected_digest" \
             --prefix "$install_prefix"
           printf 'y\n' | script --quiet --return \
             --command "'$install_prefix/bin/seal' demo --dir '$demo_dir'" /dev/null \
@@ -265,15 +264,14 @@ jobs:
           dist="$RUNNER_TEMP/demo-receipt-dist"
           prefix="$RUNNER_TEMP/demo-receipt-prefix"
           node scripts/build-dist.cjs --out "$dist"
-          read -r digest bytes artifact < "$dist/SHA256SUMS"
-          "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix"
+          read -r digest artifact < "$dist/SHA256SUMS"
+          "$dist/$artifact" --sha256 "$digest" --prefix "$prefix"
           test -x "$prefix/bin/seal"
           # The checker is a separate release asset, same shape as release.yml.
           checker="$dist/seal-receipt-check.mjs"
           cp checker/seal-receipt-check.mjs "$checker"
           checker_digest="$(sha256sum "$checker" | awk '{ print $1 }')"
-          checker_bytes="$(wc -c < "$checker" | tr -d ' ')"
-          printf '%s  %s  %s\n' "$checker_digest" "$checker_bytes" "seal-receipt-check.mjs" >> "$dist/SHA256SUMS"
+          printf '%s  %s\n' "$checker_digest" "seal-receipt-check.mjs" >> "$dist/SHA256SUMS"
           grep -F "seal-receipt-check.mjs" "$dist/SHA256SUMS"
       - name: Run the demo and check its emitted receipt
         shell: bash
@@ -314,7 +312,7 @@ jobs:
             echo '::error::published checker is empty'
             exit 1
           fi
-          pin="$(awk '$3 == "seal-receipt-check.mjs" { print $1; exit }' "$sums")"
+          pin="$(awk '$2 == "seal-receipt-check.mjs" { print $1; exit }' "$sums")"
           got="$(sha256sum "$checker" | awk '{ print $1 }')"
           if [[ -z "$pin" || "$got" != "$pin" ]]; then
             echo '::error::published checker digest does not match SHA256SUMS'

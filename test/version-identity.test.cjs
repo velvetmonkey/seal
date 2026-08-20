@@ -52,13 +52,12 @@ test("every emitted release identity derives from VERSION", () => {
   assert.equal(build.code, 0, build.stderr);
   const artifact = path.join(out, builtName);
   assert.ok(fs.existsSync(artifact), build.stdout);
-  const [digest, bytes, named] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const [digest, named] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
   assert.equal(named, builtName);
   assert.equal(digest, crypto.createHash("sha256").update(fs.readFileSync(artifact)).digest("hex"));
-  assert.equal(Number(bytes), fs.statSync(artifact).size);
 
   const prefix = path.join(out, "prefix");
-  const install = run(artifact, ["--sha256", digest, "--bytes", bytes, "--prefix", prefix]);
+  const install = run(artifact, ["--sha256", digest, "--prefix", prefix]);
   assert.equal(install.code, 0, install.stderr);
   assert.match(install.stdout, new RegExp(`installed seal ${VERSION} linux-x64`));
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
