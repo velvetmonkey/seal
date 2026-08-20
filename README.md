@@ -22,13 +22,13 @@ $ claude --version
 
 1. **Protect once.** `seal protect` reads and hashes the server entry in `.mcp.json`, then asks Claude Code to install a local override. Seal does not edit `.mcp.json` or `~/.claude.json`, and later server-entry drift refuses instead of forwarding.
 2. **Approve per call.** Seal shows the exact guarded call. Its authorization kernel is a small decision program bundled as WebAssembly (WASM); Seal pins its bytes and requires its answer before forwarding. One-use consumption means the call will not run twice. Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
-3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the release's included checker or seal-check with the limits stated below. The release checker is in the installed payload, so it cannot establish that the payload itself was not replaced.
+3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the checker or seal-check with the limits stated below.
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
 ## 1. Install
 
-Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that pin. The [full SHA256SUMS verification](docs/install.md) is the copy-paste wall; the short form below is the same install.
+Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that pin. For the longer verification procedure, see [full SHA256SUMS verification](docs/install.md).
 
 These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
 
@@ -57,7 +57,8 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 
 The `store:` and `command:` paths above include the machine that ran this example; those path prefixes differ on your machine, while the other text must match.
 
-If the `tree:` line in your install output matches the published-asset `tree:` in the block above, your installed payload matches that release artifact. This is a payload-identity check, not proof of GitHub provenance: a local build of the same payload has the same tree digest. The published release payload contains `checker/seal-receipt-check.mjs`; because that checker ships in the same artifact, it cannot show that the artifact was not replaced. That release page attaches only `seal-v0.2.0-rc.2-linux-x64` and `SHA256SUMS`; there is no separate checker asset.
+Matching a tree digest identifies payload bytes, not their provenance: a local build of the same payload has the same tree digest.
+Running a checker copied from the same installed store cannot establish that the store itself was not replaced.
 
 Add `~/.local/bin` to PATH before continuing:
 
@@ -95,11 +96,11 @@ DIRECT WRITE SUCCEEDED; Seal decisions emitted: 0
 
 The demo directory remains after the walk so you can check a receipt.
 
-The published release installed above includes its checker in the payload. If you took the secondary source-build path, its store does not include the checker; use `checker/seal-receipt-check.mjs` from that checkout and follow [the source-build evaluator walk](docs/evaluator-walk.md).
+If you took the secondary source-build path, its store does not include the checker; use `checker/seal-receipt-check.mjs` from that checkout.
 
 ## 3. Protect
 
-`seal protect SERVER TOOL` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them.
+`seal protect SERVER TOOL` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check.
 
 This is a shell transcript: `$ ` marks each command line. Do not paste the
 markers; remove them before running the block.
@@ -126,9 +127,11 @@ $ } &&
 $ seal protect db demo.mutate
 ```
 
-`protect` reports how many of that server's tools are not approval-gated, naming at most 20 and counting the rest. Those calls still route through Seal's proxy, where live server-entry drift or a lease-generation mismatch can refuse forwarding. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE.
+`protect` reports how many of that server's tools are not approval-gated, naming at most 20 and counting the rest. Those calls still route through Seal's proxy, where live server-entry drift or a lease-generation mismatch can refuse forwarding. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name.
 
 The protected proxy records every decision as a signed receipt file. On first activation it creates a machine-local Ed25519 receipt key under the Seal data directory, prints the public key and its file path, and reuses that key on later activations.
+
+The checker accepts a receipt only against the public key you supply and only when the decision, tool, arguments and signature match the sealed commitments. Semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story. The checker never reads the key from the receipt; obtain the verifying key from a source you trust.
 
 Then, in that project:
 
