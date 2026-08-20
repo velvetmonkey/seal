@@ -68,7 +68,7 @@ function main() {
 
   const sums = path.join(dir, "SHA256SUMS");
   if (fs.existsSync(sums)) {
-    const named = fs.readFileSync(sums, "utf8").trim().split(/\s+/)[2];
+    const named = fs.readFileSync(sums, "utf8").trim().split(/\s+/)[1];
     if (named !== expected) {
       refuse("checksum_identity_mismatch", `${sums} names ${named}; expected ${expected}`);
     }

@@ -21,8 +21,8 @@ function buildArtifact() {
   const out = fs.mkdtempSync(path.join(SCRATCH_ROOT, "seal-reinstall-test-"));
   const built = run(process.execPath, [BUILD, "--out", out]);
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
-  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
-  return { out, artifact: path.join(out, name), digest, bytes };
+  const [digest, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  return { out, artifact: path.join(out, name), digest, bytes: fs.statSync(path.join(out, name)).size };
 }
 
 function install(built, prefix) {

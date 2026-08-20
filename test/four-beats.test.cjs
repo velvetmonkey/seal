@@ -132,9 +132,9 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   assert.equal(built.code, 0, built.out);
 
   const sums = fs.readFileSync(path.join(distDir, "SHA256SUMS"), "utf8").trim().split(/\s+/);
-  const artifact = path.join(distDir, sums[2]);
+  const artifact = path.join(distDir, sums[1]);
   const digest = sums[0];
-  const bytes = sums[1];
+  const bytes = String(fs.statSync(artifact).size);
   assert.equal(digest, crypto.createHash("sha256").update(fs.readFileSync(artifact)).digest("hex"));
 
   // INSTALL — hash pin, not a signing key.

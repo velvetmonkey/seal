@@ -11,21 +11,22 @@ identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
 otherwise `<version>-dev.g<commit>` — see
 [VERSION-IDENTITY.md](VERSION-IDENTITY.md). That file
 is the installer and the payload. The published pin lives in the `SHA256SUMS`
-release asset alongside the artifact (digest and byte length). The repository
+release asset alongside the artifact (digest and filename). The repository
 root intentionally has no hand-maintained copy. `test/dist-pin.test.cjs`
 refuses a root entry for an artifact that is not a published release, while
 an absent or empty root file is the defined between-releases state.
 
 There is no signing-key ceremony. Download the binary and the `SHA256SUMS`
-asset attached to the same release, then supply that asset's `--sha256` (and
-optionally `--bytes`) values. Without that pin the installer refuses.
+asset attached to the same release, verify it with `sha256sum -c`, then supply
+that asset's `--sha256` value. Without that pin the installer refuses.
 
 ## Install
 
 ```bash
-$ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
-$ chmod +x "$SEAL_ARTIFACT"
-$ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix ~/.local
+$ sha256sum -c SHA256SUMS
+$ SEAL_SHA256="$(awk '{print $1}' SHA256SUMS)"
+$ chmod +x "seal-$SEAL_VERSION-linux-x64"
+$ "./seal-$SEAL_VERSION-linux-x64" --sha256 "$SEAL_SHA256" --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and

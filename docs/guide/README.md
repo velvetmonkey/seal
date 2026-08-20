@@ -43,12 +43,13 @@ $ claude --version
 ```
 
 Download a binary and the `SHA256SUMS` asset attached to the same release,
-then run the binary with that asset's digest and byte length:
+then verify it with `sha256sum -c` and run the binary with that asset's digest:
 
 ```bash
-$ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
-$ chmod +x "$SEAL_ARTIFACT"
-$ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
+$ sha256sum -c SHA256SUMS
+$ SEAL_SHA256="$(awk '{print $1}' SHA256SUMS)"
+$ chmod +x "seal-$SEAL_VERSION-linux-x64"
+$ "./seal-$SEAL_VERSION-linux-x64" --sha256 "$SEAL_SHA256"
 ```
 
 **Seal installed-tree pin role:** `published-asset`
