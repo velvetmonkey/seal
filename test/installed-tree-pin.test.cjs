@@ -9,14 +9,43 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { sha256Hex, treeDigest, unpackPayload } = require("../spine/integrity.cjs");
+let REGION_BOUNDARY;
+let INSTALLED_TREE_PIN_FILES;
+let FENCE_LINE;
+let STORE_PATHS_CASE_SENSITIVE;
+let formatInstalledTreeRefusal;
+let listInstalledTreePinFiles;
+let listMarkdownFenceSpans;
+let classifyHashToken;
+let scanInstalledTreeRegions;
+let scanInstalledTreePinFiles;
+try {
+  ({
+    REGION_BOUNDARY,
+    INSTALLED_TREE_PIN_FILES,
+    FENCE_LINE,
+    STORE_PATHS_CASE_SENSITIVE,
+    formatInstalledTreeRefusal,
+    listInstalledTreePinFiles,
+    listMarkdownFenceSpans,
+    classifyHashToken,
+    scanInstalledTreeRegions,
+    scanInstalledTreePinFiles,
+  } = require("../scripts/installed-tree-pin-regions.cjs"));
+} catch (error) {
+  if (error && error.code === "MODULE_NOT_FOUND") {
+    process.stderr.write(
+      "REFUSE shared_module_missing: cannot load scripts/installed-tree-pin-regions.cjs\n",
+    );
+    process.exit(1);
+  }
+  throw error;
+}
 const {
-  REGION_BOUNDARY,
-  INSTALLED_TREE_PIN_FILES,
-  formatInstalledTreeRefusal,
-  listInstalledTreePinFiles,
-  scanInstalledTreeRegions,
-  scanInstalledTreePinFiles,
-} = require("../scripts/installed-tree-pin-regions.cjs");
+  LISTED_PIN_FILES,
+  detectUnlistedPinSuspects,
+  watchUnlistedInstalledTreePinFiles,
+} = require("../scripts/installed-tree-pin-watchdog.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
@@ -32,6 +61,27 @@ function quotedTreeHashHits(text, file = "<memory>") {
     assert.fail(scanned.issues.map(formatInstalledTreeRefusal).join("\n"));
   }
   return scanned.hits;
+}
+
+function docsFenceSpans(source) {
+  const lines = source.split(/\r?\n/);
+  let fence = null;
+  const spans = [];
+  lines.forEach((line, index) => {
+    const match = line.match(/^( {0,3})(`{3,}|~{3,})(.*)$/);
+    if (!match) return;
+    const [, , marker, info] = match;
+    if (!fence) {
+      fence = { marker: marker[0], length: marker.length, line: index };
+      return;
+    }
+    if (marker[0] === fence.marker && marker.length >= fence.length && !info.trim()) {
+      spans.push({ open: fence.line, close: index });
+      fence = null;
+    }
+  });
+  if (fence) spans.push({ open: fence.line, close: null });
+  return spans;
 }
 
 function trackedFiles() {
@@ -463,6 +513,104 @@ test("tree colon without following whitespace is a named refusal", () => {
   assertNamedRefuse(() => quotedTreeHashHits(text, "nospace.md"), "tree_hash_spacing");
 });
 
+test("an uppercase store hash is classified, not invisible", () => {
+  assert.equal(STORE_PATHS_CASE_SENSITIVE, process.platform === "linux");
+  const upper = "E".repeat(64);
+  const text = [
+    "**Seal installed-tree pin role:** `published-asset`",
+    "```output",
+    `store: /store/${upper}`,
+    "```",
+  ].join("\n");
+  const scanned = scanInstalledTreeRegions(text, "upper.md");
+  const storeHits = scanned.hits.filter((hit) => hit.hash === "e".repeat(64));
+  assert.equal(storeHits.length, 1, "uppercase hex must be a classified store-hash hit");
+  assert.equal(storeHits[0].spelling, upper);
+  assert.equal(storeHits[0].role, "published-asset");
+  assert.ok(
+    scanned.issues.some((issue) => issue.code === "store_hash_case"),
+    scanned.issues.map(formatInstalledTreeRefusal).join("\n"),
+  );
+});
+
+test("conflicting role markers refuse when the region's hash is uppercase", () => {
+  const text = stackedMarkers(["<!-- spacer -->"]).replace(/e{64}/, "E".repeat(64));
+  assertNamedRefuse(() => quotedTreeHashHits(text, "conflict-upper.md"), "role_marker_conflict");
+});
+
+test("a four-backtick outer fence agrees with the repository Markdown fence parser", () => {
+  const hash = "a".repeat(64);
+  const text = [
+    "**Seal installed-tree pin role:** `fresh-build`",
+    "````output",
+    "inner triple-backtick example:",
+    "```",
+    `store: /store/${hash}`,
+    "```",
+    "````",
+  ].join("\n");
+  const scanned = scanInstalledTreeRegions(text, "four-backtick.md");
+  const docsSpans = docsFenceSpans(text);
+  const pinSpans = listMarkdownFenceSpans(text);
+  assert.deepEqual(
+    pinSpans.map((span) => [span.openIndex, span.closeIndex]),
+    docsSpans.map((span) => [span.open, span.close]),
+  );
+  assert.equal(scanned.regions.length, 1);
+  assert.equal(scanned.hits.length, 1);
+  assert.equal(scanned.hits[0].role, "fresh-build");
+  assert.equal(scanned.hits[0].hash, hash);
+  assert.equal(scanned.issues.length, 0);
+});
+
+test("a tilde fence agrees with the repository Markdown fence parser", () => {
+  const hash = "b".repeat(64);
+  const text = [
+    "**Seal installed-tree pin role:** `published-asset`",
+    "~~~output",
+    `store: /store/${hash}`,
+    "~~~",
+  ].join("\n");
+  const scanned = scanInstalledTreeRegions(text, "tilde.md");
+  const docsSpans = docsFenceSpans(text);
+  const pinSpans = listMarkdownFenceSpans(text);
+  assert.deepEqual(
+    pinSpans.map((span) => [span.openIndex, span.closeIndex]),
+    docsSpans.map((span) => [span.open, span.close]),
+  );
+  assert.equal(scanned.regions.length, 1);
+  assert.equal(scanned.hits.length, 1);
+  assert.equal(scanned.hits[0].role, "published-asset");
+  assert.equal(scanned.issues.length, 0);
+});
+
+test("an orphan role marker with no fence after it is a named refusal", () => {
+  const text = "**Seal installed-tree pin role:** `fresh-build`\n";
+  assertNamedRefuse(() => quotedTreeHashHits(text, "orphan.md"), "role_marker_orphan");
+});
+
+test("a hash-shaped string the recogniser cannot classify is a named refusal", () => {
+  const text = [
+    "**Seal installed-tree pin role:** `fresh-build`",
+    "```output",
+    `store: /store/0x${"c".repeat(64)}`,
+    "```",
+  ].join("\n");
+  assertNamedRefuse(() => quotedTreeHashHits(text, "unclassified.md"), "unclassified_hash_shape");
+  const classified = classifyHashToken(`0x${"c".repeat(64)}`);
+  assert.equal(classified.hashShaped, true);
+  assert.equal(classified.classified, null);
+});
+
+test("the pin fence regex is identical to the docs Markdown fence parser", () => {
+  const docsSource = fs.readFileSync(path.join(ROOT, "docs", "check-fenced-languages.mjs"), "utf8");
+  const regionsSource = fs.readFileSync(path.join(ROOT, "scripts", "installed-tree-pin-regions.cjs"), "utf8");
+  const fenceLiteral = "/^( {0,3})(`{3,}|~{3,})(.*)$/";
+  assert.equal(FENCE_LINE.toString(), fenceLiteral);
+  assert.ok(docsSource.includes(fenceLiteral), "docs guard lost the CommonMark fence regex");
+  assert.ok(regionsSource.includes(fenceLiteral), "pin scanner lost the CommonMark fence regex");
+});
+
 function markedBlockBytes(text, role) {
   const marker = `**Seal installed-tree pin role:** \`${role}\``;
   const blocks = [];
@@ -725,6 +873,20 @@ test("the pin and repin share one region scanner and one file list", () => {
 test("a tracked file with an installed-tree hash cannot sit outside the shared file set", () => {
   const shared = new Set(listInstalledTreePinFiles());
   assert.ok(shared.has("docs/COMPREHENSION-CHECK.md"));
+  assert.deepEqual([...LISTED_PIN_FILES], [...listInstalledTreePinFiles()]);
+  const watchdogSource = fs.readFileSync(
+    path.join(ROOT, "scripts", "installed-tree-pin-watchdog.cjs"),
+    "utf8",
+  );
+  assert.doesNotMatch(watchdogSource, /scanInstalledTreeRegions/);
+  assert.doesNotMatch(watchdogSource, /scanInstalledTreePinFiles/);
+  assert.doesNotMatch(watchdogSource, /installed-tree-pin-regions/);
+  const watched = watchUnlistedInstalledTreePinFiles(ROOT, trackedFiles());
+  assert.deepEqual(
+    watched.strays,
+    [],
+    watched.strays.map((stray) => `${stray.file} ${stray.reasons.join(",")}`).join("\n"),
+  );
   const strays = [];
   for (const relative of trackedFiles()) {
     if (shared.has(relative)) continue;
@@ -734,6 +896,22 @@ test("a tracked file with an installed-tree hash cannot sit outside the shared f
     }
   }
   assert.deepEqual(strays, []);
+});
+
+test("the file-set watchdog reports a hash-shaped pin the scanner does not classify", () => {
+  const hash = `0x${"d".repeat(64)}`;
+  const text = [
+    "**Seal installed-tree pin role:** `published-asset`",
+    "```output",
+    `store: /probe/.local/lib/seal/store/${hash}`,
+    "```",
+  ].join("\n");
+  const scanned = scanInstalledTreeRegions(text, "docs/WATCHDOG-PROBE.md");
+  assert.equal(scanned.hits.length, 0);
+  assert.ok(scanned.issues.some((issue) => issue.code === "unclassified_hash_shape"));
+  const reasons = detectUnlistedPinSuspects(text);
+  assert.ok(reasons.includes("role_marker"), reasons.join(","));
+  assert.ok(reasons.some((reason) => reason.startsWith("store_path:")), reasons.join(","));
 });
 
 test("quoted installed-tree hashes match a freshly built artifact", (t) => {

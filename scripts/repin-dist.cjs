@@ -5,10 +5,22 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const {
-  formatInstalledTreeRefusal,
-  scanInstalledTreePinFiles,
-} = require("./installed-tree-pin-regions.cjs");
+let formatInstalledTreeRefusal;
+let scanInstalledTreePinFiles;
+try {
+  ({
+    formatInstalledTreeRefusal,
+    scanInstalledTreePinFiles,
+  } = require("./installed-tree-pin-regions.cjs"));
+} catch (error) {
+  if (error && error.code === "MODULE_NOT_FOUND") {
+    process.stderr.write(
+      "REFUSE shared_module_missing: cannot load scripts/installed-tree-pin-regions.cjs\n",
+    );
+    process.exit(1);
+  }
+  throw error;
+}
 const { releaseArtifactName } = require("./product-identity.cjs");
 
 const ROOT = path.join(__dirname, "..");
@@ -49,10 +61,10 @@ function rewriteRoleMarkedPins(inspected, values, outsideReplacements, refusals)
       rewritten += token;
     } else {
       rewritten += block
-        .replace(/^sha256 [0-9a-f]+$/gm, `sha256 ${values.sha256}`)
+        .replace(/^sha256 [0-9a-fA-F]+$/gm, `sha256 ${values.sha256}`)
         .replace(/^bytes \d+$/gm, `bytes ${values.bytes}`)
-        .replace(/^tree:? [0-9a-f]+$/gm, `tree ${values.treeSha256}`)
-        .replace(/\/store\/[0-9a-f]+/g, `/store/${values.treeSha256}`);
+        .replace(/^tree:? [0-9a-fA-F]+$/gm, `tree ${values.treeSha256}`)
+        .replace(/\/store\/[0-9a-fA-F]+/g, `/store/${values.treeSha256}`);
     }
     cursor = region.end;
   }

@@ -26,9 +26,23 @@ const INSTALLED_TREE_PIN_FILES = Object.freeze([
 // indented marker in the region is still a marker, not an absence.
 const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`$/;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
-const TREE_HASH = /\btree:?\s+([0-9a-f]{64})\b/g;
-const TREE_HASH_WITHOUT_SPACE = /\btree:([0-9a-f]{64})\b/g;
-const STORE_HASH = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
+
+// CommonMark fence line, identical to docs/check-fenced-languages.mjs.
+// Opening: 0-3 spaces, 3 or more backticks or tildes, then an info string.
+// Closing: same marker character, length >= opening length, empty info string.
+const FENCE_LINE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+
+// Store directory names are the hex spelling of a SHA-256.
+// Reading 1, cryptographic identity: hexadecimal is case-insensitive, so
+// 5181F37E… and 5181f37e… are the same digest.
+// Reading 2, store path: on this platform (Linux) the filesystem is
+// case-sensitive, so /store/5181F37E… and /store/5181f37e… are different
+// directories. The installer materializes lowercase names.
+// Both readings are handled: a classified hit carries cryptoIdentity
+// (lowercase) and the original spelling; a non-lowercase spelling is a named
+// refusal on a case-sensitive filesystem because it cannot name the installer's
+// store directory. Case must not make a store hash invisible.
+const STORE_PATHS_CASE_SENSITIVE = process.platform === "linux";
 
 function lineNumber(text, index) {
   return text.slice(0, index).split("\n").length;
@@ -38,15 +52,11 @@ function matchRoleMarker(line) {
   return line.replace(/\r$/, "").trim().match(ROLE_MARKER);
 }
 
-function isFenceLine(line) {
-  return /^```/.test(line.replace(/\r$/, ""));
+function matchFenceLine(line) {
+  return line.replace(/\r$/, "").match(FENCE_LINE);
 }
 
-function listInstalledTreePinFiles() {
-  return INSTALLED_TREE_PIN_FILES;
-}
-
-function fencedRegions(text) {
+function lineOffsets(text) {
   const lines = text.split("\n");
   const offsets = [];
   let offset = 0;
@@ -54,45 +64,172 @@ function fencedRegions(text) {
     offsets.push(offset);
     offset += lines[index].length + (index < lines.length - 1 ? 1 : 0);
   }
+  return { lines, offsets };
+}
 
-  const regions = [];
+function listMarkdownFenceSpans(text) {
+  const { lines } = lineOffsets(text);
+  const spans = [];
   let open = null;
   for (let index = 0; index < lines.length; index += 1) {
-    if (!isFenceLine(lines[index])) continue;
+    const fence = matchFenceLine(lines[index]);
+    if (!fence) continue;
+    const marker = fence[2];
+    const info = fence[3];
     if (open === null) {
-      let regionBegin = 0;
-      for (let previous = index - 1; previous >= 0; previous -= 1) {
-        if (isFenceLine(lines[previous])) {
-          regionBegin = previous + 1;
-          break;
-        }
-      }
-      const markers = [];
-      for (let markerIndex = regionBegin; markerIndex < index; markerIndex += 1) {
-        const marker = matchRoleMarker(lines[markerIndex]);
-        if (!marker) continue;
-        markers.push({
-          role: marker[1],
-          line: markerIndex + 1,
-          start: offsets[markerIndex],
-        });
-      }
-      open = {
-        start: offsets[index],
-        end: text.length,
-        regionStart: markers.length > 0 ? markers[0].start : offsets[index],
-        openingLine: index + 1,
-        markers,
-      };
-    } else {
-      const width = lines[index].length + (index < lines.length - 1 ? 1 : 0);
-      open.end = offsets[index] + width;
-      regions.push(open);
+      open = { markerChar: marker[0], markerLength: marker.length, openIndex: index };
+      continue;
+    }
+    if (marker[0] === open.markerChar && marker.length >= open.markerLength && !info.trim()) {
+      spans.push({
+        openIndex: open.openIndex,
+        closeIndex: index,
+        markerChar: open.markerChar,
+        markerLength: open.markerLength,
+        openLine: open.openIndex + 1,
+        closeLine: index + 1,
+      });
       open = null;
     }
   }
-  if (open !== null) regions.push(open);
-  return regions;
+  if (open !== null) {
+    spans.push({
+      openIndex: open.openIndex,
+      closeIndex: null,
+      markerChar: open.markerChar,
+      markerLength: open.markerLength,
+      openLine: open.openIndex + 1,
+      closeLine: null,
+    });
+  }
+  return spans;
+}
+
+function listInstalledTreePinFiles() {
+  return INSTALLED_TREE_PIN_FILES;
+}
+
+function fencedRegions(text) {
+  const { lines, offsets } = lineOffsets(text);
+  const spans = listMarkdownFenceSpans(text);
+  const fenceIndexes = [];
+  for (const span of spans) {
+    fenceIndexes.push(span.openIndex);
+    if (span.closeIndex !== null) fenceIndexes.push(span.closeIndex);
+  }
+
+  return spans.map((span) => {
+    let regionBegin = 0;
+    for (const fenceIndex of fenceIndexes) {
+      if (fenceIndex < span.openIndex) regionBegin = fenceIndex + 1;
+    }
+    const markers = [];
+    for (let markerIndex = regionBegin; markerIndex < span.openIndex; markerIndex += 1) {
+      const marker = matchRoleMarker(lines[markerIndex]);
+      if (!marker) continue;
+      markers.push({
+        role: marker[1],
+        line: markerIndex + 1,
+        start: offsets[markerIndex],
+      });
+    }
+    const closeIndex = span.closeIndex;
+    const end = closeIndex === null
+      ? text.length
+      : offsets[closeIndex] + lines[closeIndex].length + (closeIndex < lines.length - 1 ? 1 : 0);
+    return {
+      start: offsets[span.openIndex],
+      end,
+      regionStart: markers.length > 0 ? markers[0].start : offsets[span.openIndex],
+      openingLine: span.openLine,
+      markers,
+    };
+  });
+}
+
+function classifyHashToken(token) {
+  if (/^[0-9a-fA-F]{64}$/.test(token)) {
+    const cryptoIdentity = token.toLowerCase();
+    return {
+      hashShaped: true,
+      classified: "hex-sha256",
+      spelling: token,
+      cryptoIdentity,
+      nonCanonicalCase: token !== cryptoIdentity,
+    };
+  }
+  if (/^0x[0-9a-fA-F]{64}$/i.test(token)) {
+    return {
+      hashShaped: true,
+      classified: null,
+      spelling: token,
+      reason: `0x-prefixed hex is not a store-hash spelling: ${token}`,
+    };
+  }
+  const stripped = token.replace(/[:._-]/g, "");
+  if (stripped !== token && /^[0-9a-fA-F]+$/.test(stripped) && stripped.length >= 32) {
+    return {
+      hashShaped: true,
+      classified: null,
+      spelling: token,
+      reason: `separated hex is not a store-hash spelling: ${token}`,
+    };
+  }
+  if (/^[A-Za-z0-9+/]{43,44}={0,2}$/.test(token) && token.length >= 43 && token.length <= 44) {
+    return {
+      hashShaped: true,
+      classified: null,
+      spelling: token,
+      reason: `base64 digest is not a store-hash spelling: ${token}`,
+    };
+  }
+  if (/^[0-9a-fA-F]+$/.test(token) && token.length >= 32) {
+    return {
+      hashShaped: true,
+      classified: null,
+      spelling: token,
+      reason: `hex length ${token.length} is not a SHA-256 store hash: ${token}`,
+    };
+  }
+  return { hashShaped: false, classified: null, spelling: token };
+}
+
+function findHashCandidates(text) {
+  const candidates = [];
+  for (const match of text.matchAll(/\/store\/([^\s/]+)/g)) {
+    const token = match[1];
+    const classified = classifyHashToken(token);
+    if (!classified.hashShaped) continue;
+    const tokenIndex = match.index + "/store/".length;
+    candidates.push({
+      context: "store",
+      token,
+      index: tokenIndex,
+      line: lineNumber(text, tokenIndex),
+      spacing: "ok",
+      ...classified,
+    });
+  }
+  // `tree:` with optional space, or `tree` with required space. Do not match
+  // identifiers such as treeSha256.
+  for (const match of text.matchAll(/\btree(:(?:[ \t]*)|[ \t]+)([^\s]+)/g)) {
+    const token = match[2];
+    const classified = classifyHashToken(token);
+    if (!classified.hashShaped) continue;
+    const delimiter = match[1];
+    const spacing = delimiter.startsWith(":") && !/[ \t]/.test(delimiter) ? "missing" : "ok";
+    const tokenIndex = match.index + "tree".length + delimiter.length;
+    candidates.push({
+      context: "tree",
+      token,
+      index: tokenIndex,
+      line: lineNumber(text, tokenIndex),
+      spacing,
+      ...classified,
+    });
+  }
+  candidates.sort((left, right) => left.index - right.index);
+  return candidates;
 }
 
 function formatInstalledTreeRefusal(issue) {
@@ -100,30 +237,58 @@ function formatInstalledTreeRefusal(issue) {
 }
 
 function scanInstalledTreeRegions(text, file = "<memory>") {
+  const { lines, offsets } = lineOffsets(text);
   const regions = fencedRegions(text);
-  const validHits = [
-    ...text.matchAll(TREE_HASH),
-    ...text.matchAll(STORE_HASH),
-  ].map((match) => ({
-    hash: match[1],
-    index: match.index,
-    line: lineNumber(text, match.index),
-    role: null,
-    region: null,
-  })).sort((left, right) => left.index - right.index);
-  const malformedHits = [...text.matchAll(TREE_HASH_WITHOUT_SPACE)].map((match) => ({
-    hash: match[1],
-    index: match.index,
-    line: lineNumber(text, match.index),
-  }));
-  const candidates = [...validHits, ...malformedHits];
-  const issues = malformedHits.map((hit) => ({
-    code: "tree_hash_spacing",
-    file,
-    line: hit.line,
-    index: hit.index,
-    reason: `tree hash must contain whitespace after "tree:"; found tree:${hit.hash}`,
-  }));
+  const fenceIndexes = [];
+  for (const span of listMarkdownFenceSpans(text)) {
+    fenceIndexes.push(span.openIndex);
+    if (span.closeIndex !== null) fenceIndexes.push(span.closeIndex);
+  }
+  const candidates = findHashCandidates(text);
+  const issues = [];
+  const validHits = [];
+
+  for (const candidate of candidates) {
+    if (candidate.context === "tree" && candidate.spacing === "missing" && candidate.classified === "hex-sha256") {
+      issues.push({
+        code: "tree_hash_spacing",
+        file,
+        line: candidate.line,
+        index: candidate.index,
+        reason: `tree hash must contain whitespace after "tree:"; found tree:${candidate.spelling}`,
+      });
+      continue;
+    }
+    if (candidate.classified !== "hex-sha256") {
+      issues.push({
+        code: "unclassified_hash_shape",
+        file,
+        line: candidate.line,
+        index: candidate.index,
+        reason: candidate.reason || `hash-shaped token ${JSON.stringify(candidate.token)} cannot be classified as a store hash`,
+      });
+      continue;
+    }
+    if (candidate.nonCanonicalCase && STORE_PATHS_CASE_SENSITIVE) {
+      issues.push({
+        code: "store_hash_case",
+        file,
+        line: candidate.line,
+        index: candidate.index,
+        reason:
+          `store paths are case-sensitive on this platform; quoted spelling ${candidate.spelling} ` +
+          `cannot name the installer store ${candidate.cryptoIdentity}`,
+      });
+    }
+    validHits.push({
+      hash: candidate.cryptoIdentity,
+      spelling: candidate.spelling,
+      index: candidate.index,
+      line: candidate.line,
+      role: null,
+      region: null,
+    });
+  }
 
   const conflictedRegions = new Set();
   for (const region of regions) {
@@ -176,8 +341,24 @@ function scanInstalledTreeRegions(text, file = "<memory>") {
     hit.role = marker.role;
   }
 
+  for (let index = 0; index < lines.length; index += 1) {
+    const marker = matchRoleMarker(lines[index]);
+    if (!marker) continue;
+    const hasFenceAfter = fenceIndexes.some((fenceIndex) => fenceIndex > index);
+    if (hasFenceAfter) continue;
+    issues.push({
+      code: "role_marker_orphan",
+      file,
+      line: index + 1,
+      index: offsets[index],
+      reason:
+        `orphan installed-tree role marker ${JSON.stringify(marker[1])} has no fence after it; ` +
+        "a role marker must declare the fenced block it sits above",
+    });
+  }
+
   issues.sort((left, right) => left.index - right.index);
-  return { regions, hits: validHits, issues };
+  return { regions, hits: validHits, issues, candidates };
 }
 
 function readInstalledTreePinFile(root, file) {
@@ -230,8 +411,12 @@ function scanInstalledTreePinFiles(root) {
 module.exports = {
   REGION_BOUNDARY,
   INSTALLED_TREE_PIN_FILES,
+  FENCE_LINE,
+  STORE_PATHS_CASE_SENSITIVE,
   formatInstalledTreeRefusal,
   listInstalledTreePinFiles,
+  listMarkdownFenceSpans,
+  classifyHashToken,
   scanInstalledTreeRegions,
   scanInstalledTreePinFiles,
 };
