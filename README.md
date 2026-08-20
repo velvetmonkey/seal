@@ -142,8 +142,10 @@ Seal controlled this path:
 If a route to the same effect does not pass through the printed Seal path, Seal did not control it.
 ```
 
+**Seal installed-tree pin role:** `published-asset`
 **Output:**
 
+**Seal installed-tree pin role:** `published-asset`
 ```text
 Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
@@ -154,6 +156,7 @@ Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk
 
 **Output:**
 
+**Seal installed-tree pin role:** `published-asset`
 ```text
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
@@ -298,4 +301,3 @@ $   echo "README walk stopped: seal demo printed no temporary demo directory" >&
 $   exit 1
 $ fi
 ```
-

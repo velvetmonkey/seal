@@ -37,6 +37,7 @@ test/proxy-lock-nonlinux.test.cjs
 test/proxy-lock.test.cjs
 test/readme-artifact-claim.test.cjs
 test/readme-demo-fence.test.cjs
+test/readme-demo-transcript-guard.test.cjs
 test/readme-navigation.test.mjs
 test/readme-pasteable-fences.test.cjs
 test/readme-protect-fence.test.cjs

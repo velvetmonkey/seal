@@ -28,6 +28,8 @@
     "spine/receipt-seal.cjs": { "allowlistReason": "This implementation comment describes the internal receipt-sealing data model; the behaviour is exercised by receipt tests, and it is not an independent published claim surface." },
     "test/frontdoor.test.mjs": { "allowlistReason": "The candidate strings are expected front-door assertions consumed by this test; they are test fixtures, not an additional published claim surface." },
     "test/guide-claims.test.mjs": { "allowlistReason": "The candidate strings are exact reviewed-guide fixtures whose pinned source documents are separately listed as COVERED by this test." },
+    "test/fixtures/readme-demo-checker-output.txt": { "allowlistReason": "This is captured checker output supplied to the README transcript guard; it is test evidence, not an additional published claim surface." },
+    "test/fixtures/readme-demo-output.txt": { "allowlistReason": "This is captured demo output supplied to the README transcript guard; it is test evidence, not an additional published claim surface." },
     "docs/ARCHITECTURE.md": { "coveredBy": ["test/docs-scope.test.mjs:35"] },
     "docs/ARTIFACT-INHERITANCE.md": { "allowlistReason": "This declared successor design intentionally records unbuilt and inferred mappings; its cross-repository implementation status cannot be established by a local executable check." },
     "docs/AUTHORIZATION-MESH.md": { "coveredBy": ["test/docs-scope.test.mjs:34"] },
