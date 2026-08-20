@@ -185,7 +185,7 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 ## Links
 
 - [Operating guide](docs/guide/README.md)
-- [Assurance / release notes](docs/RELEASE-NOTES-v0.2.0-rc.2)
+- [Assurance / release notes](docs/RELEASE-NOTES-v0.2.0-rc.2.md)
 - [Limitations](docs/LIMITATIONS.md)
 - [Evaluator walk](docs/evaluator-walk.md)
 - [Full documentation index](docs/README.md)

@@ -52,7 +52,7 @@ for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/install.md", path
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
 for (const file of ["README.md", "docs/install.md", "docs/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
-  replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, `v${version}`);
+  replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
 }
 
 // An artifact filename carries the product identity, not the release version
