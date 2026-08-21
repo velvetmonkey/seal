@@ -26,7 +26,8 @@ test("README artifact claim rejects builder paths and development names for a re
   const green = check(README);
   assert.equal(green.status, 0, green.stderr);
 
-  const absolute = check(README.replace(artifact, `/home/monkey/wt/builder/dist/${artifact}`));
+  const builderRoot = path.parse(os.tmpdir()).root;
+  const absolute = check(README.replace(artifact, path.join(builderRoot, "home", "monkey", "wt", "builder", "dist", artifact)));
   assert.equal(absolute.status, 1);
   assert.match(absolute.stderr, /builder-local absolute artifact path/);
 

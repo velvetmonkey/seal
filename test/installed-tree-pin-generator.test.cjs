@@ -2,6 +2,8 @@
 // Generator-side discovery behavior. The external gate intentionally does
 // not import this helper; its population comes from the declared site manifest.
 const assert = require("node:assert/strict");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 const { quotedTreeHashHits } = require("../scripts/installed-tree-pin.cjs");
 
@@ -29,7 +31,7 @@ test("published-asset markers govern four download shapes without prose inferenc
       prose,
       "**Seal installed-tree pin role:** `published-asset`",
       "```output",
-      `store: /home/x/.local/lib/seal/store/${publishedShape}`,
+      `store: ${path.join(os.tmpdir(), "x", ".local", "lib", "seal", "store", publishedShape)}`,
       "```",
     ].join("\n");
     const hits = quotedTreeHashHits(text, "shape.md");
@@ -44,7 +46,7 @@ test("a fresh-build marker wins when prose incidentally mentions releases/downlo
     "Unlike releases/download/, this builds the checkout.",
     "**Seal installed-tree pin role:** `fresh-build`",
     "```text",
-    `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-check.mjs" receipt.json`,
+    `node "${path.join(os.tmpdir(), "scratch", ".local", "lib", "seal", "store", freshShape, "checker", "seal-receipt-check.mjs")}" receipt.json`,
     "```",
   ].join("\n");
   const hits = quotedTreeHashHits(text, "fresh.md");

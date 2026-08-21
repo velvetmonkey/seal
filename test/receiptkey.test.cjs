@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
@@ -8,9 +9,7 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-check.mjs");
-const SCRATCH = process.env.RUNNER_TEMP
-  ? path.join(process.env.RUNNER_TEMP, "receiptkey")
-  : "/home/monkey/scratch/receiptkey";
+const SCRATCH = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "receiptkey");
 const { createJournal } = require("../spine/store.cjs");
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
 

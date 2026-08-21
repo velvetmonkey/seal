@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
@@ -20,7 +21,7 @@ const {
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
 function scratch(prefix) {
-  return fs.mkdtempSync(path.join("/home/monkey/scratch", prefix));
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
 function fakeClaudeBin(root) {
