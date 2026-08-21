@@ -17,7 +17,7 @@ Requires Node 20+ and the `claude` command for Protect. The install creates one 
 Check that the Claude Code command is available before Protect:
 
 ```bash
-$ claude --version
+claude --version
 ```
 
 ## How it works
@@ -65,7 +65,7 @@ Running a checker copied from the same installed store cannot establish that the
 Add `~/.local/bin` to PATH before continuing:
 
 ```bash
-$ export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ### Source-build path (secondary)
@@ -83,7 +83,7 @@ The repository root does not carry a hand-maintained `SHA256SUMS` copy. Use the 
 ## 2. Demo
 
 ```bash
-$ seal demo
+seal demo
 ```
 
 Leave it running until `Approve? [y/N]`, then type `y` and press Enter. This is the expected sequence, not a captured transcript: the first four lines show the protected path; the final line is the deliberately unprotected direct-write scope witness after it.
@@ -188,29 +188,26 @@ If you took the secondary source-build path, its store does not include the chec
 
 `seal protect SERVER TOOL` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check.
 
-This is a shell transcript: `$ ` marks each command line. Do not paste the
-markers; remove them before running the block.
-
 ```bash
-$ export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
-$ mkdir -p "$SEAL_PROTECT_PROJECT" &&
-$ cd "$SEAL_PROTECT_PROJECT" &&
-$ {
-$ cat > .mcp.json <<EOF
-$ {
-$   "mcpServers": {
-$     "db": {
-$       "command": "seal",
-$       "args": [
-$         "__demo-server",
-$         "./data.txt"
-$       ]
-$     }
-$   }
-$ }
-$ EOF
-$ } &&
-$ seal protect db demo.mutate
+export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
+mkdir -p "$SEAL_PROTECT_PROJECT" &&
+cd "$SEAL_PROTECT_PROJECT" &&
+{
+cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "db": {
+      "command": "seal",
+      "args": [
+        "__demo-server",
+        "./data.txt"
+      ]
+    }
+  }
+}
+EOF
+} &&
+seal protect db demo.mutate
 ```
 
 `protect` reports how many of that server's tools are not approval-gated, naming at most 20 and counting the rest. Those calls still route through Seal's proxy, where live server-entry drift or a lease-generation mismatch can refuse forwarding. It then invokes Claude Code's `claude mcp add` to install a local override, private to you, routing the `db` server through Seal's proxy. It does not edit `.mcp.json`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while it installs that override. Seal invokes Claude Code but does not write either file. The override takes effect when Claude Code next starts, so `protect` ends PENDING RESTART, never ACTIVE. At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name.
@@ -222,7 +219,7 @@ The checker accepts a receipt only against the public key you supply and only wh
 Then, in that project:
 
 ```bash
-$ seal status
+seal status
 ```
 
 ## 4. Remove
@@ -230,8 +227,8 @@ $ seal status
 Run these commands to return the project to outside Seal:
 
 ```bash
-$ cd "$SEAL_PROTECT_PROJECT"
-$ seal unprotect db
+cd "$SEAL_PROTECT_PROJECT"
+seal unprotect db
 ```
 
 `unprotect` invokes Claude Code's `claude mcp remove` to remove only the local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain.
@@ -239,15 +236,15 @@ $ seal unprotect db
 The store is read-only, so make it writable before removing Seal itself:
 
 ```bash
-$ chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
-$ chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
+chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
+chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
 ```
 
 The demo's temporary directory remains after the walk. After running the checker, use these commands to remove the retained state and the exact demo directory printed for your run:
 
 ```bash
-$ rm -r ~/.local/share/seal
-$ rm -r "$SEAL_DEMO_DIR"
+rm -r ~/.local/share/seal
+rm -r "$SEAL_DEMO_DIR"
 ```
 
 In the demo, Seal controlled only `demo client -> Seal -> demo MCP server -> demo.mutate`.
@@ -288,16 +285,16 @@ Apache-2.0. See [LICENSE](LICENSE).
 The repository's reproducibility check runs the demo through this harness to capture its output and recover its generated directory. Readers following the steps above do not run it.
 
 ```bash
-$ export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
-$ (set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
-$ SEAL_DEMO_STATUS="$?"
-$ if test "$SEAL_DEMO_STATUS" -ne 0; then
-$   echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
-$   exit "$SEAL_DEMO_STATUS"
-$ fi
-$ export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
-$ if test -z "$SEAL_DEMO_DIR"; then
-$   echo "README walk stopped: seal demo printed no temporary demo directory" >&2
-$   exit 1
-$ fi
+export SEAL_DEMO_LOG="$(mktemp "${TMPDIR:-/tmp}/seal-demo-log.XXXXXX")"
+(set -o pipefail; seal demo </dev/tty | tee "$SEAL_DEMO_LOG")
+SEAL_DEMO_STATUS="$?"
+if test "$SEAL_DEMO_STATUS" -ne 0; then
+  echo "README walk stopped: seal demo failed (exit $SEAL_DEMO_STATUS)" >&2
+  exit "$SEAL_DEMO_STATUS"
+fi
+export SEAL_DEMO_DIR="$(sed -n 's/^temporary demo directory: \(.*\) (remains after the demo for the printed checker command)$/\1/p' "$SEAL_DEMO_LOG")"
+if test -z "$SEAL_DEMO_DIR"; then
+  echo "README walk stopped: seal demo printed no temporary demo directory" >&2
+  exit 1
+fi
 ```
