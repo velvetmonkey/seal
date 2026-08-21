@@ -7,10 +7,16 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const files = [
-  "README.md", "index.html", "EVALUATOR-START.md",
-  ...readdirSync(resolve(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`),
-];
+const files = ["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))];
+function walk(dir, prefix = "") {
+  const out = [];
+  for (const name of readdirSync(resolve(dir, prefix), { withFileTypes: true })) {
+    const relative = prefix ? `${prefix}/${name.name}` : name.name;
+    if (name.isDirectory() && name.name !== ".git") out.push(...walk(dir, relative));
+    else if (name.isFile()) out.push(relative);
+  }
+  return out;
+}
 let bad = 0, checked = 0;
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {

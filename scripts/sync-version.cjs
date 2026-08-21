@@ -35,23 +35,22 @@ const packageTempPath = `${packagePath}.${process.pid}.tmp`;
 fs.writeFileSync(packageTempPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 fs.renameSync(packageTempPath, packagePath);
 
-const notesCandidates = fs.readdirSync(path.join(ROOT, "docs")).filter((file) => /^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(file));
+const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file === "RELEASE-NOTES-v0.2.0-rc.2.md");
 if (notesCandidates.length !== 1) throw new Error(`expected one versioned release-notes file, found ${notesCandidates.join(", ")}`);
-if (notesCandidates[0] !== releaseNotes) fs.renameSync(path.join(ROOT, "docs", notesCandidates[0]), path.join(ROOT, "docs", releaseNotes));
-for (const file of fs.readdirSync(path.join(ROOT, "docs")).filter((file) => file.endsWith(".md"))) {
-  replaceIfPresent(path.join("docs", file), /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file.endsWith(".md"))) {
+  replaceIfPresent(path.join("docs", "assurance", file), /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
 }
-replaceIfPresent("index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
-replaceIfPresent("docs/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
-replaceIfPresent("docs/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
+replaceIfPresent("docs/assurance/index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
+replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
 
-for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/install.md", path.join("docs", releaseNotes), "index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["README.md", "docs/assurance/distribution.md", "docs/start/install.md", path.join("docs/assurance", "RELEASE-NOTES-v0.2.0-rc.2.md"), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
-for (const file of ["README.md", "docs/install.md", "docs/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+for (const file of ["README.md", "docs/start/install.md", "docs/start/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
 }
 
@@ -66,9 +65,9 @@ function renameArtifact(match) {
 replace("README.md", ARTIFACT_NAME, renameArtifact);
 // Download instructions derive the artifact name from the checksum asset from
 // the same release, so these guides intentionally have no versioned filename.
-replaceIfPresent("docs/DISTRIBUTION.md", ARTIFACT_NAME, renameArtifact);
+replaceIfPresent("docs/assurance/distribution.md", ARTIFACT_NAME, renameArtifact);
 replaceIfPresent("docs/guide/README.md", ARTIFACT_NAME, renameArtifact);
 
-for (const file of ["README.md", "docs/guide/README.md", "docs/install.md"]) {
+for (const file of ["README.md", "docs/guide/README.md", "docs/start/install.md"]) {
   replaceIfPresent(file, /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
 }

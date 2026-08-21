@@ -1,6 +1,6 @@
 > Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.
 > The state machine is TESTED.
-> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../README.md).
+> For the truth about what you installed, read [release evidence](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../../README.md).
 
 # Architecture
 
@@ -121,6 +121,6 @@ flowchart LR
   itself — no implementation reading those fields can fix it. This check caught Seal's own
   pre-v2 approval surface; v2's `args_hash` closes it.
 
-Claim-status per box: [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md). Honesty boundary:
+Claim-status per box: [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
 Fleet links are public and resolve for everyone; `witness-check` remains proprietary.

@@ -422,7 +422,7 @@ jobs:
           node scripts/launch-truth-gate.mjs
           README.md
           .github/workflows/ci.yml
-          EVALUATOR-START.md
+          docs/assurance/evaluator-start.md
           docs/WHY-DIFFERENT.md
           index.html
       - run: node scripts/linkcheck.mjs
