@@ -7,6 +7,8 @@ const path = require("node:path");
 const ROOT = process.env.SEAL_PROTECTED_PATHS_ROOT || path.join(__dirname, "..");
 const CONTROL_DOCUMENT = "docs/INSTALLED-TREE-PIN-CONTROL.md";
 const PIN_MANIFEST = "scripts/installed-tree-pin-sites.json";
+const RULING_DOCUMENT = "docs/PROTECTED-PATH-RULINGS.json";
+const INVOKING_WORKFLOW = ".github/workflows/ci.yml";
 const PROTECTED_COMPONENTS = new Set(["fixture", "fixtures", "corpus", "pin", "pins"]);
 
 function usage() {
@@ -16,7 +18,7 @@ function usage() {
 
 function protectedArtifact(relativePath) {
   const normalized = relativePath.replaceAll("\\\\", "/").replace(/^\.\//, "");
-  if (normalized === PIN_MANIFEST || normalized === CONTROL_DOCUMENT || normalized === "scripts/check-protected-paths.cjs" || normalized === "scripts/resolve-ci-diff-range.cjs") return true;
+  if (normalized === PIN_MANIFEST || normalized === CONTROL_DOCUMENT || normalized === INVOKING_WORKFLOW || normalized === "scripts/check-protected-paths.cjs" || normalized === "scripts/resolve-ci-diff-range.cjs") return true;
   const components = normalized.toLowerCase().split("/").filter(Boolean);
   const basename = components.at(-1) || "";
   return components.some((component) => PROTECTED_COMPONENTS.has(component))
@@ -39,6 +41,37 @@ function git(args) {
   return spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" });
 }
 
+function exactRuling(mergeBase, head, changedPaths) {
+  const record = git(["show", `${head}:${RULING_DOCUMENT}`]);
+  if (record.status !== 0) return null;
+  let ruling;
+  try {
+    ruling = JSON.parse(record.stdout);
+  } catch {
+    return null;
+  }
+  const detail = ruling?.ruling;
+  if (!detail || detail.base !== mergeBase || typeof detail.protectedCommit !== "string"
+    || !Array.isArray(detail.paths) || detail.paths.length === 0
+    || new Set(detail.paths).size !== detail.paths.length
+    || detail.paths.some((value) => typeof value !== "string" || !protectedArtifact(value))) return null;
+
+  const currentParents = git(["rev-list", "--parents", "-n", "1", head]);
+  const parentFields = currentParents.stdout.trim().split(/\s+/);
+  if (currentParents.status !== 0 || parentFields.length !== 2 || parentFields[1] !== detail.protectedCommit) return null;
+
+  const target = git(["rev-parse", "--verify", `${detail.protectedCommit}^{commit}`]);
+  if (target.status !== 0 || target.stdout.trim() !== detail.protectedCommit) return null;
+  const targetChanged = git(["diff", "--name-only", "--diff-filter=ACDMRTUXB", `${mergeBase}...${detail.protectedCommit}`, "--"]);
+  if (targetChanged.status !== 0) return null;
+  const expected = targetChanged.stdout.split(/\r?\n/).filter(Boolean).filter(protectedArtifact).sort();
+  const recorded = [...detail.paths].sort();
+  if (expected.length !== recorded.length || expected.some((value, index) => value !== recorded[index])) return null;
+  const actual = [...changedPaths].sort();
+  if (actual.length !== recorded.length || actual.some((value, index) => value !== recorded[index])) return null;
+  return detail;
+}
+
 const options = parseArgs(process.argv.slice(2));
 if (!options) {
   usage();
@@ -55,11 +88,16 @@ if (!options) {
     } else {
       const paths = changed.stdout.split(/\r?\n/).filter(Boolean).filter(protectedArtifact);
       if (paths.length) {
-        for (const protectedPath of paths) {
-          process.stderr.write(`::error file=${protectedPath}::HUMAN RULING REQUIRED: protected artifact changed: ${protectedPath}\n`);
+        const ruling = exactRuling(mergeBase.stdout.trim(), options.head, paths);
+        if (ruling) {
+          process.stdout.write(`PROTECTED PATH REVIEW OK: recorded human ruling for protected commit ${ruling.protectedCommit}: ${ruling.paths.join(", ")}.\n`);
+        } else {
+          for (const protectedPath of paths) {
+            process.stderr.write(`::error file=${protectedPath}::HUMAN RULING REQUIRED: protected artifact changed: ${protectedPath}\n`);
+          }
+          process.stderr.write("PROTECTED PATH REVIEW REQUIRED: a human ruling is required before this change can merge.\n");
+          process.exitCode = 1;
         }
-        process.stderr.write("PROTECTED PATH REVIEW REQUIRED: a human ruling is required before this change can merge.\n");
-        process.exitCode = 1;
       } else {
         process.stdout.write(`PROTECTED PATH REVIEW OK: no protected artifacts changed in ${mergeBase.stdout.trim()}...${options.head}.\n`);
       }
