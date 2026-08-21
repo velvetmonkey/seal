@@ -39,7 +39,7 @@ SEAL_VERSION=v0.2.0-rc.2
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 read -r expected_digest expected_bytes expected_name < SHA256SUMS
-if command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; elif command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need sha256sum or shasum)" >&2; exit 1; fi
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
 test "$actual_digest" = "$expected_digest"
 actual_bytes="$(wc -c < "$expected_name")"
 test "$actual_bytes" = "$expected_bytes"

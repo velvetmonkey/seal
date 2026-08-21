@@ -26,7 +26,7 @@ if [ ! -r SHA256SUMS ] || [ ! -s SHA256SUMS ]; then echo "SHA256SUMS is missing,
 read -r expected_digest expected_bytes expected_name < SHA256SUMS
 if [ -z "$expected_digest" ] || [ -z "$expected_bytes" ] || [ -z "$expected_name" ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
 if [ "$expected_name" != "seal-$SEAL_VERSION-linux-x64" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
-if command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; elif command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need sha256sum or shasum)" >&2; exit 1; fi
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
 if [ "$actual_digest" != "$expected_digest" ]; then echo "release artifact digest does not match SHA256SUMS" >&2; exit 1; fi
 actual_bytes="$(wc -c < "$expected_name")"
 if [ "$actual_bytes" != "$expected_bytes" ]; then echo "release artifact byte count does not match SHA256SUMS" >&2; exit 1; fi
@@ -96,7 +96,7 @@ platform="darwin-$(node -p 'process.arch')"
 node scripts/build-dist.cjs --platform "$platform" --out dist
 read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS
 if [ "$expected_name" != "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
-if command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "dist/$expected_name" | awk '{print $1}')"; elif command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "dist/$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need sha256sum or shasum)" >&2; exit 1; fi
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "dist/$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "dist/$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
 if [ "$actual_digest" != "$expected_digest" ]; then echo "artifact digest does not match SHA256SUMS" >&2; exit 1; fi
 actual_bytes="$(wc -c < "dist/$expected_name" | tr -d ' ')"
 if [ "$actual_bytes" != "$expected_bytes" ]; then echo "artifact byte count does not match SHA256SUMS" >&2; exit 1; fi

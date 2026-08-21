@@ -3,12 +3,12 @@
 set -euo pipefail
 
 sha256_file() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1"
-  elif command -v shasum >/dev/null 2>&1; then
+  if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 "$1"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
   else
-    echo "no SHA-256 tool found (need sha256sum or shasum)" >&2
+    echo "no SHA-256 tool found (need shasum or sha256sum)" >&2
     return 1
   fi
 }
