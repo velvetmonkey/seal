@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+const PAYLOAD_PATHS = [
+  "bin/seal", "VERSION", "package.json", "LICENSE", "NOTICE", "runtime-manifest.json",
+  "spine/version.cjs", "spine/platform.cjs", "spine/integrity.cjs", "spine/demo.cjs",
+  "spine/demo-server.cjs", "spine/protection.cjs", "spine/proxy.cjs", "spine/proxy-cli.cjs",
+  "spine/receipts.cjs", "spine/receipt-seal.cjs", "spine/store.cjs",
+  "contract/canonical.cjs", "contract/contract.cjs", "contract/kernel-authorization.cjs",
+  "contract/kernel-authorization-worker.cjs", "contract/renderer.cjs", "runtime/kernel/kernel.js",
+  "runtime/kernel/seal-config.js", "runtime/kernel/receipt-format.js", "runtime/kernel/runner.cjs",
+  "runtime/kernel/wasm/seal.js", "runtime/kernel/wasm/seal.wasm", "scripts/seal-launch.cjs",
+];
+
+module.exports = { PAYLOAD_PATHS };
