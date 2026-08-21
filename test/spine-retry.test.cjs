@@ -15,6 +15,8 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+const { createProxy } = require("../spine/proxy.cjs");
+const { createJournal } = require("../spine/store.cjs");
 
 // Match the repository's existing path.relative(ROOT, ...) convention used by
 // output and inventory diagnostics: semantic output assertions must not depend
@@ -142,6 +144,48 @@ function callParams(line, extraParams = {}) {
   return { jsonrpc: "2.0", method: "tools/call", params: { name: "demo.mutate", arguments: { line }, ...extraParams } };
 }
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
+
+test("receipt correlations refuse loudly at capacity without orphaning live approvals", async (t) => {
+  const dir = tmpdir("seal-receipt-correlation-capacity-");
+  const storePath = path.join(dir, "approvals.journal");
+  const receiptsDir = path.join(dir, "receipts");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const responses = [];
+  const decisions = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir,
+    receiptCorrelationCapacity: 2,
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { responses.push(JSON.parse(line)); },
+    onDecision(decision) { decisions.push(decision); },
+  });
+  t.after(() => proxy.stop());
+
+  proxy.write(JSON.stringify({ ...callParams("first pending"), id: 1 }));
+  proxy.write(JSON.stringify({ ...callParams("second pending"), id: 2 }));
+  proxy.write(JSON.stringify({ ...callParams("over capacity"), id: 3 }));
+  assert.equal(responses.find((response) => response.id === 1).result.resultType, "input_required");
+  assert.equal(responses.find((response) => response.id === 2).result.resultType, "input_required");
+  assert.match(responses.find((response) => response.id === 3).result.content[0].text, /receipt_correlation_capacity_exceeded/);
+  assert.equal(decisions.at(-1).refusal, "receipt_correlation_capacity_exceeded");
+
+  const firstState = responses.find((response) => response.id === 1).result.requestState;
+  proxy.write(JSON.stringify({ ...callParams("first pending", { requestState: firstState, inputResponses: ACCEPT }), id: 4 }));
+  assert.equal(decisions.at(-1).decision, "ALLOW", "the live approval retained its receipt correlation at capacity");
+  const receiptFiles = fs.readdirSync(receiptsDir);
+  const inputCorrelations = receiptFiles
+    .filter((name) => name.endsWith("-INPUT_REQUIRED.json"))
+    .map((name) => JSON.parse(fs.readFileSync(path.join(receiptsDir, name), "utf8")).approvalRequest.correlation);
+  const allowReceipt = JSON.parse(fs.readFileSync(path.join(receiptsDir, receiptFiles.find((name) => name.endsWith("-ALLOW.json"))), "utf8"));
+  assert.ok(inputCorrelations.includes(allowReceipt.approvalRequest.correlation));
+
+  proxy.write(JSON.stringify({ ...callParams("slot reopened"), id: 5 }));
+  assert.equal(responses.find((response) => response.id === 5).result.resultType, "input_required");
+  await proxy.stop();
+});
 
 function receiptFor(dir, decision) {
   const receipts = path.join(dir, "receipts");

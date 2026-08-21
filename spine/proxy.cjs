@@ -27,6 +27,8 @@ const { openReceiptEmitter } = require("./receipts.cjs");
 
 const HANDLE_PATTERN = /^seal-rs1\.[0-9a-f]{64}$/;
 const RECEIPT_CORRELATION_MISSING = "receipt_correlation_missing";
+const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
+const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const TERMINAL_REFUSALS = new Set([
   "already_consumed",
   "terminally_declined",
@@ -51,10 +53,14 @@ function createProxy(options) {
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
     now, ttlMs, terminalWidth, // forwarded to the contract (tests inject clocks)
+    receiptCorrelationCapacity = DEFAULT_RECEIPT_CORRELATION_CAPACITY,
   } = options;
   const selectedTools = Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []);
   if (selectedTools.length === 0 || selectedTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new Error("guardTools is required");
+  }
+  if (!Number.isSafeInteger(receiptCorrelationCapacity) || receiptCorrelationCapacity < 1) {
+    throw new Error("receiptCorrelationCapacity must be a positive safe integer");
   }
   const guardedToolNames = new Set(selectedTools);
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
@@ -158,6 +164,11 @@ function createProxy(options) {
     if (requestState === undefined && inputResponses === undefined) {
       // First call for the guarded effect: offer approval through the
       // client's renderer, or refuse to offer at all.
+      if (receiptCorrelations.size >= receiptCorrelationCapacity) {
+        const detail = `receipt correlation capacity ${receiptCorrelationCapacity} is full; answer an existing approval before opening another`;
+        blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
+        return;
+      }
       const decision = contract.begin({ tool, args });
       if (decision.kind === "refuse") {
         emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
