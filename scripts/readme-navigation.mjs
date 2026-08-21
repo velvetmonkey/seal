@@ -24,7 +24,7 @@ if (repos.length === 0) {
 // repository appearing in the README is a failure, not a success.
 const offRouteFamily = new Set(["mcp-seal-dev", "seal-host", "seal-check", "seal-live-demo", "seal-assurance-kit", "seal-verify-action"]);
 function discharge(name) {
-  if (offRouteFamily.has(name)) return "repository family is off the developer route (roadmap step 6); named for evaluators in EVALUATOR-START.md and docs/REPO-TOPOLOGY.md";
+  if (offRouteFamily.has(name)) return "repository family is off the developer route (roadmap step 6); named for evaluators in docs/assurance/evaluator-start.md and docs/REPO-TOPOLOGY.md";
   if (name === "crdt-lean") return "deferred Seal v3 distributed architecture, not a current developer route";
   if (name === "seal-demo") return "superseded by seal-live-demo";
   if (name === "mcp-seal-aria") return "separate experiment, not the Seal product family";

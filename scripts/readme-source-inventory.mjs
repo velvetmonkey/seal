@@ -25,7 +25,7 @@ const sectionHomes = new Map([
   ["First receipt in 60 seconds — zero dependencies (no Docker, no Lean toolchain)", ["docs/CLAIMS-MATRIX.md", "| Claim |"]],
   ["What it does", ["docs/WHAT-SEAL-IS.md", "Seal is an object-capability broker"]],
   ["Why you can believe it", ["docs/CLAIMS-MATRIX.md", "| Claim |"]],
-  ["The family", ["docs/ARCHITECTURE.md", "Seal family architecture"]],
+  ["The family", ["docs/assurance/architecture.md", "Seal family architecture"]],
   ["The receipt toolset — one question each", ["docs/CLAIMS-MATRIX.md", "| Claim |"]],
   ["The five-minute path", ["docs/CLAIMS-MATRIX.md", "live demo's evidence is real"]],
   ["Choose your path", ["docs/REPO-TOPOLOGY.md", "Repository topology"]],
@@ -33,20 +33,20 @@ const sectionHomes = new Map([
   ["License", ["LICENSE", "Apache License"]],
 ]);
 const specialHomes = new Map([
-  [59, ["docs/ARCHITECTURE.md", "Seal family architecture"]],
+  [59, ["docs/assurance/architecture.md", "Seal family architecture"]],
   [61, ["docs/AUTHORIZATION-MESH.md", "within the approval's TTL window"]],
   [131, ["docs/TRUTH-BOX.md", "Runtime profile: `compatible`"]],
   [132, ["docs/TRUTH-BOX.md", "policy-covered request-effects"]],
   [133, ["docs/TRUTH-BOX.md", "the deployed host is not proved end to end"]],
-  [140, ["docs/LIMITATIONS.md", "mediation KERNEL, not of the whole deployed system"]],
-  [141, ["docs/LIMITATIONS.md", "does NOT prove SHA-256 collision resistance"]],
-  [142, ["docs/LIMITATIONS.md", "NOT proven bug-free"]],
+  [140, ["docs/archive/LIMITATIONS.md", "mediation KERNEL, not of the whole deployed system"]],
+  [141, ["docs/archive/LIMITATIONS.md", "does NOT prove SHA-256 collision resistance"]],
+  [142, ["docs/archive/LIMITATIONS.md", "NOT proven bug-free"]],
   [143, ["README.md", "Seal guarantees AUTHORIZATION match, not INTENT match"]],
-  [144, ["docs/LIMITATIONS.md", "does NOT prevent compromise of hosts, browsers, build systems, keys, operators"]],
-  [145, ["docs/LIMITATIONS.md", "tamper-EVIDENT, not tamper-IMPOSSIBLE"]],
-  [146, ["docs/LIMITATIONS.md", "does NOT make the AI smarter or prevent hallucinations"]],
-  [147, ["docs/LIMITATIONS.md", "Axiom footprint {propext, Classical.choice, Quot.sound}"]],
-  [148, ["docs/LIMITATIONS.md", "per-theorem ceiling for theorems named in the family's axiom-pin gates"]],
+  [144, ["docs/archive/LIMITATIONS.md", "does NOT prevent compromise of hosts, browsers, build systems, keys, operators"]],
+  [145, ["docs/archive/LIMITATIONS.md", "tamper-EVIDENT, not tamper-IMPOSSIBLE"]],
+  [146, ["docs/archive/LIMITATIONS.md", "does NOT make the AI smarter or prevent hallucinations"]],
+  [147, ["docs/archive/LIMITATIONS.md", "Axiom footprint {propext, Classical.choice, Quot.sound}"]],
+  [148, ["docs/archive/LIMITATIONS.md", "per-theorem ceiling for theorems named in the family's axiom-pin gates"]],
 ]);
 
 function assertionBearing(text) {

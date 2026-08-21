@@ -6,8 +6,8 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
-const INDEX = readFileSync(resolve(ROOT, "index.html"), "utf8");
-const ARCHITECTURE = readFileSync(resolve(ROOT, "docs/ARCHITECTURE.md"), "utf8");
+const INDEX = readFileSync(resolve(ROOT, "docs", "assurance", "index.html"), "utf8");
+const ARCHITECTURE = readFileSync(resolve(ROOT, "docs/assurance/architecture.md"), "utf8");
 const SOURCES = [
   readFileSync(resolve(ROOT, "README.md"), "utf8"),
   ...readdirSync(resolve(ROOT, "docs"), { recursive: true })

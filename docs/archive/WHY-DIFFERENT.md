@@ -1,6 +1,6 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
 > The state machine is TESTED.
-> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../README.md).
+> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md](../assurance/RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../../README.md).
 
 # Why a proof, not a prompt: Seal vs heuristic guards
 
@@ -30,7 +30,7 @@ anyone can re-derive.
 
 **Honest boundary for these results:** these are proofs about a model tightly bound to the real SealV2 consume seam (`validateAndConsumeWithStore`), within the approval's TTL, for one approval per instance, hypothesis-form validation. Not a line-by-line proof of the whole deployed Rust/wasm/JS binary or end-to-end system. The shipped bodies are tied by conformance testing over a corpus.
 
-See the four explicit Trust boundaries (Byzantine / non-participating replica, Egress after allow (P6), Model vs compiled binary, Partition liveness) with their "Closes via" mechanisms in [docs/LIMITATIONS.md#trust-boundaries](LIMITATIONS.md).
+See the four explicit Trust boundaries (Byzantine / non-participating replica, Egress after allow (P6), Model vs compiled binary, Partition liveness) with their "Closes via" mechanisms in [docs/archive/LIMITATIONS.md#trust-boundaries](../archive/LIMITATIONS.md).
 
 What this does **not** mean — the boundary, stated up front: the theorems cover the
 mediation kernel, not the whole deployed system. The shipped Rust/wasm/JS bodies are
@@ -40,5 +40,5 @@ deployed route). Seal guarantees **authorization** match, not **intent** match: 
 malicious-but-valid request and Seal executes it.
 
 - The full honesty boundary: [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md)
-- Every load-bearing claim, statused: [CLAIMS-MATRIX.md](CLAIMS-MATRIX.md)
+- Every load-bearing claim, statused: [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md)
 - See the difference run: [seal-live-demo](https://github.com/velvetmonkey/seal-live-demo) — the same destructive call, blocked with Seal on, executed with Seal bypassed

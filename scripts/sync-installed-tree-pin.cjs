@@ -37,7 +37,7 @@ function readConsumedFile(relative) {
   } catch (error) {
     refuse("input_unreadable", `${relative} cannot be read: ${error.message}`);
   }
-  if (relative === "docs/install.md" && text.length === 0) {
+  if (relative === "docs/start/install.md" && text.length === 0) {
     refuse("input_empty", `${relative} is empty`);
   }
   return text;
@@ -85,7 +85,7 @@ function assertDeclaredPopulation(discovered) {
 function main() {
   // build-dist loads sync-version, which also consumes this file. Validate it
   // here so missing content cannot escape as an anonymous dependency error.
-  const installText = readConsumedFile("docs/install.md");
+  const installText = readConsumedFile("docs/start/install.md");
 
   // After the consumed-input preflight, build on every valid invocation. No
   // source file supplies a value that could be mistaken for a derived hash.
@@ -109,7 +109,7 @@ function main() {
   let freshHits = 0;
   let publishedHits = 0;
   for (const relative of trackedFiles()) {
-    const text = relative === "docs/install.md" ? installText : readConsumedFile(relative);
+    const text = relative === "docs/start/install.md" ? installText : readConsumedFile(relative);
     const hits = quotedTreeHashHits(text, relative);
     for (const hit of hits) {
       const lineStart = text.lastIndexOf("\n", hit.index - 1) + 1;
