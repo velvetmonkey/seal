@@ -52,14 +52,23 @@ test("passes when fetched controls, README population, and pin agree", async () 
   await withPage("<html></html>", async (url) => {
     const result = await run(url);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, new RegExp(`PASS  served bytes match pinned seal-check@${PIN_COMMIT}`));
+    assert.match(result.stdout, new RegExp(`INFO  served bytes match pinned seal-check@${PIN_COMMIT}`));
   });
 });
 
 test("passes against the real production pin without environment overrides [network required]", async () => {
   const result = await run(undefined, undefined, undefined, undefined, { productionPin: true });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /PASS  served bytes match pinned seal-check@e152a053637845600e1eceaee70cea873801c609/);
+  assert.match(result.stdout, /INFO  served bytes match pinned seal-check@e152a053637845600e1eceaee70cea873801c609/);
+});
+
+test("does not print a success verdict after README claim-population failure", async () => {
+  await withPage("<html></html>", async (url) => {
+    const result = await run(url, "", "<html></html>");
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /README has no checked live-page claim block/);
+    assert.doesNotMatch(result.stdout, /\bPASS\b/);
+  });
 });
 
 test("fails and names a fetched button disagreement", async () => {

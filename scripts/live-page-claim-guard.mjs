@@ -109,7 +109,7 @@ function changedRegion(expected, actual) {
 }
 
 if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; README claims zero`);
-else console.log("PASS  landing-page control count agrees with README: zero <button> controls");
+else console.log("INFO  landing-page control count: zero <button> controls");
 
 let pinnedSource;
 let sourceSha256;
@@ -171,6 +171,6 @@ if (!pinnedSource.equals(body)) {
 } else if (body.length !== PIN.bytes || sha256 !== PIN.sha256) {
   fail(`served landing page differs from seal-check@${PIN.commit}: expected ${PIN.bytes} bytes sha256 ${PIN.sha256}; got ${body.length} bytes sha256 ${sha256}`);
 } else {
-  console.log(`PASS  served bytes match pinned seal-check@${PIN.commit}`);
+  console.log(`INFO  served bytes match pinned seal-check@${PIN.commit}`);
 }
 process.exit(bad ? 1 : 0);
