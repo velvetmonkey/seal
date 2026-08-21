@@ -41,9 +41,14 @@ function fencedBlocks(text) {
         open = {
           start: offset,
           end: text.length,
-          markerLine: index > 0 ? lines[index - 1].replace(/\r$/, "") : "",
-          markerLineNumber: index,
+          markerLines: [],
+          fenceLineNumber: index + 1,
         };
+        for (let markerIndex = index - 1; markerIndex >= 0; markerIndex -= 1) {
+          const markerLine = lines[markerIndex].replace(/\r$/, "");
+          if (!ROLE_MARKER.test(markerLine)) break;
+          open.markerLines.unshift({ text: markerLine, number: markerIndex + 1 });
+        }
       } else {
         open.end = offset + width;
         blocks.push(open);
@@ -59,8 +64,7 @@ function fencedBlocks(text) {
 function declaredHashRole(text, index, file, blocks) {
   const line = lineNumber(text, index);
   const block = blocks.find((candidate) => index >= candidate.start && index < candidate.end);
-  const marker = block ? block.markerLine.match(ROLE_MARKER) : null;
-  if (!marker) {
+  if (!block || block.markerLines.length === 0) {
     refuse(
       "role_marker_absent",
       `${file}:${line} store hash has no role marker; add ` +
@@ -68,11 +72,19 @@ function declaredHashRole(text, index, file, blocks) {
         "<!-- Seal installed-tree pin role: fresh-build --> immediately before its fenced block",
     );
   }
+  if (block.markerLines.length !== 1) {
+    const locations = block.markerLines.map((marker) => `${file}:${marker.number}`).join(" and ");
+    refuse(
+      "role_marker_ambiguous",
+      `${locations} precede fenced block at ${file}:${block.fenceLineNumber} for hash at line ${line}`,
+    );
+  }
+  const marker = block.markerLines[0].text.match(ROLE_MARKER);
   const role = marker[1] ?? marker[2];
   if (!KNOWN_ROLES.has(role)) {
     refuse(
       "role_marker_unknown",
-      `${file}:${block.markerLineNumber} unknown store-hash role ${JSON.stringify(role)} for hash at line ${line}`,
+      `${file}:${block.markerLines[0].number} unknown store-hash role ${JSON.stringify(role)} for hash at line ${line}`,
     );
   }
   return { role, line };
