@@ -52,6 +52,21 @@ test("a fresh-build marker wins when prose incidentally mentions releases/downlo
   assert.equal(hits[0].role, "fresh-build");
 });
 
+test("two role markers before one fenced pin are a named ambiguity", () => {
+  const text = [
+    "<!-- Seal installed-tree pin role: published-asset -->",
+    "<!-- Seal installed-tree pin role: fresh-build -->",
+    "```output",
+    `tree: ${"e".repeat(64)}`,
+    "```",
+  ].join("\n");
+  assertNamedRefuse(() => quotedTreeHashHits(text, "ambiguous.md"), "role_marker_ambiguous");
+  assert.throws(
+    () => quotedTreeHashHits(text, "ambiguous.md"),
+    /ambiguous\.md:1 and ambiguous\.md:2 precede fenced block at ambiguous\.md:3/,
+  );
+});
+
 test("an unmarked store hash is a named refusal with file, line, and required markers", () => {
   const text = ["```output", `store: /store/${"c".repeat(64)}`, "```"].join("\n");
   assertNamedRefuse(() => quotedTreeHashHits(text, "unmarked.md"), "role_marker_absent");
