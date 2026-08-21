@@ -58,5 +58,6 @@ test/seal-verify.test.cjs
 test/spine-retry.test.cjs
 test/step2-negative-control.test.cjs
 test/tool-validation.test.cjs
+test/twogates.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
