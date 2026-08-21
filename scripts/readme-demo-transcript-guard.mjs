@@ -50,7 +50,7 @@ try {
 }
 
 const demoStart = readme.indexOf("## 2. Demo");
-const demoEnd = readme.indexOf("### Repository transcript instrumentation", demoStart);
+const demoEnd = readme.indexOf("<!-- Repository transcript instrumentation", demoStart);
 if (demoStart === -1 || demoEnd === -1) fail("README demo section is missing or has no boundary");
 const demo = readme.slice(demoStart, demoEnd);
 const stepHeadings = [...demo.matchAll(/^### Step (\d+):.*$/gm)];
@@ -61,11 +61,11 @@ for (const heading of stepHeadings) {
   const start = heading.index;
   const next = stepHeadings.find((candidate) => candidate.index > start)?.index ?? demo.length;
   const section = demo.slice(start, next);
-  if (!/\*\*Output:\*\*\s*\n(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`\s*\n)?```text\n[\s\S]*?\n```/.test(section)) {
+  if (!/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n[\s\S]*?\n```/.test(section)) {
     fail(`MISSING_OUTPUT_FENCE: Step ${step}`);
   }
 }
-const fences = [...demo.matchAll(/\*\*Output:\*\*\s*\n(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`\s*\n)?```text\n([\s\S]*?)\n```/g)]
+const fences = [...demo.matchAll(/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n([\s\S]*?)\n```/g)]
   .map((match) => match[1]);
 if (fences.length !== 9) fail(`OUTPUT_FENCE_COUNT: expected 9, found ${fences.length}`);
 

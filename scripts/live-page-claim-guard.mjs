@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const URL = process.env.LIVE_CLAIM_GUARD_URL ?? "https://velvetmonkey.github.io/seal-check/";
 const README = process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, "README.md");
+const CLAIM_SITES = resolve(ROOT, "scripts/live-page-claim-sites.json");
 const PIN = Object.freeze({
   commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "e152a053637845600e1eceaee70cea873801c609",
   bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "10459"),
@@ -35,24 +36,46 @@ const CACHE_DIR = resolve(RUNNER_TEMP ?? tmpdir(), "live-page-claim-guard");
 // The cache key is exactly the pinned Git commit. Git commits are immutable, so
 // a source file cached under this key cannot become stale for this pin.
 const CACHE_PATH = resolve(CACHE_DIR, `${encodeURIComponent(PIN.commit)}.index.html`);
-const BEGIN = "<!-- live-page-claims:begin -->";
-const END = "<!-- live-page-claims:end -->";
-
 let bad = false;
 function fail(message) { console.error(`FAIL  ${message}`); bad = true; }
 
 function claimRegions(readme) {
-  const regions = [];
-  let offset = 0;
-  while (true) {
-    const begin = readme.indexOf(BEGIN, offset);
-    if (begin === -1) break;
-    const end = readme.indexOf(END, begin + BEGIN.length);
-    if (end === -1) { fail(`README live-page claim block beginning at byte ${begin} has no end marker`); break; }
-    regions.push({ begin, end: end + END.length, text: readme.slice(begin + BEGIN.length, end) }); // CLAIM-COVERAGE: README.md
-    offset = end + END.length;
+  let sites;
+  try { sites = JSON.parse(readFileSync(CLAIM_SITES, "utf8")); }
+  catch (error) { fail(`live-page claim site manifest is unreadable: ${CLAIM_SITES}: ${error.message}`); return []; }
+  if (!Array.isArray(sites) || sites.length === 0) {
+    fail("live-page claim site manifest must be a non-empty array");
+    return [];
   }
-  if (regions.length === 0) fail("README has no checked live-page claim block");
+  const endpoint = "https://velvetmonkey.github.io/seal-check/";
+  const lineStarts = [0];
+  for (let at = readme.indexOf("\n"); at !== -1; at = readme.indexOf("\n", at + 1)) lineStarts.push(at + 1); // CLAIM-COVERAGE: README.md
+  const declared = new Set();
+  const regions = [];
+  for (const site of sites) {
+    const key = `${site.file}:${site.line}:${site.column}`;
+    if (site.file !== "README.md" || !Number.isSafeInteger(site.line) || !Number.isSafeInteger(site.column) || site.line < 1 || site.column < 1) {
+      fail(`live-page claim site manifest has invalid site ${key}`);
+      continue;
+    }
+    if (declared.has(key)) { fail(`live-page claim site manifest has duplicate site ${key}`); continue; }
+    declared.add(key);
+    const begin = lineStarts[site.line - 1] + site.column - 1;
+    if (!Number.isSafeInteger(begin) || !readme.startsWith(endpoint, begin)) {
+      fail(`README is missing declared live-page claim site ${key}`);
+      continue;
+    }
+    const lineBegin = lineStarts[site.line - 1];
+    const lineEnd = readme.indexOf("\n", begin);
+    regions.push({ begin: lineBegin, end: lineEnd === -1 ? readme.length : lineEnd, text: readme.slice(lineBegin, lineEnd === -1 ? readme.length : lineEnd) });
+  }
+  for (let at = readme.indexOf(endpoint); at !== -1; at = readme.indexOf(endpoint, at + endpoint.length)) {
+    const line = readme.slice(0, at).split("\n").length;
+    const lineStart = readme.lastIndexOf("\n", at - 1) + 1;
+    const key = `README.md:${line}:${at - lineStart + 1}`;
+    if (!declared.has(key)) fail(`README live-page behaviour sentence at byte ${at} is outside the checked site manifest`);
+  }
+  if (regions.length === 0) fail("README has no checked live-page claim site");
   return regions;
 }
 
@@ -60,13 +83,6 @@ let readme;
 try { readme = readFileSync(README, "utf8"); }
 catch (error) { console.error(`ERROR  cannot read README claim population ${README}: ${error.message}`); process.exit(2); }
 const regions = claimRegions(readme);
-const endpoint = "https://velvetmonkey.github.io/seal-check/";
-for (let at = readme.indexOf(endpoint); at !== -1; at = readme.indexOf(endpoint, at + endpoint.length)) {
-  if (!regions.some((region) => at >= region.begin && at < region.end)) {
-    fail(`README live-page behaviour sentence at byte ${at} is outside <!-- live-page-claims --> checked population`);
-  }
-}
-
 const claims = regions.map((region) => region.text).join("\n");
 if (!claims.includes("The landing page has **zero `<button>` controls**.")) {
   fail("README checked population must state: The landing page has **zero `<button>` controls**.");

@@ -66,7 +66,7 @@ test("does not print a success verdict after README claim-population failure", a
   await withPage("<html></html>", async (url) => {
     const result = await run(url, "", "<html></html>");
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /README has no checked live-page claim block/);
+    assert.match(result.stderr, /README has no checked live-page claim site/);
     assert.doesNotMatch(result.stdout, /\bPASS\b/);
   });
 });
@@ -174,7 +174,7 @@ test("fails when a README behaviour sentence is outside the checked population",
   await withPage("<html></html>", async (url) => {
     const result = await run(url, `${originalReadme}\n[unmarked](${"https://velvetmonkey.github.io/seal-check/"}) describes the page.\n`);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /outside .*checked population/);
+    assert.match(result.stderr, /outside the checked site manifest/);
   });
 });
 
