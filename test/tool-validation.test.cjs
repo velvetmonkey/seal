@@ -187,6 +187,37 @@ test("duplicate protected tool names in stored state refuse activation by name",
   t.diagnostic(`stored guardTools: ${JSON.stringify(readState(filePath).guardTools)}`);
 });
 
+test("an empty stored protected tool refuses activation naming the entry", (t) => {
+  const ctx = setup("ok", "db.read");
+  const protectedRun = run(ctx, ["protect", "db", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = [""];
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  const activated = run(ctx, ["__proxy", "--protect-state", filePath]);
+  assert.notEqual(activated.code, 0);
+  assert.match(activated.out, /state_broken/);
+  assert.match(activated.out, /protected tool ""/);
+  t.diagnostic(activated.out.trim());
+});
+
+test("an invalid stored protected tool refuses activation naming its index", (t) => {
+  const ctx = setup("ok", "db.read");
+  const protectedRun = run(ctx, ["protect", "db", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = ["db.read", null];
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  const activated = run(ctx, ["__proxy", "--protect-state", filePath]);
+  assert.notEqual(activated.code, 0);
+  assert.match(activated.out, /invalid protected tool at index 1: null/);
+  t.diagnostic(activated.out.trim());
+});
+
 test("non-canonical whitespace in stored protected tool names refuses activation", async (t) => {
   const ctx = setup("ok", " db.read,db.read,db.read\t,   ");
   const protectedRun = run(ctx, ["protect", "db", "db.read"]);

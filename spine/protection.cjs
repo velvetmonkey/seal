@@ -293,9 +293,16 @@ function readState(statePath) {
 }
 
 function protectedToolNames(state) {
-  if (!Array.isArray(state?.guardTools) || state.guardTools.length === 0 ||
-      state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
+  if (!Array.isArray(state?.guardTools) || state.guardTools.length === 0) {
     throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
+  }
+  for (const [index, name] of state.guardTools.entries()) {
+    if (typeof name !== "string") {
+      throw new ProtectionError("state_broken", `stored protection state has invalid protected tool at index ${index}: ${JSON.stringify(name)}`);
+    }
+    if (name.length === 0) {
+      throw new ProtectionError("state_broken", `stored protection state has empty protected tool \"\" at index ${index}`);
+    }
   }
   const nonCanonical = state.guardTools.filter((name) => name !== name.trim());
   if (nonCanonical.length > 0) {
