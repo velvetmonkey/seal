@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, "..");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const TREE = /\btree:?\s+([0-9a-f]{64})\b/g;
 const STORE = /\/store\/([0-9a-f]{64})(?=\/|\b)/g;
-const ROLE_MARKER = /^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`\r?$/;
+const ROLE_MARKER = /^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)\r?$/;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const MARKER = "\n// --SEAL-PAYLOAD--\n";
 
@@ -64,11 +64,11 @@ function declaredHashRole(text, index, file, blocks) {
     refuse(
       "role_marker_absent",
       `${file}:${line} store hash has no role marker; add ` +
-        "**Seal installed-tree pin role:** `published-asset` or " +
-        "**Seal installed-tree pin role:** `fresh-build` immediately before its fenced block",
+        "<!-- Seal installed-tree pin role: published-asset --> or " +
+        "<!-- Seal installed-tree pin role: fresh-build --> immediately before its fenced block",
     );
   }
-  const role = marker[1];
+  const role = marker[1] ?? marker[2];
   if (!KNOWN_ROLES.has(role)) {
     refuse(
       "role_marker_unknown",

@@ -65,9 +65,9 @@ function roleByLine(text, file) {
     if (/^```/.test(line)) {
       if (openRole === null) {
         const marker = index > 0
-          ? lines[index - 1].replace(/\r$/, "").match(/^\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`$/)
+          ? lines[index - 1].replace(/\r$/, "").match(/^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)$/)
           : null;
-        openRole = marker ? marker[1] : "";
+        openRole = marker ? (marker[1] ?? marker[2]) : "";
       } else {
         openRole = null;
       }
@@ -193,12 +193,17 @@ function rewriteMetadata(out, mutate) {
 }
 
 function markedBlockBytes(text, role) {
-  const marker = `**Seal installed-tree pin role:** \`${role}\``;
+  const markers = [
+    `**Seal installed-tree pin role:** \`${role}\``,
+    `<!-- Seal installed-tree pin role: ${role} -->`,
+  ];
   const blocks = [];
   let from = 0;
   while (true) {
-    const start = text.indexOf(marker, from);
+    const starts = markers.map((marker) => text.indexOf(marker, from)).filter((start) => start !== -1);
+    const start = starts.length > 0 ? Math.min(...starts) : -1;
     if (start === -1) return blocks;
+    const marker = markers.find((candidate) => text.startsWith(candidate, start));
     const fence = text.indexOf("```", start + marker.length);
     const close = fence === -1 ? -1 : text.indexOf("```", fence + 3);
     assert.notEqual(fence, -1, `${role} marker has no opening fence`);
@@ -225,7 +230,7 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
     let text = fs.readFileSync(target, "utf8");
     if (relative === "README.md") {
       text = text.replace(
-        /(\*\*Seal installed-tree pin role:\*\* `fresh-build`[\s\S]*?\/store\/)[0-9a-f]{64}/,
+        /(<!-- Seal installed-tree pin role: fresh-build -->[\s\S]*?\/store\/)[0-9a-f]{64}/,
         `$1${"f".repeat(64)}`,
       );
       fs.writeFileSync(target, text);
