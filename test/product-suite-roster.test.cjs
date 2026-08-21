@@ -9,6 +9,15 @@ const ROOT = resolve(__dirname, "..");
 const DRIVER = join(ROOT, "scripts", "run-complete-product-suite.sh");
 const CRITICAL_MANIFEST = join(ROOT, "scripts", "critical-property-manifest.tsv");
 
+test("the fresh-build pin requires a recorded merge refresh", () => {
+  const checker = spawnSync(process.execPath, [join(ROOT, "scripts", "check-tree-refresh.cjs")], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(checker.status, 0, checker.stdout + checker.stderr);
+  assert.match(checker.stdout, /INSTALLED TREE PIN CHECK OK/);
+});
+
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "seal-product-suite-roster-"));
   const tests = join(root, "tests");
