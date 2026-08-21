@@ -64,11 +64,13 @@ async function run(argv) {
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
+        projectId: state.projectId,
+        serverId: state.serverName,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
-        beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
+        beforeForward: beforeForwardFromState(state.statePath, state.leaseToken),
         leaseFence: () => {
-          const current = require("./protection.cjs").readState(options.protectState);
+          const current = require("./protection.cjs").readState(state.statePath);
           const lease = current?.lease;
           const token = state.leaseToken;
           const ok = lease && token && lease.pid === token.pid &&

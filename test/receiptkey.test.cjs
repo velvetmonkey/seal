@@ -28,7 +28,7 @@ function fixture() {
   createJournal(storePath);
   const env = { ...process.env, HOME: path.join(root, "home"), XDG_DATA_HOME: dataHome };
   const observed = readProjectServer(project, "db");
-  const statePath = statePathFor(project, env);
+  const statePath = statePathFor(project, "db", env);
   fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
   fs.writeFileSync(statePath, `${JSON.stringify({
     schema: "seal.protect/v1",

@@ -63,7 +63,7 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   const dataHome = path.join(root, ".local", "share");
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   const liveLease = { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 3 };
 
@@ -86,7 +86,7 @@ test("status refuses non-Linux before a null-witness lease liveness comparison",
   const dataHome = path.join(root, ".local", "share");
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "ACTIVE",
@@ -117,7 +117,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
   fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ decision: "APPROVE", at: "2026-08-16T12:00:00.000Z" }));
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
@@ -137,7 +137,7 @@ test("status says an existing empty receipt directory has no recorded decision",
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
@@ -157,7 +157,7 @@ test("status names a missing receipt directory as no receipt yet", () => {
   const receiptDir = path.join(dataHome, "seal", "projects", "missing-receipts", "receipts");
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
@@ -177,7 +177,7 @@ test("status names an unreadable receipt directory and its permission action", (
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
@@ -200,7 +200,7 @@ test("status names a receipt path that is not a directory as misconfigured", () 
   fs.mkdirSync(project);
   fs.mkdirSync(path.dirname(receiptDir), { recursive: true });
   fs.writeFileSync(receiptDir, "not a directory\n");
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
@@ -222,7 +222,7 @@ test("status names receipt files when none can be parsed", () => {
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
   fs.writeFileSync(path.join(receiptDir, "not-a-receipt.json"), "{}\n");
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
     state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,

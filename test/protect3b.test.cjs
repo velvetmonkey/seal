@@ -142,7 +142,7 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.match(protectedRun.out, new RegExp(`Project \\.mcp\\.json hash before protect: ${beforeHash}`));
   assert.equal(sha256(fs.readFileSync(path.join(project, ".mcp.json"))), beforeHash);
-  const state = readState(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") }));
+  const state = readState(statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") }));
   assert.equal(state.state, "PENDING RESTART");
 
   const unprotectedRun = run(project, home, ["unprotect", "db"], env);
@@ -223,7 +223,7 @@ test("protect names install-time refusals", () => {
   const incompatibleProject = path.join(root, "incompatible-project");
   fs.mkdirSync(incompatibleProject);
   writeProject(incompatibleProject, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "incompatible-data.txt")] });
-  const incompatibleState = statePathFor(incompatibleProject, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const incompatibleState = statePathFor(incompatibleProject, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   fs.mkdirSync(path.dirname(incompatibleState), { recursive: true });
   fs.writeFileSync(incompatibleState, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
   result = run(incompatibleProject, home, ["protect", "db", "demo.mutate"], env);
@@ -244,7 +244,7 @@ test("proxy activation promotes pending, and live project drift refuses before c
 
   const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], { PATH: env.PATH });
   assert.equal(protectedRun.code, 0, protectedRun.out);
-  const statePath = statePathFor(project, env);
+  const statePath = statePathFor(project, "db", env);
   const proxy = spawn(SEAL, ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
   try {
     const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
@@ -288,7 +288,7 @@ test("unprotect refuses while an activation lease pid is live", () => {
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "active-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
   fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } }, null, 2));
 
@@ -307,7 +307,7 @@ test("unprotect recovers a live recycled PID whose witness does not match", () =
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "recycled-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
   const unrelated = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   try {
@@ -337,7 +337,7 @@ test("unprotect refuses without installed ownership proof", () => {
   const failedProtect = run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_ADD_FAIL: "1" });
   assert.notEqual(failedProtect.code, 0);
   assert.match(failedProtect.out, /claude_install_failed/);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   assert.equal(readState(statePath).state, "BROKEN");
 
   assert.equal(readState(statePath).localOverride.installed, false);
@@ -356,7 +356,7 @@ test("unprotect unwinds an absent override only when state proves Seal installed
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "absent-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   assert.equal(readState(statePath).localOverride.installed, true);
 
   const configPath = fakeLocalOverridePath(root);
@@ -440,7 +440,7 @@ test("status renders a dead activation lease as STALE, not active", () => {
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "dead-lease-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
-  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: path.join(home, ".local", "share") });
   const state = readState(statePath);
   fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: 999999 } }, null, 2));
 
@@ -471,7 +471,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "real-exit-data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], { PATH: env.PATH }).code, 0);
 
-  const statePath = statePathFor(project, { XDG_DATA_HOME: env.XDG_DATA_HOME });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: env.XDG_DATA_HOME });
 
   // Run the genuine wrapper to completion: empty stdin closes, the proxy
   // activates the lease with ITS OWN pid, then exits. No hand-written pid.

@@ -96,11 +96,13 @@ function createApprovalContract({
         throw new Error(`approval store is inconsistent: unknown event type ${event.type}`);
       }
     }
-    // The correction's second lifetime: any continuation still pending from
-    // an earlier connection epoch is invalidated here, and the journal
-    // records that so the invalidation itself survives.
+    // The correction's second lifetime is scoped to this protected server.
+    // Other simultaneously active server identities share the project
+    // journal so they can recognize and refuse a cross-server replay by
+    // identity; constructing one must not manufacture a restart for another.
     for (const record of recordsByHash.values()) {
-      if (record.status === "pending" && record.connection_epoch !== connectionEpoch) {
+      if (record.status === "pending" && record.project_id === projectId && record.server_id === serverId &&
+          record.connection_epoch !== connectionEpoch) {
         store.append({ type: "status", handle_hash: record.handle_hash, status: "restart_invalidated", at: now() });
         record.status = "restart_invalidated";
       }
@@ -207,7 +209,7 @@ function createApprovalContract({
     // for the authorization adapter below.
     const contextMatches = (retryProject ?? projectId) === record.project_id &&
       (retryServer ?? serverId) === record.server_id;
-    if (record.connection_epoch !== connectionEpoch) {
+    if (contextMatches && record.connection_epoch !== connectionEpoch) {
       return refuse(REFUSALS.RESTART_INVALIDATED, "this continuation predates a restart; send a fresh call");
     }
 

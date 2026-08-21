@@ -111,7 +111,7 @@ function assertUntouched(ctx, before, label) {
 }
 
 async function withProxy(ctx, fn) {
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
     cwd: ctx.project,
     env: { ...process.env, ...ctx.env },
@@ -151,7 +151,7 @@ test("1 branch drift: named refusal, no forward, .mcp.json untouched by the refu
   // Simulate checking out a branch whose .mcp.json names a different server.
   writeProject(ctx.project, { command: process.execPath, args: [SEAL, "__demo-server", ctx.dataFile, "--other-branch"] });
   const before = snapshot(ctx);
-  const started = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePathFor(ctx.project, ctx.env)], {
+  const started = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePathFor(ctx.project, "db", ctx.env)], {
     cwd: ctx.project, env: { ...process.env, ...ctx.env }, encoding: "utf8", input: "",
   });
   assert.notEqual(started.status, 0);
@@ -226,13 +226,13 @@ test("4b missing protected-server binary: protect refuses before recording state
   assert.notEqual(protect.code, 0);
   assert.match(protect.out, /protected_server_start_failed/);
   assert.doesNotMatch(protect.out, /PENDING RESTART/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false);
   assertUntouched(ctx, before, "deleted child binary");
 });
 
 test("5a incompatible state (version): message names the version, not the schema", () => {
   const ctx = setup("f5-incompat-ver-");
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
   const before = snapshot(ctx);
@@ -246,7 +246,7 @@ test("5a incompatible state (version): message names the version, not the schema
 
 test("5b incompatible state (schema): message names the schema, not a version", () => {
   const ctx = setup("f5-incompat-schema-");
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify({ schema: "seal.protect/v0", sealVersion: "0.1.1", state: "PENDING RESTART" }));
   const before = snapshot(ctx);
@@ -271,7 +271,7 @@ test("6 two protected projects: works by design, isolation holds", () => {
   const statusB = runSeal(b, ["status"]);
   assert.match(statusA.out, /PENDING RESTART/);
   assert.match(statusB.out, /PENDING RESTART/);
-  assert.notEqual(statePathFor(a.project, a.env), statePathFor(b.project, b.env));
+  assert.notEqual(statePathFor(a.project, "db", a.env), statePathFor(b.project, "db", b.env));
   assertUntouched(a, beforeA, "two projects A");
   assertUntouched(b, beforeB, "two projects B");
 });
@@ -295,7 +295,7 @@ test("7 live session during protect: works by design as PENDING RESTART", () => 
 test("8 live session during unprotect: active_claude_session", () => {
   const ctx = setup("f5-live-unprotect-");
   assert.equal(runSeal(ctx, ["protect", "db", "demo.mutate"]).code, 0);
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   const state = readState(statePath);
   fs.writeFileSync(statePath, JSON.stringify({ ...state, state: "ACTIVE", lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } }, null, 2));
   const before = snapshot(ctx);

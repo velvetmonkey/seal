@@ -40,7 +40,7 @@ function run(ctx, args) {
 }
 
 function proxySession(ctx) {
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
     cwd: ctx.project,
     env: ctx.env,
@@ -67,7 +67,7 @@ test("protect refuses a misspelled tool and names every observed tool", () => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_tool_absent/);
   assert.match(result.out, /observed tools: db\.drop_table, db\.read/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false);
 });
 
 test("an observed tool protects end to end and reports every other tool as not approval-gated", async () => {
@@ -76,7 +76,7 @@ test("an observed tool protects end to end and reports every other tool as not a
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.match(protectedRun.out, /Protection: PENDING RESTART db\.db\.drop_table/);
   assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.read/);
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], { cwd: ctx.project, env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
   const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
   try {
@@ -133,9 +133,9 @@ test("any unknown tool makes the whole named list fail", (t) => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_tool_absent/);
   assert.match(result.out, /requested tool "db\.missing" was not returned by tools\/list/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false, "no partial state may be written");
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false, "no partial state may be written");
   t.diagnostic(result.out.trim());
-  t.diagnostic(`state written: ${fs.existsSync(statePathFor(ctx.project, ctx.env))}`);
+  t.diagnostic(`state written: ${fs.existsSync(statePathFor(ctx.project, "db", ctx.env))}`);
 });
 
 test("protect refuses an empty tool list", (t) => {
@@ -143,7 +143,7 @@ test("protect refuses an empty tool list", (t) => {
   const result = run(ctx, ["protect", "db"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /usage: seal protect .* SERVER TOOL \[TOOL\.\.\.\]/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false);
   t.diagnostic(result.out.trim());
 });
 
@@ -151,7 +151,7 @@ test("duplicate protected tool names are deduped in stored order", (t) => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const result = run(ctx, ["protect", "db", "db.drop_table", "db.read", "db.drop_table"]);
   assert.equal(result.code, 0, result.out);
-  const stored = readState(statePathFor(ctx.project, ctx.env)).guardTools;
+  const stored = readState(statePathFor(ctx.project, "db", ctx.env)).guardTools;
   assert.deepEqual(stored, ["db.drop_table", "db.read"]);
   t.diagnostic(`stored guardTools: ${JSON.stringify(stored)}`);
 });
@@ -161,7 +161,7 @@ test("three protected tools round-trip through stored state", (t) => {
   const expected = ["db.drop_table", "db.read", "db.health"];
   const result = run(ctx, ["protect", "db", ...expected]);
   assert.equal(result.code, 0, result.out);
-  const state = readState(statePathFor(ctx.project, ctx.env));
+  const state = readState(statePathFor(ctx.project, "db", ctx.env));
   assert.deepEqual(state.guardTools, expected);
   assert.equal(Object.hasOwn(state, "guardTool"), false, "new state must carry the list, not the old scalar");
   t.diagnostic(`written/read guardTools: ${JSON.stringify(state.guardTools)}`);
@@ -172,7 +172,7 @@ test("pre-change scalar guardTool state still activates and gates", async (t) =>
   const ctx = setup("ok", "db.drop_table,db.read");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
-  const filePath = statePathFor(ctx.project, ctx.env);
+  const filePath = statePathFor(ctx.project, "db", ctx.env);
   const current = JSON.parse(fs.readFileSync(filePath, "utf8"));
   const { guardTools, ...oldState } = current;
   fs.writeFileSync(filePath, JSON.stringify({ ...oldState, guardTool: guardTools[0] }, null, 2) + "\n");
@@ -213,7 +213,7 @@ test("a slow initialize refuses at the default deadline and names --timeout-ms",
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_initialize_failed/);
   assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false);
 });
 
 test("--timeout-ms permits a legitimate slow initialize and is persisted for activation", () => {
@@ -221,7 +221,7 @@ test("--timeout-ms permits a legitimate slow initialize and is persisted for act
   const result = run(ctx, ["protect", "--timeout-ms", "6000", "db", "db.drop_table"]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /Protection: PENDING RESTART db\.db\.drop_table/);
-  assert.equal(readState(statePathFor(ctx.project, ctx.env)).discoveryTimeoutMs, 6000);
+  assert.equal(readState(statePathFor(ctx.project, "db", ctx.env)).discoveryTimeoutMs, 6000);
 });
 
 test("a dead initialize still refuses at the default deadline", () => {
@@ -230,7 +230,7 @@ test("a dead initialize still refuses at the default deadline", () => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_initialize_failed/);
   assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
-  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, "db", ctx.env)), false);
 });
 
 test("a tools/list error refuses protection", () => {
@@ -264,7 +264,7 @@ test("activation becomes visibly BROKEN when the protected tool vanished", () =>
   const ctx = setup("file", names);
   assert.equal(run(ctx, ["protect", "db", "db.drop_table"]).code, 0);
   fs.writeFileSync(names, "db.read\n");
-  const statePath = statePathFor(ctx.project, ctx.env);
+  const statePath = statePathFor(ctx.project, "db", ctx.env);
   const activated = run(ctx, ["__proxy", "--protect-state", statePath]);
   assert.notEqual(activated.code, 0);
   assert.match(activated.out, /protected_tool_vanished/);

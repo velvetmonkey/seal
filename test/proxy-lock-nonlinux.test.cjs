@@ -60,7 +60,7 @@ function workspace(prefix) {
 
 function ownedActiveState(ctx) {
   const projectRoot = fs.realpathSync(ctx.project);
-  const statePath = statePathFor(projectRoot, ctx.env);
+  const statePath = statePathFor(projectRoot, "db", ctx.env);
   const definition = { type: "stdio", command: "/seal", args: ["__proxy", "--protect-state", statePath], env: {} };
   fs.writeFileSync(path.join(ctx.home, ".claude.json"), JSON.stringify({
     projects: { [projectRoot]: { mcpServers: { db: definition } } },
@@ -100,7 +100,7 @@ test("direct activationLease refuses when the live lease witness is unavailable"
   await withSimulatedDarwin(async () => {
     const ctx = workspace("activation");
     const state = ownedActiveState(ctx);
-    const statePath = statePathFor(ctx.project, ctx.env);
+    const statePath = statePathFor(ctx.project, "db", ctx.env);
     fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
 

@@ -55,14 +55,17 @@ function status() {
 
   let receiptDir;
   try {
-    const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
-    const view = protection.protectionView(state, root, process.env);
-    if (!view || view.state === "UNPROTECTED") {
+    const { root, entries } = protection.statesWithProject(process.cwd(), process.env);
+    const protectedEntries = entries
+      .map(({ filePath, state }) => ({ filePath, state, view: protection.protectionView(state, root, process.env) }))
+      .filter(({ view }) => view && view.state !== "UNPROTECTED");
+    if (protectedEntries.length === 0) {
       console.log("Protection: - outside Seal");
       console.log("Receipts: unavailable outside a protected project");
       console.log("Most recent: no project receipt directory is recorded");
       return;
-    } else {
+    }
+    for (const { filePath, state, view } of protectedEntries) {
       const guarded = protection.protectedToolNames(view);
       const scope = guarded.length === 1 ? `${view.serverName}.${guarded[0]}` : `${view.serverName}.{${guarded.join(", ")}}`;
       console.log(`Protection: ${view.state} ${scope} (${filePath})`);
@@ -72,8 +75,12 @@ function status() {
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
-      if (typeof state.receiptsDir === "string") receiptDir = state.receiptsDir;
-      else {
+      if (typeof state.receiptsDir === "string") {
+        if (receiptDir && receiptDir !== state.receiptsDir) {
+          throw new Error("protected server states disagree on the project receipt directory");
+        }
+        receiptDir = state.receiptsDir;
+      } else {
         console.log("Receipts: unavailable (protected project has no recorded receipt directory)");
         console.log("Most recent: no project receipt directory is recorded");
         return;

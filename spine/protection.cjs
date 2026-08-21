@@ -216,8 +216,76 @@ function projectDirectory(projectRoot, env = process.env) {
   return path.join(dataHome(env), "seal", "projects", projectId(projectRoot));
 }
 
-function statePathFor(projectRoot, env = process.env) {
+const SERVER_KEY_CHUNK_HEX_LENGTH = 120;
+
+function serverKeyComponents(serverName) {
+  if (typeof serverName !== "string" || serverName.length === 0) {
+    throw new ProtectionError("usage", "a non-empty server name is required to locate protection state");
+  }
+  // Node strings are sequences of UTF-16 code units. Encoding those exact
+  // units (rather than Unicode scalar values) keeps this mapping injective
+  // even for unusual JSON keys containing unpaired surrogates. Lowercase hex
+  // is portable as a path alphabet and cannot collide on a case-folding
+  // filesystem. Fixed-size chunks stay below per-component name limits.
+  const encoded = Buffer.from(serverName, "utf16le").toString("hex");
+  return encoded.match(new RegExp(`.{1,${SERVER_KEY_CHUNK_HEX_LENGTH}}`, "g"))
+    .map((chunk) => `u16-${chunk}`);
+}
+
+function statePathFor(projectRoot, serverName, env = process.env) {
+  return path.join(projectDirectory(projectRoot, env), "servers", ...serverKeyComponents(serverName), "state.json");
+}
+
+function legacyStatePathFor(projectRoot, env = process.env) {
   return path.join(projectDirectory(projectRoot, env), "state.json");
+}
+
+function pathExists(filePath) {
+  try { fs.lstatSync(filePath); return true; } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function migrateLegacyState(projectRoot, serverName, env = process.env) {
+  const legacyPath = legacyStatePathFor(projectRoot, env);
+  const targetPath = statePathFor(projectRoot, serverName, env);
+  let legacyStat;
+  try { legacyStat = fs.lstatSync(legacyPath); } catch (error) {
+    if (error.code === "ENOENT") return targetPath;
+    throw new ProtectionError("state_broken", `legacy protection state cannot be inspected: ${error.message}`);
+  }
+  const legacyState = readState(legacyPath);
+  if (!legacyState || typeof legacyState.serverName !== "string" || legacyState.serverName.length === 0) {
+    throw new ProtectionError("state_broken", `legacy protection state has no server name: ${legacyPath}`);
+  }
+  if (legacyState.serverName !== serverName) return targetPath;
+  if (legacyStat.isSymbolicLink()) return targetPath;
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+  if (pathExists(targetPath)) {
+    const targetState = readState(targetPath);
+    if (canonical(targetState) !== canonical(legacyState)) {
+      throw new ProtectionError(
+        "state_broken",
+        `legacy and keyed protection state disagree for server ${JSON.stringify(serverName)}; no state was changed`,
+      );
+    }
+  } else {
+    // A hard link makes the keyed state visible before the legacy pathname is
+    // changed. Replacing the legacy pathname with a symlink is then atomic, so
+    // a crash cannot create a window in which the old gate is invisible.
+    fs.linkSync(legacyPath, targetPath);
+  }
+  const relativeTarget = path.relative(path.dirname(legacyPath), targetPath);
+  const temporaryLink = `${legacyPath}.migrate-${process.pid}`;
+  try {
+    fs.symlinkSync(relativeTarget, temporaryLink);
+    fs.renameSync(temporaryLink, legacyPath);
+  } finally {
+    try { fs.unlinkSync(temporaryLink); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  return targetPath;
 }
 
 function mcpJsonPath(projectRoot) {
@@ -572,9 +640,9 @@ function leaseMatches(lease, token) {
     lease.startWitness === token.startWitness && lease.generation === token.generation;
 }
 
-function acquireProjectLock(projectRoot, env = process.env) {
+function acquireProjectLock(projectRoot, env = process.env, statePath = null) {
   const filePath = lockPathFor(projectRoot, env);
-  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid), statePath };
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (;;) {
@@ -603,7 +671,7 @@ function acquireProjectLock(projectRoot, env = process.env) {
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
       if (lockOwnerIsLive(existing)) {
-        const state = readState(statePathFor(projectRoot, env));
+        const state = typeof existing.statePath === "string" ? readState(existing.statePath) : null;
         const generation = state?.lease?.generation ?? "unknown";
         throw new ProtectionError(
           "proxy_lease_active",
@@ -620,10 +688,41 @@ function acquireProjectLock(projectRoot, env = process.env) {
   }
 }
 
-function stateWithProject(projectRoot, env = process.env) {
+function statesWithProject(projectRoot, env = process.env) {
   const root = realProjectRoot(projectRoot);
-  const filePath = statePathFor(root, env);
-  return { root, filePath, state: readState(filePath) };
+  const legacyPath = legacyStatePathFor(root, env);
+  if (pathExists(legacyPath)) {
+    const legacyState = readState(legacyPath);
+    if (!legacyState || typeof legacyState.serverName !== "string" || legacyState.serverName.length === 0) {
+      throw new ProtectionError("state_broken", `legacy protection state has no server name: ${legacyPath}`);
+    }
+    migrateLegacyState(root, legacyState.serverName, env);
+  }
+  const serversDirectory = path.join(projectDirectory(root, env), "servers");
+  const filePaths = [];
+  function collect(directory) {
+    let entries;
+    try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) collect(candidate);
+      else if (entry.isFile() && entry.name === "state.json") filePaths.push(candidate);
+    }
+  }
+  collect(serversDirectory);
+  filePaths.sort();
+  return { root, entries: filePaths.map((filePath) => ({ filePath, state: readState(filePath) })) };
+}
+
+function stateWithProject(projectRoot, env = process.env) {
+  const { root, entries } = statesWithProject(projectRoot, env);
+  if (entries.length > 1) {
+    throw new Error("project has more than one server state; use statesWithProject");
+  }
+  return { root, filePath: entries[0]?.filePath || null, state: entries[0]?.state || null };
 }
 
 function protectionView(state, projectRoot, env = process.env) {
@@ -653,7 +752,7 @@ async function protect({
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
   }
   const root = realProjectRoot(projectRoot);
-  const statePath = statePathFor(root, env);
+  const statePath = migrateLegacyState(root, serverName, env);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED) {
     if (existing.sealVersion && existing.sealVersion !== sealVersion()) {
@@ -681,9 +780,10 @@ async function protect({
     );
   }
 
-  const directory = path.dirname(statePath);
+  const directory = projectDirectory(root, env);
   const storePath = path.join(directory, "approvals.journal");
   const receiptsDir = path.join(directory, "receipts");
+  fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   if (!fs.existsSync(storePath)) fs.writeFileSync(storePath, "", { mode: 0o600 });
   fs.mkdirSync(receiptsDir, { recursive: true, mode: 0o700 });
@@ -730,7 +830,7 @@ async function protect({
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
   const root = realProjectRoot(projectRoot);
-  const statePath = statePathFor(root, env);
+  const statePath = migrateLegacyState(root, serverName, env);
   const state = readState(statePath);
   assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
   if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
@@ -772,9 +872,10 @@ function markBroken(statePath, state, error) {
 async function activationLease(statePath, env = process.env) {
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
-  const lock = acquireProjectLock(initial.projectRoot, env);
+  const canonicalStatePath = migrateLegacyState(initial.projectRoot, initial.serverName, env);
+  const lock = acquireProjectLock(initial.projectRoot, env, canonicalStatePath);
   try {
-    const state = readState(statePath);
+    const state = readState(canonicalStatePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
     if (lockOwnerIsLive(state.lease)) {
       throw new ProtectionError(
@@ -788,7 +889,7 @@ async function activationLease(statePath, env = process.env) {
     }
     const got = currentDigestForState(state);
     if (got !== state.projectServerDigest) {
-      markDrifted(statePath, state, got);
+      markDrifted(canonicalStatePath, state, got);
       throw new ProtectionError("drifted", "project server drifted before proxy activation");
     }
     let toolNames;
@@ -801,7 +902,7 @@ async function activationLease(statePath, env = process.env) {
         timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
       });
     } catch (error) {
-      markBroken(statePath, state, error);
+      markBroken(canonicalStatePath, state, error);
       throw error;
     }
     const guardedTools = protectedToolNames(state);
@@ -814,7 +915,7 @@ async function activationLease(statePath, env = process.env) {
         "protected_tool_vanished",
         `${protectedName} before activation; observed tools: ${observedNames(toolNames)}`,
       );
-      markBroken(statePath, state, error);
+      markBroken(canonicalStatePath, state, error);
       throw error;
     }
     const existingLease = state.lease;
@@ -829,10 +930,11 @@ async function activationLease(statePath, env = process.env) {
         startedAt: new Date().toISOString(),
       },
     };
-    writeState(statePath, next);
+    writeState(canonicalStatePath, next);
     lock.release();
     Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+    Object.defineProperty(next, "statePath", { value: canonicalStatePath });
     return next;
   } catch (error) {
     lock.release();
@@ -891,11 +993,14 @@ module.exports = {
   protectionView,
   projectDirectory,
   projectId,
+  legacyStatePathFor,
+  migrateLegacyState,
   readProjectServer,
   readState,
   receiptKeyPaths,
   realProjectRoot,
   statePathFor,
   stateWithProject,
+  statesWithProject,
   unprotect,
 };

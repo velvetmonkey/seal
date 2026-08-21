@@ -27,7 +27,7 @@ function setupLeaseState() {
   const server = { command: process.execPath, args: [SEAL, "__demo-server", dataFile] };
   fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: { db: server } }) + "\n");
   const projectServer = readProjectServer(project, "db");
-  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  const statePath = statePathFor(project, "db", { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify({
     schema: "seal.protect/v1",
