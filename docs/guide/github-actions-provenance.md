@@ -37,7 +37,7 @@ $ test -n "$RUN_ID"
 $ test "$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json jobs --jq '[.jobs[] | select(.name == "demo receipt provenance" and .conclusion == "success")] | length')" = 1
 $ RUN_SHA="$(gh run view "$RUN_ID" --repo velvetmonkey/seal --json headSha --jq .headSha)"
 $ gh run download "$RUN_ID" --repo velvetmonkey/seal --name demo-receipt-provenance --dir demo-receipt-provenance
-$ sha256sum demo-receipt-provenance/demo-receipt-evidence.tgz
+$ if command -v sha256sum >/dev/null 2>&1; then sha256sum demo-receipt-provenance/demo-receipt-evidence.tgz; else shasum -a 256 demo-receipt-provenance/demo-receipt-evidence.tgz; fi
 $ gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz --repo velvetmonkey/seal --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml --source-digest "$RUN_SHA" --deny-self-hosted-runners
 $ gh attestation verify demo-receipt-provenance/demo-receipt-evidence.tgz --repo velvetmonkey/seal --signer-workflow velvetmonkey/seal/.github/workflows/ci.yml --source-digest "$RUN_SHA" --deny-self-hosted-runners --format json --jq '.[].verificationResult.statement.subject[].digest.sha256'
 ```

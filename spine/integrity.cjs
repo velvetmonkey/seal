@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Tree digest and payload codec for the Linux x86-64 install artifact.
+// Tree digest and payload codec for Seal install artifacts.
 // Used by the builder and by tests. The installer and the installed launcher
 // carry their own copies so they do not load code from a store they are
 // about to judge.
@@ -10,6 +10,7 @@ const path = require("node:path");
 const MAGIC = "SEALPAY1\n";
 const DATA = "--DATA--\n";
 const PLATFORM = "linux-x64";
+const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
 
 function sha256Hex(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -42,13 +43,18 @@ function walkFiles(root) {
   return out;
 }
 
-function packPayload(root, version) {
+function packPayload(root, version, platform = PLATFORM) {
+  if (!SUPPORTED_PLATFORMS.has(platform)) {
+    const error = new Error(`unsupported artifact platform: ${platform}`);
+    error.code = "unsupported_platform";
+    throw error;
+  }
   const files = walkFiles(root);
   const listed = files.map(({ path: p, bytes, sha256 }) => ({ path: p, bytes, sha256 }));
   const manifest = {
     schema: "seal.payload/v1",
     version,
-    platform: PLATFORM,
+    platform,
     files: listed,
     treeSha256: treeDigest(listed),
     payloadBytes: files.reduce((n, file) => n + file.bytes, 0),
@@ -164,6 +170,7 @@ function verifyStore(storeRoot, record) {
 
 module.exports = {
   PLATFORM,
+  SUPPORTED_PLATFORMS,
   sha256Hex,
   treeDigest,
   walkFiles,

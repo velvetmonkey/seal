@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Linux x86-64 installer. This file is also the body of the published
+// Platform-bound installer. This file is also the body of each published
 // artifact: the payload is appended after the marker. It never searches
 // PATH for another seal, and it will not install without an operator pin.
 const crypto = require("node:crypto");
@@ -28,10 +28,13 @@ function treeDigest(files) {
   return sha256Hex(Buffer.from(lines, "utf8"));
 }
 
-function platformOk() {
+const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
+
+function hostPlatform() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
-  return { ok: platform === "linux" && arch === "x64", platform, arch };
+  const id = `${platform}-${arch}`;
+  return { ok: SUPPORTED_PLATFORMS.has(id), platform, arch, id };
 }
 
 function unpackPayload(payload) {
@@ -114,7 +117,7 @@ function lstatOrAbsent(target) {
   }
 }
 
-function readVerifiedExistingInstall(recordPath, launchPath) {
+function readVerifiedExistingInstall(recordPath, launchPath, platform) {
   const recordStat = lstatOrAbsent(recordPath);
   const launchStat = lstatOrAbsent(launchPath);
   if (!recordStat && !launchStat) return null;
@@ -137,7 +140,7 @@ function readVerifiedExistingInstall(recordPath, launchPath) {
     ? record.files.find((file) => file && file.path === "scripts/seal-launch.cjs")
     : null;
   if (
-    !record || record.schema !== "seal.install/v1" || record.platform !== "linux-x64" ||
+    !record || record.schema !== "seal.install/v1" || record.platform !== platform ||
     typeof record.treeSha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.treeSha256) ||
     record.store !== path.posix.join("lib", "seal", "store", record.treeSha256) ||
     !launcherEntry || launcherEntry.bytes !== launcher.length ||
@@ -172,13 +175,12 @@ function verifyOrWriteStoreFile(target, file, mode) {
 }
 
 function main() {
-  const plat = platformOk();
+  const plat = hostPlatform();
   if (!plat.ok) {
     process.stderr.write([
       "UNSUPPORTED PLATFORM",
       "",
-      "Seal v0.2.0-rc.2 supports Linux x86-64 only.",
-      "macOS arm64 has not completed Seal's end-to-end acceptance path.",
+      "Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64.",
       "",
       "No files were changed.",
       "",
@@ -226,8 +228,14 @@ function main() {
   if (at < 0) refuse("artifact_malformed", "this file carries no payload; it is not a built release artifact");
   const payload = self.subarray(at + marker.length);
   const { manifest, files } = unpackPayload(payload);
-  if (manifest.platform !== "linux-x64") {
-    refuse("unsupported_platform", `artifact platform is ${manifest.platform}, not linux-x64`);
+  const artifactPlatform = typeof manifest.platform === "string" && manifest.platform.length > 0
+    ? manifest.platform
+    : "<absent>";
+  if (!SUPPORTED_PLATFORMS.has(manifest.platform)) {
+    refuse("unsupported_platform", `artifact platform is ${artifactPlatform}, not a supported platform`);
+  }
+  if (manifest.platform !== plat.id) {
+    refuse("unsupported_platform", `artifact platform is ${manifest.platform}, running host is ${plat.id}`);
   }
 
   const prefix = path.resolve(args.prefix || path.join(process.env.HOME || ".", ".local"));
@@ -236,7 +244,7 @@ function main() {
   const recordPath = path.join(prefix, "lib", "seal", "install.json");
   const launchPath = path.join(prefix, "bin", "seal");
 
-  readVerifiedExistingInstall(recordPath, launchPath);
+  readVerifiedExistingInstall(recordPath, launchPath, manifest.platform);
 
   for (const file of files) {
     if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
@@ -251,7 +259,7 @@ function main() {
   const record = {
     schema: "seal.install/v1",
     version: manifest.version,
-    platform: "linux-x64",
+    platform: manifest.platform,
     treeSha256: manifest.treeSha256,
     store: storeRel,
     files: manifest.files,
@@ -260,7 +268,7 @@ function main() {
 
   try { fs.chmodSync(storeRoot, 0o555); } catch { /* best-effort; hash check is the detector */ }
 
-  process.stdout.write(`installed seal ${manifest.version} linux-x64\n`);
+  process.stdout.write(`installed seal ${manifest.version} ${manifest.platform}\n`);
   process.stdout.write(`store: ${storeRoot}\n`);
   process.stdout.write(`command: ${launchPath}\n`);
   process.stdout.write(`tree: ${manifest.treeSha256}\n`);

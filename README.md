@@ -12,7 +12,7 @@ A build from this checkout is a separate, source-build path; its differences are
 
 Requires Node 20+ and the `claude` command for Protect. The install creates one command and one read-only store directory under `~/.local`.
 
-**Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**
+**Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v0.2.0-rc.2 release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**
 
 Check that the Claude Code command is available before Protect:
 
@@ -30,7 +30,7 @@ claude --version
 
 ## 1. Install
 
-Install Seal on Linux x86-64 only with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS `sha256sum`, then run the installer with that pin. For the longer verification procedure, see [full SHA256SUMS verification](docs/install.md).
+Install the published Linux x86-64 release with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS SHA-256 tool, then run the installer with that pin. macOS source-build instructions are in the [full installation procedure](docs/install.md).
 
 These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
 
@@ -39,7 +39,7 @@ SEAL_VERSION=v0.2.0-rc.2
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 read -r expected_digest expected_bytes expected_name < SHA256SUMS
-actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"
+if command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; elif command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need sha256sum or shasum)" >&2; exit 1; fi
 test "$actual_digest" = "$expected_digest"
 actual_bytes="$(wc -c < "$expected_name")"
 test "$actual_bytes" = "$expected_bytes"

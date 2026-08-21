@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-// The supported lane is Linux x86-64 only. Anything else is unsupported —
+// Supported release lanes are explicit. Anything else is unsupported —
 // not untested, not a warning. The env overrides exist only so the refusal
 // itself is testable.
+// Seal supports only the explicit platform and architecture pairs below.
 function platformSupport() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
-  const supported = platform === "linux" && arch === "x64";
+  const supported = platform === "linux" && arch === "x64"
+    || platform === "darwin" && (arch === "x64" || arch === "arm64");
   return { supported, platform, arch };
 }
 
@@ -13,8 +15,7 @@ function unsupportedPlatformText() {
   return [
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v0.2.0-rc.2 supports Linux x86-64 only.",
-    "macOS arm64 has not completed Seal's end-to-end acceptance path.",
+    "Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",
     "",

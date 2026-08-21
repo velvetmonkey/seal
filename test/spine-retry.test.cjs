@@ -406,7 +406,7 @@ test("unsupported platform returns unsupported, not a warning", async (t) => {
   const dir = tmpdir("seal-spine2-platform-");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
     stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, SEAL_SPINE_PLATFORM: "darwin", SEAL_SPINE_ARCH: "x64" },
+    env: { ...process.env, SEAL_SPINE_PLATFORM: "plan9", SEAL_SPINE_ARCH: "mips" },
   });
   const run = attach(child);
   t.after(run.kill);

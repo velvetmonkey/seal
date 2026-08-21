@@ -52,13 +52,13 @@ function runArtifact(file, args, opts = {}) {
   };
 }
 
-function buildArtifact() {
+function buildArtifact(platform = "linux-x64") {
   const out = tmpdir("seal-dist3d-build-");
-  const built = runNode([BUILD, "--out", out]);
+  const built = runNode([BUILD, "--platform", platform, "--out", out]);
   assert.equal(built.code, 0, built.out);
   // The file is named for the product identity of the tree it was built from,
   // which is the bare release version only at the tag.
-  const identityName = artifactName(productIdentity({ root: ROOT }).identity);
+  const identityName = artifactName(productIdentity({ root: ROOT }).identity, platform);
   const artifact = path.join(out, identityName);
   assert.ok(fs.existsSync(artifact), built.out);
   const sums = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim();
@@ -67,6 +67,42 @@ function buildArtifact() {
   assert.equal(digest, sha256Hex(fs.readFileSync(artifact)));
   assert.equal(Number(bytes), fs.statSync(artifact).size);
   return { out, artifact, digest, bytes: Number(bytes) };
+}
+
+function withManifestPlatform(built, value, present = true) {
+  const bytes = fs.readFileSync(built.artifact);
+  const payloadMarker = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
+  const payloadAt = bytes.indexOf(payloadMarker) + payloadMarker.length;
+  const dataMarker = Buffer.from("\n--DATA--\n", "utf8");
+  const dataAt = bytes.indexOf(dataMarker, payloadAt);
+  assert.ok(payloadAt >= payloadMarker.length && dataAt > payloadAt);
+  const manifestAt = payloadAt + Buffer.byteLength("SEALPAY1\n");
+  const manifest = JSON.parse(bytes.subarray(manifestAt, dataAt).toString("utf8"));
+  if (present) manifest.platform = value;
+  else delete manifest.platform;
+  const altered = Buffer.concat([
+    bytes.subarray(0, manifestAt),
+    Buffer.from(JSON.stringify(manifest), "utf8"),
+    bytes.subarray(dataAt),
+  ]);
+  const artifact = `${built.artifact}.platform-${present ? String(value || "empty") : "absent"}`;
+  fs.writeFileSync(artifact, altered, { mode: 0o555 });
+  return { ...built, artifact, digest: sha256Hex(altered), bytes: altered.length };
+}
+
+function installedBytes(root) {
+  if (!fs.existsSync(root)) return [];
+  const rows = [];
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      const stat = fs.lstatSync(full);
+      if (stat.isDirectory()) walk(full);
+      else if (stat.isFile()) rows.push(`${path.relative(root, full)} ${sha256Hex(fs.readFileSync(full))}`);
+    }
+  }
+  walk(root);
+  return rows;
 }
 
 function installOk(built, prefix) {
@@ -179,7 +215,7 @@ test("clause 3: unreadable installed file is a named refusal", () => {
   assert.match(result.stderr, /^REFUSE artifact_unreadable:/m);
 });
 
-test("clause 3: wrong architecture is a named refusal and changes nothing", () => {
+test("a linux artifact on a darwin host is a named mismatch refusal and changes no bytes", () => {
   const built = buildArtifact();
   const prefix = path.join(built.out, "nope");
   const result = runArtifact(
@@ -188,11 +224,48 @@ test("clause 3: wrong architecture is a named refusal and changes nothing", () =
     { env: { SEAL_SPINE_PLATFORM: "darwin", SEAL_SPINE_ARCH: "arm64" } },
   );
   assert.equal(result.code, 1, result.out);
-  assert.match(result.stderr, /UNSUPPORTED PLATFORM/);
-  assert.match(result.stderr, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 only`));
-  assert.match(result.stderr, /^REFUSE unsupported_platform:/m);
-  assert.doesNotMatch(result.out, /experimental|may work|coming soon/i);
-  assert.equal(fs.existsSync(path.join(prefix, "bin", "seal")), false);
+  assert.match(result.stderr, /^REFUSE unsupported_platform: artifact platform is linux-x64, running host is darwin-arm64$/m);
+  assert.deepEqual(installedBytes(prefix), []);
+});
+
+test("a darwin artifact on Linux is a named mismatch refusal and changes no bytes", () => {
+  const built = buildArtifact("darwin-arm64");
+  const prefix = path.join(built.out, "nope");
+  const before = installedBytes(prefix);
+  const result = runArtifact(built.artifact, ["--sha256", built.digest, "--bytes", String(built.bytes), "--prefix", prefix]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.stderr, /^REFUSE unsupported_platform: artifact platform is darwin-arm64, running host is linux-x64$/m);
+  assert.deepEqual(installedBytes(prefix), before);
+});
+
+for (const [label, value, present, rendered] of [
+  ["absent", undefined, false, "<absent>"],
+  ["empty", "", true, "<absent>"],
+  ["unknown", "haiku-x64", true, "haiku-x64"],
+]) {
+  test(`an artifact with ${label} manifest platform refuses and changes no bytes`, () => {
+    const built = withManifestPlatform(buildArtifact(), value, present);
+    const prefix = path.join(built.out, `nope-${label}`);
+    const before = installedBytes(prefix);
+    const result = runArtifact(built.artifact, ["--sha256", built.digest, "--bytes", String(built.bytes), "--prefix", prefix]);
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.stderr, new RegExp(`^REFUSE unsupported_platform: artifact platform is ${rendered.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}, not a supported platform$`, "m"));
+    assert.deepEqual(installedBytes(prefix), before);
+  });
+}
+
+test("a fabricated unsupported host refuses and changes no bytes", () => {
+  const built = buildArtifact();
+  const prefix = path.join(built.out, "nope-fabricated");
+  const before = installedBytes(prefix);
+  const result = runArtifact(
+    built.artifact,
+    ["--sha256", built.digest, "--bytes", String(built.bytes), "--prefix", prefix],
+    { env: { SEAL_SPINE_PLATFORM: "plan9", SEAL_SPINE_ARCH: "mips" } },
+  );
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.stderr, /^REFUSE unsupported_platform: this is plan9-mips$/m);
+  assert.deepEqual(installedBytes(prefix), before);
 });
 
 test("install without a pin refuses", () => {
@@ -214,20 +287,18 @@ test("a one-byte change to the artifact itself refuses against the published pin
   assert.match(result.stderr, /^REFUSE artifact_digest_mismatch:/m);
 });
 
-test("darwin-arm64 is unsupported on the product path too", () => {
-  const result = runNode([path.join(ROOT, "bin", "seal"), "demo", "--dir", tmpdir("seal-dist3d-plat-")], {
+test("darwin-arm64 is admitted on the product path", () => {
+  const result = runNode([path.join(ROOT, "bin", "seal"), "--version"], {
     env: { SEAL_SPINE_PLATFORM: "darwin", SEAL_SPINE_ARCH: "arm64" },
   });
-  assert.notEqual(result.code, 0);
-  assert.match(result.stderr, /UNSUPPORTED PLATFORM/);
-  assert.match(result.stderr, /^REFUSE unsupported_platform:/m);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.stdout.trim(), VERSION);
 });
 
-test("help does not claim macOS or arm64 support", () => {
+test("help names the supported Linux and macOS lanes", () => {
   const result = runNode([path.join(ROOT, "bin", "seal")]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.stdout, /Linux x86-64 only/);
-  assert.doesNotMatch(result.stdout, /macOS|darwin|arm64|experimental|coming soon/i);
+  assert.match(result.stdout, /Linux x86-64 and macOS x64\/arm64/);
 });
 
 test("installed artifact runs demo then protect and unprotect", async () => {

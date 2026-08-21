@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Build the ONE Linux x86-64 install artifact. No macOS, no arm64, no key.
+// Build one platform-labelled install artifact. No native compilation or key.
 const fs = require("node:fs");
 const path = require("node:path");
 require("./sync-version.cjs");
-const { packPayload, sha256Hex } = require("../spine/integrity.cjs");
+const { packPayload, sha256Hex, SUPPORTED_PLATFORMS } = require("../spine/integrity.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 const { productIdentity, artifactName } = require("./product-identity.cjs");
 
@@ -52,6 +52,12 @@ function copyInto(staging, rel) {
 
 function main() {
   const version = requireMatchingVersion();
+  const platformAt = process.argv.indexOf("--platform");
+  const platform = platformAt >= 0 ? process.argv[platformAt + 1] : "linux-x64";
+  if (!SUPPORTED_PLATFORMS.has(platform)) {
+    process.stderr.write(`REFUSE unsupported_platform: cannot build artifact for ${platform || "<absent>"}\n`);
+    process.exit(1);
+  }
   // The payload is named by VERSION and stays byte-identical across commits,
   // so the published pin can be committed. The FILE is named by the product
   // identity, so an untagged build cannot pass for the release.
@@ -64,7 +70,7 @@ function main() {
   const staging = fs.mkdtempSync(path.join(outDir, ".stage-"));
   try {
     for (const rel of PAYLOAD_PATHS) copyInto(staging, rel);
-    const { payload, manifest } = packPayload(staging, version);
+    const { payload, manifest } = packPayload(staging, version, platform);
     const installerSrc = fs.readFileSync(path.join(ROOT, "scripts", "install.cjs"), "utf8")
       .replace(/^#!\/usr\/bin\/env node\n/, "");
     // A shell stub so Node never parses the binary payload. `node FILE`
@@ -72,7 +78,7 @@ function main() {
     const header = [
       "#!/bin/sh",
       "if ! command -v node >/dev/null 2>&1; then",
-      "  printf '%s\\n' \"REFUSE node_missing: Seal requires Node >= 20 on Linux x86-64\"",
+      `  printf '%s\\n' "REFUSE node_missing: Seal requires Node >= 20 on ${platform}"`,
       "  exit 1",
       "fi",
       "exec node - \"$0\" \"$@\" <<'SEAL_INSTALL_JS'",
@@ -82,7 +88,7 @@ function main() {
       "",
     ].join("\n");
     const artifact = Buffer.concat([Buffer.from(header, "utf8"), payload]);
-    const name = artifactName(identity.identity);
+    const name = artifactName(identity.identity, platform);
     const dest = path.join(outDir, name);
     if (fs.existsSync(dest)) fs.rmSync(dest, { force: true });
     fs.writeFileSync(dest, artifact, { mode: 0o555 });
@@ -95,7 +101,7 @@ function main() {
       identity: identity.identity,
       identityKind: identity.kind,
       commit: identity.commit,
-      platform: "linux-x64",
+      platform,
       artifact: name,
       sha256: digest,
       bytes: artifact.length,
