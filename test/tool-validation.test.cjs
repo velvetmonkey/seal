@@ -187,6 +187,51 @@ test("duplicate protected tool names in stored state refuse activation by name",
   t.diagnostic(`stored guardTools: ${JSON.stringify(readState(filePath).guardTools)}`);
 });
 
+test("non-canonical whitespace in stored protected tool names refuses activation", async (t) => {
+  const ctx = setup("ok", " db.read,db.read,db.read\t,   ");
+  const protectedRun = run(ctx, ["protect", "db", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+  for (const guardTools of [
+    [" db.read", "db.read"],
+    ["db.read\t", "db.read"],
+    ["   "],
+  ]) {
+    state.guardTools = guardTools;
+    state.lease = null;
+    state.state = "PENDING RESTART";
+    fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+    await assert.rejects(
+      activationLease(filePath, ctx.env),
+      {
+        code: "state_broken",
+        message: /non-canonical protected tool/,
+      },
+      `guardTools ${JSON.stringify(guardTools)} must not activate`,
+    );
+  }
+  t.diagnostic("leading space, trailing tab, and whitespace-only names refused");
+});
+
+test("case-distinct stored protected tool names still activate", async (t) => {
+  const ctx = setup("ok", "db.read,DB.Read");
+  const protectedRun = run(ctx, ["protect", "db", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = ["db.read", "DB.Read"];
+  state.lease = null;
+  state.state = "PENDING RESTART";
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  const active = await activationLease(filePath, ctx.env);
+  assert.deepEqual(active.guardTools, ["db.read", "DB.Read"]);
+  assert.equal(active.state, "ACTIVE");
+  t.diagnostic(`stored guardTools: ${JSON.stringify(active.guardTools)}`);
+});
+
 test("pre-change scalar guardTool state still activates and gates", async (t) => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);

@@ -297,6 +297,13 @@ function protectedToolNames(state) {
       state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
   }
+  const nonCanonical = state.guardTools.filter((name) => name !== name.trim());
+  if (nonCanonical.length > 0) {
+    const named = nonCanonical.length === 1
+      ? `protected tool ${JSON.stringify(nonCanonical[0])}`
+      : `protected tools ${nonCanonical.map((name) => JSON.stringify(name)).join(", ")}`;
+    throw new ProtectionError("state_broken", `stored protection state has non-canonical ${named}; protected tool names must not have leading or trailing whitespace`);
+  }
   const seen = new Set();
   const duplicates = [];
   for (const name of state.guardTools) {
@@ -663,6 +670,13 @@ async function protect({
   const requestedTools = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))];
   if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
+  }
+  const nonCanonical = requestedTools.filter((name) => name !== name.trim());
+  if (nonCanonical.length > 0) {
+    const named = nonCanonical.length === 1
+      ? `protected tool ${JSON.stringify(nonCanonical[0])}`
+      : `protected tools ${nonCanonical.map((name) => JSON.stringify(name)).join(", ")}`;
+    throw new ProtectionError("usage", `non-canonical ${named}; protected tool names must not have leading or trailing whitespace`);
   }
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
