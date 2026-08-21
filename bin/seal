@@ -63,7 +63,9 @@ function status() {
       console.log("Most recent: no project receipt directory is recorded");
       return;
     } else {
-      console.log(`Protection: ${view.state} ${view.serverName}.${view.guardTool} (${filePath})`);
+      const guarded = protection.protectedToolNames(view);
+      const scope = guarded.length === 1 ? `${view.serverName}.${guarded[0]}` : `${view.serverName}.{${guarded.join(", ")}}`;
+      console.log(`Protection: ${view.state} ${scope} (${filePath})`);
       if (view.lease?.pid && view.lease?.generation !== undefined) {
         console.log(`Protection lease: pid ${view.lease.pid} generation ${view.lease.generation}`);
       }
@@ -304,14 +306,17 @@ async function protectCommand(args) {
       positional.push(argument);
     }
   }
-  if (positional.length !== 2) {
-    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL");
+  if (positional.length < 2) {
+    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]");
   }
-  const [serverName, guardTool] = positional;
-  const result = await protection.protect({ serverName, guardTool, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
+  const [serverName, ...requestedTools] = positional;
+  const guardTools = [...new Set(requestedTools)];
+  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
-  console.log(`Protection: PENDING RESTART ${serverName}.${guardTool}`);
-  const outside = result.toolNames.filter((name) => name !== guardTool);
+  const protectedScope = guardTools.length === 1 ? `${serverName}.${guardTools[0]}` : `${serverName}.{${guardTools.join(", ")}}`;
+  console.log(`Protection: PENDING RESTART ${protectedScope}`);
+  const guarded = new Set(guardTools);
+  const outside = result.toolNames.filter((name) => !guarded.has(name));
   const shownOutside = outside.slice(0, 20);
   const hiddenOutside = outside.length - shownOutside.length;
   console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} NOT APPROVAL-GATED (they pass through Seal)${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
@@ -355,7 +360,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL\n                         install a local Claude Code override for one tool\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]\n                         install a local Claude Code override for named tools\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Linux x86-64 only.");
 }
 main().catch((error) => {
   if (error.ownershipRefusal) {

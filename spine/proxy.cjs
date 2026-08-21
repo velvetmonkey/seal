@@ -26,7 +26,8 @@ const { openReceiptEmitter } = require("./receipts.cjs");
 
 function createProxy(options) {
   const {
-    guardTool,        // the ONE selected tool name
+    guardTools,       // the selected literal tool names
+    guardTool,        // legacy direct-call spelling for one selected tool
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
     signer,           // optional receipt-sealing keypair (V11-RECEIPT-01)
@@ -39,7 +40,11 @@ function createProxy(options) {
     onChildExit,      // (code, signal) => void
     now, ttlMs, terminalWidth, // forwarded to the contract (tests inject clocks)
   } = options;
-  if (typeof guardTool !== "string" || guardTool.length === 0) throw new Error("guardTool is required");
+  const selectedTools = Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []);
+  if (selectedTools.length === 0 || selectedTools.some((name) => typeof name !== "string" || name.length === 0)) {
+    throw new Error("guardTools is required");
+  }
+  const guardedToolNames = new Set(selectedTools);
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
@@ -180,7 +185,7 @@ function createProxy(options) {
         onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "seal proxy: unparseable frame refused" } }));
         return;
       }
-      if (frame.method === "tools/call" && frame.params?.name === guardTool) {
+      if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
         decideGuarded(frame);
         return;
       }

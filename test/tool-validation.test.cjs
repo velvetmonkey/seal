@@ -39,6 +39,28 @@ function run(ctx, args) {
   return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}` };
 }
 
+function proxySession(ctx) {
+  const statePath = statePathFor(ctx.project, ctx.env);
+  const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
+    cwd: ctx.project,
+    env: ctx.env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
+  return {
+    proxy,
+    request(frame) {
+      const response = new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
+      proxy.stdin.write(JSON.stringify(frame) + "\n");
+      return response;
+    },
+    async close() {
+      proxy.stdin.end();
+      await new Promise((resolve) => proxy.once("close", resolve));
+    },
+  };
+}
+
 test("protect refuses a misspelled tool and names every observed tool", () => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const result = run(ctx, ["protect", "db", "db.drop_tabel"]);
@@ -64,6 +86,108 @@ test("an observed tool protects end to end and reports every other tool as not a
   } finally {
     proxy.stdin.end();
     await new Promise((resolve) => proxy.once("close", resolve));
+  }
+});
+
+test("a named tool list gives both tools separate asks", async (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read,db.health");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  assert.match(protectedRun.out, /Protection: PENDING RESTART db\.\{db\.drop_table, db\.read\}/);
+  assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.health/);
+
+  const session = proxySession(ctx);
+  try {
+    const toolA = { jsonrpc: "2.0", id: 21, method: "tools/call", params: { name: "db.drop_table", arguments: { table: "one" } } };
+    const askA = await session.request(toolA);
+    assert.equal(askA.result.resultType, "input_required");
+
+    const allowedA = await session.request({
+      ...toolA,
+      id: 22,
+      params: {
+        ...toolA.params,
+        requestState: askA.result.requestState,
+        inputResponses: { approval: { action: "accept", content: { approve: true } } },
+      },
+    });
+    assert.match(allowedA.result.content[0].text, /CALLED db\.drop_table/);
+
+    const askB = await session.request({
+      jsonrpc: "2.0", id: 23, method: "tools/call", params: { name: "db.read", arguments: { table: "one" } },
+    });
+    assert.equal(askB.result.resultType, "input_required", "approving tool A must not approve tool B");
+    assert.notEqual(askB.result.requestState, askA.result.requestState, "each tool must receive its own ask");
+    t.diagnostic(`tool A first response: ${askA.result.resultType}`);
+    t.diagnostic(`tool A approved response: ${allowedA.result.content[0].text}`);
+    t.diagnostic(`tool B after tool A approval: ${askB.result.resultType}`);
+    t.diagnostic(`asks have distinct requestState: ${askB.result.requestState !== askA.result.requestState}`);
+  } finally {
+    await session.close();
+  }
+});
+
+test("any unknown tool makes the whole named list fail", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const result = run(ctx, ["protect", "db", "db.drop_table", "db.missing"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /protected_tool_absent/);
+  assert.match(result.out, /requested tool "db\.missing" was not returned by tools\/list/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false, "no partial state may be written");
+  t.diagnostic(result.out.trim());
+  t.diagnostic(`state written: ${fs.existsSync(statePathFor(ctx.project, ctx.env))}`);
+});
+
+test("protect refuses an empty tool list", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const result = run(ctx, ["protect", "db"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /usage: seal protect .* SERVER TOOL \[TOOL\.\.\.\]/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+  t.diagnostic(result.out.trim());
+});
+
+test("duplicate protected tool names are deduped in stored order", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const result = run(ctx, ["protect", "db", "db.drop_table", "db.read", "db.drop_table"]);
+  assert.equal(result.code, 0, result.out);
+  const stored = readState(statePathFor(ctx.project, ctx.env)).guardTools;
+  assert.deepEqual(stored, ["db.drop_table", "db.read"]);
+  t.diagnostic(`stored guardTools: ${JSON.stringify(stored)}`);
+});
+
+test("three protected tools round-trip through stored state", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read,db.health");
+  const expected = ["db.drop_table", "db.read", "db.health"];
+  const result = run(ctx, ["protect", "db", ...expected]);
+  assert.equal(result.code, 0, result.out);
+  const state = readState(statePathFor(ctx.project, ctx.env));
+  assert.deepEqual(state.guardTools, expected);
+  assert.equal(Object.hasOwn(state, "guardTool"), false, "new state must carry the list, not the old scalar");
+  t.diagnostic(`written/read guardTools: ${JSON.stringify(state.guardTools)}`);
+  t.diagnostic(`old scalar present: ${Object.hasOwn(state, "guardTool")}`);
+});
+
+test("pre-change scalar guardTool state still activates and gates", async (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const current = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const { guardTools, ...oldState } = current;
+  fs.writeFileSync(filePath, JSON.stringify({ ...oldState, guardTool: guardTools[0] }, null, 2) + "\n");
+
+  assert.deepEqual(readState(filePath).guardTools, ["db.drop_table"], "old scalar state must normalize on read");
+  t.diagnostic(`pre-change disk keys: guardTool=${JSON.parse(fs.readFileSync(filePath, "utf8")).guardTool}, guardTools=${JSON.parse(fs.readFileSync(filePath, "utf8")).guardTools}`);
+  const session = proxySession(ctx);
+  try {
+    const ask = await session.request({
+      jsonrpc: "2.0", id: 31, method: "tools/call", params: { name: "db.drop_table", arguments: {} },
+    });
+    assert.equal(ask.result.resultType, "input_required");
+    t.diagnostic(`old scalar state call response: ${ask.result.resultType}`);
+  } finally {
+    await session.close();
   }
 });
 

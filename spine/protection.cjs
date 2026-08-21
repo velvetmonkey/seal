@@ -286,7 +286,18 @@ function readState(statePath) {
   if (state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
   }
+  if (state.guardTools === undefined && typeof state.guardTool === "string" && state.guardTool.length > 0) {
+    return { ...state, guardTools: [state.guardTool] };
+  }
   return state;
+}
+
+function protectedToolNames(state) {
+  if (!Array.isArray(state?.guardTools) || state.guardTools.length === 0 ||
+      state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
+    throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
+  }
+  return [...new Set(state.guardTools)];
 }
 
 function writeState(statePath, state) {
@@ -630,13 +641,17 @@ function protectionView(state, projectRoot, env = process.env) {
 
 async function protect({
   serverName,
+  guardTools,
   guardTool,
   projectRoot = process.cwd(),
   sealBin = process.argv[1],
   env = process.env,
   timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
 }) {
-  if (!serverName || !guardTool) throw new ProtectionError("usage", "usage: seal protect SERVER TOOL");
+  const requestedTools = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))];
+  if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
+    throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
+  }
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   const existing = readState(statePath);
@@ -655,10 +670,14 @@ async function protect({
     env,
     timeoutMs,
   });
-  if (!toolNames.includes(guardTool)) {
+  const missingTools = requestedTools.filter((name) => !toolNames.includes(name));
+  if (missingTools.length > 0) {
+    const requested = missingTools.length === 1
+      ? `requested tool "${missingTools[0]}" was`
+      : `requested tools ${missingTools.map((name) => `"${name}"`).join(", ")} were`;
     throw new ProtectionError(
       "protected_tool_absent",
-      `requested tool "${guardTool}" was not returned by tools/list; observed tools: ${observedNames(toolNames)}`,
+      `${requested} not returned by tools/list; observed tools: ${observedNames(toolNames)}`,
     );
   }
 
@@ -676,7 +695,7 @@ async function protect({
     projectRoot: root,
     projectId: projectId(root),
     serverName,
-    guardTool,
+    guardTools: requestedTools,
     mcpJsonPath: project.filePath,
     mcpJsonHashAtProtect: project.hash,
     projectServerDigest: project.serverDigest,
@@ -785,10 +804,15 @@ async function activationLease(statePath, env = process.env) {
       markBroken(statePath, state, error);
       throw error;
     }
-    if (!toolNames.includes(state.guardTool)) {
+    const guardedTools = protectedToolNames(state);
+    const vanishedTools = guardedTools.filter((name) => !toolNames.includes(name));
+    if (vanishedTools.length > 0) {
+      const protectedName = vanishedTools.length === 1
+        ? `protected tool "${vanishedTools[0]}" vanished`
+        : `protected tools ${vanishedTools.map((name) => `"${name}"`).join(", ")} vanished`;
       const error = new ProtectionError(
         "protected_tool_vanished",
-        `protected tool "${state.guardTool}" vanished before activation; observed tools: ${observedNames(toolNames)}`,
+        `${protectedName} before activation; observed tools: ${observedNames(toolNames)}`,
       );
       markBroken(statePath, state, error);
       throw error;
@@ -862,6 +886,7 @@ module.exports = {
   lockPathFor,
   lockOwnerIsLive,
   processStartWitness,
+  protectedToolNames,
   protect,
   protectionView,
   projectDirectory,
