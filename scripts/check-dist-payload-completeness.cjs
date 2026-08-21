@@ -2,19 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const { PAYLOAD_PATHS } = require("./dist-payload.cjs");
 
 const ROOT = path.join(__dirname, "..");
-const DOCS = path.join(ROOT, "docs");
-
-function walkFiles(dir, suffix, out = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walkFiles(full, suffix, out);
-    else if (entry.isFile() && entry.name.endsWith(suffix)) out.push(full);
-  }
-  return out;
-}
 
 function rel(file) {
   return path.relative(ROOT, file).split(path.sep).join("/");
@@ -27,21 +18,19 @@ function lineNumber(text, index) {
 }
 
 function consumerFiles() {
-  return [
-    path.join(ROOT, ".github", "workflows", "ci.yml"),
-    path.join(ROOT, ".github", "workflows", "release.yml"),
-    path.join(ROOT, "README.md"),
-    ...walkFiles(DOCS, ".md"),
-  ];
+  const names = execFileSync("git", ["-C", ROOT, "ls-files", "-z"], { encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+  return names.map((name) => path.join(ROOT, name));
 }
 
 function requiredInstalledPaths() {
   const hits = [];
   const seen = new Set();
   const patterns = [
-    /\*\/([A-Za-z0-9._/-]+)/g,
-    /\$store\/([A-Za-z0-9._/-]+)/g,
-    /\/store\/[0-9a-f]{64}\/([A-Za-z0-9._/-]+)/g,
+    /\*\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+)/g,
+    /\$store\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+)/g,
+    /\/store\/[0-9a-f]{64}\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+)/g,
   ];
 
   for (const file of consumerFiles()) {
@@ -51,8 +40,6 @@ function requiredInstalledPaths() {
       let match;
       while ((match = pattern.exec(text)) !== null) {
         const required = match[1];
-        if (!required.includes("/")) continue;
-        if (!/seal-receipt-check\.mjs$/.test(required)) continue;
         const site = `${rel(file)}:${lineNumber(text, match.index)}`;
         const key = `${required}\0${site}`;
         if (seen.has(key)) continue;
