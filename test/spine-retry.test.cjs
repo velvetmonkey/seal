@@ -16,7 +16,7 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const { createProxy } = require("../spine/proxy.cjs");
-const { createJournal } = require("../spine/store.cjs");
+const { createJournal, openJournal } = require("../spine/store.cjs");
 
 // Match the repository's existing path.relative(ROOT, ...) convention used by
 // output and inventory diagnostics: semantic output assertions must not depend
@@ -144,6 +144,28 @@ function callParams(line, extraParams = {}) {
   return { jsonrpc: "2.0", method: "tools/call", params: { name: "demo.mutate", arguments: { line }, ...extraParams } };
 }
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
+
+test("proxy binds its project and server identities into issued approvals", (t) => {
+  const dir = tmpdir("seal-proxy-identity-");
+  const storePath = path.join(dir, "approvals.journal");
+  createJournal(storePath);
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    projectId: "project-a",
+    serverId: "server-a",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    childArgv: [process.execPath, SEAL, "__demo-server", path.join(dir, "data.txt")],
+    onClientLine() {},
+  });
+  t.after(() => proxy.stop());
+
+  proxy.write(JSON.stringify({ ...callParams("identity"), id: 1 }));
+  const issued = openJournal(storePath).events.find((event) => event.type === "issued");
+  assert.equal(issued.project_id, "project-a");
+  assert.equal(issued.server_id, "server-a");
+  t.diagnostic(`issued approval context: ${issued.project_id}/${issued.server_id}`);
+});
 
 test("receipt correlations refuse loudly at capacity without orphaning live approvals", async (t) => {
   const dir = tmpdir("seal-receipt-correlation-capacity-");

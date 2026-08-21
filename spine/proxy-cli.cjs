@@ -64,6 +64,8 @@ async function run(argv) {
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
+        projectId: state.projectId,
+        serverId: state.serverName,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),

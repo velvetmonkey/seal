@@ -156,6 +156,36 @@ test("duplicate protected tool names are deduped in stored order", (t) => {
   t.diagnostic(`stored guardTools: ${JSON.stringify(stored)}`);
 });
 
+test("a duplicated protected tool in stored state refuses activation by name", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table", "db.read"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools.push("db.read");
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  const activation = run(ctx, ["__proxy", "--protect-state", filePath]);
+  assert.notEqual(activation.code, 0, activation.out);
+  assert.match(activation.out, /state_broken: stored protection state has duplicate protected tool names/);
+  t.diagnostic(`duplicate activation exit ${activation.code}: ${activation.out.trim()}`);
+});
+
+test("a non-string protected tool in stored state refuses activation by name", (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = ["db.drop_table", 7];
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  const activation = run(ctx, ["__proxy", "--protect-state", filePath]);
+  assert.notEqual(activation.code, 0, activation.out);
+  assert.match(activation.out, /state_broken: stored protection state has no protected tool list/);
+  t.diagnostic(`non-string activation exit ${activation.code}: ${activation.out.trim()}`);
+});
+
 test("three protected tools round-trip through stored state", (t) => {
   const ctx = setup("ok", "db.drop_table,db.read,db.health");
   const expected = ["db.drop_table", "db.read", "db.health"];

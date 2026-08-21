@@ -297,7 +297,10 @@ function protectedToolNames(state) {
       state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
   }
-  return [...new Set(state.guardTools)];
+  if (new Set(state.guardTools).size !== state.guardTools.length) {
+    throw new ProtectionError("state_broken", "stored protection state has duplicate protected tool names");
+  }
+  return state.guardTools;
 }
 
 function writeState(statePath, state) {
