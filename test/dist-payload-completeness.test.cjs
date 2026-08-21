@@ -13,7 +13,16 @@ test("distribution payload contains every installed-store file required by consu
   assert.match(out, /PASS dist payload includes/);
   assert.match(out, /checker\/seal-receipt-check\.mjs/);
   assert.deepEqual(
-    [...new Set(requiredInstalledPaths().map((hit) => hit.path))],
-    ["checker/seal-receipt-check.mjs"],
+    [...new Set(requiredInstalledPaths().map((hit) => hit.path))].sort(),
+    [
+      "VERSION",
+      "bin/seal",
+      "checker/seal-receipt-check.mjs",
+      "contract/renderer.cjs",
+      "package.json",
+      "runtime/kernel/wasm/seal.wasm",
+      "spine/demo.cjs",
+      "spine/receipt-seal.cjs",
+    ],
   );
 });
