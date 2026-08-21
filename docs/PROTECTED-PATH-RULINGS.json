@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "ruling": null
+  "ruling": {
+    "base": "1cc4cd14374cc48ada4c1277bf50216a6e3a8332",
+    "protectedCommit": "fed08e29fa7ad790f73def3939d0c74de3352a64",
+    "paths": [
+      ".github/workflows/ci.yml",
+      "scripts/check-protected-paths.cjs",
+      "scripts/resolve-ci-diff-range.cjs"
+    ]
+  }
 }
