@@ -47,6 +47,25 @@ function freshPin(text) {
   return hits.length === 1 ? hits[0].hash : null;
 }
 
+function recordedPinChange(entry) {
+  if (!HASH.test(entry?.old || "") || !HASH.test(entry?.new || "") || !COMMIT.test(entry?.merge || "")) {
+    fail("each ledger entry must contain 64-hex old/new values and a 40-hex merge SHA"); return false;
+  }
+  if (git(["cat-file", "-e", `${entry.merge}^{commit}`]).status !== 0) {
+    fail(`ledger merge SHA is not a repository commit: ${entry.merge}`); return false;
+  }
+  const parent = git(["rev-parse", `${entry.merge}^`]);
+  if (parent.status !== 0) { fail(`ledger merge SHA has no parent: ${entry.merge}`); return false; }
+  const previous = git(["show", `${parent.stdout.trim()}:docs/install.md`]);
+  const current = git(["show", `${entry.merge}:docs/install.md`]);
+  const old = previous.status === 0 ? freshPin(previous.stdout) : null;
+  const fresh = current.status === 0 ? freshPin(current.stdout) : null;
+  if (!old || !fresh || old === fresh) { fail(`ledger merge SHA did not move a fresh-build pin: ${entry.merge}`); return false; }
+  if (entry.old !== old) { fail(`ledger old value ${entry.old} does not match pin before ${entry.merge}: ${old}`); return false; }
+  if (entry.new !== fresh) { fail(`ledger new value ${entry.new} does not match pin after ${entry.merge}: ${fresh}`); return false; }
+  return true;
+}
+
 function main() {
   const text = readFile("docs/install.md", true);
   const ledgerText = readFile("docs/INSTALLED-TREE-REFRESHES.json", true);
@@ -67,23 +86,11 @@ function main() {
     fail(`docs/install.md:${fresh[0].line} fresh-build pin ${fresh[0].hash} does not match built tree ${expected}`); return;
   }
   const entry = ledger.entries.at(-1);
-  if (!HASH.test(entry?.old || "") || !HASH.test(entry?.new || "") || !COMMIT.test(entry?.merge || "")) {
-    fail("latest ledger entry must contain 64-hex old/new values and a 40-hex merge SHA"); return;
-  }
+  if (!ledger.entries.every(recordedPinChange)) return;
   if (entry.new !== expected) { fail(`latest ledger new value ${entry.new} does not match built tree ${expected}`); return; }
-  if (ledger.entries.length === 1) {
-    const parent = git(["rev-parse", "HEAD^"]);
-    if (parent.status === 0) {
-      const previous = git(["show", `${parent.stdout.trim()}:docs/install.md`]);
-      const previousPin = previous.status === 0 ? freshPin(previous.stdout) : null;
-      if (previousPin && entry.old !== previousPin) { fail(`latest ledger old value ${entry.old} does not match parent pin ${previousPin}`); return; }
-    }
-  } else {
+  if (ledger.entries.length > 1) {
     const previous = ledger.entries.at(-2);
     if (entry.old !== previous?.new) { fail("latest ledger old value does not chain from the previous refresh"); return; }
-  }
-  if (entry.merge !== git(["rev-parse", "HEAD"]).stdout.trim() && git(["cat-file", "-e", `${entry.merge}^{commit}`]).status !== 0) {
-    fail(`latest ledger merge SHA is not a repository commit: ${entry.merge}`); return;
   }
   process.stdout.write(`INSTALLED TREE PIN CHECK OK: docs/install.md:${fresh[0].line} ${expected}; recorded merge ${entry.merge}.\n`);
 }
