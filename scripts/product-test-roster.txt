@@ -34,6 +34,7 @@ test/live-page-claim-guard.test.mjs
 test/no-verification-claim.test.cjs
 test/product-suite-roster.test.cjs
 test/protect3b.test.cjs
+test/protected-paths.test.cjs
 test/proxylock5-shape.test.cjs
 test/proxy-lock-nonlinux.test.cjs
 test/proxy-lock.test.cjs
