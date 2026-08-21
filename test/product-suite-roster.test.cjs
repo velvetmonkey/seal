@@ -50,7 +50,7 @@ test("the suite driver reports its runtime declared roster", (t) => {
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(DRIVER, space.tests, space.roster, space.manifest);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /PASS  product suite ran all 3 declared test files/);
+  assert.match(result.stdout, /ROSTER: 3 of 3 declared test files ran/);
   assert.match(result.stdout, new RegExp(`CRITICAL PROPERTY MANIFEST entries: ${space.properties.length}`));
 });
 
@@ -136,7 +136,7 @@ test("a strict subset of the declared roster is a red finding", (t) => {
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(copy, space.tests, space.roster, space.manifest);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /product suite roster disagrees with executed test files/);
+  assert.match(result.stdout, /ROSTER: 2 of 3 declared test files ran; refusing incomplete roster/);
   assert.match(result.stdout, /declared but not executed: .*three\.test\.cjs/);
 });
 
