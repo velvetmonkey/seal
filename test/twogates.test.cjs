@@ -11,6 +11,7 @@ const SEAL = path.join(ROOT, "bin", "seal");
 const SERVER = path.join(ROOT, "test-support", "tool-list-server.cjs");
 const {
   legacyStatePathFor,
+  previousStatePathFor,
   projectId,
   readState,
   statePathFor,
@@ -130,10 +131,10 @@ async function waitForState(filePath, expected) {
   assert.fail(`state did not become ${expected}: ${filePath}`);
 }
 
-test("server key is collision-free path-safe lowercase UTF-16LE hex", () => {
+test("server key is one collision-free path-safe lowercase UTF-16LE hex component", () => {
   const root = scratch("seal-twogates-key-");
   const env = { XDG_DATA_HOME: path.join(root, "data") };
-  const names = ["alpha", "ALPHA", "a/b", "a\\b", "a:b", "a?b", "\ud800", "\ud801", "x".repeat(200)];
+  const names = ["alpha", "ALPHA", "é", "e\u0301", "a/b", "a\\b", "..", "../", "a:b", "a?b", "\ud800", "\ud801"];
   const paths = names.map((name) => statePathFor(root, name, env));
   assert.equal(new Set(paths).size, names.length);
   for (const filePath of paths) {
@@ -143,7 +144,11 @@ test("server key is collision-free path-safe lowercase UTF-16LE hex", () => {
       assert.match(component, /^u16-[0-9a-f]+$/);
       assert.ok(component.length <= 124);
     }
+    assert.equal(components.length - serverIndex, 3);
   }
+  assert.throws(() => statePathFor(root, "", env), { code: "usage" });
+  assert.doesNotThrow(() => statePathFor(root, "x".repeat(60), env));
+  assert.throws(() => statePathFor(root, "x".repeat(61), env), { code: "usage" });
 });
 
 test("legacy project-only state migrates visibly and remains readable at its old name", () => {
@@ -171,10 +176,78 @@ test("legacy project-only state migrates visibly and remains readable at its old
   assert.equal(fs.lstatSync(legacyPath).isSymbolicLink(), true);
   assert.deepEqual(readState(legacyPath), legacyState);
   assert.deepEqual(readState(keyedPath), legacyState);
+  assert.equal(fs.readFileSync(path.join(path.dirname(keyedPath), "server-name.txt"), "utf8"), '"old/server"\n');
 
   const updated = { ...legacyState, state: "ACTIVE" };
   fs.writeFileSync(keyedPath, JSON.stringify(updated, null, 2) + "\n");
   assert.equal(readState(legacyPath).state, "ACTIVE");
+});
+
+test("previous chunked keyed state migrates and its installed pathname remains usable", () => {
+  const root = scratch("seal-twogates-previous-");
+  const project = path.join(root, "project");
+  const env = { XDG_DATA_HOME: path.join(root, "data") };
+  const serverName = "readable-server-name-that-is-long";
+  fs.mkdirSync(project);
+  const previousPath = previousStatePathFor(project, serverName, env);
+  const state = {
+    schema: "seal.protect/v1",
+    sealVersion: requireMatchingVersion(),
+    state: "PENDING RESTART",
+    projectRoot: fs.realpathSync(project),
+    projectId: projectId(project),
+    serverName,
+    guardTools: ["shared.mutate"],
+  };
+  fs.mkdirSync(path.dirname(previousPath), { recursive: true });
+  fs.writeFileSync(previousPath, JSON.stringify(state, null, 2) + "\n");
+
+  const listed = statesWithProject(project, env);
+  const currentPath = statePathFor(project, serverName, env);
+  assert.notEqual(previousPath, currentPath);
+  assert.equal(listed.entries.length, 1);
+  assert.equal(listed.entries[0].filePath, currentPath);
+  assert.equal(fs.lstatSync(previousPath).isSymbolicLink(), true);
+  assert.deepEqual(readState(previousPath), state);
+  assert.deepEqual(readState(currentPath), state);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(currentPath), "server-name.txt"), "utf8"),
+    `${JSON.stringify(serverName)}\n`,
+  );
+});
+
+test("previous chunked state above the new limit is refused by name, not ignored", () => {
+  const root = scratch("seal-twogates-previous-long-");
+  const project = path.join(root, "project");
+  const env = { XDG_DATA_HOME: path.join(root, "data") };
+  const serverName = "x".repeat(61);
+  fs.mkdirSync(project);
+  const previousPath = previousStatePathFor(project, serverName, env);
+  const state = {
+    schema: "seal.protect/v1",
+    sealVersion: requireMatchingVersion(),
+    state: "PENDING RESTART",
+    projectRoot: fs.realpathSync(project),
+    projectId: projectId(project),
+    serverName,
+    guardTools: ["shared.mutate"],
+  };
+  fs.mkdirSync(path.dirname(previousPath), { recursive: true });
+  fs.writeFileSync(previousPath, JSON.stringify(state, null, 2) + "\n");
+
+  assert.throws(() => statesWithProject(project, env), { code: "usage" });
+  assert.equal(fs.lstatSync(previousPath).isFile(), true);
+});
+
+test("corrupt old flat state remains a named finding", () => {
+  const root = scratch("seal-twogates-corrupt-");
+  const project = path.join(root, "project");
+  const env = { XDG_DATA_HOME: path.join(root, "data") };
+  fs.mkdirSync(project);
+  const legacyPath = legacyStatePathFor(project, env);
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.writeFileSync(legacyPath, "{ bad");
+  assert.throws(() => statesWithProject(project, env), { code: "state_broken" });
 });
 
 test("two protected servers coexist, bind replay to durable server identity, and unprotect separately", async (t) => {

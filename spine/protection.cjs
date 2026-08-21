@@ -216,24 +216,36 @@ function projectDirectory(projectRoot, env = process.env) {
   return path.join(dataHome(env), "seal", "projects", projectId(projectRoot));
 }
 
-const SERVER_KEY_CHUNK_HEX_LENGTH = 120;
+const MAX_SERVER_NAME_U16_LENGTH = 60;
+const PREVIOUS_SERVER_KEY_CHUNK_HEX_LENGTH = 120;
 
-function serverKeyComponents(serverName) {
+function encodedServerName(serverName) {
   if (typeof serverName !== "string" || serverName.length === 0) {
     throw new ProtectionError("usage", "a non-empty server name is required to locate protection state");
   }
-  // Node strings are sequences of UTF-16 code units. Encoding those exact
-  // units (rather than Unicode scalar values) keeps this mapping injective
-  // even for unusual JSON keys containing unpaired surrogates. Lowercase hex
-  // is portable as a path alphabet and cannot collide on a case-folding
-  // filesystem. Fixed-size chunks stay below per-component name limits.
-  const encoded = Buffer.from(serverName, "utf16le").toString("hex");
-  return encoded.match(new RegExp(`.{1,${SERVER_KEY_CHUNK_HEX_LENGTH}}`, "g"))
-    .map((chunk) => `u16-${chunk}`);
+  if (serverName.length > MAX_SERVER_NAME_U16_LENGTH) {
+    throw new ProtectionError(
+      "usage",
+      `server name is ${serverName.length} UTF-16 code units; protection supports at most ${MAX_SERVER_NAME_U16_LENGTH}`,
+    );
+  }
+  // Exact UTF-16 code units make this one-component mapping injective without
+  // relying on filesystem case or Unicode-normalisation behaviour.
+  return Buffer.from(serverName, "utf16le").toString("hex");
 }
 
 function statePathFor(projectRoot, serverName, env = process.env) {
-  return path.join(projectDirectory(projectRoot, env), "servers", ...serverKeyComponents(serverName), "state.json");
+  return path.join(projectDirectory(projectRoot, env), "servers", `u16-${encodedServerName(serverName)}`, "state.json");
+}
+
+function previousStatePathFor(projectRoot, serverName, env = process.env) {
+  if (typeof serverName !== "string" || serverName.length === 0) {
+    throw new ProtectionError("usage", "a non-empty server name is required to locate protection state");
+  }
+  const encoded = Buffer.from(serverName, "utf16le").toString("hex");
+  const components = encoded.match(new RegExp(`.{1,${PREVIOUS_SERVER_KEY_CHUNK_HEX_LENGTH}}`, "g"))
+    .map((chunk) => `u16-${chunk}`);
+  return path.join(projectDirectory(projectRoot, env), "servers", ...components, "state.json");
 }
 
 function legacyStatePathFor(projectRoot, env = process.env) {
@@ -247,9 +259,80 @@ function pathExists(filePath) {
   }
 }
 
+function ensureServerNameSidecar(statePath, serverName) {
+  const sidecarPath = path.join(path.dirname(statePath), "server-name.txt");
+  const expected = `${JSON.stringify(serverName)}\n`;
+  let existing;
+  try { existing = fs.readFileSync(sidecarPath, "utf8"); } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw new ProtectionError("state_broken", `server-name sidecar cannot be read: ${error.message}`);
+    }
+  }
+  if (existing !== undefined && existing !== expected) {
+    throw new ProtectionError("state_broken", `server-name sidecar disagrees with protection state: ${sidecarPath}`);
+  }
+  if (existing === undefined) {
+    fs.mkdirSync(path.dirname(sidecarPath), { recursive: true, mode: 0o700 });
+    const temporary = `${sidecarPath}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, expected, { mode: 0o600 });
+    fs.renameSync(temporary, sidecarPath);
+  }
+}
+
+function linkStateAndRetainOldPath(oldPath, targetPath, state, label) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+  if (pathExists(targetPath)) {
+    const targetState = readState(targetPath);
+    if (canonical(targetState) !== canonical(state)) {
+      throw new ProtectionError(
+        "state_broken",
+        `${label} and keyed protection state disagree for server ${JSON.stringify(state.serverName)}; no state was changed`,
+      );
+    }
+  } else {
+    fs.linkSync(oldPath, targetPath);
+  }
+  ensureServerNameSidecar(targetPath, state.serverName);
+  const relativeTarget = path.relative(path.dirname(oldPath), targetPath);
+  const temporaryLink = `${oldPath}.migrate-${process.pid}`;
+  try {
+    fs.symlinkSync(relativeTarget, temporaryLink);
+    fs.renameSync(temporaryLink, oldPath);
+  } finally {
+    try { fs.unlinkSync(temporaryLink); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+}
+
+function migratePreviousState(projectRoot, serverName, env = process.env) {
+  const targetPath = statePathFor(projectRoot, serverName, env);
+  const previousPath = previousStatePathFor(projectRoot, serverName, env);
+  if (previousPath === targetPath) {
+    const state = readState(targetPath);
+    if (state) {
+      if (state.serverName !== serverName) {
+        throw new ProtectionError("state_broken", `keyed protection state names another server: ${targetPath}`);
+      }
+      ensureServerNameSidecar(targetPath, serverName);
+    }
+    return targetPath;
+  }
+  let previousStat;
+  try { previousStat = fs.lstatSync(previousPath); } catch (error) {
+    if (error.code === "ENOENT") return targetPath;
+    throw new ProtectionError("state_broken", `previous keyed protection state cannot be inspected: ${error.message}`);
+  }
+  if (previousStat.isSymbolicLink()) return targetPath;
+  const previousState = readState(previousPath);
+  if (!previousState || previousState.serverName !== serverName) {
+    throw new ProtectionError("state_broken", `previous keyed protection state names another server: ${previousPath}`);
+  }
+  linkStateAndRetainOldPath(previousPath, targetPath, previousState, "previous keyed protection state");
+  return targetPath;
+}
+
 function migrateLegacyState(projectRoot, serverName, env = process.env) {
   const legacyPath = legacyStatePathFor(projectRoot, env);
-  const targetPath = statePathFor(projectRoot, serverName, env);
+  const targetPath = migratePreviousState(projectRoot, serverName, env);
   let legacyStat;
   try { legacyStat = fs.lstatSync(legacyPath); } catch (error) {
     if (error.code === "ENOENT") return targetPath;
@@ -262,29 +345,9 @@ function migrateLegacyState(projectRoot, serverName, env = process.env) {
   if (legacyState.serverName !== serverName) return targetPath;
   if (legacyStat.isSymbolicLink()) return targetPath;
 
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 });
-  if (pathExists(targetPath)) {
-    const targetState = readState(targetPath);
-    if (canonical(targetState) !== canonical(legacyState)) {
-      throw new ProtectionError(
-        "state_broken",
-        `legacy and keyed protection state disagree for server ${JSON.stringify(serverName)}; no state was changed`,
-      );
-    }
-  } else {
-    // A hard link makes the keyed state visible before the legacy pathname is
-    // changed. Replacing the legacy pathname with a symlink is then atomic, so
-    // a crash cannot create a window in which the old gate is invisible.
-    fs.linkSync(legacyPath, targetPath);
-  }
-  const relativeTarget = path.relative(path.dirname(legacyPath), targetPath);
-  const temporaryLink = `${legacyPath}.migrate-${process.pid}`;
-  try {
-    fs.symlinkSync(relativeTarget, temporaryLink);
-    fs.renameSync(temporaryLink, legacyPath);
-  } finally {
-    try { fs.unlinkSync(temporaryLink); } catch (error) { if (error.code !== "ENOENT") throw error; }
-  }
+  // The hard link makes the keyed state visible before the old name changes;
+  // retaining the old name as a symlink keeps already-installed proxies gated.
+  linkStateAndRetainOldPath(legacyPath, targetPath, legacyState, "legacy protection state");
   return targetPath;
 }
 
@@ -370,6 +433,9 @@ function protectedToolNames(state) {
 
 function writeState(statePath, state) {
   fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
+  if (typeof state?.serverName === "string" && state.serverName.length > 0) {
+    ensureServerNameSidecar(statePath, state.serverName);
+  }
   const temporary = `${statePath}.tmp-${process.pid}`;
   fs.writeFileSync(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
   fs.renameSync(temporary, statePath);
@@ -699,22 +765,39 @@ function statesWithProject(projectRoot, env = process.env) {
     migrateLegacyState(root, legacyState.serverName, env);
   }
   const serversDirectory = path.join(projectDirectory(root, env), "servers");
-  const filePaths = [];
-  function collect(directory) {
-    let entries;
-    try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch (error) {
-      if (error.code === "ENOENT") return;
-      throw error;
+  function collectStatePaths() {
+    const filePaths = [];
+    function collect(directory) {
+      let entries;
+      try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      for (const entry of entries) {
+        const candidate = path.join(directory, entry.name);
+        if (entry.isDirectory()) collect(candidate);
+        else if (entry.isFile() && entry.name === "state.json") filePaths.push(candidate);
+      }
     }
-    for (const entry of entries) {
-      const candidate = path.join(directory, entry.name);
-      if (entry.isDirectory()) collect(candidate);
-      else if (entry.isFile() && entry.name === "state.json") filePaths.push(candidate);
+    collect(serversDirectory);
+    filePaths.sort();
+    return filePaths;
+  }
+  for (const filePath of collectStatePaths()) {
+    const state = readState(filePath);
+    if (!state || typeof state.serverName !== "string" || state.serverName.length === 0) {
+      throw new ProtectionError("state_broken", `keyed protection state has no server name: ${filePath}`);
+    }
+    if (filePath === previousStatePathFor(root, state.serverName, env)) {
+      migratePreviousState(root, state.serverName, env);
     }
   }
-  collect(serversDirectory);
-  filePaths.sort();
-  return { root, entries: filePaths.map((filePath) => ({ filePath, state: readState(filePath) })) };
+  const filePaths = collectStatePaths();
+  return { root, entries: filePaths.map((filePath) => {
+    const state = readState(filePath);
+    ensureServerNameSidecar(filePath, state.serverName);
+    return { filePath, state };
+  }) };
 }
 
 function stateWithProject(projectRoot, env = process.env) {
@@ -995,6 +1078,7 @@ module.exports = {
   projectId,
   legacyStatePathFor,
   migrateLegacyState,
+  previousStatePathFor,
   readProjectServer,
   readState,
   receiptKeyPaths,
