@@ -12,8 +12,8 @@ function demoFence(text) {
   for (const match of text.matchAll(/```bash\n([\s\S]*?)\n```/g)) {
     if (!match[1].includes("export SEAL_DEMO_LOG=")) continue;
     return match[1].split("\n").map((line) => {
-      assert.notEqual(line.trim(), "", "README command lines must not be empty");
-      return line.startsWith("$ ") ? line.slice(2) : line;
+      assert.doesNotMatch(line, /^\$ /, `README demo command line must be pasteable without a prompt: ${line}`);
+      return line;
     }).join("\n");
   }
   assert.fail("README must contain the demo walk fence");
