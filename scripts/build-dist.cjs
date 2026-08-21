@@ -16,6 +16,7 @@ const PAYLOAD_PATHS = [
   "VERSION",
   "package.json",
   "LICENSE",
+  "NOTICE",
   "runtime-manifest.json",
   "spine/version.cjs",
   "spine/platform.cjs",
