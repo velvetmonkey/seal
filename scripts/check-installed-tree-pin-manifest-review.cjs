@@ -50,11 +50,9 @@ function parseArgs(argv) {
 function changedByDiff(args) {
   const result = git(["diff", "--name-only", ...args, "--", MANIFEST]);
   if (result.status !== 0) {
-    process.stderr.write(result.stdout + result.stderr);
-    process.exitCode = result.status || 1;
-    return false;
+    return { error: result.stdout + result.stderr, status: result.status || 1 };
   }
-  return result.stdout.split(/\r?\n/).includes(MANIFEST);
+  return { changed: result.stdout.split(/\r?\n/).includes(MANIFEST) };
 }
 
 function diffDetail(args) {
@@ -62,20 +60,40 @@ function diffDetail(args) {
   return result.status === 0 && result.stdout ? `\n${result.stdout}` : "";
 }
 
+function resolveCommit(ref, label) {
+  const result = git(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+  if (result.status !== 0) {
+    const reason = (result.stderr || result.stdout).trim() || `git exited ${result.status || 1}`;
+    fail(`${label} ref "${ref}" is unresolvable: ${reason}`);
+    return null;
+  }
+  return result.stdout.trim();
+}
+
 const options = parseArgs(process.argv.slice(2));
 if (!options) {
   usage();
 } else if (options.base) {
-  const head = options.head || "HEAD";
-  if (changedByDiff([options.base, head])) {
-    fail(`${MANIFEST} changed between ${options.base} and ${head}.`, diffDetail([options.base, head]));
-  } else {
-    process.stdout.write(`PINMANIFEST REVIEW OK: ${MANIFEST} unchanged between ${options.base} and ${head}.\n`);
+  const requestedHead = options.head || "HEAD";
+  const base = resolveCommit(options.base, "base");
+  const head = resolveCommit(requestedHead, "head");
+  if (base && head) {
+    const result = changedByDiff([base, head]);
+    if (result.error) {
+      fail(`could not compare ${MANIFEST} between base ref "${options.base}" and head ref "${requestedHead}": ${result.error.trim()}`);
+    } else if (result.changed) {
+      fail(`${MANIFEST} changed between ${options.base} and ${requestedHead}.`, diffDetail([base, head]));
+    } else {
+      process.stdout.write(`PINMANIFEST REVIEW OK: ${MANIFEST} unchanged between ${options.base} and ${requestedHead}.\n`);
+    }
   }
 } else {
   const unstaged = changedByDiff([]);
   const staged = changedByDiff(["--cached"]);
-  if (unstaged || staged) {
+  if (unstaged.error || staged.error) {
+    const error = unstaged.error || staged.error;
+    fail(`could not inspect local changes to ${MANIFEST}: ${error.trim()}`);
+  } else if (unstaged.changed || staged.changed) {
     fail(`${MANIFEST} has staged or unstaged local changes.`, diffDetail(["HEAD"]));
   } else {
     process.stdout.write(`PINMANIFEST REVIEW OK: ${MANIFEST} has no staged or unstaged local changes.\n`);

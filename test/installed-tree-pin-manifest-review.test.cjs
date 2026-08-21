@@ -55,3 +55,23 @@ test("installed-tree manifest review is loud when the manifest changes", (t) => 
   assert.match(result.stderr, /PINMANIFEST REVIEW REQUIRED \(INJECTED\)/);
   assert.match(result.stderr, /Human control: Ben must review/);
 });
+
+test("installed-tree manifest review refuses an unresolvable base without printing OK", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const result = run(root, ["--base", "f18fd937fcf6b161f534fe6d2cae80fa44a91d60", "--head", head]);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /base ref "f18fd937fcf6b161f534fe6d2cae80fa44a91d60" is unresolvable/);
+  assert.doesNotMatch(result.stdout, /PINMANIFEST REVIEW OK/);
+});
+
+test("installed-tree manifest review refuses an unresolvable head without printing OK", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  const result = run(root, ["--base", base, "--head", "missing-head"]);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /head ref "missing-head" is unresolvable/);
+  assert.doesNotMatch(result.stdout, /PINMANIFEST REVIEW OK/);
+});
