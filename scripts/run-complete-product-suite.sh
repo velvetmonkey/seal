@@ -174,7 +174,7 @@ fi
 
 if (( ${#roster_failures[@]} > 0 || ${#critical_manifest_failures[@]} > 0 )); then
   if (( ${#roster_failures[@]} > 0 )); then
-    echo "FAIL  product suite roster: declared test files are not runnable"
+    echo "ROSTER: 0 of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
     printf 'FAIL  product suite roster: declared test file %s\n' "${roster_failures[@]}"
   fi
   if (( ${#critical_manifest_failures[@]} > 0 )); then
@@ -342,7 +342,7 @@ if (( ${#critical_proof_failures[@]} > 0 )); then
 fi
 
 if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); then
-  echo "::error::product suite roster disagrees with executed test files"
+  echo "ROSTER: ${#executed_tests[@]} of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
   if (( ${#declared_not_executed[@]} > 0 )); then
     printf '::error::declared but not executed: %s\n' "${declared_not_executed[*]}"
   fi
@@ -350,8 +350,8 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); t
     printf '::error::executed but not declared: %s\n' "${executed_not_declared[*]}"
   fi
   gate_status=1
-elif (( ${#declared_without_cases[@]} == 0 && ${#critical_proof_failures[@]} == 0 && ${#case_count_output_failures[@]} == 0 )); then
-  echo "PASS  product suite ran all ${#declared_tests[@]} declared test files"
+elif (( gate_status == 0 && ${#declared_without_cases[@]} == 0 && ${#critical_proof_failures[@]} == 0 && ${#case_count_output_failures[@]} == 0 )); then
+  echo "ROSTER: ${#executed_tests[@]} of ${#declared_tests[@]} declared test files ran"
 fi
 
 exit "$gate_status"
