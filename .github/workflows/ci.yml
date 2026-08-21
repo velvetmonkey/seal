@@ -319,8 +319,13 @@ jobs:
           fi
 
           store="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")"
-          if [[ -f "$store/checker/seal-receipt-check.mjs" ]]; then
-            echo '::error::installed artifact must not contain the receipt checker'
+          installed_checker="$store/checker/seal-receipt-check.mjs"
+          if [[ ! -f "$installed_checker" ]]; then
+            echo '::error::installed artifact is missing the receipt checker'
+            exit 1
+          fi
+          if [[ ! -s "$installed_checker" ]]; then
+            echo '::error::installed receipt checker is empty'
             exit 1
           fi
 

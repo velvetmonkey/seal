@@ -169,12 +169,11 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   assert.match(demoOut, /DIRECT WRITE SUCCEEDED/);
   assert.match(demoOut, /Seal decisions emitted: 0/);
 
-  // CHECK — the checker published beside the artifact, not `seal verify`, not a key we mint.
+  // CHECK — the checker installed with the artifact, not `seal verify`, not a key we mint.
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
   const store = path.join(prefix, record.store);
-  assert.equal(fs.existsSync(path.join(store, "checker", "seal-receipt-check.mjs")), false, "checker must not be inside the installed payload");
-  const checker = path.join(work, "seal-receipt-check.mjs");
-  fs.copyFileSync(path.join(ROOT, "checker", "seal-receipt-check.mjs"), checker);
+  const checker = path.join(store, "checker", "seal-receipt-check.mjs");
+  assert.equal(fs.existsSync(checker), true, "checker must be inside the installed payload");
   const allow = fs.readdirSync(path.join(demoDir, "receipts")).find((name) => name.includes("-ALLOW.json"));
   assert.ok(allow, demoOut);
   const pubkey = path.join(demoDir, "receipt-signer.pub");

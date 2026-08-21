@@ -70,7 +70,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Source-build path (secondary)
 
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above. A build of this checkout excludes `checker/seal-receipt-check.mjs` from its payload; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md).
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above. A build of this checkout includes `checker/seal-receipt-check.mjs` in its payload; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md), which needs an operator ruling when the payload changes.
 
 Read this filename only if you build from source:
 
@@ -182,7 +182,7 @@ REFUSE decision_binding_mismatch: receipt line 4, field decision: recorded value
 
 The demo directory remains after the walk so you can check a receipt.
 
-If you took the secondary source-build path, its store does not include the checker; use `checker/seal-receipt-check.mjs` from that checkout.
+If you took the secondary source-build path, use the checker from that installed store.
 
 ## 3. Protect
 

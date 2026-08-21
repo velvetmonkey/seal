@@ -6,10 +6,9 @@ includes the receipt checker. It does not embed a captured transcript: three
 attempts to keep a hand-maintained transcript honest on a moving branch already
 failed. Run the commands; read what they print.
 
-The checker is **not** in a source-built installed store.
-`scripts/build-dist.cjs` excludes `checker/seal-receipt-check.mjs` from that
-payload. Run the copy from the checkout that you built; do not look for it
-under `~/.local/lib/seal/store/`.
+The checker is in a source-built installed store. Run
+`checker/seal-receipt-check.mjs` from the installed store whose hash matches the
+artifact you built.
 
 ## After `seal demo`
 

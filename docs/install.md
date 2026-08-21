@@ -54,8 +54,7 @@ $ export PATH="$HOME/.local/bin:$PATH"
 
 Further distribution detail, including what the payload does and does not
 contain, is in [DISTRIBUTION.md](DISTRIBUTION.md). The published release
-payload includes the receipt checker. A source build of this checkout excludes
-it; see [evaluator-walk.md](evaluator-walk.md) for that secondary path.
+payload and source build payload include the receipt checker.
 
 ## Source-build tree pin
 
@@ -65,6 +64,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
+
 tree: 1b16e886f47aeb4d2e5a82baca12a002f4dec7406ec6ebf4ff36dbcf9f15b4a8
 ```
 
@@ -76,8 +76,7 @@ change.
 ### Installed-tree hash definition
 
 The installed tree is exactly the regular payload files named by the artifact's
-payload manifest (the build excludes `checker/seal-receipt-check.mjs` for a
-fresh build). Order those relative slash-separated paths by bytewise
+payload manifest. Order those relative slash-separated paths by bytewise
 lexicographic path order. For each file, SHA-256 its exact payload bytes and
 form one UTF-8 line: `<file-sha256><two spaces><decimal byte count><two
 spaces><path><newline>`. Concatenate those lines without another separator and

@@ -3,6 +3,7 @@
 # Honest limit: The floor does not stop cs8frisk probe 2, where a history rewrite makes the reduced manifest its first version, or cs8frisk probe 3, where editing the runner disables the floor, because repository-local history and checker code are mutable; closing either gap requires an external reviewer boundary rather than more local code.
 a checksum naming a different artifact is refused by name	test/artifact-identity.test.cjs	a checksum file naming a different artifact is refused
 an untagged build cannot wear the bare release identity	test/artifact-identity.test.cjs	an untagged build wearing the bare release name is refused by name
+installed-store consumer requirements are included in the distribution payload	test/dist-payload-completeness.test.cjs	distribution payload contains every installed-store file required by consumers
 altered receipt fields produce distinct named refusals	test/receipt-checker.test.cjs	three distinct mutation sites each produce a distinct refusal
 repairing altered receipt commitments cannot bypass the signature	test/receipt-checker.test.cjs	the signature is the unforgeable backstop: repairing commitments still refuses
 the standalone checker runs without the Seal binary	test/receipt-checker.test.cjs	the checker runs with the seal binary absent (copied to a clean dir)

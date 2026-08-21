@@ -14,6 +14,7 @@ test/demo-receipts-store.test.cjs
 test/demo-witness.test.cjs
 test/dist3d.test.cjs
 test/dist-pin.test.cjs
+test/dist-payload-completeness.test.cjs
 test/docs-fenced-languages.test.mjs
 test/docs-index.test.cjs
 test/docs-scope.test.mjs
