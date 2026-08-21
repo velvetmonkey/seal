@@ -22,11 +22,12 @@
 // Usage:
 //   cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR
 //   cc-harness plan
-//   cc-harness next                 run the next step (this is the whole run)
+//   cc-harness show                 show the current step without running it
+//   cc-harness next                 attempt the current step
 //   cc-harness finish [--out DIR]
 //
-// `next` is the operator's only verb after `init`: it performs the machine
-// half of the step, prints the human half, and blocks on the recorded session.
+// `show` is read-only with respect to progress. `next` attempts one step and
+// advances only after the machine can certify that step's required evidence.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -41,6 +42,7 @@ const OPEN_TOOL = "read_notes";
 const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE — NOT A REAL CLAUDE CODE RUN";
 const MIN_COLUMNS = 80;
+const CURRENT_STEP_FILE = "CURRENT-STEP.txt";
 
 // The three note values the human is instructed to use. They are fixed so the
 // expected effect digest can be computed before the run, and so the declined
@@ -119,6 +121,15 @@ function loadState(runDir) {
 
 function saveState(state) {
   writeJson(statePath(state.paths.run), state);
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function recoveryGuidance(runDir) {
+  const quoted = shellQuote(runDir);
+  return `Recover this run directory with: chmod -R u+w -- ${quoted} && rm -rf -- ${quoted}`;
 }
 
 function runEnv(state) {
@@ -330,6 +341,22 @@ function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner 
   return `${lines.join("\n")}\n`;
 }
 
+function waitForEnter(state) {
+  if (state.synthetic) return;
+  if (!process.stdin.isTTY) {
+    refuse("operator_input_not_tty", "the acceptance client cannot launch because ENTER must come from a human at a terminal");
+  }
+  say("  Press Enter to start the recorded session.");
+  const byte = Buffer.alloc(1);
+  for (;;) {
+    let count;
+    try { count = fs.readSync(0, byte, 0, 1, null); }
+    catch (error) { refuse("operator_enter_unreadable", `the harness could not read ENTER: ${error.message}`); }
+    if (count === 0) refuse("operator_enter_absent", "stdin closed before the human pressed ENTER; the client was not launched");
+    if (byte[0] === 0x0a || byte[0] === 0x0d) return;
+  }
+}
+
 function recordSession(state, caseId, instructions) {
   const columns = process.stdout.columns || Number(process.env.COLUMNS) || 0;
   const rows = process.stdout.rows || Number(process.env.LINES) || 24;
@@ -345,10 +372,7 @@ function recordSession(state, caseId, instructions) {
   say("");
   for (const line of instructions) say(`  ${line}`);
   say("");
-  if (process.stdin.isTTY) {
-    say("  Press Enter to start the recorded session.");
-    try { fs.readSync(0, Buffer.alloc(1024), 0, 1024, null); } catch { /* a closed stdin starts immediately */ }
-  }
+  waitForEnter(state);
   const startedAt = new Date().toISOString();
   const result = spawnSync("script", [
     "--quiet",
@@ -398,8 +422,14 @@ function observeActivation(state, begin, end) {
     .some((step) => argvIsSealProxy(step.argv, state.paths.protectState) && step.pid === leasePid));
   const clientAbove = mediated.filter((record) => (record.ancestry || []).some((step) => argvIsClient(step.argv, state.claude.executable)));
   const direct = starts.filter((record) => !(record.ancestry || []).some((step) => argvIsSealProxy(step.argv, state.paths.protectState)));
+  const localScopeSelected = /^ {2}Scope: Local config \(private to you in this project\)$/m.test(end.claude_mcp_get.stdout || "");
+  const localEntryIsProxy = argvIsSealProxy([
+    end.local_override.entry?.command,
+    ...(Array.isArray(end.local_override.entry?.args) ? end.local_override.entry.args : []),
+  ], state.paths.protectState);
   return {
-    observed: end.protection_state.state === "ACTIVE" && leaseMatched.length > 0 && clientAbove.length > 0 && direct.length === 0,
+    observed: end.protection_state.state === "ACTIVE" && end.claude_mcp_get.code === 0 && localScopeSelected && localEntryIsProxy &&
+      leaseMatched.length > 0 && clientAbove.length > 0 && direct.length === 0,
     facts: {
       protection_state_after: end.protection_state.state,
       lease_pid: leasePid,
@@ -408,6 +438,9 @@ function observeActivation(state, begin, end) {
       starts_whose_proxy_pid_is_the_recorded_lease: leaseMatched.length,
       starts_with_the_client_above_the_proxy: clientAbove.length,
       starts_not_launched_by_seal: direct.length,
+      claude_mcp_get_exit: end.claude_mcp_get.code,
+      claude_mcp_get_local_scope_selected: localScopeSelected,
+      local_override_is_recorded_seal_proxy: localEntryIsProxy,
       ancestry: starts.map((record) => (record.ancestry || []).map((step) => ({ pid: step.pid, argv: step.argv }))),
     },
   };
@@ -445,10 +478,12 @@ function expectedDialogLines(state, note) {
   return rendered.lines;
 }
 
-function observeApprovalShown(state, begin, end, castPath) {
-  const lines = expectedDialogLines(state, NOTES.accept);
+function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {
+  const lines = expectedDialogLines(state, note);
   let text = "";
-  try { text = castScreenText(castPath); } catch { text = ""; }
+  let readError = null;
+  try { text = castScreenText(castPath); } catch (error) { readError = error.code || error.message; }
+  const recordingDigest = digestOf(castPath);
   // Compare on collapsed whitespace, with box rules and the borders a TUI
   // paints around a dialog removed, so a boxed or re-wrapped dialog still
   // matches its words. A line the recording does not carry is reported absent
@@ -460,6 +495,8 @@ function observeApprovalShown(state, begin, end, castPath) {
     observed: found.length > 0 && found.every((entry) => entry.found),
     facts: {
       recording: path.basename(castPath),
+      recording_digest: recordingDigest,
+      recording_read_error: readError,
       expected_dialog_lines: found,
       dialog_rendered_by: "contract/renderer.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
@@ -509,15 +546,24 @@ function observeDecline(state, begin, end) {
   const added = newRecords(begin, end).filter((record) => record.kind === "child-call");
   const declinedNoteInEffect = typeof end.effect_text === "string" && end.effect_text.includes(NOTES.decline);
   const receipts = newReceipts(begin, end);
+  const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
+    receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline && receipt.correlation);
+  const declinedPairs = offers.flatMap((offer) => receipts
+    .filter((receipt) => receipt.name > offer.name && receipt.correlation === offer.correlation &&
+      receipt.decision === "BLOCK" && receipt.refusal === "declined" &&
+      receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline)
+    .map((receipt) => ({ correlation: offer.correlation, offer: offer.name, decline: receipt.name })));
+  const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline);
   return {
-    observed: added.length === 0 && end.child_log.guarded_calls === begin.child_log.guarded_calls && !declinedNoteInEffect,
+    observed: declinedPairs.length > 0 && dialog.observed && added.length === 0 &&
+      end.child_log.guarded_calls === begin.child_log.guarded_calls && !declinedNoteInEffect,
     facts: {
       child_call_records_added: added.length,
       child_call_records_total: end.child_log.guarded_calls,
       declined_note: NOTES.decline,
       declined_note_present_in_effect_file: declinedNoteInEffect,
-      // Recorded, not required: a client may answer decline (Seal writes a
-      // BLOCK receipt) or simply never retry. Both leave the count at zero.
+      exact_call_decline_receipt_pairs: declinedPairs,
+      exact_call_dialog: dialog.facts,
       receipts: receipts.map((receipt) => ({ name: receipt.name, decision: receipt.decision, refusal: receipt.refusal })),
     },
   };
@@ -761,7 +807,7 @@ function init(argv) {
   }
   const runDir = path.resolve(options["run-dir"]);
   if (fs.existsSync(runDir) && fs.readdirSync(runDir).length > 0) {
-    refuse("run_dir_not_clean", `${runDir} is not empty; an acceptance run starts from a clean temporary tree`);
+    refuse("run_dir_not_clean", `${runDir} is not empty; an acceptance run starts from a clean temporary tree. ${recoveryGuidance(runDir)}`);
   }
   const artifactPath = path.resolve(options.artifact);
   const artifact = digestOf(artifactPath);
@@ -771,6 +817,10 @@ function init(argv) {
   }
   if (artifact.bytes !== Number(options.bytes)) {
     refuse("artifact_bytes_mismatch", `${artifactPath} is ${artifact.bytes} bytes, not the pinned ${options.bytes}`);
+  }
+  try { fs.accessSync(artifactPath, fs.constants.X_OK); }
+  catch {
+    refuse("artifact_not_executable", `${artifactPath} is not executable; the harness runs the artifact as its installer. Run: chmod u+x -- ${shellQuote(artifactPath)}`);
   }
 
   const paths = {
@@ -841,7 +891,11 @@ function init(argv) {
   // Run the artifact the way the published command runs it: the artifact is
   // its own installer, and it verifies its own bytes against the pin first.
   const install = run(state, artifactPath, ["--sha256", artifact.sha256, "--bytes", String(artifact.bytes), "--prefix", paths.prefix], { cwd: runDir });
-  if (install.code !== 0) refuse("install_failed", `installing the pinned artifact failed: ${(install.stderr || install.stdout).trim()}`);
+  if (install.code !== 0) {
+    const diagnostic = [install.error, install.stderr, install.stdout].find((value) => typeof value === "string" && value.trim())?.trim()
+      || "no exec error, stderr, or stdout diagnostic was captured";
+    refuse("install_failed", `installing the pinned artifact failed: ${diagnostic}`);
+  }
   const record = readJson(path.join(paths.prefix, "lib", "seal", "install.json"));
   paths.store = path.join(paths.prefix, record.store);
   state.artifact.installed_tree_sha256 = record.treeSha256;
@@ -910,14 +964,83 @@ function plan(state) {
   for (const item of CASES) say(`  ${item.id.padEnd(18)} ${item.required}`);
 }
 
+function currentStepText(state) {
+  const step = STEPS[state.step_index];
+  if (!step) return "The run is complete.\n";
+  const lines = step.record
+    ? step.record.instructions(state)
+    : [`STEP ${state.step_index + 1} of ${STEPS.length} — ${step.name}.`, "", "This step is machine-only."];
+  return `${lines.join("\n")}\n`;
+}
+
+function writeCurrentStep(state) {
+  const target = path.join(state.paths.run, CURRENT_STEP_FILE);
+  fs.writeFileSync(target, currentStepText(state));
+  return target;
+}
+
+function show(state) {
+  const target = writeCurrentStep(state);
+  say(currentStepText(state).trimEnd());
+  say("");
+  say(`Current step written to ${target}`);
+}
+
+const STEP_CASES = Object.freeze({
+  activation: ["activation"],
+  decline: ["decline", "before_approval"],
+  accept: ["accept", "approval_shown", "negotiation"],
+  missing_launcher: ["missing_launcher"],
+  unprotect: ["unprotect"],
+});
+
+function certifyStep(state, step) {
+  const failures = [];
+  for (const caseId of STEP_CASES[step.name] || []) {
+    const begin = loadSnapshot(state, caseId, "begin");
+    const end = loadSnapshot(state, caseId, "end");
+    if (!begin || !end) {
+      failures.push(`${caseId}: begin or end evidence is absent or unreadable`);
+      continue;
+    }
+    const outcome = OBSERVERS[caseId](state, begin, end);
+    if (!outcome.observed) {
+      if (caseId === "decline") {
+        const digest = outcome.facts.exact_call_dialog?.recording_digest;
+        if (!digest?.present) failures.push(`${caseId}: decline.cast is absent or unreadable (${digest?.reason || "no readable digest"})`);
+        else if (digest.bytes === 0) failures.push(`${caseId}: decline.cast is empty`);
+        else if (outcome.facts.exact_call_decline_receipt_pairs.length === 0) failures.push(`${caseId}: the exact-call BLOCK/declined receipt pair is absent`);
+        else failures.push(`${caseId}: the complete exact-call dialog is absent from decline.cast`);
+      } else if (caseId === "activation") {
+        if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
+        else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
+        else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
+      } else {
+        failures.push(`${caseId}: required positive evidence is absent`);
+      }
+    }
+  }
+  if (failures.length) {
+    refuse("step_cannot_certify", `CANNOT CERTIFY ${step.name}; ${failures.join("; ")}. The run remains on this step.`);
+  }
+}
+
 function next(state) {
   const step = STEPS[state.step_index];
   if (!step) refuse("run_complete", "every step of this run has already been taken");
+  const current = state.steps[step.name] || {};
+  if (current.attempted === true) certifyStep(state, step);
   say(`Step ${state.step_index + 1}/${STEPS.length}: ${step.name}`);
+  const currentStepPath = writeCurrentStep(state);
+  say(`  current instruction: ${currentStepPath}`);
   step.machine(state);
   if (step.record) recordSession(state, step.record.caseId, step.record.instructions(state));
   step.after(state);
+  state.steps[step.name] = { ...(state.steps[step.name] || {}), attempted: true };
+  saveState(state);
+  certifyStep(state, step);
   state.step_index += 1;
+  writeCurrentStep(state);
   saveState(state);
   const following = STEPS[state.step_index];
   say("");
@@ -1186,16 +1309,33 @@ function main(argv) {
     say("cc-harness — the Claude Code acceptance harness\n");
     say("  cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR");
     say("  cc-harness plan   --run-dir DIR");
+    say("  cc-harness show   --run-dir DIR");
     say("  cc-harness next   --run-dir DIR");
     say("  cc-harness finish --run-dir DIR [--out DIR]");
     return;
   }
-  if (command === "init") { init(argv.slice(1)); return; }
+  if (command === "init") {
+    const initArgs = argv.slice(1);
+    try { init(initArgs); }
+    catch (error) {
+      const runIndex = initArgs.indexOf("--run-dir");
+      const supplied = runIndex >= 0 ? initArgs[runIndex + 1] : null;
+      if (supplied && error instanceof Error) {
+        const runDir = path.resolve(supplied);
+        if (fs.existsSync(runDir) && fs.readdirSync(runDir).length > 0 && !error.message.includes("Recover this run directory with:")) {
+          error.message = `${error.message}\n${recoveryGuidance(runDir)}`;
+        }
+      }
+      throw error;
+    }
+    return;
+  }
   const options = parseFlags(argv.slice(1), ["run-dir", "out"]);
   const runDir = path.resolve(options["run-dir"] || process.env.SEAL_CC_RUN_DIR || "");
   if (!options["run-dir"] && !process.env.SEAL_CC_RUN_DIR) refuse("usage", `cc-harness ${command} needs --run-dir`);
   const state = loadState(runDir);
   if (command === "plan") return plan(state);
+  if (command === "show") return show(state);
   if (command === "next") return next(state);
   if (command === "finish") { finish(state, options); return; }
   refuse("usage", `unknown command ${command}`);
@@ -1228,5 +1368,6 @@ module.exports = {
   observeAll,
   runEnv,
   saveState,
+  show,
   takeSnapshot,
 };
