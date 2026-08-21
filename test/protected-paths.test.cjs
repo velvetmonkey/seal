@@ -49,6 +49,35 @@ function resolveRange(root, eventName, event) {
   });
 }
 
+function writeRuling(root, base, files) {
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), JSON.stringify({
+    version: 1,
+    ruling: { base, files },
+  }, null, 2) + "\n");
+  git(root, ["add", "docs/PROTECTED-PATH-RULINGS.json"]);
+  git(root, ["commit", "-qm", "record ruling"]);
+}
+
+function approvedTopic(root) {
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: approved\n");
+  git(root, ["add", ".github/workflows/ci.yml"]);
+  git(root, ["commit", "-qm", "approved protected edit"]);
+  writeRuling(root, base, [{
+    path: ".github/workflows/ci.yml",
+    blob: git(root, ["rev-parse", "HEAD:.github/workflows/ci.yml"]),
+  }]);
+  return base;
+}
+
+function mergeTopic(root, base) {
+  git(root, ["switch", "-qc", "main", base]);
+  git(root, ["merge", "--no-ff", "topic", "-m", "merge topic"]);
+}
+
 test("protected paths fail with the changed artifact named", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -86,6 +115,55 @@ test("the protected-path rulebook guards itself", (t) => {
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /scripts\/check-protected-paths\.cjs/);
+});
+
+test("a range-and-blob ruling passes on an actual merge commit", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  mergeTopic(root, base);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /recorded human ruling/);
+});
+
+test("a range-and-blob ruling refuses a different protected blob", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: unauthorised\n");
+  git(root, ["add", ".github/workflows/ci.yml"]);
+  git(root, ["commit", "-qm", "unauthorised protected edit"]);
+  mergeTopic(root, base);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
+});
+
+test("a range-and-blob ruling survives an unprotected commit after the ruling", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  writeFileSync(join(root, "README.md"), "stale ruling remains valid\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "unprotected follow-up"]);
+  mergeTopic(root, base);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("widening a ruling allowlist fails closed", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  writeRuling(root, base, [
+    { path: ".github/workflows/ci.yml", blob: git(root, ["rev-parse", "HEAD:.github/workflows/ci.yml"]) },
+    { path: "scripts/installed-tree-pin-sites.json", blob: "0000000000000000000000000000000000000000" },
+  ]);
+  mergeTopic(root, base);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
 });
 
 test("an all-zero first push resolves from the first pushed commit parent", (t) => {

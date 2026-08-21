@@ -51,24 +51,18 @@ function exactRuling(mergeBase, head, changedPaths) {
     return null;
   }
   const detail = ruling?.ruling;
-  if (!detail || detail.base !== mergeBase || typeof detail.protectedCommit !== "string"
-    || !Array.isArray(detail.paths) || detail.paths.length === 0
-    || new Set(detail.paths).size !== detail.paths.length
-    || detail.paths.some((value) => typeof value !== "string" || !protectedArtifact(value))) return null;
-
-  const currentParents = git(["rev-list", "--parents", "-n", "1", head]);
-  const parentFields = currentParents.stdout.trim().split(/\s+/);
-  if (currentParents.status !== 0 || parentFields.length !== 2 || parentFields[1] !== detail.protectedCommit) return null;
-
-  const target = git(["rev-parse", "--verify", `${detail.protectedCommit}^{commit}`]);
-  if (target.status !== 0 || target.stdout.trim() !== detail.protectedCommit) return null;
-  const targetChanged = git(["diff", "--name-only", "--diff-filter=ACDMRTUXB", `${mergeBase}...${detail.protectedCommit}`, "--"]);
-  if (targetChanged.status !== 0) return null;
-  const expected = targetChanged.stdout.split(/\r?\n/).filter(Boolean).filter(protectedArtifact).sort();
-  const recorded = [...detail.paths].sort();
-  if (expected.length !== recorded.length || expected.some((value, index) => value !== recorded[index])) return null;
+  if (!detail || detail.base !== mergeBase || !Array.isArray(detail.files) || detail.files.length === 0) return null;
+  const recorded = detail.files.map((file) => file?.path).sort();
+  if (new Set(recorded).size !== recorded.length
+    || detail.files.some((file) => !file || typeof file.path !== "string"
+      || typeof file.blob !== "string" || !/^[0-9a-f]{40}$/.test(file.blob)
+      || !protectedArtifact(file.path))) return null;
   const actual = [...changedPaths].sort();
   if (actual.length !== recorded.length || actual.some((value, index) => value !== recorded[index])) return null;
+  for (const file of detail.files) {
+    const actualBlob = git(["rev-parse", "--verify", `${head}:${file.path}`]);
+    if (actualBlob.status !== 0 || actualBlob.stdout.trim() !== file.blob) return null;
+  }
   return detail;
 }
 
@@ -90,7 +84,7 @@ if (!options) {
       if (paths.length) {
         const ruling = exactRuling(mergeBase.stdout.trim(), options.head, paths);
         if (ruling) {
-          process.stdout.write(`PROTECTED PATH REVIEW OK: recorded human ruling for protected commit ${ruling.protectedCommit}: ${ruling.paths.join(", ")}.\n`);
+          process.stdout.write(`PROTECTED PATH REVIEW OK: recorded human ruling for ${ruling.base}: ${ruling.files.map((file) => file.path).join(", ")}.\n`);
         } else {
           for (const protectedPath of paths) {
             process.stderr.write(`::error file=${protectedPath}::HUMAN RULING REQUIRED: protected artifact changed: ${protectedPath}\n`);
