@@ -33,7 +33,7 @@ test("the first screen requires Claude Code for Protect and provides its availab
   const firstScreen = readme.slice(0, readme.indexOf("## 1. Install"));
 
   assert.match(firstScreen, /the `claude` command for Protect\./);
-  assert.match(firstScreen, /Check that the Claude Code command is available before Protect:\n\n```bash\n\$ claude --version\n```/);
+  assert.match(firstScreen, /Check that the Claude Code command is available before Protect:\n\n```bash\nclaude --version\n```/);
   assert.doesNotMatch(firstScreen, /Protect \(check with `claude --version`\)/);
 });
 

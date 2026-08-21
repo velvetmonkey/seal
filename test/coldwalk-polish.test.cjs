@@ -53,7 +53,7 @@ test("demo announces and retains its checker directory, and Remove explains its 
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   assert.match(readme, /temporary directory.*remains after the walk/s);
   assert.match(readme, /After running the checker, use these commands to remove the retained state and the exact demo directory printed for your run:/);
-  assert.match(readme, /```bash\n\$ rm -r ~\/\.local\/share\/seal\n\$ rm -r "\$SEAL_DEMO_DIR"\n```/);
+  assert.match(readme, /```bash\nrm -r ~\/\.local\/share\/seal\nrm -r "\$SEAL_DEMO_DIR"\n```/);
 });
 
 test("the README exports the installed command directory before the Demo command", () => {
