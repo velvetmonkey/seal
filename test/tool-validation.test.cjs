@@ -11,7 +11,7 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
 const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
-const { readState, statePathFor } = require("../spine/protection.cjs");
+const { activationLease, readState, statePathFor } = require("../spine/protection.cjs");
 
 function setup(mode = "ok", source) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-tool-validation-"));
@@ -166,6 +166,25 @@ test("three protected tools round-trip through stored state", (t) => {
   assert.equal(Object.hasOwn(state, "guardTool"), false, "new state must carry the list, not the old scalar");
   t.diagnostic(`written/read guardTools: ${JSON.stringify(state.guardTools)}`);
   t.diagnostic(`old scalar present: ${Object.hasOwn(state, "guardTool")}`);
+});
+
+test("duplicate protected tool names in stored state refuse activation by name", async (t) => {
+  const ctx = setup("ok", "db.drop_table,db.read,db.health");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table", "db.read", "db.health"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = ["db.drop_table", "db.read", "db.read"];
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+
+  await assert.rejects(
+    activationLease(filePath, ctx.env),
+    {
+      code: "state_broken",
+      message: /duplicate protected tool "db\.read"/,
+    },
+  );
+  t.diagnostic(`stored guardTools: ${JSON.stringify(readState(filePath).guardTools)}`);
 });
 
 test("pre-change scalar guardTool state still activates and gates", async (t) => {
