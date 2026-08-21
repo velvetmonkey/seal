@@ -1,6 +1,6 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
 > The state machine is TESTED.
-> For the truth about what you installed, read [docs/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../README.md).
+> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md](../assurance/RELEASE-NOTES-v0.2.0-rc.2.md) and the [README](../../README.md).
 
 # Seal claims matrix
 
@@ -9,7 +9,7 @@ One table: every load-bearing claim, marked **Proven** (a machine-checked Lean 4
 not proved), or **Not claimed** (things Seal deliberately does not say).
 
 This matrix is an **index, not a new claim surface**. The canonical claim text lives in the
-drift-guarded blocks ([docs/LIMITATIONS.md](LIMITATIONS.md), [docs/TRUTH-BOX.md](TRUTH-BOX.md) —
+drift-guarded blocks ([docs/archive/LIMITATIONS.md](../archive/LIMITATIONS.md), [docs/TRUTH-BOX.md](../archive/TRUTH-BOX.md) —
 `scripts/claims-drift.mjs` enforces verbatim mirrors); theorem-to-file detail lives in
 `seal-host/docs/PROOF-REFERENCE.md` and `seal-assurance-kit/CLAIMS.md`. If this table and those
 ever disagree, they win.
@@ -58,16 +58,16 @@ seal-host/CLAIMS.md ("Proof build-wire scope").
 | The approval field set carries enough information to identify the exact effect it authorizes (receipt-field **sufficiency**). The pre-v2 field set **failed** this check — a concrete collision: two different effects indistinguishable through the committed fields — and v2's `args_hash` is the field that closes it. A collision indicts the field set, not one implementation; no implementation reading insufficient fields can fix it. | **Tested** (finite refinement analysis) | `seal adequacy` (anchored on `witness_computable_iff_refines` / `witness_separation_fails`); `witness-check`, the private sufficiency analyzer | seal-assurance-kit / witness-check |
 | Differences between two receipts are detected and classified against the authorization surface (integrity-checked against each receipt's own hashes before diffing; a pre-v2 → v2 pair is called out as the approval surface widening). | **Tested** | `seal receipt-diff` test suite (11 cases in the kit's npm chain) | seal-assurance-kit |
 | The `seal verify` closure runs in CI, vendored into the GitHub Action as a maintained **downstream-stricter fork** of the kit verifier: pinned to a base kit revision with five named fork-delta files (the action requires a valid `signed_config` for an authorised outcome; kit HEAD's verifier is trust-rootless), kernel wasm byte-identical to the kit's, every vendored file sha256-checked in CI against `VENDORED.md`, exercised by a fixture selftest workflow. | **Tested** | seal-verify-action ci + selftest workflows | seal-verify-action |
-| SHA-256 collision resistance. | **Assumed** (named, scoped: A-CR) | docs/LIMITATIONS.md, TCB docs | family-wide |
+| SHA-256 collision resistance. | **Assumed** (named, scoped: A-CR) | docs/archive/LIMITATIONS.md, TCB docs | family-wide |
 | Rust glue, wasm/JS mirror bodies, Lean toolchain, OS, Ed25519 provider, human operators. | **Assumed** (TCB) | seal-host/docs/TCB.md, SEAL-SYSTEM-TCB.md | seal-host |
-| MCP is the sole effect channel; an unconfined shell bypasses the gate by design scope. | **Assumed** | EVALUATOR-START.md §7 | umbrella |
-| Approval origin (that the signing human is who you think): the proof guarantees ordering; the out-of-band channel guarantees origin. | **Assumed** | EVALUATOR-START.md §7 | umbrella |
-| Intent match. Seal proves **authorization** match: if a human approves a malicious-but-valid request, Seal executes it. | **Not claimed** | docs/LIMITATIONS.md | — |
-| Whole-system correctness. The theorems are kernel claims, connected to deployments by finite conformance evidence, not end-to-end proof. | **Not claimed** | docs/LIMITATIONS.md, TRUTH-BOX | — |
-| Tamper-**impossibility**. The audit chain is tamper-evident only. | **Not claimed** | docs/LIMITATIONS.md | — |
-| Universal conformance. The corpus is finite evidence, not a theorem over all inputs. | **Not claimed** | EVALUATOR-START.md §6 | — |
-| Making the AI smarter, preventing hallucinations, or surviving compromised hosts/keys/operators. | **Not claimed** | docs/LIMITATIONS.md | — |
+| MCP is the sole effect channel; an unconfined shell bypasses the gate by design scope. | **Assumed** | docs/assurance/evaluator-start.md §7 | umbrella |
+| Approval origin (that the signing human is who you think): the proof guarantees ordering; the out-of-band channel guarantees origin. | **Assumed** | docs/assurance/evaluator-start.md §7 | umbrella |
+| Intent match. Seal proves **authorization** match: if a human approves a malicious-but-valid request, Seal executes it. | **Not claimed** | docs/archive/LIMITATIONS.md | — |
+| Whole-system correctness. The theorems are kernel claims, connected to deployments by finite conformance evidence, not end-to-end proof. | **Not claimed** | docs/archive/LIMITATIONS.md, TRUTH-BOX | — |
+| Tamper-**impossibility**. The audit chain is tamper-evident only. | **Not claimed** | docs/archive/LIMITATIONS.md | — |
+| Universal conformance. The corpus is finite evidence, not a theorem over all inputs. | **Not claimed** | docs/assurance/evaluator-start.md §6 | — |
+| Making the AI smarter, preventing hallucinations, or surviving compromised hosts/keys/operators. | **Not claimed** | docs/archive/LIMITATIONS.md | — |
 
 Read next: [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md)
-(the buyer-legible honesty boundary) and [EVALUATOR-START.md](../EVALUATOR-START.md) (the
+(the buyer-legible honesty boundary) and [docs/assurance/evaluator-start.md](../assurance/evaluator-start.md) (the
 proved-vs-deployed map). The Seal fleet links are public and resolve for everyone; `witness-check` remains proprietary.

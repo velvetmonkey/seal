@@ -5,7 +5,7 @@
 // so drift fails loudly instead of shipping silently.
 //
 // The canonical non-claims block (<!-- claims:begin --> ... <!-- claims:end -->)
-// lives in docs/LIMITATIONS.md and is mirrored in index.html. The README links
+// lives in docs/archive/LIMITATIONS.md and is mirrored in docs/assurance/index.html. The README links
 // to the canonical honesty surface instead of duplicating it.
 //
 // Exit codes: 0 in sync · 1 drift (diff printed) · 2 markers missing/malformed.
@@ -17,13 +17,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const BLOCKS = [
-  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/LIMITATIONS.md; CLAIM-COVERAGE: index.html
-    canonical: "docs/LIMITATIONS.md", mirrors: ["index.html"] },
+  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md; CLAIM-COVERAGE: docs/assurance/index.html
+    canonical: "docs/archive/LIMITATIONS.md", mirrors: ["docs/assurance/index.html"] },
 ];
 
 const CLAIM_MANIFEST = [
-  ["docs/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
-  ["docs/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/TRUTH-BOX.md
+  ["docs/archive/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
+  ["docs/archive/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md
 ];
 
 if (BLOCKS.length === 0) {

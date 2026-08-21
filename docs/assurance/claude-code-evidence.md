@@ -71,7 +71,7 @@ elicitation, or declines to fall back.
 - `seal doctor` reporting no elicitation auto-response hook; with one
   configured, the harness refuses to start, because human approval origin
   could not then be claimed.
-- A purpose-built MCP fixture ([`harness/claude-code/fixture-server.cjs`](../harness/claude-code/fixture-server.cjs))
+- A purpose-built MCP fixture ([`harness/claude-code/fixture-server.cjs`](../../harness/claude-code/fixture-server.cjs))
   that appends every frame it receives to an fsynced append-only log, records
   the process ancestry it was launched under, and writes one `child-call`
   record per guarded call.
@@ -178,7 +178,7 @@ observed, and the SHA-256 and byte length of every other file in the pack.
 $ node scripts/check-cc-evidence.mjs evidence/claude-code
 ```
 
-[`scripts/check-cc-evidence.mjs`](../scripts/check-cc-evidence.mjs) accepts a
+[`scripts/check-cc-evidence.mjs`](../../scripts/check-cc-evidence.mjs) accepts a
 pack or refuses it by name. It holds its own copy of the eight required cases
 and its own copy of the label rule, so a manifest cannot tell the checker what
 the rules are. It refuses a file whose hash does not match, a file the manifest
@@ -227,9 +227,9 @@ Code version. Until such a pack exists and verifies, the row reads
 
 ## The synthetic run, and why it can never be mistaken for a real one
 
-[`harness/claude-code/synthetic-run.cjs`](../harness/claude-code/synthetic-run.cjs)
+[`harness/claude-code/synthetic-run.cjs`](../../harness/claude-code/synthetic-run.cjs)
 drives the entire harness with a scripted stand-in
-([`harness/claude-code/synthetic-client.cjs`](../harness/claude-code/synthetic-client.cjs))
+([`harness/claude-code/synthetic-client.cjs`](../../harness/claude-code/synthetic-client.cjs))
 so the instrument itself is exercised on every CI run: the real artifact is
 installed, `seal protect` runs, the real proxy gates a real fixture, and the
 checker is shown accepting and refusing. It proves the harness works. It proves
@@ -255,7 +255,7 @@ checker derives synthetic provenance and refuses the pack as
 `synthetic_pack_in_release_evidence`. The
 synthetic run is never written into `evidence/`; it goes to a temporary
 directory, and
-[`test/cc-evidence.test.cjs`](../test/cc-evidence.test.cjs) fails if any pack
+[`test/cc-evidence.test.cjs`](../../test/cc-evidence.test.cjs) fails if any pack
 appears in this repository at all. Committing a real pack is the deliberate act
 of the person who performed the run, in a commit that changes that test and
 this page's status row together.

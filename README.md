@@ -30,7 +30,7 @@ claude --version
 
 ## 1. Install
 
-Install the published Linux x86-64 release with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS SHA-256 tool, then run the installer with that pin. macOS source-build instructions are in the [full installation procedure](docs/install.md).
+Install the published Linux x86-64 release with a shell and `curl`. Download the binary and the `SHA256SUMS` asset attached to the same release, check the binary with your OS SHA-256 tool, then run the installer with that pin. For the longer verification procedure, see [full SHA256SUMS verification](docs/start/install.md).
 
 These commands fetch both files from the same release page. Their digest and byte-count checks establish transfer integrity, not provenance: a replaced release page could supply matching replacements. For provenance, compare the expected digest and byte count with release information you obtained through a separate channel before executing the binary.
 
@@ -70,7 +70,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Source-build path (secondary)
 
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above. A build of this checkout excludes `checker/seal-receipt-check.mjs` from its payload; its installed-tree digest is the `fresh-build` pin in [install.md](docs/install.md).
+At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; this is a separate source-build path, not the release-download path above. A build of this checkout excludes `checker/seal-receipt-check.mjs` from its payload; its installed-tree digest is the `fresh-build` pin in [install.md](docs/start/install.md).
 
 Read this filename only if you build from source:
 
@@ -264,11 +264,11 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 ## Links
 
 - [Operating guide](docs/guide/README.md)
-- [Assurance / release notes](docs/RELEASE-NOTES-v0.2.0-rc.2.md)
-- [Limitations](docs/LIMITATIONS.md)
-- [Evaluator walk](docs/evaluator-walk.md)
-- [Full documentation index](docs/README.md)
-- [Install verification](docs/install.md)
+- [Assurance / release notes](docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md)
+- [Limitations](docs/archive/LIMITATIONS.md)
+- [Evaluator walk](docs/start/evaluator-walk.md)
+- [Full documentation index](docs/assurance/README.md)
+- [Install verification](docs/start/install.md)
 
 [Paste a receipt into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The landing page has **zero `<button>` controls**. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
 

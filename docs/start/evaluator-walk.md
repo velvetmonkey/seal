@@ -63,5 +63,5 @@ a decision receipt you paste and reports its receipt checks. It has no
 backend, accounts, or telemetry. It does not establish that your setup
 routes calls through Seal, and it is not the checker command above.
 
-See [DISTRIBUTION.md](DISTRIBUTION.md) for what the payload contains, and
-[LIMITATIONS.md](LIMITATIONS.md) for the family-level claims block.
+See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and
+[LIMITATIONS.md](../archive/LIMITATIONS.md) for the family-level claims block.

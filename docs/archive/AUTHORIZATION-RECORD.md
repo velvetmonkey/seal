@@ -44,7 +44,7 @@ evidence boundary.
 
 The separation is substantive:
 
-- `OPEN-FINDINGS.md` finding 34 records `RUN v31run-2026-07-26`: the kernel
+- `OPEN-docs/archive/findings.md` finding 34 records `RUN v31run-2026-07-26`: the kernel
   signed `external.json_corpus([-10^9999])`, while Node extracted
   `external.json_corpus([-Infinity])` from the same frame.
 - Findings 36 and 37 record that Lean cannot represent a lone UTF-16 surrogate
@@ -464,7 +464,7 @@ authorized. A lane that cannot change the approval protocol can still build an
 honest v3 recorder, but cannot claim a completed AUTHORIZED leg.
 
 The wire schema, canonical vectors, strict validator tests, and examples should
-enter the contract-region freeze set described by `OPEN-FINDINGS.md` finding
+enter the contract-region freeze set described by `OPEN-docs/archive/findings.md` finding
 41. That freeze work is not a prerequisite for writing the first implementation
 but is a prerequisite for shipping the shape as stable.
 
@@ -625,7 +625,7 @@ starting commit and must not be promoted to observed facts by this spec:
   nonetheless adopts the supplied ordering and unsigned constraint as
   normative inputs.
 - The complete five-observer surrogate matrix remains **UNVERIFIED
-  INDEPENDENTLY** in `OPEN-FINDINGS.md` finding 36.
+  INDEPENDENTLY** in `OPEN-docs/archive/findings.md` finding 36.
 - No conforming v3 encoder, validator, ApprovalRecord v2, dispatch-outcome
   protocol, executor acknowledgment, or end-to-end implementation test was
   found in this repository. Their shapes above are requirements, not
@@ -633,7 +633,7 @@ starting commit and must not be promoted to observed facts by this spec:
 
 ## 10. Specification evidence
 
-This revision was derived from `OPEN-FINDINGS.md` findings 34–37 and 40–42,
+This revision was derived from `OPEN-docs/archive/findings.md` findings 34–37 and 40–42,
 `NUMERIC-AGREEMENT.md`, `COMPREHENSION-CHECK.md`, the prior specification, and
 the mandated `fourleg-impl` refusal report. Claims exceeding on-disk sources
 are listed as unverified above.

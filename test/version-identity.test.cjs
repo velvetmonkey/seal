@@ -69,7 +69,7 @@ test("every emitted release identity derives from VERSION", () => {
 
   // Downloaded releases carry their authoritative SHA256SUMS asset. The
   // repository root is intentionally empty between releases.
-  for (const file of ["README.md", "docs/DISTRIBUTION.md", "docs/guide/README.md", "docs/VERSION-IDENTITY.md"]) {
+  for (const file of ["README.md", "docs/assurance/distribution.md", "docs/guide/README.md", "docs/assurance/version-identity.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, /release asset|release's `SHA256SUMS` asset|co-published `SHA256SUMS`|`SHA256SUMS`\s+asset\s+attached to the same release/i);
   }
@@ -77,7 +77,7 @@ test("every emitted release identity derives from VERSION", () => {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${VERSION} linux-x64`));
   }
-  for (const file of ["README.md", "docs/DISTRIBUTION.md", `docs/RELEASE-NOTES-v${VERSION}.md`, "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+  for (const file of ["README.md", "docs/assurance/distribution.md", "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`Seal v${VERSION}`));
   }
   const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");

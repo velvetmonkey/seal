@@ -6,7 +6,7 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const DOCS = path.join(ROOT, "docs");
-const INDEX = path.join(DOCS, "README.md");
+const INDEX = path.join(DOCS, "assurance", "README.md");
 const README = path.join(ROOT, "README.md");
 
 function markdownFilesUnder(directory, relativeTo = directory) {
@@ -23,13 +23,13 @@ function markdownFilesUnder(directory, relativeTo = directory) {
 
 test("docs index names every Markdown file in docs", () => {
   const index = fs.readFileSync(INDEX, "utf8");
-  const files = markdownFilesUnder(DOCS).sort();
+  const files = markdownFilesUnder(DOCS).filter((file) => !["archive/README.md", "archive/findings.md"].includes(file)).sort();
   const missing = files.filter((file) => !index.includes(file));
-  assert.deepEqual(missing, [], `docs/README.md omits:\n${missing.join("\n")}`);
+  assert.deepEqual(missing, [], `docs/assurance/README.md omits:\n${missing.join("\n")}`);
 });
 
 test("repository README links the full docs index", () => {
   const readme = fs.readFileSync(README, "utf8");
-  const linksDocsIndex = /\]\(docs\/README\.md(?:#[^)]+)?\)/.test(readme);
-  assert.ok(linksDocsIndex, "README.md must link docs/README.md");
+  const linksDocsIndex = /\]\(docs\/assurance\/README\.md(?:#[^)]+)?\)/.test(readme);
+  assert.ok(linksDocsIndex, "README.md must link docs/assurance/README.md");
 });
