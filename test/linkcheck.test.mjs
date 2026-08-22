@@ -50,9 +50,15 @@ function run(cwd = ROOT, env = process.env) {
 test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
   const { env, cleanup } = familyEnvironment();
   try {
-    const result = run(ROOT, env);
+    const result = run(ROOT, { ...env, LINKCHECK_REPORT_SCANNED_TARGETS: "1" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /link-check: 417 internal links, 50 external links, 1 required live links, 0 broken/);
+    const targetLine = result.stdout.split("\n").find((line) => line.startsWith("link-check-targets: "));
+    assert.ok(targetLine, "link checker must report the targets that actually reached check()");
+    const scanned = new Set(JSON.parse(targetLine.slice("link-check-targets: ".length)));
+    for (const target of ["docs/start/evaluator-walk.md", "docs/guide/README.md", "LICENSE"]) {
+      assert.ok(scanned.has(target), `named live link target was hidden from checking: ${target}`);
+    }
     assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
   } finally {
     cleanup();
@@ -97,4 +103,17 @@ test("link checker does not parse a regular expression in an inline code span as
   const links = /\]\(([^)]+)\)/g;
   const fixture = "Extraction regex: `/VERIFY_PROFILE[^\"']*[\"'](P-[A-Z]+)[\"']/`.";
   assert.deepEqual([...maskMarkdownCode(fixture).matchAll(links)], []);
+});
+
+test("escaped backticks remain prose and do not hide real Markdown links", () => {
+  const source = readFileSync(SCRIPT, "utf8");
+  const body = source.match(/function maskMarkdownCode\(text\) \{[\s\S]*?\n\}(?=\n\n\/\/)/)?.[0];
+  assert.ok(body, "code-span masker must be present");
+  const maskMarkdownCode = Function(`${body}; return maskMarkdownCode;`)();
+  const links = /\]\(([^)]+)\)/g;
+  const fixture = "Write \\`[ghost](escaped-not-code.md)\\` then [install](docs/start/install.md)";
+  assert.deepEqual(
+    [...maskMarkdownCode(fixture).matchAll(links)].map((match) => match[1]),
+    ["escaped-not-code.md", "docs/start/install.md"],
+  );
 });

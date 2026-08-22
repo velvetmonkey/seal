@@ -41,6 +41,7 @@ function targetFor(file, link, rootRelative = false) {
 function check(file, raw, rootRelative = false) {
   let link = raw.trim();
   if (!link || link.startsWith("http") || link.startsWith("#") || link.startsWith("mailto:")) return;
+  scannedTargets.add(link);
   link = link.split("#")[0].split("?")[0];
   if (!link) return;
   const target = targetFor(file, link, rootRelative);
@@ -61,6 +62,35 @@ function strings(value, out = []) {
 }
 
 function maskMarkdownCode(text) {
+  function maskCodeSpans(line) {
+    const chars = [...line];
+    const isEscaped = (index) => {
+      let slashes = 0;
+      for (let i = index - 1; i >= 0 && line[i] === "\\"; i--) slashes++;
+      return slashes % 2 === 1;
+    };
+    for (let i = 0; i < line.length;) {
+      if (line[i] !== "`") { i++; continue; }
+      const opener = i;
+      while (i < line.length && line[i] === "`") i++;
+      const width = i - opener;
+      // A backslash-escaped backtick is literal punctuation in CommonMark, so
+      // it cannot open or close a code span.
+      if (isEscaped(opener)) continue;
+      for (let cursor = i; cursor < line.length;) {
+        const closer = line.indexOf("`", cursor);
+        if (closer === -1) break;
+        cursor = closer;
+        while (cursor < line.length && line[cursor] === "`") cursor++;
+        if (!isEscaped(closer) && cursor - closer === width) {
+          for (let j = opener; j < cursor; j++) chars[j] = " ";
+          i = cursor;
+          break;
+        }
+      }
+    }
+    return chars.join("");
+  }
   let fence = null;
   return text.split(/(?<=\n)/).map((line) => {
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
@@ -75,7 +105,7 @@ function maskMarkdownCode(text) {
     }
     // Code spans are literal text, not Markdown link syntax. Preserve offsets so
     // any later diagnostics still point at the original document.
-    return line.replace(/(`+)[^\n]*?\1/g, (code) => code.replace(/[^\n]/g, " "));
+    return maskCodeSpans(line);
   }).join("");
 }
 
@@ -88,6 +118,7 @@ function pathStrings(text) {
 }
 
 let bad = 0, checked = 0, externalLinks = 0;
+const scannedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {
   const txt = readFileSync(`${ROOT}/${f}`, "utf8");
@@ -110,6 +141,10 @@ for (const f of dataFiles) {
   for (const candidate of candidates) {
     for (const link of pathStrings(candidate)) check(f, link, true);
   }
+}
+
+if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
+  console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
 }
 
 const requiredLiveLinks = new Map([
