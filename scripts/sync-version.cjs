@@ -35,8 +35,9 @@ const packageTempPath = `${packagePath}.${process.pid}.tmp`;
 fs.writeFileSync(packageTempPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 fs.renameSync(packageTempPath, packagePath);
 
-const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file === "RELEASE-NOTES-v0.2.0-rc.2.md");
+const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => /^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(file));
 if (notesCandidates.length !== 1) throw new Error(`expected one versioned release-notes file, found ${notesCandidates.join(", ")}`);
+if (notesCandidates[0] !== releaseNotes) fs.renameSync(path.join(ROOT, "docs", "assurance", notesCandidates[0]), path.join(ROOT, "docs", "assurance", releaseNotes));
 for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file.endsWith(".md"))) {
   replaceIfPresent(path.join("docs", "assurance", file), /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
 }
@@ -44,7 +45,7 @@ replaceIfPresent("docs/assurance/index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[
 replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
 replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
 
-for (const file of ["README.md", "docs/assurance/distribution.md", "docs/start/install.md", path.join("docs/assurance", "RELEASE-NOTES-v0.2.0-rc.2.md"), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["README.md", "docs/assurance/distribution.md", "docs/start/install.md", path.join("docs/assurance", releaseNotes), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 
