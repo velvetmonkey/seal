@@ -624,9 +624,16 @@ function observeDecline(state, begin, end) {
 function observeMissingLauncher(state, begin, end) {
   const records = newRecords(begin, end);
   const window = state.steps.missing_launcher || {};
+  const castPath = path.join(state.paths.logs, "missing_launcher.cast");
+  const correspondence = recordingCorrespondence(state, "missing_launcher", castPath);
+  let transcript = "";
+  try { transcript = castScreenText(castPath); } catch { /* correspondence names unreadable evidence */ }
+  const namedMissingLauncher = transcript.includes("local override command is missing:");
+  const namedNoFallback = transcript.includes(`does not fall back to the .mcp.json \"${SERVER_NAME}\" server`);
   return {
     observed: records.length === 0 && begin.mcp_json.sha256 === end.mcp_json.sha256 &&
-      window.launcher_absent_during_window === true && window.installed_tree_restored === true,
+      window.launcher_absent_during_window === true && window.installed_tree_restored === true &&
+      correspondence.observed && namedMissingLauncher && namedNoFallback,
     facts: {
       protected_server_records_added: records.length,
       records_added: records.map((record) => ({ kind: record.kind, argv: record.argv ?? null })),
@@ -637,14 +644,19 @@ function observeMissingLauncher(state, begin, end) {
       seal_version_after_restore: window.seal_version_after_restore ?? null,
       mcp_json_sha256_before: begin.mcp_json.sha256,
       mcp_json_sha256_after: end.mcp_json.sha256,
+      recorder_correspondence: correspondence,
+      transcript_names_missing_launcher: namedMissingLauncher,
+      transcript_names_no_fallback: namedNoFallback,
     },
   };
 }
 
 function observeUnprotect(state, begin, end) {
   const original = state.project.mcp_json_before_protect;
+  const window = state.steps.unprotect || {};
   return {
-    observed: end.local_override.entry === null &&
+    observed: window.code === 0 && /Protection: - outside Seal/m.test(window.output || "") &&
+      end.local_override.entry === null &&
       end.mcp_json.sha256 === original.sha256 && end.mcp_json.bytes === original.bytes &&
       !/^ {2}Scope: Local config /m.test(end.claude_mcp_get.stdout),
     facts: {
@@ -656,6 +668,7 @@ function observeUnprotect(state, begin, end) {
       mcp_json_sha256_after_unprotect: end.mcp_json.sha256,
       mcp_json_bytes_after_unprotect: end.mcp_json.bytes,
       unprotect_output: (state.steps.unprotect || {}).output ?? null,
+      unprotect_exit: window.code ?? null,
     },
   };
 }
@@ -1070,6 +1083,14 @@ function certifyStep(state, step) {
         if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
         else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
         else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
+      } else if (caseId === "missing_launcher") {
+        if (!outcome.facts.recorder_correspondence?.observed) failures.push(`${caseId}: missing_launcher.cast does not correspond to recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
+        else if (!outcome.facts.transcript_names_missing_launcher) failures.push(`${caseId}: the recorded session never says the local override command was missing`);
+        else if (!outcome.facts.transcript_names_no_fallback) failures.push(`${caseId}: the recorded session never says it did not fall back to .mcp.json`);
+        else failures.push(`${caseId}: required positive evidence is absent`);
+      } else if (caseId === "unprotect") {
+        if (outcome.facts.unprotect_exit !== 0) failures.push(`${caseId}: seal unprotect notes did not succeed (exit ${outcome.facts.unprotect_exit ?? "absent"})`);
+        else failures.push(`${caseId}: the local override removal and byte-identical project configuration evidence is absent`);
       } else {
         failures.push(`${caseId}: required positive evidence is absent`);
       }
@@ -1326,7 +1347,7 @@ function finish(state, options) {
     harness: state.harness,
     limitations: [
       "The harness cannot establish that a human rather than the client originated the decline.",
-      "A determined author with local file access can rewrite recorder sources, cast, and harness state consistently; this is an instrument against mistakes, not against forgery.",
+      "Binding is bookkeeping, not a control: a determined author with local file access can rewrite recorder sources, timing, cast, and harness state consistently. This detects mistakes, not forgery.",
     ],
     expected_cases: CASES,
     observed: observations,
@@ -1418,6 +1439,7 @@ if (require.main === module) {
 
 module.exports = {
   CASES,
+  castFromScript,
   GUARDED_TOOL,
   HarnessError,
   NOTES,

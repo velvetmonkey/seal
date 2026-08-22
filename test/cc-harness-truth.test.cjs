@@ -52,6 +52,20 @@ function initSyntheticRun(workspace) {
   return { harness, runDir };
 }
 
+function runSyntheticStep(harness, runDir, scenario, note) {
+  process.env.SEAL_CC_SYNTHETIC_CASE = scenario;
+  process.env.SEAL_CC_SYNTHETIC_NOTE = note;
+  harness.next(harness.loadState(runDir));
+}
+
+function completeSyntheticRun(harness, runDir) {
+  runSyntheticStep(harness, runDir, "activation", "");
+  runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  runSyntheticStep(harness, runDir, "accept", harness.NOTES.accept);
+  runSyntheticStep(harness, runDir, "missing_launcher", harness.NOTES.fallback);
+  runSyntheticStep(harness, runDir, "none", "");
+}
+
 test("a hand-written dialog cast is not evidence from the recorded session", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
   const { harness, runDir } = initSyntheticRun(workspace);
@@ -157,6 +171,73 @@ test("activation refuses when the local notes override was not selected or conne
     (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" && /CANNOT CERTIFY activation/.test(error.message),
   );
   assert.equal(harness.loadState(runDir).step_index, 0);
+});
+
+test("missing_launcher refuses when the recorded session supplies no no-fallback evidence", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  runSyntheticStep(harness, runDir, "accept", harness.NOTES.accept);
+  const noOp = path.join(workspace, "no-op-client");
+  fs.writeFileSync(noOp, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const state = harness.loadState(runDir);
+  state.claude.command = noOp;
+  harness.saveState(state);
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /CANNOT CERTIFY missing_launcher; missing_launcher: the recorded session never says the local override command was missing/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 3);
+});
+
+test("unprotect refuses when its successful removal command is absent", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-unprotect-absence-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  completeSyntheticRun(harness, runDir);
+  const state = harness.loadState(runDir);
+  assert.equal(state.step_index, 5);
+  state.step_index = 4;
+  state.steps.unprotect = { ...state.steps.unprotect, attempted: true, code: 1, output: "No MCP server named notes in local scope" };
+  harness.saveState(state);
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /CANNOT CERTIFY unprotect; unprotect: seal unprotect notes did not succeed \(exit 1\)/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 4);
+});
+
+test("a self-consistent recorder-bundle rewrite passes only with the bookkeeping boundary label", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-bundle-rewrite-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  completeSyntheticRun(harness, runDir);
+  const state = harness.loadState(runDir);
+  const outPath = path.join(runDir, "logs", "decline.typescript");
+  const timingPath = path.join(runDir, "logs", "decline.timing");
+  const castPath = path.join(runDir, "logs", "decline.cast");
+  const added = Buffer.from("FORGED\n", "utf8");
+  fs.appendFileSync(outPath, added);
+  fs.appendFileSync(timingPath, `O 0.000000 ${added.length}\n`);
+  fs.writeFileSync(castPath, harness.castFromScript(outPath, timingPath, state.recordings.decline.conversion));
+  const digestOf = (file) => {
+    const bytes = fs.readFileSync(file);
+    return { present: true, sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length };
+  };
+  state.recordings.decline.typescript = digestOf(outPath);
+  state.recordings.decline.timing = digestOf(timingPath);
+  state.recordings.decline.cast = digestOf(castPath);
+  harness.saveState(state);
+  assert.equal(harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "decline").result, "OBSERVED");
+  const out = path.join(workspace, "out");
+  harness.finish(harness.loadState(runDir), { out });
+  const manifestPath = fs.readdirSync(path.join(out, "evidence", "claude-code")).flatMap((client) =>
+    fs.readdirSync(path.join(out, "evidence", "claude-code", client, "linux-x64")).map((artifact) =>
+      path.join(out, "evidence", "claude-code", client, "linux-x64", artifact, "manifest.json")))[0];
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.match(manifest.limitations.join("\n"), /Binding is bookkeeping, not a control/);
+  assert.match(fs.readFileSync(path.join(ROOT, "docs", "CLAUDE-CODE-EVIDENCE.md"), "utf8"), /Binding is bookkeeping, not a control/);
 });
 
 test("init names a missing executable bit", () => {
