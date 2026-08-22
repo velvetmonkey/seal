@@ -35,6 +35,7 @@ test/linkcheck.test.mjs
 test/linkcheck-assertions.test.mjs
 test/live-page-claim-guard.test.mjs
 test/no-verification-claim.test.cjs
+test/multi-tool-semantics-doc.test.cjs
 test/product-suite-roster.test.cjs
 test/protect3b.test.cjs
 test/protected-paths.test.cjs
