@@ -1,6 +1,7 @@
-// Expected clean-tree occurrence totals. Target coverage is derived separately
-// from repository sources by test/linkcheck.test.mjs and cannot be refreshed from
-// LINKCHECK_REPORT_SCANNED_TARGETS.
+// Expected clean-tree occurrence totals. The separate-source target cross-check
+// lives in test/linkcheck.test.mjs and cannot be refreshed from
+// LINKCHECK_REPORT_SCANNED_TARGETS. It is deliberately described as a cross-check;
+// docs/assurance/linkcheck-population-control.md records its shared blind spots.
 export default {
   internalOccurrences: 405,
   externalOccurrences: 50,

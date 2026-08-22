@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Refuse a merge-range edit to an assurance artifact until a human has ruled.
+// Refuse a target-branch candidate-range edit to an assurance artifact until a human has ruled.
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
@@ -75,12 +75,15 @@ if (!options) {
     process.stderr.write(`PROTECTED_PATH_DIFF_UNREADABLE: cannot find merge base for ${options.base} and ${options.head}.\n${mergeBase.stderr}`);
     process.exitCode = 1;
   } else {
-    const changed = git(["diff", "--name-only", "--diff-filter=ACDMRTUXB", `${mergeBase.stdout.trim()}...${options.head}`, "--"]);
+    // The net tree diff alone erases an add-then-delete sequence. Walk every
+    // commit in the same target-branch range so a deletion remains a protected
+    // change and cannot disappear from review.
+    const changed = git(["log", "--format=", "--name-only", "--diff-filter=ACDMRTUXB", `${mergeBase.stdout.trim()}..${options.head}`, "--"]);
     if (changed.status !== 0) {
       process.stderr.write(`PROTECTED_PATH_DIFF_UNREADABLE: cannot read merge range.\n${changed.stderr}`);
       process.exitCode = 1;
     } else {
-      const paths = changed.stdout.split(/\r?\n/).filter(Boolean).filter(protectedArtifact);
+      const paths = [...new Set(changed.stdout.split(/\r?\n/).filter(Boolean).filter(protectedArtifact))];
       if (paths.length) {
         const ruling = exactRuling(mergeBase.stdout.trim(), options.head, paths);
         if (ruling) {

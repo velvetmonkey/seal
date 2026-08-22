@@ -59,8 +59,10 @@ function walk(dir, prefix = "") {
   return out;
 }
 
-// This deliberately separate reference parser does not use linkcheck's CommonMark
-// walk. It masks Markdown code constructs, then scans the remaining source.
+// This separate-source cross-check does not use linkcheck's CommonMark walk. It
+// masks Markdown code constructs, then scans the remaining source. Its
+// overlapping discovery and extraction rules can share
+// blind spots with the product checker. See docs/assurance/linkcheck-population-control.md.
 function referenceMarkdownDestinations(text) {
   const visible = [];
   let fence = null;
