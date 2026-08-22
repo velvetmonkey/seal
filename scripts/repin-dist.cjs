@@ -10,8 +10,9 @@ const { releaseArtifactName } = require("./product-identity.cjs");
 const ROOT = path.join(__dirname, "..");
 const dist = path.join(ROOT, "dist");
 const STORE_HASH = /(?:\btree:?\s+|\/store\/)[0-9a-f]{64}\b/g;
+const ROLE_MARKER = /^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)$/;
 const MARKED_FENCE =
-  /^((?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)\r?\n)(```[^\n]*\r?\n)([\s\S]*?)(^```\s*$)/gm;
+  /^((?:(?:\*\*Seal installed-tree pin role:\*\* `[A-Za-z0-9][A-Za-z0-9-]*`|<!-- Seal installed-tree pin role: [A-Za-z0-9][A-Za-z0-9-]* -->)\r?\n)+)(```[^\n]*\r?\n)([\s\S]*?)(^```\s*$)/gm;
 const KNOWN_ROLES = new Set(["published-asset", "fresh-build"]);
 const refusals = [];
 execFileSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", dist], { stdio: "inherit" });
@@ -39,15 +40,29 @@ function rewriteRoleMarkedPins(file, outsideReplacements = []) {
   const protectedBlocks = [];
   let rewritten = original.replace(
     MARKED_FENCE,
-    (block, markerLine, visibleRole, hiddenRole, opening, body, closing, offset) => {
-      const role = visibleRole ?? hiddenRole;
+    (block, markerLines, opening, body, closing, offset) => {
+      const markers = markerLines.trimEnd().split(/\r?\n/).map((line, index) => ({
+        line: line.match(ROLE_MARKER),
+        number: lineNumber(original, offset + markerLines.split(/\r?\n/).slice(0, index).join("\n").length + (index ? 1 : 0)),
+      }));
       markedRanges.push({ start: offset, end: offset + block.length });
       if (!STORE_HASH.test(body)) {
         STORE_HASH.lastIndex = 0;
         return block;
       }
       STORE_HASH.lastIndex = 0;
-      const markerAt = lineNumber(original, offset);
+      if (markers.length !== 1) {
+        const markerLocations = markers.map((marker) => `${file}:${marker.number}`).join(" and ");
+        const fenceAt = lineNumber(original, offset + markerLines.length);
+        refusals.push(
+          `REFUSE role_marker_ambiguous: ${markerLocations} precede fenced block at ${file}:${fenceAt}`,
+        );
+        const token = `\0seal-protected-block-${protectedBlocks.length}\0`;
+        protectedBlocks.push([token, block]);
+        return token;
+      }
+      const role = markers[0].line[1] ?? markers[0].line[2];
+      const markerAt = markers[0].number;
       if (!KNOWN_ROLES.has(role)) {
         refusals.push(
           `REFUSE role_marker_unknown: ${file}:${markerAt} unknown store-hash role ${JSON.stringify(role)}`,
@@ -69,7 +84,7 @@ function rewriteRoleMarkedPins(file, outsideReplacements = []) {
         .replace(/^bytes \d+$/gm, `bytes ${bytes}`)
         .replace(/^tree:? [0-9a-f]+$/gm, `tree ${meta.treeSha256}`)
         .replace(/\/store\/[0-9a-f]+/g, `/store/${meta.treeSha256}`);
-      return `${markerLine}${opening}${updatedBody}${closing}`;
+      return `${markerLines}${opening}${updatedBody}${closing}`;
     },
   );
 

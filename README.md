@@ -270,7 +270,9 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 - [Full documentation index](docs/README.md)
 - [Install verification](docs/install.md)
 
-[Paste a receipt into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The landing page has **zero `<button>` controls**. Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal `<button>` tags, and a frozen HTML blob only. It does not inspect or execute `app.js` or `wasm/seal.js`; a green guard does not show that the page runs nothing or that no MCP tool-call runs. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+[Paste a receipt into seal-check](https://velvetmonkey.github.io/seal-check/): it re-checks the decision receipt in your browser. The landing page has **zero `<button>` controls**. The page states that it has no backend, accounts, or telemetry, and that nothing you paste leaves the page. It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.
+
+<!-- Scope of the live-page guard: it checks the marked README wording, two old phrasings, literal <button> tags, and a frozen HTML blob only. It does not inspect or execute app.js or wasm/seal.js; a green guard does not show that the page runs nothing or that no MCP tool-call runs. -->
 
 ## License
 

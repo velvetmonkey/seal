@@ -1,11 +1,20 @@
 {
   "version": 1,
   "ruling": {
-    "base": "1cc4cd14374cc48ada4c1277bf50216a6e3a8332",
+    "base": "3dfdb64cb2e82bdaa22273950b1884a7dcca7898",
     "files": [
-      { "path": ".github/workflows/ci.yml", "blob": "44296e956849de458cb3d793b04c62a52e7cef94" },
-      { "path": "scripts/check-protected-paths.cjs", "blob": "536ae3f18441783be007711ce0d7d7cc6b3b2622" },
-      { "path": "scripts/resolve-ci-diff-range.cjs", "blob": "31d73bc00f28923a0f4a68ee35ffdc8d40141135" }
+      {
+        "path": "scripts/installed-tree-pin.cjs",
+        "blob": "cffb940a4321f93cb60ee74834f8b650545d47a4"
+      },
+      {
+        "path": "test/installed-tree-pin-generator.test.cjs",
+        "blob": "4886dc8d37f66a50f5fcec7f894768466aa28bd0"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "908d430083c0cc6b750afa82cf6385ce3d48e448"
+      }
     ]
   }
 }

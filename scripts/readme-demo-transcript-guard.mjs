@@ -53,6 +53,14 @@ const demoStart = readme.indexOf("## 2. Demo");
 const demoEnd = readme.indexOf("<!-- Repository transcript instrumentation", demoStart);
 if (demoStart === -1 || demoEnd === -1) fail("README demo section is missing or has no boundary");
 const demo = readme.slice(demoStart, demoEnd);
+const roleMarker = "(?:\\*\\*Seal installed-tree pin role:\\*\\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)";
+for (const match of demo.matchAll(new RegExp("\\\\*\\\\*Output:\\\\*\\\\*\\\\s*\\\\n((" + roleMarker + "\\\\s*\\\\n)+)```text", "g"))) {
+  const count = [...match[1].matchAll(new RegExp(roleMarker, "g"))].length;
+  if (count > 1) {
+    const first = readme.slice(0, demoStart + match.index + match[0].indexOf(match[1])).split("\n").length;
+    fail(`AMBIGUOUS_ROLE_MARKERS: README.md:${first} through README.md:${first + count - 1} precede one Output fence`);
+  }
+}
 const stepHeadings = [...demo.matchAll(/^### Step (\d+):.*$/gm)];
 const outputSteps = new Set([1, 2, 3, 4, 5, 6, 7, 9, 10]);
 for (const heading of stepHeadings) {

@@ -64,9 +64,14 @@ function roleByLine(text, file) {
     const line = lines[index].replace(/\r$/, "");
     if (/^```/.test(line)) {
       if (openRole === null) {
-        const marker = index > 0
-          ? lines[index - 1].replace(/\r$/, "").match(/^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)$/)
-          : null;
+        const markers = [];
+        for (let markerIndex = index - 1; markerIndex >= 0; markerIndex -= 1) {
+          const marker = lines[markerIndex].replace(/\r$/, "").match(/^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)$/);
+          if (!marker) break;
+          markers.unshift({ marker, line: markerIndex + 1 });
+        }
+        assert.ok(markers.length <= 1, `REFUSE role_marker_ambiguous: ${markers.map((entry) => `${file}:${entry.line}`).join(" and ")} precede fenced block at ${file}:${index + 1}`);
+        const marker = markers[0]?.marker;
         openRole = marker ? (marker[1] ?? marker[2]) : "";
       } else {
         openRole = null;
@@ -250,6 +255,63 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
     assert.deepEqual(after, before.get(relative), `${relative} published-asset blocks changed`);
   }
   assert.doesNotMatch(fs.readFileSync(path.join(copy, "README.md"), "utf8"), new RegExp("f{64}"));
+});
+
+test("repin refuses two role markers before one fence and names both markers", (t) => {
+  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-ambiguous-role-"));
+  t.after(() => removeScratch(copy));
+  fs.cpSync(ROOT, copy, {
+    recursive: true,
+    filter(source) {
+      return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
+    },
+  });
+  const readme = path.join(copy, "README.md");
+  const original = fs.readFileSync(readme, "utf8");
+  const stale = "f".repeat(64);
+  const attacked = original
+    .replace(
+      "<!-- Seal installed-tree pin role: published-asset -->\n```output",
+      "<!-- Seal installed-tree pin role: published-asset -->\n<!-- Seal installed-tree pin role: fresh-build -->\n```output",
+    )
+    .replace(/(store: \/home\/monkey\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
+  fs.writeFileSync(readme, attacked);
+  const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+    cwd: copy,
+    encoding: "utf8",
+  });
+  assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:52 and README\.md:53 precede fenced block at README\.md:54/);
+  assert.match(fs.readFileSync(readme, "utf8"), new RegExp(stale));
+});
+
+test("repin rewrites a legitimate single-marker fresh-build block", (t) => {
+  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-fresh-role-"));
+  t.after(() => removeScratch(copy));
+  fs.cpSync(ROOT, copy, {
+    recursive: true,
+    filter(source) {
+      return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
+    },
+  });
+  const readme = path.join(copy, "README.md");
+  const stale = "f".repeat(64);
+  fs.appendFileSync(readme, [
+    "",
+    "<!-- Seal installed-tree pin role: fresh-build -->",
+    "```output",
+    `store: /store/${stale}`,
+    `tree: ${stale}`,
+    "```",
+    "",
+  ].join("\n"));
+  const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
+    cwd: copy,
+    encoding: "utf8",
+  });
+  assert.equal(repin.status, 1, repin.stdout + repin.stderr);
+  assert.match(repin.stderr, /REFUSE published_asset_pin:/);
+  assert.doesNotMatch(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 
 test("declared installed-tree sites found by git grep match built artifacts", (t) => {
