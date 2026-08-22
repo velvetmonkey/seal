@@ -21,7 +21,7 @@ test("clean tree linkcheck exits 0 and names family allowlist entries as externa
   const result = run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /EXTERNAL  scripts\/claim-coverage-allowlist\.json -> seal-check\/FINDINGS\.md/);
-  assert.match(result.stdout, /link-check: 259 internal links, 50 external links, 1 required live links, 0 broken/);
+  assert.match(result.stdout, /link-check: 263 internal links, 50 external links, 1 required live links, 0 broken/);
   assert.doesNotMatch(result.stdout, /BROKEN  scripts\/claim-coverage-allowlist\.json -> seal-check\/FINDINGS\.md/);
 });
 
@@ -42,4 +42,15 @@ test("path matcher stays tight around versions, digests, and ordinary prose", ()
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+});
+
+test("path matcher still catches stale filenames with unknown extensions", () => {
+  const source = readFileSync(SCRIPT, "utf8");
+  const body = source.match(/const pathString = (\/.*\/gm);/s)?.[1];
+  assert.ok(body, "pathString regex literal must be present");
+  const pathString = Function(`return ${body};`)();
+  assert.deepEqual(
+    [..."docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt".matchAll(pathString)].map((match) => match[1]),
+    ["docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt"],
+  );
 });

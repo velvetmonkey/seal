@@ -17,7 +17,7 @@ const builtName = artifactName(productIdentity({ root: ROOT }).identity);
 // Named search surface for the stale-version check below: all Markdown readers
 // can receive release copy, including the top-level README and every guide.
 const READER_FACING_VERSION_SEARCH_ROOTS = ["README.md", "docs/**/*.md"];
-const TRACKED_EXTENSION = "(?:md|html|json|ya?ml|[cm]?js|sh|wasm|bin)";
+const FILENAME_EXTENSION = "[A-Za-z][A-Za-z0-9_-]*";
 
 function run(file, args, options = {}) {
   const result = spawnSync(file, args, { encoding: "utf8", ...options });
@@ -39,9 +39,10 @@ function readerFacingMarkdownFiles(root) {
 }
 
 // Match an old version only when it ends cleanly, starts a prerelease/build
-// suffix, or is immediately followed by a known tracked-file extension dot-run.
+// suffix, or is immediately followed by a filename extension. Requiring the
+// extension to start with a letter keeps `v0.2.0.1` unmatched.
 function staleVersionLiteral(version) {
-  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${TRACKED_EXTENSION})\\b|$|[^0-9A-Za-z.])`);
+  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${FILENAME_EXTENSION})\\b|$|[^0-9A-Za-z.])`);
 }
 
 test("every emitted release identity derives from VERSION", () => {
@@ -116,6 +117,11 @@ test("sync leaves no old product version in the named reader-facing search surfa
 test("stale-version matcher still catches a release-note filename left behind after a VERSION bump", () => {
   const oldLiteral = staleVersionLiteral("0.2.0");
   assert.match("docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md", oldLiteral);
+});
+
+test("stale-version matcher still catches an unknown-extension filename left behind after a VERSION bump", () => {
+  const oldLiteral = staleVersionLiteral("0.2.0");
+  assert.match("docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt", oldLiteral);
 });
 
 test("stale-version matcher does not flag a four-part version", () => {

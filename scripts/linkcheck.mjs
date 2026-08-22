@@ -61,9 +61,9 @@ function strings(value, out = []) {
 }
 
 // Deliberately narrow: a path must contain a directory separator and end in a
-// known tracked-file extension. This avoids mistaking prose and identifiers
-// for paths while covering workflow arguments and manifest/allowlist entries.
-const pathString = /(?:^|[\s"'`])((?:(?:\.{1,2}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:md|html|json|ya?ml|[cm]?js|sh|wasm|bin))|(?:(?:README|index|EVALUATOR-START)\.(?:md|html)))(?:$|[\s"'`),:#?])/gm;
+// filename extension whose first character is alphabetic. That catches stale
+// filenames with unknown extensions without treating `v0.2.0.1` as a path.
+const pathString = /(?:^|[\s"'`])((?:(?:\.{1,2}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9_-]*)|(?:(?:README|index|EVALUATOR-START)\.(?:md|html)))(?:$|[\s"'`),:#?])/gm;
 function pathStrings(text) {
   return [...text.matchAll(pathString)].map((match) => match[1]);
 }
