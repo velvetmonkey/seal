@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,19 +9,54 @@ import test from "node:test";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
 
-function run(cwd = ROOT) {
+const FAMILY = [
+  ["seal-check", "master"],
+  ["seal-demo", "main"],
+  ["seal-live-demo", "master"],
+  ["seal-verify-action", "main"],
+  ["seal-assurance-kit", "main"],
+  ["mcp-seal-dev", "main"],
+];
+
+function familyEnvironment() {
+  const existing = FAMILY.every(([repo]) => existsSync(path.join(ROOT, ".family", repo)));
+  if (existing) return { env: process.env, cleanup: () => {} };
+
+  const family = path.join(ROOT, ".family");
+  assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding");
+  mkdirSync(family);
+  for (const [repo, branch] of FAMILY) {
+    const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
+      `https://github.com/velvetmonkey/${repo}`, path.join(family, repo)], {
+      cwd: ROOT, encoding: "utf8",
+    });
+    assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
+  }
+  const env = { ...process.env };
+  for (const [repo] of FAMILY) {
+    env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(family, repo);
+  }
+  return { env, cleanup: () => rmSync(family, { recursive: true, force: true }) };
+}
+
+function run(cwd = ROOT, env = process.env) {
   return spawnSync(process.execPath, [SCRIPT], {
     cwd,
     encoding: "utf8",
-    env: process.env,
+    env,
   });
 }
 
 test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
-  const result = run();
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /link-check: 417 internal links, 50 external links, 1 required live links, 0 broken/);
-  assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
+  const { env, cleanup } = familyEnvironment();
+  try {
+    const result = run(ROOT, env);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /link-check: 417 internal links, 50 external links, 1 required live links, 0 broken/);
+    assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
+  } finally {
+    cleanup();
+  }
 });
 
 test("path matcher stays tight around versions, digests, and ordinary prose", () => {

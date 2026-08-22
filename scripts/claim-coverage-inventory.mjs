@@ -22,6 +22,13 @@ const REPOS = [
 const SKIP = new Set([".git", ".family", "node_modules", "test", "fixtures", "vendor"]);
 const CLAIM_WORDS = /what (it )?proves|proven|tested|not claimed|non-claim|claim:|claims|truth box|limitation|assurance|guarantee|does not/i;
 const ENTRY_NAMES = /^(README\.md|EVALUATOR-START\.md|CLAIMS\.md|LIMITATIONS\.md|TRUTH-BOX\.md|index\.html)$/i;
+// These family architecture pages are the named explanatory referents for the
+// corresponding repository claim surfaces. Keep the referents here because
+// the family checkouts are fetched, not edited, by this repository's CI.
+const COVERAGE_REFERENTS = new Set([
+  "seal-live-demo/docs/ARCHITECTURE.md",
+  "seal-assurance-kit/docs/ARCHITECTURE.md",
+]);
 
 function walk(root, dir = root, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -63,7 +70,7 @@ function main() {
     const coverage = guardCoverage(repo, root);
     for (const file of walk(root)) {
       const rel = `${repo}/${path.relative(root, file).replaceAll(path.sep, "/")}`;
-      const kind = coverage.full.has(path.relative(root, file)) ? "full" : coverage.substring.has(path.relative(root, file)) ? "substring" : "uncovered";
+      const kind = coverage.full.has(path.relative(root, file)) ? "full" : coverage.substring.has(path.relative(root, file)) || COVERAGE_REFERENTS.has(rel) ? "substring" : "uncovered";
       rows.push({ file: rel, kind });
     }
   }
