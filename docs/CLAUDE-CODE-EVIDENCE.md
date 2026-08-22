@@ -18,6 +18,18 @@ It does **not** establish that a real Claude Code process produced it. A
 determined author with local file access can produce a passing pack. This is an
 instrument against mistakes, not against forgery.
 
+**Binding is bookkeeping, not a control.** The recorder digests live in the
+run's `harness-state.json`, alongside the recorder sources and casts. Someone
+who can rewrite that run directory can rewrite all of them consistently and
+produce a passing pack. The binding detects accidental edits and mismatched
+files; it does not stop that same writer from forging the bundle.
+
+The harness also cannot establish that a human rather than the client
+originated the decline. It records the dialog that was shown and correlates the
+declined call with the proxy's receipts, but the interactive client remains
+inside the declared approval-origin boundary. This limit is repeated in every
+pack's `manifest.json`.
+
 The Claude Code matrix row stays `UNTESTED — real Claude Code call not observed`
 until an operator's real run fills it. That row is the honest claim; the
 checker's exit code is not.
@@ -89,19 +101,25 @@ How each one is established from files rather than from the operator's memory:
   `issued` and `consumed` entries in the fsynced approval journal.
 - **approval_shown** — the dialog text is rendered by the **installed
   artifact's own** `contract/renderer.cjs`, and every line of it is looked for
-  in the terminal recording. A line the recording does not carry is reported
-  absent.
+  in the terminal recording. The cast must also match its recorder-written
+  digest and be the deterministic asciicast conversion of the same session's
+  raw output and advanced timing files. A substituted text-only cast therefore
+  refuses even if it contains every expected dialog line.
 - **before_approval / accept / decline** — child-call records counted out of
   the append-only log, plus the effect digest, which is computed three ways
   that must agree: by the fixture as it wrote the file, by the harness from the
   instructed note, and by the checker from the pack alone.
 - **missing_launcher** — the harness moves the override's command aside, the
-  session runs, and the child log must gain no record at all: not a Seal-started
-  one, and not a directly started one. `.mcp.json` must be unchanged, and the
-  installed tree must re-verify after the launcher is restored.
+  session's recorder-corresponding cast must say both that the local command
+  was missing and that no `.mcp.json` fallback occurred. The child log must
+  gain no record at all: not a Seal-started one, and not a directly started
+  one. `.mcp.json` must be unchanged, and the installed tree must re-verify
+  after the launcher is restored.
 - **unprotect** — the override entry is gone from `~/.claude.json` and from
   `claude mcp get`, and `.mcp.json` matches the digest **and** byte length
-  recorded before `seal protect` ran.
+  recorded before `seal protect` ran. `seal unprotect notes` must also exit
+  zero and report `Protection: - outside Seal`; a pre-existing absent override
+  is not evidence that this act occurred.
 
 ## Running the acceptance walk
 
