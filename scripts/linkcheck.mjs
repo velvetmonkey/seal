@@ -29,8 +29,13 @@ const FAMILY_ROOTS = new Map([
 
 function targetFor(file, link, rootRelative = false) {
   const [family] = link.split("/", 1);
-  if (FAMILY_ROOTS.has(family)) return resolve(FAMILY_ROOTS.get(family), link.slice(family.length + 1));
-  return resolve(rootRelative ? ROOT : dirname(`${ROOT}/${file}`), link);
+  if (FAMILY_ROOTS.has(family)) {
+    return {
+      kind: family === "seal" ? "internal" : "external",
+      path: resolve(FAMILY_ROOTS.get(family), link.slice(family.length + 1)),
+    };
+  }
+  return { kind: "internal", path: resolve(rootRelative ? ROOT : dirname(`${ROOT}/${file}`), link) };
 }
 
 function check(file, raw, rootRelative = false) {
@@ -38,8 +43,14 @@ function check(file, raw, rootRelative = false) {
   if (!link || link.startsWith("http") || link.startsWith("#") || link.startsWith("mailto:")) return;
   link = link.split("#")[0].split("?")[0];
   if (!link) return;
+  const target = targetFor(file, link, rootRelative);
+  if (target.kind === "external") {
+    externalLinks++;
+    if (!existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
+    return;
+  }
   checked++;
-  if (!existsSync(targetFor(file, link, rootRelative))) { console.log(`BROKEN  ${file} -> ${link}`); bad++; }
+  if (!existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); bad++; }
 }
 
 function strings(value, out = []) {
@@ -57,7 +68,7 @@ function pathStrings(text) {
   return [...text.matchAll(pathString)].map((match) => match[1]);
 }
 
-let bad = 0, checked = 0;
+let bad = 0, checked = 0, externalLinks = 0;
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {
   const txt = readFileSync(`${ROOT}/${f}`, "utf8");
@@ -102,5 +113,5 @@ for (const [link, carriers] of requiredLiveLinks) {
   }
 }
 
-console.log(`link-check: ${checked} internal links, ${externalChecked} required live links, ${bad} broken`);
+console.log(`link-check: ${checked} internal links, ${externalLinks} external links, ${externalChecked} required live links, ${bad} broken`);
 process.exit(bad ? 1 : 0);
