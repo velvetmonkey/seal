@@ -1,19 +1,11 @@
 {
   "version": 1,
   "ruling": {
-    "base": "3dfdb64cb2e82bdaa22273950b1884a7dcca7898",
+    "base": "0c07ed8be181d0f4f690cb212a261cef789a49a1",
     "files": [
       {
-        "path": "scripts/installed-tree-pin.cjs",
-        "blob": "cffb940a4321f93cb60ee74834f8b650545d47a4"
-      },
-      {
         "path": "test/installed-tree-pin-generator.test.cjs",
-        "blob": "4886dc8d37f66a50f5fcec7f894768466aa28bd0"
-      },
-      {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "908d430083c0cc6b750afa82cf6385ce3d48e448"
+        "blob": "285be709b28a58644a75f9e83fa5729616f9800c"
       }
     ]
   }
