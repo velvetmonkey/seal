@@ -12,10 +12,6 @@
         "blob": "d8b8eb7f2192560e1f9b3944569d894185f1d059"
       },
       {
-        "path": "scripts/check-protected-paths.cjs",
-        "blob": "1faf5ec9ef5f3e311d46e2f1f3598a15632dd003"
-      },
-      {
         "path": "scripts/installed-tree-pin-sites.json",
         "blob": "aa36e12b59d8a778577b50c55684b0ad067f1e0d"
       },

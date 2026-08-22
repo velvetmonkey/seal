@@ -62,7 +62,7 @@ the Node CLI this repository ships.
 6. [guide/github-actions-provenance.md](../guide/github-actions-provenance.md) —
    download and verify the GitHub-hosted runner's attested demo-receipt
    evidence, and read the boundary of that provenance claim.
-7. [assurance/installed-tree-pin-control.md](installed-tree-pin-control.md) — the
+7. `assurance/installed-tree-pin-control.md` — the
    INJECTED human-control boundary for the hand-maintained installed-tree pin
    site manifest.
 8. `assurance/linkcheck-population-control.md` — what the link-check population

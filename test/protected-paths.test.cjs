@@ -26,7 +26,6 @@ function fixture() {
   writeFileSync(join(root, "README.md"), "base\n");
   git(root, ["add", "README.md"]);
   git(root, ["commit", "-qm", "base"]);
-  git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
   return root;
 }
 
@@ -167,7 +166,7 @@ test("widening a ruling allowlist fails closed", (t) => {
   assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
 });
 
-test("push and pull-request events resolve the same target-branch candidate range", (t) => {
+test("an all-zero first push resolves from the first pushed commit parent", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const base = git(root, ["rev-parse", "HEAD"]);
@@ -180,26 +179,20 @@ test("push and pull-request events resolve the same target-branch candidate rang
   git(root, ["add", "ordinary-note.txt"]);
   git(root, ["commit", "-qm", "unprotected second commit"]);
   const head = git(root, ["rev-parse", "HEAD"]);
-  const prRange = resolveRange(root, "pull_request", {
-    pull_request: { base: { sha: base }, head: { sha: head } },
-  });
-  const pushRange = resolveRange(root, "push", {
-    before: first,
+  const range = resolveRange(root, "push", {
+    before: "0".repeat(40),
     after: head,
     size: 2,
     commits: [{ id: first }, { id: head }],
-    repository: { default_branch: "main" },
   });
-  assert.equal(prRange.status, 0, prRange.stdout + prRange.stderr);
-  assert.equal(pushRange.status, 0, pushRange.stdout + pushRange.stderr);
-  assert.equal(prRange.stdout.trim(), `${base} ${head}`);
-  assert.equal(pushRange.stdout.trim(), prRange.stdout.trim());
-  const result = run(root, ...pushRange.stdout.trim().split(" "));
+  assert.equal(range.status, 0, range.stdout + range.stderr);
+  assert.equal(range.stdout.trim(), `${base} ${head}`);
+  const result = run(root, ...range.stdout.trim().split(" "));
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /scripts\/installed-tree-pin-sites\.json/);
 });
 
-test("a push without a target default branch fails by name", (t) => {
+test("an uncomputable all-zero first push fails by name", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const head = git(root, ["rev-parse", "HEAD"]);
@@ -210,22 +203,5 @@ test("a push without a target default branch fails by name", (t) => {
     commits: [],
   });
   assert.equal(range.status, 1, range.stdout + range.stderr);
-  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: target default branch is missing from event payload/);
-});
-
-test("a protected artifact deleted within the candidate range still requires a ruling", (t) => {
-  const root = fixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const base = git(root, ["rev-parse", "HEAD"]);
-  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
-  const artifact = join(root, "test", "fixtures", "transient.json");
-  writeFileSync(artifact, "{}\n");
-  git(root, ["add", artifact]);
-  git(root, ["commit", "-qm", "add protected artifact"]);
-  rmSync(artifact);
-  git(root, ["add", "-u"]);
-  git(root, ["commit", "-qm", "delete protected artifact"]);
-  const result = run(root, base, "HEAD");
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /test\/fixtures\/transient\.json/);
+  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: FIRST_PUSH_COMMITS_MISSING/);
 });

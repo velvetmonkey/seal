@@ -1,5 +1,8 @@
 # Link-check population cross-check limits
 
+Seal uses a clean-tree occurrence total assertion for the repository and
+sibling-family link population.
+
 `test/linkcheck.test.mjs` compares the targets reported by `scripts/linkcheck.mjs`
 with targets reconstructed from repository sources. This is a **separate-source
 cross-check**, not a separately implemented population oracle.
