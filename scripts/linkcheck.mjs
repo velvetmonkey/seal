@@ -3,8 +3,12 @@
 // Internal-link integrity check for the Seal landing repo: every relative
 // link/src in the docs must resolve to a file. Run: node scripts/linkcheck.mjs
 import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const files = ["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))];
@@ -61,52 +65,19 @@ function strings(value, out = []) {
   return out;
 }
 
-function maskMarkdownCode(text) {
-  function maskCodeSpans(line) {
-    const chars = [...line];
-    const isEscaped = (index) => {
-      let slashes = 0;
-      for (let i = index - 1; i >= 0 && line[i] === "\\"; i--) slashes++;
-      return slashes % 2 === 1;
-    };
-    for (let i = 0; i < line.length;) {
-      if (line[i] !== "`") { i++; continue; }
-      const opener = i;
-      while (i < line.length && line[i] === "`") i++;
-      const width = i - opener;
-      // A backslash-escaped backtick is literal punctuation in CommonMark, so
-      // it cannot open or close a code span.
-      if (isEscaped(opener)) continue;
-      for (let cursor = i; cursor < line.length;) {
-        const closer = line.indexOf("`", cursor);
-        if (closer === -1) break;
-        cursor = closer;
-        while (cursor < line.length && line[cursor] === "`") cursor++;
-        if (!isEscaped(closer) && cursor - closer === width) {
-          for (let j = opener; j < cursor; j++) chars[j] = " ";
-          i = cursor;
-          break;
-        }
-      }
+const markdownParser = new CommonMarkParser();
+export function markdownDestinations(text) {
+  const destinations = [];
+  const walker = markdownParser.parse(text).walker();
+  let event;
+  while ((event = walker.next())) {
+    if (!event.entering) continue;
+    const { node } = event;
+    if ((node.type === "link" || node.type === "image") && node.destination) {
+      destinations.push(node.destination);
     }
-    return chars.join("");
   }
-  let fence = null;
-  return text.split(/(?<=\n)/).map((line) => {
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
-    if (fence) {
-      const masked = line.replace(/[^\n]/g, " ");
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      return masked;
-    }
-    if (marker) {
-      fence = marker[1];
-      return line.replace(/[^\n]/g, " ");
-    }
-    // Code spans are literal text, not Markdown link syntax. Preserve offsets so
-    // any later diagnostics still point at the original document.
-    return maskCodeSpans(line);
-  }).join("");
+  return destinations;
 }
 
 // Deliberately narrow: a path must contain a directory separator and end in a
@@ -120,57 +91,66 @@ function pathStrings(text) {
 let bad = 0, checked = 0, externalLinks = 0;
 const scannedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
-for (const f of files) {
-  const txt = readFileSync(`${ROOT}/${f}`, "utf8");
-  const source = f.endsWith(".md") ? maskMarkdownCode(txt) : txt;
-  // Keep the population count stable when a link-shaped literal is correctly
-  // rejected from a code span; the count is an audit of every syntax candidate
-  // examined, while only parsed Markdown/HTML targets reach check().
-  checked += [...txt.matchAll(re)].length - [...source.matchAll(re)].length;
-  for (const m of source.matchAll(re)) {
-    check(f, m[1] || m[2] || "");
+
+async function main() {
+  bad = 0;
+  checked = 0;
+  externalLinks = 0;
+  scannedTargets.clear();
+
+  for (const f of files) {
+    const txt = readFileSync(`${ROOT}/${f}`, "utf8");
+    if (f.endsWith(".md")) {
+      for (const link of markdownDestinations(txt)) check(f, link);
+    } else {
+      for (const m of txt.matchAll(re)) check(f, m[1] || m[2] || "");
+    }
   }
-}
 
-const dataFiles = walk(ROOT).filter((f) =>
-  (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
-);
-for (const f of dataFiles) {
-  const text = readFileSync(resolve(ROOT, f), "utf8");
-  const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
-  for (const candidate of candidates) {
-    for (const link of pathStrings(candidate)) check(f, link, true);
+  const dataFiles = walk(ROOT).filter((f) =>
+    (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
+  );
+  for (const f of dataFiles) {
+    const text = readFileSync(resolve(ROOT, f), "utf8");
+    const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
+    for (const candidate of candidates) {
+      for (const link of pathStrings(candidate)) check(f, link, true);
+    }
   }
-}
 
-if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
-  console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
-}
+  if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
+    console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
+  }
 
-const requiredLiveLinks = new Map([
-  ["https://velvetmonkey.github.io/seal-check/", ["README.md", "spine/demo.cjs"]],
-]);
-let externalChecked = 0;
-for (const [link, carriers] of requiredLiveLinks) {
-  for (const carrier of carriers) {
-    if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
-      console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
+  const requiredLiveLinks = new Map([
+    ["https://velvetmonkey.github.io/seal-check/", ["README.md", "spine/demo.cjs"]],
+  ]);
+  let externalChecked = 0;
+  for (const [link, carriers] of requiredLiveLinks) {
+    for (const carrier of carriers) {
+      if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
+        console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
+        bad++;
+      }
+    }
+    try {
+      const response = await fetch(link, { redirect: "follow", signal: AbortSignal.timeout(10000) });
+      externalChecked++;
+      if (!response.ok) {
+        console.log(`BROKEN  ${link} -> HTTP ${response.status}`);
+        bad++;
+      }
+      await response.body?.cancel();
+    } catch (error) {
+      console.log(`BROKEN  ${link} -> ${error.message}`);
       bad++;
     }
   }
-  try {
-    const response = await fetch(link, { redirect: "follow", signal: AbortSignal.timeout(10000) });
-    externalChecked++;
-    if (!response.ok) {
-      console.log(`BROKEN  ${link} -> HTTP ${response.status}`);
-      bad++;
-    }
-    await response.body?.cancel();
-  } catch (error) {
-    console.log(`BROKEN  ${link} -> ${error.message}`);
-    bad++;
-  }
+
+  console.log(`link-check: ${checked} internal links, ${externalLinks} external links, ${externalChecked} required live links, ${bad} broken`);
+  return bad ? 1 : 0;
 }
 
-console.log(`link-check: ${checked} internal links, ${externalLinks} external links, ${externalChecked} required live links, ${bad} broken`);
-process.exit(bad ? 1 : 0);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(await main());
+}
