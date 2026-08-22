@@ -14,9 +14,14 @@ const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 // Two names, because they answer two questions. The built name identifies the
 // tree this build came from; the released name identifies the published bytes.
 const builtName = artifactName(productIdentity({ root: ROOT }).identity);
-// Named search surface for the stale-version check below: all Markdown readers
-// can receive release copy, including the top-level README and every guide.
-const READER_FACING_VERSION_SEARCH_ROOTS = ["README.md", "docs/**/*.md"];
+// Check the repository README and the live Markdown trees in docs/assurance,
+// docs/guide, and docs/start; docs/archive is historical and out of scope.
+const READER_FACING_VERSION_SEARCH_ROOTS = [
+  "README.md",
+  "docs/assurance/**/*.md",
+  "docs/guide/**/*.md",
+  "docs/start/**/*.md",
+];
 const FILENAME_EXTENSION = "[A-Za-z][A-Za-z0-9_-]*";
 
 function run(file, args, options = {}) {
@@ -24,18 +29,51 @@ function run(file, args, options = {}) {
   return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
-function readerFacingMarkdownFiles(root) {
-  const docs = path.join(root, "docs");
-  const files = [path.join(root, "README.md")];
-  function visit(directory) {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const target = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(target);
-      else if (entry.isFile() && entry.name.endsWith(".md")) files.push(target);
-    }
+function addMarkdownFiles(files, directory) {
+  if (!fs.existsSync(directory)) return;
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) addMarkdownFiles(files, target);
+    else if (entry.isFile() && entry.name.endsWith(".md")) files.push(target);
   }
-  visit(docs);
+}
+
+function readerFacingMarkdownFiles(root) {
+  const files = [path.join(root, "README.md")];
+  for (const directory of ["docs/assurance", "docs/guide", "docs/start"]) {
+    addMarkdownFiles(files, path.join(root, directory));
+  }
   return files;
+}
+
+function staleVersionMatches(root, version) {
+  const oldLiteral = staleVersionLiteral(version);
+  return readerFacingMarkdownFiles(root)
+    .filter((file) => oldLiteral.test(fs.readFileSync(file, "utf8")))
+    .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
+    .sort();
+}
+
+function makeScopedScratch() {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-scope-"));
+  fs.mkdirSync(path.join(scratch, "docs", "archive"), { recursive: true });
+  fs.mkdirSync(path.join(scratch, "docs", "guide"), { recursive: true });
+  fs.mkdirSync(path.join(scratch, "docs", "start"), { recursive: true });
+  fs.mkdirSync(path.join(scratch, "docs", "assurance"), { recursive: true });
+  fs.writeFileSync(path.join(scratch, "README.md"), "# Scratch\n");
+  return scratch;
+}
+
+function writeScopedDoc(root, relative, text) {
+  const target = path.join(root, relative);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, text);
+}
+
+function assertStaleMatches(version, files, expected, message) {
+  const root = makeScopedScratch();
+  for (const [relative, text] of Object.entries(files)) writeScopedDoc(root, relative, text);
+  assert.deepEqual(staleVersionMatches(root, version), expected, message);
 }
 
 // Match an old version only when it ends cleanly, starts a prerelease/build
@@ -108,28 +146,64 @@ test("sync leaves no old product version in the named reader-facing search surfa
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
-  const oldLiteral = staleVersionLiteral(oldVersion);
-  for (const file of readerFacingMarkdownFiles(scratch)) {
-    assert.doesNotMatch(fs.readFileSync(file, "utf8"), oldLiteral, `${path.relative(scratch, file)} retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`);
-  }
+  assert.deepEqual(
+    staleVersionMatches(scratch, oldVersion),
+    [],
+    `reader-facing search surface retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`,
+  );
 });
 
-test("stale-version matcher still catches a release-note filename left behind after a VERSION bump", () => {
-  const oldLiteral = staleVersionLiteral("0.2.0");
-  assert.match("docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md", oldLiteral);
+test("stale-version scope catches a stale release-note filename in a live document", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/guide/live.md": "See docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
+    },
+    ["docs/guide/live.md"],
+    "live docs must be checked for stale release-note filenames",
+  );
 });
 
-test("stale-version matcher still catches an unknown-extension filename left behind after a VERSION bump", () => {
-  const oldLiteral = staleVersionLiteral("0.2.0");
-  assert.match("docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt", oldLiteral);
+test("stale-version scope ignores the same historical release-note filename in an archived document", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/archive/history.md": "Archive note: docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md stayed here on purpose.\n",
+    },
+    [],
+    "archived docs must stay out of the stale-version search surface",
+  );
 });
 
-test("stale-version matcher does not flag a four-part version", () => {
-  const oldLiteral = staleVersionLiteral("0.2.0");
-  assert.doesNotMatch("v0.2.0.1", oldLiteral);
+test("stale-version scope catches a stale .txt filename in a live document", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/start/live.txt-check.md": "This live page still points at RELEASE-NOTES-v0.2.0-rc.2.txt.\n",
+    },
+    ["docs/start/live.txt-check.md"],
+    "live docs must still catch stale unknown-extension filenames",
+  );
 });
 
-test("stale-version matcher does not flag sentence-ending prose", () => {
-  const oldLiteral = staleVersionLiteral("0.2.0");
-  assert.doesNotMatch("we shipped 0.2.0.", oldLiteral);
+test("stale-version matcher does not flag a four-part version or sentence-ending prose in a live document", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/guide/non-stale.md": "Version history: v0.2.0.1 was a different line, and we shipped 0.2.0.\n",
+    },
+    [],
+    "four-part versions and sentence-ending prose must stay unflagged",
+  );
+});
+
+test("stale-version scope checks a new active document by default", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/guide/new-active-doc.md": "New guide page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+    },
+    ["docs/guide/new-active-doc.md"],
+    "new live docs under the checked trees must be checked without updating the scope list",
+  );
 });
