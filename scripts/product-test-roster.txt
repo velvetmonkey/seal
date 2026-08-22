@@ -31,6 +31,7 @@ test/installed-tree-pin.test.cjs
 test/kernel-bridge.test.cjs
 test/lease-generation.test.cjs
 test/limits-list.test.cjs
+test/linkcheck.test.mjs
 test/live-page-claim-guard.test.mjs
 test/no-verification-claim.test.cjs
 test/product-suite-roster.test.cjs

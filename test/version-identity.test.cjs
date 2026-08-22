@@ -17,6 +17,7 @@ const builtName = artifactName(productIdentity({ root: ROOT }).identity);
 // Named search surface for the stale-version check below: all Markdown readers
 // can receive release copy, including the top-level README and every guide.
 const READER_FACING_VERSION_SEARCH_ROOTS = ["README.md", "docs/**/*.md"];
+const TRACKED_EXTENSION = "(?:md|html|json|ya?ml|[cm]?js|sh|wasm|bin)";
 
 function run(file, args, options = {}) {
   const result = spawnSync(file, args, { encoding: "utf8", ...options });
@@ -35,6 +36,12 @@ function readerFacingMarkdownFiles(root) {
   }
   visit(docs);
   return files;
+}
+
+// Match an old version only when it ends cleanly, starts a prerelease/build
+// suffix, or is immediately followed by a known tracked-file extension dot-run.
+function staleVersionLiteral(version) {
+  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${TRACKED_EXTENSION})\\b|$|[^0-9A-Za-z.])`);
 }
 
 test("every emitted release identity derives from VERSION", () => {
@@ -100,11 +107,23 @@ test("sync leaves no old product version in the named reader-facing search surfa
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
-  // A release-note filename puts `.md` directly after its version. Rejecting
-  // dots here hid stale filenames; rejecting only a following digit still
-  // avoids treating the numeric prefix of a larger version as a match.
-  const oldLiteral = new RegExp(`(?<![0-9.])${oldVersion.replaceAll(".", "\\.")}(?![0-9])`);
+  const oldLiteral = staleVersionLiteral(oldVersion);
   for (const file of readerFacingMarkdownFiles(scratch)) {
     assert.doesNotMatch(fs.readFileSync(file, "utf8"), oldLiteral, `${path.relative(scratch, file)} retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`);
   }
+});
+
+test("stale-version matcher still catches a release-note filename left behind after a VERSION bump", () => {
+  const oldLiteral = staleVersionLiteral("0.2.0");
+  assert.match("docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md", oldLiteral);
+});
+
+test("stale-version matcher does not flag a four-part version", () => {
+  const oldLiteral = staleVersionLiteral("0.2.0");
+  assert.doesNotMatch("v0.2.0.1", oldLiteral);
+});
+
+test("stale-version matcher does not flag sentence-ending prose", () => {
+  const oldLiteral = staleVersionLiteral("0.2.0");
+  assert.doesNotMatch("we shipped 0.2.0.", oldLiteral);
 });
