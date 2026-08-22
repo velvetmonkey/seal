@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 
 const LINKCHECK_TEST = path.resolve(import.meta.dirname, "linkcheck.test.mjs");
+const CONTROL_DOCUMENT = path.resolve(import.meta.dirname, "../docs/assurance/linkcheck-population-control.md");
 
 const REQUIRED_ASSERTIONS = [
   ["family prerequisite finding", 'assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding")'],
@@ -31,4 +32,7 @@ test("linkcheck assertion inventory refuses a removed assertion by name", () => 
   }
   const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
   assert.equal(actualCount, 15, `linkcheck assertion inventory changed: expected 15 assertions, found ${actualCount}`);
+  const control = readFileSync(CONTROL_DOCUMENT, "utf8");
+  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check");
+  assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
 });
