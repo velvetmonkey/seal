@@ -7,7 +7,7 @@ state those two commands can print, from real runs.
 
 ## Reading `seal status`
 
-A healthy protected project, while a Claude Code session is running:
+A protected project before Claude Code has restarted:
 
 ```bash
 $ seal status
@@ -15,17 +15,27 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
-Protection: PENDING RESTART db.write (/tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/ba09bb02a004f37efa3c3b76280c7d23/state.json)
-Receipts: 1 stored in /tmp/seal-guide-status-run.syKs4r/home/.local/share/seal/projects/guide-example/receipts
-Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
+Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Next:
+  1. Restart Claude Code in this project.
+  2. Run `seal status`.
+  3. Look for `Protection: ACTIVE`.
+Undo:
+  Stop Claude Code, then run `seal unprotect db`.
+Receipts: 0 stored in /home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
+
+Exit code: `0`.
 
 Three parts, always in this order:
 
 - **Runtime** — a cached component that `seal verify` uses. Its presence does
   not decide whether your project is protected; see below.
-- **Protection** — this project's gate: its state, then
-  `server.tool`, then the path of the state file the answer came from.
+- **Protection** — this project's one shared server state, then the guarded
+  names: `server.tool` for one tool or `server.{tool, tool}` for several,
+  followed by the path of the state file the answer came from. There is one
+  lease for the server, not one lease per tool.
 - **Receipts** — how many decision records exist and which one was written
   last. Receipts are covered properly in
   [Knowing it worked](knowing-it-worked.md).
@@ -68,9 +78,9 @@ Protection: ACTIVE notes.delete_all_notes (…/state.json)
 Protection lease: pid 4127 generation 6
 ```
 
-A live Claude Code session is running the wrapper right now. Calls to
-`delete_all_notes` stop at the approval prompt; everything else on `notes`
-flows through.
+A live Claude Code session is running the wrapper right now. Calls to the
+guarded names stop at the approval prompt; tools outside the declared set on
+that server flow through.
 
 Status reports only observable lease facts. A live pid and generation identify
 the current holder as `ACTIVE`; a dead pid is `STALE` and recoverable by the

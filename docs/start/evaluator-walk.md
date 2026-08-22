@@ -11,6 +11,11 @@ The checker is **not** in a source-built installed store.
 payload. Run the copy from the checkout that you built; do not look for it
 under `~/.local/lib/seal/store/`.
 
+For the product's named-set capability, protect both bundled demo tools in one
+declaration: `seal protect db demo.mutate demo.erase`. `seal status` reports
+that one server protection as `db.{demo.mutate, demo.erase}`; use the operating
+guide for the setup and state details.
+
 ## After `seal demo`
 
 The demo prints `demo directory: <path> (remains after the demo
