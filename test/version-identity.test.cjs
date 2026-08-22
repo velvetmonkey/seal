@@ -14,11 +14,11 @@ const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 // Two names, because they answer two questions. The built name identifies the
 // tree this build came from; the released name identifies the published bytes.
 const builtName = artifactName(productIdentity({ root: ROOT }).identity);
-// Check the repository README and every live Markdown document under docs/;
+// Check every root Markdown file and every live Markdown document under docs/;
 // exclude docs/archive because it preserves historical references on purpose.
 const READER_FACING_VERSION_SEARCH_ROOTS = [
-  "README.md",
-  "docs/**/*.md",
+  "*.md (case-insensitive)",
+  "docs/**/*.md (case-insensitive)",
   "!docs/archive/**/*.md", // Historical archive; stale release-note mentions are intentional here.
 ];
 const FILENAME_EXTENSION = "[A-Za-z][A-Za-z0-9_-]*";
@@ -28,24 +28,23 @@ function run(file, args, options = {}) {
   return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
-function addMarkdownFiles(files, directory) {
+function addMarkdownFiles(files, directory, excludedDirectory) {
   if (!fs.existsSync(directory)) return;
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
-    if (entry.isDirectory()) addMarkdownFiles(files, target);
-    else if (entry.isFile() && entry.name.endsWith(".md")) files.push(target);
+    if (entry.isDirectory() && target !== excludedDirectory) addMarkdownFiles(files, target, excludedDirectory);
+    else if (entry.isFile() && /\.md$/i.test(entry.name)) files.push(target);
   }
 }
 
 function readerFacingMarkdownFiles(root) {
-  const files = [path.join(root, "README.md")];
+  const files = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.isFile() && /\.md$/i.test(entry.name)) files.push(path.join(root, entry.name));
+  }
   const docsRoot = path.join(root, "docs");
   if (!fs.existsSync(docsRoot)) return files;
-  for (const entry of fs.readdirSync(docsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    if (entry.name === "archive") continue; // Historical archive; stale release-note mentions are intentional here.
-    addMarkdownFiles(files, path.join(docsRoot, entry.name));
-  }
+  addMarkdownFiles(files, docsRoot, path.join(docsRoot, "archive")); // Historical archive; stale release-note mentions are intentional here.
   return files;
 }
 
@@ -189,14 +188,14 @@ test("stale-version scope catches a stale .txt filename in a live document", () 
   );
 });
 
-test("stale-version matcher does not flag a four-part version or sentence-ending prose in a live document", () => {
+test("stale-version matcher does not flag a four-part version in a live document", () => {
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/guide/non-stale.md": "Version history: v0.2.0.1 was a different line, and we shipped 0.2.0.\n",
+      "docs/guide/non-stale.md": "Version history: v0.2.0.1 was a different line.\n",
     },
     [],
-    "four-part versions and sentence-ending prose must stay unflagged",
+    "four-part versions must stay unflagged",
   );
 });
 
@@ -211,13 +210,58 @@ test("stale-version scope checks a new active document in docs/reference by defa
   );
 });
 
-test("stale-version scope checks a second new active document in docs/howto by default", () => {
+test("stale-version matcher does not flag sentence-ending prose in a live document", () => {
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/howto/new-active-doc.md": "New howto page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+      "docs/guide/non-stale.md": "We shipped 0.2.0.\n",
     },
-    ["docs/howto/new-active-doc.md"],
-    "new live docs in docs/howto must also be checked without updating any scope list",
+    [],
+    "sentence-ending prose must stay unflagged",
+  );
+});
+
+test("stale-version scope checks every root Markdown file", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "CONTRIBUTING.md": "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
+    },
+    ["CONTRIBUTING.md"],
+    "root Markdown files, not only README.md, must be checked",
+  );
+});
+
+test("stale-version scope checks uppercase Markdown extensions", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/start/NOTES.MD": "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
+    },
+    ["docs/start/NOTES.MD"],
+    "uppercase Markdown extensions must be checked",
+  );
+});
+
+test("stale-version scope checks a new active docs/field-notes directory by default", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/field-notes/new-active-doc.md": "Field note, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+    },
+    ["docs/field-notes/new-active-doc.md"],
+    "new live docs directories must be checked without updating any scope list",
+  );
+});
+
+test("stale-version scope keeps archive-substring directories live and does not follow archive symlinks", () => {
+  const root = makeScopedScratch();
+  writeScopedDoc(root, "docs/my-archive/live.md", "Stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n");
+  writeScopedDoc(root, "docs/archive/history.md", "Historical link: RELEASE-NOTES-v0.2.0-rc.2.md.\n");
+  fs.symlinkSync(path.join(root, "docs", "archive"), path.join(root, "docs", "assurance", "from-archive"));
+  assert.deepEqual(
+    staleVersionMatches(root, "0.2.0"),
+    ["docs/my-archive/live.md"],
+    "only docs/archive is excluded; archive-substring directories stay live and archive symlinks do not alter scope",
   );
 });
