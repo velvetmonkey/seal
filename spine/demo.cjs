@@ -169,8 +169,7 @@ async function run(argv, sealBinPath) {
   await send("initialize", { protocolVersion: "2026-07-28" });
   const listed = await send("tools/list", {});
   for (const tool of listed.result?.tools || []) {
-    // Dash rule: only the guarded tool earns a word; anything else is a dash.
-    console.log(`tool      ${tool.name}  ${tool.name === TOOL ? "guarded" : "—"}`);
+    if (tool.name === TOOL) console.log(`tool      ${tool.name}  guarded`);
   }
   console.log(`child     seal __demo-server (this same binary) mutating ${dataFile}`);
   console.log(`${demoCreatedDirectory ? "temporary demo directory" : "demo directory"}: ${dir} (remains after the demo for the printed checker command)`);

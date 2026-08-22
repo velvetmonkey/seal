@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Seal</title>
-<meta name="description" content="Seal puts an approval gate in front of one tool of one MCP server.">
+<meta name="description" content="Seal puts an approval gate in front of a named set of tools on one MCP server.">
 <style>
   :root { --bg:#0d0d12; --panel:#15151d; --ink:#e8e8ef; --dim:#a6a9b3; --line:#2b2b38; --accent:#a855f7; }
   * { box-sizing:border-box; }
@@ -27,7 +27,7 @@
   <header>
     <div class="logo" role="img" aria-label="Seal logo"></div>
     <h1>Seal</h1>
-    <p class="lede">Seal puts an approval gate in front of one tool of one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.</p>
+    <p class="lede">Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.</p>
     <p>Requires Node 20+ and the <code>claude</code> command for Protect. The install creates one command and one read-only store directory under <code>~/.local</code>.</p>
     <p class="limit"><strong>Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.</strong></p>
   </header>
@@ -48,7 +48,7 @@
 
   <section>
     <h2>How the gate decides</h2>
-    <p>The demo and the protected path run the same proxy and rule. The state machine is TESTED. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.</p>
+    <p>The demo and the protected path run the same proxy and rule. The state machine is TESTED for the single-tool case. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.</p>
   </section>
 
   <section>

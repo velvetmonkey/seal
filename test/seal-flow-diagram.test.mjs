@@ -27,7 +27,7 @@ test("README presents the approved three-step explanation", () => {
     readme,
     /## How it works\n\n1\. \*\*Protect once\.\*\*[\s\S]*2\. \*\*Approve per call\.\*\*[\s\S]*3\. \*\*Keep the receipt\.\*\*/,
   );
-  assert.match(readme, /Other tools on the protected server are not approval-gated, but still pass through Seal's forwarding checks\./);
+  assert.match(readme, /Tools you did not name on the protected server are not approval-gated, but still pass through Seal's forwarding checks\./);
   assert.match(readme, /Seal writes a signed receipt for every guarded decision\./);
   assert.doesNotMatch(readme, /other tools remain outside Seal|other tools OUTSIDE Seal/);
 });
