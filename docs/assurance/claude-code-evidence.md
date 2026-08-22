@@ -153,7 +153,7 @@ Two cautions for the operator:
 ## The evidence pack
 
 ```text
-evidence/claude-code/
+<separately captured evidence-pack directory>/
   <client-version>/
     linux-x64/
       <seal-artifact-sha256>/
@@ -175,10 +175,10 @@ observed, and the SHA-256 and byte length of every other file in the pack.
 ## The checker
 
 ```bash
-$ node scripts/check-cc-evidence.mjs evidence/claude-code
+$ node scripts/check-cc-evidence.mjs <evidence-pack-directory>
 ```
 
-[`scripts/check-cc-evidence.mjs`](../../scripts/check-cc-evidence.mjs) accepts a
+This repository does not ship an `evidence/claude-code/` pack. [`scripts/check-cc-evidence.mjs`](../../scripts/check-cc-evidence.mjs) accepts a
 pack or refuses it by name. It holds its own copy of the eight required cases
 and its own copy of the label rule, so a manifest cannot tell the checker what
 the rules are. It refuses a file whose hash does not match, a file the manifest
@@ -198,7 +198,7 @@ actual Claude Code executable they independently verified (not a hash copied
 out of the pack):
 
 ```bash
-$ node scripts/check-cc-evidence.mjs evidence/claude-code --release --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> --client-executable-sha256 <independently-verified-claude-executable-digest>
+$ node scripts/check-cc-evidence.mjs <evidence-pack-directory> --release --artifact-sha256 <artifact-digest> --artifact-bytes <artifact-bytes> --client-executable-sha256 <independently-verified-claude-executable-digest>
 ```
 
 The checker compares that supplied digest to the executable identity the live

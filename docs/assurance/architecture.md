@@ -34,7 +34,8 @@ one-use consumption. The kernel checks the exact tool-and-arguments
 authorization target. Node tests project, server, continuation, expiry and
 response context before presenting that authorization state to the kernel.
 Therefore the accurate product claim is exactly: The authorization rule is
-PROVED. The state machine is TESTED.
+TESTED (`test/approval-contract.test.cjs` and `test/kernel-bridge.test.cjs`).
+The state machine is TESTED.
 
 The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
 stub envelope. It generates an Ed25519 key inside the kernel worker and signs

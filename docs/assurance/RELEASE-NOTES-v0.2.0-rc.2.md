@@ -32,9 +32,9 @@ These notes make no stranger-verification claim. They also do not use the Lean o
 
 ## What changed
 
-- The guarded retry path now uses the proved WASM authorization kernel through
+- The guarded retry path uses the TESTED pinned WASM authorization kernel through
   a named fail-closed adapter. There is no JavaScript authorization fallback.
-  ([adapter implementation](../../contract/contract.cjs))
+  ([adapter implementation](../../contract/contract.cjs); `test/kernel-bridge.test.cjs`)
 
 - The approval contract now binds the displayed call to a retry and records a consumed approval across a restart; altered, expired, malformed, declined, and replayed continuations have named refusals. ([approval-contract test](../../test/approval-contract.test.cjs); [retry-continuation test](../../test/spine-retry.test.cjs); merged [00176cd](https://github.com/velvetmonkey/seal/commit/00176cd88e8a20e50239342c05f2eafa3830520f) and [4228744](https://github.com/velvetmonkey/seal/commit/42287448e51f75f43250782faec59bcb23f1d7b8))
 

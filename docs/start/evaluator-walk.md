@@ -13,22 +13,22 @@ under `~/.local/lib/seal/store/`.
 
 ## After `seal demo`
 
-The demo prints `temporary demo directory: <path> (remains after the demo
+The demo prints `demo directory: <path> (remains after the demo
 for the printed checker command)`. Keep that path. It holds the receipts
 and the demo's public key.
 
 ```bash
-$ read -r -p "Paste the temporary demo directory: " SEAL_DEMO_DIR
+$ read -r -p "Paste the demo directory: " SEAL_DEMO_DIR
 ```
 
-Copy only the path after `temporary demo directory:` from the demo output.
+Copy only the path after `demo directory:` from the demo output.
 
 Name the blocked receipt from the demo directory, then check it against
 the demo's key with the checkout checker in the current directory:
 
 ```bash
 $ SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
-$ node seal-receipt-check.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ node checker/seal-receipt-check.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
 
 A matching receipt prints `ACCEPT BLOCK demo.mutate` and then states the
@@ -44,7 +44,7 @@ already trust.
 
 ```bash
 $ sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
-$ node seal-receipt-check.mjs "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ node checker/seal-receipt-check.mjs "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 $ test "$?" -eq 1
 ```
 
