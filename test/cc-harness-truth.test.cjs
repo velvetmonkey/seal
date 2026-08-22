@@ -237,7 +237,7 @@ test("a self-consistent recorder-bundle rewrite passes only with the bookkeeping
       path.join(out, "evidence", "claude-code", client, "linux-x64", artifact, "manifest.json")))[0];
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   assert.match(manifest.limitations.join("\n"), /Binding is bookkeeping, not a control/);
-  assert.match(fs.readFileSync(path.join(ROOT, "docs", "CLAUDE-CODE-EVIDENCE.md"), "utf8"), /Binding is bookkeeping, not a control/);
+  assert.match(fs.readFileSync(path.join(ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8"), /Binding is bookkeeping, not a control/);
 });
 
 test("init names a missing executable bit", () => {
