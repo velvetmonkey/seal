@@ -341,6 +341,46 @@ function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner 
   return `${lines.join("\n")}\n`;
 }
 
+function recordingCorrespondence(state, caseId, castPath) {
+  const recorded = state.recordings?.[caseId];
+  if (!recorded) return { observed: false, reason: "recorder-written provenance is absent" };
+  const outPath = path.join(state.paths.logs, `${caseId}.typescript`);
+  const timingPath = path.join(state.paths.logs, `${caseId}.timing`);
+  const castDigest = digestOf(castPath);
+  const outDigest = digestOf(outPath);
+  const timingDigest = digestOf(timingPath);
+  if (!castDigest.present) return { observed: false, reason: `cast is unreadable (${castDigest.reason})` };
+  if (!outDigest.present) return { observed: false, reason: `recorder output is unreadable (${outDigest.reason})` };
+  if (!timingDigest.present) return { observed: false, reason: `recorder timing is unreadable (${timingDigest.reason})` };
+  if (outDigest.sha256 !== recorded.typescript.sha256 || outDigest.bytes !== recorded.typescript.bytes) {
+    return { observed: false, reason: "recorder output no longer matches its write-time digest" };
+  }
+  if (timingDigest.sha256 !== recorded.timing.sha256 || timingDigest.bytes !== recorded.timing.bytes) {
+    return { observed: false, reason: "recorder timing no longer matches its write-time digest" };
+  }
+  if (castDigest.sha256 !== recorded.cast.sha256 || castDigest.bytes !== recorded.cast.bytes) {
+    return { observed: false, reason: "cast no longer matches its recorder-written digest" };
+  }
+  let derived;
+  try {
+    derived = Buffer.from(castFromScript(outPath, timingPath, recorded.conversion), "utf8");
+  } catch (error) {
+    return { observed: false, reason: `recorder sources cannot be converted (${error.code || error.message})` };
+  }
+  const derivedDigest = { present: true, sha256: sha256(derived), bytes: derived.length };
+  if (derivedDigest.sha256 !== castDigest.sha256 || derivedDigest.bytes !== castDigest.bytes) {
+    return { observed: false, reason: "cast bytes are not the deterministic conversion of recorder output and timing" };
+  }
+  return {
+    observed: true,
+    reason: null,
+    write_time_cast: recorded.cast,
+    current_cast: castDigest,
+    recorder_output: outDigest,
+    recorder_timing: timingDigest,
+  };
+}
+
 function waitForEnter(state) {
   if (state.synthetic) return;
   if (!process.stdin.isTTY) {
@@ -382,12 +422,22 @@ function recordSession(state, caseId, instructions) {
     "--command", state.claude.command,
   ], { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
   if (result.error) refuse("recorder_failed", `terminal recorder could not start: ${result.error.message}`);
-  fs.writeFileSync(castPath, castFromScript(outPath, timingPath, {
+  const conversion = {
     columns: columns || MIN_COLUMNS,
     rows,
     startedAt,
     banner: state.synthetic ? SYNTHETIC_BANNER : undefined,
-  }));
+  };
+  fs.writeFileSync(castPath, castFromScript(outPath, timingPath, conversion));
+  state.recordings ||= {};
+  state.recordings[caseId] = {
+    format: "util-linux script output+advanced-timing → asciinema/v2",
+    conversion,
+    typescript: digestOf(outPath),
+    timing: digestOf(timingPath),
+    cast: digestOf(castPath),
+  };
+  saveState(state);
   say(`  recorded ${castPath}`);
   return castPath;
 }
@@ -484,6 +534,7 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
   let readError = null;
   try { text = castScreenText(castPath); } catch (error) { readError = error.code || error.message; }
   const recordingDigest = digestOf(castPath);
+  const correspondence = recordingCorrespondence(state, path.basename(castPath, ".cast"), castPath);
   // Compare on collapsed whitespace, with box rules and the borders a TUI
   // paints around a dialog removed, so a boxed or re-wrapped dialog still
   // matches its words. A line the recording does not carry is reported absent
@@ -492,11 +543,12 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
   const found = lines.map((line) => ({ line, found: haystack.includes(line.trim().replace(/\s+/g, " ")) }));
   const anchor = haystack.indexOf("Approval required");
   return {
-    observed: found.length > 0 && found.every((entry) => entry.found),
+    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found),
     facts: {
       recording: path.basename(castPath),
       recording_digest: recordingDigest,
       recording_read_error: readError,
+      recorder_correspondence: correspondence,
       expected_dialog_lines: found,
       dialog_rendered_by: "contract/renderer.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
@@ -1010,7 +1062,10 @@ function certifyStep(state, step) {
         if (!digest?.present) failures.push(`${caseId}: decline.cast is absent or unreadable (${digest?.reason || "no readable digest"})`);
         else if (digest.bytes === 0) failures.push(`${caseId}: decline.cast is empty`);
         else if (outcome.facts.exact_call_decline_receipt_pairs.length === 0) failures.push(`${caseId}: the exact-call BLOCK/declined receipt pair is absent`);
+        else if (!outcome.facts.exact_call_dialog?.recorder_correspondence?.observed) failures.push(`${caseId}: decline.cast does not correspond to the recorder output (${outcome.facts.exact_call_dialog?.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
         else failures.push(`${caseId}: the complete exact-call dialog is absent from decline.cast`);
+      } else if (caseId === "approval_shown" && !outcome.facts.recorder_correspondence?.observed) {
+        failures.push(`${caseId}: accept.cast does not correspond to the recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
       } else if (caseId === "activation") {
         if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
         else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
@@ -1159,6 +1214,10 @@ function beforeAfter(state) {
 
 function finish(state, options) {
   const observations = observeAll(state);
+  const missing = observations.filter((entry) => entry.result !== "OBSERVED").map((entry) => entry.case);
+  if (missing.length) {
+    refuse("finish_cannot_certify", `CANNOT CERTIFY evidence pack; missing cases: ${missing.join(", ")}. No evidence pack was written.`);
+  }
   const outRoot = path.resolve(options.out || path.join(state.paths.run, "pack"));
   const packDir = path.join(outRoot, "evidence", "claude-code", state.claude.version, "linux-x64", state.artifact.sha256);
   fs.mkdirSync(path.join(packDir, "receipts"), { recursive: true });
@@ -1265,6 +1324,10 @@ function finish(state, options) {
       notes: NOTES,
     },
     harness: state.harness,
+    limitations: [
+      "The harness cannot establish that a human rather than the client originated the decline.",
+      "A determined author with local file access can rewrite recorder sources, cast, and harness state consistently; this is an instrument against mistakes, not against forgery.",
+    ],
     expected_cases: CASES,
     observed: observations,
     files,

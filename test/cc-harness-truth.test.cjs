@@ -35,6 +35,73 @@ function syntheticSetup(workspace) {
   return { stubBin, client };
 }
 
+function initSyntheticRun(workspace) {
+  const runDir = path.join(workspace, "run");
+  const { stubBin, client } = syntheticSetup(workspace);
+  const artifact = artifactFixture();
+  const harness = require(HARNESS);
+  harness.init([
+    "--artifact", artifact.path,
+    "--sha256", artifact.sha256,
+    "--bytes", artifact.bytes,
+    "--run-dir", runDir,
+    "--stub-bin", stubBin,
+    "--synthetic-client",
+    "--client-command", client,
+  ]);
+  return { harness, runDir };
+}
+
+test("a hand-written dialog cast is not evidence from the recorded session", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+
+  process.env.SEAL_CC_SYNTHETIC_CASE = "activation";
+  process.env.SEAL_CC_SYNTHETIC_NOTE = "";
+  harness.next(harness.loadState(runDir));
+  process.env.SEAL_CC_SYNTHETIC_CASE = "decline";
+  process.env.SEAL_CC_SYNTHETIC_NOTE = "seal-declined-note";
+  harness.next(harness.loadState(runDir));
+
+  // Keep the proxy's genuine correlated receipt pair, but replace the cast
+  // with a hand-written asciicast containing the expected dialog words.
+  const state = harness.loadState(runDir);
+  state.step_index = 1;
+  state.steps.decline.attempted = true;
+  fs.writeFileSync(path.join(runDir, "harness-state.json"), `${JSON.stringify(state, null, 2)}\n`);
+  const castPath = path.join(runDir, "logs", "decline.cast");
+  const copiedDialogText = fs.readFileSync(castPath, "utf8").trimEnd().split("\n").slice(1)
+    .map((line) => JSON.parse(line))
+    .filter((event) => Array.isArray(event) && event[1] === "o")
+    .map((event) => event[2])
+    .join("");
+  fs.writeFileSync(castPath, [
+    JSON.stringify({ version: 2, width: 80, height: 24, timestamp: 1, env: { TERM: "xterm-256color", SHELL: "/bin/bash" } }),
+    JSON.stringify([0.1, "o", copiedDialogText]),
+    "",
+  ].join("\n"));
+
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /CANNOT CERTIFY decline; decline: decline\.cast does not correspond to the recorder output/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 1);
+});
+
+test("finish refuses before writing when any declared case lacks positive evidence", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-finish-absence-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  const out = path.join(workspace, "out");
+
+  assert.throws(
+    () => harness.finish(harness.loadState(runDir), { out }),
+    (error) => error instanceof harness.HarnessError && error.code === "finish_cannot_certify" &&
+      /CANNOT CERTIFY evidence pack; missing cases: activation/.test(error.message),
+  );
+  assert.equal(fs.existsSync(out), false, "finish must not write pack bytes before certification");
+});
+
 test("decline refuses and does not advance when the human does nothing", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-harness-truth-"));
   const runDir = path.join(workspace, "run");
