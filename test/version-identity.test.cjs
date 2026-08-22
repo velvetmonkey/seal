@@ -14,13 +14,12 @@ const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 // Two names, because they answer two questions. The built name identifies the
 // tree this build came from; the released name identifies the published bytes.
 const builtName = artifactName(productIdentity({ root: ROOT }).identity);
-// Check the repository README and the live Markdown trees in docs/assurance,
-// docs/guide, and docs/start; docs/archive is historical and out of scope.
+// Check the repository README and every live Markdown document under docs/;
+// exclude docs/archive because it preserves historical references on purpose.
 const READER_FACING_VERSION_SEARCH_ROOTS = [
   "README.md",
-  "docs/assurance/**/*.md",
-  "docs/guide/**/*.md",
-  "docs/start/**/*.md",
+  "docs/**/*.md",
+  "!docs/archive/**/*.md", // Historical archive; stale release-note mentions are intentional here.
 ];
 const FILENAME_EXTENSION = "[A-Za-z][A-Za-z0-9_-]*";
 
@@ -40,8 +39,12 @@ function addMarkdownFiles(files, directory) {
 
 function readerFacingMarkdownFiles(root) {
   const files = [path.join(root, "README.md")];
-  for (const directory of ["docs/assurance", "docs/guide", "docs/start"]) {
-    addMarkdownFiles(files, path.join(root, directory));
+  const docsRoot = path.join(root, "docs");
+  if (!fs.existsSync(docsRoot)) return files;
+  for (const entry of fs.readdirSync(docsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === "archive") continue; // Historical archive; stale release-note mentions are intentional here.
+    addMarkdownFiles(files, path.join(docsRoot, entry.name));
   }
   return files;
 }
@@ -197,13 +200,24 @@ test("stale-version matcher does not flag a four-part version or sentence-ending
   );
 });
 
-test("stale-version scope checks a new active document by default", () => {
+test("stale-version scope checks a new active document in docs/reference by default", () => {
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/guide/new-active-doc.md": "New guide page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+      "docs/reference/new-active-doc.md": "New reference page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
     },
-    ["docs/guide/new-active-doc.md"],
-    "new live docs under the checked trees must be checked without updating the scope list",
+    ["docs/reference/new-active-doc.md"],
+    "new live docs in docs/reference must be checked without updating any scope list",
+  );
+});
+
+test("stale-version scope checks a second new active document in docs/howto by default", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/howto/new-active-doc.md": "New howto page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+    },
+    ["docs/howto/new-active-doc.md"],
+    "new live docs in docs/howto must also be checked without updating any scope list",
   );
 });
