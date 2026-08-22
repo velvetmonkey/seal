@@ -13,6 +13,7 @@ test/claims-drift.test.mjs
 test/coldwalk-fixes.test.cjs
 test/coldwalk-polish.test.cjs
 test/demo-receipts-store.test.cjs
+test/demo-server-tools.test.cjs
 test/demo-witness.test.cjs
 test/dist3d.test.cjs
 test/dist-pin.test.cjs
