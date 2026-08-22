@@ -100,7 +100,10 @@ test("sync leaves no old product version in the named reader-facing search surfa
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
-  const oldLiteral = new RegExp(`(?<![0-9.])${oldVersion.replaceAll(".", "\\.")}(?![0-9.])`);
+  // A release-note filename puts `.md` directly after its version. Rejecting
+  // dots here hid stale filenames; rejecting only a following digit still
+  // avoids treating the numeric prefix of a larger version as a match.
+  const oldLiteral = new RegExp(`(?<![0-9.])${oldVersion.replaceAll(".", "\\.")}(?![0-9])`);
   for (const file of readerFacingMarkdownFiles(scratch)) {
     assert.doesNotMatch(fs.readFileSync(file, "utf8"), oldLiteral, `${path.relative(scratch, file)} retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`);
   }

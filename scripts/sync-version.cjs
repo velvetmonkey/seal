@@ -41,6 +41,19 @@ if (notesCandidates[0] !== releaseNotes) fs.renameSync(path.join(ROOT, "docs", "
 for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file.endsWith(".md"))) {
   replaceIfPresent(path.join("docs", "assurance", file), /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
 }
+// Reader-facing routes outside assurance cite the release-note filename too.
+// Keep those links attached to the note when VERSION renames it.
+for (const file of [
+  "README.md",
+  "docs/archive/CLAIMS-MATRIX.md",
+  "docs/archive/TRUTH-BOX.md",
+  "docs/archive/LIMITATIONS.md",
+  "docs/archive/AUTHORIZATION-MESH.md",
+  "docs/archive/WHY-DIFFERENT.md",
+  "docs/archive/WHAT-SEAL-IS.md",
+]) {
+  replaceIfPresent(file, /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+}
 replaceIfPresent("docs/assurance/index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
 replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
 replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
