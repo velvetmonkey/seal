@@ -52,7 +52,7 @@ function protectedStatusPrefix(statePath) {
     "  2. Run `seal status`.\n" +
     "  3. Look for `Protection: ACTIVE`.\n" +
     "Undo:\n" +
-    "  Stop Claude Code, then run `seal unprotect db`.\n";
+    "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
 
 test("status finds the shipped kernel runtime with an empty cache", () => {
