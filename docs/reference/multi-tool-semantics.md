@@ -153,14 +153,9 @@ The uncovered multi-tool states are therefore **four**:
 same file check list validation, order-preserving deduplication, set persistence,
 and independent approval prompts, but they do not add another state class.
 
-## Verdict on “The state machine is TESTED”
-
-**The state machine is not tested across the multi-tool space. The existing
-suite earns that statement only for the single-tool case. Applied to shipped
-multi-tool protection, “The state machine is TESTED” is an overclaim and this is
-a G0 finding.** Four of the six shared state classes have no multi-tool exercise,
-including the load-bearing `BROKEN` result when one member of a larger set
-vanishes and the all-tools `UNPROTECTED` result after server-level unprotect.
+Four of the six shared state classes have no multi-tool exercise, including the
+load-bearing `BROKEN` result when one member of a larger set vanishes and the
+all-tools `UNPROTECTED` result after server-level unprotect.
 
 ## Document/code disagreements
 
