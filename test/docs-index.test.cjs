@@ -23,7 +23,7 @@ function markdownFilesUnder(directory, relativeTo = directory) {
 
 test("docs index names every Markdown file in docs", () => {
   const index = fs.readFileSync(INDEX, "utf8");
-  const files = markdownFilesUnder(DOCS).filter((file) => !["archive/README.md", "archive/findings.md"].includes(file)).sort();
+  const files = markdownFilesUnder(DOCS).sort();
   const missing = files.filter((file) => !index.includes(file));
   assert.deepEqual(missing, [], `docs/assurance/README.md omits:\n${missing.join("\n")}`);
 });

@@ -133,6 +133,8 @@ Their disposition is an open ruling.
   `index.html`; its wording is family-level.
 - [TRUTH-BOX.md](../archive/TRUTH-BOX.md) — the canonical three-line truth box; its
   current claim names Lean-kernel gating.
+- [archive/README.md](../archive/README.md) — navigation for the preserved archive.
+- [findings.md](../archive/findings.md) — the preserved NEEDS BEN items.
 
 The evaluator-facing family truth surface is
 [docs/assurance/evaluator-start.md](../assurance/evaluator-start.md), at the repository root; it audits

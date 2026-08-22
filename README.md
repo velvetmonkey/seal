@@ -265,7 +265,7 @@ Seal asks you to approve one exact call. It will not run that call twice, and it
 
 - [Operating guide](docs/guide/README.md)
 - [Assurance / release notes](docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md)
-- [Limitations](docs/archive/LIMITATIONS.md)
+- [Limitations](docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md#what-seal-does-not-cover)
 - [Evaluator walk](docs/start/evaluator-walk.md)
 - [Full documentation index](docs/assurance/README.md)
 - [Install verification](docs/start/install.md)
