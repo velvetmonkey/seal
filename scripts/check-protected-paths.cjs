@@ -5,7 +5,7 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
 const ROOT = process.env.SEAL_PROTECTED_PATHS_ROOT || path.join(__dirname, "..");
-const CONTROL_DOCUMENT = "docs/INSTALLED-TREE-PIN-CONTROL.md";
+const CONTROL_DOCUMENT = "docs/assurance/installed-tree-pin-control.md";
 const PIN_MANIFEST = "scripts/installed-tree-pin-sites.json";
 const RULING_DOCUMENT = "docs/PROTECTED-PATH-RULINGS.json";
 const INVOKING_WORKFLOW = ".github/workflows/ci.yml";
