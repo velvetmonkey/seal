@@ -38,15 +38,15 @@ const specialHomes = new Map([
   [131, ["docs/archive/TRUTH-BOX.md", "Runtime profile: `compatible`"]],
   [132, ["docs/archive/TRUTH-BOX.md", "policy-covered request-effects"]],
   [133, ["docs/archive/TRUTH-BOX.md", "the deployed host is not proved end to end"]],
-  [140, ["docs/archive/LIMITATIONS.md", "mediation KERNEL, not of the whole deployed system"]],
-  [141, ["docs/archive/LIMITATIONS.md", "does NOT prove SHA-256 collision resistance"]],
-  [142, ["docs/archive/LIMITATIONS.md", "NOT proven bug-free"]],
-  [143, ["README.md", "Seal guarantees AUTHORIZATION match, not INTENT match"]],
+  [140, ["docs/archive/LIMITATIONS.md", "This Node CLI's authorization binding is TESTED, not PROVEN"]],
+  [141, ["docs/archive/LIMITATIONS.md", "Lean-kernel and axiom claims belong to the separate Seal family material"]],
+  [142, ["docs/archive/LIMITATIONS.md", "This Node CLI's authorization binding is TESTED, not PROVEN"]],
+  [143, ["README.md", "Seal is TESTED to bind AUTHORIZATION, not INTENT"]],
   [144, ["docs/archive/LIMITATIONS.md", "does NOT prevent compromise of hosts, browsers, build systems, keys, operators"]],
   [145, ["docs/archive/LIMITATIONS.md", "tamper-EVIDENT, not tamper-IMPOSSIBLE"]],
   [146, ["docs/archive/LIMITATIONS.md", "does NOT make the AI smarter or prevent hallucinations"]],
-  [147, ["docs/archive/LIMITATIONS.md", "Axiom footprint {propext, Classical.choice, Quot.sound}"]],
-  [148, ["docs/archive/LIMITATIONS.md", "per-theorem ceiling for theorems named in the family's axiom-pin gates"]],
+  [147, ["docs/archive/LIMITATIONS.md", "Lean-kernel and axiom claims belong to the separate Seal family material"]],
+  [148, ["docs/archive/LIMITATIONS.md", "Lean-kernel and axiom claims belong to the separate Seal family material"]],
 ]);
 
 function assertionBearing(text) {

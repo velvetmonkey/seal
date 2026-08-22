@@ -10,7 +10,7 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
   main { max-width:860px; margin:0 auto; padding:64px 22px 96px; }
-  .logo { width:144px; height:144px; margin-bottom:20px; background:url("assets/seal-logo.png") center/contain no-repeat; }
+  .logo { width:144px; height:144px; margin-bottom:20px; background:url("../../assets/seal-logo.png") center/contain no-repeat; }
   h1 { margin:0 0 12px; font-size:2.2rem; }
   h2 { margin:42px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--line); font-size:1.15rem; }
   p, li { max-width:72ch; }
@@ -61,7 +61,7 @@
   <nav aria-label="Product documentation">
     <h2>Next</h2>
     <ul>
-      <li><a href="README.md">Install, demo, protect, and remove</a></li>
+      <li><a href="../../README.md">Install, demo, protect, and remove</a></li>
       <li><a href="architecture.md">Architecture</a></li>
       <li><a href="../guide/README.md">Operating guide</a></li>
       <li><a href="RELEASE-NOTES-v0.2.0-rc.2.md">Release notes</a></li>
@@ -71,15 +71,12 @@
   <section>
     <h2>Honest boundaries</h2>
     <!-- claims:begin -->
-    <pre class="nonclaims">- Seal proves properties of the mediation KERNEL, not of the whole deployed system.
-- Seal does NOT prove SHA-256 collision resistance in Lean; it is a named, scoped cryptographic assumption (A-CR).
-- The deployed Rust / wasm / JS are NOT proven bug-free; they are tied to the proof by byte-exact conformance testing over a corpus, not for every possible input.
-- Seal guarantees AUTHORIZATION match, not INTENT match: if a human approves a malicious-but-valid request, Seal will execute it.
-- Seal does NOT prevent compromise of hosts, browsers, build systems, keys, operators, or downstream tools.
-- Seal's audit chain is tamper-EVIDENT, not tamper-IMPOSSIBLE.
-- Seal does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
-- Axiom footprint {propext, Classical.choice, Quot.sound} is the minimal classical fragment; no extra axioms.
-- The axiom-footprint line is a per-theorem ceiling for theorems named in the family's axiom-pin gates; it is not a repository-wide census. Pin scope and named exceptions are indexed in the seal claims matrix (seal/docs/CLAIMS-MATRIX.md).</pre>
+    <pre class="nonclaims">- This Node CLI's authorization binding is TESTED, not PROVEN; see the named contract and retry tests in the README.
+- It does NOT establish INTENT: if a human approves a malicious-but-valid request, Seal executes it.
+- It does NOT prevent compromise of hosts, browsers, build systems, keys, operators, or downstream tools.
+- Its receipts are tamper-EVIDENT, not tamper-IMPOSSIBLE.
+- It does NOT make the AI smarter or prevent hallucinations; it stops an unapproved effect.
+- Lean-kernel and axiom claims belong to the separate Seal family material, not this Node CLI. The local family history is `docs/archive/CLAIMS-MATRIX.md`.</pre>
     <!-- claims:end -->
   </section>
 </main>
