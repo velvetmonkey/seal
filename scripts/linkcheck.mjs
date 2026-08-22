@@ -17,17 +17,63 @@ function walk(dir, prefix = "") {
   }
   return out;
 }
+const FAMILY_ROOTS = new Map([
+  ["seal", process.env.FAMILY_SEAL_ROOT ?? ROOT],
+  ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? resolve(ROOT, ".family/seal-check")],
+  ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? resolve(ROOT, ".family/seal-demo")],
+  ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? resolve(ROOT, ".family/seal-live-demo")],
+  ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? resolve(ROOT, ".family/seal-verify-action")],
+  ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? resolve(ROOT, ".family/seal-assurance-kit")],
+  ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? resolve(ROOT, ".family/mcp-seal-dev")],
+]);
+
+function targetFor(file, link, rootRelative = false) {
+  const [family] = link.split("/", 1);
+  if (FAMILY_ROOTS.has(family)) return resolve(FAMILY_ROOTS.get(family), link.slice(family.length + 1));
+  return resolve(rootRelative ? ROOT : dirname(`${ROOT}/${file}`), link);
+}
+
+function check(file, raw, rootRelative = false) {
+  let link = raw.trim();
+  if (!link || link.startsWith("http") || link.startsWith("#") || link.startsWith("mailto:")) return;
+  link = link.split("#")[0].split("?")[0];
+  if (!link) return;
+  checked++;
+  if (!existsSync(targetFor(file, link, rootRelative))) { console.log(`BROKEN  ${file} -> ${link}`); bad++; }
+}
+
+function strings(value, out = []) {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) for (const item of value) strings(item, out);
+  else if (value && typeof value === "object") for (const item of Object.values(value)) strings(item, out);
+  return out;
+}
+
+// Deliberately narrow: a path must contain a directory separator and end in a
+// known tracked-file extension. This avoids mistaking prose and identifiers
+// for paths while covering workflow arguments and manifest/allowlist entries.
+const pathString = /(?:^|[\s"'`])((?:\.{1,2}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:md|html|json|ya?ml|[cm]?js|sh|wasm|bin))(?:$|[\s"'`),:#?])/gm;
+function pathStrings(text) {
+  return [...text.matchAll(pathString)].map((match) => match[1]);
+}
+
 let bad = 0, checked = 0;
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {
   const txt = readFileSync(`${ROOT}/${f}`, "utf8");
   for (const m of txt.matchAll(re)) {
-    let link = (m[1] || m[2] || "").trim();
-    if (!link || link.startsWith("http") || link.startsWith("#") || link.startsWith("mailto:")) continue;
-    link = link.split("#")[0].split("?")[0];
-    if (!link) continue;
-    checked++;
-    if (!existsSync(resolve(dirname(`${ROOT}/${f}`), link))) { console.log(`BROKEN  ${f} -> ${link}`); bad++; }
+    check(f, m[1] || m[2] || "");
+  }
+}
+
+const dataFiles = walk(ROOT).filter((f) =>
+  (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
+);
+for (const f of dataFiles) {
+  const text = readFileSync(resolve(ROOT, f), "utf8");
+  const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
+  for (const candidate of candidates) {
+    for (const link of pathStrings(candidate)) check(f, link, true);
   }
 }
 
