@@ -44,6 +44,7 @@ test/readme-demo-fence.test.cjs
 test/readme-demo-transcript-guard.test.cjs
 test/readme-navigation.test.mjs
 test/readme-pasteable-fences.test.cjs
+test/readme-reader-visible-bookkeeping.test.mjs
 test/readme-protect-fence.test.cjs
 test/readme-source-inventory.test.mjs
 test/receipt-checker.test.cjs
