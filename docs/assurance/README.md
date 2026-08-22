@@ -81,7 +81,7 @@ the Node CLI this repository ships.
   approval prompts, refusals, demo evidence, and receipt checks.
 - [guide/when-something-looks-wrong.md](../guide/when-something-looks-wrong.md) —
   what each refusal token means, what caused it, and what to do next.
-- [reference/multi-tool-semantics.md](reference/multi-tool-semantics.md) — the
+- [reference/multi-tool-semantics.md](../reference/multi-tool-semantics.md) — the
   shipped named-set behavior, its code and command evidence, and the measured
   multi-tool state-coverage gap.
 

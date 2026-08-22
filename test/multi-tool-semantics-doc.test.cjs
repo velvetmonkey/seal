@@ -13,7 +13,7 @@ function codeDeclaresCompleteSet(source) {
     new RegExp("guard" + "Tools: requestedTools").test(source);
 }
 
-test("multi-tool semantics document and protection code agree on declared-set behavior", () => {
+test("multi-tool semantics document and protection code agree on declared-set behavior", () => { // CLAIM-COVERAGE: docs/reference/multi-tool-semantics.md
   const document = fs.readFileSync(DOC, "utf8");
   const source = fs.readFileSync(PROTECTION, "utf8");
   const documentedAnswer = "Protection is declared as the complete set for one server; a later\n`seal protect` refuses while that server is protected instead of adding tools.";
