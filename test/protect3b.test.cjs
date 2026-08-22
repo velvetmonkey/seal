@@ -184,6 +184,7 @@ test("unprotect refuses a developer-replaced local override and preserves it byt
   assert.match(unprotectedRun.out, /^REFUSED local_override_drifted$/m);
   assert.match(unprotectedRun.out, /^The current local override is not the one Seal installed\.$/m);
   assert.match(unprotectedRun.out, /^No configuration was changed\.$/m);
+  assert.match(unprotectedRun.out, /^Next:\n  Restore the local Claude Code MCP override Seal installed, or leave it in place; Seal changed nothing\.$/m);
   assert.equal(fs.existsSync(overridePath), true, "the developer's override must remain present");
   assert.equal(sha256(fs.readFileSync(overridePath)), beforeHash, "the developer's override must remain byte-identical");
 });
@@ -200,16 +201,19 @@ test("protect names install-time refusals", () => {
   let result = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /project_server_absent/);
+  assert.match(result.out, /^Next:\n  Fix this project's \.mcp\.json so the named server is a stdio MCP server, then retry protect\.$/m);
 
   fs.writeFileSync(path.join(project, ".mcp.json"), "{not-json\n");
   result = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /project_server_invalid/);
+  assert.match(result.out, /^Next:\n  Fix this project's \.mcp\.json so the named server is a stdio MCP server, then retry protect\.$/m);
 
   writeProject(project, { type: "http", url: "https://example.invalid/mcp" });
   result = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /project_server_non_stdio/);
+  assert.match(result.out, /^Next:\n  Fix this project's \.mcp\.json so the named server is a stdio MCP server, then retry protect\.$/m);
 
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "override-data.txt")] });
   execFileSync("claude", ["mcp", "add", "--scope", "local", "db", "--", "node", "-e", "process.exit(0)"], {
@@ -219,6 +223,7 @@ test("protect names install-time refusals", () => {
   result = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /local_override_exists/);
+  assert.match(result.out, /^Next:\n  Remove or rename the existing local Claude Code MCP override for this server only if you want Seal to own it, then retry protect\.$/m);
 
   const incompatibleProject = path.join(root, "incompatible-project");
   fs.mkdirSync(incompatibleProject);
@@ -295,6 +300,7 @@ test("unprotect refuses while an activation lease pid is live", () => {
   const result = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /active_claude_session/);
+  assert.match(result.out, /^Next:\n  Stop the Claude Code session using this server, then retry unprotect\.$/m);
 });
 
 test("unprotect recovers a live recycled PID whose witness does not match", () => {
@@ -344,6 +350,7 @@ test("unprotect refuses without installed ownership proof", () => {
   const refused = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(refused.code, 0, refused.out);
   assert.match(refused.out, /^REFUSED no_seal_owned_override$/m);
+  assert.match(refused.out, /^Next:\n  Inspect the local Claude Code MCP override for this server; Seal changed nothing\.$/m);
 });
 
 test("unprotect unwinds an absent override only when state proves Seal installed it", () => {
@@ -386,6 +393,7 @@ test("unprotect refuses when no Seal state exists", () => {
   const result = run(project, home, ["unprotect", "db"], env);
   assert.notEqual(result.code, 0, result.out);
   assert.match(result.out, /^REFUSED no_seal_owned_override$/m);
+  assert.match(result.out, /^Next:\n  Inspect the local Claude Code MCP override for this server; Seal changed nothing\.$/m);
   assert.equal(sha256(fs.readFileSync(configPath)), beforeHash, "an override without Seal state must remain byte-identical");
 });
 
@@ -404,6 +412,31 @@ test("unprotect still refuses when the Claude command is unavailable during remo
   assert.notEqual(refused.code, 0);
   assert.match(refused.out, /claude_remove_failed/);
   assert.match(refused.out, /ENOENT/);
+  assert.match(refused.out, /^Next:\n  Make Claude Code's claude command available and able to remove the local override, then retry unprotect\.$/m);
+});
+
+test("status guides an absent Seal-owned local override in a pending project", () => {
+  const root = tmpdir("seal-protect3b-status-absent-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "status-absent-data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+
+  const configPath = fakeLocalOverridePath(root);
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  delete config.projects[project].mcpServers.db;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+
+  const result = run(project, home, ["status"], env);
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /^REFUSED local_override_drifted$/m);
+  assert.match(result.out, /^The current local override is not the one Seal installed\.$/m);
+  assert.match(result.out, /^No configuration was changed\.$/m);
+  assert.match(result.out, /^Next:\n  Restore the local Claude Code MCP override Seal installed; status cannot report protection from a replaced override\.$/m);
 });
 
 test("status and doctor use outside-Seal and assumption/refusal language", () => {

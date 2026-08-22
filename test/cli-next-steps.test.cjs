@@ -99,7 +99,7 @@ test("printed Next and Undo seal commands resolve to public CLI commands", () =>
   const fakeBin = fakeClaudeBin(root);
   fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({
     mcpServers: {
-      db: { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] },
+      db: { command: process.execPath, args: [path.join(__dirname, "..", "test-support", "tool-list-server.cjs"), "ok", "demo.mutate,demo.read"] },
     },
   }, null, 2) + "\n");
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
@@ -129,5 +129,30 @@ test("printed Next and Undo seal commands resolve to public CLI commands", () =>
       "seal unprotect db",
       "seal unprotect db",
     ].sort(),
+  );
+});
+
+test("Undo states unprotect clears every guarded tool on the server", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-next-steps-scope-"));
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({
+    mcpServers: {
+      db: { command: process.execPath, args: [path.join(__dirname, "..", "test-support", "tool-list-server.cjs"), "ok", "demo.mutate,demo.read"] },
+    },
+  }, null, 2) + "\n");
+
+  const result = run(project, home, ["protect", "db", "demo.mutate", "demo.read"], {
+    PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+  });
+
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Protection: PENDING RESTART db\.\{demo\.mutate, demo\.read\}$/m);
+  assert.match(
+    result.out,
+    /^  To clear protection for every guarded tool on server db, including guarded tools: demo\.mutate, demo\.read, stop Claude Code, then run `seal unprotect db`\.$/m,
   );
 });

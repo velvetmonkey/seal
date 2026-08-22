@@ -67,6 +67,7 @@ test("protect refuses a misspelled tool and names every observed tool", () => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_tool_absent/);
   assert.match(result.out, /observed tools: db\.drop_table, db\.read/);
+  assert.match(result.out, /^Next:\n  Choose exact tool names from the observed tools list above, then retry protect\.$/m);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
 });
 
@@ -133,6 +134,7 @@ test("any unknown tool makes the whole named list fail", (t) => {
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_tool_absent/);
   assert.match(result.out, /requested tool "db\.missing" was not returned by tools\/list/);
+  assert.match(result.out, /^Next:\n  Choose exact tool names from the observed tools list above, then retry protect\.$/m);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false, "no partial state may be written");
   t.diagnostic(result.out.trim());
   t.diagnostic(`state written: ${fs.existsSync(statePathFor(ctx.project, ctx.env))}`);
@@ -197,6 +199,7 @@ test("a configured server that cannot start refuses protection", () => {
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_start_failed/);
+  assert.match(result.out, /^Next:\n  Fix the configured MCP server's startup and tools\/list response\. If it is only slow, retry protect with a larger timeout\.$/m);
   assert.doesNotMatch(result.out, /PENDING RESTART/);
 });
 
@@ -205,6 +208,7 @@ test("an initialize failure refuses protection", () => {
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_initialize_failed/);
+  assert.match(result.out, /^Next:\n  Fix the configured MCP server's startup and tools\/list response\. If it is only slow, retry protect with a larger timeout\.$/m);
 });
 
 test("a slow initialize refuses at the default deadline and names --timeout-ms", () => {
@@ -238,6 +242,7 @@ test("a tools/list error refuses protection", () => {
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_tools_list_failed/);
+  assert.match(result.out, /^Next:\n  Fix the configured MCP server's startup and tools\/list response\. If it is only slow, retry protect with a larger timeout\.$/m);
 });
 
 test("an empty tools/list refuses protection", () => {
@@ -245,6 +250,7 @@ test("an empty tools/list refuses protection", () => {
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_tools_empty/);
+  assert.match(result.out, /^Next:\n  Fix the configured MCP server's startup and tools\/list response\. If it is only slow, retry protect with a larger timeout\.$/m);
   assert.doesNotMatch(result.out, /PENDING RESTART/);
 });
 

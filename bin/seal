@@ -72,7 +72,7 @@ function status() {
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
-      if (view.state === "PENDING RESTART" || view.state === "STALE") printGuidance(protectGuidance(view.serverName));
+      if (view.state === "PENDING RESTART" || view.state === "STALE") printGuidance(protectGuidance(view.serverName, guarded));
       if (typeof state.receiptsDir === "string") receiptDir = state.receiptsDir;
       else {
         console.log("Receipts: unavailable (protected project has no recorded receipt directory)");
@@ -84,6 +84,10 @@ function status() {
     if (error.ownershipRefusal) {
       console.log(`REFUSED ${error.code}`);
       if (error.message) console.log(error.message);
+      try {
+        const { state } = protection.stateWithProject(process.cwd(), process.env);
+        printFailureGuidance("status", error, { serverName: state?.serverName }, (line) => console.log(line));
+      } catch {}
       process.exitCode = 1;
       return;
     }
@@ -174,25 +178,62 @@ function verifyHint(receipt) {
   if (sealOnPath()) return `seal verify ${shellWord(receipt)}`;
   return `${shellWord(fs.realpathSync(launcher))} verify ${shellWord(receipt)}`;
 }
-function printGuidance({ next = [], undo = [] }) {
+function printGuidance({ next = [], undo = [] }, writeLine = (line) => console.log(line)) {
   if (next.length > 0) {
-    console.log("Next:");
-    for (const line of next) console.log(`  ${line}`);
+    writeLine("Next:");
+    for (const line of next) writeLine(`  ${line}`);
   }
   if (undo.length > 0) {
-    console.log("Undo:");
-    for (const line of undo) console.log(`  ${line}`);
+    writeLine("Undo:");
+    for (const line of undo) writeLine(`  ${line}`);
   }
 }
-function protectGuidance(serverName) {
+function joinedToolNames(toolNames) {
+  return toolNames.map((name) => `${shellWord(name)}`).join(", ");
+}
+function protectGuidance(serverName, guardTools = []) {
+  const guarded = guardTools.length > 0 ? `, including guarded tools: ${joinedToolNames(guardTools)}` : "";
   return {
     next: [
       "1. Restart Claude Code in this project.",
       "2. Run `seal status`.",
       "3. Look for `Protection: ACTIVE`.",
     ],
-    undo: [`Stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
+    undo: [`To clear protection for every guarded tool on server ${shellWord(serverName)}${guarded}, stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
   };
+}
+function failureGuidance(command, error, context = {}) {
+  const code = error?.code;
+  if (command === "protect") {
+    if (code === "already_protected") return ["Run `seal status` to see the current protection before changing it."];
+    if (code === "project_server_absent" || code === "project_server_invalid" || code === "project_server_non_stdio") {
+      return ["Fix this project's .mcp.json so the named server is a stdio MCP server, then retry protect."];
+    }
+    if (code === "local_override_exists") {
+      return ["Remove or rename the existing local Claude Code MCP override for this server only if you want Seal to own it, then retry protect."];
+    }
+    if (code === "claude_unavailable" || code === "claude_install_failed") {
+      return ["Make Claude Code's claude command available for this project, then retry protect."];
+    }
+    if (code === "protected_tool_absent") return ["Choose exact tool names from the observed tools list above, then retry protect."];
+    if (code === "protected_server_start_failed" || code === "protected_server_initialize_failed" || code === "protected_server_tools_list_failed" || code === "protected_server_tools_empty") {
+      return ["Fix the configured MCP server's startup and tools/list response. If it is only slow, retry protect with a larger timeout."];
+    }
+  }
+  if (command === "unprotect") {
+    if (code === "active_claude_session") return ["Stop the Claude Code session using this server, then retry unprotect."];
+    if (code === "claude_remove_failed") return ["Make Claude Code's claude command available and able to remove the local override, then retry unprotect."];
+    if (code === "local_override_drifted") return ["Restore the local Claude Code MCP override Seal installed, or leave it in place; Seal changed nothing."];
+    if (code === "no_seal_owned_override") return ["Inspect the local Claude Code MCP override for this server; Seal changed nothing."];
+  }
+  if (command === "status") {
+    if (code === "local_override_drifted") return ["Restore the local Claude Code MCP override Seal installed; status cannot report protection from a replaced override."];
+  }
+  return [];
+}
+function printFailureGuidance(command, error, context, writeLine = (line) => console.error(line)) {
+  const next = failureGuidance(command, error, context);
+  if (next.length > 0) printGuidance({ next }, writeLine);
 }
 async function fetchBytes(url) {
   let response;
@@ -342,7 +383,7 @@ async function protectCommand(args) {
   const hiddenOutside = outside.length - shownOutside.length;
   console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} NOT APPROVAL-GATED (they pass through Seal)${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
   console.log(`State: ${result.statePath}`);
-  printGuidance(protectGuidance(serverName));
+  printGuidance(protectGuidance(serverName, result.state.guardTools));
 }
 
 function unprotectCommand(args) {
@@ -399,11 +440,13 @@ main().catch((error) => {
   if (error.ownershipRefusal) {
     console.error(`REFUSED ${error.code}`);
     if (error.message) console.error(error.message);
+    printFailureGuidance(process.argv[2], error);
     process.exitCode = 1;
     return;
   }
   const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";
   console.error(`seal: ${prefix}${error.message}`);
+  printFailureGuidance(process.argv[2], error);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
   process.exitCode = 1;
 });
