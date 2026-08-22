@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { markdownDestinations } from "../scripts/linkcheck.mjs";
+import expectedPopulation from "./fixtures/linkcheck-population.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
@@ -48,50 +49,6 @@ function run(cwd = ROOT, env = process.env) {
   });
 }
 
-function walk(dir, prefix = "") {
-  const out = [];
-  for (const name of readdirSync(path.resolve(dir, prefix), { withFileTypes: true })) {
-    const relative = prefix ? `${prefix}/${name.name}` : name.name;
-    if (name.isDirectory() && name.name !== ".git") out.push(...walk(dir, relative));
-    else if (name.isFile()) out.push(relative);
-  }
-  return out;
-}
-
-function expectedTargets() {
-  const targets = new Set();
-  const files = ["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))];
-  const htmlLink = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
-  const pathString = /(?:^|[\s"'`])((?:(?:\.{1,2}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9_-]*)|(?:(?:README|index|EVALUATOR-START)\.(?:md|html)))(?:$|[\s"'`),:#?])/gm;
-  const strings = (value, out = []) => {
-    if (typeof value === "string") out.push(value);
-    else if (Array.isArray(value)) for (const item of value) strings(item, out);
-    else if (value && typeof value === "object") for (const item of Object.values(value)) strings(item, out);
-    return out;
-  };
-  for (const f of files) {
-    const txt = readFileSync(path.join(ROOT, f), "utf8");
-    if (f.endsWith(".md")) {
-      for (const target of markdownDestinations(txt)) targets.add(target.trim());
-    } else {
-      for (const match of txt.matchAll(htmlLink)) targets.add((match[1] || match[2] || "").trim());
-    }
-  }
-  const dataFiles = walk(ROOT).filter((f) =>
-    (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
-  );
-  for (const f of dataFiles) {
-    const text = readFileSync(path.join(ROOT, f), "utf8");
-    const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
-    for (const candidate of candidates) {
-      for (const match of candidate.matchAll(pathString)) targets.add(match[1].trim());
-    }
-  }
-  return [...targets].filter((target) =>
-    target && !target.startsWith("http") && !target.startsWith("#") && !target.startsWith("mailto:"),
-  ).sort();
-}
-
 test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
   const { env, cleanup } = familyEnvironment();
   try {
@@ -100,8 +57,11 @@ test("clean CI family linkcheck exits 0 without reducing its scanned population 
     const targetLine = result.stdout.split("\n").find((line) => line.startsWith("link-check-targets: "));
     assert.ok(targetLine, "link checker must report the targets that actually reached check()");
     const scanned = JSON.parse(targetLine.slice("link-check-targets: ".length)).sort();
-    assert.deepEqual(scanned, expectedTargets(), "every parsed live target must reach check()");
-    assert.match(result.stdout, /link-check: 414 internal links, 50 external links, 1 required live links, 0 broken/);
+    assert.deepEqual(scanned, expectedPopulation.scannedTargets, "checked targets must match the human-reviewed baseline");
+    assert.match(result.stdout, new RegExp(`link-check: ${expectedPopulation.internalOccurrences} internal links, ${expectedPopulation.externalOccurrences} external links, 1 required live links, 0 broken`));
+    for (const target of ["assets/seal-logo.png", "docs/start/evaluator-walk.md", "docs/guide/README.md", "LICENSE"]) {
+      assert.ok(scanned.includes(target), `named live link target was hidden from checking: ${target}`);
+    }
     assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
   } finally {
     cleanup();
@@ -141,6 +101,24 @@ test("path matcher still catches stale filenames with unknown extensions", () =>
 test("CommonMark parser does not expose link-looking text in inline code spans", () => {
   const fixture = "Extraction regex: `/VERIFY_PROFILE[^\"']*[\"'](P-[A-Z]+)[\"']/`.";
   assert.deepEqual(markdownDestinations(fixture), []);
+});
+
+test("raw HTML block and inline src/href attributes become linkcheck destinations", () => {
+  const fixture = [
+    '<p><img src="assets/seal-logo.png"><a href="docs/guide/README.md">guide</a></p>',
+    '',
+    'Inline <img src=assets/seal-flow.svg> and <a href=docs/start/install.md>install</a>.',
+    '',
+    '<img src="https://example.test/logo.png"><a href="mailto:test@example.test">mail</a>',
+  ].join("\n");
+  assert.deepEqual(markdownDestinations(fixture), [
+    "assets/seal-logo.png",
+    "docs/guide/README.md",
+    "assets/seal-flow.svg",
+    "docs/start/install.md",
+    "https://example.test/logo.png",
+    "mailto:test@example.test",
+  ]);
 });
 
 test("escaped backticks remain prose and do not hide real Markdown links", () => {

@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const files = ["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))];
+const files = [...new Set(["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
 function walk(dir, prefix = "") {
   const out = [];
   for (const name of readdirSync(resolve(dir, prefix), { withFileTypes: true })) {
@@ -44,7 +44,7 @@ function targetFor(file, link, rootRelative = false) {
 
 function check(file, raw, rootRelative = false) {
   let link = raw.trim();
-  if (!link || link.startsWith("http") || link.startsWith("#") || link.startsWith("mailto:")) return;
+  if (!link || link.startsWith("#") || link.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(link)) return;
   scannedTargets.add(link);
   link = link.split("#")[0].split("?")[0];
   if (!link) return;
@@ -66,6 +66,19 @@ function strings(value, out = []) {
 }
 
 const markdownParser = new CommonMarkParser();
+const htmlTag = /<[A-Za-z][^>"']*(?:"[^"]*"|'[^']*'|[^'"<>])*?>/g;
+const htmlAttribute = /(?:^|\s)(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+
+function htmlDestinations(text) {
+  const destinations = [];
+  for (const tag of text.matchAll(htmlTag)) {
+    for (const attribute of tag[0].matchAll(htmlAttribute)) {
+      destinations.push(attribute[1] ?? attribute[2] ?? attribute[3] ?? "");
+    }
+  }
+  return destinations;
+}
+
 export function markdownDestinations(text) {
   const destinations = [];
   const walker = markdownParser.parse(text).walker();
@@ -75,6 +88,9 @@ export function markdownDestinations(text) {
     const { node } = event;
     if ((node.type === "link" || node.type === "image") && node.destination) {
       destinations.push(node.destination);
+    }
+    if ((node.type === "html_block" || node.type === "html_inline") && node.literal) {
+      destinations.push(...htmlDestinations(node.literal));
     }
   }
   return destinations;
