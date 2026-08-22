@@ -17,12 +17,11 @@ function run(cwd = ROOT) {
   });
 }
 
-test("clean tree linkcheck exits 0 and names family allowlist entries as external [network required]", () => {
+test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
   const result = run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /EXTERNAL  scripts\/claim-coverage-allowlist\.json -> seal-check\/FINDINGS\.md/);
-  assert.match(result.stdout, /link-check: 263 internal links, 50 external links, 1 required live links, 0 broken/);
-  assert.doesNotMatch(result.stdout, /BROKEN  scripts\/claim-coverage-allowlist\.json -> seal-check\/FINDINGS\.md/);
+  assert.match(result.stdout, /link-check: 417 internal links, 50 external links, 1 required live links, 0 broken/);
+  assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
 });
 
 test("path matcher stays tight around versions, digests, and ordinary prose", () => {
@@ -53,4 +52,14 @@ test("path matcher still catches stale filenames with unknown extensions", () =>
     [..."docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt".matchAll(pathString)].map((match) => match[1]),
     ["docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt"],
   );
+});
+
+test("link checker does not parse a regular expression in an inline code span as a Markdown link", () => {
+  const source = readFileSync(SCRIPT, "utf8");
+  const body = source.match(/function maskMarkdownCode\(text\) \{[\s\S]*?\n\}(?=\n\n\/\/)/)?.[0];
+  assert.ok(body, "code-span masker must be present");
+  const maskMarkdownCode = Function(`${body}; return maskMarkdownCode;`)();
+  const links = /\]\(([^)]+)\)/g;
+  const fixture = "Extraction regex: `/VERIFY_PROFILE[^\"']*[\"'](P-[A-Z]+)[\"']/`.";
+  assert.deepEqual([...maskMarkdownCode(fixture).matchAll(links)], []);
 });

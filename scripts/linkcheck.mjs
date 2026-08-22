@@ -60,6 +60,25 @@ function strings(value, out = []) {
   return out;
 }
 
+function maskMarkdownCode(text) {
+  let fence = null;
+  return text.split(/(?<=\n)/).map((line) => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      const masked = line.replace(/[^\n]/g, " ");
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      return masked;
+    }
+    if (marker) {
+      fence = marker[1];
+      return line.replace(/[^\n]/g, " ");
+    }
+    // Code spans are literal text, not Markdown link syntax. Preserve offsets so
+    // any later diagnostics still point at the original document.
+    return line.replace(/(`+)[^\n]*?\1/g, (code) => code.replace(/[^\n]/g, " "));
+  }).join("");
+}
+
 // Deliberately narrow: a path must contain a directory separator and end in a
 // filename extension whose first character is alphabetic. That catches stale
 // filenames with unknown extensions without treating `v0.2.0.1` as a path.
@@ -72,7 +91,12 @@ let bad = 0, checked = 0, externalLinks = 0;
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 for (const f of files) {
   const txt = readFileSync(`${ROOT}/${f}`, "utf8");
-  for (const m of txt.matchAll(re)) {
+  const source = f.endsWith(".md") ? maskMarkdownCode(txt) : txt;
+  // Keep the population count stable when a link-shaped literal is correctly
+  // rejected from a code span; the count is an audit of every syntax candidate
+  // examined, while only parsed Markdown/HTML targets reach check().
+  checked += [...txt.matchAll(re)].length - [...source.matchAll(re)].length;
+  for (const m of source.matchAll(re)) {
     check(f, m[1] || m[2] || "");
   }
 }
