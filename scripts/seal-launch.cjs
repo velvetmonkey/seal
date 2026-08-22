@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Installed `seal` entry. Judges the store against the install record BEFORE
 // loading any file from that store. Never searches PATH for another seal.
+// Seal supports only the explicit host lanes below and refuses record mismatch.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -24,23 +25,26 @@ function treeDigest(files) {
   return sha256Hex(Buffer.from(lines, "utf8"));
 }
 
-function platformOk() {
+const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
+
+function hostPlatform() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
-  return platform === "linux" && arch === "x64";
+  const id = `${platform}-${arch}`;
+  return { ok: SUPPORTED_PLATFORMS.has(id), id };
 }
 
-if (!platformOk()) {
+const host = hostPlatform();
+if (!host.ok) {
   process.stderr.write([
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v0.2.0-rc.2 supports Linux x86-64 only.",
-    "macOS arm64 has not completed Seal's end-to-end acceptance path.",
+    "Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",
     "",
   ].join("\n"));
-  process.stderr.write("REFUSE unsupported_platform: refusing to run a non linux-x64 host\n");
+  process.stderr.write(`REFUSE unsupported_platform: refusing to run unsupported host ${host.id}\n`);
   process.exit(1);
 }
 
@@ -55,6 +59,9 @@ try {
 } catch (error) {
   if (error && error.code === "ENOENT") refuse("install_record_missing", `no install record at ${recordPath}`);
   refuse("install_record_unreadable", `cannot read install record ${recordPath}: ${error.message}`);
+}
+if (!SUPPORTED_PLATFORMS.has(record.platform) || record.platform !== host.id) {
+  refuse("unsupported_platform", `install record platform is ${record.platform || "<absent>"}, running host is ${host.id}`);
 }
 
 const storeRoot = path.join(prefix, record.store);

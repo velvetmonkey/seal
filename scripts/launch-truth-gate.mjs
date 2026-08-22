@@ -87,9 +87,9 @@ const originCount = readme.split(approvalOrigin).length - 1;
 if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
 
 // The platform sentence, verbatim (roadmap section 7), stated plainly.
-const platformSentence = `**Seal v${version} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.**`;
+const platformSentence = `**Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v${version} release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**`;
 const platformCount = readme.split(platformSentence).length - 1;
-if (platformCount !== 1) fail(`README must state the Linux x86-64-only platform sentence verbatim exactly once; found ${platformCount}`);
+if (platformCount !== 1) fail(`README must state the source-build and immutable-release platform boundary verbatim exactly once; found ${platformCount}`);
 
 // The signed-receipt claim was the fifth false user-visible string in this
 // build: the demo signs receipts with a per-run key, the protected path

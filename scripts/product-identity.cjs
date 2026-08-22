@@ -61,15 +61,15 @@ function productIdentity(options = {}) {
   };
 }
 
-// The one Linux x86-64 artifact carries its identity in its filename. The
+// Each platform artifact carries its identity in its filename. The
 // bytes cannot carry it: this repository pins the artifact digest in-tree, and
 // a digest that depended on the commit could never be pinned by a commit.
-function artifactName(identity) {
-  return `seal-v${identity}-linux-x64`;
+function artifactName(identity, platform = "linux-x64") {
+  return `seal-v${identity}-${platform}`;
 }
 
-function releaseArtifactName(version) {
-  return `seal-v${version}-linux-x64`;
+function releaseArtifactName(version, platform = "linux-x64") {
+  return `seal-v${version}-${platform}`;
 }
 
 module.exports = { productIdentity, artifactName, releaseArtifactName };

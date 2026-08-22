@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: Apache-2.0
+name: macOS build evidence
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos-install-demo-receipt:
+    name: macOS install, demo, and receipt check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and run the documented macOS install ritual
+        shell: bash
+        run: |
+          set -euo pipefail
+          platform="darwin-$(node -p 'process.arch')"
+          dist="$RUNNER_TEMP/macos-dist"
+          prefix="$RUNNER_TEMP/macos-prefix"
+          node scripts/build-dist.cjs --platform "$platform" --out "$dist"
+          read -r expected_digest expected_bytes expected_name < "$dist/SHA256SUMS"
+          expected_stem="$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')"
+          test "$expected_name" = "$expected_stem-$platform"
+          if command -v shasum >/dev/null 2>&1; then
+            digest_tool='shasum -a 256'
+            actual_digest="$(shasum -a 256 "$dist/$expected_name" | awk '{print $1}')"
+          elif command -v sha256sum >/dev/null 2>&1; then
+            digest_tool=sha256sum
+            actual_digest="$(sha256sum "$dist/$expected_name" | awk '{print $1}')"
+          else
+            echo '::error::no SHA-256 tool found (need shasum or sha256sum)'
+            exit 1
+          fi
+          echo "digest-tool $digest_tool"
+          test "$actual_digest" = "$expected_digest"
+          actual_bytes="$(wc -c < "$dist/$expected_name" | tr -d ' ')"
+          test "$actual_bytes" = "$expected_bytes"
+          chmod +x "$dist/$expected_name"
+          set +e
+          "$dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix "$prefix" > "$RUNNER_TEMP/macos-install.log" 2>&1
+          install_status=$?
+          set -e
+          cat "$RUNNER_TEMP/macos-install.log"
+          echo "macos-install-exit $install_status"
+          test "$install_status" -eq 0
+      - name: Run seal demo and record its exit
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/macos-prefix"
+          demo_dir="$RUNNER_TEMP/macos-demo"
+          printf 'y\n' > "$RUNNER_TEMP/demo-input"
+          set +e
+          "$prefix/bin/seal" demo --dir "$demo_dir" < "$RUNNER_TEMP/demo-input" > "$RUNNER_TEMP/macos-demo.log" 2>&1
+          demo_status=$?
+          set -e
+          cat "$RUNNER_TEMP/macos-demo.log"
+          echo "macos-demo-exit $demo_status"
+          test "$demo_status" -eq 0
+      - name: Check a receipt produced by that demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$(find "$RUNNER_TEMP/macos-demo/receipts" -type f -name '*-ALLOW.json' -print -quit)"
+          test -n "$receipt"
+          checker="$RUNNER_TEMP/seal-receipt-check.mjs"
+          cp checker/seal-receipt-check.mjs "$checker"
+          set +e
+          node "$checker" "$receipt" --pubkey "$RUNNER_TEMP/macos-demo/receipt-signer.pub" > "$RUNNER_TEMP/macos-receipt-check.log" 2>&1
+          checker_status=$?
+          set -e
+          cat "$RUNNER_TEMP/macos-receipt-check.log"
+          echo "macos-receipt-check-exit $checker_status"
+          test "$checker_status" -eq 0
+      - name: "Negative control: Linux artifact refuses on macOS without writing bytes"
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/linux-dist"
+          prefix="$RUNNER_TEMP/linux-on-darwin-prefix"
+          mkdir -p "$prefix"
+          node scripts/build-dist.cjs --platform linux-x64 --out "$dist"
+          read -r digest bytes artifact < "$dist/SHA256SUMS"
+          find "$prefix" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort > "$RUNNER_TEMP/linux-on-darwin.before"
+          set +e
+          "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix" > "$RUNNER_TEMP/linux-on-darwin.log" 2>&1
+          mismatch_status=$?
+          set -e
+          cat "$RUNNER_TEMP/linux-on-darwin.log"
+          echo "linux-on-darwin-exit $mismatch_status"
+          test "$mismatch_status" -eq 1
+          grep -E '^REFUSE unsupported_platform: artifact platform is linux-x64, running host is darwin-(x64|arm64)$' "$RUNNER_TEMP/linux-on-darwin.log"
+          find "$prefix" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort > "$RUNNER_TEMP/linux-on-darwin.after"
+          cmp "$RUNNER_TEMP/linux-on-darwin.before" "$RUNNER_TEMP/linux-on-darwin.after"
+      - name: Upload macOS execution logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-evidence
+          path: ${{ runner.temp }}/*.log
+          if-no-files-found: warn

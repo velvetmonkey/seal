@@ -2,6 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 
+sha256_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
+  else
+    echo "no SHA-256 tool found (need shasum or sha256sum)" >&2
+    return 1
+  fi
+}
+
 repository_name=${1:?repository name is required}
 release_tag=${2:?release tag is required}
 release_dir=${3:?release output directory is required}
@@ -24,7 +35,7 @@ git archive --format=tar --prefix="${repository_name}-${release_tag}/" "$commit_
 
 (
   cd "$release_dir"
-  sha256sum "$archive_name" > SHA256SUMS
+  sha256_file "$archive_name" > SHA256SUMS
 )
 
 REPOSITORY_NAME=$repository_name RELEASE_TAG=$release_tag RELEASE_DIR=$release_dir \
@@ -74,5 +85,7 @@ PY
 
 (
   cd "$release_dir"
-  sha256sum -c SHA256SUMS
+  read -r expected_digest expected_name < SHA256SUMS
+  actual_digest="$(sha256_file "$expected_name" | awk '{print $1}')"
+  test "$actual_digest" = "$expected_digest"
 )

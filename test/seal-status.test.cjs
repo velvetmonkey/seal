@@ -80,7 +80,7 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
 
 });
 
-test("status refuses non-Linux before a null-witness lease liveness comparison", () => {
+test("status refuses an unsupported host before a null-witness lease liveness comparison", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-non-linux-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
@@ -98,12 +98,12 @@ test("status refuses non-Linux before a null-witness lease liveness comparison",
   });
 
   const result = run(["status"], root, "", project, {
-    SEAL_SPINE_PLATFORM: "darwin",
-    SEAL_SPINE_ARCH: "arm64",
+    SEAL_SPINE_PLATFORM: "plan9",
+    SEAL_SPINE_ARCH: "mips",
   });
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
-  assert.match(result.out, /^REFUSE unsupported_platform: this is darwin-arm64$/m);
+  assert.match(result.out, /^REFUSE unsupported_platform: this is plan9-mips$/m);
   assert.doesNotMatch(result.out, /^Protection: (?:ACTIVE|STALE) /m);
   assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
