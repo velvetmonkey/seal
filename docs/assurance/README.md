@@ -100,8 +100,9 @@ ruled on and explicitly never built; each says so in its opening lines.
   by the topology-C ruling; not built.
 - [META-PARTITION-SPEC.md](../archive/META-PARTITION-SPEC.md) — the MCP `_meta` partition
   ruling; ruled, not started.
-- [POLICY-LANGUAGE.md](../archive/POLICY-LANGUAGE.md) — draft `boxpol` policy-language
+- [assurance/POLICY-LANGUAGE.md](POLICY-LANGUAGE.md) — draft `boxpol` policy-language
   specification for a future build.
+- [SECURITY.md](../../SECURITY.md) — GitHub security policy and private advisory intake.
 - [NUMERIC-AGREEMENT.md](../archive/NUMERIC-AGREEMENT.md) — accepted remediation spec for
   a cross-parser numeric disagreement in a kernel/host pair that is not in
   this repository.

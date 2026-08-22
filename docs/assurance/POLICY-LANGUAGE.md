@@ -6,13 +6,13 @@ answered on 2026-07-26 in response to the "tiny DSL vs Cedar" question, revised
 where reading the repositories contradicted it (revisions are listed in §10, not
 silently applied).
 
-Placement against `NORTH-STAR-V3.md`: the roadmap is four items and this is not a
+Placement against `docs/archive/NORTH-STAR-V3.md`: the roadmap is four items and this is not a
 fifth. This language is the policy layer that **V3.3 (one sink, end to end)**
 signs against, and the bundle in §5 is the claims discipline of North Star §5
 made mechanical. The analyzer build (§9) starts **after V3.1** or not at all;
 adding it to the roadmap is a visible decision for Ben, which is what this
 document exists to make decidable. Repository placement follows the topology-C
-ruling (`REPO-TOPOLOGY.md`): one merged repository, so file paths below are given
+ruling (`docs/archive/REPO-TOPOLOGY.md`): one merged repository, so file paths below are given
 against today's `seal-host` / `mcp-seal-dev` layout and survive the merge
 unchanged as subtrees.
 
@@ -50,7 +50,7 @@ consumes is the solver's word, and the solver is a large unverified C++
 artifact. Two escape routes exist and both fail the sizing test:
 
 1. **Trust the solver.** Reasonable for AWS. Incoherent here: this project's
-   entire identity (`NORTH-STAR-V3.md` §1, §5) is that the decision function is
+   entire identity (`docs/archive/NORTH-STAR-V3.md` §1, §5) is that the decision function is
    machine-checked and every claim carries its scope line. "The policy the
    human signed was compared against its predecessor by machinery outside the
    proof boundary" is exactly the asterisk the project exists to not have —
@@ -729,7 +729,7 @@ signing; it stamped the receipt `signed-without-comprehension-evidence`,
 permanently, and the failed boundary was quizzed first at the next renewal. The
 enemy in that position was the reflex signature, not the assisted one; the
 record was the point. This connects to
-`COMPREHENSION-CHECK.md` and North Star V3.3 criterion 3: the receipt records
+`docs/archive/COMPREHENSION-CHECK.md` and North Star V3.3 criterion 3: the receipt records
 what the human demonstrably understood, not merely that a click happened.
 
 ### 6.1 Sampling
@@ -1115,7 +1115,7 @@ Two sharpenings the test produced, one of them a disagreement:
 
 **The refusal trap.** Refusal used alone satisfies "full coverage" by
 shrinking D: "the analyzer covers 100% of what it accepts" is the same defect
-`NORTH-STAR-V3.md` V3.2 bans in the broker ("a coverage figure computed over
+`docs/archive/NORTH-STAR-V3.md` V3.2 bans in the broker ("a coverage figure computed over
 what we already watch is the project's own signature defect wearing a new
 hat"). Clause (ii)'s externally-fixed denominator is what separates honest
 refusal from denominator-gaming, and the analyzer instance passes only

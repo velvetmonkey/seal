@@ -70,7 +70,7 @@ the distinction is the whole finding. Measured against the current bound:
 | `1e308` | 3 | yes | `1e+308`, agrees |
 
 Four of five pass a gate that exists to stop pathological numbers, and four of
-five are read differently by the party that acts on them. `OPEN-docs/archive/findings.md`
+five are read differently by the party that acts on them. `docs/archive/OPEN-FINDINGS.md`
 already carries a row saying `wireNumbersSafe` measures the wrong thing. This
 spec says precisely which thing it should have measured, and keeps the DoS guard.
 
