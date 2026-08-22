@@ -424,7 +424,7 @@ jobs:
           .github/workflows/ci.yml
           docs/assurance/evaluator-start.md
           docs/archive/WHY-DIFFERENT.md
-          index.html
+          docs/assurance/index.html
       - run: node scripts/linkcheck.mjs
       - name: Check live seal-check landing-page claims against served bytes
         run: node scripts/live-page-claim-guard.mjs
