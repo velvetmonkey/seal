@@ -26,6 +26,10 @@ function fixture() {
   fs.writeFileSync(path.join(roots.seal, "substring.md"), "substring claims");
   fs.writeFileSync(path.join(roots.seal, "README.md"), "fixture overview");
   fs.writeFileSync(path.join(roots["seal-check"], "CLAIMS.md"), "fixture claim ledger");
+  for (const repo of ["seal-live-demo", "seal-assurance-kit"]) {
+    fs.mkdirSync(path.join(roots[repo], "docs"), { recursive: true });
+    fs.writeFileSync(path.join(roots[repo], "docs/ARCHITECTURE.md"), "This architecture does not prove the boundary.");
+  }
   return { family, roots };
 }
 
@@ -42,7 +46,9 @@ test("inventory reports fixture three-way accounting", (t) => {
   t.after(() => fs.rmSync(family, { recursive: true, force: true }));
   const result = run(roots);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /full=1 substring=1 uncovered=2 allowlisted=2/);
+  assert.match(result.out, /full=1 substring=1 uncovered=4 allowlisted=2 declared-gaps=2/);
+  assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-live-demo\/docs\/ARCHITECTURE\.md/);
+  assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-assurance-kit\/docs\/ARCHITECTURE\.md/);
 });
 
 test("an uncovered claim-bearing file fails until allowlisted", (t) => {

@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const NOTES = path.join(ROOT, "docs", `RELEASE-NOTES-v${VERSION}.md`);
+const NOTES = path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md`);
 
 test("release notes state the platform and protected-receipt signing boundary", () => {
   const notes = fs.readFileSync(NOTES, "utf8");

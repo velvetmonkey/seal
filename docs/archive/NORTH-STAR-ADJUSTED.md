@@ -79,7 +79,7 @@ were unreliable. Revised:
 1. **Make the signal trustworthy.** A `release-evidence` CI job that fails
    unless every security job returned success; external oracles in required CI;
    every written control actually wired to a target. Until this lands, every
-   green below is unfalsifiable. See `OPEN-FINDINGS.md` tier 1.
+   green below is unfalsifiable. See `docs/archive/OPEN-FINDINGS.md` tier 1.
 2. **The comprehension check**, kernel-side, with the rendering in the receipt.
 3. **Close the red suite** to zero, for understood reasons, with negative
    controls rather than relaxed assertions.

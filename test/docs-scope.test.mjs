@@ -7,33 +7,36 @@ const ROOT = resolve(import.meta.dirname, "..");
 const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
-  `> For the truth about what you installed, read [docs/RELEASE-NOTES-v${VERSION}.md](RELEASE-NOTES-v${VERSION}.md) and the [README](../README.md).`,
 ];
-const FAMILY_PRODUCT_SCOPE_BLOCK = [
-  "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.",
-  ...COMMON_SCOPE_LINES,
-].join("\n");
-const PRODUCT_THEN_FAMILY_SCOPE_BLOCK = [
-  "> Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.",
-  ...COMMON_SCOPE_LINES,
-].join("\n");
-const POSITION_PAPER_SCOPE_BLOCK = [
-  "> Scope: This document argues a Seal family product position accepted on 2026-07-25; it does not describe the Node CLI shipped by this repository.",
-  ...COMMON_SCOPE_LINES,
-].join("\n");
+function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`) {
+  const releaseNotes = name.startsWith("archive/")
+    ? `../assurance/RELEASE-NOTES-v${VERSION}.md`
+    : `RELEASE-NOTES-v${VERSION}.md`;
+  return [
+    scope,
+    ...COMMON_SCOPE_LINES,
+    `> For the truth about what you installed, read [${releaseNotesLabel}](${releaseNotes}) and the [README](../../README.md).`,
+  ].join("\n");
+}
+const FAMILY_PRODUCT_SCOPE = "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.";
+const PRODUCT_THEN_FAMILY_SCOPE = "> Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.";
+const POSITION_PAPER_SCOPE = "> Scope: This document argues a Seal family product position accepted on 2026-07-25; it does not describe the Node CLI shipped by this repository.";
 const FAMILY_PRODUCT_FILES = [
-  "AUTHORIZATION-MESH.md",
-  "CLAIMS-MATRIX.md",
-  "LIMITATIONS.md",
-  "TRUTH-BOX.md",
-  "WHY-DIFFERENT.md",
+  "archive/AUTHORIZATION-MESH.md",
+  "archive/CLAIMS-MATRIX.md",
+  "archive/LIMITATIONS.md",
+  "archive/TRUTH-BOX.md",
+  "archive/WHY-DIFFERENT.md",
 ];
 
 test("each scoped document carries its exact scope signpost", () => {
+  // CLAIM-COVERAGE: docs/archive/AUTHORIZATION-MESH.md; CLAIM-COVERAGE: docs/archive/CLAIMS-MATRIX.md
+  // CLAIM-COVERAGE: docs/assurance/architecture.md
+  // CLAIM-COVERAGE: docs/archive/WHAT-SEAL-IS.md
   const expectedBlocks = new Map([
-    ...FAMILY_PRODUCT_FILES.map((name) => [name, FAMILY_PRODUCT_SCOPE_BLOCK]), // CLAIM-COVERAGE: docs/AUTHORIZATION-MESH.md; CLAIM-COVERAGE: docs/CLAIMS-MATRIX.md
-    ["ARCHITECTURE.md", PRODUCT_THEN_FAMILY_SCOPE_BLOCK], // CLAIM-COVERAGE: docs/ARCHITECTURE.md
-    ["WHAT-SEAL-IS.md", POSITION_PAPER_SCOPE_BLOCK], // CLAIM-COVERAGE: docs/WHAT-SEAL-IS.md
+    ...FAMILY_PRODUCT_FILES.map((name) => [name, scopeBlock(FAMILY_PRODUCT_SCOPE, name)]),
+    ["assurance/architecture.md", scopeBlock(PRODUCT_THEN_FAMILY_SCOPE, "assurance/architecture.md", "release evidence")],
+    ["archive/WHAT-SEAL-IS.md", scopeBlock(POSITION_PAPER_SCOPE, "archive/WHAT-SEAL-IS.md")],
   ]);
 
   for (const [name, expectedBlock] of expectedBlocks) {

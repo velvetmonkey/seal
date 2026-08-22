@@ -1,19 +1,23 @@
 {
   "version": 1,
   "ruling": {
-    "base": "3dfdb64cb2e82bdaa22273950b1884a7dcca7898",
+    "base": "466be4a5d423ad763c7325263f1d014311c95879",
     "files": [
       {
-        "path": "scripts/installed-tree-pin.cjs",
-        "blob": "cffb940a4321f93cb60ee74834f8b650545d47a4"
+        "path": "docs/assurance/installed-tree-pin-control.md",
+        "blob": "7cc7c7e36d334baada7ac3a2bd1e6cf859f5d24e"
       },
       {
-        "path": "test/installed-tree-pin-generator.test.cjs",
-        "blob": "4886dc8d37f66a50f5fcec7f894768466aa28bd0"
+        "path": ".github/workflows/ci.yml",
+        "blob": "d8b8eb7f2192560e1f9b3944569d894185f1d059"
       },
       {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "908d430083c0cc6b750afa82cf6385ce3d48e448"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "aa36e12b59d8a778577b50c55684b0ad067f1e0d"
+      },
+      {
+        "path": "scripts/sync-installed-tree-pin.cjs",
+        "blob": "019d54400e89678a8c090a33246d1ca23a82887d"
       }
     ]
   }

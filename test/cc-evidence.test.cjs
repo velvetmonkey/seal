@@ -22,7 +22,7 @@ const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
 const SYNTHETIC_RUN = path.join(ROOT, "harness", "claude-code", "synthetic-run.cjs");
 const EVIDENCE_ROOT = path.join(ROOT, "evidence", "claude-code");
-const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "CLAUDE-CODE-EVIDENCE.md");
+const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "assurance", "claude-code-evidence.md");
 const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
 
 let sharedPack = null;

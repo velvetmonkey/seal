@@ -22,6 +22,13 @@ const REPOS = [
 const SKIP = new Set([".git", ".family", "node_modules", "test", "fixtures", "vendor"]);
 const CLAIM_WORDS = /what (it )?proves|proven|tested|not claimed|non-claim|claim:|claims|truth box|limitation|assurance|guarantee|does not/i;
 const ENTRY_NAMES = /^(README\.md|EVALUATOR-START\.md|CLAIMS\.md|LIMITATIONS\.md|TRUTH-BOX\.md|index\.html)$/i;
+// These fetched sibling pages make claims but have no entry in their
+// repository's claims-drift manifest. Keep that debt visible as named gaps;
+// an uncovered page is never reclassified as substring coverage.
+const DECLARED_GAPS = new Set([
+  "seal-live-demo/docs/ARCHITECTURE.md",
+  "seal-assurance-kit/docs/ARCHITECTURE.md",
+]);
 
 function walk(root, dir = root, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -75,13 +82,17 @@ function main() {
   const counts = Object.fromEntries(["full", "substring", "uncovered"].map((kind) => [kind, rows.filter((row) => row.kind === kind).length]));
   const actualUncovered = rows.filter((row) => row.kind === "uncovered").map((row) => row.file).sort();
   const listed = [...allowlist].sort();
-  const missing = actualUncovered.filter((file) => !allowlist.includes(file));
+  const declared = actualUncovered.filter((file) => DECLARED_GAPS.has(file));
+  const missing = actualUncovered.filter((file) => !allowlist.includes(file) && !DECLARED_GAPS.has(file));
   const stale = allowlist.filter((file) => !actualUncovered.includes(file));
-  console.log(`CLAIM COVERAGE: full=${counts.full} substring=${counts.substring} uncovered=${counts.uncovered} allowlisted=${allowlist.length}`);
+  const staleGaps = [...DECLARED_GAPS].filter((file) => !actualUncovered.includes(file));
+  console.log(`CLAIM COVERAGE: full=${counts.full} substring=${counts.substring} uncovered=${counts.uncovered} allowlisted=${allowlist.length} declared-gaps=${declared.length}`);
+  for (const file of declared) console.log(`GAP uncovered claim-bearing file declared: ${file}`);
   if (missing.length) console.error(`FAIL uncovered claim-bearing files not allowlisted: ${missing.join(", ")}`);
   if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
-  if (missing.length || stale.length) process.exitCode = 1;
-  else console.log("PASS every uncovered claim-bearing file is explicitly allowlisted");
+  if (staleGaps.length) console.error(`FAIL declared gaps name covered or absent files: ${staleGaps.join(", ")}`);
+  if (missing.length || stale.length || staleGaps.length) process.exitCode = 1;
+  else console.log("PASS every uncovered claim-bearing file is explicitly allowlisted or declared as a gap");
 }
 
 main();

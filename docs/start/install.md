@@ -4,7 +4,7 @@ Source-built artifacts support Linux x86-64 and macOS x64/arm64. The immutable
 v0.2.0-rc.2 asset remains Linux x86-64; Windows and Linux ARM are unsupported.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
-This page is the SHA256SUMS verification wall. The [README](../README.md)
+This page is the SHA256SUMS verification wall. The [README](../../README.md)
 short form is the same install without the named refusals spelled out. Use
 this page when you want every check to fail closed in the shell, before the
 binary runs.
@@ -53,9 +53,9 @@ $ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Further distribution detail, including what the payload does and does not
-contain, is in [DISTRIBUTION.md](DISTRIBUTION.md). The published release
+contain, is in [DISTRIBUTION.md](../assurance/distribution.md). The published release
 payload includes the receipt checker. A source build of this checkout excludes
-it; see [evaluator-walk.md](evaluator-walk.md) for that secondary path.
+it; see [evaluator-walk.md](../start/evaluator-walk.md) for that secondary path.
 
 ## Source-build tree pin
 

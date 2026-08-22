@@ -437,11 +437,11 @@ make the semantic display retain the pre-coercion type.
 For an accepted number, the typed tree prints the exact mathematical integer or
 the admitted shortest round-tripping decimal from the canonical action. The
 measured `1234567890123456789` case must refuse before `R`; it must never reach
-a JavaScript `number`. `OPEN-FINDINGS.md` row 40 records the concrete failure:
+a JavaScript `number`. `docs/archive/OPEN-FINDINGS.md` row 40 records the concrete failure:
 JavaScript renders that literal as `1234567890123456800` through
 `JSON.stringify` and `1234567890123456768` through `toFixed(0)`, while Python
 retains the literal. `docs/NUMERIC-AGREEMENT.md` section 4 and
-`OPEN-FINDINGS.md` rows 35 and 40 establish on disk that the recorded kernel rule
+`docs/archive/OPEN-FINDINGS.md` rows 35 and 40 establish on disk that the recorded kernel rule
 accepts integer syntax only when the exponent-applied value is exactly
 representable in binary64 (with an additional coefficient restriction), and
 accepts decimal/exponent syntax only for the shortest round-tripping decimal.
@@ -474,7 +474,7 @@ types cannot denote. Above the bound it shows the refusal reason, exact byte
 length and wire digest, but no body and no approval affordance. This is not
 better parsing; it is total rendering of a byte-preserving refusal.
 
-`OPEN-FINDINGS.md` rows 36 and 37 support the Lean type limitation and the
+`docs/archive/OPEN-FINDINGS.md` rows 36 and 37 support the Lean type limitation and the
 independently reproduced Lean/Node/Python shape. The reported complete
 five-observer, nine-vector matrix remains **UNVERIFIED INDEPENDENTLY**, as the
 finding itself says.
@@ -529,7 +529,7 @@ identity, and `ApprovalRecord` v2 retains the original signed token bytes
    nothing agent-authored reaches the surface except as a bound,
    kernel-derived, inert rendering inside `R`.
 2. The earlier definition `digest = sha256(bytes)` is not precise enough for
-   the approval target. `OPEN-FINDINGS.md` row 24 says the target is computed by
+   the approval target. `docs/archive/OPEN-FINDINGS.md` row 24 says the target is computed by
    Lean from `argsJson`, while raw `request_sha256` is a separate retained
    digest. This design therefore names `targetPreimage`, `targetDigest`,
    `wireBytes` and `wireSha256` separately. Item 8 must pin their exact scopes;
@@ -552,7 +552,7 @@ identity, and `ApprovalRecord` v2 retains the original signed token bytes
 
 Checked on `main` against `ROADMAP-KERNEL-OUTWARD.md` item 6-10,
 `AUTHORIZATION-RECORD.md` section 2.4, `NUMERIC-AGREEMENT.md` section 4, and
-`OPEN-FINDINGS.md` rows 24, 35-37 and 40. The unavailable implementation
+`docs/archive/OPEN-FINDINGS.md` rows 24, 35-37 and 40. The unavailable implementation
 repositories and worktrees were not entered.
 
 Evidence: RUN renderR-spec-2026-07-27
