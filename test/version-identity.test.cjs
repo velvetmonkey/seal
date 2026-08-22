@@ -17,10 +17,24 @@ const builtName = artifactName(productIdentity({ root: ROOT }).identity);
 // Check every root Markdown file and every live Markdown document under docs/;
 // exclude docs/archive because it preserves historical references on purpose.
 const READER_FACING_VERSION_SEARCH_ROOTS = [
-  "*.md (case-insensitive)",
-  "docs/**/*.md (case-insensitive)",
-  "!docs/archive/**/*.md", // Historical archive; stale release-note mentions are intentional here.
+  "root Markdown files (case-insensitive)",
+  "docs/** Markdown files (case-insensitive)",
+  "!docs/archive/**", // Historical archive; stale release-note mentions are intentional here.
 ];
+// The Markdown extension set is .md, .livemd, .markdown, .mdown, .mdwn, .mkd, .mkdn, .mkdown, .ronn, .scd, and .workbook.
+const MARKDOWN_EXTENSIONS = new Set([
+  ".md",
+  ".livemd",
+  ".markdown",
+  ".mdown",
+  ".mdwn",
+  ".mkd",
+  ".mkdn",
+  ".mkdown",
+  ".ronn",
+  ".scd",
+  ".workbook",
+]);
 const FILENAME_EXTENSION = "[A-Za-z][A-Za-z0-9_-]*";
 
 function run(file, args, options = {}) {
@@ -28,19 +42,23 @@ function run(file, args, options = {}) {
   return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
+function isMarkdownFilename(filename) {
+  return MARKDOWN_EXTENSIONS.has(path.extname(filename).toLowerCase());
+}
+
 function addMarkdownFiles(files, directory, excludedDirectory) {
   if (!fs.existsSync(directory)) return;
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory() && target !== excludedDirectory) addMarkdownFiles(files, target, excludedDirectory);
-    else if (entry.isFile() && /\.md$/i.test(entry.name)) files.push(target);
+    else if (entry.isFile() && isMarkdownFilename(entry.name)) files.push(target);
   }
 }
 
 function readerFacingMarkdownFiles(root) {
   const files = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (entry.isFile() && /\.md$/i.test(entry.name)) files.push(path.join(root, entry.name));
+    if (entry.isFile() && isMarkdownFilename(entry.name)) files.push(path.join(root, entry.name));
   }
   const docsRoot = path.join(root, "docs");
   if (!fs.existsSync(docsRoot)) return files;
@@ -240,6 +258,41 @@ test("stale-version scope checks uppercase Markdown extensions", () => {
     },
     ["docs/start/NOTES.MD"],
     "uppercase Markdown extensions must be checked",
+  );
+});
+
+test("stale-version scope checks the Markdown extension set", () => {
+  const extensionFiles = [
+    "docs/field-notes/stranger.md",
+    "docs/field-notes/stranger.livemd",
+    "docs/field-notes/stranger.markdown",
+    "docs/field-notes/stranger.mdown",
+    "docs/field-notes/stranger.mdwn",
+    "docs/field-notes/stranger.mkd",
+    "docs/field-notes/stranger.mkdn",
+    "docs/field-notes/stranger.mkdown",
+    "docs/field-notes/stranger.ronn",
+    "docs/field-notes/stranger.scd",
+    "docs/field-notes/stranger.workbook",
+  ];
+  assertStaleMatches(
+    "0.2.0",
+    Object.fromEntries(extensionFiles.map((file) => [file, "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n"])),
+    extensionFiles.sort(),
+    "every Markdown extension, including .markdown, must be checked for stale release-note references",
+  );
+});
+
+test("stale-version exclusions remain unflagged together", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/archive/history.md": "Archive note: RELEASE-NOTES-v0.2.0-rc.2.md stayed here on purpose.\n",
+      "docs/guide/four-part.md": "Version history: v0.2.0.1 was a different line.\n",
+      "docs/guide/prose.md": "We shipped 0.2.0.\n",
+    },
+    [],
+    "archive references, four-part versions, and sentence-ending prose must stay unflagged",
   );
 });
 
