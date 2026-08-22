@@ -191,6 +191,29 @@ test("the protected-path rulebook guards itself", (t) => {
   assert.match(result.stderr, /scripts\/check-protected-paths\.cjs/);
 });
 
+test("a protected path introduced only by a merge commit requires a ruling", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "topic-only.txt"), "topic\n");
+  git(root, ["add", "topic-only.txt"]);
+  git(root, ["commit", "-qm", "topic change"]);
+  git(root, ["switch", "-qc", "main", base]);
+  writeFileSync(join(root, "main-only.txt"), "main\n");
+  git(root, ["add", "main-only.txt"]);
+  git(root, ["commit", "-qm", "main change"]);
+  git(root, ["merge", "--no-ff", "--no-commit", "topic"]);
+  mkdirSync(join(root, "corpus"), { recursive: true });
+  writeFileSync(join(root, "corpus", "merge-only.txt"), "merge result\n");
+  git(root, ["add", "corpus/merge-only.txt"]);
+  git(root, ["commit", "-qm", "merge topic with protected result"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /corpus\/merge-only\.txt/);
+});
+
 test("a range-and-blob ruling passes on an actual merge commit", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));

@@ -17,9 +17,10 @@ const PROTECTED_EXACT_PATHS = new Set([
   "scripts/resolve-ci-diff-range.cjs",
 ]);
 const PROTECTED_COMPONENTS = new Set(["fixture", "fixtures", "corpus", "pin", "pins"]);
-// Keep a second, deliberately literal copy of the ten-entry contract. A change
-// to the operative list must fail by name instead of silently redefining what
-// this checker can see. The checker script is itself an exact protected path.
+// INJECTED integrity lock: keep a second, deliberately literal copy of the
+// ten-entry contract so an accidental one-sided edit fails by name. It does not
+// stop a single commit that edits both the operative list and this lock.
+// The checker script is itself an exact protected path.
 const LOCKED_EXACT_PATHS = new Set([
   "scripts/installed-tree-pin-sites.json",
   "docs/assurance/installed-tree-pin-control.md",
@@ -129,9 +130,10 @@ if (!protectedListIsIntact()) {
     process.exitCode = 1;
   } else {
     // The net tree diff alone erases an add-then-delete sequence. Walk every
-    // commit in the same target-branch range so a deletion remains a protected
-    // change and cannot disappear from review.
-    const changed = git(["log", "--format=", "--name-status", "-z", "--diff-filter=ACDMRTUXB", `${mergeBase.stdout.trim()}..${options.head}`, "--"]);
+    // commit in the same target-branch range, diffing merges against every
+    // parent, so neither a deletion nor a merge-only change disappears from
+    // review.
+    const changed = git(["log", "-m", "--format=", "--name-status", "-z", "--diff-filter=ACDMRTUXB", `${mergeBase.stdout.trim()}..${options.head}`, "--"]);
     if (changed.status !== 0) {
       process.stderr.write(`PROTECTED_PATH_DIFF_UNREADABLE: cannot read merge range.\n${changed.stderr}`);
       process.exitCode = 1;
