@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -31,10 +31,28 @@ function fixture() {
 }
 
 function run(root, base, head) {
-  return spawnSync(process.execPath, [SCRIPT, "--base", base, "--head", head], {
+  return runWithScript(SCRIPT, root, base, head);
+}
+
+function runWithScript(script, root, base, head) {
+  return spawnSync(process.execPath, [script, "--base", base, "--head", head], {
     encoding: "utf8",
     env: { ...process.env, SEAL_PROTECTED_PATHS_ROOT: root },
   });
+}
+
+function renameCase(source, destination) {
+  const root = fixture();
+  mkdirSync(join(root, source, ".."), { recursive: true });
+  writeFileSync(join(root, source), "rename payload\n");
+  git(root, ["add", source]);
+  git(root, ["commit", "-qm", "add rename source"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, destination, ".."), { recursive: true });
+  renameSync(join(root, source), join(root, destination));
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "rename artifact"]);
+  return { root, base, result: run(root, base, "HEAD") };
 }
 
 function resolveRange(root, eventName, event) {
@@ -103,6 +121,61 @@ test("unprotected paths pass", (t) => {
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("a rename from a protected source to an unprotected destination requires a ruling", (t) => {
+  const { root, result } = renameCase("test/fixtures/source.txt", "ordinary-renamed.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /test\/fixtures\/source\.txt/);
+});
+
+test("a rename from an unprotected source to a protected destination requires a ruling", (t) => {
+  const { root, result } = renameCase("ordinary-source.txt", "test/fixtures/destination.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /test\/fixtures\/destination\.txt/);
+});
+
+test("a rename between two protected paths requires a ruling for both sides", (t) => {
+  const { root, result } = renameCase("test/fixtures/source.txt", "test/pins/destination.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /test\/fixtures\/source\.txt/);
+  assert.match(result.stderr, /test\/pins\/destination\.txt/);
+});
+
+test("a rename between two unprotected paths passes", (t) => {
+  const { root, result } = renameCase("ordinary-source.txt", "ordinary-renamed.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("changing a protected-list entry fails closed and names the change", (t) => {
+  const root = fixture();
+  const scriptRoot = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-list-test-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => rmSync(scriptRoot, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeFileSync(join(root, "README.md"), "ordinary documentation edit\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "ordinary edit"]);
+  const tamperedScript = join(scriptRoot, "check-protected-paths.cjs");
+  const source = readFileSync(SCRIPT, "utf8");
+  const changed = source.replace(
+    'const CONTROL_DOCUMENT = "docs/assurance/installed-tree-pin-control.md";',
+    'const CONTROL_DOCUMENT = "docs/control.md";',
+  );
+  assert.notEqual(changed, source, "tamper fixture did not change the protected list");
+  writeFileSync(tamperedScript, changed);
+  const result = runWithScript(tamperedScript, root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_LIST_TAMPERED/);
+  assert.match(result.stderr, /missing \[docs\/assurance\/installed-tree-pin-control\.md\]/);
+  assert.match(result.stderr, /unexpected \[docs\/control\.md\]/);
 });
 
 test("the protected-path rulebook guards itself", (t) => {
