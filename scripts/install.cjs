@@ -20,6 +20,10 @@ function sha256Hex(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+function shellWord(value) {
+  return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function treeDigest(files) {
   const lines = [...files]
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
@@ -272,6 +276,9 @@ function main() {
   process.stdout.write(`store: ${storeRoot}\n`);
   process.stdout.write(`command: ${launchPath}\n`);
   process.stdout.write(`tree: ${manifest.treeSha256}\n`);
+  process.stdout.write("Next:\n");
+  process.stdout.write(`  export PATH=${shellWord(path.dirname(launchPath))}:$PATH\n`);
+  process.stdout.write("  seal demo\n");
 }
 
 main();
