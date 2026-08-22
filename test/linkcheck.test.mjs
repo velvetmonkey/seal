@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { markdownDestinations } from "../scripts/linkcheck.mjs";
-import expectedPopulation from "./fixtures/linkcheck-population.mjs";
+import expectedPopulation from "./support/linkcheck-population.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
@@ -49,6 +49,77 @@ function run(cwd = ROOT, env = process.env) {
   });
 }
 
+function walk(dir, prefix = "") {
+  const out = [];
+  for (const name of readdirSync(path.resolve(dir, prefix), { withFileTypes: true })) {
+    const relative = prefix ? `${prefix}/${name.name}` : name.name;
+    if (name.isDirectory() && name.name !== ".git") out.push(...walk(dir, relative));
+    else if (name.isFile()) out.push(relative);
+  }
+  return out;
+}
+
+// This deliberately separate reference parser does not use linkcheck's CommonMark
+// walk. It masks Markdown code constructs, then scans the remaining source.
+function referenceMarkdownDestinations(text) {
+  const visible = [];
+  let fence = null;
+  for (const line of text.split("\n")) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (marker && !fence) {
+      fence = marker[0];
+      visible.push("");
+      continue;
+    }
+    if (marker && fence === marker[0]) {
+      fence = null;
+      visible.push("");
+      continue;
+    }
+    visible.push(fence || /^(?: {4}|\t)/u.test(line) ? "" : line);
+  }
+  const source = visible.join("\n").replace(/(`+)[\s\S]*?\1/gu, "");
+  const destinations = [];
+  const markdownLink = /!?\[[^\]]*\]\(\s*(?:<([^>\n]+)>|([^\s)]+))/gu;
+  const htmlAttribute = /(?:^|\s)(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/giu;
+  for (const match of source.matchAll(markdownLink)) destinations.push(match[1] ?? match[2] ?? "");
+  for (const match of source.matchAll(htmlAttribute)) destinations.push(match[1] ?? match[2] ?? match[3] ?? "");
+  return destinations;
+}
+
+function expectedTargets() {
+  const targets = new Set();
+  const files = [...new Set(["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/u.test(f) && !f.startsWith("node_modules/"))])];
+  const htmlLink = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/gu;
+  const pathString = /(?:^|[\s"'`])((?:(?:\.{1,2}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9_-]*)|(?:(?:README|index|EVALUATOR-START)\.(?:md|html)))(?:$|[\s"'`),:#?])/gmu;
+  const strings = (value, out = []) => {
+    if (typeof value === "string") out.push(value);
+    else if (Array.isArray(value)) for (const item of value) strings(item, out);
+    else if (value && typeof value === "object") for (const item of Object.values(value)) strings(item, out);
+    return out;
+  };
+  for (const file of files) {
+    const text = readFileSync(path.join(ROOT, file), "utf8");
+    const found = file.endsWith(".md")
+      ? referenceMarkdownDestinations(text)
+      : [...text.matchAll(htmlLink)].map((match) => match[1] ?? match[2] ?? "");
+    for (const target of found) targets.add(target.trim());
+  }
+  const dataFiles = walk(ROOT).filter((f) =>
+    (/^\.github\//u.test(f) || /^scripts\//u.test(f)) && /\.(json|ya?ml)$/iu.test(f),
+  );
+  for (const file of dataFiles) {
+    const text = readFileSync(path.join(ROOT, file), "utf8");
+    const candidates = file.endsWith(".json") ? strings(JSON.parse(text)) : [text];
+    for (const candidate of candidates) {
+      for (const match of candidate.matchAll(pathString)) targets.add(match[1].trim());
+    }
+  }
+  return [...targets].filter((target) =>
+    target && !target.startsWith("#") && !target.startsWith("//") && !/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(target),
+  ).sort();
+}
+
 test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
   const { env, cleanup } = familyEnvironment();
   try {
@@ -57,11 +128,8 @@ test("clean CI family linkcheck exits 0 without reducing its scanned population 
     const targetLine = result.stdout.split("\n").find((line) => line.startsWith("link-check-targets: "));
     assert.ok(targetLine, "link checker must report the targets that actually reached check()");
     const scanned = JSON.parse(targetLine.slice("link-check-targets: ".length)).sort();
-    assert.deepEqual(scanned, expectedPopulation.scannedTargets, "checked targets must match the human-reviewed baseline");
+    assert.deepEqual(scanned, expectedTargets(), "every reference-parsed live target must reach check()");
     assert.match(result.stdout, new RegExp(`link-check: ${expectedPopulation.internalOccurrences} internal links, ${expectedPopulation.externalOccurrences} external links, 1 required live links, 0 broken`));
-    for (const target of ["assets/seal-logo.png", "docs/start/evaluator-walk.md", "docs/guide/README.md", "LICENSE"]) {
-      assert.ok(scanned.includes(target), `named live link target was hidden from checking: ${target}`);
-    }
     assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
   } finally {
     cleanup();
