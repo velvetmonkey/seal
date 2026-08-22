@@ -746,7 +746,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   }
   const after = readProjectConfig(root).hash;
   if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after });
-  return { beforeHash: before, afterHash: after, statePath };
+  return { beforeHash: before, afterHash: after, statePath, previousState: state };
 }
 
 function markDrifted(statePath, state, gotDigest) {

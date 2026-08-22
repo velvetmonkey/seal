@@ -72,6 +72,7 @@ function status() {
       if (view.state === "DRIFTED") console.log("Protection detail: project .mcp.json server changed since protect; forwarding refused");
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
+      if (view.state === "PENDING RESTART" || view.state === "STALE") printGuidance(protectGuidance(view.serverName));
       if (typeof state.receiptsDir === "string") receiptDir = state.receiptsDir;
       else {
         console.log("Receipts: unavailable (protected project has no recorded receipt directory)");
@@ -172,6 +173,26 @@ function verifyHint(receipt) {
   if (npxByArgv) return `npx github:velvetmonkey/seal verify ${shellWord(receipt)}`;
   if (sealOnPath()) return `seal verify ${shellWord(receipt)}`;
   return `${shellWord(fs.realpathSync(launcher))} verify ${shellWord(receipt)}`;
+}
+function printGuidance({ next = [], undo = [] }) {
+  if (next.length > 0) {
+    console.log("Next:");
+    for (const line of next) console.log(`  ${line}`);
+  }
+  if (undo.length > 0) {
+    console.log("Undo:");
+    for (const line of undo) console.log(`  ${line}`);
+  }
+}
+function protectGuidance(serverName) {
+  return {
+    next: [
+      "1. Restart Claude Code in this project.",
+      "2. Run `seal status`.",
+      "3. Look for `Protection: ACTIVE`.",
+    ],
+    undo: [`Stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
+  };
 }
 async function fetchBytes(url) {
   let response;
@@ -321,6 +342,7 @@ async function protectCommand(args) {
   const hiddenOutside = outside.length - shownOutside.length;
   console.log(`Protection scope: ${outside.length} other tool${outside.length === 1 ? "" : "s"} NOT APPROVAL-GATED (they pass through Seal)${outside.length ? `: ${shownOutside.join(", ")}${hiddenOutside ? ` (+${hiddenOutside} more)` : ""}` : ""}`);
   console.log(`State: ${result.statePath}`);
+  printGuidance(protectGuidance(serverName));
 }
 
 function unprotectCommand(args) {
@@ -330,6 +352,17 @@ function unprotectCommand(args) {
   console.log(`Project .mcp.json hash before unprotect: ${result.beforeHash}`);
   console.log(`Project .mcp.json hash after unprotect: ${result.afterHash}`);
   console.log("Protection: - outside Seal");
+  const guardTools = protection.protectedToolNames(result.previousState || {});
+  const undo = guardTools.length > 0
+    ? [`Run \`seal protect ${shellWord(serverName)} ${guardTools.map(shellWord).join(" ")}\`.`]
+    : [];
+  printGuidance({
+    next: [
+      "1. Run `seal status`.",
+      "2. Look for `Protection: - outside Seal`.",
+    ],
+    undo,
+  });
 }
 
 function doctorCommand() {
