@@ -3,6 +3,6 @@
 // LINKCHECK_REPORT_SCANNED_TARGETS. It is deliberately described as a cross-check;
 // docs/assurance/linkcheck-population-control.md records its shared blind spots.
 export default {
-  internalOccurrences: 407,
+  internalOccurrences: 408,
   externalOccurrences: 50,
 };
