@@ -96,11 +96,12 @@ function assertStaleMatches(version, files, expected, message) {
   assert.deepEqual(staleVersionMatches(root, version), expected, message);
 }
 
-// Match an old version only when it ends cleanly, starts a prerelease/build
-// suffix, or is immediately followed by a filename extension. Requiring the
-// extension to start with a letter keeps `v0.2.0.1` unmatched.
+// Match an old version only when it ends cleanly, starts an alphabetic
+// prerelease/build suffix, or is immediately followed by a filename
+// extension. Requiring the extension to start with a letter keeps
+// `v0.2.0.1` unmatched.
 function staleVersionLiteral(version) {
-  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${FILENAME_EXTENSION})\\b|$|[^0-9A-Za-z.])`);
+  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${FILENAME_EXTENSION})\\b|[A-Za-z]|$|[^0-9A-Za-z.])`);
 }
 
 test("every emitted release identity derives from VERSION", () => {
@@ -239,6 +240,24 @@ test("stale-version matcher does not flag sentence-ending prose in a live docume
   );
 });
 
+test("stale-version matcher catches alphabetic prerelease and suffix references", () => {
+  const losses = [
+    "v0.2.0rc",
+    "v0.2.0beta",
+    "pre0.2.0post",
+    "x0.2.0y",
+    "0.2.0foo",
+    "v0.2.0a1",
+    "0.2.0RC2",
+    "version0.2.0next",
+  ];
+  assert.deepEqual(
+    losses.filter((text) => staleVersionLiteral("0.2.0").test(text)),
+    losses,
+    "alphabetic suffixes must remain stale-version matches",
+  );
+});
+
 test("stale-version scope checks every root Markdown file", () => {
   assertStaleMatches(
     "0.2.0",
@@ -275,12 +294,16 @@ test("stale-version scope checks the Markdown extension set", () => {
     "docs/field-notes/stranger.scd",
     "docs/field-notes/stranger.workbook",
   ];
-  assertStaleMatches(
-    "0.2.0",
-    Object.fromEntries(extensionFiles.map((file) => [file, "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n"])),
-    extensionFiles.sort(),
+  const expected = extensionFiles.sort();
+  const root = makeScopedScratch();
+  for (const file of extensionFiles) writeScopedDoc(root, file, "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n");
+  let actual;
+  assert.deepEqual(
+    actual = staleVersionMatches(root, "0.2.0"),
+    expected,
     "every Markdown extension, including .markdown, must be checked for stale release-note references",
   );
+  assert.equal(actual.length, expected.length, "the extension-set assertion must not become vacuous");
 });
 
 test("stale-version exclusions remain unflagged together", () => {
