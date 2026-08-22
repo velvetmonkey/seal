@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -26,14 +26,33 @@ function fixture() {
   writeFileSync(join(root, "README.md"), "base\n");
   git(root, ["add", "README.md"]);
   git(root, ["commit", "-qm", "base"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
   return root;
 }
 
 function run(root, base, head) {
-  return spawnSync(process.execPath, [SCRIPT, "--base", base, "--head", head], {
+  return runWithScript(SCRIPT, root, base, head);
+}
+
+function runWithScript(script, root, base, head) {
+  return spawnSync(process.execPath, [script, "--base", base, "--head", head], {
     encoding: "utf8",
     env: { ...process.env, SEAL_PROTECTED_PATHS_ROOT: root },
   });
+}
+
+function renameCase(source, destination) {
+  const root = fixture();
+  mkdirSync(join(root, source, ".."), { recursive: true });
+  writeFileSync(join(root, source), "rename payload\n");
+  git(root, ["add", source]);
+  git(root, ["commit", "-qm", "add rename source"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, destination, ".."), { recursive: true });
+  renameSync(join(root, source), join(root, destination));
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "rename artifact"]);
+  return { root, base, result: run(root, base, "HEAD") };
 }
 
 function resolveRange(root, eventName, event) {
@@ -104,6 +123,61 @@ test("unprotected paths pass", (t) => {
   assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
 });
 
+test("a rename from a protected source to an unprotected destination requires a ruling", (t) => {
+  const { root, result } = renameCase("test/fixtures/source.txt", "ordinary-renamed.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /test\/fixtures\/source\.txt/);
+});
+
+test("a rename from an unprotected source to a protected destination requires a ruling", (t) => {
+  const { root, result } = renameCase("ordinary-source.txt", "test/fixtures/destination.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /test\/fixtures\/destination\.txt/);
+});
+
+test("a rename between two protected paths requires a ruling for both sides", (t) => {
+  const { root, result } = renameCase("test/fixtures/source.txt", "test/pins/destination.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /test\/fixtures\/source\.txt/);
+  assert.match(result.stderr, /test\/pins\/destination\.txt/);
+});
+
+test("a rename between two unprotected paths passes", (t) => {
+  const { root, result } = renameCase("ordinary-source.txt", "ordinary-renamed.txt");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("changing a protected-list entry fails closed and names the change", (t) => {
+  const root = fixture();
+  const scriptRoot = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-list-test-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => rmSync(scriptRoot, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeFileSync(join(root, "README.md"), "ordinary documentation edit\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "ordinary edit"]);
+  const tamperedScript = join(scriptRoot, "check-protected-paths.cjs");
+  const source = readFileSync(SCRIPT, "utf8");
+  const changed = source.replace(
+    'const CONTROL_DOCUMENT = "docs/assurance/installed-tree-pin-control.md";',
+    'const CONTROL_DOCUMENT = "docs/control.md";',
+  );
+  assert.notEqual(changed, source, "tamper fixture did not change the protected list");
+  writeFileSync(tamperedScript, changed);
+  const result = runWithScript(tamperedScript, root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_LIST_TAMPERED/);
+  assert.match(result.stderr, /missing \[docs\/assurance\/installed-tree-pin-control\.md\]/);
+  assert.match(result.stderr, /unexpected \[docs\/control\.md\]/);
+});
+
 test("the protected-path rulebook guards itself", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -115,6 +189,29 @@ test("the protected-path rulebook guards itself", (t) => {
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /scripts\/check-protected-paths\.cjs/);
+});
+
+test("a protected path introduced only by a merge commit requires a ruling", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "topic-only.txt"), "topic\n");
+  git(root, ["add", "topic-only.txt"]);
+  git(root, ["commit", "-qm", "topic change"]);
+  git(root, ["switch", "-qc", "main", base]);
+  writeFileSync(join(root, "main-only.txt"), "main\n");
+  git(root, ["add", "main-only.txt"]);
+  git(root, ["commit", "-qm", "main change"]);
+  git(root, ["merge", "--no-ff", "--no-commit", "topic"]);
+  mkdirSync(join(root, "corpus"), { recursive: true });
+  writeFileSync(join(root, "corpus", "merge-only.txt"), "merge result\n");
+  git(root, ["add", "corpus/merge-only.txt"]);
+  git(root, ["commit", "-qm", "merge topic with protected result"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /corpus\/merge-only\.txt/);
 });
 
 test("a range-and-blob ruling passes on an actual merge commit", (t) => {
@@ -166,7 +263,7 @@ test("widening a ruling allowlist fails closed", (t) => {
   assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
 });
 
-test("an all-zero first push resolves from the first pushed commit parent", (t) => {
+test("push and pull-request events resolve the same target-branch candidate range", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const base = git(root, ["rev-parse", "HEAD"]);
@@ -179,20 +276,26 @@ test("an all-zero first push resolves from the first pushed commit parent", (t) 
   git(root, ["add", "ordinary-note.txt"]);
   git(root, ["commit", "-qm", "unprotected second commit"]);
   const head = git(root, ["rev-parse", "HEAD"]);
-  const range = resolveRange(root, "push", {
-    before: "0".repeat(40),
+  const prRange = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: base }, head: { sha: head } },
+  });
+  const pushRange = resolveRange(root, "push", {
+    before: first,
     after: head,
     size: 2,
     commits: [{ id: first }, { id: head }],
+    repository: { default_branch: "main" },
   });
-  assert.equal(range.status, 0, range.stdout + range.stderr);
-  assert.equal(range.stdout.trim(), `${base} ${head}`);
-  const result = run(root, ...range.stdout.trim().split(" "));
+  assert.equal(prRange.status, 0, prRange.stdout + prRange.stderr);
+  assert.equal(pushRange.status, 0, pushRange.stdout + pushRange.stderr);
+  assert.equal(prRange.stdout.trim(), `${base} ${head}`);
+  assert.equal(pushRange.stdout.trim(), prRange.stdout.trim());
+  const result = run(root, ...pushRange.stdout.trim().split(" "));
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /scripts\/installed-tree-pin-sites\.json/);
 });
 
-test("an uncomputable all-zero first push fails by name", (t) => {
+test("a push without a target default branch fails by name", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const head = git(root, ["rev-parse", "HEAD"]);
@@ -203,5 +306,22 @@ test("an uncomputable all-zero first push fails by name", (t) => {
     commits: [],
   });
   assert.equal(range.status, 1, range.stdout + range.stderr);
-  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: FIRST_PUSH_COMMITS_MISSING/);
+  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: target default branch is missing from event payload/);
+});
+
+test("a protected artifact deleted within the candidate range still requires a ruling", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  const artifact = join(root, "test", "fixtures", "transient.json");
+  writeFileSync(artifact, "{}\n");
+  git(root, ["add", artifact]);
+  git(root, ["commit", "-qm", "add protected artifact"]);
+  rmSync(artifact);
+  git(root, ["add", "-u"]);
+  git(root, ["commit", "-qm", "delete protected artifact"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /test\/fixtures\/transient\.json/);
 });
