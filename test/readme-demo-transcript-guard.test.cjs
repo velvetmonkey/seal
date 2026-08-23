@@ -34,12 +34,11 @@ function run(transcriptPath, readmePath = README, checkerPath = CHECKER_OUTPUT) 
   });
 }
 
-test("published transcript retains the known fresh-build distribution drift", (t) => {
+test("README demo fences agree with the supplied transcript", (t) => {
   const space = fixture();
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, README, space.checkerPath);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 test("a changed README line is detected against the transcript", (t) => {

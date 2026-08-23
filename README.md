@@ -4,11 +4,11 @@
 
 Seal runs locally between Claude Code and one stdio MCP server. Calls to the
 tools you select stop before execution. You see the exact tool and arguments,
-approve or decline them, and Seal refuses reuse of the same approval.
+accept or decline them, and Seal refuses reuse of the same approval.
 
 > **One exact call. One approval. One use.**
 
-**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command.**
+**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command. Check that it is available with `claude --version` before Protect.**
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
@@ -16,7 +16,7 @@ approve or decline them, and Seal refuses reuse of the same approval.
 
 ## See it work
 
-Run the local demo and approve when it asks:
+Run the local demo and accept when it asks:
 
 ```bash
 seal demo
@@ -40,7 +40,7 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
 child calls observed: still 0 (read from /tmp/seal-demo-59gSrW/child/data.txt.count) — approval shown, nothing executed
-Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+
 child calls observed: 1 (read from /tmp/seal-demo-59gSrW/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
@@ -168,8 +168,8 @@ Seal decisions emitted: 0 (receipts in /tmp/seal-demo-59gSrW/receipts: 3 before 
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
-receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). Download seal-receipt-check.mjs from the same release page as the install artifact and check its digest in that release SHA256SUMS before running it; that digest is not covered by the artifact's digest. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform.
-  node seal-receipt-check.mjs "/tmp/seal-demo-59gSrW/receipts/receipt-1787445514564-1067984-0003-BLOCK.json" --pubkey "/tmp/seal-demo-59gSrW/receipt-signer.pub"
+receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
+  node "/home/monkey/scratch/seal/checker/seal-receipt-check.mjs" "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787135578553-2349212-0003-BLOCK.json" --pubkey "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
 ```
