@@ -23,7 +23,7 @@ const BLOCKS = [
 
 const CLAIM_MANIFEST = [
   ["docs/archive/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
-  ["docs/archive/README.md", "Nothing in this archive describes the shipped Node CLI."],
+  ["docs/archive/README.md", "This archive describes the shipped Node CLI as a live checked contract store: claim-bearing-file-inventory, claim-coverage-inventory, and claims-drift require its files and fail if one is removed."],
   ["docs/archive/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md
   ["docs/assurance/linkcheck-population-control.md", "separate-source\ncross-check"],
 ];
