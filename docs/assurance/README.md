@@ -68,6 +68,24 @@ the Node CLI this repository ships.
 8. `assurance/linkcheck-population-control.md` — what the link-check population
    cross-check measures, and its shared blind spots.
 
+## I want to build a checker of my own
+
+Frozen, versioned specifications written from the implementation, so that a
+second implementation can be built by someone who has never read Seal's
+code. Each ends with what it does not specify and the condition that lifts
+each gap.
+
+1. [spec/canonicalization.md](../spec/canonicalization.md) — the two
+   canonicalization rules (contract: safe integers only; receipt: any finite
+   number), which artefact uses which, and worked examples with exact bytes.
+2. [spec/receipt-seal-spine-v1.md](../spec/receipt-seal-spine-v1.md) — the
+   receipt schema with every field marked committed or evidence, the four
+   commitments, the domain separator, the signature, and the checker's steps
+   in order.
+3. [spec/approval-contract-rs1.md](../spec/approval-contract-rs1.md) — the
+   handle, the elicitation shape, the retry steps in order, every refusal
+   code, and the two state lifetimes.
+
 ## I want to operate Seal day to day
 
 - [guide/README.md](../guide/README.md) — the operating-guide entry point,
