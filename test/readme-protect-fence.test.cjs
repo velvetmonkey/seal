@@ -17,31 +17,24 @@ function shellFences(text) {
   ));
 }
 
-test("README protect fence stops before writing .mcp.json if its target directory cannot be entered", () => {
+test("README protect fence passes exactly two tools and fails closed", () => {
   const readme = fs.readFileSync(README, "utf8");
   const protectFence = shellFences(readme).find((fence) => fence.includes("seal protect db demo.mutate"));
   assert.ok(protectFence, "README must contain the protect fence");
+  assert.equal(protectFence, "seal protect db demo.mutate demo.erase");
 
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-protect-"));
   const sentinel = path.join(work, "sentinel.txt");
   fs.writeFileSync(sentinel, "sentinel\n");
-
-  const blockedFence = protectFence.replace(
-    /^export SEAL_PROTECT_PROJECT=.*$/m,
-    'export SEAL_PROTECT_PROJECT="/proc/seal-readme-protect-denied/project"',
-  );
-
   const script = `
-seal() { printf 'seal-ran\\n' > seal-ran.txt; }
-${blockedFence}
+seal() { printf '%s\\n' "$*" > seal-args.txt; return 41; }
+${protectFence} && printf 'walk continued\\n'
 `;
-  const result = spawnSync("bash", ["-lc", script], {
-    cwd: work,
-    encoding: "utf8",
-  });
+  const result = spawnSync("bash", ["-lc", script], { cwd: work, encoding: "utf8" });
 
-  assert.notEqual(result.status, 0, "blocked protect fence must fail closed");
-  assert.equal(fs.existsSync(path.join(work, ".mcp.json")), false, "blocked protect fence must not write .mcp.json into the caller directory");
-  assert.equal(fs.existsSync(path.join(work, "seal-ran.txt")), false, "blocked protect fence must not reach seal protect after cd fails");
+  assert.equal(result.status, 41, result.stderr);
+  assert.equal(fs.readFileSync(path.join(work, "seal-args.txt"), "utf8"), "protect db demo.mutate demo.erase\n");
+  assert.equal(fs.existsSync(path.join(work, ".mcp.json")), false, "failed protect fence must not create .mcp.json");
   assert.equal(fs.readFileSync(sentinel, "utf8"), "sentinel\n");
+  assert.doesNotMatch(result.stdout, /walk continued/);
 });

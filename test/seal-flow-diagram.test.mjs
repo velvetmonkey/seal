@@ -11,8 +11,8 @@ const SVG_PATH = resolve(ROOT, "assets/seal-flow.svg");
 const svg = readFileSync(SVG_PATH, "utf8");
 const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
-test("README places the process graphic immediately before Install", () => {
-  assert.match(readme, /!\[[^\]]*\]\(assets\/seal-flow\.svg\)(?:\]\([^)\s]+\))?\n\n## 1\. Install/);
+test("README retains the process graphic in the hero", () => {
+  assert.match(readme.slice(0, readme.indexOf("## See it work")), /!\[[^\]]*\]\(assets\/seal-flow\.svg\)(?:\]\([^)\s]+\))?/);
 });
 
 test("renderer reproduces the committed SVG bytes", () => {
@@ -22,13 +22,9 @@ test("renderer reproduces the committed SVG bytes", () => {
   assert.deepEqual(readFileSync(SVG_PATH), before);
 });
 
-test("README presents the approved three-step explanation", () => {
-  assert.match(
-    readme,
-    /## How it works\n\n1\. \*\*Protect once\.\*\*[\s\S]*2\. \*\*Approve per call\.\*\*[\s\S]*3\. \*\*Keep the receipt\.\*\*/,
-  );
-  assert.match(readme, /Tools you did not name on the protected server are not approval-gated, but still pass through Seal's forwarding checks\./);
-  assert.match(readme, /Seal writes a signed receipt for every guarded decision\./);
+test("README explains the guarded and forwarding paths", () => {
+  assert.match(readme, /Only the selected tools are\n  approval-gated; unselected tools still pass through Seal's forwarding checks\./);
+  assert.match(readme, /Receipts are signed records/);
   assert.doesNotMatch(readme, /other tools remain outside Seal|other tools OUTSIDE Seal/);
 });
 

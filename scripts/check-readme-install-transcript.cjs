@@ -41,13 +41,14 @@ function readReadme() {
 }
 
 function documentedTranscript(readme) {
-  const install = readme.indexOf("## 1. Install");
-  const start = readme.indexOf("```output\n", install);
-  const end = start === -1 ? -1 : readme.indexOf("\n```", start + 10);
-  if (install === -1 || start === -1 || end === -1) fail(`README install transcript absent: ${README}`);
-  const body = readme.slice(start + "```output\n".length, end);
+  const pattern = /<!-- Seal installed-tree pin role: published-asset -->\n```output\n(installed seal [^\n]+\n[\s\S]*?)\n```/g;
+  const matches = [...readme.matchAll(pattern)];
+  if (matches.length === 0) fail(`README install transcript absent: ${README}`);
+  if (matches.length !== 1) fail(`README install transcript ambiguous: ${README}: found ${matches.length}`);
+  const [match] = matches;
+  const body = match[1];
   if (!body) fail(`README install transcript empty: ${README}`);
-  const line = readme.slice(0, start).split("\n").length + 1;
+  const line = readme.slice(0, match.index).split("\n").length + 2;
   return { body: `${body}\n`, line };
 }
 

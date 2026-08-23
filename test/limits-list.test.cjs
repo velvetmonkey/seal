@@ -8,7 +8,7 @@ const ROOT = path.join(__dirname, "..");
 
 test("boundary list names the implemented limits", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const limits = readme.match(/## What Seal covers, and what it does not\n\n([\s\S]*?)(?=\n## )/);
+  const limits = readme.match(/## The boundary\n([\s\S]*?)(?=\n## )/);
   assert.ok(limits, "README must contain the boundary list");
 
   for (const phrase of [

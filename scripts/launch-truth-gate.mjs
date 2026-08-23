@@ -2,7 +2,7 @@
 // Truth gate for the launch surfaces.
 //
 // Since roadmap step 6 the README is the developer route only: one badge,
-// four exercised beats, the canonical approval-origin sentence, and no
+// four exercised beats, the approval-origin boundary, and no
 // repository family, replay narrative or mesh claim. This gate holds that
 // shape, and holds the evaluator and comparison surfaces to the corrections
 // they already carry. If a removed claim is reintroduced, the gate fails
@@ -80,23 +80,26 @@ if (badge.label !== umbrellaName
 }
 if (/shields\.io[^\n]*actions\/workflow\/status/i.test(readme)) fail('README uses a workflow-status proxy instead of the native GitHub badge endpoint');
 
-// The canonical approval-origin sentence, verbatim (roadmap section 6),
-// placed once on the front page.
-const approvalOrigin = 'Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human\'s choice; Seal cannot distinguish a human click from a client-generated acceptance.'; // CLAIM-COVERAGE: README.md
+// The compact front page splits the approval-origin boundary between its hero
+// and limits list. Hold both exact statements so neither half can disappear.
+const approvalOrigin = 'Seal runs locally between Claude Code and one stdio MCP server. Calls to the\ntools you select stop before execution. You see the exact tool and arguments,\napprove or decline them, and Seal refuses reuse of the same approval.'; // CLAIM-COVERAGE: README.md
 const originCount = readme.split(approvalOrigin).length - 1;
-if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
+if (originCount !== 1) fail(`README must carry the compact approval-gate statement verbatim exactly once; found ${originCount}`);
+const approvalLimit = 'A failure before forwarding can spend\n  it without running the call. Seal trusts Claude Code to present the choice to a\n  human and cannot distinguish a human click from an automatic elicitation hook.';
+const approvalLimitCount = readme.split(approvalLimit).length - 1;
+if (approvalLimitCount !== 1) fail(`README must carry the approval-origin limitation verbatim exactly once; found ${approvalLimitCount}`);
 
-// The platform sentence, verbatim (roadmap section 7), stated plainly.
-const platformSentence = `**Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v${version} release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**`;
+// CI build evidence is compatibility evidence, not a product-support promise.
+const platformSentence = `**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v${version} asset is Linux x86-64. Protect also requires Claude Code's \`claude\` command.**`;
 const platformCount = readme.split(platformSentence).length - 1;
-if (platformCount !== 1) fail(`README must state the source-build and immutable-release platform boundary verbatim exactly once; found ${platformCount}`);
+if (platformCount !== 1) fail(`README must state the CI-evidenced and published-asset platform boundary verbatim exactly once; found ${platformCount}`);
 
 // The signed-receipt claim was the fifth false user-visible string in this
 // build: the demo signs receipts with a per-run key, the protected path
 // Protected activation creates or loads a durable signer (spine/proxy-cli.cjs),
 // while the demo uses a key generated for that run. Keep both lifetimes plain.
-if (!readme.includes('protected path creates or reuses a machine-local signing key')) fail('README must disclose the protected path\'s durable machine-local receipt key');
-if (!readme.includes("demo's key is generated fresh for that run")) fail('README must distinguish the demo\'s temporary receipt key from the protected path\'s durable key');
+if (!readme.includes('protected path keeps a machine-local key')) fail('README must disclose the protected path\'s durable machine-local receipt key');
+if (!readme.includes('The demo key is new for each run')) fail('README must distinguish the demo\'s temporary receipt key from the protected path\'s durable key');
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording
@@ -122,4 +125,4 @@ requireMatch(evaluator, /The module axiom gate is derived evidence: run `lake ex
 if (/expected 51 production modules and 25 kernel-baseline assignments/.test(evaluator)) fail('time-dependent module and assignment counts were copied back into the evaluator prose');
 requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}28bb3ae7/, 'current fleet disposition must remain explicitly dated');
 
-console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the approval-origin and platform sentences, and the standing corrections all hold`);
+console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the compact approval boundary, the CI-evidence platform sentence, and the standing corrections all hold`);

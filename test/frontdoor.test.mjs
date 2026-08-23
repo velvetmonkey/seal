@@ -24,14 +24,42 @@ const CUT_CLAIMS = [
 ];
 
 const SOURCED_BLOCKS = [
-  "Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
-  "Requires Node 20+ and the <code>claude</code> command for Protect. The install creates one command and one read-only store directory under <code>~/.local</code>.",
   `Seal v${VERSION} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.`,
   "The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths.",
-  "The demo and the protected path run the same proxy and rule. The state machine is TESTED for the single-tool case. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.",
   "Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal.",
   "Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override.",
   "Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments.",
+];
+
+const RETARGETED_BLOCKS = [
+  {
+    landing: "Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
+    sources: [
+      /Seal runs locally between Claude Code and one stdio MCP server\./,
+      /Seal refuses reuse of the same approval\./,
+      /A failure before forwarding can spend\s+it without running the call\./,
+      /Receipts are signed records, not evidence that an event happened\./,
+      /The demo key is new for each run; the\s+protected path keeps a machine-local key\./,
+    ],
+  },
+  {
+    landing: "Requires Node 20+ and the <code>claude</code> command for Protect. The install creates one command and one read-only store directory under <code>~/.local</code>.",
+    sources: [
+      /Requires Node 20\+\.[\s\S]*Protect also requires Claude Code's claude command\./,
+      /The installed command is in a user-writable prefix[\s\S]*The packaged store is read-only/,
+    ],
+  },
+  {
+    landing: "The demo and the protected path run the same proxy and rule. The state machine is TESTED for the single-tool case. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.",
+    sources: [
+      /same proxy for the demo and protected paths/,
+      /state machine is TESTED for the SINGLE-TOOL case only/,
+      /Node still owns opaque-handle lookup,[\s\S]*journal-before-forward\s+one-use consumption/,
+      /authorization sub-question through the vendored WASM/,
+      /Node\/kernel disagreement all refuse, with no JavaScript authorization fallback/,
+      /demo-grade, self-authorized configuration signing—not an externally trusted\s+production configuration key/,
+    ],
+  },
 ];
 
 function withoutHtmlCode(text) {
@@ -39,6 +67,12 @@ function withoutHtmlCode(text) {
 }
 
 test("the repository landing page uses only frisked product prose", () => {
+  for (const { landing, sources } of RETARGETED_BLOCKS) {
+    assert.ok(INDEX.includes(landing), `index.html is missing sourced block: ${landing}`);
+    for (const source of sources) {
+      assert.match(NORMALIZED_SOURCES, source, `README/docs do not source landing-page claim: ${source}`);
+    }
+  }
   for (const block of SOURCED_BLOCKS) {
     assert.ok(INDEX.includes(block), `index.html is missing sourced block: ${block}`);
     assert.ok(NORMALIZED_SOURCES.includes(withoutHtmlCode(block)), `README/docs do not contain landing-page block: ${block}`);

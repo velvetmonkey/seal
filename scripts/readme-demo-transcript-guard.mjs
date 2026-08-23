@@ -49,38 +49,17 @@ try {
   fail(`UNREADABLE_README: ${README}: ${error.message}`);
 }
 
-const demoStart = readme.indexOf("## 2. Demo");
-const demoEnd = readme.indexOf("<!-- Repository transcript instrumentation", demoStart);
-if (demoStart === -1 || demoEnd === -1) fail("README demo section is missing or has no boundary");
-const demo = readme.slice(demoStart, demoEnd);
-const roleMarker = "(?:\\*\\*Seal installed-tree pin role:\\*\\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)";
-for (const match of demo.matchAll(new RegExp("\\\\*\\\\*Output:\\\\*\\\\*\\\\s*\\\\n((" + roleMarker + "\\\\s*\\\\n)+)```text", "g"))) {
-  const count = [...match[1].matchAll(new RegExp(roleMarker, "g"))].length;
-  if (count > 1) {
-    const first = readme.slice(0, demoStart + match.index + match[0].indexOf(match[1])).split("\n").length;
-    fail(`AMBIGUOUS_ROLE_MARKERS: README.md:${first} through README.md:${first + count - 1} precede one Output fence`);
-  }
-}
-const stepHeadings = [...demo.matchAll(/^### Step (\d+):.*$/gm)];
-const outputSteps = new Set([1, 2, 3, 4, 5, 6, 7, 9, 10]);
-for (const heading of stepHeadings) {
-  const step = Number(heading[1]);
-  if (!outputSteps.has(step)) continue;
-  const start = heading.index;
-  const next = stepHeadings.find((candidate) => candidate.index > start)?.index ?? demo.length;
-  const section = demo.slice(start, next);
-  if (!/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n[\s\S]*?\n```/.test(section)) {
-    fail(`MISSING_OUTPUT_FENCE: Step ${step}`);
-  }
-}
-const fences = [...demo.matchAll(/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n([\s\S]*?)\n```/g)]
+const fences = [...readme.matchAll(/<!-- Seal demo transcript -->\s*\n```text\n([\s\S]*?)\n```/g)]
   .map((match) => match[1]);
-if (fences.length !== 9) fail(`OUTPUT_FENCE_COUNT: expected 9, found ${fences.length}`);
+if (fences.length !== 3) fail(`OUTPUT_FENCE_COUNT: expected 3, found ${fences.length}`);
 
 function stable(text) {
   return text
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/\r/g, "")
+    .replace(/^temporary demo directory:/gm, "demo directory:")
+    .replace(/Approve\? \[y\/N\](?: y)?[ \n]*/g, "Approve? [y/N] ")
+    .replace(/\/(?:private\/)?tmp\/seal-demo-[^\s)"']+/g, "<volatile-path>")
     .replace(/\/(?:home|tmp)\/[^\s)"']+/g, "<volatile-path>")
     .replace(/receipt-\d+-\d+-\d+-[A-Z_]+\.json/g, "receipt-<volatile>.json")
     .replace(/\n+/g, "\n");
@@ -94,7 +73,7 @@ for (const fence of fences) {
     if (!line.trim()) continue;
     if (line.trim().startsWith("<!--") || line.trim().endsWith("-->")) continue;
     checked += 1;
-    if (!actual.includes(line)) fail(`MISSING_DEMO_OUTPUT: ${rawLine}`);
+    if (!actual.includes(line)) fail(`MISSING_DEMO_OUTPUT: ${README}: ${rawLine}`);
   }
 }
 

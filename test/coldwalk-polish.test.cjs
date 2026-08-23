@@ -34,7 +34,7 @@ function demoRun() {
   };
 }
 
-test("demo announces and retains its checker directory, and Remove explains its cleanup", async (t) => {
+test("demo announces and retains its checker directory, and the README explains its cleanup", async (t) => {
   const demo = demoRun();
   await demo.waitFor(/Approve\? \[y\/N\]/);
   const demoPrefix = path.join(os.tmpdir(), "seal-demo-");
@@ -51,18 +51,18 @@ test("demo announces and retains its checker directory, and Remove explains its 
   assert.ok(fs.statSync(path.join(directory, "receipt-signer.pub")).isFile(), "the retained directory must keep the checker public key");
 
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /temporary directory.*remains after the walk/s);
-  assert.match(readme, /After running the checker, use these commands to remove the retained state and the exact demo directory printed for your run:/);
-  assert.match(readme, /```bash\nrm -r ~\/\.local\/share\/seal\nrm -r "\$SEAL_DEMO_DIR"\n```/);
+  assert.match(readme, /temporary demo directory: .* \(remains after the demo for the printed checker command\)/);
+  assert.match(readme, /After checking the receipt, remove the exact temporary demo directory printed for your run with `rm -r`/);
 });
 
-test("the README exports the installed command directory before the Demo command", () => {
+test("the README links the install guide whose PATH setup precedes its next steps", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const pathInstruction = readme.indexOf("Add `~/.local/bin` to PATH before continuing:");
-  const exportCommand = readme.indexOf('export PATH="$HOME/.local/bin:$PATH"');
-  const demo = readme.indexOf("## 2. Demo");
+  const firstScreen = readme.slice(0, readme.indexOf("## See it work"));
+  const install = fs.readFileSync(path.join(ROOT, "docs", "start", "install.md"), "utf8");
+  const pathInstruction = install.indexOf("Add `~/.local/bin` to PATH:");
+  const exportCommand = install.indexOf('export PATH="$HOME/.local/bin:$PATH"');
 
-  assert.ok(pathInstruction >= 0, "README must make PATH setup part of the happy path");
-  assert.ok(exportCommand > pathInstruction, "README must show the PATH export after introducing it");
-  assert.ok(exportCommand < demo, "README must show the PATH export before seal demo");
+  assert.match(firstScreen, /\[Source builds\]\(docs\/start\/install\.md\)/);
+  assert.ok(pathInstruction >= 0, "linked install guide must make PATH setup part of the happy path");
+  assert.ok(exportCommand > pathInstruction, "linked install guide must show the PATH export after introducing it");
 });

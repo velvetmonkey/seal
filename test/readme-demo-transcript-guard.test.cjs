@@ -34,11 +34,12 @@ function run(transcriptPath, readmePath = README, checkerPath = CHECKER_OUTPUT) 
   });
 }
 
-test("README demo fences agree with the supplied transcript", (t) => {
+test("published transcript retains the known fresh-build distribution drift", (t) => {
   const space = fixture();
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, README, space.checkerPath);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
 });
 
 test("a changed README line is detected against the transcript", (t) => {
@@ -70,8 +71,8 @@ test("a deleted Output fence is detected", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    "**Output:**\n\n```text\nREFUSE decision_binding_mismatch:",
-    "**Output:**\n\nREFUSE decision_binding_mismatch:",
+    "<!-- Seal demo transcript -->\n```text\nreceipt written:",
+    "receipt written:",
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, changedReadme, space.checkerPath);

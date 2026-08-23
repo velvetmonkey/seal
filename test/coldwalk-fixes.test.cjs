@@ -28,25 +28,23 @@ test("the Protect and Remove instructions identify Claude Code's retained home f
   assert.match(readme, /does not delete Claude Code's `~\/\.claude\.json` or backups under `~\/\.claude\/backups\/`; those files remain/);
 });
 
-test("the first screen requires Claude Code for Protect and provides its availability check", () => {
+test("the first screen names the Claude Code requirement for Protect", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const firstScreen = readme.slice(0, readme.indexOf("## 1. Install"));
+  const firstScreen = readme.slice(0, readme.indexOf("## See it work"));
 
-  assert.match(firstScreen, /the `claude` command for Protect\./);
-  assert.match(firstScreen, /Check that the Claude Code command is available before Protect:\n\n```bash\nclaude --version\n```/);
-  assert.doesNotMatch(firstScreen, /Protect \(check with `claude --version`\)/);
+  assert.match(firstScreen, /Protect also requires Claude Code's `claude` command\./);
 });
 
 test("the removal beat leaves the demo authority path fresh in the reader's memory", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const remove = readme.indexOf("## 4. Remove");
-  const limits = readme.indexOf("## What Seal covers, and what it does not");
+  const remove = readme.indexOf("## Remove it");
+  const limits = readme.indexOf("## The boundary");
   const pathReminder = "demo client -> Seal -> demo MCP server -> demo.mutate";
 
   assert.ok(remove >= 0, "README must contain the Remove beat");
   assert.ok(limits > remove, "limits must follow the Remove beat");
   assert.ok(readme.indexOf(pathReminder, remove) > remove, "the authority path must appear after Remove");
-  assert.ok(readme.indexOf(pathReminder, remove) < limits, "the authority path must appear before the limits list");
+  assert.ok(readme.indexOf(pathReminder, limits) > limits, "the authority path must appear in the boundary section");
 });
 
 test("both conventional help flags print the bare-command help and succeed", () => {

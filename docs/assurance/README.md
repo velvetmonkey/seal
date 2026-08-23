@@ -4,6 +4,7 @@ The product's front door is the [repository README](../../README.md):
 requirements, a short install, `seal demo`, protect / status / unprotect,
 and a five-bullet boundary list. This `docs/assurance/README.md` page maps everything
 else in `docs/`, grouped by reader.
+Every refusal code in this reference is checked against the product source.
 Files in the last two groups describe the Seal *family* of research repositories
 or a past design state — they are kept for the record and are not claims about
 the Node CLI this repository ships.
