@@ -45,6 +45,7 @@ for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((
 // Keep those links attached to the note when VERSION renames it.
 for (const file of [
   "README.md",
+  "docs/README.md",
   "docs/archive/CLAIMS-MATRIX.md",
   "docs/archive/TRUTH-BOX.md",
   "docs/archive/LIMITATIONS.md",
@@ -64,7 +65,7 @@ for (const file of ["README.md", "docs/assurance/distribution.md", "docs/start/i
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
-for (const file of ["README.md", "docs/start/install.md", "docs/start/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+for (const file of ["README.md", "docs/README.md", "docs/start/install.md", "docs/start/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
 }
 

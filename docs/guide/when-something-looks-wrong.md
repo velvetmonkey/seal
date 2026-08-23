@@ -1,5 +1,17 @@
 # When something looks wrong
 
+## Contents
+
+- [While using the protected tool](#while-using-the-protected-tool)
+- [Running `seal protect` and `seal unprotect`](#running-seal-protect-and-seal-unprotect)
+- [As Claude Code starts the protected server](#as-claude-code-starts-the-protected-server)
+- [From `seal doctor`](#from-seal-doctor)
+- [From `seal verify`](#from-seal-verify)
+- [Platform and version refusals](#platform-and-version-refusals)
+- [From the installer](#from-the-installer)
+- [From the installed `seal` command at startup](#from-the-installed-seal-command-at-startup)
+- [From the receipt checker](#from-the-receipt-checker)
+
 Every refusal Seal prints carries a token — a fixed `snake_case` name for
 what happened. This page lists every token the product can emit, grouped by
 where you meet it, with the cause and the way out. A test in this repository

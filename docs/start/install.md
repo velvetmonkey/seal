@@ -1,5 +1,11 @@
 # Install Seal v0.2.0-rc.2
 
+## Contents
+
+- [Verify, then install](#verify-then-install)
+- [Source-build tree pin](#source-build-tree-pin)
+- [Build and install this checkout on macOS](#build-and-install-this-checkout-on-macos)
+
 Source-built artifacts support Linux x86-64 and macOS x64/arm64. The immutable
 v0.2.0-rc.2 asset remains Linux x86-64; Windows and Linux ARM are unsupported.
 The installer refuses before changing anything on an unsupported or mismatched platform.

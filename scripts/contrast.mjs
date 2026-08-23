@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// WCAG 2.1 contrast audit for assets/seal-flow.svg.
+// WCAG 2.1 contrast audit for docs/seal-flow.svg.
 // Uses seal-check's committed method: extract the rendered palette, compute
 // relative luminance, and audit an explicit inventory of foreground/background
 // pairs at the applicable 4.5:1 normal-text threshold.
@@ -10,7 +10,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SVG = readFileSync(resolve(ROOT, "assets/seal-flow.svg"), "utf8");
+const SVG = readFileSync(resolve(ROOT, "docs/seal-flow.svg"), "utf8");
 const TOKENS = Object.create(null);
 for (const match of SVG.matchAll(/--([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) {
   TOKENS[match[1]] = match[2];

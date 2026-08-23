@@ -71,4 +71,6 @@ whether Seal behaved correctly, and not whether anyone independently checked
 it. The receipt's own signer remains subject to its existing limitations; this
 job introduces no signer or second account.
 
-Next: [Knowing it worked](knowing-it-worked.md).
+Next: [Knowing it worked](knowing-it-worked.md). If a Seal command refuses
+while following that path, use the token in
+[When something looks wrong](when-something-looks-wrong.md).

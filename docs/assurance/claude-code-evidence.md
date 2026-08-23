@@ -1,5 +1,16 @@
 # Claude Code integration evidence
 
+## Contents
+
+- [The honest limit](#the-honest-limit)
+- [The release-gating client matrix](#the-release-gating-client-matrix)
+- [What discharges the Claude Code row](#what-discharges-the-claude-code-row)
+- [Running the acceptance walk](#running-the-acceptance-walk)
+- [The evidence pack](#the-evidence-pack)
+- [The checker](#the-checker)
+- [The honest label](#the-honest-label)
+- [The synthetic run, and why it can never be mistaken for a real one](#the-synthetic-run-and-why-it-can-never-be-mistaken-for-a-real-one)
+
 Seal's protected path runs through Claude Code: `seal protect` installs a local
 override with `claude mcp add`, and Claude Code is the process that starts the
 Seal proxy, renders the approval request and returns the human's answer. The

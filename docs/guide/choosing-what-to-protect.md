@@ -1,5 +1,12 @@
 # Choosing what to protect
 
+## Contents
+
+- [The judgement call](#the-judgement-call)
+- [What `seal protect` does](#what-seal-protect-does)
+- [What it leaves alone](#what-it-leaves-alone)
+- [Taking the gate down](#taking-the-gate-down)
+
 Seal protects a declared set of tools on one MCP server per project. This page
 about making that choice well, and about what `seal protect` does and — just
 as important — what it leaves alone.
@@ -146,4 +153,6 @@ session is still running with the wrapper, `seal unprotect` refuses with
 `active_claude_session` until you stop it — taking the gate down mid-session
 is exactly the kind of silent change the gate exists to prevent.
 
-Next: [What is protected right now](what-is-protected-right-now.md).
+Next: [What is protected right now](what-is-protected-right-now.md). If a
+protect or unprotect command refuses along the way, look up its token in
+[When something looks wrong](when-something-looks-wrong.md).

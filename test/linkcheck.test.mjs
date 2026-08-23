@@ -181,14 +181,14 @@ test("raw HTML block and inline src/href attributes become linkcheck destination
   const fixture = [
     '<p><img src="assets/seal-logo.png"><a href="docs/guide/README.md">guide</a></p>',
     '',
-    'Inline <img src=assets/seal-flow.svg> and <a href=docs/start/install.md>install</a>.',
+    'Inline <img src=docs/seal-flow.svg> and <a href=docs/start/install.md>install</a>.',
     '',
     '<img src="https://example.test/logo.png"><a href="mailto:test@example.test">mail</a>',
   ].join("\n");
   assert.deepEqual(markdownDestinations(fixture), [
     "assets/seal-logo.png",
     "docs/guide/README.md",
-    "assets/seal-flow.svg",
+    "docs/seal-flow.svg",
     "docs/start/install.md",
     "https://example.test/logo.png",
     "mailto:test@example.test",

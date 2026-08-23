@@ -1,6 +1,6 @@
 {
   "files": {
-    "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
+    "docs/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
     "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:9"] },
     "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:120"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },

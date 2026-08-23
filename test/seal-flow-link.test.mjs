@@ -10,5 +10,5 @@ const GUARD = resolve(ROOT, "scripts/check-seal-flow-link.mjs");
 test("README diagram link target resolves to this commit's SVG", () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-  assert.match(result.stdout, /PASS  diagram link target assets\/seal-flow\.svg sha256=/);
+  assert.match(result.stdout, /PASS  diagram link target docs\/seal-flow\.svg sha256=/);
 });

@@ -1,5 +1,17 @@
 # Seal: Evaluator Truth Surface
 
+## Contents
+
+- [1. Source order and status words](#1-source-order-and-status-words)
+- [2. Historical artifact identity: 2026-07-31 candidate and shipped fleet](#2-historical-artifact-identity-2026-07-31-candidate-and-shipped-fleet)
+- [3. Proved, tested, deployed, and residual truth surface](#3-proved-tested-deployed-and-residual-truth-surface)
+- [4. Live verifier profiles](#4-live-verifier-profiles)
+- [5. Current theorem inventories and the module inventory gate](#5-current-theorem-inventories-and-the-module-inventory-gate)
+- [6. Five stop-ships](#6-five-stop-ships)
+- [7. Four secondary roadmap items](#7-four-secondary-roadmap-items)
+- [8. Prior surface disposition](#8-prior-surface-disposition)
+- [9. Unverified](#9-unverified)
+
 Regenerated: 2026-08-09. This file separates proved, tested, reproduced,
 shipped, and open facts. It is still hand-generated from the two `CLAIMS.md`
 files, the fleet lock, the live verifier declarations, and the current

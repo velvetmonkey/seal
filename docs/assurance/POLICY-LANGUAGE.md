@@ -1,5 +1,21 @@
 # POLICY-LANGUAGE.md — boxpol: the seal policy language and its analyzer
 
+## Contents
+
+- [1. The design bet](#1-the-design-bet)
+- [2. The language](#2-the-language)
+- [3. Semantics](#3-semantics)
+- [4. The analyzer](#4-the-analyzer)
+- [5. The signing bundle](#5-the-signing-bundle)
+- [6. Teach-back](#6-teach-back)
+- [7. The ceiling](#7-the-ceiling)
+- [8. The tripwire](#8-the-tripwire)
+- [9. What must be built](#9-what-must-be-built)
+- [10. Revisions forced by reading the code (not silently applied)](#10-revisions-forced-by-reading-the-code-not-silently-applied)
+- [11. Open UNKNOWNs of this specification](#11-open-unknowns-of-this-specification)
+- [12. Coverage: the reviewer's three questions, answered against the code (2026-07-26)](#12-coverage-the-reviewers-three-questions-answered-against-the-code-2026-07-26)
+- [13. Frisk corrections (Monkey, 2026-07-26 02:00, read-only lane `boxpolfrisk`)](#13-frisk-corrections-monkey-2026-07-26-0200-read-only-lane-boxpolfrisk)
+
 Status: draft specification v1, 2026-07-26. Written for Ben's evaluation and for a
 competent stranger to implement from. Supersedes nothing; it specifies the design
 answered on 2026-07-26 in response to the "tiny DSL vs Cedar" question, revised

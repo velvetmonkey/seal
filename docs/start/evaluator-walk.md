@@ -1,5 +1,11 @@
 # Evaluator walk
 
+## Contents
+
+- [After `seal demo`](#after-seal-demo)
+- [Tamper the recorded decision](#tamper-the-recorded-decision)
+- [What this does not prove](#what-this-does-not-prove)
+
 This is the forensic receipt walk for a source build of this checkout. It is
 not the path for the published GitHub release `v0.2.0-rc.2`, whose payload
 includes the receipt checker. It does not embed a captured transcript: three

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// The README process-diagram wrapper must name this tree's assets/seal-flow.svg.
+// The README process-diagram wrapper must name this tree's docs/seal-flow.svg.
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { dirname, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CANONICAL = "assets/seal-flow.svg";
+const CANONICAL = "docs/seal-flow.svg";
 const README = process.env.SEAL_FLOW_LINK_README || resolve(ROOT, "README.md");
 const SVG = process.env.SEAL_FLOW_LINK_SVG || resolve(ROOT, CANONICAL);
 
@@ -89,7 +89,7 @@ function filePathFromTarget(target) {
 }
 
 const readme = readReadme(README);
-const wrapped = readme.match(/\[!\[[^\]]*\]\(assets\/seal-flow\.svg\)\]\(([^)\s]+)\)/);
+const wrapped = readme.match(/\[!\[[^\]]*\]\(docs\/seal-flow\.svg\)\]\(([^)\s]+)\)/);
 if (!wrapped) {
   fail("diagram_link_absent", `README has no process-diagram link wrapping ${CANONICAL}`);
 }
