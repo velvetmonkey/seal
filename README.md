@@ -338,3 +338,73 @@ if test -z "$SEAL_DEMO_DIR"; then
 fi
 ```
 -->
+
+## Reader additions
+
+**Put a one-use approval gate in front of the MCP tools that can hurt you.**
+Seal runs locally between Claude Code and one stdio MCP server. Calls to the
+tools you select stop before execution. You see the exact tool and arguments,
+accept or decline them, and Seal refuses reuse of the same approval.
+
+> **One exact call. One approval. One use.**
+
+The package manifest declares Node 20 or newer. The repository's source-build
+workflow records Linux x86-64 and macOS x64/arm64 compatibility for build,
+install, demo, and receipt-check jobs; the published v0.2.0-rc.2 asset is
+Linux x86-64. Protect requires Claude Code's `claude` command; run the command
+above and continue only when it exits successfully. The source-build workflow
+is the checkable boundary for macOS x64/arm64; Windows and Linux ARM are not in
+that supported release matrix.
+
+The demo's approval prompt is a real input boundary: the parsed tool call,
+argument values, and one-use limit are the scope of that approval. Bash,
+network access, subprocesses, other servers, and direct local writes are
+outside the path shown by the demo. Seal controls the route through the
+protected MCP server, not every route to the same effect.
+
+The checker is a separate process. For a run whose output printed a temporary
+directory, set the two paths from that output and check the blocked receipt:
+
+```bash
+export SEAL_DEMO_DIR="<the temporary demo directory printed by seal demo>"
+export SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
+node checker/seal-receipt-check.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+```
+
+The checker can detect a changed canonical parsed value against the supplied
+key, but semantically irrelevant JSON formatting differences are not
+distinguished. Receipts are claims, not proofs: a matching receipt does not
+show that the decision happened. The checker does not read a key from the
+receipt, and a key stored next to it establishes self-consistency only.
+
+The maintained checker correspondence is exercised by
+`node --test test/receipt-checker.test.cjs`; both sides use the same Node crypto
+platform. A defect shared by the canonicalisation rule or platform is outside
+that check, and a checker shipped in the same artifact cannot establish that
+the artifact itself was not replaced. A hosted receipt checker can recheck a
+pasted receipt, but it cannot establish routing from that receipt.
+
+Protection is declared once as the complete set for that server; it is not
+additive. Seal checks that both names exist, asks Claude Code to install a
+local override, and leaves `.mcp.json` unchanged. Protect ends at `PENDING
+RESTART`; inspect the stored state before restarting Claude Code. The local
+override is owned by Claude Code: Seal invokes that command but does not write
+the Claude configuration or its backup files.
+
+Unprotect asks Claude Code to remove only Seal's local override. It does not
+delete Claude Code's configuration or backups; those remain unless separately
+removed by the operator. The project `.mcp.json` stays byte-for-byte unchanged.
+Seal controls calls that pass through the protected MCP server path. It does
+not control Bash, direct file writes, network access, subprocesses, other MCP
+servers, or another route to the same effect. Seal is a gate, not a sandbox.
+
+The state machine is TESTED for the single-tool case. Multi-tool protection
+reaches `PENDING RESTART` and `ACTIVE`; the remaining state classes are a
+coverage boundary, not a promise that every state has been exercised.
+
+The source-build artifact is named `seal-v0.2.0-rc.2-linux-x64` at the exact
+release tag. Protect mediates one stdio MCP server entry: only selected tools
+are approval-gated, while unselected tools still pass through Seal's
+forwarding checks. A failure before forwarding can spend an approval without
+running the call. Seal trusts Claude Code to present the choice to a human and
+cannot distinguish a human click from an automatic elicitation hook.
