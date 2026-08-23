@@ -37,7 +37,10 @@ stop-ship.
 When sources disagree, live bytes and live declarations win over prose. A
 theorem states a model result. A test gives finite evidence. `REPRODUCED` means
 one observed rebuild matched. It does not mean `REPRODUCIBLE` across hardware,
-kernels, or repeated independent runs. `CANDIDATE` is not `SHIPPED`.
+kernels, or repeated independent runs. That limitation lifts only after
+independent rebuilds match on each declared hardware and kernel combination
+under a recorded procedure; until then, report the result as `REPRODUCED`.
+`CANDIDATE` is not `SHIPPED`.
 
 | Source | Role | Backing |
 |---|---|---|

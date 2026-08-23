@@ -9,6 +9,10 @@
 - [I want the design history](#i-want-the-design-history)
 - [Family material — not claims about this CLI](#family-material-not-claims-about-this-cli)
 
+You do not need any of these assurance documents to use Seal. To use Seal,
+skip this page and follow the repository README; return here
+only when you want the evidence, operations, or design history.
+
 The product's front door is the [repository README](../../README.md):
 requirements, a short install, `seal demo`, protect / status / unprotect,
 and a five-bullet boundary list. This `docs/assurance/README.md` page maps everything
