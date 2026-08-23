@@ -17,10 +17,10 @@ function shellFences(text) {
   ));
 }
 
-test("README protects the documented complete tool set", () => {
+test("README protect fence matches the published single-tool CLI", () => {
   const readme = fs.readFileSync(README, "utf8");
   const protectFence = shellFences(readme).find((fence) => fence.includes("seal protect db demo.mutate"));
   assert.ok(protectFence, "README must contain the protect fence");
 
-  assert.equal(protectFence.trim(), "seal protect db demo.mutate demo.erase");
+  assert.equal(protectFence.trim(), "seal protect db demo.mutate");
 });

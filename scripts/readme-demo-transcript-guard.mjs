@@ -58,7 +58,7 @@ function stable(text) {
   return text
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/\r/g, "")
-    .replace(/\/(?:home|tmp)\/[^\s)"']+/g, "<volatile-path>")
+    .replace(/\/(?:home|tmp|var)\/[^\s)"']+/g, "<volatile-path>")
     .replace(/receipt-\d+-\d+-\d+-[A-Z_]+\.json/g, "receipt-<volatile>.json")
     .replace(/\n+/g, "\n");
 }

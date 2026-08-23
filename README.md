@@ -12,7 +12,7 @@ One exact call. One approval. One use.
 seal demo
 ```
 
-This is real output from `seal demo`.
+This is real output from `seal demo` (excerpted).
 
 ```text
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
@@ -56,8 +56,8 @@ directory. Keep it if you want to check the blocked receipt.
 At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.2-linux-x64
 
-Its payload does not include the checker. The repository root has no
-hand-maintained `SHA256SUMS`.
+The installed release tree includes the receipt checker. The repository root
+has no hand-maintained `SHA256SUMS`.
 
 **Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v0.2.0-rc.2 release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**
 
@@ -69,27 +69,35 @@ First check that Claude Code is available:
 claude --version
 ```
 
-In a [Claude Code project](docs/guide/choosing-what-to-protect.md) whose
-`.mcp.json` defines a stdio server named `db`, protect both tools as one set:
+In a [Claude Code project](docs/guide/choosing-what-to-protect.md), first make
+sure `.mcp.json` defines the stdio server and tool you want to gate. For
+example, this project starts a local `db` server:
+
+```json
+{
+  "mcpServers": {
+    "db": {
+      "command": "node",
+      "args": ["./db-server.mjs"]
+    }
+  }
+}
+```
+
+With the published v0.2.0-rc.2 CLI, protect one tool:
 
 ```bash
-seal protect db demo.mutate demo.erase
+seal protect db demo.mutate
 ```
 
 ```output
-Project .mcp.json hash before protect: 5039c5ce68ad23ecd2e30b6bac49869b2aadd1b0ba6109d68346913395916135
-Protection: PENDING RESTART db.{demo.mutate, demo.erase}
+Project .mcp.json hash before protect: <the SHA-256 of your project file>
+Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-Next:
-  1. Restart Claude Code in this project.
-  2. Run `seal status`.
-  3. Look for `Protection: ACTIVE`.
-Undo:
-  Stop Claude Code, then run `seal unprotect db`.
 ```
 
-Protection is the complete set for that server. It is not additive. Seal
-checks the requested names before recording it. It then asks Claude Code to
+The command also prints a local `State:` path, next steps, and the undo command.
+Seal checks the requested name before recording it. It then asks Claude Code to
 install a private local override and leaves `.mcp.json` unchanged. Protect ends
 at `PENDING RESTART`, never `ACTIVE`. After restarting Claude Code, check it:
 
@@ -102,11 +110,21 @@ counting the rest. They still pass through Seal's forwarding checks. Claude Code
 writes `~/.claude.json` and a backup under `~/.claude/backups/`. Seal invokes
 Claude Code but writes neither file. If the server entry changes, or a named
 tool disappears at activation, Seal refuses forwarding or records `BROKEN`.
+`status` prints the runtime, current protection state, and receipt summary; after
+the command above it reports `PENDING RESTART db.demo.mutate` until Claude Code
+restarts.
 
 The protected path creates or reuses a machine-local signing key. The demo's key is generated fresh for that run. The checker accepts a receipt only with a
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
-trust.
+trust. The demo prints a ready-to-run checker command for one of its receipts.
+To run the installed checker yourself, substitute the receipt and public-key
+paths printed by your demo:
+
+```bash
+checker="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+node "$checker" /path/to/receipt.json --pubkey /path/to/receipt-signer.pub
+```
 
 ## Remove it
 
@@ -116,11 +134,8 @@ Stop Claude Code. Then run this in the protected project:
 seal unprotect db
 ```
 
-```output
-Project .mcp.json hash before unprotect: 5039c5ce68ad23ecd2e30b6bac49869b2aadd1b0ba6109d68346913395916135
-Project .mcp.json hash after unprotect: 5039c5ce68ad23ecd2e30b6bac49869b2aadd1b0ba6109d68346913395916135
-Protection: - outside Seal
-```
+`unprotect` prints the `.mcp.json` hash before and after (the same value when
+the project file was unchanged), then `Protection: - outside Seal`.
 
 Unprotect asks Claude Code to remove only Seal's local override. It does not
 delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
