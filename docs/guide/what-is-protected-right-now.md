@@ -15,14 +15,14 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
-Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/you/scratch/example/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Look for `Protection: ACTIVE`.
 Undo:
   Stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+Receipts: 0 stored in /home/you/scratch/example/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 

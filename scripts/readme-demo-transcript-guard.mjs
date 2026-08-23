@@ -81,6 +81,8 @@ function stable(text) {
   return text
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/\r/g, "")
+    .replace(/^  node "\/(?:home|tmp)\/[^"\n]+" "\/(?:home|tmp)\/[^"\n]+" --pubkey "\/(?:home|tmp)\/[^"\n]+"$/gm,
+      "  [the demo prints a checker command using its generated paths here]")
     .replace(/\/(?:home|tmp)\/[^\s)"']+/g, "<volatile-path>")
     .replace(/receipt-\d+-\d+-\d+-[A-Z_]+\.json/g, "receipt-<volatile>.json")
     .replace(/\n+/g, "\n");

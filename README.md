@@ -52,8 +52,8 @@ You should see this output; `installed seal 0.2.0-rc.2 linux-x64` means done:
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /home/monkey/.local/bin/seal
+store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
@@ -93,9 +93,9 @@ Leave it running until `Approve? [y/N]`, then type `y` and press Enter. This is 
 ```text
 seal demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt
-demo directory: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2 (remains after the demo for the printed checker command)
-child calls observed: 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /home/you/scratch/example/seal-demo/child/data.txt
+demo directory: /home/you/scratch/example/seal-demo (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /home/you/scratch/example/seal-demo/child/data.txt.count)
 ```
 
 **Output:**
@@ -108,7 +108,7 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal demo wrote this line"
     Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /home/you/scratch/example/seal-demo/child/data.txt.count) — approval shown, nothing executed
 ```
 
 **Output:**
@@ -116,7 +116,7 @@ child calls observed: still 0 (read from /home/monkey/scratch/docsland-reader-wa
 ```text
 Approve? [y/N] y
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
+child calls observed: 1 (read from /home/you/scratch/example/seal-demo/child/data.txt.count)
 ```
 
 **Output:**
@@ -124,10 +124,10 @@ child calls observed: 1 (read from /home/monkey/scratch/docsland-reader-walk-run
 ```text
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/child/data.txt.count)
-receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452628-3115472-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452631-3115472-0002-ALLOW.json
-receipt written: /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/you/scratch/example/seal-demo/child/data.txt.count)
+receipt written: /home/you/scratch/example/seal-demo/receipts/receipt-1786793452628-3115472-0001-INPUT_REQUIRED.json
+receipt written: /home/you/scratch/example/seal-demo/receipts/receipt-1786793452631-3115472-0002-ALLOW.json
+receipt written: /home/you/scratch/example/seal-demo/receipts/receipt-1786793452633-3115472-0003-BLOCK.json
 ```
 
 **Output:**
@@ -151,7 +151,7 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /home/you/scratch/example/seal-demo/receipts: 3 before the write, 3 after)
 ```
 
 **Output:**
@@ -161,9 +161,18 @@ Seal decisions emitted: 0 (receipts in /home/monkey/scratch/docsland-reader-walk
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
 receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/docsland-reader-walk-run/home/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3/checker/seal-receipt-check.mjs" "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipts/receipt-1786793452633-3115472-0003-BLOCK.json" --pubkey "/home/monkey/scratch/docsland-reader-walk-run/tmp/seal-demo-aJvvA2/receipt-signer.pub"
+  [the demo prints a checker command using its generated paths here]
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
+```
+
+From the repository root, capture the demo directory it printed and run the
+same checkout-checker form used by the evaluator walk:
+
+```bash
+read -r -p "Paste the demo directory: " SEAL_DEMO_DIR
+SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
+node checker/seal-receipt-check.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
 ```
 
 **Output:**
@@ -213,7 +222,7 @@ seal protect db demo.mutate demo.erase
 Project .mcp.json hash before protect: 5039c5ce68ad23ecd2e30b6bac49869b2aadd1b0ba6109d68346913395916135
 Protection: PENDING RESTART db.{demo.mutate, demo.erase}
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/monkey/scratch/demomulti/.tmp/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json
+State: /home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
@@ -236,14 +245,14 @@ seal status
 **Output:**
 ```output
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
-Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/monkey/scratch/demomulti/.tmp/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json)
+Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json)
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Look for `Protection: ACTIVE`.
 Undo:
   Stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /home/monkey/scratch/demomulti/.tmp/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/receipts
+Receipts: 0 stored in /home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 Exit code: `0`.

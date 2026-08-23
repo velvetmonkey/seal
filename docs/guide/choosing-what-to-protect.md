@@ -56,7 +56,7 @@ $ seal protect db demo.mutate demo.erase
 Project .mcp.json hash before protect: d46bf1f116eb99abcbb7d664032e5691bc4d217034dd96757a38a44c7ace10d8
 Protection: PENDING RESTART db.{demo.mutate, demo.erase}
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json
+State: /home/you/scratch/example/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.

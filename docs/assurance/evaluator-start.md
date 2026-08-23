@@ -54,7 +54,7 @@ table in Section 6 state what superseded them.
 | Pinned verify-action record | Bytes at fleet-pinned commit `d97433e2e9370d660af2f5b08912941a880a75ce` hash to `d7d81e27`, but `VENDORED.md:15,70` and `lib/pin.js:22` at that commit say `a3790181`. This is stale documentation, not a wasm mismatch | Git blobs at the pinned commit; later commit `3d62f55b14a89e24fc317abf8a0549b28787a6b7` corrects both records |
 
 The clean rebuild excluded the host checkout, host caches, sibling private
-repositories, Docker socket and volumes, and `/home/monkey`. It used a complete
+repositories, Docker socket and volumes, and `/home/you`. It used a complete
 Git bundle, a read-only root, dropped capabilities, no new privileges, and a
 byte-identical `lake-manifest.json`. Backing:
 `/var/tmp/seal-wasm-clean-final2.2ia1TA/reproduce.sh:19-109` and
@@ -72,7 +72,7 @@ The limits are part of the result:
   and hashes; it does not run the three-way runtime agreement suite. Backing:
   `reproduce.sh:77-109`.
 - The checked-in provenance recipe is not the recipe that succeeded. It names
-  `/home/monkey/bin/leanbuild` and omits the separate dependency C-object build;
+  `/home/you/bin/leanbuild` and omits the separate dependency C-object build;
   the clean recipe used pinned `lake build` and first ran
   `.lake/packages/mcp-seal/c/build.sh`. Backing:
   `seal-host/wasm-spike/verified/PROVENANCE.txt:76-91` and

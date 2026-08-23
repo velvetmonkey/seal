@@ -2,9 +2,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const README = path.join(__dirname, "..", "README.md");
+const ROOT = path.join(__dirname, "..");
+const README = path.join(ROOT, "README.md");
 
 function commandFences(text) {
   const lines = text.split("\n");
@@ -42,5 +44,25 @@ test("README command fences do not embed /home/ absolutes", () => {
     offenders,
     [],
     `README command fences must not embed build-machine /home/ paths:\n${offenders.join("\n")}`,
+  );
+});
+
+test("public Markdown outside docs/archive does not publish /home/monkey paths", () => {
+  const listed = spawnSync("git", ["ls-files", "*.md"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(listed.status, 0, listed.stdout + listed.stderr);
+  const offenders = [];
+  for (const relative of listed.stdout.trim().split("\n").filter(Boolean)) {
+    if (relative.startsWith("docs/archive/")) continue;
+    const lines = fs.readFileSync(path.join(ROOT, relative), "utf8").split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      if (lines[index].includes("/home/monkey")) {
+        offenders.push(`${relative}:${index + 1}: ${lines[index]}`);
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `public Markdown contains build-machine /home/monkey paths:\n${offenders.join("\n")}`,
   );
 });
