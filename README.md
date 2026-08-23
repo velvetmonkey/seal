@@ -12,13 +12,13 @@ One exact call. One approval. One use.
 seal demo
 ```
 
-This is real output from `node bin/seal demo --dir /home/monkey/scratch/readmereal/demo-capture`.
+This is real output from `seal demo`.
 
 ```text
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
-child calls observed: still 0 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /var/tmp/seal-demo/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count)
+child calls observed: 1 (read from /var/tmp/seal-demo/child/data.txt.count)
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
 ```
 
