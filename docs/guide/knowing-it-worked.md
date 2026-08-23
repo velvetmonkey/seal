@@ -129,9 +129,12 @@ This signed example is from `seal demo`:
 
 Receipts are claims written by the gate, not proofs — so they are checked by
 a separate process that imports no Seal module at runtime and needs a public
-key you already trust as input. Its canonicalisation is nevertheless a
-byte-identical copy of the producer's rule, and both use Node crypto: a defect
-shared there can make both agree on a wrong receipt.
+key you already trust as input. The checker implements the same receipt
+canonicalisation rule separately from the sealer, except that it omits the
+sealer's refusal branches for undefined values, non-finite numbers and
+unsupported non-object values. Check the maintained correspondence yourself with
+`node --test test/receipt-checker.test.cjs`. Both sides use Node crypto, so a
+defect shared there can make both agree on a wrong receipt.
 
 ```bash
 $ node checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub

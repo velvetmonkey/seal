@@ -14,6 +14,38 @@ const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-check.mjs");
 
+// These five statements are the shared receipt canonicalisation rule. The
+// sealer-only refusal branches are deliberately outside this correspondence:
+// undefined values, non-finite numbers, and unsupported non-object values.
+const CORRESPONDING_CANONICAL_RULE_LINES = [
+  ["JSON scalar encoding", /^\s*if \(value === null/],
+  ["JSON string encoding", /^\s*if \(typeof value === "string"/],
+  ["recursive array encoding", /^\s*if \(Array\.isArray\(value\)\)/],
+  ["UTF-8 object-key ordering", /^\s*const names = Object\.keys\(value\)\.sort/],
+  ["recursive object encoding", /^\s*return `\{\$\{names\.map/],
+];
+
+test("checker and sealer corresponding canonicalisation statements agree, excluding the three sealer-only refusal branches", () => {
+  const files = ["spine/receipt-seal.cjs", "checker/seal-receipt-check.mjs"];
+  const sources = files.map((file) => fs.readFileSync(path.join(ROOT, file), "utf8").split("\n"));
+  const findings = [];
+
+  for (const [part, pattern] of CORRESPONDING_CANONICAL_RULE_LINES) {
+    const matches = sources.map((lines) => lines
+      .map((line, index) => ({ line, number: index + 1 }))
+      .filter(({ line }) => pattern.test(line)));
+    if (matches.some((found) => found.length !== 1)) {
+      findings.push(`${part}: expected one corresponding statement in each file; ${files.map((file, index) => `${file}:${matches[index][0]?.number ?? "missing"}`).join(" differs from ")}`);
+      continue;
+    }
+    if (matches[0][0].line.trim() !== matches[1][0].line.trim()) {
+      findings.push(`${part}:\n${files[0]}:${matches[0][0].number}: ${matches[0][0].line.trim()}\n${files[1]}:${matches[1][0].number}: ${matches[1][0].line.trim()}`);
+    }
+  }
+
+  assert.equal(findings.length, 0, `receipt canonicalisation correspondence differs:\n${findings.join("\n")}`);
+});
+
 test("receipt canonicaliser refuses an absent value by name and the caller exits promptly", () => {
   const started = Date.now();
   const probe = spawnSync(process.execPath, ["-e", `
