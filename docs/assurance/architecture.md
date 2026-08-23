@@ -7,7 +7,7 @@
 ## Contents
 
 - [Shipped Node product path](#shipped-node-product-path)
-- [Assurance lineage — Seal family architecture](#assurance-lineage--seal-family-architecture)
+- [Assurance lineage — Seal family architecture](#assurance-lineage-seal-family-architecture)
 - [What each box is (and what it is not)](#what-each-box-is-and-what-it-is-not)
 
 The [documentation landing page](../README.md) carries the compact process

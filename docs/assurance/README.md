@@ -7,7 +7,7 @@
 - [I want to check the evidence myself](#i-want-to-check-the-evidence-myself)
 - [I want to operate Seal day to day](#i-want-to-operate-seal-day-to-day)
 - [I want the design history](#i-want-the-design-history)
-- [Family material — not claims about this CLI](#family-material--not-claims-about-this-cli)
+- [Family material — not claims about this CLI](#family-material-not-claims-about-this-cli)
 
 The product's front door is the [repository README](../../README.md):
 requirements, a short install, `seal demo`, protect / status / unprotect,

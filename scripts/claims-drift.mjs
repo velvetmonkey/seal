@@ -26,7 +26,17 @@ const CLAIM_MANIFEST = [
   ["docs/archive/README.md", "Nothing in this archive describes the shipped Node CLI."],
   ["docs/archive/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md
   ["docs/assurance/linkcheck-population-control.md", "separate-source\ncross-check"],
+  ["docs/README.md", "The landing page links to the routes below."],
 ];
+
+const landing = readFileSync(resolve(ROOT, "docs/README.md"), "utf8");
+const landingBehaviourClaims = landing
+  .split(/[.!?\n]+/)
+  .map((unit) => unit.trim())
+  .filter((unit) => /^(?:the\s+)?seal(?:-check)?\s+(?:is|are|has|does|can|cannot|will|would|must|should|[a-z][a-z'-]*(?:s|es))\b/i.test(unit));
+if (landingBehaviourClaims.length) {
+  for (const sentence of landingBehaviourClaims) console.error(`FAIL docs/README.md contains direct product behavior claim: ${sentence}`);
+}
 
 if (BLOCKS.length === 0) {
   console.error("ERROR claims-drift block population is empty; refusing to treat silence as complete claim synchronization");
@@ -121,6 +131,7 @@ for (const [file, claim] of CLAIM_MANIFEST) {
   else { drift = true; console.error(`FAIL  ${file} missing repaired claim: ${claim}`); }
 }
 
+if (landingBehaviourClaims.length) drift = true;
 if (drift) {
   console.error("\nCLAIMS DRIFT — edit the canonical file first, then mirror verbatim.");
   if (!fatal) process.exitCode = 1;
