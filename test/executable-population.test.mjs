@@ -34,13 +34,13 @@ test("canonical population agrees with a separate direct-route reconstruction", 
   const canonical = enumerate(ROOT).length;
   const program = String.raw`
 const fs=require('node:fs'),cp=require('node:child_process'),path=require('node:path');
-const root=process.argv[1], files=cp.execFileSync('git',['-C',root,'ls-files','--cached','--others','--exclude-standard','-z'],{encoding:'utf8'}).split('\0').filter(Boolean);
+const root=process.argv[1], temporary=path.relative(root,path.resolve(process.argv[2])), temporaryInside=temporary&&!temporary.startsWith('../')&&!path.isAbsolute(temporary), files=cp.execFileSync('git',['-C',root,'ls-files','--cached','--others','--exclude-standard','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).filter(f=>!temporaryInside||(f!==temporary&&!f.startsWith(temporary+'/')));
 const units=files.filter(f=>{const p=path.join(root,f),s=fs.lstatSync(p);return s.isSymbolicLink()||(s.mode&73)||f.endsWith('.wasm')||fs.readFileSync(p,'utf8').startsWith('#!')});
 let rows=new Set(['generated-release -> dist/seal-v'+fs.readFileSync(path.join(root,'VERSION'),'utf8').trim()+'-linux-x64']);
 for(const caller of files){let source;try{source=fs.readFileSync(path.join(root,caller),'utf8')}catch{continue}; for(const target of units){if(caller===target)continue;const escaped=target.replace(/[^A-Za-z0-9_/-]/g,'\\$&');for(const m of source.matchAll(new RegExp('(?<![A-Za-z0-9_./-])'+escaped+'(?![A-Za-z0-9_./-])','g')))rows.add(caller+':'+source.slice(0,m.index).split('\n').length+' -> '+target)}
 for(const m of source.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(?:resolve|join)\(([^\n)]*)\)/g)){const target=[...m[2].matchAll(/["']([^"']+)["']/g)].map(x=>x[1]).join('/'); if(units.includes(target)){const use=new RegExp('(?:spawn(?:Sync)?|execFile(?:Sync)?|exec|node|bash|sh|run)\\s*(?:\\(|\\s+)[^\\n]*?\\b'+m[1]+'\\b|\\$'+m[1]+'\\b','g');for(const hit of source.matchAll(use))rows.add(caller+':'+source.slice(0,hit.index).split('\n').length+' -> '+target)}}}
 console.log(rows.size)`;
-  const separate = Number(execFileSync(process.execPath, ["-e", program, ROOT], { encoding: "utf8" }));
+  const separate = Number(execFileSync(process.execPath, ["-e", program, ROOT, tmpdir()], { encoding: "utf8" }));
   assert.equal(canonical, separate, "separate route must agree with the canonical enumerator");
 });
 

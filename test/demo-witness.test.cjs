@@ -18,7 +18,9 @@ const SEAL = path.join(__dirname, "..", "bin", "seal");
 // output and inventory diagnostics: semantic output assertions must not depend
 // on the checkout's absolute filesystem location.
 function repositoryRelativeOutput(text) {
-  return text.replaceAll(ROOT, ".");
+  // A sibling temporary directory can share ROOT's textual prefix without
+  // being inside the checkout.
+  return text.replaceAll(`${ROOT}${path.sep}`, `.${path.sep}`);
 }
 
 function runSeal(args, input) {

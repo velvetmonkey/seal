@@ -22,7 +22,10 @@ const { createJournal } = require("../spine/store.cjs");
 // output and inventory diagnostics: semantic output assertions must not depend
 // on the checkout's absolute filesystem location.
 function repositoryRelativeOutput(text) {
-  return text.replaceAll(ROOT, ".");
+  // Only abbreviate paths that are actually below this checkout. A textual
+  // prefix can also name a sibling temporary directory (ROOT=".../seal",
+  // TMPDIR=".../seal-tmp"), which must remain an absolute path.
+  return text.replaceAll(`${ROOT}${path.sep}`, `.${path.sep}`);
 }
 
 function tmpdir(prefix) {

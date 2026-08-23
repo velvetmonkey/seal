@@ -53,7 +53,10 @@ function walk(dir, prefix = "") {
   const out = [];
   for (const name of readdirSync(path.resolve(dir, prefix), { withFileTypes: true })) {
     const relative = prefix ? `${prefix}/${name.name}` : name.name;
-    if (name.isDirectory() && name.name !== ".git") out.push(...walk(dir, relative));
+    const full = path.resolve(dir, relative);
+    // Keep the separate population oracle aligned with the product rule:
+    // an in-checkout system temporary directory is runtime state, not source.
+    if (name.isDirectory() && name.name !== ".git" && full !== path.resolve(tmpdir())) out.push(...walk(dir, relative));
     else if (name.isFile()) out.push(relative);
   }
   return out;

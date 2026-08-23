@@ -23,7 +23,23 @@ const SITE_MANIFEST = path.join(ROOT, "scripts", "installed-tree-pin-sites.json"
 const PIN_PATTERN = /\btree:?\s+([0-9a-f]{64})\b|\/store\/([0-9a-f]{64})(?=\/|\b)/g;
 
 function scratchRoot() {
-  return process.env.RUNNER_TEMP || os.tmpdir();
+  const temporary = process.env.RUNNER_TEMP || os.tmpdir();
+  const relative = path.relative(ROOT, path.resolve(temporary));
+  if (relative && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+    const outsideRoot = path.join(path.dirname(ROOT), ".seal-test-scratch");
+    fs.mkdirSync(outsideRoot, { recursive: true });
+    return outsideRoot;
+  }
+  return temporary;
+}
+
+function copyableSource(source) {
+  const relative = path.relative(ROOT, source);
+  const temporary = path.relative(ROOT, path.resolve(os.tmpdir()));
+  return source !== path.join(ROOT, ".git")
+    && !source.startsWith(path.join(ROOT, "dist"))
+    && relative !== temporary
+    && !relative.startsWith(`${temporary}${path.sep}`);
 }
 
 function assertNamedRefuse(fn, code) {
@@ -224,7 +240,7 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
   fs.cpSync(ROOT, copy, {
     recursive: true,
     filter(source) {
-      return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
+      return copyableSource(source);
     },
   });
 
@@ -263,7 +279,7 @@ test("repin refuses two role markers before one fence and names both markers", (
   fs.cpSync(ROOT, copy, {
     recursive: true,
     filter(source) {
-      return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
+      return copyableSource(source);
     },
   });
   const readme = path.join(copy, "README.md");
@@ -291,7 +307,7 @@ test("repin rewrites a legitimate single-marker fresh-build block", (t) => {
   fs.cpSync(ROOT, copy, {
     recursive: true,
     filter(source) {
-      return source !== path.join(ROOT, ".git") && !source.startsWith(path.join(ROOT, "dist"));
+      return copyableSource(source);
     },
   });
   const readme = path.join(copy, "README.md");

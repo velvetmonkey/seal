@@ -5,6 +5,7 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
@@ -16,7 +17,10 @@ function walk(dir, prefix = "") {
   const out = [];
   for (const name of readdirSync(resolve(dir, prefix), { withFileTypes: true })) {
     const relative = prefix ? `${prefix}/${name.name}` : name.name;
-    if (name.isDirectory() && name.name !== ".git") out.push(...walk(dir, relative));
+    const full = resolve(dir, relative);
+    // The system temporary directory may be deliberately located inside this
+    // checkout. It is runtime state, not a source directory for link checks.
+    if (name.isDirectory() && name.name !== ".git" && full !== resolve(tmpdir())) out.push(...walk(dir, relative));
     else if (name.isFile()) out.push(relative);
   }
   return out;

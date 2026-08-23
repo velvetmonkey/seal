@@ -50,10 +50,15 @@ const DOC_BANNED_OVERCLAIMS = [
   },
 ];
 
+function isTemporaryDirectory(directory) {
+  return path.resolve(directory) === path.resolve(os.tmpdir());
+}
+
 function scan(dir, hits) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
     const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && isTemporaryDirectory(full)) continue;
     if (entry.isDirectory()) { scan(full, hits); continue; }
     if (!entry.isFile()) continue;
     const text = fs.readFileSync(full, "utf8");
@@ -69,6 +74,7 @@ function scanDocs(dir, claims, hits) {
   let scanned = 0;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && isTemporaryDirectory(full)) continue;
     if (entry.isDirectory()) { scanned += scanDocs(full, claims, hits); continue; }
     if (!entry.isFile()) continue;
     scanned++;

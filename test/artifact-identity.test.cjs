@@ -23,7 +23,14 @@ const SCRIPTS = ["product-identity.cjs", "check-artifact-identity.cjs"];
 const FIXTURE_VERSION = "0.2.0-rc.1";
 
 function run(command, args, cwd) {
-  return spawnSync(command, args, { cwd, encoding: "utf8" });
+  // Keep a no-history fixture from inheriting a repository found above the
+  // fixture directory (for example when the system temporary directory is
+  // inside another checkout).
+  return spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(cwd) },
+  });
 }
 
 function git(cwd, ...args) {
