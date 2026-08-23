@@ -1,8 +1,9 @@
+y
 seal demo — one shared proxy, one hidden child, one real file
 tool      demo.mutate  guarded
-child     seal __demo-server (this same binary) mutating /home/monkey/scratch/runner-temp/tty-demo/child/data.txt
-demo directory: /home/monkey/scratch/runner-temp/tty-demo (remains after the demo for the printed checker command)
-child calls observed: 0 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
+child     seal __demo-server (this same binary) mutating /home/monkey/scratch/transcriptclose-demo.8PEhqN/child/data.txt
+demo directory: /home/monkey/scratch/transcriptclose-demo.8PEhqN (remains after the demo for the printed checker command)
+child calls observed: 0 (read from /home/monkey/scratch/transcriptclose-demo.8PEhqN/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Approval required
     Tool: demo.mutate
@@ -10,14 +11,16 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
       line: "seal demo wrote this line"
     Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
-child calls observed: still 0 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count) — approval shown, nothing executed
+child calls observed: still 0 (read from /home/monkey/scratch/transcriptclose-demo.8PEhqN/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] y
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
+child calls observed: 1 (read from /home/monkey/scratch/transcriptclose-demo.8PEhqN/child/data.txt.count)
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787135578553-2349212-0003-BLOCK.json
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/transcriptclose-demo.8PEhqN/child/data.txt.count)
+receipt written: /home/monkey/scratch/transcriptclose-demo.8PEhqN/receipts/receipt-1787462495963-3241633-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/transcriptclose-demo.8PEhqN/receipts/receipt-1787462496478-3241633-0002-ALLOW.json
+receipt written: /home/monkey/scratch/transcriptclose-demo.8PEhqN/receipts/receipt-1787462496484-3241633-0003-BLOCK.json
 
 SCOPE WITNESS
 
@@ -30,11 +33,11 @@ Now the demo performs a harmless direct local write
 that does not cross the Seal gate.
 
 DIRECT WRITE SUCCEEDED
-Seal decisions emitted: 0 (receipts in /home/monkey/scratch/runner-temp/tty-demo/receipts: 3 before the write, 3 after)
+Seal decisions emitted: 0 (receipts in /home/monkey/scratch/transcriptclose-demo.8PEhqN/receipts: 3 before the write, 3 after)
 
 Seal is a gate, not a sandbox: it controls the path through it, and only that path.
 summary: approval matched the effect, one child call observed, replay refused; 3 receipts written; one write happened outside Seal.
-receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
-  node "/home/monkey/scratch/seal/checker/seal-receipt-check.mjs" "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787135578553-2349212-0003-BLOCK.json" --pubkey "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub"
+receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). It imports no Seal module at check time and implements the same receipt canonicalisation rule separately from the sealer, while omitting the sealer's refusal branches for undefined values, non-finite numbers and unsupported non-object values. The maintained rule correspondence is checked by `node --test test/receipt-checker.test.cjs`. Both sides use the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform. It ships in this same artifact, so it also cannot protect against a replaced artifact:
+  node seal-receipt-check.mjs "/home/monkey/scratch/transcriptclose-demo.8PEhqN/receipts/receipt-1787462496484-3241633-0003-BLOCK.json" --pubkey "/home/monkey/scratch/transcriptclose-demo.8PEhqN/receipt-signer.pub"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
