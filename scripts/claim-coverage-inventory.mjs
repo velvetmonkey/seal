@@ -29,6 +29,14 @@ const DECLARED_GAPS = new Set([
   "seal-live-demo/docs/ARCHITECTURE.md",
   "seal-assurance-kit/docs/ARCHITECTURE.md",
 ]);
+// A file is checked only when a novel false sentence in that file makes an
+// instrument exit nonzero and name the file. These are the measured files.
+const CHECKED_FILES = new Set([
+  "seal/SECURITY.md",
+  "seal/docs/assurance/installed-tree-pin-control.md",
+  "seal/docs/guide/what-is-protected-right-now.md",
+  "seal/docs/guide/when-something-looks-wrong.md",
+]);
 
 function walk(root, dir = root, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -86,19 +94,19 @@ function main() {
   const missing = actualUncovered.filter((file) => !allowlist.includes(file) && !DECLARED_GAPS.has(file));
   const stale = allowlist.filter((file) => !actualUncovered.includes(file));
   const staleGaps = [...DECLARED_GAPS].filter((file) => !actualUncovered.includes(file));
-  // These counts come from stored whole-file and substring comparisons. They
+  // These counts come from stored marked-block and substring comparisons. They
   // detect drift but do not reject a novel false sentence, so they are wording
   // fixtures rather than claim checks.
-  const checked = 0;
+  const checked = CHECKED_FILES.size;
   const driftFixture = counts.full + counts.substring;
   const debt = counts.uncovered;
-  console.log(`CLAIM COVERAGE ACCOUNTING: checked=${checked} drift-fixture=${driftFixture} debt=${debt} (full-file=${counts.full} stored-substring=${counts.substring} allowlisted=${allowlist.length} declared-gaps=${declared.length})`);
+  console.log(`CLAIM COVERAGE ACCOUNTING: checked=${checked} drift-fixture=${driftFixture} debt=${debt} (marked-block-sync=${counts.full} stored-substring=${counts.substring} allowlisted=${allowlist.length} declared-gaps=${declared.length})`);
   for (const file of declared) console.log(`GAP uncovered claim-bearing file declared: ${file}`);
   if (missing.length) console.error(`FAIL uncovered claim-bearing files not allowlisted: ${missing.join(", ")}`);
   if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
   if (staleGaps.length) console.error(`FAIL declared gaps name covered or absent files: ${staleGaps.join(", ")}`);
   if (missing.length || stale.length || staleGaps.length) process.exitCode = 1;
-  else console.log(`ACCOUNTED checked=${checked} drift-fixture=${driftFixture} debt=${debt}; drift-fixture compares stored wording, debt is named`);
+  else console.log(`ACCOUNTED checked=${checked} drift-fixture=${driftFixture} debt=${debt}; drift-fixture compares marked blocks and stored substrings, not claim truth; a stored substring can remain while surrounding wording becomes false`);
 }
 
 main();

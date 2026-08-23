@@ -46,8 +46,8 @@ test("inventory reports fixture three-way accounting", (t) => {
   t.after(() => fs.rmSync(family, { recursive: true, force: true }));
   const result = run(roots);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /CLAIM COVERAGE ACCOUNTING: checked=0 drift-fixture=2 debt=4 \(full-file=1 stored-substring=1 allowlisted=2 declared-gaps=2\)/);
-  assert.match(result.out, /ACCOUNTED checked=0 drift-fixture=2 debt=4; drift-fixture compares stored wording, debt is named/);
+  assert.match(result.out, /CLAIM COVERAGE ACCOUNTING: checked=4 drift-fixture=2 debt=4 \(marked-block-sync=1 stored-substring=1 allowlisted=2 declared-gaps=2\)/);
+  assert.match(result.out, /ACCOUNTED checked=4 drift-fixture=2 debt=4; drift-fixture compares marked blocks and stored substrings, not claim truth; a stored substring can remain while surrounding wording becomes false/);
   assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-live-demo\/docs\/ARCHITECTURE\.md/);
   assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-assurance-kit\/docs\/ARCHITECTURE\.md/);
 });
