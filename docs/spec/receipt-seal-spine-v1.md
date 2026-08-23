@@ -358,6 +358,13 @@ Anyone able to use the machine's private key could have signed a
 different story. The `evidence` block is the contract's own account and
 carries `human_present: "unknown"` for that reason.
 
+For a particular receipt, this limitation lifts only when a separately
+specified verification system supplies a separately authenticated record
+bound to that receipt's `effect_sha256` and to the particular fact at issue:
+a decision record, a child execution record, a human-presence attestation, or
+a signer-custody attestation. That additional record establishes only the fact
+it states; the receipt and its `evidence` block alone do not.
+
 ## 9. What this document does not specify, and what would lift each gap
 
 1. **Non-JSON inputs to the checker's canonicalizer.** The checker's copy
