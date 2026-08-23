@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "files": {
+    "README.md": [
+      { "sentence": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.", "proof": "test/frontdoor.test.mjs:27" },
+      { "sentence": "Seal puts an approval gate in front of a named set of tools on one MCP server.", "proof": "test/frontdoor.test.mjs:27" },
+      { "sentence": "Seal will not run it twice.", "proof": "test/demo-witness.test.cjs:109" },
+      { "sentence": "Seal writes a signed receipt of the decision.", "proof": "test/seal-flow-diagram.test.mjs:31" },
+      { "sentence": "Seal source builds support Linux x86-64 and macOS x64/arm64.", "proof": "test/frontdoor.test.mjs:34" },
+      { "sentence": "Seal is a gate, not a sandbox: it controls the path through it, and only that path.", "proof": "test/frontdoor.test.mjs:32" },
+      { "sentence": "Seal asks you to approve one exact call.", "proof": "test/frontdoor.test.mjs:27" },
+      { "sentence": "Seal will not run it twice, and a failure before forwarding can spend the approval without running it at all.", "proof": "test/demo-witness.test.cjs:109" },
+      { "sentence": "Seal is TESTED to bind AUTHORIZATION, not INTENT: if a human approves a malicious-but-valid request, Seal executes it.", "proof": "test/kernel-bridge.test.cjs:102" },
+      { "sentence": "Seal binds a client's retry to the displayed request.", "proof": "test/demo-witness.test.cjs:108" },
+      { "sentence": "Seal v0.2.0-rc.2 is Linux x86-64 only.", "proof": "test/frontdoor.test.mjs:29" }
+    ],
+    "docs/guide/knowing-it-worked.md": [
+      { "sentence": "Seal makes the approved call and the executed call the same call: same tool,", "proof": "test/demo-witness.test.cjs:109" }
+    ]
+  }
+}

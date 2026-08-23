@@ -67,7 +67,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   const rule = "If a route to the same effect does not pass through the printed Seal path, Seal did not control it.";
   const pathAt = run.out.indexOf(pathLine);
   const ruleAt = run.out.indexOf(rule);
-  const directWriteAt = run.out.indexOf("Now the demo performs a harmless direct local write");
+  const directWriteAt = run.out.indexOf("Now the demo performs a harmless direct local write"); // CLAIM-COVERAGE: README.md
   assert.ok(pathAt >= 0, "demo output must print the authority path");
   assert.ok(ruleAt > pathAt, "demo output must print the boundary rule after the authority path");
   assert.ok(directWriteAt > ruleAt, "demo output must print the direct write after the boundary rule");
@@ -104,9 +104,9 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   assert.doesNotMatch(fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8"), /without crossing/);
 
   // Four observed child counts on the way: 0, still 0 at the dialog, 1, still 1.
-  assert.match(run.out, /child calls observed: 0 \(read from /);
+  assert.match(run.out, /child calls observed: 0 \(read from /); // CLAIM-COVERAGE: README.md
   assert.match(run.out, /child calls observed: still 0 \(read from /);
-  assert.match(run.out, /child calls observed: 1 \(read from /);
+  assert.match(run.out, /child calls observed: 1 \(read from /); // CLAIM-COVERAGE: README.md; CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
   assert.match(run.out, /child calls observed: still 1 \(read from /);
 
   // Output discipline: no verification claims anywhere.

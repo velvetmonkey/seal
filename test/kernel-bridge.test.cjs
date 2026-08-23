@@ -100,7 +100,7 @@ test("real MCP retry uses the proved authorization kernel and forwards only its 
   const receipt = JSON.parse(fs.readFileSync(path.join(run.receipts, allowReceiptName), "utf8"));
   assert.equal(receipt.evidence.authorization_rule, "PROVED");
   assert.equal(receipt.evidence.state_machine, "TESTED");
-  assert.equal(receipt.evidence.kernel.verdict, "ALLOW");
+  assert.equal(receipt.evidence.kernel.verdict, "ALLOW"); // CLAIM-COVERAGE: README.md
   const raw = JSON.parse(receipt.evidence.kernel.raw);
   const audit = JSON.parse(raw.audit);
   assert.equal(audit.verdict, "allow");
