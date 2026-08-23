@@ -9,6 +9,13 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = "scripts/claim-bearing-files.json";
+// Ben's first narrow slice. Add a path here to widen the mandatory prose gate.
+const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md"];
+const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
+const REQUIRED_MANDATORY_CLAIMS = {
+  "README.md": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
+  "docs/guide/knowing-it-worked.md": "Seal makes the approved call and the executed call the same call: same tool,",
+};
 
 // A text file is claim-bearing when it contains a declarative, present-tense
 // sentence whose subject is a Seal product entity. This is deliberately
@@ -108,6 +115,42 @@ function referenceProvesFile(reference, claimFile, tracked) {
   }
   return null;
 }
+
+function mandatoryClaimUnits(file) {
+  const text = readText(file);
+  if (text === null) return [];
+  return text.split(/\r?\n/).flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .map((unit) => unit.replace(/^\s*(?:[-*]\s+)?(?:\*\*)?/, "").replace(/(?:\*\*)?\s*$/, "").trim())
+    .filter((unit) => Object.values(REQUIRED_MANDATORY_CLAIMS).includes(unit)
+      || /\bSeal\s+proves?\b/i.test(unit)
+      || /\bSeal\s+guarantees?\b/i.test(unit)
+      || /\bSeal\s+has\s+made\s+every\b/i.test(unit));
+}
+
+function checkMandatoryBindings() {
+  if (!MANDATORY_DOC_FILES.some((file) => tracked.has(file))) return;
+  let bindings;
+  try { bindings = JSON.parse(readFileSync(resolve(ROOT, MANDATORY_BINDINGS), "utf8")); }
+  catch (error) { fail(`mandatory binding file unreadable: ${error.message}`); return; }
+  if (!bindings || typeof bindings !== "object" || !bindings.files || typeof bindings.files !== "object") {
+    fail(`${MANDATORY_BINDINGS}: files must be an object`); return;
+  }
+  for (const file of MANDATORY_DOC_FILES) {
+    const entry = manifest.files[file];
+    if (!entry?.coveredBy?.length || entry.allowlistReason) fail(`${file}: mandatory document cannot use allowlist/debt coverage`);
+    const fileBindings = bindings.files[file];
+    if (!Array.isArray(fileBindings) || fileBindings.length === 0) { fail(`${file}: mandatory claim binding list is empty`); continue; }
+    const bySentence = new Map(fileBindings.map((binding) => [binding.sentence, binding.proof]));
+    if (!bySentence.has(REQUIRED_MANDATORY_CLAIMS[file])) fail(`${file}: required binding missing: ${REQUIRED_MANDATORY_CLAIMS[file]}`);
+    for (const sentence of mandatoryClaimUnits(file)) {
+      const proof = bySentence.get(sentence);
+      if (!proof) { fail(`${file}: unbound claim sentence: ${sentence}`); continue; }
+      const problem = referenceProvesFile(proof, file, tracked);
+      if (problem) fail(`${file}: binding for sentence ${JSON.stringify(sentence)} ${JSON.stringify(proof)} ${problem}`);
+    }
+    for (const binding of fileBindings) if (typeof binding?.sentence !== "string" || typeof binding?.proof !== "string") fail(`${file}: binding must contain sentence and proof`);
+  }
+}
 let manifest;
 try { manifest = JSON.parse(readFileSync(resolve(ROOT, MANIFEST), "utf8")); }
 catch (error) { fail(`cannot read ${MANIFEST}: ${error.message}`); manifest = { files: {} }; }
@@ -119,6 +162,10 @@ if (!manifest.files || typeof manifest.files !== "object" || Array.isArray(manif
 const tracked = new Set(trackedFiles());
 const inventory = [];
 for (const path of tracked) {
+  // The inventory implementation's own sentence fixtures are not a second
+  // published claim surface. Its distinct registry is handled explicitly.
+  if (path === "scripts/claim-bearing-file-inventory.mjs") continue;
+  if (path === MANDATORY_BINDINGS) { inventory.push(path); continue; }
   const excluded = excludedBinaryReason(path);
   if (excluded) continue;
   let text;
@@ -151,4 +198,5 @@ for (const path of inventory) {
   const status = entry?.coveredBy?.length ? `COVERED by ${entry.coveredBy.join(", ")}` : `ALLOWLISTED: ${entry?.allowlistReason ?? "<missing>"}`;
   console.log(`${path}\t${status}`);
 }
+checkMandatoryBindings();
 process.exit(bad ? 1 : 0);

@@ -101,6 +101,15 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
 
   // FILE evidence 3: the write did not go through the child.
   assert.equal(fs.readFileSync(path.join(dir, "child", "data.txt.count"), "utf8").trim(), "1");
+  const sameCallClaim = "Seal makes the approved call and the executed call the same call: same tool,";
+  const allowedReceipt = receiptFiles
+    .map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")))
+    .find((receipt) => receipt.decision === "ALLOW");
+  assert.equal(
+    fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8"),
+    `${allowedReceipt.arguments.line}\n`,
+    sameCallClaim,
+  ); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
   assert.doesNotMatch(fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8"), /without crossing/);
 
   // Four observed child counts on the way: 0, still 0 at the dialog, 1, still 1.
