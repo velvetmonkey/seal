@@ -437,6 +437,7 @@ jobs:
         run: node scripts/claim-bearing-file-inventory.mjs
       - run: node --test test/claim-bearing-file-inventory.test.mjs
       - run: node scripts/claims-drift.mjs
+      - run: node scripts/check-receipt-canonicalization.mjs
       - run: node scripts/claim-coverage-inventory.mjs
       - run: node --test test/claims-drift.test.mjs
       # Required CI compares the local claim block against the committed hash only; live sibling comparison is in family-claims-live.yml.

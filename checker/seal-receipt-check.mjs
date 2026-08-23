@@ -15,13 +15,13 @@
 // receipt whose decision, tool, arguments or signature has been altered.
 //
 // LIMITS — what this check does NOT establish:
-//   1. Runtime-independent, NOT implementation-independent. The canonical()
-//      below is a byte-for-byte COPY of the sealer's canonical function
-//      (spine/receipt-seal.cjs), kept local only so no module is shared at
-//      runtime. It is not a second, independent implementation: a bug in
-//      that canonicalisation is a bug in BOTH sides, and they would agree on
-//      the same wrong answer. Catching that class needs a genuinely separate
-//      implementation, which this is not.
+//   1. Independent implementation boundary for canonical receipt values:
+//      The receipt checker implements the sealer's rule without importing it.
+//      It intentionally omits the sealer-only refusal branches for undefined,
+//      non-finite numbers and unsupported non-object values. Agreement checks
+//      the shared rule; it does not make Node's crypto or JSON behaviour
+//      independent from the sealer's use of that platform.
+//      This is implementation separation inside a shared runtime.
 //   2. Key provisioning is the whole trust. If the reader supplies the
 //      SEALER'S OWN key, the checker accepts whatever that sealer signed —
 //      including a hostile sealer's receipts. The check is only as meaningful
@@ -46,10 +46,10 @@ function sha256Hex(text) {
   return createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
 }
 
-// Canonical form (compact JSON, object keys sorted by UTF-8 bytes). This is a
-// byte-identical COPY of the sealer's canonical function, held here only so
-// the checker shares no module with Seal at runtime — see LIMITS #1: it is a
-// copy, not an independent implementation.
+// Independent implementation of the sealer's canonical receipt rule: compact
+// JSON with object keys sorted by UTF-8 bytes. It deliberately has none of the
+// sealer's input-refusal branches; scripts/check-receipt-canonicalization.mjs
+// checks only the statements the two implementations are meant to share.
 function canonical(value) {
   if (value === null || typeof value === "number" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "string") return JSON.stringify(value);

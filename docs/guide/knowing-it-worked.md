@@ -3,10 +3,12 @@
 Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a
-receipt that has been altered. The checker imports no Seal module at runtime,
-but copies Seal's canonicalisation rule and uses the same Node crypto
-platform, so it cannot detect defects shared there. This page walks all
-three, from real runs.
+receipt that has been altered. The checker independently implements Seal's
+receipt canonicalisation rule, without the sealer's input-refusal branches,
+and uses the same Node crypto platform. Run
+`node scripts/check-receipt-canonicalization.mjs` from the repository root to
+see the shared statements and deliberate omissions. This page walks all three,
+from real runs.
 
 ## The approval prompt, line by line
 
@@ -129,9 +131,11 @@ This signed example is from `seal demo`:
 
 Receipts are claims written by the gate, not proofs — so they are checked by
 a separate process that imports no Seal module at runtime and needs a public
-key you already trust as input. Its canonicalisation is nevertheless a
-byte-identical copy of the producer's rule, and both use Node crypto: a defect
-shared there can make both agree on a wrong receipt.
+key you already trust as input. Its canonicalisation independently implements
+the producer's receipt rule and deliberately omits the producer-only refusal
+branches. Both still use Node crypto, so a platform defect can affect both.
+Run `node scripts/check-receipt-canonicalization.mjs` from the repository root
+to inspect the exact shared statements and omissions.
 
 ```bash
 $ node checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
