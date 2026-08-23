@@ -7,8 +7,8 @@ import test from "node:test";
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = resolve(ROOT, "scripts/check-seal-flow-link.mjs");
 
-test("README diagram link target resolves to this commit's SVG", () => {
+test("README uses the terminal approval capture instead of the SVG", () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-  assert.match(result.stdout, /PASS  diagram link target assets\/seal-flow\.svg sha256=/);
+  assert.match(result.stdout, /PASS  README uses the terminal approval capture/);
 });

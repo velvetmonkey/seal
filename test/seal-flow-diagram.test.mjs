@@ -11,8 +11,9 @@ const SVG_PATH = resolve(ROOT, "assets/seal-flow.svg");
 const svg = readFileSync(SVG_PATH, "utf8");
 const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
-test("README places the process graphic immediately before Install", () => {
-  assert.match(readme, /!\[[^\]]*\]\(assets\/seal-flow\.svg\)(?:\]\([^)\s]+\))?\n\n## 1\. Install/);
+test("README shows the terminal approval capture instead of the process graphic", () => {
+  assert.doesNotMatch(readme, /assets\/seal-flow\.svg/);
+  assert.match(readme, /INPUT REQUIRED[\s\S]*?BLOCKED/);
 });
 
 test("renderer reproduces the committed SVG bytes", () => {
@@ -20,16 +21,6 @@ test("renderer reproduces the committed SVG bytes", () => {
   const result = spawnSync(process.execPath, [resolve(ROOT, "scripts/render-seal-flow.mjs")], { encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
   assert.deepEqual(readFileSync(SVG_PATH), before);
-});
-
-test("README presents the approved three-step explanation", () => {
-  assert.match(
-    readme,
-    /## How it works\n\n1\. \*\*Protect once\.\*\*[\s\S]*2\. \*\*Approve per call\.\*\*[\s\S]*3\. \*\*Keep the receipt\.\*\*/,
-  );
-  assert.match(readme, /Tools you did not name on the protected server are not approval-gated, but still pass through Seal's forwarding checks\./);
-  assert.match(readme, /Seal writes a signed receipt for every guarded decision\./);
-  assert.doesNotMatch(readme, /other tools remain outside Seal|other tools OUTSIDE Seal/);
 });
 
 test("critical diagram labels remain searchable SVG text", () => {

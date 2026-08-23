@@ -45,8 +45,8 @@ test("a changed README line is detected against the transcript", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    'but carries a byte-identical copy',
-    'but it carries a byte-identical copy',
+    'INPUT REQUIRED',
+    'INPUT NEEDED',
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, changedReadme);
@@ -57,8 +57,8 @@ test("a changed README line is detected against the transcript", (t) => {
 test("a changed product transcript is detected against the README", (t) => {
   const space = fixture();
   writeFileSync(space.transcriptPath, space.transcript.replace(
-    "Seal is a gate, not a sandbox:",
-    "Seal is a gate and a sandbox:",
+    "BLOCKED",
+    "STOPPED",
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath);
@@ -66,15 +66,15 @@ test("a changed product transcript is detected against the README", (t) => {
   assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
 });
 
-test("a deleted Output fence is detected", (t) => {
+test("a deleted terminal capture is detected", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    "**Output:**\n\n```text\nREFUSE decision_binding_mismatch:",
-    "**Output:**\n\nREFUSE decision_binding_mismatch:",
+    "```text\nINPUT REQUIRED",
+    "INPUT REQUIRED",
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, changedReadme, space.checkerPath);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /MISSING_OUTPUT_FENCE|OUTPUT_FENCE_COUNT/);
+  assert.match(result.stderr, /CAPTURE_FENCE_ABSENT/);
 });

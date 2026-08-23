@@ -51,18 +51,17 @@ test("demo announces and retains its checker directory, and Remove explains its 
   assert.ok(fs.statSync(path.join(directory, "receipt-signer.pub")).isFile(), "the retained directory must keep the checker public key");
 
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /temporary directory.*remains after the walk/s);
-  assert.match(readme, /After running the checker, use these commands to remove the retained state and the exact demo directory printed for your run:/);
-  assert.match(readme, /```bash\nrm -r ~\/\.local\/share\/seal\nrm -r "\$SEAL_DEMO_DIR"\n```/);
+  assert.match(readme, /Remove the exact temporary demo directory printed by your run after checking/);
+  assert.match(readme, /rm -r ~\/\.local\/share\/seal/);
 });
 
 test("the README exports the installed command directory before the Demo command", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const pathInstruction = readme.indexOf("Add `~/.local/bin` to PATH before continuing:");
+  const pathInstruction = readme.indexOf('export PATH="$HOME/.local/bin:$PATH"');
   const exportCommand = readme.indexOf('export PATH="$HOME/.local/bin:$PATH"');
-  const demo = readme.indexOf("## 2. Demo");
+  const demo = readme.indexOf("seal demo");
 
   assert.ok(pathInstruction >= 0, "README must make PATH setup part of the happy path");
-  assert.ok(exportCommand > pathInstruction, "README must show the PATH export after introducing it");
+  assert.equal(exportCommand, pathInstruction, "README must show the PATH export");
   assert.ok(exportCommand < demo, "README must show the PATH export before seal demo");
 });

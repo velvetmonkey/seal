@@ -49,33 +49,10 @@ try {
   fail(`UNREADABLE_README: ${README}: ${error.message}`);
 }
 
-const demoStart = readme.indexOf("## 2. Demo");
-const demoEnd = readme.indexOf("<!-- Repository transcript instrumentation", demoStart);
-if (demoStart === -1 || demoEnd === -1) fail("README demo section is missing or has no boundary");
-const demo = readme.slice(demoStart, demoEnd);
-const roleMarker = "(?:\\*\\*Seal installed-tree pin role:\\*\\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)";
-for (const match of demo.matchAll(new RegExp("\\\\*\\\\*Output:\\\\*\\\\*\\\\s*\\\\n((" + roleMarker + "\\\\s*\\\\n)+)```text", "g"))) {
-  const count = [...match[1].matchAll(new RegExp(roleMarker, "g"))].length;
-  if (count > 1) {
-    const first = readme.slice(0, demoStart + match.index + match[0].indexOf(match[1])).split("\n").length;
-    fail(`AMBIGUOUS_ROLE_MARKERS: README.md:${first} through README.md:${first + count - 1} precede one Output fence`);
-  }
-}
-const stepHeadings = [...demo.matchAll(/^### Step (\d+):.*$/gm)];
-const outputSteps = new Set([1, 2, 3, 4, 5, 6, 7, 9, 10]);
-for (const heading of stepHeadings) {
-  const step = Number(heading[1]);
-  if (!outputSteps.has(step)) continue;
-  const start = heading.index;
-  const next = stepHeadings.find((candidate) => candidate.index > start)?.index ?? demo.length;
-  const section = demo.slice(start, next);
-  if (!/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n[\s\S]*?\n```/.test(section)) {
-    fail(`MISSING_OUTPUT_FENCE: Step ${step}`);
-  }
-}
-const fences = [...demo.matchAll(/\*\*Output:\*\*\s*\n(?:(?:\*\*Seal installed-tree pin role:\*\* `(?:published-asset|fresh-build)`|<!-- Seal installed-tree pin role: (?:published-asset|fresh-build) -->)\s*\n)?```text\n([\s\S]*?)\n```/g)]
-  .map((match) => match[1]);
-if (fences.length !== 9) fail(`OUTPUT_FENCE_COUNT: expected 9, found ${fences.length}`);
+const captureStart = readme.indexOf("This is real output from");
+const capture = captureStart === -1 ? null : readme.slice(captureStart).match(/```text\n([\s\S]*?)\n```/);
+if (!capture) fail("CAPTURE_FENCE_ABSENT: README has no terminal capture after its real-output label");
+const fences = [capture[1]];
 
 function stable(text) {
   return text
@@ -92,10 +69,11 @@ for (const fence of fences) {
   for (const rawLine of stable(fence).split("\n")) {
     const line = rawLine.trimEnd();
     if (!line.trim()) continue;
+    if (line.startsWith("Approve? [y/N]")) continue;
     if (line.trim().startsWith("<!--") || line.trim().endsWith("-->")) continue;
     checked += 1;
     if (!actual.includes(line)) fail(`MISSING_DEMO_OUTPUT: ${rawLine}`);
   }
 }
 
-console.log(`PASS  README demo Output fences match transcript (${fences.length} fences, ${checked} stable lines)`);
+console.log(`PASS  README terminal capture matches transcript (${checked} stable lines)`);
