@@ -25,7 +25,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const REVIEWED_GUIDES = [
   {
     file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
-    sha256: "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd",
+    sha256: "0d0f70abb22bfb51eda52acb239b9ce660b1445594598e114b393e246b4b8a37",
     claims: [
       "You pointed `seal verify` at one of the gate's own receipts.",
       "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
@@ -34,7 +34,7 @@ const REVIEWED_GUIDES = [
   },
   {
     file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
-    sha256: "fb937dae67496bac3ff1de7c238b69d4424315ee25a425b4cf35324732fe53ac",
+    sha256: "ec826413deaa2c3b9defd2085bbe292fee8d81b7825c545ba07c45d5108988a1",
     claims: [
       "One honest wrinkle: `seal verify` can leave a *kernel* receipt (a different format) in the same directory, and `seal status` then prints `Receipt unreadable: … (missing decision or receipt time)` for it.",
       "That line means only that this listing does not parse the kernel format; use `seal verify` to check a named kernel receipt.",

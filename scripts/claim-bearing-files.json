@@ -65,6 +65,7 @@
     "scripts/mandatory-doc-claim-bindings.json": { "allowlistReason": "This binding registry is coverage metadata: its embedded claim text identifies the mandatory document sentences, but it is not a reader-facing Seal assertion." },
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-claims.test.mjs:36"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-claims.test.mjs:27"] },
-    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:11", "scripts/launch-truth-gate.mjs:110"] }
+    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:11", "scripts/launch-truth-gate.mjs:110"] },
+    "docs/README.md": { "allowlistReason": "This landing page is a navigation index whose short descriptions choose named documentation destinations; link resolution is checked locally, while the editorial recommendation is not a product-behavior claim." }
   }
 }
