@@ -1,5 +1,17 @@
 # Multi-tool protection semantics
 
+## Contents
+
+- [1. Additive or declared as a set?](#1-additive-or-declared-as-a-set)
+- [2. What does `seal status` show per tool?](#2-what-does-seal-status-show-per-tool)
+- [3. What happens when one of three tools vanishes at activation?](#3-what-happens-when-one-of-three-tools-vanishes-at-activation)
+- [4. Does unprotecting one tool touch the others' leases?](#4-does-unprotecting-one-tool-touch-the-others-leases)
+- [State-space count](#state-space-count)
+- [Existing multi-tool coverage](#existing-multi-tool-coverage)
+- [Verdict on “The state machine is TESTED”](#verdict-on-the-state-machine-is-tested)
+- [Document/code disagreements](#documentcode-disagreements)
+- [UNVERIFIED](#unverified)
+
 This document records the behavior shipped at commit
 `466be4a5d423ad763c7325263f1d014311c95879`. It answers the four questions in
 roadmap section 15.4 from the product code and from commands run on 2026-08-22.

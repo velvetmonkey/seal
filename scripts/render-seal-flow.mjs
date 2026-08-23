@@ -7,7 +7,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const target = resolve(root, "assets/seal-flow.svg");
+const target = resolve(root, "docs/seal-flow.svg");
 const layoutSource = resolve(root, "scripts/seal-flow-layout.svg");
 const replacements = [
   ['viewBox="0 0 1775 887"', 'width="1775" height="970" viewBox="0 0 1775 970"'],

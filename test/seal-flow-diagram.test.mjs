@@ -5,14 +5,14 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
-// CLAIM-COVERAGE: assets/seal-flow.svg
+// CLAIM-COVERAGE: docs/seal-flow.svg
 // CLAIM-COVERAGE: scripts/seal-flow-layout.svg
-const SVG_PATH = resolve(ROOT, "assets/seal-flow.svg");
+const SVG_PATH = resolve(ROOT, "docs/seal-flow.svg");
 const svg = readFileSync(SVG_PATH, "utf8");
 const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
 test("README places the process graphic immediately before Install", () => {
-  assert.match(readme, /!\[[^\]]*\]\(assets\/seal-flow\.svg\)(?:\]\([^)\s]+\))?\n\n## 1\. Install/);
+  assert.match(readme, /!\[[^\]]*\]\(docs\/seal-flow\.svg\)(?:\]\([^)\s]+\))?\n\n## 1\. Install/);
 });
 
 test("renderer reproduces the committed SVG bytes", () => {

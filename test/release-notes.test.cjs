@@ -24,7 +24,7 @@ test("every release-note commit and repository-path citation resolves", () => {
   const links = [...notes.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
   const shas = [...new Set(notes.match(/\b[0-9a-f]{7,40}\b/g) ?? [])];
   const repositoryPaths = links
-    .filter((link) => !/^[a-z]+:/i.test(link))
+    .filter((link) => !/^[a-z]+:/i.test(link) && !link.startsWith("#"))
     .map((link) => path.relative(ROOT, path.resolve(path.dirname(notesPath), link)));
 
   for (const sha of shas) {

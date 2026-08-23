@@ -26,7 +26,7 @@ claude --version
 2. **Approve per call.** Seal shows the exact guarded call. Its authorization kernel is a small decision program bundled as WebAssembly (WASM); Seal pins its bytes and requires its answer before forwarding. One-use consumption means the call will not run twice. Tools you did not name on the protected server are not approval-gated, but still pass through Seal's forwarding checks.
 3. **Keep the receipt.** Seal writes a signed receipt for every guarded decision. Keep it with a public key obtained from a source you trust, then use the checker or seal-check with the limits stated below.
 
-[![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
+[![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](docs/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/docs/seal-flow.svg)
 
 ## 1. Install
 

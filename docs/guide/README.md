@@ -1,5 +1,11 @@
 # The Seal operating guide
 
+## Contents
+
+- [How examples are labeled](#how-examples-are-labeled)
+- [Before you start](#before-you-start)
+- [The path through this guide](#the-path-through-this-guide)
+
 Seal puts one approval gate in front of a named set of tools on one MCP server in one
 project. When a healthy gate can show a fresh approval request for that tool,
 you see exactly what would run, and the call waits for approval — once, and

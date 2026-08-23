@@ -1,5 +1,14 @@
 # Seal docs — where to start, by what you came for
 
+## Contents
+
+- [I want to use this](#i-want-to-use-this)
+- [I want to know what it does not do](#i-want-to-know-what-it-does-not-do)
+- [I want to check the evidence myself](#i-want-to-check-the-evidence-myself)
+- [I want to operate Seal day to day](#i-want-to-operate-seal-day-to-day)
+- [I want the design history](#i-want-the-design-history)
+- [Family material — not claims about this CLI](#family-material--not-claims-about-this-cli)
+
 The product's front door is the [repository README](../../README.md):
 requirements, a short install, `seal demo`, protect / status / unprotect,
 and a five-bullet boundary list. This `docs/assurance/README.md` page maps everything

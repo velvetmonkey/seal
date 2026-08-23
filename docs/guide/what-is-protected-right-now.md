@@ -1,5 +1,13 @@
 # What is protected right now
 
+## Contents
+
+- [Reading `seal status`](#reading-seal-status)
+- [Every protection state](#every-protection-state)
+- [The Runtime line](#the-runtime-line)
+- [The Receipts lines](#the-receipts-lines)
+- [`seal doctor`](#seal-doctor)
+
 You should never have to remember what you protected. `seal status`, run in
 the project directory, answers from the recorded state; `seal doctor` states
 the one assumption approvals rest on. This page shows every line and every

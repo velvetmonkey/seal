@@ -1,5 +1,13 @@
 # Knowing it worked
 
+## Contents
+
+- [The approval prompt, line by line](#the-approval-prompt-line-by-line)
+- [Watching it hold: `seal demo`](#watching-it-hold-seal-demo)
+- [What a refusal means](#what-a-refusal-means)
+- [Checking a receipt afterwards](#checking-a-receipt-afterwards)
+- [The limit, stated plainly](#the-limit-stated-plainly)
+
 Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a

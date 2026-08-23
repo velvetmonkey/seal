@@ -1,5 +1,12 @@
 # Version identity
 
+## Contents
+
+- [The rule](#the-rule)
+- [Where the identity is carried](#where-the-identity-is-carried)
+- [The three checks, and why they are three](#the-three-checks-and-why-they-are-three)
+- [Not wired: the post-release transition](#not-wired-the-post-release-transition)
+
 `VERSION` was doing three jobs at once:
 
 1. naming the **next intended release**,

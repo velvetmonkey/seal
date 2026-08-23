@@ -1,5 +1,11 @@
 # Seal v0.2.0-rc.2 release notes
 
+## Contents
+
+- [What Seal is](#what-seal-is)
+- [What Seal does not cover](#what-seal-does-not-cover)
+- [What changed](#what-changed)
+
 ## What Seal is
 
 Seal puts an approval gate in front of one selected tool of one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. ([README.md](../../README.md); [at-most-once claim test](../../test/at-most-once-claim.test.cjs); merged [abf6f5a](https://github.com/velvetmonkey/seal/commit/abf6f5a6a46eb15310b0cd10769504ac6ed05f62))
