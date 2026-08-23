@@ -62,12 +62,14 @@ function excludedBinaryReason(path) {
   if (EXCLUDED_BINARY_PATHS.has(path)) return EXCLUDED_BINARY_PATHS.get(path);
   return [...EXCLUDED_BINARY_SUFFIXES].find(([suffix]) => path.endsWith(suffix))?.[1];
 }
-function carriesClaim(text) {
+function carriesClaim(text, path) {
   // A code-shaped text file contributes only its human-language comments and
   // sentence-like string literals.  This is syntax-shaped rather than
   // extension-shaped: a .js claim is seen, while identifiers such as
   // sealReceipt() do not turn executable implementation into prose inventory.
-  const codeShaped = /^\s*(?:#!|import\s|export\s|(?:const|let|var|function|class)\s|["'](?:files|name)["']\s*:)/m.test(text);
+  // README contains shell examples such as `export PATH`; that does not make a
+  // Markdown document source code. Other files retain the syntax-shaped scan.
+  const codeShaped = path !== "README.md" && /^\s*(?:#!|import\s|export\s|(?:const|let|var|function|class)\s|["'](?:files|name)["']\s*:)/m.test(text);
   const units = codeShaped
     ? [...text.matchAll(/(?:\/\/|\/\*+|\*|#)\s*(.*)|(?:"([^"\n]{12,}[.!?])"|'([^'\n]{12,}[.!?])')/g)]
       .map((match) => match[1] ?? match[2] ?? match[3] ?? "")
@@ -172,7 +174,7 @@ for (const path of tracked) {
   try { text = readText(path); }
   catch (error) { fail(`${path}: cannot read text: ${error.message}`); continue; }
   if (text === null) { fail(`${path}: text kind is unclassified (contains NUL bytes; add a bounded binary exclusion with a reason if appropriate)`); continue; }
-  if (carriesClaim(text)) inventory.push(path);
+  if (carriesClaim(text, path)) inventory.push(path);
 }
 for (const [path, entry] of Object.entries(manifest.files)) {
   if (!inventory.includes(path)) fail(`${path}: manifest entry is not a current claim-bearing file`);

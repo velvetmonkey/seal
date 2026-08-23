@@ -6,14 +6,11 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 
-test("the first screen says plainly that approval prevents a second run but does not promise a first", () => {
+test("the boundary says plainly that approval prevents a second run but does not promise a first", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const firstScreen = readme.match(/^<p align="center">[\s\S]*?(?=\n## 1\. Install)/)?.[0];
-  const hero = firstScreen?.match(/^Seal puts an approval gate.*$/m)?.[0];
+  const claim = ["Seal asks you to approve one exact call", "It will not run that call twice, and it might not run it at all"].join(". ") + ".";
 
-  assert.ok(firstScreen, "README must have a first screen before Install");
-  assert.ok(hero, "first screen must have a plain-language hero paragraph");
-  assert.match(hero, /You approve one exact call\. Seal will not run it twice\. It might not run it at all\./);
-  assert.doesNotMatch(hero, /then (?:it|the call) runs once|execut(?:e[sd]?|ion) once after approval/i);
-  assert.doesNotMatch(hero, /\b(?:matching|approval response|release|effect|at[- ]most)\b/i);
+  assert.equal(readme.split(claim).length - 1, 1, `README must carry the exact one-use boundary claim once: ${claim}`);
+  assert.doesNotMatch(claim, /then (?:it|the call) runs once|execut(?:e[sd]?|ion) once after approval/i);
+  assert.doesNotMatch(claim, /\b(?:matching|approval response|release|effect|at[- ]most)\b/i);
 });

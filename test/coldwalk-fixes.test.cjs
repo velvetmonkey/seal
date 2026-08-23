@@ -16,37 +16,39 @@ function runSeal(args) {
   }
 }
 
-test("the Protect and Remove instructions identify Claude Code's retained home files", () => {
+test("the Protect and Remove sections identify Claude Code's retained home files", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const protection = fs.readFileSync(path.join(ROOT, "spine", "protection.cjs"), "utf8");
+  const prose = readme.replace(/\s+/g, " ");
+  const retainedFiles = "Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/`. ";
+  const noSealWrite = "Seal invokes Claude Code but writes neither file";
+  const removal = ["Unprotect asks Claude Code to remove only Seal's local override", "It does not delete `~/.claude.json` or backups under `~/.claude/backups/`", "Those files remain until you or Claude Code remove them"].join(". ") + ".";
 
   assert.match(protection, /spawnSync\("claude", args/);
   assert.match(protection, /"mcp", "add", "--scope", "local", serverName/);
   assert.match(protection, /"mcp", "remove", "--scope", "local", serverName/);
-  assert.match(readme, /Claude Code writes `~\/\.claude\.json` and a backup under `~\/\.claude\/backups\/`/);
-  assert.match(readme, /Seal invokes Claude Code but does not write either file/);
-  assert.match(readme, /does not delete Claude Code's `~\/\.claude\.json` or backups under `~\/\.claude\/backups\/`; those files remain/);
+  assert.ok(prose.includes(retainedFiles + noSealWrite + "."), "README must state that Seal invokes Claude Code but writes neither retained file");
+  assert.ok(prose.includes(removal), "README must state that Unprotect leaves Claude Code's retained files in place");
 });
 
-test("the first screen requires Claude Code for Protect and provides its availability check", () => {
+test("the Protect section requires Claude Code and provides its availability check", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const firstScreen = readme.slice(0, readme.indexOf("## 1. Install"));
+  const protect = readme.slice(readme.indexOf("## Protect something real"), readme.indexOf("## Remove it"));
 
-  assert.match(firstScreen, /the `claude` command for Protect\./);
-  assert.match(firstScreen, /Check that the Claude Code command is available before Protect:\n\n```bash\nclaude --version\n```/);
-  assert.doesNotMatch(firstScreen, /Protect \(check with `claude --version`\)/);
+  assert.ok(protect.includes("First check that Claude Code is available:\n\n```bash\nclaude --version\n```"), "Protect must show the exact Claude Code availability command");
+  assert.ok(protect.includes("With the published v0.2.0-rc.2 CLI, protect one tool:"), "Protect must state its published-CLI scope");
 });
 
-test("the removal beat leaves the demo authority path fresh in the reader's memory", () => {
+test("the Remove section leaves the demo cleanup instruction fresh in the reader's memory", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const remove = readme.indexOf("## 4. Remove");
-  const limits = readme.indexOf("## What Seal covers, and what it does not");
-  const pathReminder = "demo client -> Seal -> demo MCP server -> demo.mutate";
+  const remove = readme.indexOf("## Remove it");
+  const boundary = readme.indexOf("## The boundary");
+  const cleanupReminder = "Remove the exact temporary demo directory printed by your run after checking\nits receipt.";
 
   assert.ok(remove >= 0, "README must contain the Remove beat");
-  assert.ok(limits > remove, "limits must follow the Remove beat");
-  assert.ok(readme.indexOf(pathReminder, remove) > remove, "the authority path must appear after Remove");
-  assert.ok(readme.indexOf(pathReminder, remove) < limits, "the authority path must appear before the limits list");
+  assert.ok(boundary > remove, "the boundary must follow the Remove beat");
+  assert.ok(readme.indexOf(cleanupReminder, remove) > remove, "the demo cleanup instruction must appear after Remove");
+  assert.ok(readme.indexOf(cleanupReminder, remove) < boundary, "the demo cleanup instruction must appear before the boundary");
 });
 
 test("both conventional help flags print the bare-command help and succeed", () => {

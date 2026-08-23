@@ -55,13 +55,15 @@ test("demo announces and retains its checker directory, and Remove explains its 
   assert.match(readme, /rm -r ~\/\.local\/share\/seal/);
 });
 
-test("the README exports the installed command directory before the Demo command", () => {
+test("the README exports the installed command directory after installation and before Protect", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const pathInstruction = readme.indexOf('export PATH="$HOME/.local/bin:$PATH"');
   const exportCommand = readme.indexOf('export PATH="$HOME/.local/bin:$PATH"');
-  const demo = readme.indexOf("seal demo");
+  const install = readme.indexOf('./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local');
+  const protect = readme.indexOf("seal protect db demo.mutate");
 
   assert.ok(pathInstruction >= 0, "README must make PATH setup part of the happy path");
   assert.equal(exportCommand, pathInstruction, "README must show the PATH export");
-  assert.ok(exportCommand < demo, "README must show the PATH export before seal demo");
+  assert.ok(install < exportCommand, "README must show the PATH export after the installer command");
+  assert.ok(exportCommand < protect, "README must show the PATH export before Protect");
 });

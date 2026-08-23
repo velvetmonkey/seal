@@ -290,14 +290,14 @@ test("repin refuses two role markers before one fence and names both markers", (
       "<!-- Seal installed-tree pin role: published-asset -->\n```output",
       "<!-- Seal installed-tree pin role: published-asset -->\n<!-- Seal installed-tree pin role: fresh-build -->\n```output",
     )
-    .replace(/(store: \/home\/monkey\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
+    .replace(/(store: \/home\/you\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
   fs.writeFileSync(readme, attacked);
   const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
     cwd: copy,
     encoding: "utf8",
   });
   assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:52 and README\.md:53 precede fenced block at README\.md:54/);
+  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:45 and README\.md:46 precede fenced block at README\.md:47/);
   assert.match(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 

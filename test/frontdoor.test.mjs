@@ -43,7 +43,7 @@ function withoutHtmlCode(text) {
 
 test("the repository landing page uses only frisked product prose", () => {
   for (const block of SOURCED_BLOCKS) assert.ok(INDEX.includes(block), `index.html is missing sourced block: ${block}`);
-  assert.match(NORMALIZED_SOURCES, /Put a one-use approval gate in front of the MCP tools that can hurt you\./);
+  assert.match(NORMALIZED_SOURCES, /One exact call\. One approval\. One use\./);
   assert.match(NORMALIZED_SOURCES, /Seal controls calls that pass through the protected MCP server path\./);
   for (const claim of CUT_CLAIMS) {
     assert.equal(INDEX.includes(claim), false, `index.html contains cut claim: ${claim}`);
