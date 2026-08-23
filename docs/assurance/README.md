@@ -1,5 +1,8 @@
 # Seal docs — where to start, by what you came for
 
+You do not need this assurance index to use Seal. If you only want to use Seal,
+start with the repository README and skip this page.
+
 The product's front door is the [repository README](../../README.md):
 requirements, a short install, `seal demo`, protect / status / unprotect,
 and a five-bullet boundary list. This `docs/assurance/README.md` page maps everything

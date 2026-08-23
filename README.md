@@ -8,7 +8,7 @@ accept or decline them, and Seal refuses reuse of the same approval.
 
 > **One exact call. One approval. One use.**
 
-**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command.** Check that it is available with `claude --version` before Protect.
+**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command.** Check that it is available with `claude --version` before Protect. On macOS x64/arm64, the published-asset limitation lifts when you build and install from source by the linked procedure. It never lifts for Windows or Linux ARM in this release; use a supported Linux x86-64 or macOS x64/arm64 host instead.
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
@@ -131,7 +131,7 @@ Undo:
 
 Exit code: `0`.
 
-Unprotect asks Claude Code to remove only Seal's local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain.
+Unprotect asks Claude Code to remove only Seal's local override. It does not delete Claude Code's `~/.claude.json` or backups under `~/.claude/backups/`; those files remain. They cease to remain only if you or Claude Code separately remove those exact files; Unprotect itself never removes them.
 
 The project `.mcp.json` stays byte-for-byte unchanged.
 
@@ -180,6 +180,8 @@ The [published-asset checker line](docs/start/install.md) between the capture pi
 immutable pin. A fresh source build instead prints `seal-receipt-check.mjs` as a
 separate release asset; the quoted-output guard reports that inherited drift.
 The landing page has **zero `<button>` controls**. See [seal-check](https://velvetmonkey.github.io/seal-check/).
+For the checker caveats in the captured output above, the JSON-formatting limit never lifts because the checker verifies canonical parsed values; compare the receipt bytes with a trusted byte-for-byte copy if formatting itself matters. The shared-rule and shared-platform limit lifts only with a checker that separately implements canonicalisation and uses a separate crypto implementation. The replaced-artifact limit lifts only when the checker is obtained and authenticated through a trust path separate from the Seal artifact it checks.
+The online checker can never establish routing from a receipt because it sees no call path. Establish routing separately: require `seal status` to report `ACTIVE`, then observe the protected call stop at Seal's exact-tool approval prompt before the server effect.
 At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory; see [distribution details](docs/assurance/distribution.md).
 
 ```text
@@ -192,17 +194,30 @@ seal-v0.2.0-rc.2-linux-x64
   it without running the call. Seal trusts Claude Code to present the choice to a
   human and cannot distinguish a human click from an automatic elicitation hook.
   Expiry follows the local wall clock; there is no trusted-time guarantee.
+  The spent-before-forwarding limit never lifts for that approval because Seal
+  consumes it durably before forwarding; after confirming no server effect,
+  submit a fresh call for a fresh approval. Human-origin assurance would lift
+  only if the client response supplied Seal a verifiable human-origin signal,
+  which the shipped protocol does not. Trusted-time assurance would lift only
+  if Seal's expiry input came from a trusted time source, which the shipped CLI
+  does not support.
 - The state machine is TESTED for the SINGLE-TOOL case only. In that case,
   Seal is TESTED to bind AUTHORIZATION, not INTENT. Multi-tool coverage reaches
-  `PENDING RESTART` and `ACTIVE`; four state classes remain uncovered.
+  `PENDING RESTART` and `ACTIVE`; four state classes remain uncovered. That
+  coverage limitation lifts when multi-tool tests also exercise `UNPROTECTED`,
+  `STALE`, `DRIFTED`, and `BROKEN`.
 - Receipts are signed records, not evidence that an event happened. Checking is
   only as good as the public key supplied. The demo key is new for each run; the
   protected path keeps a machine-local key. The optional checking path fetches a
   separately pinned runtime from GitHub, so it inherits that repository and
-  byte-integrity boundary.
+  byte-integrity boundary. The event-evidence limitation never lifts for a
+  receipt alone because an `ALLOW` receipt is emitted before forwarding; use an
+  server-side observation made separately from Seal as event evidence.
 - The installed command is in a user-writable prefix and can be replaced by
   another process running as that user. The packaged store is read-only and
-  integrity-checked; the entry point is not.
+  integrity-checked; the entry point is not. This limitation lifts only when the
+  installed command and every path component used to resolve it are not writable
+  by that user and invocation is pinned to that protected path.
 - Protect delegates its override to Claude Code, whose configuration and backups remain after Unprotect.
 
 ## Links
