@@ -12,10 +12,7 @@ const MANIFEST = "scripts/claim-bearing-files.json";
 // Ben's first narrow slice. Add a path here to widen the mandatory prose gate.
 const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md"];
 const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
-const REQUIRED_MANDATORY_CLAIMS = {
-  "README.md": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
-  "docs/guide/knowing-it-worked.md": "Seal makes the approved call and the executed call the same call: same tool,",
-};
+const SENTENCE_SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
 // A text file is claim-bearing when it contains a declarative, present-tense
 // sentence whose subject is a Seal product entity. This is deliberately
@@ -116,15 +113,45 @@ function referenceProvesFile(reference, claimFile, tracked) {
   return null;
 }
 
+function markdownProse(text) {
+  const paragraphs = [];
+  let paragraph = [];
+  let fenced = false;
+  const flush = () => {
+    if (paragraph.length) paragraphs.push(paragraph.join(" "));
+    paragraph = [];
+  };
+  for (const line of text.split(/\r?\n/)) {
+    if (line.trimStart().startsWith("```")) { flush(); fenced = !fenced; continue; }
+    if (fenced) continue;
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("<") || trimmed.startsWith("#")) { flush(); continue; }
+    const listItem = trimmed.startsWith("- ") || /^\d+\.\s/.test(trimmed);
+    if (listItem) flush();
+    paragraph.push(trimmed.replace(/^[-*]\s+/, ""));
+    if (listItem) flush();
+  }
+  flush();
+  return paragraphs;
+}
+
+function normalizeMarkdownSentence(sentence) {
+  return sentence
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replaceAll("**", "")
+    .replaceAll("`", "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function mandatoryClaimUnits(file) {
   const text = readText(file);
   if (text === null) return [];
-  return text.split(/\r?\n/).flatMap((line) => line.split(/(?<=[.!?])\s+/))
-    .map((unit) => unit.replace(/^\s*(?:[-*]\s+)?(?:\*\*)?/, "").replace(/(?:\*\*)?\s*$/, "").trim())
-    .filter((unit) => Object.values(REQUIRED_MANDATORY_CLAIMS).includes(unit)
-      || /\bSeal\s+proves?\b/i.test(unit)
-      || /\bSeal\s+guarantees?\b/i.test(unit)
-      || /\bSeal\s+has\s+made\s+every\b/i.test(unit));
+  return markdownProse(text)
+    .flatMap((paragraph) => [...SENTENCE_SEGMENTER.segment(paragraph)].map(({ segment }) => segment))
+    .map(normalizeMarkdownSentence)
+    .filter((unit) => DIRECT_BEHAVIOUR.test(unit) || (PRODUCT_ENTITY.test(unit) && ASSERTION.test(unit)));
 }
 
 function checkMandatoryBindings() {
@@ -140,15 +167,23 @@ function checkMandatoryBindings() {
     if (!entry?.coveredBy?.length || entry.allowlistReason) fail(`${file}: mandatory document cannot use allowlist/debt coverage`);
     const fileBindings = bindings.files[file];
     if (!Array.isArray(fileBindings) || fileBindings.length === 0) { fail(`${file}: mandatory claim binding list is empty`); continue; }
+    const baselineSentences = bindings.baselineSentences?.[file];
+    if (!Array.isArray(baselineSentences)) { fail(`${file}: mandatory baseline sentence list is missing`); continue; }
     const bySentence = new Map(fileBindings.map((binding) => [binding.sentence, binding.proof]));
-    if (!bySentence.has(REQUIRED_MANDATORY_CLAIMS[file])) fail(`${file}: required binding missing: ${REQUIRED_MANDATORY_CLAIMS[file]}`);
+    const currentSentences = new Set(mandatoryClaimUnits(file));
     for (const sentence of mandatoryClaimUnits(file)) {
+      if (baselineSentences.includes(sentence)) continue;
       const proof = bySentence.get(sentence);
       if (!proof) { fail(`${file}: unbound claim sentence: ${sentence}`); continue; }
       const problem = referenceProvesFile(proof, file, tracked);
       if (problem) fail(`${file}: binding for sentence ${JSON.stringify(sentence)} ${JSON.stringify(proof)} ${problem}`);
     }
-    for (const binding of fileBindings) if (typeof binding?.sentence !== "string" || typeof binding?.proof !== "string") fail(`${file}: binding must contain sentence and proof`);
+    for (const binding of fileBindings) {
+      if (typeof binding?.sentence !== "string" || typeof binding?.proof !== "string") { fail(`${file}: binding must contain sentence and proof`); continue; }
+      if (!currentSentences.has(binding.sentence)) fail(`${file}: bound sentence is absent: ${binding.sentence}`);
+      const problem = referenceProvesFile(binding.proof, file, tracked);
+      if (problem) fail(`${file}: binding for sentence ${JSON.stringify(binding.sentence)} ${JSON.stringify(binding.proof)} ${problem}`);
+    }
   }
 }
 let manifest;

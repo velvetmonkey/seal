@@ -93,7 +93,7 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   const receiptFiles = fs.readdirSync(path.join(dir, "receipts")).sort();
   assert.equal(receiptFiles.length, 3, receiptFiles.join(","));
   const decisions = receiptFiles.map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")).decision).sort();
-  assert.deepEqual(decisions, ["ALLOW", "BLOCK", "INPUT_REQUIRED"]);
+  assert.deepEqual(decisions, ["ALLOW", "BLOCK", "INPUT_REQUIRED"]); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
   for (const f of receiptFiles) {
     const receipt = JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8"));
     assert.equal(receipt.tool, "demo.mutate", "no receipt may name the outside write");

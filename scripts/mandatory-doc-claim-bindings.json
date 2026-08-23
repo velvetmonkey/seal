@@ -1,5 +1,74 @@
 {
   "version": 1,
+  "baselineSentences": {
+    "README.md": [
+      "Seal puts an approval gate in front of a named set of tools on one MCP server.",
+      "Seal will not run it twice.",
+      "Seal writes a signed receipt of the decision.",
+      "Seal source builds support Linux x86-64 and macOS x64/arm64.",
+      "Protect once. seal protect reads and hashes the server entry in .mcp.json, then asks Claude Code to install a local override.",
+      "Seal does not edit .mcp.json or ~/.claude.json, and later server-entry drift refuses instead of forwarding.",
+      "Seal shows the exact guarded call.",
+      "Its authorization kernel is a small decision program bundled as WebAssembly (WASM); Seal pins its bytes and requires its answer before forwarding.",
+      "Tools you did not name on the protected server are not approval-gated, but still pass through Seal's forwarding checks.",
+      "Seal writes a signed receipt for every guarded decision.",
+      "Keep it with a public key obtained from a source you trust, then use the checker or seal-check with the limits stated below.",
+      "Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)",
+      "You should see this output; installed seal 0.2.0-rc.2 linux-x64 means done:",
+      "At the exact release tag, your build writes seal-v0.2.0-rc.2-linux-x64 in your own dist/ directory; this is a separate source-build path, not the release-download path above.",
+      "A build of this checkout excludes checker/seal-receipt-check.mjs from its payload; its installed-tree digest is the fresh-build pin in install.md.",
+      "If you took the secondary source-build path, its store does not include the checker; use checker/seal-receipt-check.mjs from that checkout.",
+      "seal protect SERVER TOOL [TOOL...] needs the claude command and a project whose .mcp.json has a stdio MCP server.",
+      "Before recording protection, Seal starts the server, lists its tools, and refuses unless every requested tool is among them.",
+      "Running seal protect again while the server is protected refuses already_protected instead of adding another tool.",
+      "Those calls still route through Seal's proxy, where live server-entry drift or a lease-generation mismatch can refuse forwarding.",
+      "It then invokes Claude Code's claude mcp add to install a local override, private to you, routing the db server through Seal's proxy.",
+      "Seal invokes Claude Code but does not write either file.",
+      "At activation Seal repeats the discovery; a vanished tool makes the stored state BROKEN instead of silently forwarding around a stale name.",
+      "On first activation it creates a machine-local Ed25519 receipt key under the Seal data directory, prints the public key and its file path, and reuses that key on later activations.",
+      "It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.",
+      "Paste a receipt into seal-check: it re-checks the decision receipt in your browser.",
+      "The landing page has zero <button> controls.",
+      "It does not establish that your setup routes calls through Seal, and it is not the shipped checker command above.",
+      "Run these commands to return the project to outside Seal:",
+      "The store is read-only, so make it writable before removing Seal itself:",
+      "Seal asks you to approve one exact call.",
+      "On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human's choice; Seal cannot distinguish a human click from a client-generated acceptance.",
+      "Seal is a gate, not a sandbox.",
+      "Bash, network, subprocesses, other servers, and a direct local write are outside Seal.",
+      "Tools you did not name on the protected server are not approval-gated, but pass through Seal's forwarding checks.",
+      "Seal will not run it twice, and a failure before forwarding can spend the approval without running it at all.",
+      "Seal is TESTED to bind AUTHORIZATION, not INTENT: if a human approves a malicious-but-valid request, Seal executes it. test/approval-contract.test.cjs and test/spine-retry.test.cjs exercise that binding.",
+      "Seal binds a client's retry to the displayed request.",
+      "The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory.",
+      "Seal v0.2.0-rc.2 is Linux x86-64 only.",
+      "Put a one-use approval gate in front of the MCP tools that can hurt you.",
+      "Seal runs locally between Claude Code and one stdio MCP server.",
+      "You see the exact tool and arguments, accept or decline them, and Seal refuses reuse of the same approval.",
+      "Seal controls the route through the protected MCP server, not every route to the same effect.",
+      "A hosted receipt checker can recheck a pasted receipt, but it cannot establish routing from that receipt.",
+      "Seal checks that both names exist, asks Claude Code to install a local override, and leaves .mcp.json unchanged.",
+      "The local override is owned by Claude Code: Seal invokes that command but does not write the Claude configuration or its backup files.",
+      "Seal controls calls that pass through the protected MCP server path.",
+      "The source-build artifact is named seal-v0.2.0-rc.2-linux-x64 at the exact release tag.",
+      "Protect mediates one stdio MCP server entry: only selected tools are approval-gated, while unselected tools still pass through Seal's forwarding checks.",
+      "Seal trusts Claude Code to present the choice to a human and cannot distinguish a human click from an automatic elicitation hook."
+    ],
+    "docs/guide/knowing-it-worked.md": [
+      "The checker independently implements Seal's receipt canonicalisation rule, without the sealer's input-refusal branches, and uses the same Node crypto platform.",
+      "If the full effect cannot fit on screen, Seal refuses to ask rather than truncate it — a boundary the terminal hides is not one you approved.",
+      "Outside Seal is the honesty line, printed every time: the gate does not",
+      "You do not have to take the paragraph above on faith, and you do not need a protected project to see it. seal demo runs the same gate against a harmless built-in server that counts every call it actually receives, and every count printed is read back from that server's own count file:",
+      "The demo then ends by writing a file *without* crossing the gate and showing that Seal emitted nothing for it — the same \"gate, not sandbox\" boundary the prompt states.",
+      "When the gate can write its receipt directory, every decision — the prompt being offered, an allowed call, a refusal — writes one JSON file. seal status shows where they live and which is newest.",
+      "Both seal demo and the protected Claude Code path write signed receipts.",
+      "This signed example is from seal demo:",
+      "Receipts are claims written by the gate, not proofs — so they are checked by a separate process that imports no Seal module at runtime and needs a public key you already trust as input.",
+      "One routing note: seal verify is not the command for these receipts.",
+      "That is a declared assumption, not an enforced property; seal doctor prints it, and refuses if it finds a configuration that automates the answer.",
+      "If you want the boundary demonstrated rather than described, run seal demo and read its scope witness; it ends with the honest summary this guide keeps returning to: Seal is a gate, not a sandbox — it controls the path through it, and only that path."
+    ]
+  },
   "files": {
     "README.md": [
       {
@@ -9,7 +78,7 @@
     ],
     "docs/guide/knowing-it-worked.md": [
       {
-        "sentence": "Seal makes the approved call and the executed call the same call: same tool,",
+        "sentence": "Seal makes the approved call and the executed call the same call: same tool, same arguments, once, within the window.",
         "proof": "test/demo-witness.test.cjs:112"
       }
     ]

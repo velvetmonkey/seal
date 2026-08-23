@@ -75,6 +75,6 @@ test("README claim: Seal intercepts one call, asks approval, and refuses its rep
     });
   }, claim);
   assert.match(output, /INPUT REQUIRED.*approval/s, claim); // CLAIM-COVERAGE: README.md
-  assert.match(output, /BLOCKED.*already_consumed/s, claim);
+  assert.match(output, /BLOCKED.*already_consumed/s, claim); // CLAIM-COVERAGE: README.md
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
 });

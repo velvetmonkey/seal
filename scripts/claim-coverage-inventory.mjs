@@ -86,13 +86,15 @@ function main() {
   const missing = actualUncovered.filter((file) => !allowlist.includes(file) && !DECLARED_GAPS.has(file));
   const stale = allowlist.filter((file) => !actualUncovered.includes(file));
   const staleGaps = [...DECLARED_GAPS].filter((file) => !actualUncovered.includes(file));
-  console.log(`CLAIM COVERAGE: full=${counts.full} substring=${counts.substring} uncovered=${counts.uncovered} allowlisted=${allowlist.length} declared-gaps=${declared.length}`);
+  const checked = counts.full + counts.substring;
+  const debt = counts.uncovered;
+  console.log(`CLAIM COVERAGE ACCOUNTING: checked=${checked} debt=${debt} (full=${counts.full} substring=${counts.substring} allowlisted=${allowlist.length} declared-gaps=${declared.length})`);
   for (const file of declared) console.log(`GAP uncovered claim-bearing file declared: ${file}`);
   if (missing.length) console.error(`FAIL uncovered claim-bearing files not allowlisted: ${missing.join(", ")}`);
   if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
   if (staleGaps.length) console.error(`FAIL declared gaps name covered or absent files: ${staleGaps.join(", ")}`);
   if (missing.length || stale.length || staleGaps.length) process.exitCode = 1;
-  else console.log("PASS every uncovered claim-bearing file is explicitly allowlisted or declared as a gap");
+  else console.log(`ACCOUNTED checked=${checked} debt=${debt}; debt is named, not claim-checked`);
 }
 
 main();
