@@ -8,7 +8,7 @@ accept or decline them, and Seal refuses reuse of the same approval.
 
 > **One exact call. One approval. One use.**
 
-**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command. Check that it is available with `claude --version` before Protect.**
+**Requires Node 20+. [Source builds](docs/start/install.md) have CI compatibility evidence on Linux x86-64 and macOS x64/arm64 for build, install, demo, and receipt check; the published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also requires Claude Code's `claude` command.** Check that it is available with `claude --version` before Protect.
 
 [![Seal process diagram: one exact tool call is approval-gated; other tools on the protected server pass through Seal without approval](assets/seal-flow.svg)](https://raw.githubusercontent.com/velvetmonkey/seal/main/assets/seal-flow.svg)
 
@@ -105,10 +105,10 @@ Most recent: no receipt yet (receipt directory has no files; no decision has bee
 
 Exit code: `0`.
 
-`protect` reads and hashes the server entry, then discovers its tools before it
-records protection. A vanished tool at activation makes the state `BROKEN`.
-Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while
-installing the override; Seal invokes Claude Code but does not write either file.
+Seal runs locally between Claude Code and one stdio MCP server. Calls to the
+tools you select stop before execution. You see the exact tool and arguments,
+approve or decline them, and Seal refuses reuse of the same approval.
+`protect` hashes the server entry and discovers its tools before recording protection; a vanished tool at activation makes the state `BROKEN`. Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/` while installing the override; Seal invokes Claude Code but does not write either file.
 
 ## Remove it
 
