@@ -27,30 +27,22 @@ This checker establishes that a recorded run is internally consistent, that its
 inputs were present and readable, and that the pack was not casually relabelled.
 It does **not** establish that a real Claude Code process produced it. A
 determined author with local file access can produce a passing pack. This is an
-instrument against mistakes, not against forgery. That limitation never lifts
-from this checker alone: establishing real-client origin requires an
-independently trusted capture or provenance boundary outside the pack, which
-this repository does not provide; use the matrix's `UNTESTED` status until
-such a boundary exists.
+instrument against mistakes, not against forgery. The Claude Code matrix row
+stays `UNTESTED — real Claude Code call not observed`.
 
 **Binding is bookkeeping, not a control.** The recorder digests live in the
 run's `harness-state.json`, alongside the recorder sources and casts. Someone
 who can rewrite that run directory can rewrite all of them consistently and
 produce a passing pack. The binding detects accidental edits and mismatched
-files; it does not stop that same writer from forging the bundle. This
-limitation lifts only when the run directory and its recorder inputs are held
-behind an independently trusted, tamper-resistant boundary; the repository's
-digests do not create that boundary, so treat the pack as locally checkable
-evidence rather than provenance.
+files; it does not stop that same writer from forging the bundle. Treat the pack
+as locally checkable evidence rather than provenance.
 
 The harness also cannot establish that a human rather than the client
 originated the decline. It records the dialog that was shown and correlates the
 declined call with the proxy's receipts, but the interactive client remains
 inside the declared approval-origin boundary. This limit is repeated in every
-pack's `manifest.json`. It lifts only when the approval input itself is
-independently attested as human-controlled; this harness does not provide that
-attestation, so a reader should not treat its decline record as proof of human
-origin.
+pack's `manifest.json`; a reader should not treat its decline record as proof of
+human origin.
 
 The Claude Code matrix row stays `UNTESTED — real Claude Code call not observed`
 until an operator's real run fills it. That row is the honest claim; the

@@ -69,11 +69,10 @@ The checker imports no Seal module at check time, but copies the receipt
 canonicalisation rule and uses the same Node crypto platform as the
 producer. It detects mutation of the receipt's canonical parsed value
 under a trusted supplied key; semantically irrelevant JSON formatting
-differences are not distinguished. That formatting limitation lifts only if
-the checker is changed to compare the raw JSON bytes as well as the parsed
-value. It does not detect defects in those shared implementation choices; that
-limitation lifts only when an independently implemented canonicalisation and
-crypto path is checked against this one, which this release does not provide.
+differences are not distinguished. The checker is runtime-separate, not
+implementation-independent: it copies the producer's canonicalisation rule and
+shares the Node crypto platform. It cannot expose a defect common to those
+parts.
 
 For `seal protect`, MCP discovery has a 5000ms deadline per phase by
 default. Slow but legitimate servers can use

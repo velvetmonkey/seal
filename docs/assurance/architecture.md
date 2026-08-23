@@ -113,10 +113,8 @@ flowchart LR
   `seal-verify-action` is derived from the CLI closure as a downstream-stricter
   fork. Agreement between these surfaces is useful conformance evidence, but a
   defect in shared kernel or format logic can make them agree on the same wrong
-  answer. That limitation lifts only when the surfaces use independently
-  implemented kernel and receipt-format logic and their agreement is checked
-  against that independent implementation; the current published artifacts do
-  not satisfy that condition.
+  answer. These surfaces are runtime-separate, not implementation-independent:
+  they cannot expose a defect common to those parts.
 - **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
   deployed bodies (Rust, wasm, JS) agree with the proven kernel byte-for-byte over a corpus.
   Evidence, not a universal theorem.

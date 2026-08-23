@@ -125,7 +125,6 @@ function expectedTargets() {
     target && !target.startsWith("#") && !target.startsWith("//") && !/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(target),
   ).sort();
 }
-
 test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => { // CLAIM-COVERAGE: docs/README.md
   const { env, cleanup } = familyEnvironment();
   try {
