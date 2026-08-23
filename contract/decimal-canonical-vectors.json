@@ -1,0 +1,29 @@
+{
+  "format": "seal-decimal-canonical-v1",
+  "reference": "finite values within the inclusive safe range use ECMAScript JSON.stringify; non-finite values and magnitudes outside the range refuse",
+  "vectors": [
+    { "id": "zero-point-five", "expression": "0.5", "expected": "0.5" },
+    { "id": "one-point-five", "expression": "1.5", "expected": "1.5" },
+    { "id": "minus-one-point-five", "expression": "-1.5", "expected": "-1.5" },
+    { "id": "zero-point-one", "expression": "0.1", "expected": "0.1" },
+    { "id": "zero-point-two", "expression": "0.2", "expected": "0.2" },
+    { "id": "zero-point-one-plus-zero-point-two", "expression": "0.1 + 0.2", "expected": "0.30000000000000004" },
+    { "id": "one-e-minus-seven", "expression": "1e-7", "expected": "1e-7" },
+    { "id": "one-e-twenty-one", "expression": "1e21", "refused": "number outside the safe canonical range" },
+    { "id": "minus-zero-point-zero", "expression": "-0.0", "expected": "0" },
+    { "id": "zero-point-zero", "expression": "0.0", "expected": "0" },
+    { "id": "one-point-zero", "expression": "1.0", "expected": "1" },
+    { "id": "one-two-three-point-four-five-six", "expression": "123.456", "expected": "123.456" },
+    { "id": "one-third-double", "expression": "1 / 3", "expected": "0.3333333333333333" },
+    { "id": "number-epsilon", "expression": "Number.EPSILON", "expected": "2.220446049250313e-16" },
+    { "id": "max-safe-integer", "expression": "Number.MAX_SAFE_INTEGER", "expected": "9007199254740991" },
+    { "id": "min-safe-integer", "expression": "-Number.MAX_SAFE_INTEGER", "expected": "-9007199254740991" },
+    { "id": "max-safe-plus-one", "expression": "Number.MAX_SAFE_INTEGER + 1", "refused": "number outside the safe canonical range" },
+    { "id": "number-max-value", "expression": "Number.MAX_VALUE", "refused": "number outside the safe canonical range" },
+    { "id": "number-min-value", "expression": "Number.MIN_VALUE", "expected": "5e-324" },
+    { "id": "five-e-minus-three-two-four", "expression": "5e-324", "expected": "5e-324" },
+    { "id": "nan", "expression": "NaN", "refused": "non-finite number has no canonical form" },
+    { "id": "infinity", "expression": "Infinity", "refused": "non-finite number has no canonical form" },
+    { "id": "minus-infinity", "expression": "-Infinity", "refused": "non-finite number has no canonical form" }
+  ]
+}
