@@ -1,6 +1,6 @@
 # The Seal operating guide
 
-Seal puts one approval gate in front of one tool of one MCP server in one
+Seal puts one approval gate in front of a named set of tools on one MCP server in one
 project. When a healthy gate can show a fresh approval request for that tool,
 you see exactly what would run, and the call waits for approval — once, and
 only once. In a healthy, non-drifted wrapper, other tools keep working as if

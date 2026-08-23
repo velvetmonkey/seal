@@ -1,6 +1,6 @@
 # Choosing what to protect
 
-Seal protects exactly one tool of one MCP server per project. This page is
+Seal protects a declared set of tools on one MCP server per project. This page
 about making that choice well, and about what `seal protect` does and — just
 as important — what it leaves alone.
 
@@ -8,17 +8,18 @@ as important — what it leaves alone.
 
 Open your project's `.mcp.json` and look at each server's tools (Claude Code's
 `/mcp` screen lists them, and so does the server's own documentation). Most
-tools are harmless: they read, they search, they list. Protect the one whose
-worst possible call you could not undo.
+tools are harmless: they read, they search, they list. Choose the set whose
+calls you need to stop for approval.
 
 Ask, for each tool: *if Claude Code called this once, with arguments I never
 saw, what is the worst that happens?* A tool that reads files loses you
 nothing. A tool that deletes, drops, sends, pays, or publishes can lose you
-something real. That one gets the gate.
+something real. Name every tool in the set that warrants that gate.
 
-The running example in this guide is a small `notes` server with two tools:
-`append_note`, which adds a line to a file, and `delete_all_notes`, which
-deletes the file. One of those is worth an approval prompt.
+The bundled demo is the useful contrast: `demo.mutate` appends to its demo data
+file, while `demo.erase` truncates it. They are different risks; naming both
+when both need approval is the point of choosing a set rather than selecting a
+single winner.
 
 ```json
 {
@@ -38,22 +39,46 @@ Two constraints to know before you choose:
   process. Seal refuses `http` and other remote types, because it works by
   standing between Claude Code and the server process, and there is no local
   process to stand in front of.
-- One tool per project. If two tools on the server scare you, that is worth
-  knowing before you commit; today the gate holds one name.
+- The set is declared once, not added to later. Decide the complete list before
+  you run `seal protect`: a later `seal protect` while the server is protected
+  refuses `already_protected`. To change the list, unprotect the server, then
+  protect the complete replacement set.
 
 ## What `seal protect` does
 
-Run it in the project directory, naming the server and the tool:
+Run it in the project directory, naming the server and the complete tool set:
 
 ```bash
-$ seal protect notes delete_all_notes
+$ seal protect db demo.mutate demo.erase
 ```
 
 ```output
-Project .mcp.json hash before protect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
-Protection: PENDING RESTART notes.delete_all_notes
-State: /home/you/.local/share/seal/projects/9852104386c7756d6abbd76408f7014b/state.json
+Project .mcp.json hash before protect: d46bf1f116eb99abcbb7d664032e5691bc4d217034dd96757a38a44c7ace10d8
+Protection: PENDING RESTART db.{demo.mutate, demo.erase}
+Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
+State: /home/monkey/scratch/guidemulti/proof-home/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json
+Next:
+  1. Restart Claude Code in this project.
+  2. Run `seal status`.
+  3. Look for `Protection: ACTIVE`.
+Undo:
+  Stop Claude Code, then run `seal unprotect db`.
 ```
+
+Exit code: `0`.
+
+The same server cannot be extended by running `protect` again; the second
+command was refused:
+
+```bash
+$ seal protect db demo.mutate demo.erase
+```
+
+```output
+seal: REFUSE already_protected: project is already PENDING RESTART
+```
+
+Exit code: `1`.
 
 The three user-visible changes are:
 
@@ -63,7 +88,7 @@ The three user-visible changes are:
    the changed server until you look at it.
 2. **Seal asked Claude Code for a local override**: it ran
    `claude mcp add --scope local`, so that in this project, for you only,
-   the name `notes` now starts Seal's wrapper, and the wrapper starts your
+   the name `db` now starts Seal's wrapper, and the wrapper starts your
    real server behind the gate. Local scope is private to your machine — it
    is not written to `.mcp.json` and teammates never see it.
 3. **It printed the hash of your `.mcp.json`** so you can see it was not
