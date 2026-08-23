@@ -111,7 +111,8 @@ function expectedTargets() {
     for (const target of found) targets.add(target.trim());
   }
   const dataFiles = walk(ROOT).filter((f) =>
-    (/^\.github\//u.test(f) || /^scripts\//u.test(f)) && /\.(json|ya?ml)$/iu.test(f),
+    f !== "scripts/mandatory-doc-claim-bindings.json"
+      && (/^\.github\//u.test(f) || /^scripts\//u.test(f)) && /\.(json|ya?ml)$/iu.test(f),
   );
   for (const file of dataFiles) {
     const text = readFileSync(path.join(ROOT, file), "utf8");

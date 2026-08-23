@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync, mkdtempSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
+const SEAL = resolve(ROOT, "bin", "seal");
 const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const INDEX = readFileSync(resolve(ROOT, "docs", "assurance", "index.html"), "utf8");
 const ARCHITECTURE = readFileSync(resolve(ROOT, "docs/assurance/architecture.md"), "utf8");
@@ -60,4 +63,18 @@ test("the first architecture diagram is the shipped Node path", () => {
   for (const label of ["Claude Code", "Node proxy", "TESTED state machine", "Selected MCP server"]) {
     assert.ok(ARCHITECTURE.includes(label), `architecture is missing ${label}`);
   }
+});
+
+test("README claim: Seal intercepts one call, asks approval, and refuses its replay", () => {
+  const claim = "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.";
+  const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-"));
+  let output;
+  assert.doesNotThrow(() => {
+    output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
+      input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+    });
+  }, claim);
+  assert.match(output, /INPUT REQUIRED.*approval/s, claim); // CLAIM-COVERAGE: README.md
+  assert.match(output, /BLOCKED.*already_consumed/s, claim);
+  assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
 });

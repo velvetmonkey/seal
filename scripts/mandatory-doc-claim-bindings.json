@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "files": {
+    "README.md": [
+      {
+        "sentence": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
+        "proof": "test/frontdoor.test.mjs:77"
+      }
+    ],
+    "docs/guide/knowing-it-worked.md": [
+      {
+        "sentence": "Seal makes the approved call and the executed call the same call: same tool,",
+        "proof": "test/demo-witness.test.cjs:112"
+      }
+    ]
+  }
+}

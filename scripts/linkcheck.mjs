@@ -127,8 +127,10 @@ async function main() {
     }
   }
 
+  // Binding records use path:line proof references, not document links.
   const dataFiles = walk(ROOT).filter((f) =>
-    (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
+    f !== "scripts/mandatory-doc-claim-bindings.json"
+      && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
   );
   for (const f of dataFiles) {
     const text = readFileSync(resolve(ROOT, f), "utf8");

@@ -6,7 +6,7 @@
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
-    "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52", "scripts/launch-truth-gate.mjs:85"] },
+    "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52"] },
     ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },
     ".github/workflows/release.yml": { "allowlistReason": "The candidate is the release-job assertion that its Linux artifact name exists; CI executes this workflow only on release publication, outside a repository-local fixture." },
     "checker/seal-receipt-check.mjs": { "allowlistReason": "Its comments describe the checker isolation boundary; checker/seal-receipt-check.mjs is the implementation that must be independently audited rather than a separate product claim surface." },
@@ -61,7 +61,8 @@
     "docs/guide/README.md": { "allowlistReason": "This guide-index sentence chooses which named guide a reader should open for a situation; the repository can validate those links but cannot execute or prove the reader-specific recommendation." },
     "docs/guide/choosing-what-to-protect.md": { "allowlistReason": "This operator decision guide gives situational advice that depends on the user's tools and threat model, not a fixed local test fixture." },
     "docs/guide/github-actions-provenance.md": { "allowlistReason": "This guide explains GitHub Actions provenance and depends on GitHub-hosted workflow and attestation state outside the repository." },
-    "docs/guide/knowing-it-worked.md": { "allowlistReason": "This page explains how an operator should interpret their own terminal and receipt observations after a run; those observations are not fixtures in this checkout, so the advice is not a claim that a fixed command here can prove." },
+    "docs/guide/knowing-it-worked.md": { "coveredBy": ["test/demo-witness.test.cjs:112"] },
+    "scripts/mandatory-doc-claim-bindings.json": { "allowlistReason": "This binding registry is coverage metadata: its embedded claim text identifies the mandatory document sentences, but it is not a reader-facing Seal assertion." },
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-claims.test.mjs:36"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-claims.test.mjs:27"] },
     "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:11", "scripts/launch-truth-gate.mjs:110"] }
