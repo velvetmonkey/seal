@@ -45,8 +45,8 @@ Requires Node 20+. The published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /home/monkey/.local/bin/seal
+store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
