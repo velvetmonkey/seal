@@ -193,9 +193,9 @@ If you took the secondary source-build path, its store does not include the chec
 
 ## 3. Protect
 
-`seal protect SERVER TOOL [TOOL...]` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless every requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check.
+`seal protect SERVER TOOL` needs the `claude` command and a project whose `.mcp.json` has a stdio MCP server. Before recording protection, Seal starts the server, lists its tools, and refuses unless the requested tool is among them. Discovery allows 5000ms per phase; if a server needs longer, the refusal names `--timeout-ms`, which also governs the activation re-check.
 
-Protection is declared once as the complete set for that server; it is not additive. To change the set later, unprotect the server first, then protect the complete replacement set. Running `seal protect` again while the server is protected refuses `already_protected` instead of adding another tool.
+Protection is declared once for that server. To change the protected tool later, unprotect the server first, then protect its replacement. Running `seal protect` again while the server is protected refuses `already_protected`.
 ```bash
 export SEAL_PROTECT_PROJECT="$PWD/seal-protect-demo"
 mkdir -p "$SEAL_PROTECT_PROJECT" &&
@@ -215,12 +215,12 @@ cat > .mcp.json <<EOF
 }
 EOF
 } &&
-seal protect db demo.mutate demo.erase
+seal protect db demo.mutate
 ```
 **Output:**
 ```output
 Project .mcp.json hash before protect: 5039c5ce68ad23ecd2e30b6bac49869b2aadd1b0ba6109d68346913395916135
-Protection: PENDING RESTART db.{demo.mutate, demo.erase}
+Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 State: /home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json
 Next:
@@ -245,7 +245,7 @@ seal status
 **Output:**
 ```output
 Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
-Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json)
+Protection: PENDING RESTART db.demo.mutate (/home/you/scratch/example/home-data/seal/projects/688e589345a3e82d23a4afda990416d5/state.json)
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
@@ -260,7 +260,7 @@ Exit code: `0`.
 Running Protect again demonstrates that the declaration is not additive:
 
 ```bash
-seal protect db demo.mutate demo.erase
+seal protect db demo.mutate
 ```
 **Output:**
 ```output

@@ -290,7 +290,7 @@ test("repin refuses two role markers before one fence and names both markers", (
       "<!-- Seal installed-tree pin role: published-asset -->\n```output",
       "<!-- Seal installed-tree pin role: published-asset -->\n<!-- Seal installed-tree pin role: fresh-build -->\n```output",
     )
-    .replace(/(store: \/home\/monkey\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
+    .replace(/(store: \/home\/you\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
   fs.writeFileSync(readme, attacked);
   const repin = spawnSync(process.execPath, [path.join(copy, "scripts", "repin-dist.cjs")], {
     cwd: copy,
