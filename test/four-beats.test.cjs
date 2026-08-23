@@ -34,7 +34,9 @@ const ROOT = path.join(__dirname, "..");
 // output and inventory diagnostics: semantic command assertions must not
 // depend on the checkout's absolute filesystem location.
 function repositoryRelativeOutput(text) {
-  return text.replaceAll(ROOT, ".");
+  // A sibling temporary directory can share ROOT's textual prefix without
+  // being inside the checkout.
+  return text.replaceAll(`${ROOT}${path.sep}`, `.${path.sep}`);
 }
 
 // A PATH that cannot see docker, lake, elan, or python even if they exist

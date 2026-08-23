@@ -42,6 +42,17 @@ function run(file, args, options = {}) {
   return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
+function scratchRoot() {
+  const temporary = os.tmpdir();
+  const relative = path.relative(ROOT, path.resolve(temporary));
+  if (relative && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+    const outsideRoot = path.join(path.dirname(ROOT), ".seal-test-scratch");
+    fs.mkdirSync(outsideRoot, { recursive: true });
+    return outsideRoot;
+  }
+  return temporary;
+}
+
 function isMarkdownFilename(filename) {
   return MARKDOWN_EXTENSIONS.has(path.extname(filename).toLowerCase());
 }
@@ -155,12 +166,15 @@ test("every emitted release identity derives from VERSION", () => {
 
 test("sync leaves no old product version in the named reader-facing search surface", () => {
   const oldVersion = VERSION;
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-stale-"));
+  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-stale-"));
   fs.cpSync(ROOT, scratch, {
     recursive: true,
     filter(source) {
       const relative = path.relative(ROOT, source);
-      return ![".git", "dist", "kernel"].includes(relative) && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
+      const temporary = path.relative(ROOT, path.resolve(os.tmpdir()));
+      return ![".family", ".git", "dist", "kernel", temporary].includes(relative)
+        && !relative.startsWith(`${temporary}${path.sep}`)
+        && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
     },
   });
   const bumpedVersion = VERSION === "9.9.9" ? "9.9.10" : "9.9.9";

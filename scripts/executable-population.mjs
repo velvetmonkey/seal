@@ -4,12 +4,19 @@
 // that is deliberately generated outside the source tree.
 import { execFileSync } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 
 export function trackedFiles(root) {
   try {
+    const temporary = relative(root, resolve(tmpdir()));
+    const temporaryIsInsideRoot = temporary && !temporary.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) && !isAbsolute(temporary);
     return execFileSync("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { encoding: "utf8" })
-      .split("\0").filter(Boolean).sort();
+      .split("\0").filter(Boolean)
+      // A caller may deliberately put its system temporary directory beneath
+      // the source root. Runtime files are not executable source population.
+      .filter((file) => !temporaryIsInsideRoot || (file !== temporary && !file.startsWith(`${temporary}/`)))
+      .sort();
   } catch (error) {
     throw new Error(`cannot derive executable population from ${root}: ${error.message}`);
   }
