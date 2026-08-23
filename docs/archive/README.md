@@ -1,4 +1,4 @@
 # Archive
 
 This directory preserves documentation moved out of the main navigation.
-This archive describes the shipped Node CLI as a live checked contract store: claim-bearing-file-inventory, claim-coverage-inventory, and claims-drift require its files and fail if one is removed.
+This archive has eighteen files registered with claim-bearing-file-inventory; removing its WHAT-IS document makes that check fail, removing AUTHORIZATION-RECORD.md makes claim-coverage-inventory fail, and removing this README makes claims-drift fail.
