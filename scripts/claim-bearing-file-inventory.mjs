@@ -11,7 +11,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = "scripts/claim-bearing-files.json";
 // Ben's first narrow slice. Add a path here to widen the mandatory prose gate.
 const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md"];
-const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
+const MANDATORY_WORDING_FIXTURE = "scripts/mandatory-doc-claim-bindings.json";
 const SENTENCE_SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
 // A text file is claim-bearing when it contains a declarative, present-tense
@@ -154,13 +154,16 @@ function mandatoryClaimUnits(file) {
     .filter((unit) => DIRECT_BEHAVIOUR.test(unit) || (PRODUCT_ENTITY.test(unit) && ASSERTION.test(unit)));
 }
 
-function checkMandatoryBindings() {
+// WORDING FIXTURE: this pins exact approved sentence strings. It compares a
+// stored list, not meaning, and therefore rejects true restatements as well as
+// novel false sentences. Do not describe these documents as claim-checked.
+function checkMandatoryWordingFixture() {
   if (!MANDATORY_DOC_FILES.some((file) => tracked.has(file))) return;
   let bindings;
-  try { bindings = JSON.parse(readFileSync(resolve(ROOT, MANDATORY_BINDINGS), "utf8")); }
-  catch (error) { fail(`mandatory binding file unreadable: ${error.message}`); return; }
+  try { bindings = JSON.parse(readFileSync(resolve(ROOT, MANDATORY_WORDING_FIXTURE), "utf8")); }
+  catch (error) { fail(`mandatory wording fixture unreadable: ${error.message}`); return; }
   if (!bindings || typeof bindings !== "object" || !bindings.files || typeof bindings.files !== "object") {
-    fail(`${MANDATORY_BINDINGS}: files must be an object`); return;
+    fail(`${MANDATORY_WORDING_FIXTURE}: files must be an object`); return;
   }
   for (const file of MANDATORY_DOC_FILES) {
     const entry = manifest.files[file];
@@ -200,7 +203,7 @@ for (const path of tracked) {
   // The inventory implementation's own sentence fixtures are not a second
   // published claim surface. Its distinct registry is handled explicitly.
   if (path === "scripts/claim-bearing-file-inventory.mjs") continue;
-  if (path === MANDATORY_BINDINGS) { inventory.push(path); continue; }
+  if (path === MANDATORY_WORDING_FIXTURE) { inventory.push(path); continue; }
   const excluded = excludedBinaryReason(path);
   if (excluded) continue;
   let text;
@@ -233,5 +236,6 @@ for (const path of inventory) {
   const status = entry?.coveredBy?.length ? `COVERED by ${entry.coveredBy.join(", ")}` : `ALLOWLISTED: ${entry?.allowlistReason ?? "<missing>"}`;
   console.log(`${path}\t${status}`);
 }
-checkMandatoryBindings();
+console.log(`MANDATORY WORDING FIXTURE: pinned=${MANDATORY_DOC_FILES.length}; compares exact approved sentence strings, not meaning or claim truth`);
+checkMandatoryWordingFixture();
 process.exit(bad ? 1 : 0);

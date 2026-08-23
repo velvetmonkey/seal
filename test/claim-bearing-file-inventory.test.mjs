@@ -45,7 +45,7 @@ test("a bare contextual component reference remains outside the subject-keyed ru
   }
 });
 
-test("mandatory documents require exact proof bindings for unseen claim sentences", () => {
+test("mandatory wording fixture pins exact approved sentences and names unseen sentences", () => {
   const worktree = mkdtempSync(join(tmpdir(), "seal-mandatory-claims-"));
   const sentence = (stem) => stem + String.fromCharCode(46);
   const readmeBaseline = sentence("Seal handles the baseline request");
@@ -93,6 +93,7 @@ test("mandatory documents require exact proof bindings for unseen claim sentence
     writeFileSync(join(worktree, "docs/guide/knowing-it-worked.md"), `${guideBaseline}\n${guideBound}\n`);
     const positive = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], { cwd: worktree, encoding: "utf8" });
     assert.equal(positive.status, 0, positive.stdout + positive.stderr);
+    assert.match(positive.stdout, /MANDATORY WORDING FIXTURE: pinned=2; compares exact approved sentence strings, not meaning or claim truth/);
   } finally {
     rmSync(worktree, { recursive: true, force: true });
   }

@@ -86,15 +86,19 @@ function main() {
   const missing = actualUncovered.filter((file) => !allowlist.includes(file) && !DECLARED_GAPS.has(file));
   const stale = allowlist.filter((file) => !actualUncovered.includes(file));
   const staleGaps = [...DECLARED_GAPS].filter((file) => !actualUncovered.includes(file));
-  const checked = counts.full + counts.substring;
+  // These counts come from stored whole-file and substring comparisons. They
+  // detect drift but do not reject a novel false sentence, so they are wording
+  // fixtures rather than claim checks.
+  const checked = 0;
+  const driftFixture = counts.full + counts.substring;
   const debt = counts.uncovered;
-  console.log(`CLAIM COVERAGE ACCOUNTING: checked=${checked} debt=${debt} (full=${counts.full} substring=${counts.substring} allowlisted=${allowlist.length} declared-gaps=${declared.length})`);
+  console.log(`CLAIM COVERAGE ACCOUNTING: checked=${checked} drift-fixture=${driftFixture} debt=${debt} (full-file=${counts.full} stored-substring=${counts.substring} allowlisted=${allowlist.length} declared-gaps=${declared.length})`);
   for (const file of declared) console.log(`GAP uncovered claim-bearing file declared: ${file}`);
   if (missing.length) console.error(`FAIL uncovered claim-bearing files not allowlisted: ${missing.join(", ")}`);
   if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
   if (staleGaps.length) console.error(`FAIL declared gaps name covered or absent files: ${staleGaps.join(", ")}`);
   if (missing.length || stale.length || staleGaps.length) process.exitCode = 1;
-  else console.log(`ACCOUNTED checked=${checked} debt=${debt}; debt is named, not claim-checked`);
+  else console.log(`ACCOUNTED checked=${checked} drift-fixture=${driftFixture} debt=${debt}; drift-fixture compares stored wording, debt is named`);
 }
 
 main();
