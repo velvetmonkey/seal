@@ -23,9 +23,18 @@ test("every release-note commit and repository-path citation resolves", () => {
   const notes = fs.readFileSync(notesPath, "utf8");
   const links = [...notes.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
   const shas = [...new Set(notes.match(/\b[0-9a-f]{7,40}\b/g) ?? [])];
-  const repositoryPaths = links
-    .filter((link) => !/^[a-z]+:/i.test(link) && !link.startsWith("#"))
-    .map((link) => path.relative(ROOT, path.resolve(path.dirname(notesPath), link)));
+  const localLinks = links
+    .filter((link) => !/^[a-z]+:/i.test(link))
+    .map((link) => {
+      const hash = link.indexOf("#");
+      const destination = hash < 0 ? link : link.slice(0, hash);
+      const fragment = hash < 0 ? "" : link.slice(hash + 1);
+      const target = destination
+        ? path.resolve(path.dirname(notesPath), destination)
+        : notesPath;
+      return { repositoryPath: path.relative(ROOT, target), fragment };
+    });
+  const repositoryPaths = localLinks.map(({ repositoryPath }) => repositoryPath);
 
   for (const sha of shas) {
     assert.doesNotThrow(
@@ -40,5 +49,22 @@ test("every release-note commit and repository-path citation resolves", () => {
       () => childProcess.execFileSync("git", ["cat-file", "-e", `HEAD:${repositoryPath}`], { cwd: ROOT }),
       `release-note path does not resolve at HEAD: ${repositoryPath}`,
     );
+  }
+
+  const slug = (heading) => heading.trim().toLowerCase()
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\u0060*~]/g, "")
+    .replace(/[^\p{L}\p{N}_\s-]/gu, "")
+    .replace(/\s+/g, "-");
+  const anchors = new Set();
+  const used = new Map();
+  for (const match of notes.matchAll(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
+    const base = slug(match[1]);
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    anchors.add(count ? `${base}-${count}` : base);
+  }
+  for (const { fragment } of localLinks) {
+    if (fragment) assert.ok(anchors.has(decodeURIComponent(fragment)), `release-note fragment does not resolve: #${fragment}`);
   }
 });

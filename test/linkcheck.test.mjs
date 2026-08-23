@@ -125,7 +125,7 @@ function expectedTargets() {
   ).sort();
 }
 
-test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => {
+test("clean CI family linkcheck exits 0 without reducing its scanned population [network required]", () => { // CLAIM-COVERAGE: docs/README.md
   const { env, cleanup } = familyEnvironment();
   try {
     const result = run(ROOT, { ...env, LINKCHECK_REPORT_SCANNED_TARGETS: "1" });
