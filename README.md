@@ -1,25 +1,28 @@
 # Seal
 
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+An AI coding agent can call a tool that changes or deletes something important.
 
-Put a one-use approval gate in front of the MCP tools that can hurt you.
+Seal stops that call and asks you before the tool runs.
 
 One exact call. One approval. One use.
 
-Seal runs locally between Claude Code and one stdio MCP server. You see the
-exact tool and arguments before it runs. You can accept or decline it. Seal
-refuses reuse of that approval.
-
-Requires Node 20+. The published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect
-also needs Claude Code's `claude` command.
-
 ## See it work
 
-Install the published Linux x86-64 release. These commands fetch the binary and
-its `SHA256SUMS` from the same release. Check the digest and byte count before
-you run it. For provenance, compare them with release information you got from
-a separate channel. See the [full install guide](docs/start/install.md) for the
-long form and for source builds.
+```bash
+seal demo
+```
+
+This is real output from `node bin/seal demo --dir /home/monkey/scratch/readmereal/demo-capture`.
+
+```text
+INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
+child calls observed: still 0 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count) — approval shown, nothing executed
+Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+child calls observed: 1 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count)
+BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+```
+
+Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
 ```bash
 SEAL_VERSION=v0.2.0-rc.2
@@ -35,7 +38,9 @@ chmod +x "$expected_name"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-You should see `installed seal 0.2.0-rc.2 linux-x64`:
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+
+Requires Node 20+. The published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
 
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
@@ -43,35 +48,6 @@ installed seal 0.2.0-rc.2 linux-x64
 store: /home/monkey/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 command: /home/monkey/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-```
-
-The path prefix changes on your machine. The store and tree values do not.
-Matching a tree digest identifies payload bytes, not provenance. A checker from
-the same installed store cannot establish that the store was not replaced.
-
-This is real output from `node bin/seal demo --dir /home/monkey/scratch/readmereal/demo-capture`.
-The prompt holds the call. After approval, the server runs it once. The retry
-is blocked.
-
-```text
-INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
-    Approval required
-    Tool: demo.mutate
-    Arguments:
-      line: "seal demo wrote this line"
-    Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
-child calls observed: still 0 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count) — approval shown, nothing executed
-Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count)
-replaying the identical retry with the same requestState…
-BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/readmereal/demo-capture/child/data.txt.count)
-```
-
-Now run the demo yourself:
-
-```bash
-seal demo
 ```
 
 At `Approve? [y/N]`, type `y` and press Enter. The demo prints its temporary
