@@ -16,6 +16,7 @@ const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const POPULATION_FILE = resolve(ROOT, "test/support/linkcheck-population.mjs");
 const POPULATION_KEYS = ["internalOccurrences", "externalOccurrences"];
+const FILE_COUNT_KEYS = ["internalOccurrences", "externalOccurrences"];
 const HIGH_WATER_KEYS = {
   internalOccurrences: "internalOccurrencesHighWaterMark",
   externalOccurrences: "externalOccurrencesHighWaterMark",
@@ -97,10 +98,12 @@ function check(file, raw, sourceRoot, roots, rootRelative = false) {
   const target = targetFor(file, link, sourceRoot, roots, rootRelative);
   if (target.kind === "external") {
     externalLinks++;
+    fileOccurrences[file].externalOccurrences++;
     if (!existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
     return;
   }
   checked++;
+  fileOccurrences[file].internalOccurrences++;
   if (!existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); bad++; }
 }
 
@@ -151,6 +154,7 @@ function pathStrings(text) {
 }
 
 let bad = 0, checked = 0, externalLinks = 0;
+let fileOccurrences = {};
 const scannedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 
@@ -170,6 +174,8 @@ function populationSource(population) {
     `  externalOccurrences: ${population.externalOccurrences},`,
     `  internalOccurrencesHighWaterMark: ${population.internalOccurrencesHighWaterMark},`,
     `  externalOccurrencesHighWaterMark: ${population.externalOccurrencesHighWaterMark},`,
+    `  fileOccurrences: ${JSON.stringify(population.fileOccurrences, null, 2).replace(/^/gm, "  ")},`,
+    `  fileOccurrencesHighWaterMarks: ${JSON.stringify(population.fileOccurrencesHighWaterMarks, null, 2).replace(/^/gm, "  ")},`,
     "  shrinkHistory: [",
     ...history,
     "  ],",
@@ -187,6 +193,19 @@ export function populationChanges(oldPopulation, newPopulation) {
   }));
 }
 
+function filePopulationChanges(oldPopulation, newPopulation) {
+  const oldCounts = oldPopulation.fileOccurrencesHighWaterMarks ?? oldPopulation.fileOccurrences ?? {};
+  const newCounts = newPopulation.fileOccurrences ?? {};
+  const files = [...new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)])].sort();
+  return files.flatMap((file) => FILE_COUNT_KEYS.map((key) => ({
+    file,
+    key,
+    oldCount: oldCounts[file]?.[key] ?? 0,
+    newCount: newCounts[file]?.[key] ?? 0,
+    difference: (newCounts[file]?.[key] ?? 0) - (oldCounts[file]?.[key] ?? 0),
+  })));
+}
+
 export function populationDecision(oldPopulation, newPopulation, { allowShrink = false, date = new Date().toISOString().slice(0, 10) } = {}) {
   const currentShrinks = populationChanges(oldPopulation, newPopulation).filter(({ difference }) => difference < 0);
   const highWaterChanges = POPULATION_KEYS.map((key) => ({
@@ -195,7 +214,10 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
     newCount: newPopulation[key],
     difference: newPopulation[key] - oldPopulation[HIGH_WATER_KEYS[key]],
   }));
-  const shrinks = highWaterChanges.filter(({ difference }) => difference < 0);
+  const shrinks = [
+    ...highWaterChanges.filter(({ difference }) => difference < 0),
+    ...filePopulationChanges(oldPopulation, newPopulation).filter(({ difference }) => difference < 0),
+  ];
   if (shrinks.length && !allowShrink) return { population: null, shrinks };
   return {
     shrinks,
@@ -205,6 +227,15 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
         HIGH_WATER_KEYS[key],
         Math.max(oldPopulation[HIGH_WATER_KEYS[key]], newPopulation[key]),
       ])),
+      fileOccurrencesHighWaterMarks: Object.fromEntries(
+        [...new Set([
+          ...Object.keys(oldPopulation.fileOccurrencesHighWaterMarks ?? {}),
+          ...Object.keys(newPopulation.fileOccurrences ?? {}),
+        ])].sort().map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
+          key,
+          Math.max(oldPopulation.fileOccurrencesHighWaterMarks?.[file]?.[key] ?? 0, newPopulation.fileOccurrences?.[file]?.[key] ?? 0),
+        ]))]),
+      ),
       shrinkHistory: currentShrinks.length ? [
         ...oldPopulation.shrinkHistory,
         {
@@ -231,14 +262,24 @@ function committedPopulation() {
     population[key] = recordedPopulation[key];
     population[highWaterKey] = recordedPopulation[highWaterKey];
   }
+  if (recordedPopulation.fileOccurrences !== undefined &&
+      (!recordedPopulation.fileOccurrences || typeof recordedPopulation.fileOccurrences !== "object")) {
+    throw new Error("invalid fileOccurrences: must be an object");
+  }
+  if (recordedPopulation.fileOccurrencesHighWaterMarks !== undefined &&
+      (!recordedPopulation.fileOccurrencesHighWaterMarks || typeof recordedPopulation.fileOccurrencesHighWaterMarks !== "object")) {
+    throw new Error("invalid fileOccurrencesHighWaterMarks: must be an object");
+  }
+  population.fileOccurrences = recordedPopulation.fileOccurrences ?? {};
+  population.fileOccurrencesHighWaterMarks = recordedPopulation.fileOccurrencesHighWaterMarks ?? {};
   if (!Array.isArray(recordedPopulation.shrinkHistory)) throw new Error("invalid shrinkHistory: must be an array");
   population.shrinkHistory = recordedPopulation.shrinkHistory;
   return { population, source };
 }
 
 function describeChanges(changes) {
-  return changes.map(({ key, oldCount, newCount, difference }) =>
-    `${key} old=${oldCount} new=${newCount} difference=${difference}`,
+  return changes.map(({ file, key, oldCount, newCount, difference }) =>
+    `${file ? `${file} ` : ""}${key} old=${oldCount} new=${newCount} difference=${difference}`,
   ).join("; ");
 }
 
@@ -278,6 +319,14 @@ async function main({ sourceRoot = ROOT, write = false, allowShrink = false } = 
 async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
   const roots = familyRoots(sourceRoot);
   const files = [...new Set(["README.md", ...sourceFiles.filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
+  const dataFiles = sourceFiles.filter((f) =>
+    f !== "scripts/mandatory-doc-claim-bindings.json"
+      && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
+  );
+  fileOccurrences = Object.fromEntries([...new Set([...files, ...dataFiles])].sort().map((file) => [file, {
+    internalOccurrences: 0,
+    externalOccurrences: 0,
+  }]));
 
   try {
     for (const f of files) {
@@ -290,10 +339,6 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
     }
 
     // Binding records use path:line proof references, not document links.
-    const dataFiles = sourceFiles.filter((f) =>
-      f !== "scripts/mandatory-doc-claim-bindings.json"
-        && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
-    );
     for (const f of dataFiles) {
       const text = readFileSync(resolve(sourceRoot, f), "utf8");
       const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
@@ -350,7 +395,11 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
       console.error(`REFUSE link-check population unreadable: ${POPULATION_FILE}: ${error.message}`);
       return 1;
     }
-    const newPopulation = { internalOccurrences: checked, externalOccurrences: externalLinks };
+    const newPopulation = {
+      internalOccurrences: checked,
+      externalOccurrences: externalLinks,
+      fileOccurrences,
+    };
     const decision = populationDecision(oldPopulation, newPopulation, { allowShrink });
     if (!decision.population) {
       const { shrinks } = decision;
