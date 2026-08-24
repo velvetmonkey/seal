@@ -60,8 +60,10 @@ test("a later protect refuses already_protected and leaves the first tool set un
   assert.equal(first.code, 0, first.out);
 
   const statePath = statePathFor(ctx.project, ctx.env);
+  const beforeSecond = fs.readFileSync(statePath, "utf8");
   const protectedToolsBeforeSecond = Buffer.from(JSON.stringify(readState(statePath).guardTools));
   const second = run(ctx, ["protect", "db", "db.read"]);
+  const afterSecond = fs.readFileSync(statePath, "utf8");
   const stateAfterSecond = readState(statePath);
   const protectedToolsAfterSecond = Buffer.from(JSON.stringify(stateAfterSecond.guardTools));
   const guardTools = stateAfterSecond.guardTools;
@@ -70,6 +72,11 @@ test("a later protect refuses already_protected and leaves the first tool set un
     protectedToolsAfterSecond,
     protectedToolsBeforeSecond,
     `second protect refusal must leave the recorded protected tool set byte-identical; before ${protectedToolsBeforeSecond}, after ${protectedToolsAfterSecond}`,
+  );
+  assert.equal(
+    afterSecond,
+    beforeSecond,
+    `refused second protect changed on-disk state; before ${beforeSecond}, after ${afterSecond}`,
   );
 
   const third = run(ctx, ["protect", "db", "db.read"]);
