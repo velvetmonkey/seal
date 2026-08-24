@@ -2,7 +2,7 @@
 
 # Seal
 
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![seal-check: kernel no spine](https://img.shields.io/badge/seal--check-kernel%20no%20spine-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
 
 An AI coding agent can call a tool that changes or deletes something important.
 
@@ -114,7 +114,7 @@ Claude Code but writes neither file. If the server entry changes, or a named
 tool disappears at activation, Seal refuses forwarding or records `BROKEN`.
 `status` prints the runtime, current protection state, and receipt summary; after
 the command above it reports `PENDING RESTART db.demo.mutate` until Claude Code
-restarts.
+restarts. **Receipt privacy:** Receipts contain the complete parsed protected-tool arguments and child command metadata. Sharing a receipt shares those values.
 
 The protected path creates or reuses a machine-local signing key. The demo's key is generated fresh for that run. The checker accepts a receipt only with a
 public key you supply, and only when the decision, tool, arguments, and
@@ -179,7 +179,7 @@ four state classes remain uncovered.
 Receipts are signed records, not evidence that an event happened. The checker
 uses the same Node crypto platform and cannot find a defect shared by its rule
 or that platform. Formatting differences that do not change parsed JSON are not
-distinguished. A hosted checker can recheck a pasted receipt, but it cannot establish routing. [seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
+distinguished. Hosted checker checks kernel receipts; it refuses seal.spine/v1 proxy receipts. [seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
 
 ## Links
 
