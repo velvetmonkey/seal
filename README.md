@@ -1,4 +1,6 @@
+<p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
 # Seal
+[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
 
 An AI coding agent can call a tool that changes or deletes something important.
 
@@ -37,8 +39,6 @@ chmod +x "$expected_name"
 ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 export PATH="$HOME/.local/bin:$PATH"
 ```
-
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
 
 Requires Node 20+. The published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
 
