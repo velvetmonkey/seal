@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   actions: read
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -107,3 +109,12 @@ jobs:
             "$RUNNER_TEMP/dist/SHA256SUMS" \
             "${prerelease[@]}" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+      - name: Attest release assets
+        # Human post-release verification workflow path: .github/workflows/release.yml
+        # CI release-download provenance remains absent here: .github/workflows/ci.yml
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ runner.temp }}/dist/seal-v*-linux-x64
+            ${{ runner.temp }}/dist/seal-receipt-check.mjs
+            ${{ runner.temp }}/dist/SHA256SUMS
