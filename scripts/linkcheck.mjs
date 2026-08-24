@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Internal-link integrity check for the Seal landing repo: every relative
 // link/src in the docs must resolve to a file. Run: node scripts/linkcheck.mjs
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -12,7 +13,15 @@ const require = createRequire(import.meta.url);
 const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const files = [...new Set(["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
+const POPULATION_FILE = resolve(ROOT, "test/support/linkcheck-population.mjs");
+const FAMILY_REPOSITORIES = [
+  ["seal-check", "master"],
+  ["seal-demo", "main"],
+  ["seal-live-demo", "master"],
+  ["seal-verify-action", "main"],
+  ["seal-assurance-kit", "main"],
+  ["mcp-seal-dev", "main"],
+];
 function walk(dir, prefix = "") {
   const out = [];
   for (const name of readdirSync(resolve(dir, prefix), { withFileTypes: true })) {
@@ -25,34 +34,61 @@ function walk(dir, prefix = "") {
   }
   return out;
 }
-const FAMILY_ROOTS = new Map([
-  ["seal", process.env.FAMILY_SEAL_ROOT ?? ROOT],
-  ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? resolve(ROOT, ".family/seal-check")],
-  ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? resolve(ROOT, ".family/seal-demo")],
-  ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? resolve(ROOT, ".family/seal-live-demo")],
-  ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? resolve(ROOT, ".family/seal-verify-action")],
-  ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? resolve(ROOT, ".family/seal-assurance-kit")],
-  ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? resolve(ROOT, ".family/mcp-seal-dev")],
-]);
-
-function targetFor(file, link, rootRelative = false) {
-  const [family] = link.split("/", 1);
-  if (FAMILY_ROOTS.has(family)) {
-    return {
-      kind: family === "seal" ? "internal" : "external",
-      path: resolve(FAMILY_ROOTS.get(family), link.slice(family.length + 1)),
-    };
-  }
-  return { kind: "internal", path: resolve(rootRelative ? ROOT : dirname(`${ROOT}/${file}`), link) };
+function familyRoots(sourceRoot) {
+  return new Map([
+    ["seal", process.env.FAMILY_SEAL_ROOT ?? sourceRoot],
+    ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? resolve(sourceRoot, ".family/seal-check")],
+    ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? resolve(sourceRoot, ".family/seal-demo")],
+    ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? resolve(sourceRoot, ".family/seal-live-demo")],
+    ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? resolve(sourceRoot, ".family/seal-verify-action")],
+    ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? resolve(sourceRoot, ".family/seal-assurance-kit")],
+    ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? resolve(sourceRoot, ".family/mcp-seal-dev")],
+  ]);
 }
 
-function check(file, raw, rootRelative = false) {
+function prepareFamilyTree(sourceRoot) {
+  const familyDir = resolve(sourceRoot, ".family");
+  const present = FAMILY_REPOSITORIES.filter(([repo]) => existsSync(resolve(familyDir, repo)));
+  if (present.length === FAMILY_REPOSITORIES.length) return () => {};
+  if (present.length !== 0 || existsSync(familyDir)) {
+    throw new Error(`partial .family tree: found ${present.length} of ${FAMILY_REPOSITORIES.length} repositories`);
+  }
+
+  mkdirSync(familyDir);
+  try {
+    for (const [repo, branch] of FAMILY_REPOSITORIES) {
+      const clone = spawnSync("git", ["clone", "--quiet", "--depth", "1", "--branch", branch,
+        `https://github.com/velvetmonkey/${repo}`, resolve(familyDir, repo)], {
+        cwd: sourceRoot,
+        encoding: "utf8",
+      });
+      if (clone.status !== 0) throw new Error(`git clone ${repo} exited ${clone.status}: ${clone.stderr.trim()}`);
+    }
+  } catch (error) {
+    rmSync(familyDir, { recursive: true, force: true });
+    throw error;
+  }
+  return () => rmSync(familyDir, { recursive: true, force: true });
+}
+
+function targetFor(file, link, sourceRoot, roots, rootRelative = false) {
+  const [family] = link.split("/", 1);
+  if (roots.has(family)) {
+    return {
+      kind: family === "seal" ? "internal" : "external",
+      path: resolve(roots.get(family), link.slice(family.length + 1)),
+    };
+  }
+  return { kind: "internal", path: resolve(rootRelative ? sourceRoot : dirname(`${sourceRoot}/${file}`), link) };
+}
+
+function check(file, raw, sourceRoot, roots, rootRelative = false) {
   let link = raw.trim();
   if (!link || link.startsWith("#") || link.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(link)) return;
   scannedTargets.add(link);
   link = link.split("#")[0].split("?")[0];
   if (!link) return;
-  const target = targetFor(file, link, rootRelative);
+  const target = targetFor(file, link, sourceRoot, roots, rootRelative);
   if (target.kind === "external") {
     externalLinks++;
     if (!existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
@@ -112,32 +148,77 @@ let bad = 0, checked = 0, externalLinks = 0;
 const scannedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 
-async function main() {
+function populationSource() {
+  return `// Generated by node scripts/linkcheck.mjs --write; review by rerunning that command.\n// The separate-source target cross-check lives in test/linkcheck.test.mjs and\n// cannot be refreshed from LINKCHECK_REPORT_SCANNED_TARGETS. It is deliberately\n// described as a cross-check; docs/assurance/linkcheck-population-control.md\n// records its shared blind spots.\nexport default {\n  internalOccurrences: ${checked},\n  externalOccurrences: ${externalLinks},\n};\n`;
+}
+
+async function main({ sourceRoot = ROOT, write = false } = {}) {
   bad = 0;
   checked = 0;
   externalLinks = 0;
   scannedTargets.clear();
-
-  for (const f of files) {
-    const txt = readFileSync(`${ROOT}/${f}`, "utf8");
-    if (f.endsWith(".md")) {
-      for (const link of markdownDestinations(txt)) check(f, link);
-    } else {
-      for (const m of txt.matchAll(re)) check(f, m[1] || m[2] || "");
+  let sourceFiles;
+  try {
+    sourceFiles = walk(sourceRoot);
+  } catch (error) {
+    console.error(`REFUSE link-check source tree unreadable: ${sourceRoot}: ${error.message}`);
+    return 1;
+  }
+  if (sourceFiles.length === 0) {
+    console.error(`REFUSE link-check source tree empty: ${sourceRoot}`);
+    return 1;
+  }
+  let cleanupFamilyTree = () => {};
+  if (write) {
+    try {
+      cleanupFamilyTree = prepareFamilyTree(sourceRoot);
+      sourceFiles = walk(sourceRoot);
+    } catch (error) {
+      console.error(`REFUSE link-check family tree unavailable: ${error.message}`);
+      return 1;
     }
   }
+  try {
+    return await measure({ sourceRoot, sourceFiles, write });
+  } finally {
+    cleanupFamilyTree();
+  }
+}
 
-  // Binding records use path:line proof references, not document links.
-  const dataFiles = walk(ROOT).filter((f) =>
-    f !== "scripts/mandatory-doc-claim-bindings.json"
-      && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
-  );
-  for (const f of dataFiles) {
-    const text = readFileSync(resolve(ROOT, f), "utf8");
-    const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
-    for (const candidate of candidates) {
-      for (const link of pathStrings(candidate)) check(f, link, true);
+async function measure({ sourceRoot, sourceFiles, write }) {
+  const roots = familyRoots(sourceRoot);
+  const files = [...new Set(["README.md", ...sourceFiles.filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
+
+  try {
+    for (const f of files) {
+      const txt = readFileSync(`${sourceRoot}/${f}`, "utf8");
+      if (f.endsWith(".md")) {
+        for (const link of markdownDestinations(txt)) check(f, link, sourceRoot, roots);
+      } else {
+        for (const m of txt.matchAll(re)) check(f, m[1] || m[2] || "", sourceRoot, roots);
+      }
     }
+
+    // Binding records use path:line proof references, not document links.
+    const dataFiles = sourceFiles.filter((f) =>
+      f !== "scripts/mandatory-doc-claim-bindings.json"
+        && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
+    );
+    for (const f of dataFiles) {
+      const text = readFileSync(resolve(sourceRoot, f), "utf8");
+      const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
+      for (const candidate of candidates) {
+        for (const link of pathStrings(candidate)) check(f, link, sourceRoot, roots, true);
+      }
+    }
+  } catch (error) {
+    console.error(`REFUSE link-check source tree unreadable: ${sourceRoot}: ${error.message}`);
+    return 1;
+  }
+
+  if (checked === 0 && externalLinks === 0) {
+    console.error(`REFUSE link-check measured zero links in source tree: ${sourceRoot}`);
+    return 1;
   }
 
   if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
@@ -150,7 +231,7 @@ async function main() {
   let externalChecked = 0;
   for (const [link, carriers] of requiredLiveLinks) {
     for (const carrier of carriers) {
-      if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
+      if (!readFileSync(resolve(sourceRoot, carrier), "utf8").includes(link)) {
         console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
         bad++;
       }
@@ -170,9 +251,26 @@ async function main() {
   }
 
   console.log(`link-check: ${checked} internal links, ${externalLinks} external links, ${externalChecked} required live links, ${bad} broken`);
-  return bad ? 1 : 0;
+  if (bad) return 1;
+  if (write) {
+    writeFileSync(POPULATION_FILE, populationSource(), "utf8");
+    console.log(`link-check-population: wrote ${POPULATION_FILE} (${checked} internal, ${externalLinks} external)`);
+  }
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(await main());
+  const args = process.argv.slice(2);
+  let sourceRoot = ROOT;
+  let write = false;
+  while (args.length) {
+    const arg = args.shift();
+    if (arg === "--write") write = true;
+    else if (arg === "--root" && args.length) sourceRoot = resolve(args.shift());
+    else {
+      console.error("usage: node scripts/linkcheck.mjs [--write] [--root PATH]");
+      process.exit(2);
+    }
+  }
+  process.exit(await main({ sourceRoot, write }));
 }
