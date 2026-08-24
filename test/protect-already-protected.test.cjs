@@ -68,8 +68,8 @@ test("a later protect refuses already_protected and leaves the first tool set un
 
   assert.doesNotMatch(
     second.out,
-    /^Protection: PENDING RESTART db\.db\.read$/m,
-    `second protect must not report additive success; found output ${JSON.stringify(second.out)}`,
+    /^Protection:\s+\S+(?:\s+.*)?$/m,
+    `second protect must not report a successful protection outcome; found output ${JSON.stringify(second.out)}`,
   );
   assert.equal(
     second.code,
