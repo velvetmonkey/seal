@@ -40,6 +40,19 @@ if(a[1]==="remove"){try{fs.unlinkSync(f)}catch{}process.exit(0)} process.exit(2)
     XDG_DATA_HOME: path.join(home, ".local/share"),
     PATH: `${bin}${path.delimiter}${process.env.PATH}`,
   };
+  const projectDirectory = path.dirname(statePathFor(project, env));
+  const receiptsDirectory = path.join(projectDirectory, "receipts");
+  const keysDirectory = path.join(env.XDG_DATA_HOME, "seal", "keys");
+  fs.mkdirSync(receiptsDirectory, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(keysDirectory, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(projectDirectory, "state.json.live"), "seeded state target\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(projectDirectory, "approvals.journal"), "seeded approvals journal\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(projectDirectory, "approvals.journal.lock"), "seeded approvals lock\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(projectDirectory, "proxy.lock"), "seeded proxy lock\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(receiptsDirectory, "seeded-receipt.json"), "seeded receipt\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(keysDirectory, "receipt-ed25519"), "seeded private key\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(keysDirectory, "receipt-ed25519.pub"), "seeded public key\n", { mode: 0o644 });
+  fs.writeFileSync(path.join(home, ".claude.json"), "{}\n", { mode: 0o600 });
   return { project, env };
 }
 
@@ -54,6 +67,75 @@ function run(ctx, args) {
   return { code: result.status, stdout, stderr, out: `${stdout}${stderr}` };
 }
 
+function lstatType(stat) {
+  if (stat.isDirectory()) return "directory";
+  if (stat.isFile()) return "file";
+  if (stat.isSymbolicLink()) return "symlink";
+  return "other";
+}
+
+function treeSnapshot(directory) {
+  const entries = [];
+  const visit = (current, relative) => {
+    for (const name of fs.readdirSync(current).sort()) {
+      const absolute = path.join(current, name);
+      const entryRelative = path.join(relative, name);
+      const stat = fs.lstatSync(absolute);
+      const entry = { path: entryRelative, type: lstatType(stat), mode: stat.mode & 0o7777 };
+      if (stat.isFile()) entry.bytes = fs.readFileSync(absolute).toString("base64");
+      entries.push(entry);
+      if (stat.isDirectory()) visit(absolute, entryRelative);
+    }
+  };
+  visit(directory, "");
+  return entries;
+}
+
+function snapshotPath(filePath) {
+  let stat;
+  try {
+    stat = fs.lstatSync(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return { state: "absent" };
+    throw error;
+  }
+  const snapshot = { state: "present", type: lstatType(stat), mode: stat.mode & 0o7777 };
+  if (stat.isFile()) snapshot.bytes = fs.readFileSync(filePath).toString("base64");
+  if (stat.isDirectory()) snapshot.tree = treeSnapshot(filePath);
+  return snapshot;
+}
+
+function boundPaths(ctx, statePath) {
+  const projectDirectory = path.dirname(statePath);
+  const stateTargets = fs.readdirSync(projectDirectory)
+    .filter((name) => /^state\.json\./.test(name))
+    .sort()
+    .map((name) => path.join(projectDirectory, name));
+  return [
+    path.join(ctx.project, ".mcp.json"),
+    statePath,
+    ...stateTargets,
+    path.join(projectDirectory, "approvals.journal"),
+    path.join(projectDirectory, "approvals.journal.lock"),
+    path.join(projectDirectory, "receipts"),
+    path.join(projectDirectory, "proxy.lock"),
+    path.join(ctx.env.CLAUDE_CONFIG_DIR || ctx.env.HOME, ".claude.json"),
+    path.join(ctx.env.XDG_DATA_HOME, "seal", "keys", "receipt-ed25519"),
+    path.join(ctx.env.XDG_DATA_HOME, "seal", "keys", "receipt-ed25519.pub"),
+  ];
+}
+
+function snapshotBoundPaths(paths) {
+  return new Map(paths.map((filePath) => [filePath, snapshotPath(filePath)]));
+}
+
+function assertBoundPathsUnchanged(before, paths) {
+  for (const filePath of paths) {
+    const after = snapshotPath(filePath);
+    assert.deepEqual(after, before.get(filePath), `refused second protect changed bound path: ${filePath}`);
+  }
+}
+
 test("a later protect refuses already_protected and leaves the first tool set unchanged", (t) => {
   const ctx = setup();
   const first = run(ctx, ["protect", "db", "db.drop_table"]);
@@ -62,11 +144,15 @@ test("a later protect refuses already_protected and leaves the first tool set un
   const statePath = statePathFor(ctx.project, ctx.env);
   const beforeSecond = fs.readFileSync(statePath, "utf8");
   const protectedToolsBeforeSecond = Buffer.from(JSON.stringify(readState(statePath).guardTools));
+  const paths = boundPaths(ctx, statePath);
+  const boundBeforeSecond = snapshotBoundPaths(paths);
   const second = run(ctx, ["protect", "db", "db.read"]);
   const afterSecond = fs.readFileSync(statePath, "utf8");
   const stateAfterSecond = readState(statePath);
   const protectedToolsAfterSecond = Buffer.from(JSON.stringify(stateAfterSecond.guardTools));
   const guardTools = stateAfterSecond.guardTools;
+
+  assertBoundPathsUnchanged(boundBeforeSecond, paths);
 
   assert.deepEqual(
     protectedToolsAfterSecond,
