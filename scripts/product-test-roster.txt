@@ -51,6 +51,7 @@ test/readme-navigation.test.mjs
 test/readme-pasteable-fences.test.cjs
 test/readme-reader-visible-bookkeeping.test.mjs
 test/readme-protect-fence.test.cjs
+test/readme-protect-state-witness.test.cjs
 test/readme-source-inventory.test.mjs
 test/receipt-checker.test.cjs
 test/receiptkey.test.cjs
