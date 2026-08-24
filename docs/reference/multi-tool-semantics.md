@@ -134,35 +134,31 @@ set and its shared lease. `STALE` is a status view of an `ACTIVE` record whose
 lease is dead (`spine/protection.cjs:629-639`), but it is a distinct value the
 shipped status state machine admits and displays.
 
-## Existing multi-tool coverage
+## Multi-tool coverage
 
-Only **two of the six** state classes are exercised with a guarded set containing
-more than one distinct tool. Both are in `test/tool-validation.test.cjs`.
+All six state classes are exercised with a guarded set containing more than one
+distinct tool. Four tests use the same declaration of three distinct tools and
+observe the guarded set after the state transition.
 
 | State class | Multi-tool coverage | Existing test |
 |---|---:|---|
-| `UNPROTECTED` | No | Uncovered: no test unprotects a multi-tool set; the unknown-member test refuses before a multi-tool state exists. |
+| `UNPROTECTED` | Yes | `UNPROTECTED guards none of a former three-tool declaration and clears its shared lease` in `test/multi-tool-semantics-doc.test.cjs`. |
 | `PENDING RESTART` | Yes | `three protected tools round-trip through stored state` (lines 159-169). |
 | `ACTIVE` | Yes | `a named tool list gives both tools separate asks` (lines 92-128); starting its proxy activates the shared lease before the calls. |
-| `STALE` | No | Uncovered for a multi-tool set. |
-| `DRIFTED` | No | Uncovered for a multi-tool set. |
-| `BROKEN` | No | Uncovered for a multi-tool set; `activation becomes visibly BROKEN when the protected tool vanished` (lines 261-273) guards only one tool. |
+| `STALE` | Yes | `STALE exposes one complete three-tool guard set for a dead shared lease` in `test/multi-tool-semantics-doc.test.cjs`. |
+| `DRIFTED` | Yes | `DRIFTED guards the complete three-tool declaration after server configuration changes` in `test/multi-tool-semantics-doc.test.cjs`. |
+| `BROKEN` | Yes | `BROKEN guards the complete three-tool declaration after one member vanishes` in `test/multi-tool-semantics-doc.test.cjs`. |
 
-The uncovered multi-tool states are therefore **four**:
-`UNPROTECTED`, `STALE`, `DRIFTED`, and `BROKEN`. Other multi-tool tests in the
-same file check list validation, order-preserving deduplication, set persistence,
-and independent approval prompts, but they do not add another state class.
+The tests for `UNPROTECTED`, `STALE`, `DRIFTED`, and `BROKEN` each assert that the
+observed guarded names equal the declared three-tool set or are empty. A later
+protect test also observes the stored guarded set after replacement is refused.
 
 ## Verdict on “The state machine is TESTED”
 
-**The state machine is not tested across the multi-tool space. The existing
-suite earns that statement only for the single-tool case. Applied to shipped
-multi-tool protection, “The state machine is TESTED” is an overclaim and this is
-a G0 finding.**
-
-Four of the six shared state classes have no multi-tool exercise, including the
-load-bearing `BROKEN` result when one member of a larger set vanishes and the
-all-tools `UNPROTECTED` result after server-level unprotect.
+**The state machine is TESTED across all six shared multi-tool state classes.**
+This badge reports behavioral test observations. The four added state tests use
+three distinct tools, and physical tamper runs showed each targeted test failing
+with the omitted tool named when its state exposed only two guarded members.
 
 ## Document/code disagreements
 
@@ -186,6 +182,6 @@ all-tools `UNPROTECTED` result after server-level unprotect.
 
 ## UNVERIFIED
 
-None. All four answers were observed through the shipped CLI and product spine.
-The coverage verdict is a source/test inventory: no external Claude Code
-acceptance claim is made here.
+The protection state machine has no machine-checked model in the Lean kernel.
+The coverage verdict is based on the shipped CLI and product spine test paths;
+no external Claude Code acceptance claim is made here.

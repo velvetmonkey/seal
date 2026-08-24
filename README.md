@@ -172,9 +172,9 @@ request, Seal runs it. Approval expiry follows the local wall clock.
 
 The decision program is bundled as WebAssembly. Its byte-pinned answer is
 required before forwarding. A failure or disagreement refuses; there is no
-JavaScript authorization fallback. The state machine is tested for the
-single-tool case. Multi-tool coverage reaches `PENDING RESTART` and `ACTIVE`;
-four state classes remain uncovered.
+JavaScript authorization fallback. Single-tool and multi-tool protection are
+TESTED across all six shared state classes, including three-tool observations
+of `BROKEN`, `DRIFTED`, `STALE`, and `UNPROTECTED` atomicity.
 
 Receipts are signed records, not evidence that an event happened. The checker
 uses the same Node crypto platform and cannot find a defect shared by its rule
