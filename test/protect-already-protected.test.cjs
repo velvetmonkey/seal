@@ -49,7 +49,9 @@ function run(ctx, args) {
     env: ctx.env,
     encoding: "utf8",
   });
-  return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}` };
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  return { code: result.status, stdout, stderr, out: `${stdout}${stderr}` };
 }
 
 test("a later protect refuses already_protected and leaves the first tool set unchanged", (t) => {
@@ -66,10 +68,17 @@ test("a later protect refuses already_protected and leaves the first tool set un
   const third = run(ctx, ["protect", "db", "db.read"]);
   const stateAfterThird = readState(statePath);
 
-  assert.doesNotMatch(
-    second.out,
-    /^Protection: PENDING RESTART db\.db\.read$/m,
-    `second protect must not report additive success; found output ${JSON.stringify(second.out)}`,
+  assert.equal(
+    second.stdout,
+    "",
+    `refused second protect must write exact stdout; found ${JSON.stringify(second.stdout)}`,
+  );
+  assert.equal(
+    second.stderr,
+    "seal: REFUSE already_protected: project is already PENDING RESTART\n" +
+      "Next:\n" +
+      "  Run `seal status` to see the current protection before changing it.\n",
+    `refused second protect must write exact stderr; found ${JSON.stringify(second.stderr)}`,
   );
   assert.equal(
     second.code,
