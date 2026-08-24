@@ -25,7 +25,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const REVIEWED_GUIDES = [
   {
     file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
-    sha256: "a4ac1ec7bc8e93eb7fc1355a6e95ece3db1e9098aac80a63ac3467602bb5bdad",
+    sha256: "6657afac59df8c4021b5eb812227737d2fc9c997fc02389094c8b60e25e63c74",
     claims: [
       "You pointed `seal verify` at one of the gate's own receipts.",
       "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
