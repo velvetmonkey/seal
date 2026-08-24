@@ -175,11 +175,14 @@ test("population changes and high-water decisions stay explicit without running 
     externalOccurrences: 50,
     internalOccurrencesHighWaterMark: 407,
     externalOccurrencesHighWaterMark: 50,
+    fileOccurrences: {},
+    fileOccurrencesHighWaterMarks: {},
     shrinkHistory: [],
   };
   const accepted = populationDecision(recorded, {
     internalOccurrences: 406,
     externalOccurrences: 50,
+    fileOccurrences: {},
   }, { allowShrink: true, date: "2026-08-24" });
   const sequential = populationDecision(accepted.population, {
     internalOccurrences: 406,
@@ -194,8 +197,10 @@ test("population changes and high-water decisions stay explicit without running 
       && JSON.stringify(accepted.population) === JSON.stringify({
         internalOccurrences: 406,
         externalOccurrences: 50,
+        fileOccurrences: {},
         internalOccurrencesHighWaterMark: 407,
         externalOccurrencesHighWaterMark: 50,
+        fileOccurrencesHighWaterMarks: {},
         shrinkHistory: [{
           date: "2026-08-24",
           oldCounts: { internalOccurrences: 407, externalOccurrences: 50 },
@@ -211,6 +216,40 @@ test("population changes and high-water decisions stay explicit without running 
       }]),
     "population changes must preserve differences, retain the high-water floor, record consent, and refuse a later unflagged lowered write",
   );
+});
+
+test("a compensated cross-file swap is refused by per-file population counts", () => {
+  const oldPopulation = {
+    internalOccurrences: 407,
+    externalOccurrences: 50,
+    internalOccurrencesHighWaterMark: 407,
+    externalOccurrencesHighWaterMark: 50,
+    fileOccurrences: {
+      "docs/assurance/README.md": { internalOccurrences: 1, externalOccurrences: 0 },
+      "README.md": { internalOccurrences: 0, externalOccurrences: 0 },
+    },
+    fileOccurrencesHighWaterMarks: {
+      "docs/assurance/README.md": { internalOccurrences: 1, externalOccurrences: 0 },
+      "README.md": { internalOccurrences: 0, externalOccurrences: 0 },
+    },
+    shrinkHistory: [],
+  };
+  const decision = populationDecision(oldPopulation, {
+    internalOccurrences: 407,
+    externalOccurrences: 50,
+    fileOccurrences: {
+      "docs/assurance/README.md": { internalOccurrences: 0, externalOccurrences: 0 },
+      "README.md": { internalOccurrences: 1, externalOccurrences: 0 },
+    },
+  });
+  assert.equal(decision.population, null);
+  assert.deepEqual(decision.shrinks, [{
+    file: "docs/assurance/README.md",
+    key: "internalOccurrences",
+    oldCount: 1,
+    newCount: 0,
+    difference: -1,
+  }]);
 });
 
 test("path matcher still catches stale filenames with unknown extensions", () => {

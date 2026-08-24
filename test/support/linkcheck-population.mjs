@@ -9,6 +9,1234 @@ export default {
   externalOccurrences: 50,
   internalOccurrencesHighWaterMark: 407,
   externalOccurrencesHighWaterMark: 50,
+  fileOccurrences:   {
+    ".family/mcp-seal-dev/ASSURANCE_CASE.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/CLAIMS.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/README.md": {
+      "internalOccurrences": 20,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/ROADMAP_ARIA_TA2.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/THREAT_MODEL.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 7,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/CONFORMANCE.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/FFI.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/GLOSSARY.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/GOLDEN-PATH-SPEC.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/POLICY-V2.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/POLICY.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/TCB.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/AGREEMENT_BOUNDARY_REPORT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/external/vendor/json-testsuite/PROVENANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/external/vendor/wycheproof/PROVENANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/README.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/STATUS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/01-parse/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/02-validate/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/03-serialize/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/03-serialize/aristotle-handoff.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/04-decide/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/05-sign/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/06-lifecycle/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/07-host/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/08-threat-model/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/08-threat-model/THREAT-MODEL.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/CLAIMS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/README.md": {
+      "internalOccurrences": 19,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/DEPLOYMENT.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/SCHEMAS.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/VERIFY-PROFILES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/WHAT-SEAL-IS-NOT.md": {
+      "internalOccurrences": 6,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/AUDIT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/README.md": {
+      "internalOccurrences": 18,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/DECISION-RECEIPT-SCHEMA.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/SEAL-ASSURANCE-STATEMENT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/SEAL-MEDIATION-PROFILE-L0.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/index.html": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/tools.html": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/README.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/docs/BUILD.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/public/index.html": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/public/live.html": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/AUDIT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/PROVENANCE.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/README.md": {
+      "internalOccurrences": 22,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/archive/README.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/evidence/summary.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/pwa/index.html": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/CHANGELOG.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/PR-DESCRIPTION.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/README.md": {
+      "internalOccurrences": 8,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/VENDORED.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/fixtures/fail/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/fixtures/reduced/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/ci.yml": {
+      "internalOccurrences": 38,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/family-claims-live.yml": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/macos.yml": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/release.yml": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "README.md": {
+      "internalOccurrences": 9,
+      "externalOccurrences": 0
+    },
+    "SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/ARTIFACT-INHERITANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/AUTHORIZATION-MESH.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/AUTHORIZATION-RECORD.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/BROKER-HA.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/CLAIMS-MATRIX.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/archive/COMPREHENSION-CHECK.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/CONSISTENCY-REPORT.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/archive/LIMITATIONS.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/META-PARTITION-SPEC.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NORTH-STAR-ADJUSTED.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NORTH-STAR-V3.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NUMERIC-AGREEMENT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/OPEN-FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/PUBLIC-FLIP-CHECKLIST.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/REPO-TOPOLOGY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/ROADMAP-KERNEL-OUTWARD.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/archive/TRUTH-BOX.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/WHAT-SEAL-IS.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/WHY-DIFFERENT.md": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    "docs/archive/findings.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/POLICY-LANGUAGE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/README.md": {
+      "internalOccurrences": 46,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": {
+      "internalOccurrences": 31,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/architecture.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/claude-code-evidence.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/distribution.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/evaluator-start.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/index.html": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/installed-tree-pin-control.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/linkcheck-population-control.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/version-identity.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/guide/README.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/guide/choosing-what-to-protect.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/guide/github-actions-provenance.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/guide/knowing-it-worked.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/guide/what-is-protected-right-now.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "docs/guide/when-something-looks-wrong.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/reference/multi-tool-semantics.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/start/evaluator-walk.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/start/install.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "scripts/claim-bearing-files.json": {
+      "internalOccurrences": 22,
+      "externalOccurrences": 0
+    },
+    "scripts/claim-coverage-allowlist.json": {
+      "internalOccurrences": 37,
+      "externalOccurrences": 50
+    },
+    "scripts/claims-drift-family-hashes.json": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "scripts/installed-tree-pin-sites.json": {
+      "internalOccurrences": 7,
+      "externalOccurrences": 0
+    },
+    "scripts/live-page-claim-sites.json": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    }
+  },
+  fileOccurrencesHighWaterMarks:   {
+    ".family/mcp-seal-dev/ASSURANCE_CASE.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/CLAIMS.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/README.md": {
+      "internalOccurrences": 20,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/ROADMAP_ARIA_TA2.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/THREAT_MODEL.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 7,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/CONFORMANCE.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/FFI.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/GLOSSARY.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/GOLDEN-PATH-SPEC.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/POLICY-V2.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/POLICY.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/TCB.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/AGREEMENT_BOUNDARY_REPORT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/external/vendor/json-testsuite/PROVENANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/test/external/vendor/wycheproof/PROVENANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/README.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/STATUS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/01-parse/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/02-validate/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/03-serialize/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/03-serialize/aristotle-handoff.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/04-decide/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/05-sign/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/06-lifecycle/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/07-host/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/08-threat-model/NOTES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/mcp-seal-dev/v2/milestones/08-threat-model/THREAT-MODEL.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/CLAIMS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/README.md": {
+      "internalOccurrences": 19,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/DEPLOYMENT.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/SCHEMAS.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/VERIFY-PROFILES.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-assurance-kit/docs/WHAT-SEAL-IS-NOT.md": {
+      "internalOccurrences": 6,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/AUDIT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/README.md": {
+      "internalOccurrences": 18,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/DECISION-RECEIPT-SCHEMA.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/SEAL-ASSURANCE-STATEMENT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/SEAL-MEDIATION-PROFILE-L0.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/index.html": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    ".family/seal-check/tools.html": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/README.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/docs/BUILD.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/public/index.html": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    ".family/seal-demo/public/live.html": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/AUDIT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/PROVENANCE.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/README.md": {
+      "internalOccurrences": 22,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/archive/README.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/ARCHITECTURE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/ASSUMPTIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/CONFORMANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/GLOSSARY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/PROOF-REFERENCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/TCB.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/THREAT-MODEL.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/evidence/summary.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-live-demo/pwa/index.html": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/CHANGELOG.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/PR-DESCRIPTION.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/README.md": {
+      "internalOccurrences": 8,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/VENDORED.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/docs/LIMITATIONS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/docs/TRUTH-BOX.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/fixtures/fail/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".family/seal-verify-action/fixtures/reduced/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/ci.yml": {
+      "internalOccurrences": 38,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/family-claims-live.yml": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/macos.yml": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    ".github/workflows/release.yml": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "README.md": {
+      "internalOccurrences": 9,
+      "externalOccurrences": 0
+    },
+    "SECURITY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/ARTIFACT-INHERITANCE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/AUTHORIZATION-MESH.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/AUTHORIZATION-RECORD.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/BROKER-HA.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/CLAIMS-MATRIX.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/archive/COMPREHENSION-CHECK.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/CONSISTENCY-REPORT.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/archive/LIMITATIONS.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/META-PARTITION-SPEC.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NORTH-STAR-ADJUSTED.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NORTH-STAR-V3.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/NUMERIC-AGREEMENT.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/OPEN-FINDINGS.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/PUBLIC-FLIP-CHECKLIST.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/README.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/REPO-TOPOLOGY.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/archive/ROADMAP-KERNEL-OUTWARD.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/archive/TRUTH-BOX.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/WHAT-SEAL-IS.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/archive/WHY-DIFFERENT.md": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    "docs/archive/findings.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/POLICY-LANGUAGE.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/README.md": {
+      "internalOccurrences": 46,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": {
+      "internalOccurrences": 31,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/architecture.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/claude-code-evidence.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/distribution.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/evaluator-start.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/index.html": {
+      "internalOccurrences": 4,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/installed-tree-pin-control.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/linkcheck-population-control.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/version-identity.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/guide/README.md": {
+      "internalOccurrences": 5,
+      "externalOccurrences": 0
+    },
+    "docs/guide/choosing-what-to-protect.md": {
+      "internalOccurrences": 1,
+      "externalOccurrences": 0
+    },
+    "docs/guide/github-actions-provenance.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/guide/knowing-it-worked.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/guide/what-is-protected-right-now.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "docs/guide/when-something-looks-wrong.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/reference/multi-tool-semantics.md": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "docs/start/evaluator-walk.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
+    "docs/start/install.md": {
+      "internalOccurrences": 3,
+      "externalOccurrences": 0
+    },
+    "scripts/claim-bearing-files.json": {
+      "internalOccurrences": 22,
+      "externalOccurrences": 0
+    },
+    "scripts/claim-coverage-allowlist.json": {
+      "internalOccurrences": 37,
+      "externalOccurrences": 50
+    },
+    "scripts/claims-drift-family-hashes.json": {
+      "internalOccurrences": 0,
+      "externalOccurrences": 0
+    },
+    "scripts/installed-tree-pin-sites.json": {
+      "internalOccurrences": 7,
+      "externalOccurrences": 0
+    },
+    "scripts/live-page-claim-sites.json": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    }
+  },
   shrinkHistory: [
   ],
 };

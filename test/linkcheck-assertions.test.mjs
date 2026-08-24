@@ -23,6 +23,8 @@ const REQUIRED_ASSERTIONS = [
   ["HTML attribute destinations", '"assets/seal-logo.png",'],
   ["escaped-backtick destination", '"escaped-not-code.md", "docs/start/install.md"'],
   ["CommonMark boundary cases", "assert.deepEqual(markdownDestinations(item.markdown), item.links, item.name)"],
+  ["compensated swap refusal", "a compensated cross-file swap is refused by per-file population counts"],
+  ["per-file refusal names the lost occurrence", 'file: "docs/assurance/README.md"'],
 ];
 
 test("linkcheck assertion inventory refuses a removed assertion by name", () => {
@@ -31,7 +33,7 @@ test("linkcheck assertion inventory refuses a removed assertion by name", () => 
     assert.ok(source.includes(fragment), `linkcheck assertion missing: ${name}`);
   }
   const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
-  assert.equal(actualCount, 15, `linkcheck assertion inventory changed: expected 15 assertions, found ${actualCount}`);
+  assert.equal(actualCount, 17, `linkcheck assertion inventory changed: expected 17 assertions, found ${actualCount}`);
   const control = readFileSync(CONTROL_DOCUMENT, "utf8");
   assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md
   assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
