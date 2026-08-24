@@ -45,7 +45,6 @@ if(a[1]==="remove"){try{fs.unlinkSync(f)}catch{}process.exit(0)} process.exit(2)
   const keysDirectory = path.join(env.XDG_DATA_HOME, "seal", "keys");
   fs.mkdirSync(receiptsDirectory, { recursive: true, mode: 0o700 });
   fs.mkdirSync(keysDirectory, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(path.join(projectDirectory, "state.json.live"), "seeded state target\n", { mode: 0o600 });
   fs.writeFileSync(path.join(projectDirectory, "approvals.journal"), "seeded approvals journal\n", { mode: 0o600 });
   fs.writeFileSync(path.join(projectDirectory, "approvals.journal.lock"), "seeded approvals lock\n", { mode: 0o600 });
   fs.writeFileSync(path.join(projectDirectory, "proxy.lock"), "seeded proxy lock\n", { mode: 0o600 });
@@ -78,6 +77,10 @@ function treeSnapshot(directory) {
   const entries = [];
   const visit = (current, relative) => {
     for (const name of fs.readdirSync(current).sort()) {
+      // writeState uses this process-scoped file as a transient rename source.
+      // It is deliberately outside the refusal invariant; stable entries are
+      // still compared by exact type, mode, and bytes below.
+      if (relative === "" && /^state\.json\.tmp-\d+$/.test(name)) continue;
       const absolute = path.join(current, name);
       const entryRelative = path.join(relative, name);
       const stat = fs.lstatSync(absolute);
@@ -91,7 +94,7 @@ function treeSnapshot(directory) {
   return entries;
 }
 
-function snapshotPath(filePath) {
+function snapshotPath(filePath, includeDirectoryTree = true) {
   let stat;
   try {
     stat = fs.lstatSync(filePath);
@@ -101,20 +104,18 @@ function snapshotPath(filePath) {
   }
   const snapshot = { state: "present", type: lstatType(stat), mode: stat.mode & 0o7777 };
   if (stat.isFile()) snapshot.bytes = fs.readFileSync(filePath).toString("base64");
-  if (stat.isDirectory()) snapshot.tree = treeSnapshot(filePath);
+  if (stat.isDirectory() && includeDirectoryTree) snapshot.tree = treeSnapshot(filePath);
   return snapshot;
 }
 
 function boundPaths(ctx, statePath) {
   const projectDirectory = path.dirname(statePath);
-  const stateTargets = fs.readdirSync(projectDirectory)
-    .filter((name) => /^state\.json\./.test(name))
-    .sort()
-    .map((name) => path.join(projectDirectory, name));
-  return [
+  const files = [
     path.join(ctx.project, ".mcp.json"),
     statePath,
-    ...stateTargets,
+    // Reserved for a future crash-consistent live-state handoff. It remains
+    // bound even when absent so a refusal cannot create or alter that route.
+    path.join(projectDirectory, "state.json.live"),
     path.join(projectDirectory, "approvals.journal"),
     path.join(projectDirectory, "approvals.journal.lock"),
     path.join(projectDirectory, "receipts"),
@@ -123,24 +124,19 @@ function boundPaths(ctx, statePath) {
     path.join(ctx.env.XDG_DATA_HOME, "seal", "keys", "receipt-ed25519"),
     path.join(ctx.env.XDG_DATA_HOME, "seal", "keys", "receipt-ed25519.pub"),
   ];
-}
-
-function stateTargetPaths(statePath) {
-  const projectDirectory = path.dirname(statePath);
-  return fs.readdirSync(projectDirectory)
-    .filter((name) => /^state\.json\./.test(name))
-    .sort()
-    .map((name) => path.join(projectDirectory, name));
+  // Every directory containing a bound file is itself part of the invariant.
+  // This includes the keys directory: its mode is required for receipt signing.
+  const directories = [...new Set(files.map((filePath) => path.dirname(filePath)))];
+  return [...files, ...directories];
 }
 
 function snapshotBoundPaths(paths) {
-  return new Map(paths.map((filePath) => [filePath, snapshotPath(filePath)]));
+  return new Map(paths.map((filePath) => [filePath, snapshotPath(filePath, path.basename(filePath) === "receipts")]));
 }
 
-function assertBoundPathsUnchanged(before, paths, statePath) {
-  const allPaths = [...new Set([...paths, ...stateTargetPaths(statePath)])];
-  for (const filePath of allPaths) {
-    const after = snapshotPath(filePath);
+function assertBoundPathsUnchanged(before, paths) {
+  for (const filePath of paths) {
+    const after = snapshotPath(filePath, path.basename(filePath) === "receipts");
     assert.deepEqual(after, before.get(filePath) || { state: "absent" }, `refused second protect changed bound path: ${filePath}`);
   }
 }
@@ -161,7 +157,7 @@ test("a later protect refuses already_protected and leaves the first tool set un
   const protectedToolsAfterSecond = Buffer.from(JSON.stringify(stateAfterSecond.guardTools));
   const guardTools = stateAfterSecond.guardTools;
 
-  assertBoundPathsUnchanged(boundBeforeSecond, paths, statePath);
+  assertBoundPathsUnchanged(boundBeforeSecond, paths);
 
   assert.deepEqual(
     protectedToolsAfterSecond,
