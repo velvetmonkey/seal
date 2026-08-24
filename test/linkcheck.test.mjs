@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { markdownDestinations, populationChanges } from "../scripts/linkcheck.mjs";
+import { markdownDestinations, populationChanges, populationDecision } from "../scripts/linkcheck.mjs";
 import expectedPopulation from "./support/linkcheck-population.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -161,7 +161,7 @@ test("path matcher stays tight around versions, digests, and ordinary prose", ()
   }
 });
 
-test("population changes expose growth, shrinkage, and equality without running the generator", () => {
+test("population changes and high-water decisions stay explicit without running the generator", () => {
   const mixed = populationChanges(
     { internalOccurrences: 407, externalOccurrences: 50 },
     { internalOccurrences: 406, externalOccurrences: 51 },
@@ -170,12 +170,46 @@ test("population changes expose growth, shrinkage, and equality without running 
     { internalOccurrences: 407, externalOccurrences: 50 },
     { internalOccurrences: 407, externalOccurrences: 50 },
   );
+  const recorded = {
+    internalOccurrences: 407,
+    externalOccurrences: 50,
+    internalOccurrencesHighWaterMark: 407,
+    externalOccurrencesHighWaterMark: 50,
+    shrinkHistory: [],
+  };
+  const accepted = populationDecision(recorded, {
+    internalOccurrences: 406,
+    externalOccurrences: 50,
+  }, { allowShrink: true, date: "2026-08-24" });
+  const sequential = populationDecision(accepted.population, {
+    internalOccurrences: 406,
+    externalOccurrences: 50,
+  });
   assert(
     JSON.stringify(mixed) === JSON.stringify([
       { key: "internalOccurrences", oldCount: 407, newCount: 406, difference: -1 },
       { key: "externalOccurrences", oldCount: 50, newCount: 51, difference: 1 },
-    ]) && equal.every(({ difference }) => difference === 0),
-    "population change records must preserve each field's old count, new count, and signed difference",
+    ])
+      && equal.every(({ difference }) => difference === 0)
+      && JSON.stringify(accepted.population) === JSON.stringify({
+        internalOccurrences: 406,
+        externalOccurrences: 50,
+        internalOccurrencesHighWaterMark: 407,
+        externalOccurrencesHighWaterMark: 50,
+        shrinkHistory: [{
+          date: "2026-08-24",
+          oldCounts: { internalOccurrences: 407, externalOccurrences: 50 },
+          newCounts: { internalOccurrences: 406, externalOccurrences: 50 },
+        }],
+      })
+      && sequential.population === null
+      && JSON.stringify(sequential.shrinks) === JSON.stringify([{
+        key: "internalOccurrences",
+        oldCount: 407,
+        newCount: 406,
+        difference: -1,
+      }]),
+    "population changes must preserve differences, retain the high-water floor, record consent, and refuse a later unflagged lowered write",
   );
 });
 

@@ -3,7 +3,12 @@
 // cannot be refreshed from LINKCHECK_REPORT_SCANNED_TARGETS. It is deliberately
 // described as a cross-check; docs/assurance/linkcheck-population-control.md
 // records its shared blind spots.
+// High-water marks never move down automatically; accepted shrink history stays review-visible.
 export default {
   internalOccurrences: 407,
   externalOccurrences: 50,
+  internalOccurrencesHighWaterMark: 407,
+  externalOccurrencesHighWaterMark: 50,
+  shrinkHistory: [
+  ],
 };
