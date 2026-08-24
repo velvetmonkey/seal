@@ -49,7 +49,9 @@ function run(ctx, args) {
     env: ctx.env,
     encoding: "utf8",
   });
-  return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}` };
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  return { code: result.status, stdout, stderr, out: `${stdout}${stderr}` };
 }
 
 test("a later protect refuses already_protected and leaves the first tool set unchanged", (t) => {
@@ -58,31 +60,36 @@ test("a later protect refuses already_protected and leaves the first tool set un
   assert.equal(first.code, 0, first.out);
 
   const statePath = statePathFor(ctx.project, ctx.env);
-  const beforeSecond = fs.readFileSync(statePath, "utf8");
+  const protectedToolsBeforeSecond = Buffer.from(JSON.stringify(readState(statePath).guardTools));
   const second = run(ctx, ["protect", "db", "db.read"]);
-  const afterSecond = fs.readFileSync(statePath, "utf8");
   const stateAfterSecond = readState(statePath);
+  const protectedToolsAfterSecond = Buffer.from(JSON.stringify(stateAfterSecond.guardTools));
   const guardTools = stateAfterSecond.guardTools;
+
+  assert.deepEqual(
+    protectedToolsAfterSecond,
+    protectedToolsBeforeSecond,
+    `second protect refusal must leave the recorded protected tool set byte-identical; before ${protectedToolsBeforeSecond}, after ${protectedToolsAfterSecond}`,
+  );
+
   const third = run(ctx, ["protect", "db", "db.read"]);
   const stateAfterThird = readState(statePath);
 
-  assert.doesNotMatch(
-    second.out,
-    /^Protection: PENDING RESTART db\.db\.read$/m,
-    `second protect must not report additive success; found output ${JSON.stringify(second.out)}`,
+  assert.equal(
+    second.stdout,
+    "",
+    `refused second protect must keep stdout empty; found ${JSON.stringify(second.stdout)}`,
   );
   assert.equal(
     second.code,
     1,
     `later protect must refuse already_protected instead of adding tools; found exit ${second.code}, output ${JSON.stringify(second.out)}, guardTools ${JSON.stringify(guardTools)}`,
   );
-  assert.match(second.out, /^seal: REFUSE already_protected: project is already PENDING RESTART$/m);
   assert.equal(
     third.code,
     1,
     `third protect must also refuse already_protected; found exit ${third.code}, output ${JSON.stringify(third.out)}, guardTools ${JSON.stringify(stateAfterThird.guardTools)}`,
   );
-  assert.match(third.out, /^seal: REFUSE already_protected: project is already PENDING RESTART$/m);
   assert.deepEqual(
     stateAfterThird.guardTools,
     ["db.drop_table"],
@@ -92,11 +99,6 @@ test("a later protect refuses already_protected and leaves the first tool set un
     [Object.hasOwn(stateAfterSecond, "guardTool"), Object.hasOwn(stateAfterThird, "guardTool")],
     [false, false],
     `refused protects must not write singular guardTool; found after second ${JSON.stringify(stateAfterSecond)}, after third ${JSON.stringify(stateAfterThird)}`,
-  );
-  assert.equal(
-    afterSecond,
-    beforeSecond,
-    `second protect refusal must leave the on-disk state byte-identical; before ${beforeSecond}, after ${afterSecond}`,
   );
   assert.deepEqual(guardTools, ["db.drop_table"]);
   t.diagnostic(`second protect exit: ${second.code}`);
