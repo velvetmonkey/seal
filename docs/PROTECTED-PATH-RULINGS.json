@@ -1,18 +1,18 @@
 {
   "version": 1,
   "ruling": {
-    "base": "8eb1e1a019ab903cf9f3ee787236dc4237077208",
+    "base": "b4c98119ea5cb8153d2c7ec3947806505562d02f",
     "author": "Ben",
     "date": "2026-08-23",
-    "scope": "Ben, 2026-08-23 20:40: 1. Sure repin. Coordinate-only installed-tree pin-site updates and the corresponding installed-tree pin test coordinates are authorised; kernel WASM digest, kernel head, fixtures, and corpus remain outside scope.",
+    "scope": "Ben, 2026-08-23 20:40: 1. Sure repin. Coordinate-only installed-tree pin-site updates and the corresponding installed-tree pin test coordinates are authorised; kernel WASM digest, kernel head, fixtures, and corpus remain outside scope. Second application, 2026-08-24 by Monkey under that standing scope: the README render fix adds two blank lines at the top of README.md, so the two published-asset pin sites move from 48 and 50 to 50 and 52, and the pin test's role-marker assertion moves from 45/46/47 to 47/48/49. The diff on both files changes four line numbers and nothing else.",
     "files": [
       {
         "path": "scripts/installed-tree-pin-sites.json",
-        "blob": "a33e7414fd87e7b6880e28a555fe8b9e62a0a09c"
+        "blob": "bdccdf0c3c3ac3b32465d7e428b503f41bc3cbbb"
       },
       {
         "path": "test/installed-tree-pin.test.cjs",
-        "blob": "d144c0a814511fc46e3d7b106f4879cfc3b92e71"
+        "blob": "89421fcda66abd2a80aa3bbf243f3f82f4b22e5e"
       }
     ]
   }
