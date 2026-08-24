@@ -125,14 +125,23 @@ function boundPaths(ctx, statePath) {
   ];
 }
 
+function stateTargetPaths(statePath) {
+  const projectDirectory = path.dirname(statePath);
+  return fs.readdirSync(projectDirectory)
+    .filter((name) => /^state\.json\./.test(name))
+    .sort()
+    .map((name) => path.join(projectDirectory, name));
+}
+
 function snapshotBoundPaths(paths) {
   return new Map(paths.map((filePath) => [filePath, snapshotPath(filePath)]));
 }
 
-function assertBoundPathsUnchanged(before, paths) {
-  for (const filePath of paths) {
+function assertBoundPathsUnchanged(before, paths, statePath) {
+  const allPaths = [...new Set([...paths, ...stateTargetPaths(statePath)])];
+  for (const filePath of allPaths) {
     const after = snapshotPath(filePath);
-    assert.deepEqual(after, before.get(filePath), `refused second protect changed bound path: ${filePath}`);
+    assert.deepEqual(after, before.get(filePath) || { state: "absent" }, `refused second protect changed bound path: ${filePath}`);
   }
 }
 
@@ -152,7 +161,7 @@ test("a later protect refuses already_protected and leaves the first tool set un
   const protectedToolsAfterSecond = Buffer.from(JSON.stringify(stateAfterSecond.guardTools));
   const guardTools = stateAfterSecond.guardTools;
 
-  assertBoundPathsUnchanged(boundBeforeSecond, paths);
+  assertBoundPathsUnchanged(boundBeforeSecond, paths, statePath);
 
   assert.deepEqual(
     protectedToolsAfterSecond,
