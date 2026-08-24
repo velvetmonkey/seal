@@ -22,6 +22,13 @@ function runDemo(root, dir) {
   });
 }
 
+function assertSignerIdentity(root, dir) {
+  const receipt = fs.readdirSync(path.join(dir, "receipts")).find((name) => name.endsWith("-ALLOW.json"));
+  const pubkey = path.join(dir, "receipt-signer.pub");
+  const checker = spawnSync(process.execPath, [path.join(root, "checker", "seal-receipt-check.mjs"), path.join(dir, "receipts", receipt), "--pubkey", pubkey], { encoding: "utf8" });
+  assert.equal(checker.status, 0, `demo signer identity claim failed: receipt signature did not verify with receipt-signer.pub\n${checker.stdout}\n${checker.stderr}`);
+}
+
 function probe(root) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-demo-probe-"));
   const keys = [];
@@ -32,6 +39,7 @@ function probe(root) {
     keys.push(fs.readFileSync(path.join(dir, "receipt-signer.pub"), "utf8").trim());
   }
   assert.notEqual(keys[0], keys[1], `demo ephemeral key claim failed: two runs emitted the same public key ${keys[0]}`);
+  for (const name of ["one", "two"]) assertSignerIdentity(root, path.join(work, name));
 }
 
 if (process.argv[2] === "--probe") {
@@ -52,4 +60,13 @@ test("demo uses a fresh ephemeral signing key for each run", () => {
   const result = spawnSync(process.execPath, [__filename, "--probe", mutant], { encoding: "utf8", timeout: 60000 });
   assert.notEqual(result.status, 0, "fixed demo signer mutant unexpectedly passed");
   assert.match(`${result.stdout}\n${result.stderr}`, /demo ephemeral key claim failed: two runs emitted the same public key/);
+
+  const identityMutant = copyTree();
+  const identityFile = path.join(identityMutant, "spine", "demo.cjs");
+  const identitySource = fs.readFileSync(identityFile, "utf8");
+  assert.equal(identitySource.split(needle).length - 1, 1, "demo identity mutation site must be unique");
+  fs.writeFileSync(identityFile, identitySource.replace(needle, '  const signer = (() => { const generated = generateSigner(); return { ...generated, publicKeyHex: require("node:crypto").randomBytes(32).toString("hex") }; })();'));
+  const identityResult = spawnSync(process.execPath, [__filename, "--probe", identityMutant], { encoding: "utf8", timeout: 60000 });
+  assert.notEqual(identityResult.status, 0, "shared-private/random-public signer mutant unexpectedly passed");
+  assert.match(`${identityResult.stdout}\n${identityResult.stderr}`, /demo signer identity claim failed: receipt signature did not verify/);
 });

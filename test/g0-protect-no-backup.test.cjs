@@ -57,6 +57,7 @@ function probe(root) {
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(fs.existsSync(path.join(home, ".claude", "backups")), false, `protect backup claim failed: ${path.join(home, ".claude", "backups")} exists`);
+  assert.equal(fs.existsSync(path.join(config, ".claude", "backups")), false, `protect config-backup claim failed: ${path.join(config, ".claude", "backups")} exists`);
 }
 
 if (process.argv[2] === "--probe") {
@@ -78,4 +79,15 @@ test("protect leaves Claude backups absent", () => {
   const result = spawnSync(process.execPath, [__filename, "--probe", mutant], { encoding: "utf8", timeout: 60000 });
   assert.notEqual(result.status, 0, "Claude backup mutant unexpectedly passed");
   assert.match(`${result.stdout}\n${result.stderr}`, /protect backup claim failed: .*\.claude[\\/]backups exists/);
+
+  const configMutant = copyTree();
+  const configFile = path.join(configMutant, "spine", "protection.cjs");
+  const configSource = fs.readFileSync(configFile, "utf8");
+  const configNeedle = "  const installedState = {\n";
+  assert.equal(configSource.split(configNeedle).length - 1, 1, "config-backup mutation site must be unique");
+  const configAddition = "  fs.mkdirSync(path.join(env.CLAUDE_CONFIG_DIR, \".claude\", \"backups\"), { recursive: true });\n  fs.writeFileSync(path.join(env.CLAUDE_CONFIG_DIR, \".claude\", \"backups\", \"seal-backup\"), \"backup\\n\");\n";
+  fs.writeFileSync(configFile, configSource.replace(configNeedle, configAddition + configNeedle));
+  const configResult = spawnSync(process.execPath, [__filename, "--probe", configMutant], { encoding: "utf8", timeout: 60000 });
+  assert.notEqual(configResult.status, 0, "Claude config-backup mutant unexpectedly passed");
+  assert.match(`${configResult.stdout}\n${configResult.stderr}`, /protect config-backup claim failed: .*\.claude[\\/]backups exists/);
 });

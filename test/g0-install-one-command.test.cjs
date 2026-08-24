@@ -23,6 +23,7 @@ function probe(root) {
   assert.equal(installed.status, 0, `${installed.stdout}\n${installed.stderr}`);
   const entries = fs.readdirSync(path.join(prefix, "bin")).sort();
   assert.deepEqual(entries, ["seal"], `install one-command claim failed: prefix bin contains ${JSON.stringify(entries)}`);
+  assert.equal(fs.existsSync(path.join(prefix, "sbin")), false, `install outside-bin claim failed: ${path.join(prefix, "sbin")} exists`);
 }
 
 if (process.argv[2] === "--probe") {
@@ -41,4 +42,13 @@ test("install creates exactly one command in the prefix bin directory", () => {
   const result = spawnSync(process.execPath, [__filename, "--probe", mutant], { encoding: "utf8", timeout: 120000 });
   assert.notEqual(result.status, 0, "extra installer file mutant unexpectedly passed");
   assert.match(`${result.stdout}\n${result.stderr}`, /install one-command claim failed: prefix bin contains/);
+
+  const outsideMutant = copyTree();
+  const outsideFile = path.join(outsideMutant, "scripts", "install.cjs");
+  const outsideSource = fs.readFileSync(outsideFile, "utf8");
+  assert.equal(outsideSource.split(needle).length - 1, 1, "outside-bin mutation site must be unique");
+  fs.writeFileSync(outsideFile, outsideSource.replace(needle, `${needle}  writeFileDeep(path.join(prefix, "sbin", "seal-extra"), Buffer.from("extra"), 0o444);\n`));
+  const outsideResult = spawnSync(process.execPath, [__filename, "--probe", outsideMutant], { encoding: "utf8", timeout: 120000 });
+  assert.notEqual(outsideResult.status, 0, "outside-prefix-bin mutant unexpectedly passed");
+  assert.match(`${outsideResult.stdout}\n${outsideResult.stderr}`, /install outside-bin claim failed: .*sbin exists/);
 });
