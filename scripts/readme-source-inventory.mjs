@@ -41,7 +41,7 @@ const specialHomes = new Map([
   [140, ["docs/archive/LIMITATIONS.md", "This Node CLI's authorization binding is TESTED, not PROVEN"]],
   [141, ["docs/archive/LIMITATIONS.md", "Lean-kernel and axiom claims belong to the separate Seal family material"]],
   [142, ["docs/archive/LIMITATIONS.md", "This Node CLI's authorization binding is TESTED, not PROVEN"]],
-  [143, ["README.md", "Seal is TESTED to bind AUTHORIZATION, not INTENT"]],
+  [143, ["docs/archive/LIMITATIONS.md", "It does NOT establish INTENT: if a human approves a malicious-but-valid request, Seal executes it."]],
   [144, ["docs/archive/LIMITATIONS.md", "does NOT prevent compromise of hosts, browsers, build systems, keys, operators"]],
   [145, ["docs/archive/LIMITATIONS.md", "tamper-EVIDENT, not tamper-IMPOSSIBLE"]],
   [146, ["docs/archive/LIMITATIONS.md", "does NOT make the AI smarter or prevent hallucinations"]],

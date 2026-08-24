@@ -1,14 +1,18 @@
 {
   "version": 1,
   "ruling": {
-    "base": "72d564f848fcf443a12e72cf3ad3c6616deac034",
+    "base": "8eb1e1a019ab903cf9f3ee787236dc4237077208",
     "author": "Ben",
     "date": "2026-08-23",
-    "scope": "Wire scripts/check-receipt-canonicalization.mjs into the existing docs-claims CI job only.",
+    "scope": "Ben, 2026-08-23 20:40: 1. Sure repin. Coordinate-only installed-tree pin-site updates and the corresponding installed-tree pin test coordinates are authorised; kernel WASM digest, kernel head, fixtures, and corpus remain outside scope.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "e3d8c2f6fbf47feb3f1a0bd6e5c7c3b7c67e20a1"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "a33e7414fd87e7b6880e28a555fe8b9e62a0a09c"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "d144c0a814511fc46e3d7b106f4879cfc3b92e71"
       }
     ]
   }
