@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { markdownDestinations } from "../scripts/linkcheck.mjs";
+import { markdownDestinations, populationChanges } from "../scripts/linkcheck.mjs";
 import expectedPopulation from "./support/linkcheck-population.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -159,6 +159,24 @@ test("path matcher stays tight around versions, digests, and ordinary prose", ()
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+});
+
+test("population changes expose growth, shrinkage, and equality without running the generator", () => {
+  const mixed = populationChanges(
+    { internalOccurrences: 407, externalOccurrences: 50 },
+    { internalOccurrences: 406, externalOccurrences: 51 },
+  );
+  const equal = populationChanges(
+    { internalOccurrences: 407, externalOccurrences: 50 },
+    { internalOccurrences: 407, externalOccurrences: 50 },
+  );
+  assert(
+    JSON.stringify(mixed) === JSON.stringify([
+      { key: "internalOccurrences", oldCount: 407, newCount: 406, difference: -1 },
+      { key: "externalOccurrences", oldCount: 50, newCount: 51, difference: 1 },
+    ]) && equal.every(({ difference }) => difference === 0),
+    "population change records must preserve each field's old count, new count, and signed difference",
+  );
 });
 
 test("path matcher still catches stale filenames with unknown extensions", () => {
