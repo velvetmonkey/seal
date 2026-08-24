@@ -22,3 +22,10 @@ test("an empty README source population is a refusal", (t) => {
   assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
   assert.match(result.stderr, /README source population is empty/);
 });
+
+test("historical README line 143 is relocated to the intent limitation", () => {
+  const result = spawnSync(process.execPath, [SCRIPT], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /RELOCATED 143-143 -> docs\/archive\/LIMITATIONS\.md/); // CLAIM-COVERAGE: scripts/readme-source-inventory.mjs
+  assert.match(result.stdout, /source-claim-inventory: 54 derived units from ef918e0:README\.md, 0 unclassified/);
+});
