@@ -27,7 +27,7 @@ as product output.
 
 ## Before you start
 
-- Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release.
+- Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release. On anything else, `seal` refuses and changes nothing.
 - Node 20 or newer.
 - Claude Code installed (`claude --version` prints a version). `seal protect`
   needs it; `seal demo` and `seal status` do not.

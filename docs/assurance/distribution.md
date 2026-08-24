@@ -1,8 +1,8 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0-rc.2 ships **one** installable artifact, for **Linux x86-64 only**.
-macOS, Windows, Linux ARM and other platforms are not supported in this
-release.
+Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM
+and other platforms are not supported in this release.
+It ships **one** installable artifact, for **Linux x86-64**.
 
 ## The artifact
 

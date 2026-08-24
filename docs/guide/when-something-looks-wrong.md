@@ -329,8 +329,9 @@ status.
 
 Seal found a live PID for a stored lease or project lock but could not read a
 process-start witness for that PID. It refuses instead of guessing whether
-the owner is current or stale. Run on the supported Linux x86-64 path, where
-Seal can read `/proc/<pid>/stat`, or stop the recorded owner and retry.
+the owner is current or stale. On Linux x86-64, Seal can read `/proc/<pid>/stat`;
+on macOS x64/arm64 that witness is unavailable, so Seal refuses rather than
+guessing. Stop the recorded owner and retry.
 
 ### `drifted`
 
@@ -412,8 +413,8 @@ refuse without changing files.
 
 ### `node_missing`
 
-The install artifact could not find `node` on `PATH`. Seal requires Node 20
-or newer on Linux x86-64.
+The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
+newer on Linux x86-64 and macOS x64/arm64.
 
 ### `version_mismatch`
 
