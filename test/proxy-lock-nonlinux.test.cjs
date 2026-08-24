@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -13,7 +14,10 @@ const {
   statePathFor,
 } = require("../spine/protection.cjs");
 const { createJournal, openJournal } = require("../spine/store.cjs");
+const { platformSupport } = require("../spine/platform.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
+
+const CLI = path.join(__dirname, "../bin/seal");
 
 const SCRATCH = path.join(
   process.env.SEAL_TEST_SCRATCH ||
@@ -84,6 +88,35 @@ function ownedActiveState(ctx) {
     lease: { pid: process.pid, startWitness: null, generation: 5 },
   };
 }
+
+test("Darwin is install-supported but not Protect-supported", () => {
+  withSimulatedDarwin(() => {
+    const support = platformSupport();
+    assert.equal(support.installSupported, true);
+    assert.equal(support.protectSupported, false);
+    assert.equal(support.supported, true, "legacy supported answer remains the install/demo answer");
+  });
+});
+
+test("seal protect refuses Darwin before changing project files", () => {
+  const ctx = workspace("protect-refusal");
+  const result = spawnSync(process.execPath, [CLI, "protect", "db", "write"], {
+    cwd: ctx.project,
+    env: {
+      ...process.env,
+      ...ctx.env,
+      SEAL_SPINE_PLATFORM: "darwin",
+      SEAL_SPINE_ARCH: "arm64",
+    },
+    encoding: "utf8",
+  });
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 1, output);
+  assert.match(output, /^REFUSE unsupported_platform: Protect is not supported on macOS yet; this is darwin-arm64$/m);
+  assert.equal(fs.readdirSync(ctx.project).length, 0, "Protect refusal must not change project files");
+  assert.equal(fs.existsSync(path.join(ctx.home, ".claude.json")), false, "Protect refusal must not change the user configuration");
+  assert.equal(fs.existsSync(ctx.dataHome), false, "Protect refusal must not create protection state");
+});
 
 test("direct protectionView refuses when the live lease witness is unavailable", () => {
   withSimulatedDarwin(() => {

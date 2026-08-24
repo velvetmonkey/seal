@@ -8,7 +8,7 @@ const readline = require("node:readline");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
 const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolNames, ProtectionError } = require("./protection.cjs");
-const { requireSupportedPlatform } = require("./platform.cjs");
+const { requireProtectSupportedPlatform } = require("./platform.cjs");
 
 function parseArgs(argv) {
   const options = { initStore: false };
@@ -30,7 +30,7 @@ function parseArgs(argv) {
 }
 
 async function run(argv) {
-  requireSupportedPlatform();
+  requireProtectSupportedPlatform();
   let parsed;
   try {
     parsed = parseArgs(argv);
