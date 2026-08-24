@@ -195,14 +195,17 @@ export function populationChanges(oldPopulation, newPopulation) {
 
 function filePopulationChanges(oldPopulation, newPopulation) {
   const oldCounts = oldPopulation.fileOccurrencesHighWaterMarks ?? oldPopulation.fileOccurrences ?? {};
+  const currentCounts = oldPopulation.fileOccurrences ?? {};
   const newCounts = newPopulation.fileOccurrences ?? {};
   const files = [...new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)])].sort();
   return files.flatMap((file) => FILE_COUNT_KEYS.map((key) => ({
     file,
     key,
-    oldCount: oldCounts[file]?.[key] ?? 0,
+    oldCount: currentCounts[file]?.[key] ?? 0,
     newCount: newCounts[file]?.[key] ?? 0,
-    difference: (newCounts[file]?.[key] ?? 0) - (oldCounts[file]?.[key] ?? 0),
+    difference: (newCounts[file]?.[key] ?? 0) === (currentCounts[file]?.[key] ?? 0)
+      ? 0
+      : (newCounts[file]?.[key] ?? 0) - (oldCounts[file]?.[key] ?? 0),
   })));
 }
 
@@ -266,12 +269,17 @@ function committedPopulation() {
       (!recordedPopulation.fileOccurrences || typeof recordedPopulation.fileOccurrences !== "object")) {
     throw new Error("invalid fileOccurrences: must be an object");
   }
-  if (recordedPopulation.fileOccurrencesHighWaterMarks !== undefined &&
-      (!recordedPopulation.fileOccurrencesHighWaterMarks || typeof recordedPopulation.fileOccurrencesHighWaterMarks !== "object")) {
-    throw new Error("invalid fileOccurrencesHighWaterMarks: must be an object");
+  if (!Object.hasOwn(recordedPopulation, "fileOccurrencesHighWaterMarks")) {
+    throw new Error("invalid fileOccurrencesHighWaterMarks: expected a non-empty object");
+  }
+  if (!recordedPopulation.fileOccurrencesHighWaterMarks ||
+      typeof recordedPopulation.fileOccurrencesHighWaterMarks !== "object" ||
+      Array.isArray(recordedPopulation.fileOccurrencesHighWaterMarks) ||
+      Object.keys(recordedPopulation.fileOccurrencesHighWaterMarks).length === 0) {
+    throw new Error("invalid fileOccurrencesHighWaterMarks: expected a non-empty object");
   }
   population.fileOccurrences = recordedPopulation.fileOccurrences ?? {};
-  population.fileOccurrencesHighWaterMarks = recordedPopulation.fileOccurrencesHighWaterMarks ?? {};
+  population.fileOccurrencesHighWaterMarks = recordedPopulation.fileOccurrencesHighWaterMarks;
   if (!Array.isArray(recordedPopulation.shrinkHistory)) throw new Error("invalid shrinkHistory: must be an array");
   population.shrinkHistory = recordedPopulation.shrinkHistory;
   return { population, source };

@@ -531,7 +531,11 @@ export default {
       "externalOccurrences": 0
     },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": {
-      "internalOccurrences": 31,
+      "internalOccurrences": 28,
+      "externalOccurrences": 0
+    },
+    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": {
+      "internalOccurrences": 2,
       "externalOccurrences": 0
     },
     "docs/assurance/architecture.md": {
@@ -603,7 +607,7 @@ export default {
       "externalOccurrences": 0
     },
     "scripts/claim-bearing-files.json": {
-      "internalOccurrences": 22,
+      "internalOccurrences": 23,
       "externalOccurrences": 0
     },
     "scripts/claim-coverage-allowlist.json": {
@@ -1148,6 +1152,10 @@ export default {
       "internalOccurrences": 31,
       "externalOccurrences": 0
     },
+    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": {
+      "internalOccurrences": 2,
+      "externalOccurrences": 0
+    },
     "docs/assurance/architecture.md": {
       "internalOccurrences": 3,
       "externalOccurrences": 0
@@ -1217,7 +1225,7 @@ export default {
       "externalOccurrences": 0
     },
     "scripts/claim-bearing-files.json": {
-      "internalOccurrences": 22,
+      "internalOccurrences": 23,
       "externalOccurrences": 0
     },
     "scripts/claim-coverage-allowlist.json": {
