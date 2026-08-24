@@ -297,7 +297,7 @@ test("repin refuses two role markers before one fence and names both markers", (
     encoding: "utf8",
   });
   assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:45 and README\.md:46 precede fenced block at README\.md:47/);
+  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:47 and README\.md:48 precede fenced block at README\.md:49/);
   assert.match(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 
