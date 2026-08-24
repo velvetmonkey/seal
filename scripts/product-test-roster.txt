@@ -24,6 +24,10 @@ test/executable-population.test.mjs
 test/failure5.test.cjs
 test/four-beats.test.cjs
 test/frontdoor.test.mjs
+test/g0-approval-wall-clock.test.cjs
+test/g0-demo-ephemeral-key.test.cjs
+test/g0-install-one-command.test.cjs
+test/g0-protect-no-backup.test.cjs
 test/guide-claims.test.mjs
 test/guide-tokens.test.mjs
 test/identity-wiring.test.cjs
