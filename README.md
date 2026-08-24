@@ -42,7 +42,7 @@ chmod +x "$expected_name"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Requires Node 20+. The published Seal v0.2.0-rc.2 asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
+Requires Node 20+. The published Seal v0.2.0-rc.2 release asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
 
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
@@ -55,13 +55,13 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 At `Approve? [y/N]`, type `y` and press Enter. The demo prints its temporary
 directory. Keep it if you want to check the blocked receipt.
 
-At the exact release tag, your build writes `seal-v0.2.0-rc.2-linux-x64` in your own `dist/` directory;
-seal-v0.2.0-rc.2-linux-x64
+At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
+seal-v0.2.0-rc.3-linux-x64
 
 The installed release tree includes the receipt checker. The repository root
 has no hand-maintained `SHA256SUMS`.
 
-**Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v0.2.0-rc.2 release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**
+**macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.** Linux x86-64 is the supported Protect path; Windows and Linux ARM are unsupported.
 
 ## Protect something real
 
@@ -187,5 +187,5 @@ distinguished. Hosted checker checks kernel receipts; it refuses seal.spine/v1 p
 - [Choose what to protect](docs/guide/choosing-what-to-protect.md)
 - [Know whether it worked](docs/guide/knowing-it-worked.md)
 - [Refusal codes and the documentation index](docs/assurance/README.md)
-- [Limitations and assurance material](docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md#what-seal-does-not-cover)
+- [Limitations and assurance material](docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#what-seal-does-not-cover)
 - Apache-2.0. See [LICENSE](LICENSE).

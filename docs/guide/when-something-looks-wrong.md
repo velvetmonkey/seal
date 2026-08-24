@@ -406,15 +406,15 @@ learn whether the receipt is valid.
 
 ### `unsupported_platform`
 
-Printed by the installer, the installed launcher, and the demo alike: Seal
-v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and
-other platforms are not supported in this release, and unsupported installations
-refuse without changing files.
+Printed by the installer, the installed launcher, and the demo alike for Seal
+v0.2.0-rc.3. macOS source portability is CI-exercised for install, demo and receipt checking.
+Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+Windows, Linux ARM and other unsupported installations refuse without changing files.
 
 ### `node_missing`
 
 The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
-newer on Linux x86-64 and macOS x64/arm64.
+newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.
 
 ### `version_mismatch`
 

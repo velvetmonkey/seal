@@ -295,10 +295,12 @@ test("darwin-arm64 is admitted on the product path", () => {
   assert.equal(result.stdout.trim(), VERSION);
 });
 
-test("help names the supported Linux and macOS lanes", () => {
+test("help distinguishes macOS portability from the supported Protect path", () => {
   const result = runNode([path.join(ROOT, "bin", "seal")]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.stdout, /Linux x86-64 and macOS x64\/arm64/);
+  assert.match(result.stdout, /macOS source portability is CI-exercised for install, demo and receipt checking\./);
+  assert.match(result.stdout, /Protect is not supported on macOS yet\./);
+  assert.doesNotMatch(result.stdout, /Linux x86-64 and macOS x64\/arm64/);
 });
 
 test("installed artifact runs demo then protect and unprotect", async () => {

@@ -39,7 +39,9 @@ if (!host.ok) {
   process.stderr.write([
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64.",
+    "Seal v0.2.0-rc.3.",
+    "macOS source portability is CI-exercised for install, demo and receipt checking.",
+    "Protect is not supported on macOS yet.",
     "",
     "No files were changed.",
     "",

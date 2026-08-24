@@ -87,9 +87,9 @@ const originCount = readme.split(approvalOrigin).length - 1;
 if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
 
 // The platform sentence, verbatim (roadmap section 7), stated plainly.
-const platformSentence = `**Seal source builds support Linux x86-64 and macOS x64/arm64. The immutable v${version} release asset remains Linux x86-64; Windows and Linux ARM are unsupported.**`;
+const platformSentence = '**macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.**';
 const platformCount = readme.split(platformSentence).length - 1;
-if (platformCount !== 1) fail(`README must state the source-build and immutable-release platform boundary verbatim exactly once; found ${platformCount}`);
+if (platformCount !== 1 || /supports Linux x86-64 and macOS x64\/arm64|source builds support Linux x86-64 and macOS/i.test(readme)) fail(platformCount !== 1 ? `README must state the macOS portability and Protect boundary verbatim exactly once; found ${platformCount}` : 'README claims macOS support without excluding Protect');
 
 // The signed-receipt claim was the fifth false user-visible string in this
 // build: the demo signs receipts with a per-run key, the protected path

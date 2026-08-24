@@ -17,9 +17,10 @@ the Node CLI this repository ships.
 3. [evaluator-walk.md](../start/evaluator-walk.md) — the forensic receipt check for a
    source build after `seal demo`, using the checkout checker, with no captured
    transcript.
-4. [assurance/RELEASE-NOTES-v0.2.0-rc.2.md](RELEASE-NOTES-v0.2.0-rc.2.md) — what v0.2.0-rc.2 contains and
+4. [assurance/RELEASE-NOTES-v0.2.0-rc.3.md](RELEASE-NOTES-v0.2.0-rc.3.md) — what v0.2.0-rc.3 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
+   The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
 5. [assurance/distribution.md](distribution.md) — what the one installable artifact is,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
@@ -33,9 +34,10 @@ the Node CLI this repository ships.
 
 1. [“What Seal covers, and what it does not”](../../README.md) — the boundary
    list at the end of the README is the current, tested statement. Gate, not
-   sandbox; one tool of one server; receipt-key custody limits; Linux x86-64
-   and macOS x64/arm64.
-2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.2.md) —
+   sandbox; one server's named tool set; and receipt-key custody limits.
+   macOS source portability is CI-exercised for install, demo and receipt checking.
+   Protect is not supported on macOS yet.
+2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
    the same boundary with citations.
 
 ## I want to check the evidence myself
@@ -87,7 +89,7 @@ the Node CLI this repository ships.
 
 ## I want the design history
 
-Dated records of how v0.2.0-rc.2 got its shape. Several describe designs that were
+Dated records of how v0.2.0-rc.3 got its shape. Several describe designs that were
 ruled on and explicitly never built; each says so in its opening lines.
 
 - [ROADMAP-KERNEL-OUTWARD.md](../archive/ROADMAP-KERNEL-OUTWARD.md) — the working order

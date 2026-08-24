@@ -35,11 +35,19 @@ const packageTempPath = `${packagePath}.${process.pid}.tmp`;
 fs.writeFileSync(packageTempPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 fs.renameSync(packageTempPath, packagePath);
 
-const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => /^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(file));
-if (notesCandidates.length !== 1) throw new Error(`expected one versioned release-notes file, found ${notesCandidates.join(", ")}`);
-if (notesCandidates[0] !== releaseNotes) fs.renameSync(path.join(ROOT, "docs", "assurance", notesCandidates[0]), path.join(ROOT, "docs", "assurance", releaseNotes));
+const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance"))
+  .filter((file) => /^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(file))
+  .sort();
+if (notesCandidates.length === 0) throw new Error("expected at least one versioned release-notes file");
+let currentNotes = notesCandidates.includes(releaseNotes) ? releaseNotes : notesCandidates.at(-1);
+const priorNotesVersion = currentNotes.match(/^RELEASE-NOTES-v(.+)\.md$/)[1];
+const priorReleaseNotesPattern = new RegExp(`RELEASE-NOTES-v${priorNotesVersion.replaceAll(".", "\\.")}\\.md`, "g");
+if (currentNotes !== releaseNotes) {
+  fs.renameSync(path.join(ROOT, "docs", "assurance", currentNotes), path.join(ROOT, "docs", "assurance", releaseNotes));
+  currentNotes = releaseNotes;
+}
 for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file.endsWith(".md"))) {
-  replaceIfPresent(path.join("docs", "assurance", file), /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+  replaceIfPresent(path.join("docs", "assurance", file), priorReleaseNotesPattern, releaseNotes);
 }
 // Reader-facing routes outside assurance cite the release-note filename too.
 // Keep those links attached to the note when VERSION renames it.
@@ -52,19 +60,20 @@ for (const file of [
   "docs/archive/WHY-DIFFERENT.md",
   "docs/archive/WHAT-SEAL-IS.md",
 ]) {
-  replaceIfPresent(file, /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+  replaceIfPresent(file, priorReleaseNotesPattern, releaseNotes);
 }
-replaceIfPresent("docs/assurance/index.html", /RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md/g, releaseNotes);
+replaceIfPresent("docs/assurance/index.html", priorReleaseNotesPattern, releaseNotes);
 replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
 replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
 
-for (const file of ["README.md", "docs/assurance/distribution.md", "docs/start/install.md", path.join("docs/assurance", releaseNotes), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["docs/assurance/distribution.md", path.join("docs/assurance", releaseNotes), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
+replaceIfPresent(path.join("docs", "assurance", releaseNotes), new RegExp(`\\bv${priorNotesVersion.replaceAll(".", "\\.")}\\b`, "g"), `v${version}`);
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
-for (const file of ["README.md", "docs/start/install.md", "docs/start/evaluator-walk.md", path.join("docs", "guide", "when-something-looks-wrong.md")]) {
+for (const file of [path.join("docs", "guide", "when-something-looks-wrong.md")]) {
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
 }
 
@@ -81,7 +90,3 @@ replace("README.md", ARTIFACT_NAME, renameArtifact);
 // the same release, so these guides intentionally have no versioned filename.
 replaceIfPresent("docs/assurance/distribution.md", ARTIFACT_NAME, renameArtifact);
 replaceIfPresent("docs/guide/README.md", ARTIFACT_NAME, renameArtifact);
-
-for (const file of ["README.md", "docs/guide/README.md", "docs/start/install.md"]) {
-  replaceIfPresent(file, /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
-}

@@ -1,7 +1,7 @@
 # Install Seal v0.2.0-rc.2
 
-Source-built artifacts support Linux x86-64 and macOS x64/arm64. The immutable
-v0.2.0-rc.2 asset remains Linux x86-64; Windows and Linux ARM are unsupported.
+macOS source portability is CI-exercised for install, demo and receipt checking.
+Protect is not supported on macOS yet. The immutable v0.2.0-rc.2 release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -104,4 +104,4 @@ chmod +x "dist/$expected_name"
 ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-The immutable landing-page record remains exact: Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release.
+macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.

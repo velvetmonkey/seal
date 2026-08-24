@@ -151,11 +151,16 @@ test("every emitted release identity derives from VERSION", () => {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, /release asset|release's `SHA256SUMS` asset|co-published `SHA256SUMS`|`SHA256SUMS`\s+asset\s+attached to the same release/i);
   }
+  const publishedVersion = fs.readFileSync(path.join(ROOT, "README.md"), "utf8")
+    .match(/^SEAL_VERSION=v(.+)$/m)?.[1];
+  assert.ok(publishedVersion, "README must name the published release version");
+  assert.doesNotThrow(() => fs.statSync(path.join(ROOT, ".git")));
+  assert.equal(run("git", ["cat-file", "-e", `v${publishedVersion}^{commit}`], { cwd: ROOT }).code, 0, `published v${publishedVersion} tag must resolve`);
   for (const file of ["README.md", "docs/guide/README.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, new RegExp(`installed seal ${VERSION} linux-x64`));
+    assert.match(text, new RegExp(`installed seal ${publishedVersion.replaceAll(".", "\\.")} linux-x64`));
   }
-  for (const file of ["README.md", "docs/assurance/distribution.md", "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+  for (const file of ["docs/assurance/distribution.md", `docs/assurance/RELEASE-NOTES-v${VERSION}.md`, "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`Seal v${VERSION}`));
   }
   const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");

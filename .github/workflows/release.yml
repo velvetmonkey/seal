@@ -82,7 +82,9 @@ jobs:
           grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
-            "Seal v${version} supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release." \
+            "Seal v${version}." \
+            "macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet." \
+            "Linux x86-64 is the supported Protect path. Windows, Linux ARM and other platforms are unsupported." \
             '' \
             "The installable artifact is the single file \`${artifact_name}\`." \
             'Its command is generated from the built artifact and `SHA256SUMS`:' \
