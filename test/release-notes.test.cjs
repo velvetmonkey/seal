@@ -12,7 +12,7 @@ const NOTES = path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md
 test("release notes state the platform and protected-receipt signing boundary", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 only\\.`));
+  assert.match(notes, new RegExp(`Seal v${VERSION.replaceAll(".", "\\.")} supports Linux x86-64 and macOS x64/arm64\\.`));
   assert.match(notes, /Both paths write signed receipt files/);
   assert.match(notes, /the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory/);
   assert.match(notes, /The checker accepts a receipt only against the public key you supply/);

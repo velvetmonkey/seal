@@ -406,8 +406,9 @@ learn whether the receipt is valid.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike: Seal
-v0.2.0-rc.2 supports Linux x86-64 only, refuses everything else, and changes no
-files when it refuses.
+v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and
+other platforms are not supported in this release, and unsupported installations
+refuse without changing files.
 
 ### `node_missing`
 

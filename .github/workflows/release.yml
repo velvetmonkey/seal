@@ -82,7 +82,7 @@ jobs:
           grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
-            "Seal v${version} supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release." \
+            "Seal v${version} supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release." \
             '' \
             "The installable artifact is the single file \`${artifact_name}\`." \
             'Its command is generated from the built artifact and `SHA256SUMS`:' \

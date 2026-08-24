@@ -152,7 +152,7 @@ test("clause 1: changing one byte of the installed artifact is a named refusal",
   const result = runNode([seal, "--version"]);
   assert.equal(result.code, 1, result.out);
   assert.match(result.stderr, /^REFUSE artifact_digest_mismatch:/m);
-  assert.doesNotMatch(result.out, /Linux x86-64 only/);
+  assert.doesNotMatch(result.out, /Linux x86-64 and macOS x64\/arm64/);
 });
 
 test("clause 2: a later write to the install store is detected, not silent", () => {

@@ -104,4 +104,4 @@ chmod +x "dist/$expected_name"
 ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-The immutable landing-page record remains exact: Seal v0.2.0-rc.2 supports Linux x86-64 only. macOS, Windows, Linux ARM and other platforms are not supported in this release.
+The immutable landing-page record remains exact: Seal v0.2.0-rc.2 supports Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are not supported in this release.

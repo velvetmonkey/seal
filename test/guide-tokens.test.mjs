@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "1f0ec25264a06146d4b653c401572f3531ae8d9321935f53015d62c392d3dedd";
+const GUIDE_SHA256 = "68d7326275c3ada120d294b8c4d118ddac07f1ab8d3583aa2e2d0c6b0205f620";
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
