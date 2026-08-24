@@ -518,7 +518,7 @@ D.1 **Keep the recursive demo inventory as the measured baseline** *(former
 item 3.12)*.
 **MEASURED:** `find seal-host/demo -type f -name '*.py'` returns 22 files. The
 per-file classification and invocation table is
-`/home/monkey/.mega-monkey/demo-inventory-2026-07-28.md`: 6 `RUNS-GREEN`, 3
+`/home/you/.mega-monkey/demo-inventory-2026-07-28.md`: 6 `RUNS-GREEN`, 3
 `RUNS-RED`, 2 `BLOCKED-DEP`, 2 `NOT-AN-ENTRYPOINT`, and 9 `UNASSESSABLE`.
 D.3's build-enabled follow-up has now reclassified those nine fenced outcomes
 as 1 `RUNS-GREEN` and 8 `RUNS-RED`. **INFERRED:** this supersedes the former
@@ -531,7 +531,7 @@ NINE RECLASSIFIED IN D.3.**
 D.2 **Preserve the four measured symptom classes, but do not mistake them for
 four current root causes: SUPERSEDED.**
 **MEASURED:** the build-enabled table at
-`/home/monkey/.mega-monkey/golden-state-2026-07-28.md` records: (1)
+`/home/you/.mega-monkey/golden-state-2026-07-28.md` records: (1)
 `demo/golden_path.py`, `demo/golden_path_postgres.py`, and
 `demo/golden_path_filesystem.py` reached `seal verify`, which rejected the
 host-produced authorization decision with `no recognized version
@@ -543,7 +543,7 @@ returned `approval required`; and (4) `demo/golden_path_token.py` and
 Budget and Consensus denials. None of the eight outputs contained the exact
 known-stale-guard-config failure. **CORRECTED BY LATER MEASUREMENT:** the
 earlier inference that these were four distinct cause classes is no longer
-current. `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md` establishes
+current. `/home/you/.mega-monkey/demoapproval-2026-07-28.md` establishes
 that the five approval-carrying demos share the legacy v1 signer and that the
 host structurally refuses that record; its one authoritative after-run reached
 the host-minted target and stopped on that refusal. **INFERRED:** the old table
@@ -625,7 +625,7 @@ outcomes remain unmeasured until a new run records them.
 REPINNED AT `f820f0f`.**
 
 D.8 **Obtain demo approval targets from the host, not private commitment
-recipes.** **MEASURED:** `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md`
+recipes.** **MEASURED:** `/home/you/.mega-monkey/demoapproval-2026-07-28.md`
 finds private approval-target recipes in five demos and records their
 replacement with targets discovered by blocked calls to the real host on
 `fix/demo-approval-target-from-host`, commit
@@ -639,13 +639,13 @@ green while they still sign a record version the host refuses.
 UNMERGED BRANCH; DEMOS STILL RED.**
 
 D.9 **Make ApprovalRecord v2 mintable from the product refusal.**
-**MEASURED:** `/home/monkey/.mega-monkey/demoapproval-2026-07-28.md` records
+**MEASURED:** `/home/you/.mega-monkey/demoapproval-2026-07-28.md` records
 that all five affected demos use the shared legacy v1 signer and that
 `rust/src/providers.rs:21` names the structural refusal
 `approval_record_v1_not_supported`; the path check recorded in
-`/home/monkey/.mega-monkey/docsync-2026-07-28.md` resolves its two admission
+`/home/you/.mega-monkey/docsync-2026-07-28.md` resolves its two admission
 calls at `rust/src/providers.rs:654` and `:1060`.
-`/home/monkey/.mega-monkey/approvalv2-2026-07-28.md` records that v2 admission
+`/home/you/.mega-monkey/approvalv2-2026-07-28.md` records that v2 admission
 requires the exact delimiter-bearing framed subject, while the refusal exposes
 only the target and the retained BLOCK record contains a canonical body and
 body hash rather than that framed preimage.
@@ -657,7 +657,7 @@ refusal will emit the framed subject as base64 with explicit length; lane
 **Serves: V3.3, VERIFY. Status: RULED AND IN PROGRESS; NOT DONE.**
 
 D.10 **Track watched-mutation coverage against declared denominators.**
-**MEASURED:** `/home/monkey/.mega-monkey/oraclecensus-2026-07-28.md` establishes
+**MEASURED:** `/home/you/.mega-monkey/oraclecensus-2026-07-28.md` establishes
 the first watched-mutation denominator:
 
 | population | WATCHED | total |
@@ -681,13 +681,13 @@ EXPANSION OPEN.**
 D.11 **State the shipped ApprovalRecord v2 display limit without turning an
 unimplemented profile into a defect.** **INFERRED FROM SOURCE:** the complete
 leaf warrant in
-`/home/monkey/.mega-monkey/v2leafwarrant-2026-07-28.md` classifies all 21
+`/home/you/.mega-monkey/v2leafwarrant-2026-07-28.md` classifies all 21
 signed leaves as 7 `ENFORCED`, 14 `WELL-FORMEDNESS-ONLY`, and 0 `CARRIED`.
 The weakness is concentrated in the display half: `shown_*`, `renderer.*`,
 `approver`, and `session` meet no displayed bytes, renderer registry, or
 authenticated approver comparand in the host. **MEASURED:** the three
 independent searches recorded in
-`/home/monkey/.mega-monkey/docsync-2026-07-28.md` find none of
+`/home/you/.mega-monkey/docsync-2026-07-28.md` find none of
 `EVIDENCE_UNAVAILABLE`, `AUTHORIZED`, `NOT_REQUIRED`, or `NOT_REACHED` under
 `seal-host/rust/src`, and find neither `shown` nor `presentation` in
 `rust/src/authorization_decision.rs`. **INFERRED:** the shipped v2 record
@@ -704,8 +704,8 @@ DISPLAY VERIFICATION OPEN.**
 Ben ruled this into seal v1 on 2026-07-28. This is a lettered, cross-cutting
 phase, recorded after the existing lettered Phase D; that placement adds no
 schedule to the settled Phase 0–4 sequence. The evidence baseline is
-`/home/monkey/.mega-monkey/mcpspec-report.md`; the costs and repin judgments
-are `/home/monkey/.mega-monkey/v1mcp2026-2026-07-28.md`. The stateless core is
+`/home/you/.mega-monkey/mcpspec-report.md`; the costs and repin judgments
+are `/home/you/.mega-monkey/v1mcp2026-2026-07-28.md`. The stateless core is
 not work for the current stdio host. The live drift order is `_meta`, top-level
 batch arrays, then MRTR; MRTR fails closed today.
 

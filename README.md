@@ -96,7 +96,7 @@ Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```
 
-The command also prints a local `State:` path, next steps, and the undo command.
+The command also prints a local `State:` path.
 Seal checks the requested name before recording it. It then asks Claude Code to
 install a private local override and leaves `.mcp.json` unchanged. Protect ends
 at `PENDING RESTART`, never `ACTIVE`. After restarting Claude Code, check it:

@@ -44,20 +44,20 @@ table in Section 6 state what superseded them.
 
 | Fact | Result | Backing |
 |---|---|---|
-| Source measured by the clean rebuild | `seal-host` commit `54aa677f1eb5f560e978eb1ef8131cb54069c8e1` | Git object and checkout identity; `/var/tmp/seal-wasm-clean-final2.2ia1TA/REPRODUCE.md:3-20` |
+| Source measured by the clean rebuild | `seal-host` commit `54aa677f1eb5f560e978eb1ef8131cb54069c8e1` | Git object and checkout identity; `/home/you/scratch/seal-wasm-clean-final/REPRODUCE.md:3-20` |
 | CANDIDATE wasm | SHA-256 `dd00cd2bd01531113e3c687eb0df62f23860213219a01d2cb1f3e219adfa48c3`, 5,776,864 bytes | Independently hashed `seal-host/wasm-spike/verified/seal.wasm`; clean evidence `evidence/result.sha256:1-3` and `evidence/result.sizes:1-3` |
 | CANDIDATE generated JS | SHA-256 `0802ef0c4237c88dcefbaa4e2bb541e0dc6477ee1b6e3d5e5627e1d50b3bdf0a`, 62,971 bytes | Independently hashed `seal-host/wasm-spike/verified/seal.js`; clean evidence `evidence/result.sha256:2` and `evidence/result.sizes:2` |
-| Clean rebuild result | REPRODUCED once: generated wasm and JS matched the checked-in candidate; all nine recorded phases exited 0; the cold Lake build reached 16,247 of 16,247 jobs | `/var/tmp/seal-wasm-clean-final2.2ia1TA/evidence/comparison.txt:1-2`; `evidence/status.txt:1-9`; `evidence/lake_build.log`; `evidence/result.sha256:1-3` |
-| Toolchain recipe pins | Ubuntu `sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90`; Lean commit `7e01a1bf5c70fc6167d49c345d3bf80596e9a79b`; Lean archive SHA-256 `ceb3a3f844f7aebf63245e2b51c28d5b0ed38942c19f93cf3febd520302160bd`; Emscripten commit `d223ae73c6998296e3ab27cf81dc2c2c9fd383de`; runner image ID `sha256:770b606e55d3e89448392d432bb05000ab806114452a9fa8350621aeb1aede83` | `/var/tmp/seal-wasm-clean-final2.2ia1TA/Dockerfile:1-21`; `evidence/provision_toolchain.log`; `evidence/environment.txt`; local image `seal-wasm-clean-runner:lean4.28.0` |
+| Clean rebuild result | REPRODUCED once: generated wasm and JS matched the checked-in candidate; all nine recorded phases exited 0; the cold Lake build reached 16,247 of 16,247 jobs | `/home/you/scratch/seal-wasm-clean-final/evidence/comparison.txt:1-2`; `evidence/status.txt:1-9`; `evidence/lake_build.log`; `evidence/result.sha256:1-3` |
+| Toolchain recipe pins | Ubuntu `sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90`; Lean commit `7e01a1bf5c70fc6167d49c345d3bf80596e9a79b`; Lean archive SHA-256 `ceb3a3f844f7aebf63245e2b51c28d5b0ed38942c19f93cf3febd520302160bd`; Emscripten commit `d223ae73c6998296e3ab27cf81dc2c2c9fd383de`; runner image ID `sha256:770b606e55d3e89448392d432bb05000ab806114452a9fa8350621aeb1aede83` | `/home/you/scratch/seal-wasm-clean-final/Dockerfile:1-21`; `evidence/provision_toolchain.log`; `evidence/environment.txt`; local image `seal-wasm-clean-runner:lean4.28.0` |
 | SHIPPED fleet wasm | SHA-256 `d7d81e277ba0b5e9df385129d86abf6f7469e6da2a65bb2ec35626caa44ea2be` in all six locked wasm paths | `seal-host/release/fleet-lock.json:3-30`; each blob at its locked commit was independently hashed |
 | Candidate versus shipped | The clean rebuild reproduced the CANDIDATE. It did not reproduce the SHIPPED fleet artifact. The measured gap is `dd00cd2b` versus `d7d81e27` | The two independently measured rows above |
 | Pinned verify-action record | Bytes at fleet-pinned commit `d97433e2e9370d660af2f5b08912941a880a75ce` hash to `d7d81e27`, but `VENDORED.md:15,70` and `lib/pin.js:22` at that commit say `a3790181`. This is stale documentation, not a wasm mismatch | Git blobs at the pinned commit; later commit `3d62f55b14a89e24fc317abf8a0549b28787a6b7` corrects both records |
 
 The clean rebuild excluded the host checkout, host caches, sibling private
-repositories, Docker socket and volumes, and `/home/monkey`. It used a complete
+repositories, Docker socket and volumes, and `/home/you`. It used a complete
 Git bundle, a read-only root, dropped capabilities, no new privileges, and a
 byte-identical `lake-manifest.json`. Backing:
-`/var/tmp/seal-wasm-clean-final2.2ia1TA/reproduce.sh:19-109` and
+`/home/you/scratch/seal-wasm-clean-final/reproduce.sh:19-109` and
 `REPRODUCE.md:11-58`.
 
 The limits are part of the result:
@@ -72,11 +72,11 @@ The limits are part of the result:
   and hashes; it does not run the three-way runtime agreement suite. Backing:
   `reproduce.sh:77-109`.
 - The checked-in provenance recipe is not the recipe that succeeded. It names
-  `/home/monkey/bin/leanbuild` and omits the separate dependency C-object build;
+  `/home/you/bin/leanbuild` and omits the separate dependency C-object build;
   the clean recipe used pinned `lake build` and first ran
   `.lake/packages/mcp-seal/c/build.sh`. Backing:
   `seal-host/wasm-spike/verified/PROVENANCE.txt:76-91` and
-  `/var/tmp/seal-wasm-clean-final2.2ia1TA/reproduce.sh:77-90`.
+  `/home/you/scratch/seal-wasm-clean-final/reproduce.sh:77-90`.
 
 ## 3. Proved, tested, deployed, and residual truth surface
 

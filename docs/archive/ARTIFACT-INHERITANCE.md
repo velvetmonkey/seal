@@ -29,11 +29,11 @@ product artifact and requires an out-of-band `TrustContext`
 time and expiry, nonce, session, exact request-subject digest/length/scope,
 exact shown-byte digest/length/type/encoding, renderer identity, approver, key
 identity, algorithm, and domain
-(`/home/monkey/src/seal-host/rust/src/providers.rs:77`). The implementation
+(`/home/you/src/seal-host/rust/src/providers.rs:77`). The implementation
 canonicalizes and domain-separates the signed payload
-(`/home/monkey/src/seal-host/rust/src/providers.rs:314`) and verifies the key
+(`/home/you/src/seal-host/rust/src/providers.rs:314`) and verifies the key
 identity, canonical payload, and Ed25519 signature
-(`/home/monkey/src/seal-host/rust/src/providers.rs:759`).
+(`/home/you/src/seal-host/rust/src/providers.rs:759`).
 
 **MEASURED.** That payload does **not** contain g9's signed configuration,
 requester statement, approval constraints, deployment identifier, config
@@ -41,7 +41,7 @@ reference, adapter profile, receipt-issuer decision attestation, role-split
 trust context, history anchor, or verifier result. The current authorization
 decision writer emits a separate v2 host record and retains some signed config,
 request, audit, approval, and kernel-identity material
-(`/home/monkey/src/seal-host/rust/src/authorization_decision.rs:198`), but it is
+(`/home/you/src/seal-host/rust/src/authorization_decision.rs:198`), but it is
 not the four-leg v3 record and not the g9 verifier. The four-leg v3 specification
 is explicitly unsigned and was specified as not implemented
 (`AUTHORIZATION-RECORD.md:3`, `AUTHORIZATION-RECORD.md:426`).
@@ -212,7 +212,7 @@ UNPINNED-AUDIT(10) > AUTHORIZED(0)` (`seal-north-star-v2-g9.md` §3.1a-ii).
 **MEASURED.** Related receipt verifiers do exist on disk, but they are not this
 implementation. For example, `seal-check` declares the distinct P-ENFORCE set
 `{authorised, authorised-unparseable, unpinned, failure}` mapped to exits
-`0/4/3/1` (`/home/monkey/src/seal-check/receipt.js:17`). Neither matching exit
+`0/4/3/1` (`/home/you/src/seal-check/receipt.js:17`). Neither matching exit
 zero nor the word “authorised” makes that verifier an implementation of g9's
 different input type, gates, and five-case result.
 
@@ -247,7 +247,7 @@ scope now** (with ruler and time), or **UNKNOWN — needs Ben**.
 **MEASURED.** The brief is correct that `ApprovalRecordV2` is the strongest
 signed successor component currently on disk. It is not the only related
 artifact: an authorization-decision v2 writer also exists
-(`/home/monkey/src/seal-host/rust/src/authorization_decision.rs:60`). That
+(`/home/you/src/seal-host/rust/src/authorization_decision.rs:60`). That
 writer does not change the conclusion because it is neither the four-leg v3
 record nor ADEP-v1.
 
