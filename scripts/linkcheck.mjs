@@ -209,6 +209,92 @@ function filePopulationChanges(oldPopulation, newPopulation) {
   })));
 }
 
+function duplicateHighWaterMarkKeys(source) {
+  const marker = "fileOccurrencesHighWaterMarks:";
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex < 0) return [];
+  const open = source.indexOf("{", markerIndex + marker.length);
+  if (open < 0) return [];
+  const keys = [];
+  const seen = new Set();
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let index = open; index < source.length; index++) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      if (depth === 1) {
+        let end = index + 1;
+        let stringEscaped = false;
+        for (; end < source.length; end++) {
+          if (stringEscaped) stringEscaped = false;
+          else if (source[end] === "\\") stringEscaped = true;
+          else if (source[end] === character) break;
+        }
+        let after = end + 1;
+        while (/\s/u.test(source[after] ?? "")) after++;
+        if (source[after] === ":") {
+          const raw = source.slice(index, end + 1);
+          const key = character === '"' ? JSON.parse(raw) : raw.slice(1, -1);
+          if (seen.has(key)) keys.push(key);
+          else seen.add(key);
+        }
+      }
+      quote = character;
+    } else if (character === "{") depth++;
+    else if (character === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return keys;
+}
+
+function validateFileHighWaterMarks(population, currentPopulation, source, { allowShrink = false } = {}) {
+  const marks = population.fileOccurrencesHighWaterMarks;
+  const duplicateKeys = duplicateHighWaterMarkKeys(source);
+  if (duplicateKeys.length) {
+    throw new Error(`duplicate key in fileOccurrencesHighWaterMarks: ${duplicateKeys[0]}`);
+  }
+  const countedFiles = currentPopulation.fileOccurrences ?? {};
+  for (const file of Object.keys(marks)) {
+    if (!allowShrink && !Object.hasOwn(countedFiles, file)) {
+      throw new Error(`stranger key in fileOccurrencesHighWaterMarks: ${file}`);
+    }
+  }
+  for (const [file, occurrences] of Object.entries(marks)) {
+    if (!occurrences || typeof occurrences !== "object" || Array.isArray(occurrences)) {
+      throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file}: expected an object`);
+    }
+    for (const key of FILE_COUNT_KEYS) {
+      const value = occurrences[key];
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file} ${key}: ${String(value)}`);
+      }
+    }
+    const unexpectedKeys = Object.keys(occurrences).filter((key) => !FILE_COUNT_KEYS.includes(key));
+    if (unexpectedKeys.length) {
+      throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file}: unexpected key ${unexpectedKeys[0]}`);
+    }
+  }
+  for (const [file, occurrences] of Object.entries(countedFiles)) {
+    // A genuinely new link-bearing file has no historical key yet; the
+    // sanctioned generator adds that key in populationDecision. Existing
+    // counted files must already be represented, or a shrink can be hidden.
+    if (occurrences.internalOccurrences > 0 &&
+        Object.hasOwn(population.fileOccurrences, file) &&
+        !Object.hasOwn(marks, file)) {
+      throw new Error(`incomplete fileOccurrencesHighWaterMarks: missing link-bearing file ${file}`);
+    }
+  }
+}
+
 export function populationDecision(oldPopulation, newPopulation, { allowShrink = false, date = new Date().toISOString().slice(0, 10) } = {}) {
   const currentShrinks = populationChanges(oldPopulation, newPopulation).filter(({ difference }) => difference < 0);
   const highWaterChanges = POPULATION_KEYS.map((key) => ({
@@ -231,10 +317,7 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
         Math.max(oldPopulation[HIGH_WATER_KEYS[key]], newPopulation[key]),
       ])),
       fileOccurrencesHighWaterMarks: Object.fromEntries(
-        [...new Set([
-          ...Object.keys(oldPopulation.fileOccurrencesHighWaterMarks ?? {}),
-          ...Object.keys(newPopulation.fileOccurrences ?? {}),
-        ])].sort().map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
+        Object.keys(newPopulation.fileOccurrences ?? {}).sort().map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
           key,
           Math.max(oldPopulation.fileOccurrencesHighWaterMarks?.[file]?.[key] ?? 0, newPopulation.fileOccurrences?.[file]?.[key] ?? 0),
         ]))]),
@@ -408,6 +491,12 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
       externalOccurrences: externalLinks,
       fileOccurrences,
     };
+    try {
+      validateFileHighWaterMarks(oldPopulation, newPopulation, oldSource, { allowShrink });
+    } catch (error) {
+      console.error(`REFUSE link-check population record: ${error.message}`);
+      return 1;
+    }
     const decision = populationDecision(oldPopulation, newPopulation, { allowShrink });
     if (!decision.population) {
       const { shrinks } = decision;
