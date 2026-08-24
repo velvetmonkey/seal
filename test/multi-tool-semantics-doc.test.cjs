@@ -82,15 +82,37 @@ function observedGuardedTools(view) {
 }
 
 function assertAtomicity(stateName, guardedTools) {
-  const guardsNothing = guardedTools.length === 0;
   const guardsDeclaredSet = guardedTools.length === DECLARED_TOOLS.length &&
     guardedTools.every((name, index) => name === DECLARED_TOOLS[index]);
   const missing = DECLARED_TOOLS.filter((name) => !guardedTools.includes(name));
   assert.ok(
-    guardsNothing || guardsDeclaredSet,
+    guardsDeclaredSet,
     `${stateName} ATOMICITY observed a strict subset; missing tool(s): ${missing.join(", ")}; declared: ${DECLARED_TOOLS.join(", ")}; guarded: ${guardedTools.join(", ")}`,
   );
 }
+
+function assertNoDeclaredToolsGuarded(guardedTools) {
+  const declaredToolsStillGuarded = DECLARED_TOOLS.filter((name) => guardedTools.includes(name));
+  assert.deepEqual(
+    declaredToolsStillGuarded,
+    [],
+    `UNPROTECTED still guards declared tool(s): ${declaredToolsStillGuarded.join(", ")}; guarded: ${guardedTools.join(", ")}`,
+  );
+}
+
+test("the shared atomicity helper rejects a known incomplete declaration", () => {
+  assert.throws(
+    () => assertAtomicity("KNOWN-BAD", DECLARED_TOOLS.slice(0, -1)),
+    /KNOWN-BAD ATOMICITY.*missing tool\(s\): db\.health/,
+  );
+});
+
+test("the UNPROTECTED set assertion rejects one still-guarded member", () => {
+  assert.throws(
+    () => assertNoDeclaredToolsGuarded([DECLARED_TOOLS[0]]),
+    /UNPROTECTED still guards declared tool\(s\): db\.drop_table/,
+  );
+});
 
 test("BROKEN guards the complete three-tool declaration after one member vanishes", () => {
   const names = path.join(os.tmpdir(), `seal-multi-tool-names-${crypto.randomUUID()}`);
@@ -100,7 +122,11 @@ test("BROKEN guards the complete three-tool declaration after one member vanishe
 
   fs.writeFileSync(names, `${DECLARED_TOOLS.slice(0, 2).join(" ")}\n`);
   const activation = run(ctx, ["__proxy", "--protect-state", statePath]);
-  assert.notEqual(activation.code, 0);
+  assert.notEqual(
+    activation.code,
+    0,
+    `BROKEN expected missing tool ${DECLARED_TOOLS.at(-1)} to refuse activation; output: ${activation.out}`,
+  );
   assert.match(activation.out, /protected tool "db\.health" vanished/);
   const view = observedView(ctx, statePath);
   assert.equal(view.state, "BROKEN");
@@ -142,6 +168,12 @@ test("STALE exposes one complete three-tool guard set for a dead shared lease", 
 test("UNPROTECTED guards none of a former three-tool declaration and clears its shared lease", () => {
   const ctx = setup();
   const statePath = protectDeclaredSet(ctx);
+  const activation = run(ctx, ["__proxy", "--protect-state", statePath]);
+  assert.equal(activation.code, 0, activation.out);
+  const activeView = observedView(ctx, statePath);
+  assert.equal(activeView.state, "STALE");
+  assertAtomicity(activeView.state, observedGuardedTools(activeView));
+
   const unprotected = run(ctx, ["unprotect", "db"]);
   assert.equal(unprotected.code, 0, unprotected.out);
   assert.match(unprotected.out, /^Protection: - outside Seal$/m);
@@ -150,7 +182,8 @@ test("UNPROTECTED guards none of a former three-tool declaration and clears its 
   assert.equal(stored.lease, null);
   const view = observedView(ctx, statePath);
   assert.equal(view.state, "UNPROTECTED");
-  assertAtomicity(view.state, observedGuardedTools(view));
+  const guardedAfterUnprotect = observedGuardedTools(view);
+  assertNoDeclaredToolsGuarded(guardedAfterUnprotect);
 });
 
 test("a later protect refuses replacement and leaves the complete declared set guarded", () => {

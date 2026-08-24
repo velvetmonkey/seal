@@ -149,9 +149,14 @@ observe the guarded set after the state transition.
 | `DRIFTED` | Yes | `DRIFTED guards the complete three-tool declaration after server configuration changes` in `test/multi-tool-semantics-doc.test.cjs`. |
 | `BROKEN` | Yes | `BROKEN guards the complete three-tool declaration after one member vanishes` in `test/multi-tool-semantics-doc.test.cjs`. |
 
-The tests for `UNPROTECTED`, `STALE`, `DRIFTED`, and `BROKEN` each assert that the
-observed guarded names equal the declared three-tool set or are empty. A later
-protect test also observes the stored guarded set after replacement is refused.
+The tests for `STALE`, `DRIFTED`, and `BROKEN` assert that the observed guarded
+names equal the declared three-tool set. The `UNPROTECTED` test first observes
+that complete set after a real wrapper activation, then unprotects the server
+and asserts through the product view that no declared member remains guarded.
+A later protect test also observes the stored guarded set after replacement is
+refused. The shared set-comparison helper has its own known-incomplete input
+check, and the post-unprotect set assertion has a one-member-still-guarded
+check.
 
 ## Verdict on “The state machine is TESTED”
 
