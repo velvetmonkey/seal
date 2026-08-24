@@ -18,12 +18,18 @@ function fixture() {
     'const CLAIM_MANIFEST = [["substring.md", "fixture"]];',
     'const COPY = { canonical: "covered.md", mirrors: [] };',
   ].join("\n"));
+  fs.mkdirSync(path.join(roots.seal, "test"));
+  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), "// CLAIM-COVERAGE: declared.md\n");
+  fs.writeFileSync(path.join(roots.seal, "scripts/claim-bearing-files.json"), JSON.stringify({
+    files: { "declared.md": { coveredBy: ["test/declared.test.mjs:1"] } },
+  }));
   fs.writeFileSync(path.join(roots.seal, "scripts/claim-coverage-allowlist.json"), JSON.stringify({
     version: 1,
     uncovered: ["seal/README.md", "seal-check/CLAIMS.md"],
   }));
   fs.writeFileSync(path.join(roots.seal, "covered.md"), "covered claims");
   fs.writeFileSync(path.join(roots.seal, "substring.md"), "substring claims");
+  fs.writeFileSync(path.join(roots.seal, "declared.md"), "declared claims");
   fs.writeFileSync(path.join(roots.seal, "README.md"), "fixture overview");
   fs.writeFileSync(path.join(roots["seal-check"], "CLAIMS.md"), "fixture claim ledger");
   for (const repo of ["seal-live-demo", "seal-assurance-kit"]) {
@@ -46,9 +52,18 @@ test("inventory reports fixture three-way accounting", (t) => {
   t.after(() => fs.rmSync(family, { recursive: true, force: true }));
   const result = run(roots);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /full=1 substring=1 uncovered=4 allowlisted=2 declared-gaps=2/);
+  assert.match(result.out, /full=1 substring=2 uncovered=4 allowlisted=2 declared-gaps=2/);
   assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-live-demo\/docs\/ARCHITECTURE\.md/);
   assert.match(result.out, /GAP uncovered claim-bearing file declared: seal-assurance-kit\/docs\/ARCHITECTURE\.md/);
+});
+
+test("a coveredBy declaration without its binding marker fails closed", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), "// unrelated line\n");
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /declared\.md coveredBy .* lacks its CLAIM-COVERAGE binding/);
 });
 
 test("an uncovered claim-bearing file fails until allowlisted", (t) => {

@@ -54,7 +54,30 @@ function guardCoverage(repo, root) {
   const substring = new Set();
   const manifest = source.match(/const CLAIM_MANIFEST = \[([\s\S]*?)\];/);
   for (const match of (manifest?.[1] ?? "").matchAll(/\[\s*["']([^"']+)["']/g)) substring.add(match[1]);
-  return { repo, full, substring };
+  const declared = new Set();
+  const declarationPath = path.join(root, "scripts/claim-bearing-files.json");
+  if (fs.existsSync(declarationPath)) {
+    const declarations = JSON.parse(fs.readFileSync(declarationPath, "utf8")).files;
+    if (!declarations || typeof declarations !== "object" || Array.isArray(declarations)) {
+      throw new Error(`${declarationPath}: files must be an object`);
+    }
+    for (const [claimFile, entry] of Object.entries(declarations)) {
+      if (!Array.isArray(entry?.coveredBy) || entry.coveredBy.length === 0) continue;
+      for (const reference of entry.coveredBy) {
+        const parsed = /^(.*):(\d+)$/.exec(reference);
+        if (!parsed || !parsed[1] || Number(parsed[2]) < 1) {
+          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} must be path:line`);
+        }
+        const proofPath = path.join(root, parsed[1]);
+        const line = fs.readFileSync(proofPath, "utf8").split(/\r?\n/)[Number(parsed[2]) - 1];
+        if (line === undefined || !line.includes(`CLAIM-COVERAGE: ${claimFile}`)) {
+          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} lacks its CLAIM-COVERAGE binding`);
+        }
+      }
+      declared.add(claimFile);
+    }
+  }
+  return { repo, full, substring, declared };
 }
 
 function main() {
@@ -69,8 +92,13 @@ function main() {
     }
     const coverage = guardCoverage(repo, root);
     for (const file of walk(root)) {
-      const rel = `${repo}/${path.relative(root, file).replaceAll(path.sep, "/")}`;
-      const kind = coverage.full.has(path.relative(root, file)) ? "full" : coverage.substring.has(path.relative(root, file)) ? "substring" : "uncovered";
+      const local = path.relative(root, file).replaceAll(path.sep, "/");
+      const rel = `${repo}/${local}`;
+      // A family allowlist entry deliberately retains uncovered-debt status.
+      // Otherwise, a locally validated coveredBy declaration is real partial
+      // coverage and must not disappear merely because it is not claims-drift.
+      const locallyDeclared = coverage.declared.has(local) && !allowlist.includes(rel);
+      const kind = coverage.full.has(local) ? "full" : coverage.substring.has(local) || locallyDeclared ? "substring" : "uncovered";
       rows.push({ file: rel, kind });
     }
   }
