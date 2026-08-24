@@ -41,8 +41,11 @@ function readReadme() {
 }
 
 function documentedTranscript(readme) {
-  const install = readme.indexOf("## 1. Install");
-  const start = readme.indexOf("```output\n", install);
+  const anchor = "<!-- Seal installed-tree pin role: published-asset -->";
+  const install = readme.indexOf(anchor);
+  const start = install === -1 || !readme.startsWith("\n```output\n", install + anchor.length)
+    ? -1
+    : install + anchor.length + 1;
   const end = start === -1 ? -1 : readme.indexOf("\n```", start + 10);
   if (install === -1 || start === -1 || end === -1) fail(`README install transcript absent: ${README}`);
   const body = readme.slice(start + "```output\n".length, end);
