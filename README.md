@@ -1,5 +1,7 @@
 <p align="center"><img src="assets/seal-logo.png" width="150" alt="Seal"></p>
+
 # Seal
+
 [![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![seal-check: paste a receipt](https://img.shields.io/badge/seal--check-paste%20a%20receipt-1f6feb?style=flat-square)](https://velvetmonkey.github.io/seal-check/)
 
 An AI coding agent can call a tool that changes or deletes something important.
