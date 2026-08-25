@@ -325,6 +325,7 @@ if ! output_file_mode="$(stat -c '%a' -- "$output_file" 2>/dev/null)"; then
 fi
 if (( (8#$output_file_mode & 0444) == 0 )) || [[ ! -r "$output_file" ]]; then
   report_unreadable_record "$output_file" "record mode $output_file_mode is unreadable"
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 fi
 if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
   report_unreadable_record "$output_file" "record could not be fingerprinted after writing"
@@ -346,9 +347,6 @@ if (( node_status != 0 )); then
   echo "::error::node --test exited $node_status"
   gate_status=1
 fi
-
-
-# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 record_untrusted_reason=""
 if [[ ! -f "$output_file" || -L "$output_file" ]]; then
   mark_record_untrusted "record disappeared before reconciliation"
