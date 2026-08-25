@@ -10,6 +10,11 @@ import { spawnSync } from "node:child_process";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = resolve(ROOT, "scripts/claims-drift.mjs"); // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md; CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md; CLAIM-COVERAGE: docs/assurance/index.html
 const README = resolve(ROOT, "README.md");
+const COVERED_CLAIM_FILES = [
+  "docs/archive/LIMITATIONS.md", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md
+  "docs/archive/TRUTH-BOX.md", // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md
+  "docs/assurance/index.html", // CLAIM-COVERAGE: docs/assurance/index.html
+];
 const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->")
   ? README
   : resolve(ROOT, "docs/assurance/index.html");
@@ -17,6 +22,7 @@ const UNREADABLE = resolve(ROOT, "docs/.claims-drift-unreadable");
 
 test("fatal manifest read first still reports later drift", () => {
   const guard = readFileSync(GUARD, "utf8");
+  for (const file of COVERED_CLAIM_FILES) assert.ok(guard.includes(file), `claims-drift guard must name ${file}`);
   const readme = readFileSync(DRIFT_FILE, "utf8");
   const rewritten = guard.replace(
     "const CLAIM_MANIFEST = [\n",

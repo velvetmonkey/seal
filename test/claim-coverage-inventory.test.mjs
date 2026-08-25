@@ -19,7 +19,7 @@ function fixture() {
     'const COPY = { canonical: "covered.md", mirrors: [] };',
   ].join("\n"));
   fs.mkdirSync(path.join(roots.seal, "test"));
-  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), "// CLAIM-COVERAGE: declared.md\n");
+  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), 'readFileSync("declared.md", "utf8"); // CLAIM-COVERAGE: declared.md\n');
   fs.writeFileSync(path.join(roots.seal, "scripts/claim-bearing-files.json"), JSON.stringify({
     files: { "declared.md": { coveredBy: ["test/declared.test.mjs:1"] } },
   }));
@@ -64,6 +64,42 @@ test("a coveredBy declaration without its binding marker fails closed", (t) => {
   const result = run(roots);
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /declared\.md coveredBy .* lacks its CLAIM-COVERAGE binding/);
+});
+
+test("a coveredBy marker in an unrelated file fails closed", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), "// CLAIM-COVERAGE: declared.md\n");
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /does not establish a relationship/);
+});
+
+test("an absent covering file is named distinctly", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  fs.rmSync(path.join(roots.seal, "test/declared.test.mjs"));
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /covering file is absent/);
+});
+
+test("an empty covering file is named distinctly", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(roots.seal, "test/declared.test.mjs"), "");
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /covering file is empty/);
+});
+
+test("an unreadable covering file is named distinctly", (t) => {
+  const { family, roots } = fixture();
+  t.after(() => fs.rmSync(family, { recursive: true, force: true }));
+  fs.chmodSync(path.join(roots.seal, "test/declared.test.mjs"), 0o000);
+  const result = run(roots);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /covering file is unreadable/);
 });
 
 test("an uncovered claim-bearing file fails until allowlisted", (t) => {

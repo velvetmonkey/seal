@@ -30,6 +30,53 @@ const DECLARED_GAPS = new Set([
   "seal-assurance-kit/docs/ARCHITECTURE.md",
 ]);
 
+function sourceLiterals(source) {
+  const literals = [];
+  for (let start = 0; start < source.length; start += 1) {
+    const quote = source[start];
+    if (!`"'\``.includes(quote)) continue;
+    let end = start + 1;
+    let escaped = false;
+    for (; end < source.length; end += 1) {
+      if (!escaped && source[end] === quote) break;
+      if (!escaped && quote !== "`" && /[\r\n]/.test(source[end])) break;
+      escaped = !escaped && source[end] === "\\";
+      if (source[end] !== "\\") escaped = false;
+    }
+    if (source[end] !== quote) continue;
+    const value = source.slice(start + 1, end)
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\(["'`\\])/g, "$1");
+    if (!value.includes("${") && value.length >= 16 && /\s/.test(value) && !/[\\/]/.test(value)) literals.push(value);
+    start = end;
+  }
+  return literals;
+}
+
+function hasCoverageRelationship(proofSource, claimFile, claimSource) {
+  // The marker cannot supply its own evidence. Remove binding-comment tails
+  // before looking for a real path or a substantive literal shared with the
+  // covered file.
+  const source = proofSource.replace(/\s*(?:\/\/|#)?\s*CLAIM-COVERAGE:[^\r\n]*/g, "");
+  if (source.includes(claimFile)) return true;
+  return sourceLiterals(source).some((literal) => claimSource.includes(literal));
+}
+
+function readCoveringFile(proofPath, label) {
+  if (!fs.existsSync(proofPath)) throw new Error(`${label} covering file is absent: ${proofPath}`);
+  const stat = fs.statSync(proofPath);
+  if (!stat.isFile()) throw new Error(`${label} covering path is not a regular file: ${proofPath}`);
+  if (stat.size === 0) throw new Error(`${label} covering file is empty: ${proofPath}`);
+  if ((stat.mode & 0o444) === 0) throw new Error(`${label} covering file is unreadable: ${proofPath} (no read permission bits)`);
+  try {
+    return fs.readFileSync(proofPath, "utf8");
+  } catch (error) {
+    throw new Error(`${label} covering file is unreadable: ${proofPath}: ${error.message}`);
+  }
+}
+
 function walk(root, dir = root, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP.has(entry.name)) continue;
@@ -63,15 +110,22 @@ function guardCoverage(repo, root) {
     }
     for (const [claimFile, entry] of Object.entries(declarations)) {
       if (!Array.isArray(entry?.coveredBy) || entry.coveredBy.length === 0) continue;
+      const claimPath = path.join(root, claimFile);
+      const claimSource = fs.readFileSync(claimPath, "utf8");
       for (const reference of entry.coveredBy) {
         const parsed = /^(.*):(\d+)$/.exec(reference);
         if (!parsed || !parsed[1] || Number(parsed[2]) < 1) {
           throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} must be path:line`);
         }
         const proofPath = path.join(root, parsed[1]);
-        const line = fs.readFileSync(proofPath, "utf8").split(/\r?\n/)[Number(parsed[2]) - 1];
+        const label = `${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)}`;
+        const proofSource = readCoveringFile(proofPath, label);
+        const line = proofSource.split(/\r?\n/)[Number(parsed[2]) - 1];
         if (line === undefined || !line.includes(`CLAIM-COVERAGE: ${claimFile}`)) {
           throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} lacks its CLAIM-COVERAGE binding`);
+        }
+        if (!hasCoverageRelationship(proofSource, claimFile, claimSource)) {
+          throw new Error(`${label} does not establish a relationship: covering source neither references the covered path nor shares a specific claim literal`);
         }
       }
       declared.add(claimFile);
