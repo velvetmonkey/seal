@@ -43,6 +43,7 @@ test/lease-generation.test.cjs
 test/limits-list.test.cjs
 test/linkcheck.test.mjs
 test/linkcheck-assertions.test.mjs
+test/linkcheck-write.test.mjs
 test/live-page-claim-guard.test.mjs
 test/no-verification-claim.test.cjs
 test/multi-tool-semantics-doc.test.cjs
