@@ -30,6 +30,7 @@ export default async function* productSuiteTapReporter(source) {
       event.data.name === event.data.file
     )
     .map((event) => event.data.file);
+  yield `# product-suite-executed-file-count ${executed.length}\n`;
   for (const file of executed.sort()) {
     yield `# product-suite-executed-file ${file}\n`;
     yield `# product-suite-test-case-count ${file}\t${caseCounts.get(file) || 0}\n`;

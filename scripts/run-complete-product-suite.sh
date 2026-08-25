@@ -19,10 +19,22 @@ report_unreadable_record() {
   exit 1
 }
 
+mark_record_untrusted() {
+  local reason="$1"
+  if [[ -n "${record_untrusted_reason:-}" ]]; then
+    record_untrusted_reason+="; $reason"
+  else
+    record_untrusted_reason="$reason"
+  fi
+}
+
 report_unreconciled_exit() {
   local status=$?
   if [[ -n "${output_file:-}" ]]; then
     rm -f -- "$output_file"
+  fi
+  if [[ -n "${record_snapshot_file:-}" ]]; then
+    rm -f -- "$record_snapshot_file"
   fi
   if (( roster_reported == 0 )); then
     echo "ROSTER: unknown; driver exited $status before reconciliation"
@@ -278,6 +290,7 @@ fi
 run_tests=("${declared_tests[@]}")
 record_directory="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 output_file="$record_directory/seal-node-test.$$.tap"
+record_snapshot_file="$output_file.snapshot"
 if [[ ! -d "$record_directory" ]]; then
   report_unreadable_record "$output_file" "record directory does not exist"
 fi
@@ -317,6 +330,16 @@ if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
   report_unreadable_record "$output_file" "record could not be fingerprinted after writing"
 fi
 record_fingerprint="${record_fingerprint%% *}"
+if ! cp -- "$output_file" "$record_snapshot_file" 2>/dev/null; then
+  report_unreadable_record "$output_file" "record could not be snapshotted after writing"
+fi
+if ! snapshot_fingerprint="$(sha256sum -- "$record_snapshot_file" 2>/dev/null)"; then
+  report_unreadable_record "$output_file" "record snapshot could not be fingerprinted"
+fi
+snapshot_fingerprint="${snapshot_fingerprint%% *}"
+if [[ "$snapshot_fingerprint" != "$record_fingerprint" ]]; then
+  report_unreadable_record "$output_file" "record changed while it was being snapshotted"
+fi
 
 gate_status=0
 if (( node_status != 0 )); then
@@ -326,21 +349,30 @@ fi
 
 
 # CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
+record_untrusted_reason=""
 if [[ ! -f "$output_file" || -L "$output_file" ]]; then
-  report_unreadable_record "$output_file" "record disappeared before reconciliation"
+  mark_record_untrusted "record disappeared before reconciliation"
+elif ! reconciliation_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
+  mark_record_untrusted "record could not be read before reconciliation"
+else
+  reconciliation_fingerprint="${reconciliation_fingerprint%% *}"
+  if [[ "$reconciliation_fingerprint" != "$snapshot_fingerprint" ]]; then
+    mark_record_untrusted "record changed after the test process finished"
+  fi
 fi
-if ! reconciliation_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
-  report_unreadable_record "$output_file" "record could not be read before reconciliation"
-fi
-reconciliation_fingerprint="${reconciliation_fingerprint%% *}"
-if [[ "$reconciliation_fingerprint" != "$record_fingerprint" ]]; then
-  report_unreadable_record "$output_file" "record changed after the test process finished"
+
+executed_file_count="$(sed -n 's/^# product-suite-executed-file-count \([0-9][0-9]*\)$/\1/p' "$record_snapshot_file" | tail -n 1)"
+executed_file_count_occurrences="$(grep -Ec '^# product-suite-executed-file-count [0-9]+$' "$record_snapshot_file" || true)"
+if [[ -z "$executed_file_count" ]]; then
+  mark_record_untrusted "malformed record: missing canonical '# product-suite-executed-file-count N' header"
+elif [[ "$executed_file_count_occurrences" != 1 ]]; then
+  mark_record_untrusted "malformed record: canonical '# product-suite-executed-file-count N' header is duplicated"
 fi
 
 summary_value() {
   local field="$1"
   local value
-  value="$(sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$output_file" | tail -n 1)"
+  value="$(sed -n "s/^# $field \([0-9][0-9]*\)$/\1/p" "$record_snapshot_file" | tail -n 1)"
   if [[ -z "$value" ]]; then
     return 1
   fi
@@ -356,12 +388,12 @@ for field in tests pass fail skipped todo; do
   set -e
   if (( summary_status[$field] != 0 )); then
     summary_record_failures+=("missing canonical '# $field N' summary")
-  elif [[ "$(grep -Ec "^# $field [0-9]+$" "$output_file")" != 1 ]]; then
+  elif [[ "$(grep -Ec "^# $field [0-9]+$" "$record_snapshot_file")" != 1 ]]; then
     summary_record_failures+=("canonical '# $field N' summary is duplicated")
   fi
 done
 if (( ${#summary_record_failures[@]} > 0 )); then
-  report_unreadable_record "$output_file" "malformed record: ${summary_record_failures[*]}"
+  mark_record_untrusted "malformed record: ${summary_record_failures[*]}"
 fi
 
 if (( summary_status[skipped] == 0 && summary[skipped] != 0 )); then
@@ -383,7 +415,10 @@ while IFS= read -r file; do
     execution_output_failures+=("duplicate executed-file evidence: $file")
   fi
   executed_set["$file"]=1
-done < <(sed -n 's/^# product-suite-executed-file //p' "$output_file")
+done < <(sed -n 's/^# product-suite-executed-file //p' "$record_snapshot_file")
+if [[ -n "$executed_file_count" && ${#executed_tests[@]} -ne "$executed_file_count" ]]; then
+  mark_record_untrusted "malformed record: executed-file count says $executed_file_count but record contains ${#executed_tests[@]} entries"
+fi
 
 declare -A executed_case_count passed_test_case_set
 case_count_output_failures=()
@@ -397,13 +432,13 @@ while IFS=$'\t' read -r file count extra; do
   fi
   file="$(canonical_path "$file")"
   executed_case_count["$file"]="$count"
-done < <(sed -n 's/^# product-suite-test-case-count //p' "$output_file")
+done < <(sed -n 's/^# product-suite-test-case-count //p' "$record_snapshot_file")
 while IFS=$'\t' read -r file test_name extra; do
   if [[ -n "$file" && -n "$test_name" && -z "$extra" ]]; then
     file="$(canonical_path "$file")"
     passed_test_case_set["$file"$'\x1f'"$test_name"]=1
   fi
-done < <(sed -n 's/^# product-suite-passed-test-case //p' "$output_file")
+done < <(sed -n 's/^# product-suite-passed-test-case //p' "$record_snapshot_file")
 
 load_failed_tests=()
 declare -A load_failed_set=()
@@ -413,7 +448,7 @@ while IFS= read -r file; do
     load_failed_tests+=("$file")
     load_failed_set["$file"]=1
   fi
-done < <(sed -n 's/^not ok [0-9][0-9]* - //p' "$output_file" | sort -u)
+done < <(sed -n 's/^not ok [0-9][0-9]* - //p' "$record_snapshot_file" | sort -u)
 for file in "${load_failed_tests[@]}"; do
   echo "::error::declared test file failed to load: $file"
   unset 'executed_set[$file]'
@@ -436,6 +471,30 @@ for file in "${roster_executed_tests[@]}"; do
     executed_not_declared+=("$file")
   fi
 done
+if [[ -n "$record_untrusted_reason" ]]; then
+  known_missing_tests=()
+  if [[ -n "$executed_file_count" && "$executed_file_count_occurrences" == 1 && ${#executed_tests[@]} -eq "$executed_file_count" && ${#summary_record_failures[@]} == 0 ]]; then
+    known_missing_tests=("${declared_not_executed[@]}")
+  else
+    known_missing_tests=("${load_failed_tests[@]}")
+  fi
+  at_least_count=0
+  for file in "${declared_tests[@]}"; do
+    if [[ -n "${executed_set[$file]+x}" && -z "${load_failed_set[$file]+x}" ]]; then
+      ((at_least_count += 1))
+    fi
+  done
+  if (( ${#known_missing_tests[@]} > 0 )); then
+    roster_message="ROSTER: at least $at_least_count of ${#declared_tests[@]} declared test files ran"
+    for file in "${known_missing_tests[@]}"; do
+      roster_message+="; $file did not run"
+    done
+    roster_message+="; the executed-file record is untrusted at $output_file: $record_untrusted_reason, so the count may be low"
+    report_roster_line "$roster_message"
+    exit 1
+  fi
+  report_unreadable_record "$output_file" "$record_untrusted_reason"
+fi
 if (( summary_status[fail] == 0 && summary[fail] != 0 && ${#load_failed_tests[@]} == 0 )); then
   echo "::error::node --test reported ${summary[fail]} assertion failures, expected 0"
   gate_status=1

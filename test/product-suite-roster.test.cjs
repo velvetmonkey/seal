@@ -99,8 +99,8 @@ test("a malformed executed-file record is unreadable rather than a short roster"
   const space = fixture();
   const copy = join(space.root, "driver-malformed-record.sh");
   writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
-    "gate_status=0",
-    'record_fingerprint="$(printf malformed | sha256sum)"\nrecord_fingerprint="${record_fingerprint%% *}"\nprintf malformed >"$output_file"\ngate_status=0',
+    'if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
+    'printf malformed >"$output_file"\nif ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
   ));
   chmodSync(copy, 0o755);
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
@@ -108,6 +108,51 @@ test("a malformed executed-file record is unreadable rather than a short roster"
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*malformed record/);
   assert.doesNotMatch(result.stdout, /INCOMPLETE ROSTER|declared test file did not run/);
+});
+
+test("a genuine short roster and a later record change are both reported", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-short-changed-record.sh");
+  writeFileSync(join(space.tests, "three.test.cjs"), "this cannot parse = ;\n");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    "gate_status=0",
+    'printf \'# late change\\n\' >>"$output_file"\ngate_status=0',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: at least 2 of 3 declared test files ran; .*three\.test\.cjs did not run; the executed-file record is untrusted .*record changed after the test process finished, so the count may be low/);
+});
+
+test("a stable partial record whose entry count is short is unreadable", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-truncated-record.sh");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    'if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
+    'sed -i \'0,/^# product-suite-executed-file /{/^# product-suite-executed-file /d;}\' "$output_file"\nif ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*executed-file count says 3 but record contains 2 entries/);
+  assert.doesNotMatch(result.stdout, /ROSTER: [0-9]+ of|INCOMPLETE ROSTER|declared test file did not run/);
+});
+
+test("a genuine short roster and a stable partial record are both reported", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-short-truncated-record.sh");
+  writeFileSync(join(space.tests, "three.test.cjs"), "this cannot parse = ;\n");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    'if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
+    'sed -i \'0,/^# product-suite-executed-file /{/^# product-suite-executed-file /d;}\' "$output_file"\nif ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: at least 1 of 3 declared test files ran; .*three\.test\.cjs did not run; the executed-file record is untrusted .*executed-file count says 3 but record contains 2 entries, so the count may be low/);
 });
 
 test("an unwritable record directory fails before the test phase", (t) => {
@@ -226,7 +271,7 @@ test("zero executed files prints a measured zero roster and names every declarat
   const copy = join(space.root, "driver-zero.sh");
   writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
     'node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"',
-    'printf \'TAP version 13\\n1..0\\n# tests 0\\n# pass 0\\n# fail 0\\n# skipped 0\\n# todo 0\\n\' | tee "$output_file"',
+    'printf \'# product-suite-executed-file-count 0\\nTAP version 13\\n1..0\\n# tests 0\\n# pass 0\\n# fail 0\\n# skipped 0\\n# todo 0\\n\' | tee "$output_file"',
   ));
   chmodSync(copy, 0o755);
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
@@ -246,6 +291,7 @@ test("duplicate executed-file evidence is counted rather than deduplicated", (t)
   const two = join(space.tests, "two.test.cjs");
   const three = join(space.tests, "three.test.cjs");
   const synthetic = [
+    "# product-suite-executed-file-count 4",
     `# product-suite-executed-file ${one}`,
     `# product-suite-executed-file ${two}`,
     `# product-suite-executed-file ${two}`,
