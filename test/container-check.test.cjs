@@ -9,14 +9,14 @@ const test = require("node:test");
 const ROOT = resolve(__dirname, "..");
 const CHECK = join(ROOT, "scripts", "container-check.mjs");
 
-function run(readme) {
+function run(readme, env = {}) {
   const dir = mkdtempSync(join(tmpdir(), "seal-container-check-test-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
   const result = spawnSync(process.execPath, [CHECK], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { PATH: "/usr/bin:/bin", CONTAINERWALK_README: path },
+    env: { PATH: "/usr/bin:/bin", CONTAINERWALK_README: path, ...env },
   });
   rmSync(dir, { recursive: true, force: true });
   return result;
@@ -40,6 +40,18 @@ test("a command failure names the command, exit code, and first error line", () 
   assert.match(result.stderr, /exit 7/);
   assert.match(result.stderr, /first error: visible error/);
   assert.match(result.stderr, /printf 'visible error/);
+});
+
+test("a protect section without its server setup refuses before executing fences", () => {
+  const result = run("## Protect something real\n```bash\nprintf 'not reached\\n'\n```\n```bash\nseal protect db demo.mutate\n```\n```output\nProtection: PENDING RESTART db.demo.mutate\n```\n```bash\nseal status\n```\n## Remove it\n", { CONTAINERWALK_REQUIRE_PROTECT: "1" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /has no \.mcp\.json server setup command/);
+});
+
+test("a protect section without a shown pending-restart result refuses", () => {
+  const result = run("## Protect something real\n```bash\nprintf '%s\\n' '{\"mcpServers\":{}}' > .mcp.json\n```\n```bash\nseal protect db demo.mutate\n```\n```bash\nseal status\n```\n## Remove it\n", { CONTAINERWALK_REQUIRE_PROTECT: "1" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must be followed by output showing Protection: PENDING RESTART/);
 });
 
 test("an output path from the builder is not normalized away", () => {

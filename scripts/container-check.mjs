@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process";
 const root = resolve(import.meta.dirname, "..");
 const readmePath = process.env.CONTAINERWALK_README || join(root, "README.md");
 const keepHome = process.env.CONTAINERWALK_KEEP_HOME === "1";
+const requireProtectWalk = readmePath === join(root, "README.md") || process.env.CONTAINERWALK_REQUIRE_PROTECT === "1";
 
 function fail(message) {
   console.error(`CONTAINERWALK FAIL: ${message}`);
@@ -115,6 +116,39 @@ const expected = new Map();
 for (let i = 0; i < fences.length - 1; i += 1) {
   if (fences[i].role === "command" && fences[i + 1].role === "output") expected.set(fences[i].line, fences[i + 1]);
 }
+
+// The protect walkthrough is a reader promise, not merely another fence for
+// the generic runner to happen to see.  Keep its setup, protection call, shown
+// result, and follow-up status command together so removing any link makes the
+// cold walk refuse before it can claim coverage.
+if (requireProtectWalk) {
+  const readmeLines = readme.split(/\r?\n/);
+  const protectHeading = readmeLines.findIndex((line) => /^##\s+Protect something real\s*$/.test(line));
+  const nextHeading = protectHeading === -1
+    ? -1
+    : readmeLines.findIndex((line, index) => index > protectHeading && /^##\s+/.test(line));
+  if (protectHeading === -1) {
+    fail("README contains no Protect something real section");
+  } else if (nextHeading === -1) {
+    fail(`README protect section at line ${protectHeading + 1} has no following section boundary`);
+  } else {
+    const protectCommands = commands.filter((fence) => fence.line > protectHeading + 1 && fence.line < nextHeading + 1);
+    const setup = protectCommands.find((fence) => /\.mcp\.json/.test(fence.body) && /mcpServers/.test(fence.body));
+    const protect = protectCommands.find((fence) => /(?:^|[;&|\s])seal\s+protect\s+\S+\s+\S+/.test(fence.body));
+    const status = protectCommands.find((fence) => /(?:^|[;&|\s])seal\s+status(?:\s|$)/.test(fence.body));
+    const shown = protect && expected.get(protect.line);
+    if (!setup) fail(`README protect section at line ${protectHeading + 1} has no .mcp.json server setup command`);
+    if (!protect) fail(`README protect section at line ${protectHeading + 1} has no seal protect command`);
+    if (!shown || !/^Protection:\s+PENDING RESTART\b/m.test(shown.body)) {
+      fail("README protect command must be followed by output showing Protection: PENDING RESTART");
+    }
+    if (!status) fail(`README protect section at line ${protectHeading + 1} has no seal status follow-up command`);
+    if (setup && protect && shown && status) {
+      console.log(`PROTECTWALK PASS: executing ${protectCommands.length} protect commands from README.md:${protectCommands.map((fence) => fence.line).join(",")}`);
+    }
+  }
+}
+if (process.exitCode === 1) process.exit(1);
 
 const homeRoot = process.env.CONTAINERWALK_HOME_ROOT || join(homedir(), ".cache");
 mkdirSync(homeRoot, { recursive: true, mode: 0o700 });
