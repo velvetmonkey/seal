@@ -2,7 +2,7 @@
   "files": {
     "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
     "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:9"] },
-    "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:179"] },
+    "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:180"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
@@ -58,7 +58,7 @@
     "docs/archive/TRUTH-BOX.md": { "coveredBy": ["test/claims-drift.test.mjs:15"] },
     "docs/assurance/version-identity.md": { "allowlistReason": "This version-history narrative includes external release and compatibility statements that cannot be established solely from the current checkout." },
     "docs/archive/WHAT-SEAL-IS.md": { "coveredBy": ["test/docs-scope.test.mjs:35"] },
-    "docs/archive/WHY-DIFFERENT.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:173"] },
+    "docs/archive/WHY-DIFFERENT.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:174"] },
     "docs/guide/README.md": { "allowlistReason": "This guide-index sentence chooses which named guide a reader should open for a situation; the repository can validate those links but cannot execute or prove the reader-specific recommendation." },
     "docs/guide/choosing-what-to-protect.md": { "allowlistReason": "This operator decision guide gives situational advice that depends on the user's tools and threat model, not a fixed local test fixture." },
     "docs/guide/github-actions-provenance.md": { "allowlistReason": "This guide explains GitHub Actions provenance and depends on GitHub-hosted workflow and attestation state outside the repository." },
@@ -66,6 +66,6 @@
     "scripts/mandatory-doc-claim-bindings.json": { "allowlistReason": "This binding registry is coverage metadata: its embedded claim text identifies the mandatory document sentences, but it is not a reader-facing Seal assertion." },
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs:125"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs:116"] },
-    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:16", "scripts/launch-truth-gate.mjs:169"] }
+    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:16", "scripts/launch-truth-gate.mjs:170"] }
   }
 }

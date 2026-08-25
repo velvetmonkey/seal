@@ -112,6 +112,14 @@ test("launch truth gate compares the complete self-repository path", () => {
     "https://github.com/extra/velvetmonkey/seal.git",
     "https://xn--githb-3we.com/velvetmonkey/seal.git",
     "https://github.com:444/velvetmonkey/seal.git",
+    "https://github.com//velvetmonkey/seal",
+    "https://github.com@evil.example/velvetmonkey/seal.git",
+    "https://github.com/one/two/three/four/five/velvetmonkey/seal",
+    "https://github.com/velvetmonkey/\nseal-unseen-sibling",
+    "https://github.com:443@evil.example/velvetmonkey/seal.git",
+    "https://github.com/velvetmonkey//seal.git",
+    "https://github.com/velvetmonkey/seal.git/%2e%2e/seal-sapphire-reef.git",
+    "https://github.com/velvetmonkey/seal.git%2Fextra",
   ]) assert.notEqual(run(link).status, 0, link);
   rmSync(dir, { recursive: true, force: true });
 });

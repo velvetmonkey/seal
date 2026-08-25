@@ -9,6 +9,7 @@
 // until the claim returns WITH its qualification and this gate is updated
 // deliberately in the same change.
 import fs from 'node:fs';
+import path from 'node:path';
 
 const EXPECTED = {
   readme: 'README.md',
@@ -54,29 +55,28 @@ function requireMatch(source, pattern, message) {
 }
 
 function repositoryLinks(source) {
-  return source.match(/(?:https?:\/\/|\/\/)[^\s<>()]+|git@github\.com:[^\s<>()]+/gi) ?? [];
+  // Markdown occasionally wraps a long destination immediately after a path
+  // slash. Reassemble that one lexical continuation before extracting tokens;
+  // do not otherwise remove or collapse whitespace inside a URL.
+  const joinedContinuations = source.replace(
+    /((?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]*\/|git@github\.com:[^\s<>()\[\]{}"'`]*\/))[ \t]*\r?\n[ \t]*(?=[A-Za-z0-9%])/gi,
+    '$1',
+  );
+  return joinedContinuations.match(
+    /(?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]+|git@github\.com:[^\s<>()\[\]{}"'`]+)/gi,
+  ) ?? [];
 }
 
 function repositoryLinkVerdict(link) {
-  let host;
-  let pathname;
-  let username = '';
-  let port = '';
+  let parsed;
   if (link.startsWith('git@github.com:')) {
-    host = 'github.com';
-    pathname = `/${link.slice('git@github.com:'.length).split(/[?#]/, 1)[0]}`;
+    parsed = new URL(`ssh://github.com/${link.slice('git@github.com:'.length)}`);
   } else {
-    const parsed = new URL(link.startsWith('//') ? `https:${link}` : link);
-    host = parsed.hostname;
-    pathname = parsed.pathname;
-    username = parsed.username;
-    port = parsed.port;
+    parsed = new URL(link.startsWith('//') ? `https:${link}` : link);
   }
-  if (port) return 'sibling';
-  if (host !== 'github.com') {
-    const githubImposter = host.includes('github.com') || pathname.includes('/github.com/') || host.startsWith('xn--');
-    return githubImposter ? 'sibling' : null;
-  }
+
+  if (parsed.username || parsed.password) return 'sibling';
+  if (parsed.port) return 'sibling';
 
   const selfPaths = new Set([
     '/velvetmonkey/seal',
@@ -84,24 +84,25 @@ function repositoryLinkVerdict(link) {
     '/velvetmonkey/seal.git',
     '/velvetmonkey/seal.git/',
   ]);
-  if (!selfPaths.has(pathname)) {
-    // These are repository-shaped URLs with an extra segment; do not
-    // silently accept them as unrelated document links.
-    if (/^\/[^/]+\/velvetmonkey\/seal(?:\.git)?\/?$/.test(pathname)
-      || /^\/velvetmonkey\/seal(?:\.git)?\/[^/]+\/?$/.test(pathname)
-      || /^\/[^/]+\/[^/]+\/[^/]+\.git\/?$/.test(pathname)) return 'sibling';
-    const parts = pathname.split('/').filter(Boolean);
-    if (parts.length !== 2) return null;
-    const repository = parts[1];
-    if (!/^(?:[^/]+|[^/]+\.git)$/.test(repository)) return null;
+  if (parsed.hostname === 'github.com') {
+    if (selfPaths.has(parsed.pathname)) return 'self';
+
+    // These are the non-repository GitHub endpoints already required by the
+    // fixed README. Everything else on github.com is fail-closed as a sibling
+    // repository reference; no path miss receives a second self decision.
+    const nonRepositoryPaths = new Set([
+      '/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/ci.yml',
+      '/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS',
+      '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64',
+    ]);
+    return nonRepositoryPaths.has(parsed.pathname) ? null : 'sibling';
   }
 
-  const parts = pathname.split('/').filter(Boolean);
-  const owner = parts[0];
-  const repository = parts[1];
-  const repositoryName = repository.endsWith('.git') ? repository.slice(0, -4) : repository;
-  if (username || owner !== 'velvetmonkey' || repositoryName !== 'seal') return 'sibling';
-  return 'self';
+  // A clone-shaped URL on any other exact hostname is not an unrelated web
+  // link. It is a repository reference and therefore cannot be this repo.
+  const finalComponentExtension = path.posix.extname(path.posix.basename(parsed.pathname));
+  return finalComponentExtension === '.git' ? 'sibling' : null;
 }
 
 if (process.argv.length !== 7) {
