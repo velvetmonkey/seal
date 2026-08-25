@@ -10,11 +10,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+const README = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+const ARTIFACT = `seal-v${VERSION}-linux-x64`;
+const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
 const BANNED = ["PASS" + " VERIFIED", "independ" + "ent"];
 const DOC_BANNED_CLAIMS = [
   {
@@ -49,6 +53,16 @@ const DOC_BANNED_OVERCLAIMS = [
     pattern: /\bthe\s+kernel\s+answers\s+exact\s+tool,\s+canonical\s+arguments,\s+issue-time\s+project\/server\s+binding\b/i,
   },
 ];
+
+function checkArtifactClaim(text) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-readme-artifact-claim-"));
+  const file = path.join(dir, "README.md");
+  fs.writeFileSync(file, text);
+  return spawnSync(process.execPath, [ARTIFACT_CLAIM_CHECK], {
+    encoding: "utf8",
+    env: { ...process.env, README_ARTIFACT_CLAIM_README: file },
+  });
+}
 
 function isTemporaryDirectory(directory) {
   return path.resolve(directory) === path.resolve(os.tmpdir());
@@ -129,4 +143,17 @@ test("seal verify output claims re-derivation, never an outside verification", a
 test("seal help claims neither an outside verification nor a passing verdict", () => {
   const help = execFileSync(process.execPath, [SEAL], { encoding: "utf8" });
   for (const needle of BANNED) assert.ok(!help.includes(needle), `seal help printed a banned claim: ${needle}`);
+});
+
+test("README artifact claim rejects builder paths and development names for a released VERSION", () => {
+  const green = checkArtifactClaim(README);
+  assert.equal(green.status, 0, green.stderr);
+
+  const absolute = checkArtifactClaim(README.replace(ARTIFACT, `/home/monkey/wt/builder/dist/${ARTIFACT}`));
+  assert.equal(absolute.status, 1);
+  assert.match(absolute.stderr, /builder-local absolute artifact path/);
+
+  const development = checkArtifactClaim(README.replace(ARTIFACT, `seal-v${VERSION}-dev.gdeadbee-linux-x64`));
+  assert.equal(development.status, 1);
+  assert.match(development.stderr, /development artifact named while VERSION is a release/);
 });
