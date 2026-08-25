@@ -20,7 +20,7 @@
     "scripts/claim-bearing-files.json": { "allowlistReason": "This manifest contains coverage metadata and exception reasons; apparent sentences are data values, not independently published Seal assertions." },
     "scripts/claim-coverage-allowlist.json": { "allowlistReason": "This data file is the exact uncovered-file ledger for the separately executed family inventory; its path entries and maintenance rationale are coverage metadata, not reader-facing Seal assertions." },
     "scripts/critical-property-manifest.tsv": { "coveredBy": ["scripts/run-complete-product-suite.sh:337"] },
-    "scripts/readme-source-inventory.mjs": { "coveredBy": ["test/readme-source-inventory.test.mjs:29"] },
+    "scripts/readme-source-inventory.mjs": { "allowlistReason": "scripts/readme-source-inventory.mjs is an internal ledger implementation that reports source-unit bookkeeping; its diagnostics are not reader-facing product claims." },
     "scripts/claims-drift-family-hashes.json": { "allowlistReason": "This JSON is a revision-hash data table for sibling repositories; the apparent candidate is an identifier/value, not a sentence addressed to users." },
     "scripts/install.cjs": { "allowlistReason": "The candidate is an installer refusal diagnostic describing an existing installation; reproducing its exact filesystem state requires an operator prefix fixture." },
     "scripts/launch-truth-gate.mjs": { "allowlistReason": "The candidate occurs in the executable truth gate's expected README literals; the guard checks those literals and is not a second user-facing claim surface." },
