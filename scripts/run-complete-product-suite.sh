@@ -279,6 +279,16 @@ while IFS=$'\t' read -r file test_name extra; do
   fi
 done < <(sed -n 's/^# product-suite-passed-test-case //p' "$output_file")
 
+load_failed_tests=()
+while IFS= read -r file; do
+  if [[ -n "${declared_set[$file]+x}" ]]; then
+    load_failed_tests+=("$file")
+  fi
+done < <(sed -n 's/^not ok [0-9][0-9]* - //p' "$output_file" | sort -u)
+for file in "${load_failed_tests[@]}"; do
+  echo "::error::declared test file failed to load: $file"
+  unset 'executed_set[$file]'
+done
 declared_not_executed=()
 for file in "${declared_tests[@]}"; do
   if [[ -z "${executed_set[$file]+x}" ]]; then
@@ -291,16 +301,6 @@ for file in "${executed_tests[@]}"; do
     executed_not_declared+=("$file")
   fi
 done
-load_failed_tests=()
-while IFS= read -r file; do
-  if [[ -n "${declared_set[$file]+x}" ]]; then
-    load_failed_tests+=("$file")
-  fi
-done < <(sed -n 's/^not ok [0-9][0-9]* - //p' "$output_file" | sort -u)
-
-for file in "${load_failed_tests[@]}"; do
-  echo "::error::declared test file failed to load: $file"
-done
 if (( summary_status[fail] == 0 && summary[fail] != 0 && ${#load_failed_tests[@]} == 0 )); then
   echo "::error::node --test reported ${summary[fail]} assertion failures, expected 0"
   gate_status=1
@@ -309,7 +309,6 @@ if (( summary_status[pass] == 0 && summary_status[tests] == 0 && summary[pass] !
   echo "::error::node --test reported ${summary[pass]} passes for ${summary[tests]} tests"
   gate_status=1
 fi
-
 declared_without_cases=()
 for file in "${declared_tests[@]}"; do
   if [[ -n "${executed_set[$file]+x}" && "${executed_case_count[$file]:-0}" == 0 ]]; then
@@ -324,6 +323,7 @@ if (( ${#declared_without_cases[@]} > 0 )); then
   printf '::error::declared test file registered zero test cases: %s\n' "${declared_without_cases[@]}"
   gate_status=1
 fi
+
 
 # CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 critical_proof_failures=()
@@ -342,16 +342,16 @@ if (( ${#critical_proof_failures[@]} > 0 )); then
 fi
 
 if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); then
-  echo "ROSTER: ${#executed_tests[@]} of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
+  echo "ROSTER: ${#executed_set[@]} of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
   if (( ${#declared_not_executed[@]} > 0 )); then
-    printf '::error::declared but not executed: %s\n' "${declared_not_executed[*]}"
+    printf '::error::INCOMPLETE ROSTER: declared test file did not run: %s\n' "${declared_not_executed[@]}"
   fi
   if (( ${#executed_not_declared[@]} > 0 )); then
     printf '::error::executed but not declared: %s\n' "${executed_not_declared[*]}"
   fi
   gate_status=1
-elif (( gate_status == 0 && ${#declared_without_cases[@]} == 0 && ${#critical_proof_failures[@]} == 0 && ${#case_count_output_failures[@]} == 0 )); then
-  echo "ROSTER: ${#executed_tests[@]} of ${#declared_tests[@]} declared test files ran"
+else
+  echo "ROSTER: ${#executed_set[@]} of ${#declared_tests[@]} declared test files ran"
 fi
 
 exit "$gate_status"

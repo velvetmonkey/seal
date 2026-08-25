@@ -54,6 +54,16 @@ test("the suite driver reports its runtime declared roster", (t) => {
   assert.match(result.stdout, new RegExp(`CRITICAL PROPERTY MANIFEST entries: ${space.properties.length}`));
 });
 
+test("a complete roster remains visible when an assertion fails", (t) => {
+  const space = fixture();
+  writeFileSync(join(space.tests, "two.test.cjs"), "require('node:test')('intentional assertion failure', () => { throw new Error('intentional'); });\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /intentional assertion failure/);
+  assert.match(result.stdout, /ROSTER: 3 of 3 declared test files ran/);
+});
+
 test("a failing present but undeclared test is a red finding", (t) => {
   const space = fixture();
   const omitted = join(space.tests, "omitted.test.cjs");
@@ -137,7 +147,19 @@ test("a strict subset of the declared roster is a red finding", (t) => {
   const result = run(copy, space.tests, space.roster, space.manifest);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /ROSTER: 2 of 3 declared test files ran; refusing incomplete roster/);
-  assert.match(result.stdout, /declared but not executed: .*three\.test\.cjs/);
+  assert.match(result.stdout, /INCOMPLETE ROSTER: declared test file did not run: .*three\.test\.cjs/);
+});
+
+test("a load failure and an assertion failure each remain visible with the short roster", (t) => {
+  const space = fixture();
+  writeFileSync(join(space.tests, "two.test.cjs"), "require('node:test')('intentional assertion failure', () => { throw new Error('intentional'); });\n");
+  writeFileSync(join(space.tests, "three.test.cjs"), "this cannot parse = ;\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /intentional assertion failure/);
+  assert.match(result.stdout, /ROSTER: 2 of 3 declared test files ran; refusing incomplete roster/);
+  assert.match(result.stdout, /INCOMPLETE ROSTER: declared test file did not run: .*three\.test\.cjs/);
 });
 
 test("a declared file that registers zero test cases is a named red finding", (t) => {
