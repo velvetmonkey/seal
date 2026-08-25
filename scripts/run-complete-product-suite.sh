@@ -12,8 +12,18 @@ report_roster_line() {
   roster_reported=1
 }
 
+report_unreadable_record() {
+  local record_path="$1"
+  local reason="$2"
+  report_roster_line "ROSTER: unreadable; executed-file record unavailable at $record_path: $reason"
+  exit 1
+}
+
 report_unreconciled_exit() {
   local status=$?
+  if [[ -n "${output_file:-}" ]]; then
+    rm -f -- "$output_file"
+  fi
   if (( roster_reported == 0 )); then
     echo "ROSTER: unknown; driver exited $status before reconciliation"
   fi
@@ -266,16 +276,65 @@ if (( ${#present_not_declared[@]} > 0 || ${#declared_not_present[@]} > 0 )); the
 fi
 
 run_tests=("${declared_tests[@]}")
-output_file="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/seal-node-test.tap"
+record_directory="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+output_file="$record_directory/seal-node-test.$$.tap"
+if [[ ! -d "$record_directory" ]]; then
+  report_unreadable_record "$output_file" "record directory does not exist"
+fi
+if ! record_directory_mode="$(stat -c '%a' -- "$record_directory" 2>/dev/null)"; then
+  report_unreadable_record "$output_file" "record directory metadata could not be read"
+fi
+if (( (8#$record_directory_mode & 0222) == 0 )); then
+  report_unreadable_record "$output_file" "record directory mode $record_directory_mode has no write permissions"
+fi
+if [[ ! -w "$record_directory" || ! -x "$record_directory" ]]; then
+  report_unreadable_record "$output_file" "record directory is not writable and searchable"
+fi
+umask 077
+if ! : >"$output_file" 2>/dev/null; then
+  report_unreadable_record "$output_file" "preflight creation failed"
+fi
 set +e
 node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"
-node_status=${PIPESTATUS[0]}
+pipeline_status=("${PIPESTATUS[@]}")
+node_status=${pipeline_status[0]}
+record_write_status=${pipeline_status[1]}
 set -e
+
+if (( record_write_status != 0 )); then
+  report_unreadable_record "$output_file" "record write failed with exit $record_write_status"
+fi
+if [[ ! -f "$output_file" || -L "$output_file" ]]; then
+  report_unreadable_record "$output_file" "record is missing or is not a regular file"
+fi
+if ! output_file_mode="$(stat -c '%a' -- "$output_file" 2>/dev/null)"; then
+  report_unreadable_record "$output_file" "record metadata could not be read after writing"
+fi
+if (( (8#$output_file_mode & 0444) == 0 )) || [[ ! -r "$output_file" ]]; then
+  report_unreadable_record "$output_file" "record mode $output_file_mode is unreadable"
+fi
+if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
+  report_unreadable_record "$output_file" "record could not be fingerprinted after writing"
+fi
+record_fingerprint="${record_fingerprint%% *}"
 
 gate_status=0
 if (( node_status != 0 )); then
   echo "::error::node --test exited $node_status"
   gate_status=1
+fi
+
+
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
+if [[ ! -f "$output_file" || -L "$output_file" ]]; then
+  report_unreadable_record "$output_file" "record disappeared before reconciliation"
+fi
+if ! reconciliation_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
+  report_unreadable_record "$output_file" "record could not be read before reconciliation"
+fi
+reconciliation_fingerprint="${reconciliation_fingerprint%% *}"
+if [[ "$reconciliation_fingerprint" != "$record_fingerprint" ]]; then
+  report_unreadable_record "$output_file" "record changed after the test process finished"
 fi
 
 summary_value() {
@@ -289,16 +348,21 @@ summary_value() {
 }
 
 declare -A summary summary_status
+summary_record_failures=()
 for field in tests pass fail skipped todo; do
   set +e
   summary[$field]="$(summary_value "$field")"
   summary_status[$field]=$?
   set -e
   if (( summary_status[$field] != 0 )); then
-    echo "::error::node --test is missing canonical '# $field N' summary"
-    gate_status=1
+    summary_record_failures+=("missing canonical '# $field N' summary")
+  elif [[ "$(grep -Ec "^# $field [0-9]+$" "$output_file")" != 1 ]]; then
+    summary_record_failures+=("canonical '# $field N' summary is duplicated")
   fi
 done
+if (( ${#summary_record_failures[@]} > 0 )); then
+  report_unreadable_record "$output_file" "malformed record: ${summary_record_failures[*]}"
+fi
 
 if (( summary_status[skipped] == 0 && summary[skipped] != 0 )); then
   echo "::error::node --test reported ${summary[skipped]} skipped tests, expected 0"

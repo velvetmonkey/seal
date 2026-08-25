@@ -27,7 +27,7 @@ function fixture() {
   return { root, tests, roster, manifest, properties };
 }
 
-function run(driver, tests, roster, manifest) {
+function run(driver, tests, roster, manifest, extraEnv = {}) {
   const env = {
     ...process.env,
     RUNNER_TEMP: tmpdir(),
@@ -36,6 +36,7 @@ function run(driver, tests, roster, manifest) {
     SEAL_PRODUCT_TEST_DIR: tests,
     SEAL_PRODUCT_TEST_ROSTER: roster,
     SEAL_CRITICAL_PROPERTY_MANIFEST: manifest,
+    ...extraEnv,
   };
   delete env.NODE_TEST_CONTEXT;
   return spawnSync("bash", [driver], {
@@ -62,6 +63,66 @@ test("a complete roster remains visible when an assertion fails", (t) => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /intentional assertion failure/);
   assert.match(result.stdout, /ROSTER: 3 of 3 declared test files ran/);
+});
+
+test("a deleted executed-file record is unreadable rather than a short roster", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-deleted-record.sh");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    "gate_status=0",
+    'rm -f -- "$output_file"\ngate_status=0',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*record disappeared before reconciliation/);
+  assert.doesNotMatch(result.stdout, /INCOMPLETE ROSTER|declared test file did not run/);
+});
+
+test("a changed executed-file record is unreadable rather than a short roster", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-changed-record.sh");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    "gate_status=0",
+    'sed -i "/^# product-suite-executed-file /{x;/x/{x;b};x;d}" "$output_file"\ngate_status=0',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*record changed after the test process finished/);
+  assert.doesNotMatch(result.stdout, /INCOMPLETE ROSTER|declared test file did not run/);
+});
+
+test("a malformed executed-file record is unreadable rather than a short roster", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-malformed-record.sh");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    "gate_status=0",
+    'record_fingerprint="$(printf malformed | sha256sum)"\nrecord_fingerprint="${record_fingerprint%% *}"\nprintf malformed >"$output_file"\ngate_status=0',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*malformed record/);
+  assert.doesNotMatch(result.stdout, /INCOMPLETE ROSTER|declared test file did not run/);
+});
+
+test("an unwritable record directory fails before the test phase", (t) => {
+  const space = fixture();
+  const recordDirectory = join(space.root, "record");
+  mkdirSync(recordDirectory);
+  chmodSync(recordDirectory, 0o555);
+  t.after(() => {
+    chmodSync(recordDirectory, 0o755);
+    rmSync(space.root, { recursive: true, force: true });
+  });
+  const result = run(DRIVER, space.tests, space.roster, space.manifest, { RUNNER_TEMP: recordDirectory });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unreadable; executed-file record unavailable .*record directory mode 555 has no write permissions/);
+  assert.doesNotMatch(result.stdout, /TAP version|# tests|fixture/);
 });
 
 test("a failing present but undeclared test is a red finding", (t) => {
@@ -247,6 +308,7 @@ test("SIGTERM during the node phase prints an explicitly unknown roster", async 
   assert.equal(result.status, 143, result.stdout + result.stderr);
   assert.match(result.stdout, /ROSTER: unknown; driver died at SIGTERM/);
   assert.doesNotMatch(result.stdout, /ROSTER: [0-9]+ of [0-9]+/);
+  assert.equal(result.stdout.split("\n").filter((line) => line.startsWith("ROSTER:")).length, 1, result.stdout + result.stderr);
 });
 
 test("a symlink and its target declare one canonical file", (t) => {
