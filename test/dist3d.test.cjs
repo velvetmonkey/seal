@@ -25,21 +25,47 @@ function sha256Hex(bytes) {
 }
 
 function installedCheckerPresenceClaims(document) {
-  // This is deliberately a claim classifier, not an exact-prose guard. A
-  // sentence is a positive installed-tree claim only when it identifies the
-  // checker, an installation surface, and a positive placement relation.
-  return document
+  // INJECTED: this bounded natural-language classifier still misses novel
+  // checker/surface paraphrases, implications, non-prose claims, and references
+  // whose antecedent is more than one sentence away.
+  // Surface terms name the forms the artifact actually takes: a distribution
+  // archive/tarball delivered as a package/bundle, then installed in a prefix,
+  // store, payload, or install tree. They are not sentence-specific exceptions.
+  const correction = /\b(?:old|former|previous|incorrect|false|outdated|retracted)\s+claim\b|\b(?:corrects?|corrected|correction|replaces?|supersedes?|withdraws?|rejects?|disavows?)\b/i;
+  const normalized = document
     .replace(/\[[^\]]+\]\([^)]*\)/g, (link) => link.replace(/\([^)]*\)/, ""))
-    .replace(/[\n\r]+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .filter((sentence) => {
-      const checker = /\b(?:receipt\s+)?checker\b|checker\/seal-receipt-check\.mjs/i.test(sentence);
-      const installedSurface = /\b(?:install(?:ed|ation|er)?|payload|package|tree|store)\b/i.test(sentence);
-      const placement = /\b(?:contains?|includes?|has|ships?|bundles?|carries|puts?|places?)\b|\b(?:is|are)\s+(?:present|available|included|bundled)\b/i.test(sentence);
-      const negative = /\b(?:does|do|is|are|was|were)\s+not\b|\b(?:without|absent|excludes?|lacks?)\b/i.test(sentence);
+    .replace(/[\n\r]+/g, " ");
+  const withoutCorrectedQuotes = normalized.replace(/["“][^"”]*["”]/g, (quoted, offset, whole) => {
+    const followingClause = whole.slice(offset + quoted.length).split(/[.!?]/, 1)[0];
+    return correction.test(followingClause) ? "" : quoted;
+  });
+  const sentences = withoutCorrectedQuotes.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const windows = sentences.flatMap((sentence, index) => [
+    sentence,
+    ...(index + 1 < sentences.length ? [`${sentence} ${sentences[index + 1]}`] : []),
+  ]);
+
+  return windows
+    .filter((claim) => {
+      const checker = /\b(?:receipt\s+)?checker\b|checker\/seal-receipt-check\.mjs/i.test(claim);
+      const installedSurface = /\b(?:package|bundle|tarball|archive|prefix|store|payload|distribution)\b|\binstall(?:ed|ation|er)?(?:\s+(?:release\s+)?tree)?\b|\bdelivered\s+package\b/i.test(claim);
+      const placement = /\b(?:contains?|includes?|has|ships?|bundles?|carries|puts?|places?|installs?)\b|\bcomes?\s+(?:with|in)\b|\b(?:is|are)\s+(?:in|inside|present|available|included|bundled)\b/i.test(claim);
+      const negative = /\b(?:does|do|is|are|was|were)\s+not\b|\b(?:without|absent|excludes?|lacks?)\b/i.test(claim);
       return checker && installedSurface && placement && !negative;
     });
 }
+
+test("installed checker claim classifier composes bounded prose without refusing corrections", () => {
+  const stop = ".";
+  const indirect = ["Everything needed to verify a receipt comes with the installation package,", "including the checker", stop].join(" ");
+  const split = ["Seal installs the runtime package for receipt verification", stop, "The checker is in that package", stop].join(" ");
+  const synonym = ["The receipt checker", "is bundled in the tarball", stop].join(" ");
+  const correction = ["\"The installed release tree includes", "the receipt checker\" was the old claim,", "and this README corrects it", stop].join(" ");
+  assert.ok(installedCheckerPresenceClaims(indirect).length > 0);
+  assert.ok(installedCheckerPresenceClaims(split).length > 0);
+  assert.ok(installedCheckerPresenceClaims(synonym).length > 0);
+  assert.equal(installedCheckerPresenceClaims(correction).length, 0);
+});
 
 function runNode(args, opts = {}) {
   const result = spawnSync(process.execPath, args, {
