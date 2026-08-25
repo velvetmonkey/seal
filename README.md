@@ -10,22 +10,6 @@ Seal stops that call and asks you before the tool runs.
 
 One exact call. One approval. One use.
 
-## See it work
-
-```bash
-seal demo
-```
-
-This is real output from `seal demo` (excerpted).
-
-```text
-INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
-child calls observed: still 0 (read from /var/tmp/seal-demo/child/data.txt.count) — approval shown, nothing executed
-Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
-child calls observed: 1 (read from /var/tmp/seal-demo/child/data.txt.count)
-BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
-```
-
 Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
 ```bash
@@ -47,13 +31,28 @@ Requires Node 20+. The published Seal v0.2.0-rc.2 release asset is Linux x86-64.
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
-command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
-At `Approve? [y/N]`, type `y` and press Enter. The demo prints its temporary
-directory. Keep it if you want to check the blocked receipt.
+## See it work
+
+The command supplies `y` to show the complete approve-once demonstration. Run
+`seal demo` interactively instead if you want to choose the response yourself.
+
+```bash
+printf 'y\n' | seal demo --dir ./seal-demo
+```
+
+This is real output from that command (excerpted).
+
+```text
+INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
+Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+```
+
+The demo prints its temporary directory. Keep it if you want to check the
+blocked receipt.
 
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
@@ -65,25 +64,23 @@ The installed development tree does not include `checker/seal-receipt-check.mjs`
 
 ## Protect something real
 
-First check that Claude Code is available:
+Install Claude Code into your local tools directory, then check that it is
+available:
 
 ```bash
+npm install --prefix "$HOME/.local" @anthropic-ai/claude-code
+export PATH="$HOME/.local/node_modules/.bin:$PATH"
 claude --version
 ```
 
 In a [Claude Code project](docs/guide/choosing-what-to-protect.md), first make
-sure `.mcp.json` defines the stdio server and tool you want to gate. For
-example, this project starts a local `db` server:
+sure `.mcp.json` defines the stdio server and tool you want to gate. The
+following makes a small local project whose `db` server is Seal's demo server:
 
-```json
-{
-  "mcpServers": {
-    "db": {
-      "command": "node",
-      "args": ["./db-server.mjs"]
-    }
-  }
-}
+```bash
+mkdir -p seal-protect-demo
+cd seal-protect-demo
+printf '%s\n' '{"mcpServers":{"db":{"command":"seal","args":["__demo-server","./data.txt"]}}}' > .mcp.json
 ```
 
 With the published v0.2.0-rc.2 CLI, protect one tool:
@@ -93,7 +90,6 @@ seal protect db demo.mutate
 ```
 
 ```output
-Project .mcp.json hash before protect: <the SHA-256 of your project file>
 Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```
@@ -120,8 +116,16 @@ The protected path creates or reuses a machine-local signing key. The demo's key
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
 trust. The demo prints a ready-to-run checker command for one of its receipts.
-To run the checker, clone the source repository and substitute the receipt and
-public-key paths printed by your demo:
+To run the installed checker on the blocked receipt from the demo above:
+
+```bash
+checker="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+receipt="$(find ../seal-demo/receipts -name '*BLOCK.json' -print -quit)"
+node "$checker" "$receipt" --pubkey ../seal-demo/receipt-signer.pub
+```
+
+If the installed tree does not contain the checker, clone the source repository
+and substitute the receipt and public-key paths printed by your demo:
 
 ```bash
 git clone https://github.com/velvetmonkey/seal.git && cd seal

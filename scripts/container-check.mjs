@@ -3,7 +3,7 @@
 // Execute the README's bash fences in one clean, throw-away HOME and compare
 // the output fences which immediately follow them. This is deliberately a
 // small parser: an unlabelled or unknown fence is not silently guessed.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -48,6 +48,16 @@ function parse(text) {
 
 function normalize(text, home) {
   return text.replaceAll("\\r", "").replaceAll(home, "<HOME>").replaceAll("/tmp/", "<TMP>/");
+}
+
+function removeWritableTree(path) {
+  const stat = lstatSync(path);
+  if (stat.isDirectory()) {
+    chmodSync(path, 0o700);
+    for (const name of readdirSync(path)) removeWritableTree(join(path, name));
+  } else {
+    chmodSync(path, 0o600);
+  }
 }
 
 let readme;
@@ -128,6 +138,9 @@ try {
     console.log(`CONTAINERWALK PASS: extracted ${commands.length} bash commands and ${expected.size} output samples`);
   }
 } finally {
-  if (!keepHome) rmSync(home, { recursive: true, force: true });
+  if (!keepHome) {
+    removeWritableTree(home);
+    rmSync(home, { recursive: true, force: true });
+  }
   rmSync(work, { recursive: true, force: true });
 }
