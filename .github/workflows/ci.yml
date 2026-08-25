@@ -51,7 +51,7 @@ jobs:
           node scripts/check-installed-tree-pin-manifest-review.cjs --base "$base" --head "$head"
 
   demo-receipt-provenance:
-    name: demo receipt provenance
+    name: demo receipt provenance — UNVERIFIED when prerelease release is absent
     # This boundary depends on GitHub-operated infrastructure. Do not change
     # this to a self-hosted label: a runner controlled by the operator would
     # not provide the provenance this job documents.
@@ -88,7 +88,7 @@ jobs:
             > "$oidc_response"
           node -e 'const response = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if (typeof response.value !== "string" || response.value.length === 0) process.exit(1)' "$oidc_response"
           rm -f "$oidc_response"
-      - name: Produce and check the demo receipt in this runner
+      - name: "Produce and check the demo receipt (UNVERIFIED if prerelease release is absent)"
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,13 +101,39 @@ jobs:
           release_tag="v$(tr -d '\n' < VERSION)"
           artifact_name="seal-$release_tag-linux-x64"
           mkdir -p "$evidence_dir" "$release_dir"
+          # First establish that the repository exists.  A repository-level
+          # 404 must never be mistaken for an absent release.
           set +e
-          release_view_output="$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" 2>&1)"
-          release_view_status=$?
+          repository_lookup_response="$(gh api --include "repos/$GITHUB_REPOSITORY" 2>&1)"
+          repository_lookup_command_status=$?
           set -e
-          if [[ "$release_view_status" -eq 0 ]]; then
+          repository_lookup_status="$(printf '%s\n' "$repository_lookup_response" | awk '/^HTTP\// { status=$2 } END { if (status ~ /^[0-9][0-9][0-9]$/) print status }')"
+          if [[ "$repository_lookup_status" != 200 || "$repository_lookup_command_status" -ne 0 ]]; then
+            echo "::error::RELEASE_PROVENANCE_REPOSITORY_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY reported HTTP ${repository_lookup_status:-none} (command exit $repository_lookup_command_status)."
+            exit 1
+          fi
+          # `gh api --include` writes an HTTP status line.  The status, not an
+          # error message, is the release-existence fact: 404 means absent.
+          set +e
+          release_lookup_response="$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$release_tag" 2>&1)"
+          release_lookup_command_status=$?
+          set -e
+          release_lookup_status="$(printf '%s\n' "$release_lookup_response" | awk '/^HTTP\// { status=$2 } END { if (status ~ /^[0-9][0-9][0-9]$/) print status }')"
+          if [[ -z "$release_lookup_status" ]]; then
+            echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY/releases/tags/$release_tag returned no HTTP status (command exit $release_lookup_command_status)."
+            exit 1
+          fi
+          if [[ "$release_lookup_status" -eq 200 ]]; then
+            if [[ "$release_lookup_command_status" -ne 0 ]]; then
+              echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY/releases/tags/$release_tag reported HTTP 200 but exited $release_lookup_command_status."
+              exit 1
+            fi
             gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$release_dir" \
               --pattern SHA256SUMS --pattern "$artifact_name"
+            if [[ ! -f "$release_dir/SHA256SUMS" ]]; then
+              echo "::error::RELEASE_PROVENANCE_ASSETS_MISSING: published release $release_tag has no SHA256SUMS asset."
+              exit 1
+            fi
             read -r expected_digest expected_bytes expected_name < "$release_dir/SHA256SUMS"
             if [[ "$expected_name" != "$artifact_name" ]]; then
               echo "::error::RELEASE_PROVENANCE_ASSET_NAME_MISMATCH: SHA256SUMS names $expected_name; expected $artifact_name."
@@ -154,8 +180,8 @@ jobs:
             cp "$allow_receipt" "$evidence_dir/demo-allow-receipt.json"
             cp "$demo_dir/receipt-signer.pub" "$evidence_dir/demo-receipt-signer.pub"
           else
-            if [[ "$release_view_status" -ne 1 || "$release_view_output" != *"release not found"* ]]; then
-              echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh release view exited $release_view_status: $release_view_output"
+            if [[ "$release_lookup_status" -ne 404 ]]; then
+              echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY/releases/tags/$release_tag reported HTTP $release_lookup_status (command exit $release_lookup_command_status)."
               exit 1
             fi
             if [[ "$release_tag" != *-rc.* ]]; then
