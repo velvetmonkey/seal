@@ -525,7 +525,7 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrinkFiles }) {
     }
     const { population: acceptedPopulation, shrinks } = decision;
     if (shrinks.length) {
-      console.log(`OVERRIDE link-check population below high-water mark: ${describeChanges(shrinks)}`);
+      console.log(`OVERRIDE link-check population below recorded per-file count: ${describeChanges(shrinks)}`);
     }
     const newSource = populationSource(acceptedPopulation);
     if (newSource === oldSource) {
