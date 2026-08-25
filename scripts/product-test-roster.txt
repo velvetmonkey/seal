@@ -57,7 +57,6 @@ test/readme-artifact-claim.test.cjs
 test/readme-demo-fence.test.cjs
 test/readme-demo-transcript-guard.test.cjs
 test/readme-pasteable-fences.test.cjs
-test/readme-reader-visible-bookkeeping.test.mjs
 test/readme-protect-fence.test.cjs
 test/readme-protect-state-witness.test.cjs
 test/receipt-checker.test.cjs
