@@ -39,6 +39,7 @@ const logPath = process.env.SEAL_CC_FIXTURE_LOG;
 const effectPath = process.env.SEAL_CC_FIXTURE_EFFECT;
 if (!logPath) refuse("fixture_log_unset", "SEAL_CC_FIXTURE_LOG names the append-only frame log; this fixture never runs unrecorded");
 if (!effectPath) refuse("fixture_effect_unset", "SEAL_CC_FIXTURE_EFFECT names the effect file the guarded tool writes");
+const readyPath = process.env.SEAL_CC_FIXTURE_READY_FILE;
 
 const session = crypto.randomUUID();
 let recordNumber = 0;
@@ -169,6 +170,14 @@ appendRecord({
   ancestry: ancestry(process.pid),
   effect: { path: effectPath, ...digestOf(effectPath) },
 });
+
+if (readyPath) fs.writeFileSync(readyPath, `${process.pid}\n`, { mode: 0o600 });
+
+// Test-only fault injection used to prove that an uninitializable protected
+// server still makes the evidence build refuse. It exits after the durable
+// start record so the parent can distinguish a real child failure from an
+// unobserved launch.
+if (process.env.SEAL_CC_FIXTURE_FAIL_INITIALIZE === "1") process.exit(86);
 
 let guardedCalls = 0;
 

@@ -18,7 +18,7 @@
 // With no artifact given it builds one from this checkout.
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const harness = require("./cc-harness.cjs");
 
@@ -51,7 +51,38 @@ function buildArtifact(inputsDir) {
   return { artifact: path.join(outDir, meta.artifact), sha256: meta.sha256, bytes: String(meta.bytes) };
 }
 
-function main(argv) {
+async function waitForFixtureReadiness(inputsDir) {
+  const readyPath = path.join(inputsDir, "fixture-ready");
+  const logPath = path.join(inputsDir, "fixture-readiness.jsonl");
+  const effectPath = path.join(inputsDir, "fixture-readiness-effect");
+  const probeEnv = { ...process.env, SEAL_CC_FIXTURE_LOG: logPath, SEAL_CC_FIXTURE_EFFECT: effectPath, SEAL_CC_FIXTURE_READY_FILE: readyPath };
+  delete probeEnv.SEAL_CC_FIXTURE_FAIL_INITIALIZE;
+  const child = spawn(process.execPath, [path.join(__dirname, "fixture-server.cjs")], {
+    cwd: ROOT,
+    env: probeEnv,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const started = Date.now();
+  try {
+    while (!fs.existsSync(readyPath)) {
+      if (child.exitCode !== null) throw new Error(`fixture readiness probe exited ${child.exitCode}: ${stderr.trim()}`);
+      if (Date.now() - started >= 30000) throw new Error(`fixture readiness probe timed out after 30000ms: ${stderr.trim()}`);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  } finally {
+    if (child.exitCode === null) child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      if (child.exitCode !== null) return resolve();
+      child.once("exit", resolve);
+      setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, 2000);
+    });
+  }
+}
+
+async function main(argv) {
   const options = parse(argv);
   if (!options["run-dir"]) throw new Error("synthetic-run needs --run-dir DIR");
   const runDir = path.resolve(options["run-dir"]);
@@ -72,6 +103,8 @@ function main(argv) {
   const stubPath = path.join(stubBin, "claude");
   fs.copyFileSync(path.join(__dirname, "synthetic-client.cjs"), stubPath);
   fs.chmodSync(stubPath, 0o755);
+
+  await waitForFixtureReadiness(inputsDir);
 
   harness.init([
     "--artifact", pinned.artifact,
@@ -100,17 +133,16 @@ function main(argv) {
 }
 
 if (require.main === module) {
-  try {
-    const written = main(process.argv.slice(2));
+  Promise.resolve().then(() => main(process.argv.slice(2))).then((written) => {
     process.stdout.write(`\nSYNTHETIC pack root: ${written}\n`);
-  } catch (error) {
+  }).catch((error) => {
     if (error instanceof harness.HarnessError) {
       process.stderr.write(`REFUSE ${error.code}: ${error.message}\n`);
       process.exit(1);
     }
     process.stderr.write(`synthetic-run failed: ${error.stack}\n`);
     process.exit(1);
-  }
+  });
 }
 
 module.exports = { main };
