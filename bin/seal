@@ -333,8 +333,8 @@ async function verify(receiptPath) {
   // than crash it through the kernel verifier as an "unrecognized" schema.
   if (parsed && parsed.receipt === "seal.spine/v1") {
     console.error(`seal: spine_receipt_use_separate_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
-    console.error(`Download seal-receipt-check.mjs from the same release page as the install artifact and check its digest in that release SHA256SUMS before running it; that digest is not covered by the artifact's digest.`);
-    console.error(`Then: node seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
+    console.error(`This installed payload does not include checker/seal-receipt-check.mjs. Clone https://github.com/velvetmonkey/seal and run the checker from that source checkout.`);
+    console.error(`Then, from the checkout root: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
     process.exitCode = 2;
     return;
   }

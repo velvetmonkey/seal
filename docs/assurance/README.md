@@ -56,8 +56,9 @@ the Node CLI this repository ships.
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
 5. [checker/seal-receipt-check.mjs](../../checker/seal-receipt-check.mjs) — the
-   receipt checker included in the published release payload. It is not an
-   independent check of that payload.
+   receipt checker in the source checkout, not in the current installed
+   payload. Clone the [Seal source repository](https://github.com/velvetmonkey/seal)
+   to obtain it.
    It imports no Seal module at check time, but copies the producer's
    canonicalisation rule and uses the same Node crypto platform; read what
    that does and does not establish.
