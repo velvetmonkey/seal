@@ -1,5 +1,19 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
+/*
+ * SCOPE: INJECTED claim-coverage relationship check.
+ * WHAT IT ESTABLISHES: the covering file references the covered file by path,
+ * or shares a specific literal with it, so a declaration cannot name a wholly
+ * unrelated file.
+ * WHAT IT DOES NOT ESTABLISH: that the covering file actually TESTS the claim.
+ * It does not trace runtime dataflow, it does not check that an assertion runs,
+ * and it does not judge whether a claim is true.
+ * KNOWN GAPS: one exact-path reference in a comment passes; one unused shared
+ * string of sixteen characters or more passes; a dead path reference passes; a
+ * copied true literal passes.
+ * WHY IT IS ACCEPTED: the residual forgery requires deliberate effort. The
+ * cold frisk recorded `accidental no`.
+ */
 // Family claim-surface accounting. This names uncovered prose as debt; it
 // does not pretend the debt is covered.
 import fs from "node:fs";
@@ -174,7 +188,7 @@ function main() {
   if (stale.length) console.error(`FAIL allowlist names covered or absent files: ${stale.join(", ")}`);
   if (staleGaps.length) console.error(`FAIL declared gaps name covered or absent files: ${staleGaps.join(", ")}`);
   if (missing.length || stale.length || staleGaps.length) process.exitCode = 1;
-  else console.log("PASS every uncovered claim-bearing file is explicitly allowlisted or declared as a gap");
+  else console.log("PASS relationship checked; not a claim test");
 }
 
 main();
