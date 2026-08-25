@@ -47,7 +47,7 @@ function parse(text) {
 }
 
 function normalize(text, home) {
-  return text.replaceAll("\\r", "").replaceAll(home, "<HOME>").replaceAll("/tmp/", "<TMP>/");
+  return text.replaceAll("\\r", "").replaceAll("/home/you", home).replaceAll(home, "<HOME>").replaceAll("/tmp/", "<TMP>/");
 }
 
 function removeWritableTree(path) {
@@ -80,9 +80,14 @@ if (commands.length === 0) {
   fail("README contains no bash command fences");
   process.exit(1);
 }
-for (const fence of fences.filter((item) => item.role === "command" || item.role === "output")) {
+for (const fence of commands) {
+  if (/\/home\//.test(fence.body)) {
+    fail(`README.md:${fence.line} command fence contains /home/ absolute path`);
+  }
+}
+for (const fence of fences.filter((item) => item.role === "output")) {
   if (/\/home\/monkey\/scratch\//.test(fence.body)) {
-    fail(`README.md:${fence.line} ${fence.role} fence contains builder-local path /home/monkey/scratch/`);
+    fail(`README.md:${fence.line} output fence contains builder-local path /home/monkey/scratch/`);
   }
 }
 if (process.exitCode === 1) process.exit(1);

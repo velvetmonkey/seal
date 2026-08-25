@@ -10,6 +10,22 @@ Seal stops that call and asks you before the tool runs.
 
 One exact call. One approval. One use.
 
+## Before you start
+
+This is a clean-machine walkthrough for the published Linux x86-64 release.
+It keeps every command in the order a new reader needs to run it.
+
+Use a disposable project directory and a writable local tools directory.
+The walkthrough creates both and leaves your project `.mcp.json` unchanged.
+
+The commands fetch a release asset and verify its supplied digest and byte count.
+Compare those values with release information obtained through a separate channel.
+
+The demo is approve-once; Protect uses Claude Code's local override.
+Both leave local evidence you can inspect before removing the throw-away files.
+
+Keep the printed receipt paths until you have checked them.
+
 Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
 ```bash
@@ -31,19 +47,19 @@ Requires Node 20+. The published Seal v0.2.0-rc.2 release asset is Linux x86-64.
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.2 linux-x64
+store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+command: /home/you/.local/bin/seal
 tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 ```
 
 ## See it work
 
-The command supplies `y` to show the complete approve-once demonstration. Run
-`seal demo` interactively instead if you want to choose the response yourself.
+The command supplies `y` to show the complete approve-once demonstration; run `seal demo` interactively to choose the response yourself.
 
 ```bash
 printf 'y\n' | seal demo --dir ./seal-demo
 ```
-
-This is real output from that command (excerpted).
+This is real output from `seal demo` (excerpted).
 
 ```text
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
@@ -51,35 +67,36 @@ Approve? [y/N] child replied through the shared proxy: "demo server: appended 26
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
 ```
 
-The demo prints its temporary directory. Keep it if you want to check the
-blocked receipt.
-
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
 
-The installed development tree does not include `checker/seal-receipt-check.mjs`; clone the
-[Seal source repository](https://github.com/velvetmonkey/seal) to get it. The repository root has no hand-maintained `SHA256SUMS`.
+The installed release tree includes the receipt checker, while an installed
+development tree does not; clone the [Seal source repository](https://github.com/velvetmonkey/seal)
+to get it. The repository root has no hand-maintained `SHA256SUMS`.
 
 **macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.** Linux x86-64 is the supported Protect path; Windows and Linux ARM are unsupported.
 
 ## Protect something real
 
-Install Claude Code into your local tools directory, then check that it is
-available:
+Install Claude Code into your local tools directory:
 
 ```bash
 npm install --prefix "$HOME/.local" @anthropic-ai/claude-code
 export PATH="$HOME/.local/node_modules/.bin:$PATH"
+```
+
+First check that Claude Code is available:
+
+```bash
 claude --version
 ```
 
-In a [Claude Code project](docs/guide/choosing-what-to-protect.md), first make
-sure `.mcp.json` defines the stdio server and tool you want to gate. The
-following makes a small local project whose `db` server is Seal's demo server:
+In a [Claude Code project](docs/guide/choosing-what-to-protect.md), make `.mcp.json` define the stdio server and tool to gate. This makes a small local project whose `db` server is Seal's demo server:
 
 ```bash
 mkdir -p seal-protect-demo
 cd seal-protect-demo
+git init -q
 printf '%s\n' '{"mcpServers":{"db":{"command":"seal","args":["__demo-server","./data.txt"]}}}' > .mcp.json
 ```
 
@@ -95,28 +112,24 @@ Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```
 
 The command also prints a local `State:` path.
-Seal checks the requested name before recording it. It then asks Claude Code to
-install a private local override and leaves `.mcp.json` unchanged. Protect ends
-at `PENDING RESTART`, never `ACTIVE`. After restarting Claude Code, check it:
+Seal checks the requested name before recording it, asks Claude Code to install a private local override, and leaves `.mcp.json` unchanged. Protect ends at `PENDING RESTART`, never `ACTIVE`. After restarting Claude Code, check it:
 
 ```bash
 seal status
 ```
 
-`protect` reports tools that are not approval-gated, naming at most 20 and
-counting the rest. They still pass through Seal's forwarding checks. Claude Code
+`protect` reports tools that are not approval-gated, naming at most 20 and counting the rest. They still pass through Seal's forwarding checks. Claude Code
 writes `~/.claude.json` and a backup under `~/.claude/backups/`. Seal invokes
 Claude Code but writes neither file. If the server entry changes, or a named
-tool disappears at activation, Seal refuses forwarding or records `BROKEN`.
-`status` prints the runtime, current protection state, and receipt summary; after
-the command above it reports `PENDING RESTART db.demo.mutate` until Claude Code
-restarts. **Receipt privacy:** Receipts contain the complete parsed protected-tool arguments and child command metadata. Sharing a receipt shares those values.
+tool disappears at activation, Seal refuses forwarding or records `BROKEN`. `status` prints the runtime, current protection state, and receipt summary; after
+the command above it reports `PENDING RESTART db.demo.mutate` until Claude Code restarts. **Receipt privacy:** Receipts contain the complete parsed protected-tool arguments and child command metadata. Sharing a receipt shares those values.
 
 The protected path creates or reuses a machine-local signing key. The demo's key is generated fresh for that run. The checker accepts a receipt only with a
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
 trust. The demo prints a ready-to-run checker command for one of its receipts.
-To run the installed checker on the blocked receipt from the demo above:
+To run the installed checker on the blocked receipt from the demo above, use
+the trusted public key printed by the demo:
 
 ```bash
 checker="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
@@ -176,9 +189,7 @@ request, Seal runs it. Approval expiry follows the local wall clock.
 
 The decision program is bundled as WebAssembly. Its byte-pinned answer is
 required before forwarding. A failure or disagreement refuses; there is no
-JavaScript authorization fallback. Single-tool and multi-tool protection are
-TESTED across all six shared state classes, including three-tool observations
-of `BROKEN`, `DRIFTED`, `STALE`, and `UNPROTECTED` atomicity.
+JavaScript authorization fallback. Single-tool and multi-tool protection are TESTED across all six shared state classes, including three-tool observations of `BROKEN`, `DRIFTED`, `STALE`, and `UNPROTECTED` atomicity.
 
 Receipts are signed records, not evidence that an event happened. The checker
 uses the same Node crypto platform and cannot find a defect shared by its rule

@@ -48,3 +48,9 @@ test("an output path from the builder is not normalized away", () => {
   assert.match(result.stderr, /output fence contains builder-local path/);
   assert.match(result.stderr, /\/home\/monkey\/scratch\//);
 });
+
+test("a command fence with a /home absolute path fails before it runs", () => {
+  const result = run("```bash\nprintf '%s\\n' /home/monkey/not-a-reader-path\n```\n");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /command fence contains \/home\/ absolute path/);
+});
