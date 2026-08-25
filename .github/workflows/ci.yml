@@ -52,6 +52,14 @@ jobs:
 
   demo-receipt-provenance:
     name: demo receipt provenance
+    # Bootstrap window scope: a pre-release version whose release does not
+    # exist yet must be able to reach green CI, or no new version can ever be
+    # published. The window cannot distinguish a legitimate new version from
+    # a well-formed typo of one; both name a release that does not exist.
+    # Instead, this job checks the version's shape, that the repository
+    # resolves, that the tag is genuinely absent by HTTP 404, and that any
+    # release which does exist matches by name, digest, and byte count.
+    # State: INJECTED, not enforced.
     # This boundary depends on GitHub-operated infrastructure. Do not change
     # this to a self-hosted label: a runner controlled by the operator would
     # not provide the provenance this job documents.
@@ -60,6 +68,8 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      release_state: ${{ steps.produce_demo_receipt.outputs.release_state }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -89,6 +99,7 @@ jobs:
           node -e 'const response = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if (typeof response.value !== "string" || response.value.length === 0) process.exit(1)' "$oidc_response"
           rm -f "$oidc_response"
       - name: "Produce and check the demo receipt (UNVERIFIED if prerelease release is absent)"
+        id: produce_demo_receipt
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,6 +113,10 @@ jobs:
           git show "$GITHUB_SHA:VERSION" > "$committed_version"
           if ! cmp -s VERSION "$committed_version"; then
             echo "::error::RELEASE_PROVENANCE_VERSION_COMMIT_MISMATCH: VERSION is not byte-for-byte the VERSION committed at $GITHUB_SHA."
+            exit 1
+          fi
+          if ! node -e 'const text = require("node:fs").readFileSync("VERSION", "utf8"); if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)(?:\n)?$/.test(text)) process.exit(1)'; then
+            echo "::error file=VERSION,line=1::RELEASE_PROVENANCE_BOOTSTRAP_TAG_INVALID: VERSION line 1 must be exactly <major>.<minor>.<patch>-rc.<n>, each number must be 0 or start with 1-9, with no surrounding whitespace; one final LF is permitted."
             exit 1
           fi
           release_tag="v$(tr -d '\n' < VERSION)"
@@ -185,13 +200,10 @@ jobs:
               node scripts/readme-demo-transcript-guard.mjs
             cp "$allow_receipt" "$evidence_dir/demo-allow-receipt.json"
             cp "$demo_dir/receipt-signer.pub" "$evidence_dir/demo-receipt-signer.pub"
+            echo "release_state=verified" >> "$GITHUB_OUTPUT"
           else
             if [[ "$release_lookup_status" -ne 404 ]]; then
               echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY/releases/tags/$release_tag reported HTTP $release_lookup_status (command exit $release_lookup_command_status)."
-              exit 1
-            fi
-            if ! grep -qxE '[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+' VERSION; then
-              echo "::error::RELEASE_PROVENANCE_BOOTSTRAP_TAG_INVALID: VERSION must be exactly <major>.<minor>.<patch>-rc.<n>."
               exit 1
             fi
             if [[ "$release_tag" != *-rc.* ]]; then
@@ -207,6 +219,7 @@ jobs:
               echo "**NO RELEASE EXISTS FOR $release_tag. THIS RUN VERIFIED NOTHING about release assets or demo receipt provenance.**"
               echo "The bootstrap window applies only to pre-release tags containing -rc.; publishing remains gated by successful CI on this exact commit."
             } >> "$GITHUB_STEP_SUMMARY"
+            echo "release_state=unverified" >> "$GITHUB_OUTPUT"
           fi
           git show "$GITHUB_SHA:.github/workflows/ci.yml" > "$evidence_dir/recorded-workflow.yml"
           tar -C "$evidence_dir" -czf "$RUNNER_TEMP/demo-receipt-evidence.tgz" .
@@ -268,6 +281,15 @@ jobs:
           name: demo-receipt-provenance
           path: ${{ runner.temp }}/demo-receipt-evidence.tgz
           if-no-files-found: error
+
+  demo-receipt-provenance-unverified:
+    name: "UNVERIFIED: demo receipt provenance (release absent)"
+    needs: demo-receipt-provenance
+    if: ${{ needs.demo-receipt-provenance.outputs.release_state == 'unverified' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the bootstrap state in the check list
+        run: echo "No release exists for this well-formed pre-release version; CI verified no release assets or demo receipt provenance."
 
   # The collision gate reaches origin for release tags. It is one question
   # about one commit, so it is asked ONCE, in one job, off the product matrix.
