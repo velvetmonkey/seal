@@ -51,7 +51,7 @@ jobs:
           node scripts/check-installed-tree-pin-manifest-review.cjs --base "$base" --head "$head"
 
   demo-receipt-provenance:
-    name: demo receipt provenance — UNVERIFIED when prerelease release is absent
+    name: demo receipt provenance
     # This boundary depends on GitHub-operated infrastructure. Do not change
     # this to a self-hosted label: a runner controlled by the operator would
     # not provide the provenance this job documents.
@@ -98,6 +98,12 @@ jobs:
           demo_dir="$RUNNER_TEMP/seal-demo"
           release_dir="$RUNNER_TEMP/seal-release"
           install_prefix="$RUNNER_TEMP/seal-install"
+          committed_version="$RUNNER_TEMP/seal-committed-VERSION"
+          git show "$GITHUB_SHA:VERSION" > "$committed_version"
+          if ! cmp -s VERSION "$committed_version"; then
+            echo "::error::RELEASE_PROVENANCE_VERSION_COMMIT_MISMATCH: VERSION is not byte-for-byte the VERSION committed at $GITHUB_SHA."
+            exit 1
+          fi
           release_tag="v$(tr -d '\n' < VERSION)"
           artifact_name="seal-$release_tag-linux-x64"
           mkdir -p "$evidence_dir" "$release_dir"
@@ -182,6 +188,10 @@ jobs:
           else
             if [[ "$release_lookup_status" -ne 404 ]]; then
               echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh api --include repos/$GITHUB_REPOSITORY/releases/tags/$release_tag reported HTTP $release_lookup_status (command exit $release_lookup_command_status)."
+              exit 1
+            fi
+            if ! grep -qxE '[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+' VERSION; then
+              echo "::error::RELEASE_PROVENANCE_BOOTSTRAP_TAG_INVALID: VERSION must be exactly <major>.<minor>.<patch>-rc.<n>."
               exit 1
             fi
             if [[ "$release_tag" != *-rc.* ]]; then
