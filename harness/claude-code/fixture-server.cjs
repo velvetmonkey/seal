@@ -170,6 +170,12 @@ appendRecord({
   effect: { path: effectPath, ...digestOf(effectPath) },
 });
 
+// Test-only fault injection used to prove that an uninitializable protected
+// server still makes the evidence build refuse. It exits after the durable
+// start record so the parent can distinguish a real child failure from an
+// unobserved launch.
+if (process.env.SEAL_CC_FIXTURE_FAIL_INITIALIZE === "1") process.exit(86);
+
 let guardedCalls = 0;
 
 const input = readline.createInterface({ input: process.stdin, terminal: false });

@@ -866,7 +866,7 @@ function clientIdentity(env) {
 
 function init(argv) {
   requireLinuxX64();
-  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client-command", "synthetic-client", "stub-bin"]);
+  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client-command", "synthetic-client", "stub-bin", "protect-timeout-ms"]);
   for (const required of ["artifact", "sha256", "bytes", "run-dir"]) {
     if (!options[required]) refuse("usage", `cc-harness init needs --${required}`);
   }
@@ -886,6 +886,9 @@ function init(argv) {
   try { fs.accessSync(artifactPath, fs.constants.X_OK); }
   catch {
     refuse("artifact_not_executable", `${artifactPath} is not executable; the harness runs the artifact as its installer. Run: chmod u+x -- ${shellQuote(artifactPath)}`);
+  }
+  if (options["protect-timeout-ms"] && (!/^\d+$/.test(options["protect-timeout-ms"]) || Number(options["protect-timeout-ms"]) < 1)) {
+    refuse("usage", "--protect-timeout-ms requires a positive integer");
   }
 
   const paths = {
@@ -990,7 +993,10 @@ function init(argv) {
   fs.writeFileSync(path.join(paths.project, ".mcp.json"), mcpJson);
   state.project = { path: paths.project, mcp_json_before_protect: digestOf(path.join(paths.project, ".mcp.json")) };
 
-  const protect = run(state, path.join(paths.prefix, "bin", "seal"), ["protect", SERVER_NAME, GUARDED_TOOL]);
+  const protectArgs = ["protect"];
+  if (options["protect-timeout-ms"]) protectArgs.push("--timeout-ms", options["protect-timeout-ms"]);
+  protectArgs.push(SERVER_NAME, GUARDED_TOOL);
+  const protect = run(state, path.join(paths.prefix, "bin", "seal"), protectArgs);
   if (protect.code !== 0) refuse("protect_failed", `\`seal protect\` failed: ${(protect.stderr || protect.stdout).trim()}`);
   const stateLine = /^State: (.+)$/m.exec(protect.stdout);
   if (!stateLine) refuse("protect_state_unreported", "`seal protect` did not name the protection state file");

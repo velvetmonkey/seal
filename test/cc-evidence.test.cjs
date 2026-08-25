@@ -34,7 +34,7 @@ function pack() {
   if (sharedPack) return sharedPack;
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-evidence-"));
   const runDir = path.join(workspace, "run");
-  const built = spawnSync(process.execPath, [SYNTHETIC_RUN, "--run-dir", runDir], { encoding: "utf8" });
+  const built = spawnSync(process.execPath, [SYNTHETIC_RUN, "--run-dir", runDir, "--protect-timeout-ms", "30000"], { encoding: "utf8" });
   assert.equal(built.status, 0, `synthetic run failed:\n${built.stdout}\n${built.stderr}`);
   const evidence = path.join(runDir, "pack", "evidence");
   const client = fs.readdirSync(path.join(evidence, "claude-code"))[0];

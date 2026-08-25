@@ -81,6 +81,7 @@ function main(argv) {
     "--stub-bin", stubBin,
     "--synthetic-client",
     "--client-command", stubPath,
+    ...(options["protect-timeout-ms"] ? ["--protect-timeout-ms", options["protect-timeout-ms"]] : []),
   ]);
 
   for (const name of ["activation", "decline", "accept", "missing_launcher", "unprotect", "finish"]) {
