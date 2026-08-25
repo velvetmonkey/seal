@@ -52,14 +52,11 @@ jobs:
 
   demo-receipt-provenance:
     name: demo receipt provenance
-    # Bootstrap window scope: a pre-release version whose release does not
-    # exist yet must be able to reach green CI, or no new version can ever be
-    # published. The window cannot distinguish a legitimate new version from
-    # a well-formed typo of one; both name a release that does not exist.
-    # Instead, this job checks the version's shape, that the repository
-    # resolves, that the tag is genuinely absent by HTTP 404, and that any
-    # release which does exist matches by name, digest, and byte count.
-    # State: INJECTED, not enforced.
+    # The row named "UNVERIFIED: demo receipt provenance (release absent)" is
+    # present in both states: it succeeds when the release is genuinely absent
+    # and nothing was verified. It is skipped when the release exists and was
+    # verified for real, so the row's conclusion carries the meaning, not its
+    # presence.
     # This boundary depends on GitHub-operated infrastructure. Do not change
     # this to a self-hosted label: a runner controlled by the operator would
     # not provide the provenance this job documents.
@@ -115,8 +112,8 @@ jobs:
             echo "::error::RELEASE_PROVENANCE_VERSION_COMMIT_MISMATCH: VERSION is not byte-for-byte the VERSION committed at $GITHUB_SHA."
             exit 1
           fi
-          if ! node -e 'const text = require("node:fs").readFileSync("VERSION", "utf8"); if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)(?:\n)?$/.test(text)) process.exit(1)'; then
-            echo "::error file=VERSION,line=1::RELEASE_PROVENANCE_BOOTSTRAP_TAG_INVALID: VERSION line 1 must be exactly <major>.<minor>.<patch>-rc.<n>, each number must be 0 or start with 1-9, with no surrounding whitespace; one final LF is permitted."
+          if ! node -e 'const text = require("node:fs").readFileSync("VERSION", "utf8"); if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.([1-9][0-9]*)(?:\n)?$/.test(text)) process.exit(1)'; then
+            echo "::error file=VERSION,line=1::RELEASE_PROVENANCE_BOOTSTRAP_TAG_INVALID: VERSION line 1 must be exactly <major>.<minor>.<patch>-rc.<n>, major/minor/patch must be 0 or start with 1-9, and rc must be 1 or greater; no surrounding whitespace; one final LF is permitted."
             exit 1
           fi
           release_tag="v$(tr -d '\n' < VERSION)"
