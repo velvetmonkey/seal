@@ -144,13 +144,9 @@ receipt="$(find ../seal-demo/receipts -name '*BLOCK.json' -print -quit)"
 node "$checker" "$receipt" --pubkey ../seal-demo/receipt-signer.pub
 ```
 
-If the installed tree does not contain the checker, clone the source repository
-and substitute the receipt and public-key paths printed by your demo:
-
-```bash
-git clone https://github.com/velvetmonkey/seal.git && cd seal
-node checker/seal-receipt-check.mjs /path/to/receipt.json --pubkey /path/to/receipt-signer.pub
-```
+If the installed development tree does not contain the checker, use the
+[Seal source repository](https://github.com/velvetmonkey/seal) and substitute
+the receipt and public-key paths printed by your demo.
 
 ## Remove it
 
