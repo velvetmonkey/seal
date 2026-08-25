@@ -205,10 +205,10 @@ test("seal verify recognizes a self-contained real spine receipt and routes to t
   // Recognized coherently, not crashed as an unknown schema.
   assert.notEqual(result.code, 0, result.out);
   assert.match(result.out, /spine_receipt_use_separate_checker/);
-  assert.match(result.out, /Download seal-receipt-check\.mjs from the same release page/);
-  assert.match(result.out, /check its digest in that release SHA256SUMS before running it/);
-  assert.match(result.out, /node seal-receipt-check\.mjs/);
-  assert.doesNotMatch(result.out, /checker\/seal-receipt-check\.mjs/, "verify must not point at a checker path inside the install store");
+  assert.match(result.out, /This installed payload does not include checker\/seal-receipt-check\.mjs/);
+  assert.match(result.out, /Clone https:\/\/github\.com\/velvetmonkey\/seal and run the checker from that source checkout/);
+  assert.match(result.out, /from the checkout root: node checker\/seal-receipt-check\.mjs/i);
+  assert.doesNotMatch(result.out, /same release page/, "verify must not promise an unpublished release asset");
   // The old bug: verify treated a real product receipt as an unrecognized kernel receipt.
   assert.doesNotMatch(result.out, /unrecognized|no recognized version discriminator|verdict: undefined/);
 });

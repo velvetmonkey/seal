@@ -76,11 +76,11 @@ test("the scope witness: the direct write happened and the proxy emitted zero de
   assert.match(run.out, /a gate, not a sandbox/);
   assert.match(
     run.out,
-    /receipts are claims, not proofs\. Check one with the separate-process checker \(V11-RECEIPT-01\)\. Download seal-receipt-check\.mjs from the same release page as the install artifact and check its digest in that release SHA256SUMS before running it; that digest is not covered by the artifact's digest\. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform\. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished\. It cannot detect a defect shared by that rule or platform\./,
-    "demo must state the runtime/process boundary, copied canonicalisation and shared crypto limit, and that the checker is published beside the artifact with its own digest",
+    /receipts are claims, not proofs\. Check one with the separate-process checker \(V11-RECEIPT-01\)\. This installed payload does not include checker\/seal-receipt-check\.mjs\. Clone https:\/\/github\.com\/velvetmonkey\/seal and run the checker from that source checkout\. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform\. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished\. It cannot detect a defect shared by that rule or platform\./,
+    "demo must state the runtime/process boundary, copied canonicalisation and shared crypto limit, and the source-checkout acquisition path",
   );
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
-  assert.doesNotMatch(run.out, /checker\/seal-receipt-check\.mjs/, "demo must not point at a checker path inside the install store");
+  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-check\.mjs/, "demo must name the checker path inside the cloned source checkout"); assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
   assert.match(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must name the online browser instrument beside the checker command");
   assert.match(run.out, /does not establish that this setup routes calls through Seal/, "demo must state the online page's setup limit");
 

@@ -162,9 +162,9 @@ whole meaning of the check:
 - The key must come from a source you already trust, not from beside the
   receipt. Checking a receipt against the sealer's own key (as the demo does)
   proves only self-consistency — a hostile sealer could sign its own.
-- The published release includes the checker in its payload, so it is not an
-  independent check of that payload. A source build excludes it; use the
-  checkout copy for that secondary path.
+- The current installed payload does not include the checker. Clone the
+  [Seal source repository](https://github.com/velvetmonkey/seal) and use
+  `checker/seal-receipt-check.mjs` from that checkout.
 - The checker is runtime-separate, not implementation-independent: it copies
   the producer's canonicalisation rule and shares the Node crypto platform.
   It cannot expose a defect common to those parts.
