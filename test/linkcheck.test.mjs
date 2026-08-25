@@ -171,22 +171,23 @@ test("population changes and high-water decisions stay explicit without running 
     { internalOccurrences: 407, externalOccurrences: 50 },
   );
   const recorded = {
-    internalOccurrences: 407,
+    internalOccurrences: 2,
     externalOccurrences: 50,
-    internalOccurrencesHighWaterMark: 407,
+    internalOccurrencesHighWaterMark: 2,
     externalOccurrencesHighWaterMark: 50,
-    fileOccurrences: {},
-    fileOccurrencesHighWaterMarks: {},
+    fileOccurrences: { "page.md": { internalOccurrences: 2, externalOccurrences: 0 } },
+    fileOccurrencesHighWaterMarks: { "page.md": { internalOccurrences: 2, externalOccurrences: 0 } },
     shrinkHistory: [],
   };
   const accepted = populationDecision(recorded, {
-    internalOccurrences: 406,
+    internalOccurrences: 1,
     externalOccurrences: 50,
-    fileOccurrences: {},
-  }, { allowShrink: true, date: "2026-08-24" });
+    fileOccurrences: { "page.md": { internalOccurrences: 1, externalOccurrences: 0 } },
+  }, { allowShrinkFiles: ["page.md"], date: "2026-08-24" });
   const sequential = populationDecision(accepted.population, {
-    internalOccurrences: 406,
+    internalOccurrences: 1,
     externalOccurrences: 50,
+    fileOccurrences: { "page.md": { internalOccurrences: 1, externalOccurrences: 0 } },
   });
   assert(
     JSON.stringify(mixed) === JSON.stringify([
@@ -195,26 +196,27 @@ test("population changes and high-water decisions stay explicit without running 
     ])
       && equal.every(({ difference }) => difference === 0)
       && JSON.stringify(accepted.population) === JSON.stringify({
-        internalOccurrences: 406,
+        internalOccurrences: 1,
         externalOccurrences: 50,
-        fileOccurrences: {},
-        internalOccurrencesHighWaterMark: 407,
+        fileOccurrences: { "page.md": { internalOccurrences: 1, externalOccurrences: 0 } },
+        internalOccurrencesHighWaterMark: 2,
         externalOccurrencesHighWaterMark: 50,
-        fileOccurrencesHighWaterMarks: {},
+        fileOccurrencesHighWaterMarks: { "page.md": { internalOccurrences: 2, externalOccurrences: 0 } },
         shrinkHistory: [{
           date: "2026-08-24",
-          oldCounts: { internalOccurrences: 407, externalOccurrences: 50 },
-          newCounts: { internalOccurrences: 406, externalOccurrences: 50 },
+          oldCounts: { internalOccurrences: 2, externalOccurrences: 50 },
+          newCounts: { internalOccurrences: 1, externalOccurrences: 50 },
         }],
       })
       && sequential.population === null
       && JSON.stringify(sequential.shrinks) === JSON.stringify([{
+        file: "page.md",
         key: "internalOccurrences",
-        oldCount: 407,
-        newCount: 406,
+        oldCount: 2,
+        newCount: 1,
         difference: -1,
       }]),
-    "population changes must preserve differences, retain the high-water floor, record consent, and refuse a later unflagged lowered write",
+    "the one union rule must retain a named shrink floor and refuse a later unflagged lowered write",
   );
 });
 

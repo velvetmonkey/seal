@@ -8,7 +8,6 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import recordedPopulation from "../test/support/linkcheck-population.mjs";
 
 const require = createRequire(import.meta.url);
 const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
@@ -193,24 +192,7 @@ export function populationChanges(oldPopulation, newPopulation) {
   }));
 }
 
-function filePopulationChanges(oldPopulation, newPopulation) {
-  const oldCounts = oldPopulation.fileOccurrencesHighWaterMarks ?? oldPopulation.fileOccurrences ?? {};
-  const currentCounts = oldPopulation.fileOccurrences ?? {};
-  const newCounts = newPopulation.fileOccurrences ?? {};
-  const files = [...new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)])].sort();
-  return files.flatMap((file) => FILE_COUNT_KEYS.map((key) => ({
-    file,
-    key,
-    oldCount: currentCounts[file]?.[key] ?? 0,
-    newCount: newCounts[file]?.[key] ?? 0,
-    difference: (newCounts[file]?.[key] ?? 0) === (currentCounts[file]?.[key] ?? 0)
-      ? 0
-      : (newCounts[file]?.[key] ?? 0) - (oldCounts[file]?.[key] ?? 0),
-  })));
-}
-
-function duplicateHighWaterMarkKeys(source) {
-  const marker = "fileOccurrencesHighWaterMarks:";
+function duplicateObjectKeys(source, marker) {
   const markerIndex = source.indexOf(marker);
   if (markerIndex < 0) return [];
   const open = source.indexOf("{", markerIndex + marker.length);
@@ -256,66 +238,64 @@ function duplicateHighWaterMarkKeys(source) {
   return keys;
 }
 
-function validateFileHighWaterMarks(population, currentPopulation, source, { allowShrink = false } = {}) {
-  const marks = population.fileOccurrencesHighWaterMarks;
-  const duplicateKeys = duplicateHighWaterMarkKeys(source);
-  if (duplicateKeys.length) {
-    throw new Error(`duplicate key in fileOccurrencesHighWaterMarks: ${duplicateKeys[0]}`);
-  }
-  const recordedFiles = population.fileOccurrences ?? {};
-  const countedFiles = currentPopulation.fileOccurrences ?? {};
-  for (const file of Object.keys(marks)) {
-    // A recorded path remains part of the required set while it is being
-    // checked, even if the mutation removed its last link or renamed it.
-    // Only a path absent from both populations is a stranger key; a path
-    // absent from the recorded population is genuinely new.
-    if (!Object.hasOwn(recordedFiles, file) && !Object.hasOwn(countedFiles, file)) {
-      throw new Error(`stranger key in fileOccurrencesHighWaterMarks: ${file}`);
-    }
-  }
-  for (const [file, occurrences] of Object.entries(marks)) {
+function validateOccurrenceMap(map, name) {
+  for (const [file, occurrences] of Object.entries(map)) {
     if (!occurrences || typeof occurrences !== "object" || Array.isArray(occurrences)) {
-      throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file}: expected an object`);
+      throw new Error(`bad value in ${name} for ${file}: expected an object`);
     }
     for (const key of FILE_COUNT_KEYS) {
       const value = occurrences[key];
       if (!Number.isSafeInteger(value) || value < 0) {
-        throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file} ${key}: ${String(value)}`);
+        throw new Error(`bad value in ${name} for ${file} ${key}: ${String(value)}`);
       }
     }
     const unexpectedKeys = Object.keys(occurrences).filter((key) => !FILE_COUNT_KEYS.includes(key));
     if (unexpectedKeys.length) {
-      throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file}: unexpected key ${unexpectedKeys[0]}`);
-    }
-  }
-  for (const [file, occurrences] of Object.entries(recordedFiles)) {
-    // This is deliberately based on the recorded population. A recorded
-    // link-bearing file remains required when its new count is zero or the
-    // path disappeared; otherwise a last-link removal or rename could hide a
-    // missing key behind the new-file exception.
-    const currentOccurrences = countedFiles[file]?.internalOccurrences ?? 0;
-    if (occurrences.internalOccurrences > 0 && currentOccurrences === 0 &&
-        !allowShrink && !Object.hasOwn(marks, file)) {
-      throw new Error(`incomplete fileOccurrencesHighWaterMarks: missing link-bearing file ${file}`);
+      throw new Error(`bad value in ${name} for ${file}: unexpected key ${unexpectedKeys[0]}`);
     }
   }
 }
 
-export function populationDecision(oldPopulation, newPopulation, { allowShrink = false, date = new Date().toISOString().slice(0, 10) } = {}) {
+function validateFileHighWaterMarks(population, currentPopulation) {
+  const marks = population.fileOccurrencesHighWaterMarks;
+  const recordedFiles = population.fileOccurrences ?? {};
+  const countedFiles = currentPopulation.fileOccurrences ?? {};
+  validateOccurrenceMap(recordedFiles, "fileOccurrences");
+  validateOccurrenceMap(marks, "fileOccurrencesHighWaterMarks");
+  for (const file of Object.keys(recordedFiles)) {
+    if (!Object.hasOwn(marks, file)) {
+      throw new Error(`incomplete fileOccurrencesHighWaterMarks: missing recorded file ${file}`);
+    }
+  }
+  for (const file of Object.keys(marks)) {
+    if (!Object.hasOwn(recordedFiles, file) && !Object.hasOwn(countedFiles, file)) {
+      throw new Error(`stranger key in fileOccurrencesHighWaterMarks: ${file}`);
+    }
+  }
+}
+
+export function populationDecision(oldPopulation, newPopulation, { allowShrinkFiles = [], date = new Date().toISOString().slice(0, 10) } = {}) {
+  const authorizedFiles = new Set(allowShrinkFiles);
   const currentShrinks = populationChanges(oldPopulation, newPopulation).filter(({ difference }) => difference < 0);
-  const highWaterChanges = POPULATION_KEYS.map((key) => ({
-    key,
-    oldCount: oldPopulation[HIGH_WATER_KEYS[key]],
-    newCount: newPopulation[key],
-    difference: newPopulation[key] - oldPopulation[HIGH_WATER_KEYS[key]],
+  const recordedCounts = oldPopulation.fileOccurrencesHighWaterMarks;
+  const newCounts = newPopulation.fileOccurrences ?? {};
+  const files = [...new Set([...Object.keys(recordedCounts), ...Object.keys(newCounts)])].sort();
+  const shrinks = files.flatMap((file) => FILE_COUNT_KEYS.flatMap((key) => {
+    const oldCount = recordedCounts[file]?.[key] ?? 0;
+    const newCount = newCounts[file]?.[key] ?? 0;
+    const difference = newCount - oldCount;
+    return difference < 0 ? [{ file, key, oldCount, newCount, difference }] : [];
   }));
-  const shrinks = [
-    ...highWaterChanges.filter(({ difference }) => difference < 0),
-    ...filePopulationChanges(oldPopulation, newPopulation).filter(({ difference }) => difference < 0),
-  ];
-  if (shrinks.length && !allowShrink) return { population: null, shrinks };
+  const shrinkingFiles = new Set(shrinks.map(({ file }) => file));
+  const unauthorizedShrinks = shrinks.filter(({ file }) => !authorizedFiles.has(file));
+  const unusedAuthorizations = [...authorizedFiles].filter((file) => !shrinkingFiles.has(file)).sort();
+  if (unauthorizedShrinks.length || unusedAuthorizations.length) {
+    return { population: null, shrinks, unauthorizedShrinks, unusedAuthorizations };
+  }
   return {
     shrinks,
+    unauthorizedShrinks: [],
+    unusedAuthorizations: [],
     population: {
       ...newPopulation,
       ...Object.fromEntries(POPULATION_KEYS.map((key) => [
@@ -323,13 +303,10 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
         Math.max(oldPopulation[HIGH_WATER_KEYS[key]], newPopulation[key]),
       ])),
       fileOccurrencesHighWaterMarks: Object.fromEntries(
-        Object.keys(newPopulation.fileOccurrences ?? {}).sort()
-          .filter((file) => !(allowShrink &&
-            (oldPopulation.fileOccurrences?.[file]?.internalOccurrences ?? 0) > 0 &&
-            (newPopulation.fileOccurrences?.[file]?.internalOccurrences ?? 0) === 0))
+        files
+          .filter((file) => Object.hasOwn(newCounts, file))
           .map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
-            key,
-            Math.max(oldPopulation.fileOccurrencesHighWaterMarks?.[file]?.[key] ?? 0, newPopulation.fileOccurrences?.[file]?.[key] ?? 0),
+            key, Math.max(recordedCounts[file]?.[key] ?? 0, newCounts[file]?.[key] ?? 0),
           ]))]),
       ),
       shrinkHistory: currentShrinks.length ? [
@@ -344,8 +321,19 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
   };
 }
 
-function committedPopulation() {
+async function committedPopulation() {
   const source = readFileSync(POPULATION_FILE, "utf8");
+  for (const marker of ["fileOccurrences:", "fileOccurrencesHighWaterMarks:"]) {
+    const duplicateKeys = duplicateObjectKeys(source, marker);
+    if (duplicateKeys.length) {
+      throw new Error(`duplicate key in ${marker.slice(0, -1)}: ${duplicateKeys[0]}`);
+    }
+  }
+  const imported = await import(`${pathToFileURL(POPULATION_FILE).href}?linkcheck=${Date.now()}`);
+  const recordedPopulation = imported.default;
+  if (!recordedPopulation || typeof recordedPopulation !== "object" || Array.isArray(recordedPopulation)) {
+    throw new Error("invalid population record: expected an object");
+  }
   const population = {};
   for (const key of POPULATION_KEYS) {
     const highWaterKey = HIGH_WATER_KEYS[key];
@@ -359,7 +347,8 @@ function committedPopulation() {
     population[highWaterKey] = recordedPopulation[highWaterKey];
   }
   if (recordedPopulation.fileOccurrences !== undefined &&
-      (!recordedPopulation.fileOccurrences || typeof recordedPopulation.fileOccurrences !== "object")) {
+      (!recordedPopulation.fileOccurrences || typeof recordedPopulation.fileOccurrences !== "object" ||
+       Array.isArray(recordedPopulation.fileOccurrences))) {
     throw new Error("invalid fileOccurrences: must be an object");
   }
   if (!Object.hasOwn(recordedPopulation, "fileOccurrencesHighWaterMarks")) {
@@ -375,6 +364,9 @@ function committedPopulation() {
   population.fileOccurrencesHighWaterMarks = recordedPopulation.fileOccurrencesHighWaterMarks;
   if (!Array.isArray(recordedPopulation.shrinkHistory)) throw new Error("invalid shrinkHistory: must be an array");
   population.shrinkHistory = recordedPopulation.shrinkHistory;
+  if (populationSource(population) !== source) {
+    throw new Error("population record is not canonical; comments, duplicate keys, or hand edits are not accepted");
+  }
   return { population, source };
 }
 
@@ -384,7 +376,7 @@ function describeChanges(changes) {
   ).join("; ");
 }
 
-async function main({ sourceRoot = ROOT, write = false, allowShrink = false } = {}) {
+async function main({ sourceRoot = ROOT, write = false, allowShrinkFiles = [] } = {}) {
   bad = 0;
   checked = 0;
   externalLinks = 0;
@@ -411,13 +403,13 @@ async function main({ sourceRoot = ROOT, write = false, allowShrink = false } = 
     }
   }
   try {
-    return await measure({ sourceRoot, sourceFiles, write, allowShrink });
+    return await measure({ sourceRoot, sourceFiles, write, allowShrinkFiles });
   } finally {
     cleanupFamilyTree();
   }
 }
 
-async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
+async function measure({ sourceRoot, sourceFiles, write, allowShrinkFiles }) {
   const roots = familyRoots(sourceRoot);
   const files = [...new Set(["README.md", ...sourceFiles.filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
   const dataFiles = sourceFiles.filter((f) =>
@@ -491,7 +483,7 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
   if (write) {
     let oldPopulation, oldSource;
     try {
-      ({ population: oldPopulation, source: oldSource } = committedPopulation());
+      ({ population: oldPopulation, source: oldSource } = await committedPopulation());
     } catch (error) {
       console.error(`REFUSE link-check population unreadable: ${POPULATION_FILE}: ${error.message}`);
       return 1;
@@ -502,15 +494,20 @@ async function measure({ sourceRoot, sourceFiles, write, allowShrink }) {
       fileOccurrences,
     };
     try {
-      validateFileHighWaterMarks(oldPopulation, newPopulation, oldSource, { allowShrink });
+      validateFileHighWaterMarks(oldPopulation, newPopulation);
     } catch (error) {
       console.error(`REFUSE link-check population record: ${error.message}`);
       return 1;
     }
-    const decision = populationDecision(oldPopulation, newPopulation, { allowShrink });
+    const decision = populationDecision(oldPopulation, newPopulation, { allowShrinkFiles });
     if (!decision.population) {
-      const { shrinks } = decision;
-      console.error(`REFUSE link-check population below high-water mark: ${describeChanges(shrinks)}; rerun with --write --allow-shrink to accept a legitimate deletion`);
+      const { shrinks, unauthorizedShrinks, unusedAuthorizations } = decision;
+      if (unauthorizedShrinks.length) {
+        console.error(`REFUSE link-check population below recorded per-file count: ${describeChanges(unauthorizedShrinks)}; rerun with --write --allow-shrink FILE for each legitimate deletion`);
+      }
+      if (unusedAuthorizations.length) {
+        console.error(`REFUSE unused --allow-shrink authorization: ${unusedAuthorizations.join(", ")} did not shrink`);
+      }
       return 1;
     }
     const { population: acceptedPopulation, shrinks } = decision;
@@ -532,20 +529,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const args = process.argv.slice(2);
   let sourceRoot = ROOT;
   let write = false;
-  let allowShrink = false;
+  const allowShrinkFiles = [];
   while (args.length) {
     const arg = args.shift();
     if (arg === "--write") write = true;
-    else if (arg === "--allow-shrink") allowShrink = true;
+    else if (arg === "--allow-shrink" && args.length && !args[0].startsWith("--")) allowShrinkFiles.push(args.shift());
+    else if (arg === "--allow-shrink") {
+      console.error("usage: --allow-shrink requires a file name");
+      process.exit(2);
+    }
     else if (arg === "--root" && args.length) sourceRoot = resolve(args.shift());
     else {
-      console.error("usage: node scripts/linkcheck.mjs [--write [--allow-shrink]] [--root PATH]");
+      console.error("usage: node scripts/linkcheck.mjs [--write [--allow-shrink FILE ...]] [--root PATH]");
       process.exit(2);
     }
   }
-  if (allowShrink && !write) {
+  if (allowShrinkFiles.length && !write) {
     console.error("usage: --allow-shrink requires --write");
     process.exit(2);
   }
-  process.exit(await main({ sourceRoot, write, allowShrink }));
+  process.exit(await main({ sourceRoot, write, allowShrinkFiles }));
 }
