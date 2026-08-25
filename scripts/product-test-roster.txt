@@ -10,6 +10,7 @@ test/claim-bearing-file-inventory.test.mjs
 test/claim-coverage-inventory.test.mjs
 test/claims-drift-family.test.mjs
 test/claims-drift.test.mjs
+test/container-check.test.cjs
 test/coldwalk-fixes.test.cjs
 test/coldwalk-polish.test.cjs
 test/demo-receipts-store.test.cjs
