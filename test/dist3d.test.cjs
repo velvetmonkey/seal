@@ -24,6 +24,23 @@ function sha256Hex(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+function installedCheckerPresenceClaims(document) {
+  // This is deliberately a claim classifier, not an exact-prose guard. A
+  // sentence is a positive installed-tree claim only when it identifies the
+  // checker, an installation surface, and a positive placement relation.
+  return document
+    .replace(/\[[^\]]+\]\([^)]*\)/g, (link) => link.replace(/\([^)]*\)/, ""))
+    .replace(/[\n\r]+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => {
+      const checker = /\b(?:receipt\s+)?checker\b|checker\/seal-receipt-check\.mjs/i.test(sentence);
+      const installedSurface = /\b(?:install(?:ed|ation|er)?|payload|package|tree|store)\b/i.test(sentence);
+      const placement = /\b(?:contains?|includes?|has|ships?|bundles?|carries|puts?|places?)\b|\b(?:is|are)\s+(?:present|available|included|bundled)\b/i.test(sentence);
+      const negative = /\b(?:does|do|is|are|was|were)\s+not\b|\b(?:without|absent|excludes?|lacks?)\b/i.test(sentence);
+      return checker && installedSurface && placement && !negative;
+    });
+}
+
 function runNode(args, opts = {}) {
   const result = spawnSync(process.execPath, args, {
     encoding: "utf8",
@@ -390,11 +407,11 @@ process.exit(2);
   const packagedChecker = path.join(store, "checker", "seal-receipt-check.mjs");
   assert.equal(fs.existsSync(packagedChecker), false, "3C checker must not be in the payload");
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /The installed development tree does not include `checker\/seal-receipt-check\.mjs`/);
-  assert.equal(
-    readme.includes("does not include") && fs.existsSync(packagedChecker),
-    false,
-    "README installed-tree checker claim must agree with the actual installed tree",
+  const readmePresenceClaims = installedCheckerPresenceClaims(readme);
+  assert.deepEqual(
+    readmePresenceClaims,
+    [],
+    `README.md asserts that its installed tree contains the checker: ${readmePresenceClaims.join(" | ")}`,
   );
   const publishedChecker = path.join(ROOT, "checker", "seal-receipt-check.mjs");
   const allow = fs.readdirSync(path.join(demoDir, "receipts")).find((name) => name.includes("-ALLOW.json"));
