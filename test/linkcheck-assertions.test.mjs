@@ -15,7 +15,7 @@ const REQUIRED_ASSERTIONS = [
   ["linkcheck process success", "assert.equal(result.status, 0, result.stdout + result.stderr)"],
   ["reported target list", 'assert.ok(targetLine, "link checker must report the targets that actually reached check()")'],
   ["cross-check target equality", 'assert.deepEqual(scanned, expectedTargets(), "every reference-parsed live target must reach check()")'],
-  ["clean occurrence totals", "assert.match(result.stdout, new RegExp(`link-check: ${expectedPopulation.internalOccurrences} internal links, ${expectedPopulation.externalOccurrences} external links, 1 required live links, 0 broken`))"],
+  ["family-fixture occurrence totals", "assert.match(result.stdout, new RegExp(`link-check: ${expectedFamilyPopulation.familyInternalOccurrences} internal links, ${expectedFamilyPopulation.familyExternalOccurrences} external links, 1 required live links, 0 broken`))"],
   ["phantom P-pattern exclusion", "assert.doesNotMatch(result.stdout, /P-\\[A-Z\\]\\+/)"],
   ["tight path matcher", "assert.deepEqual([...contents.matchAll(pathString)].map((match) => match[1]), [])"],
   ["unknown-extension path matcher", '"docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt"'],

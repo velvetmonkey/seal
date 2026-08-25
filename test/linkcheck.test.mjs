@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { markdownDestinations } from "../scripts/linkcheck.mjs";
-import expectedPopulation from "./support/linkcheck-population.mjs";
+import expectedFamilyPopulation from "./support/linkcheck-population.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
@@ -135,7 +135,7 @@ test("clean CI family linkcheck exits 0 without reducing its scanned population 
     assert.ok(targetLine, "link checker must report the targets that actually reached check()");
     const scanned = JSON.parse(targetLine.slice("link-check-targets: ".length)).sort();
     assert.deepEqual(scanned, expectedTargets(), "every reference-parsed live target must reach check()");
-    assert.match(result.stdout, new RegExp(`link-check: ${expectedPopulation.internalOccurrences} internal links, ${expectedPopulation.externalOccurrences} external links, 1 required live links, 0 broken`));
+    assert.match(result.stdout, new RegExp(`link-check: ${expectedFamilyPopulation.familyInternalOccurrences} internal links, ${expectedFamilyPopulation.familyExternalOccurrences} external links, 1 required live links, 0 broken`));
     assert.doesNotMatch(result.stdout, /P-\[A-Z\]\+/);
   } finally {
     cleanup();
