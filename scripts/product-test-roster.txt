@@ -1,6 +1,5 @@
 test/approval-contract.test.cjs
 test/artifact-identity.test.cjs
-test/at-most-once-claim.test.cjs
 test/cc-evidence.test.cjs
 test/cc-fixture.test.cjs
 test/cc-harness-truth.test.cjs

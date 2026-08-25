@@ -2,7 +2,7 @@
 
 ## What Seal is
 
-Seal puts an approval gate in front of one selected tool of one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. ([README.md](../../README.md); [at-most-once claim test](../../test/at-most-once-claim.test.cjs); merged [abf6f5a](https://github.com/velvetmonkey/seal/commit/abf6f5a6a46eb15310b0cd10769504ac6ed05f62))
+Seal puts an approval gate in front of one selected tool of one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. ([README.md](../../README.md); [boundary-list test](../../test/limits-list.test.cjs); merged [abf6f5a](https://github.com/velvetmonkey/seal/commit/abf6f5a6a46eb15310b0cd10769504ac6ed05f62))
 
 The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths. ([approval-contract test](../../test/approval-contract.test.cjs); [retry-continuation test](../../test/spine-retry.test.cjs); merged [00176cd](https://github.com/velvetmonkey/seal/commit/00176cd88e8a20e50239342c05f2eafa3830520f) and [4228744](https://github.com/velvetmonkey/seal/commit/42287448e51f75f43250782faec59bcb23f1d7b8))
 

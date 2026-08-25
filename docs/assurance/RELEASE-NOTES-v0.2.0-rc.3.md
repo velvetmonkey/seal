@@ -2,7 +2,7 @@
 
 ## What Seal is
 
-Seal puts an approval gate in front of a named set of tools on one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. See `README.md`, `test/at-most-once-claim.test.cjs`, and `docs/reference/multi-tool-semantics.md`.
+Seal puts an approval gate in front of a named set of tools on one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. See `README.md`, `test/limits-list.test.cjs`, and `docs/reference/multi-tool-semantics.md`.
 
 The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths. See `test/approval-contract.test.cjs` and `test/spine-retry.test.cjs`.
 
