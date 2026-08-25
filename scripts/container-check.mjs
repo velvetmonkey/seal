@@ -58,9 +58,9 @@ function normalize(text, home) {
 
 function forbiddenHomePath(body) {
   const patterns = [
-    { name: "/home/ absolute path", regex: /\/home\/(?!you(?:\/|$))[^/\s`"'<>]+(?:\/|$)/ },
-    { name: "/Users/ absolute path", regex: /\/Users\/[^/\s`"'<>]+(?:\/|$)/ },
-    { name: "C:\\Users\\ absolute path", regex: /[A-Za-z]:\\Users\\[^\\\s`"'<>]+(?:\\|$)/ },
+    { name: "/home/ absolute path", regex: /\/home\/(?!you(?:\/|$))[^/\s`"'<>]+(?:\/|(?=$|[\s`"'<>;&|()]))/ },
+    { name: "/Users/ absolute path", regex: /\/Users\/[^/\s`"'<>]+(?:\/|(?=$|[\s`"'<>;&|()]))/ },
+    { name: "C:\\Users\\ absolute path", regex: /[A-Za-z]:\\Users\\[^\\\s`"'<>]+(?:\\|(?=$|[\s`"'<>;&|()]))/ },
   ];
   return patterns.find((pattern) => pattern.regex.test(body)) || null;
 }

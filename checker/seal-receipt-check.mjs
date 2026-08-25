@@ -37,6 +37,7 @@
 // "verified" as a bare adjective and it makes no claim beyond what it recomputed.
 
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { createHash, verify as edVerify, createPublicKey } from "node:crypto";
 
 const DOMAIN = "seal.receipt-seal/v1\n";
@@ -200,4 +201,4 @@ function main(argv) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv);

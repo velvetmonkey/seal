@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export function trackedFiles(root) {
   try {
@@ -123,7 +124,7 @@ export function enumerate(root = process.cwd()) {
   return sorted;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const rootFlag = process.argv.indexOf("--root");
   const root = rootFlag >= 0 ? resolve(process.argv[rootFlag + 1]) : process.cwd();
   try {

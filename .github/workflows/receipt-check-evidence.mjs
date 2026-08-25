@@ -63,7 +63,7 @@ async function check([checkerPath, receiptPath, pubkeyPath, challenge, resultPat
   const receiptBytes = readFileSync(receiptPath);
   const receipt = parseJson(receiptBytes, "receipt");
   const pubkey = readFileSync(pubkeyPath, "utf8").trim();
-  const { checkReceipt } = await import(pathToFileURL(checkerPath));
+  const { checkReceipt } = await import(pathToFileURL(checkerPath).href);
 
   let outcome = "accept";
   let code = "ok";

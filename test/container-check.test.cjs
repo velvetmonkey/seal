@@ -52,7 +52,10 @@ test("a command fence with an absolute home path fails before it runs", () => {
   for (const [pathText, diagnostic] of [
     ["/home/monkey/not-a-reader-path", /command fence contains \/home\/ absolute path/],
     ["/Users/reader/not-a-reader-path", /command fence contains \/Users\/ absolute path/],
+    ["C:\\Users\\reader\\not-a-reader-path", /command fence contains C:\\Users\\ absolute path/],
     ["'C:\\Users\\reader\\not-a-reader-path'", /command fence contains C:\\Users\\ absolute path/],
+    ['"C:\\Users\\reader\\not-a-reader-path"', /command fence contains C:\\Users\\ absolute path/],
+    ["TARGET='C:\\Users\\reader\\not-a-reader-path'", /command fence contains C:\\Users\\ absolute path/],
   ]) {
     const result = run(`\`\`\`bash\nprintf '%s\\n' ${pathText}\n\`\`\`\n`);
     assert.equal(result.status, 1, pathText);
