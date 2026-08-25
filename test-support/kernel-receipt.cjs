@@ -36,7 +36,7 @@ async function ensureRuntime(cacheRoot) {
 // Writes one ALLOW kernel receipt into dataHome/seal/receipts and returns its path.
 async function writeKernelReceipt(cacheRoot, dataHome) {
   const runtime = await ensureRuntime(cacheRoot);
-  const config = await import(pathToFileURL(path.join(runtime, "kernel/seal-config.js")));
+  const config = await import(pathToFileURL(path.join(runtime, "kernel/seal-config.js")).href);
   const runner = require(path.join(runtime, "kernel/runner.cjs"));
   const call = { tool: "db.execute", args: { database: "demo", sql: "drop table users" }, now: 1000 };
   const target = config.guardTarget(call.tool, call.args);
