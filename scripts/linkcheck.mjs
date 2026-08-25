@@ -3,6 +3,7 @@
 // Internal-link integrity check for the Seal landing repo: every relative
 // link/src in the docs must resolve to a file. Run: node scripts/linkcheck.mjs
 import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -25,41 +26,31 @@ function walk(dir, prefix = "") {
   }
   return out;
 }
-const FAMILY_ROOTS = new Map([
-  ["seal", process.env.FAMILY_SEAL_ROOT ?? ROOT],
-  ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? resolve(ROOT, ".family/seal-check")],
-  ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? resolve(ROOT, ".family/seal-demo")],
-  ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? resolve(ROOT, ".family/seal-live-demo")],
-  ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? resolve(ROOT, ".family/seal-verify-action")],
-  ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? resolve(ROOT, ".family/seal-assurance-kit")],
-  ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? resolve(ROOT, ".family/mcp-seal-dev")],
-]);
-
-function targetFor(file, link, rootRelative = false) {
+function targetFor(file, link, sourceRoot, roots, rootRelative = false) {
   const [family] = link.split("/", 1);
-  if (FAMILY_ROOTS.has(family)) {
+  if (roots.has(family)) {
     return {
       kind: family === "seal" ? "internal" : "external",
-      path: resolve(FAMILY_ROOTS.get(family), link.slice(family.length + 1)),
+      path: resolve(roots.get(family), link.slice(family.length + 1)),
     };
   }
-  return { kind: "internal", path: resolve(rootRelative ? ROOT : dirname(`${ROOT}/${file}`), link) };
+  return { kind: "internal", path: resolve(rootRelative ? sourceRoot : dirname(`${sourceRoot}/${file}`), link) };
 }
 
-function check(file, raw, rootRelative = false) {
+function countDestination(file, raw, sourceRoot, roots, counts, checkTargets, rootRelative = false) {
   let link = raw.trim();
   if (!link || link.startsWith("#") || link.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(link)) return;
-  scannedTargets.add(link);
+  if (checkTargets) scannedTargets.add(link);
   link = link.split("#")[0].split("?")[0];
   if (!link) return;
-  const target = targetFor(file, link, rootRelative);
+  const target = targetFor(file, link, sourceRoot, roots, rootRelative);
   if (target.kind === "external") {
-    externalLinks++;
-    if (!existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
+    counts.externalOccurrences++;
+    if (checkTargets && !existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
     return;
   }
-  checked++;
-  if (!existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); bad++; }
+  counts.internalOccurrences++;
+  if (checkTargets && !existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
 }
 
 function strings(value, out = []) {
@@ -108,37 +99,89 @@ function pathStrings(text) {
   return [...text.matchAll(pathString)].map((match) => match[1]);
 }
 
-let bad = 0, checked = 0, externalLinks = 0;
 const scannedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 
-async function main() {
-  bad = 0;
-  checked = 0;
-  externalLinks = 0;
-  scannedTargets.clear();
-
-  for (const f of files) {
-    const txt = readFileSync(`${ROOT}/${f}`, "utf8");
-    if (f.endsWith(".md")) {
-      for (const link of markdownDestinations(txt)) check(f, link);
-    } else {
-      for (const m of txt.matchAll(re)) check(f, m[1] || m[2] || "");
-    }
-  }
-
-  // Binding records use path:line proof references, not document links.
-  const dataFiles = walk(ROOT).filter((f) =>
+function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
+  const roots = new Map([
+    ["seal", sourceRoot],
+    ["seal-check", process.env.FAMILY_SEAL_CHECK_ROOT ?? resolve(sourceRoot, ".family/seal-check")],
+    ["seal-demo", process.env.FAMILY_SEAL_DEMO_ROOT ?? resolve(sourceRoot, ".family/seal-demo")],
+    ["seal-live-demo", process.env.FAMILY_SEAL_LIVE_DEMO_ROOT ?? resolve(sourceRoot, ".family/seal-live-demo")],
+    ["seal-verify-action", process.env.FAMILY_SEAL_VERIFY_ACTION_ROOT ?? resolve(sourceRoot, ".family/seal-verify-action")],
+    ["seal-assurance-kit", process.env.FAMILY_SEAL_ASSURANCE_KIT_ROOT ?? resolve(sourceRoot, ".family/seal-assurance-kit")],
+    ["mcp-seal-dev", process.env.FAMILY_MCP_SEAL_DEV_ROOT ?? resolve(sourceRoot, ".family/mcp-seal-dev")],
+  ]);
+  const files = [...new Set(["README.md", ...sourceFiles.filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
+  const dataFiles = sourceFiles.filter((f) =>
     f !== "scripts/mandatory-doc-claim-bindings.json"
       && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
   );
-  for (const f of dataFiles) {
-    const text = readFileSync(resolve(ROOT, f), "utf8");
-    const candidates = f.endsWith(".json") ? strings(JSON.parse(text)) : [text];
-    for (const candidate of candidates) {
-      for (const link of pathStrings(candidate)) check(f, link, true);
-    }
+  const counts = { internalOccurrences: 0, externalOccurrences: 0, bad: 0, files: {} };
+  for (const file of [...new Set([...files, ...dataFiles])].sort()) {
+    counts.files[file] = { internalOccurrences: 0, externalOccurrences: 0 };
   }
+  const count = (file, raw, rootRelative = false) => {
+    const beforeInternal = counts.internalOccurrences;
+    const beforeExternal = counts.externalOccurrences;
+    countDestination(file, raw, sourceRoot, roots, counts, checkTargets, rootRelative);
+    counts.files[file].internalOccurrences += counts.internalOccurrences - beforeInternal;
+    counts.files[file].externalOccurrences += counts.externalOccurrences - beforeExternal;
+  };
+  for (const file of files) {
+    const text = readText(file);
+    if (file.endsWith(".md")) for (const link of markdownDestinations(text)) count(file, link);
+    else for (const match of text.matchAll(re)) count(file, match[1] || match[2] || "");
+  }
+  for (const file of dataFiles) {
+    const text = readText(file);
+    const candidates = file.endsWith(".json") ? strings(JSON.parse(text)) : [text];
+    for (const candidate of candidates) for (const link of pathStrings(candidate)) count(file, link, true);
+  }
+  return counts;
+}
+
+function baselineTree(sourceRoot) {
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    return { base, files: new Set(names ? names.split("\n") : []) };
+  } catch {
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    return { base, files: new Set(names ? names.split("\n") : []) };
+  }
+}
+
+function compareToBaseline(sourceRoot, actual, currentFiles) {
+  const { base, files: baselineFiles } = baselineTree(sourceRoot);
+  const expectedFiles = [...currentFiles].filter((file) => baselineFiles.has(file));
+  const expectedSource = (file) => execFileSync("git", ["show", `${base}:${file}`], { cwd: sourceRoot, encoding: "utf8" });
+  const expected = countOccurrences({
+    sourceRoot,
+    sourceFiles: expectedFiles,
+    readText: expectedSource,
+    checkTargets: false,
+  });
+  const disagreements = Object.keys(expected.files).filter((file) => actual.files[file]).flatMap((file) => {
+    const oldCounts = expected.files[file];
+    const newCounts = actual.files[file];
+    return ["internalOccurrences", "externalOccurrences"].flatMap((key) =>
+      newCounts[key] < oldCounts[key] ? [`${file} ${key} expected=${oldCounts[key]} actual=${newCounts[key]}`] : [],
+    );
+  });
+  return { base, expected, disagreements };
+}
+
+async function main() {
+  scannedTargets.clear();
+  const sourceFiles = walk(ROOT);
+  const actual = countOccurrences({
+    sourceRoot: ROOT,
+    sourceFiles,
+    readText: (file) => readFileSync(resolve(ROOT, file), "utf8"),
+    checkTargets: true,
+  });
 
   if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
     console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
@@ -152,7 +195,7 @@ async function main() {
     for (const carrier of carriers) {
       if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
         console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
-        bad++;
+        actual.bad++;
       }
     }
     try {
@@ -160,17 +203,23 @@ async function main() {
       externalChecked++;
       if (!response.ok) {
         console.log(`BROKEN  ${link} -> HTTP ${response.status}`);
-        bad++;
+        actual.bad++;
       }
       await response.body?.cancel();
     } catch (error) {
       console.log(`BROKEN  ${link} -> ${error.message}`);
-      bad++;
+      actual.bad++;
     }
   }
 
-  console.log(`link-check: ${checked} internal links, ${externalLinks} external links, ${externalChecked} required live links, ${bad} broken`);
-  return bad ? 1 : 0;
+  console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.bad} broken`);
+  if (actual.bad) return 1;
+  const comparison = compareToBaseline(ROOT, actual, sourceFiles);
+  if (comparison.disagreements.length) {
+    console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
+    return 1;
+  }
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
