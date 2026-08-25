@@ -2,7 +2,7 @@
 
 ## What Seal is
 
-Seal puts an approval gate in front of a named set of tools on one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. See `README.md`, `test/limits-list.test.cjs`, and `docs/reference/multi-tool-semantics.md`.
+Seal puts an approval gate in front of a named set of tools on one MCP server. An approval is for one exact call: it prevents a second run of that approved call, but it does not promise that the first run will happen. See `README.md` and `test/approval-contract.test.cjs` (the `refusal 3` and `refusal 4` cases).
 
 The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths. See `test/approval-contract.test.cjs` and `test/spine-retry.test.cjs`.
 
@@ -14,13 +14,13 @@ Seal is a gate, not a sandbox. It controls the path through it, and only that pa
 
 Protect mediates a stdio MCP server entry. Other transport shapes are outside the protected path, and Protect relies on Claude Code for its local override. See `README.md` and `test/protect3b.test.cjs`.
 
-macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path. See the [macOS workflow](../../.github/workflows/macos.yml), the [non-Linux witness test](../../test/proxy-lock-nonlinux.test.cjs), and `test/protect3b.test.cjs`.
+macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path. See the [macOS workflow](../../.github/workflows/macos.yml), the [non-Linux witness test](../../test/proxy-lock-nonlinux.test.cjs), and `docs/assurance/distribution.md`.
 
 Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments. See `README.md`, `docs/assurance/distribution.md`, and `checker/seal-receipt-check.mjs`.
 
 The v0.2.0-rc.3 install payload does not include the checker. Get `checker/seal-receipt-check.mjs` by cloning the [Seal source repository](https://github.com/velvetmonkey/seal), then run it from that checkout. At check time it imports no Seal module: it independently implements the same receipt canonicalisation rule while omitting the sealer's input-refusal branches. From the repository root, `node scripts/check-receipt-canonicalization.mjs` shows the compared statements and the deliberate omissions. See `scripts/build-dist.cjs`, `.github/workflows/release.yml`, and `test/receipt-checker.test.cjs`.
 
-These notes make no stranger-verification claim. They also do not use the Lean or family-assurance material as evidence for this Node artifact. See `docs/archive/ARTIFACT-INHERITANCE.md` and `test/dist3d.test.cjs`.
+These notes make no stranger-verification claim. See `test/no-verification-claim.test.cjs`. They also do not use the Lean or family-assurance material as evidence for this Node artifact. See `docs/assurance/architecture.md`.
 
 ## What changed since v0.2.0-rc.2
 

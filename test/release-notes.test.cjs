@@ -20,6 +20,22 @@ test("release notes state the platform and protected-receipt signing boundary", 
   assert.match(notes, /The checker accepts a receipt only against the public key you supply/);
 });
 
+test("replacement rc.3 citations retain their specific evidence", () => {
+  const approvalContract = fs.readFileSync(path.join(ROOT, "test", "approval-contract.test.cjs"), "utf8");
+  assert.match(approvalContract, /replayed approval already consumed; child stays at exactly 1/);
+  assert.match(approvalContract, /expired approval; child receives nothing/);
+
+  const distribution = fs.readFileSync(path.join(ROOT, "docs", "assurance", "distribution.md"), "utf8");
+  assert.match(distribution, /Linux x86-64 is the supported Protect path\./);
+
+  const noVerification = fs.readFileSync(path.join(ROOT, "test", "no-verification-claim.test.cjs"), "utf8");
+  assert.match(noVerification, /arm's-length verification/);
+
+  const architecture = fs.readFileSync(path.join(ROOT, "docs", "assurance", "architecture.md"), "utf8");
+  assert.match(architecture, /Shipped Node product path/);
+  assert.match(architecture, /This diagram describes the Seal family product, not the Node CLI shipped by this repository\./);
+});
+
 test("v0.2.0-rc.2 release notes retain the immutable tag's Linux-only platform claim", () => {
   const notes = fs.readFileSync(path.join(ROOT, "docs", "assurance", "RELEASE-NOTES-v0.2.0-rc.2.md"), "utf8");
   assert.match(notes, /Seal v0\.2\.0-rc\.2 supports Linux x86-64 only\. macOS, Windows, Linux ARM, and other platforms are not supported in this release\./);
