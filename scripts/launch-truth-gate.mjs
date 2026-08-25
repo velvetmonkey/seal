@@ -61,6 +61,7 @@ function repositoryLinkVerdict(link) {
   let host;
   let pathname;
   let username = '';
+  let port = '';
   if (link.startsWith('git@github.com:')) {
     host = 'github.com';
     pathname = `/${link.slice('git@github.com:'.length).split(/[?#]/, 1)[0]}`;
@@ -69,19 +70,36 @@ function repositoryLinkVerdict(link) {
     host = parsed.hostname;
     pathname = parsed.pathname;
     username = parsed.username;
+    port = parsed.port;
   }
+  if (port) return 'sibling';
   if (host !== 'github.com') {
-    const githubImposter = host.includes('github.com') || pathname.includes('/github.com/');
+    const githubImposter = host.includes('github.com') || pathname.includes('/github.com/') || host.startsWith('xn--');
     return githubImposter ? 'sibling' : null;
   }
 
+  const selfPaths = new Set([
+    '/velvetmonkey/seal',
+    '/velvetmonkey/seal/',
+    '/velvetmonkey/seal.git',
+    '/velvetmonkey/seal.git/',
+  ]);
+  if (!selfPaths.has(pathname)) {
+    // These are repository-shaped URLs with an extra segment; do not
+    // silently accept them as unrelated document links.
+    if (/^\/[^/]+\/velvetmonkey\/seal(?:\.git)?\/?$/.test(pathname)
+      || /^\/velvetmonkey\/seal(?:\.git)?\/[^/]+\/?$/.test(pathname)
+      || /^\/[^/]+\/[^/]+\/[^/]+\.git\/?$/.test(pathname)) return 'sibling';
+    const parts = pathname.split('/').filter(Boolean);
+    if (parts.length !== 2) return null;
+    const repository = parts[1];
+    if (!/^(?:[^/]+|[^/]+\.git)$/.test(repository)) return null;
+  }
+
   const parts = pathname.split('/').filter(Boolean);
-  if (parts.length < 2) return null;
   const owner = parts[0];
   const repository = parts[1];
   const repositoryName = repository.endsWith('.git') ? repository.slice(0, -4) : repository;
-  const isRepositoryBoundary = parts.length === 2 && (repositoryName === repository || repository.endsWith('.git'));
-  if (!isRepositoryBoundary) return null;
   if (username || owner !== 'velvetmonkey' || repositoryName !== 'seal') return 'sibling';
   return 'self';
 }

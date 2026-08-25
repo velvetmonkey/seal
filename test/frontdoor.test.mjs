@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, mkdtempSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -25,6 +25,8 @@ const CUT_CLAIMS = [
   "The authorization rule is PROVED.",
   "PROVED WASM authorization rule",
 ];
+
+const TRUTH_GATE = resolve(ROOT, "scripts", "launch-truth-gate.mjs");
 
 const SOURCED_BLOCKS = [
   "Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
@@ -72,8 +74,44 @@ test("README claim: Seal intercepts one call, asks approval, and refuses its rep
     output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
     });
-  }, claim);
+  }, claim); // CLAIM-COVERAGE: README.md
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
-  assert.match(output, /BLOCKED.*already_consumed/s, claim); // CLAIM-COVERAGE: README.md
+  assert.match(output, /BLOCKED.*already_consumed/s, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
+});
+
+test("launch truth gate compares the complete self-repository path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "seal-launch-truth-"));
+  const required = [
+    "README.md",
+    ".github/workflows/ci.yml",
+    "docs/assurance/evaluator-start.md",
+    "docs/archive/WHY-DIFFERENT.md",
+    "docs/assurance/index.html",
+  ];
+  const paths = required.map((name) => join(dir, name));
+  for (const file of paths) {
+    const relative = file.slice(dir.length + 1);
+    const parent = file.slice(0, file.lastIndexOf("/"));
+    if (parent !== dir) mkdirSync(parent, { recursive: true });
+    writeFileSync(file, readFileSync(resolve(ROOT, relative)));
+  }
+  const run = (link) => {
+    writeFileSync(paths[0], `${readFileSync(resolve(ROOT, "README.md"))}\n${link}\n`);
+    return spawnSync(process.execPath, [TRUTH_GATE, ...paths], { encoding: "utf8" });
+  };
+  for (const link of [
+    "https://github.com/velvetmonkey/seal",
+    "https://github.com/velvetmonkey/seal.git/",
+    "https://github.com/velvetmonkey/seal?tab=readme#top",
+    "//github.com/velvetmonkey/seal.git",
+    "git@github.com:velvetmonkey/seal.git",
+    "https://github.com:443/velvetmonkey/seal.git",
+  ]) assert.equal(run(link).status, 0, link);
+  for (const link of [
+    "https://github.com/extra/velvetmonkey/seal.git",
+    "https://xn--githb-3we.com/velvetmonkey/seal.git",
+    "https://github.com:444/velvetmonkey/seal.git",
+  ]) assert.notEqual(run(link).status, 0, link);
+  rmSync(dir, { recursive: true, force: true });
 });
