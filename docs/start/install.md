@@ -52,10 +52,10 @@ Add `~/.local/bin` to PATH:
 $ export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Further distribution detail, including what the payload does and does not
-contain, is in [DISTRIBUTION.md](../assurance/distribution.md). The published release
-payload includes the receipt checker. A source build of this checkout excludes
-it; see [evaluator-walk.md](../start/evaluator-walk.md) for that secondary path.
+Further distribution detail, including what each payload contains, is in
+[DISTRIBUTION.md](../assurance/distribution.md). The published payload in the transcript above
+includes the checker; the current development payload below does not. Clone the
+[Seal source repository](https://github.com/velvetmonkey/seal) to obtain it; see [evaluator-walk.md](../start/evaluator-walk.md).
 
 ## Source-build tree pin
 

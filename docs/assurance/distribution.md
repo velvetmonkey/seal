@@ -56,10 +56,10 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 5000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
-The published release payload includes `checker/seal-receipt-check.mjs`; the
-release has no separate checker asset.
-A source build of this checkout excludes that file from its payload. The
-launcher never searches `PATH` for another `seal`.
+The current install payload excludes `checker/seal-receipt-check.mjs`, and no
+separate checker asset is currently published. Get the checker by cloning the
+[Seal source repository](https://github.com/velvetmonkey/seal) and run it from
+that checkout. The launcher never searches `PATH` for another `seal`.
 The checker imports no Seal module at check time, but copies the receipt
 canonicalisation rule and uses the same Node crypto platform as the
 producer. It detects mutation of the receipt's canonical parsed value

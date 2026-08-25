@@ -389,6 +389,13 @@ process.exit(2);
   assert.ok(fs.existsSync(path.join(store, "spine", "receipt-seal.cjs")), "3C sealer must be in the payload");
   const packagedChecker = path.join(store, "checker", "seal-receipt-check.mjs");
   assert.equal(fs.existsSync(packagedChecker), false, "3C checker must not be in the payload");
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  assert.match(readme, /The installed development tree does not include `checker\/seal-receipt-check\.mjs`/);
+  assert.equal(
+    readme.includes("does not include") && fs.existsSync(packagedChecker),
+    false,
+    "README installed-tree checker claim must agree with the actual installed tree",
+  );
   const publishedChecker = path.join(ROOT, "checker", "seal-receipt-check.mjs");
   const allow = fs.readdirSync(path.join(demoDir, "receipts")).find((name) => name.includes("-ALLOW.json"));
   assert.ok(allow, out);
@@ -399,6 +406,8 @@ process.exit(2);
   ], { cwd: built.out });
   assert.equal(checked.code, 0, checked.out);
   assert.match(checked.stdout, /^ACCEPT ALLOW demo\.mutate/);
-  assert.match(out, /Download seal-receipt-check\.mjs from the same release page/);
-  assert.doesNotMatch(out, /checker\/seal-receipt-check\.mjs/);
+  assert.match(out, /This installed payload does not include checker\/seal-receipt-check\.mjs/);
+  assert.match(out, /Clone https:\/\/github\.com\/velvetmonkey\/seal and run the checker from that source checkout/);
+  assert.match(out, /From the checkout root: node checker\/seal-receipt-check\.mjs/);
+  assert.doesNotMatch(out, /same release page/, "installed demo must not promise an unpublished release asset");
 });
