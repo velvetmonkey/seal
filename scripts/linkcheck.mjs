@@ -262,9 +262,14 @@ function validateFileHighWaterMarks(population, currentPopulation, source, { all
   if (duplicateKeys.length) {
     throw new Error(`duplicate key in fileOccurrencesHighWaterMarks: ${duplicateKeys[0]}`);
   }
+  const recordedFiles = population.fileOccurrences ?? {};
   const countedFiles = currentPopulation.fileOccurrences ?? {};
   for (const file of Object.keys(marks)) {
-    if (!allowShrink && !Object.hasOwn(countedFiles, file)) {
+    // A recorded path remains part of the required set while it is being
+    // checked, even if the mutation removed its last link or renamed it.
+    // Only a path absent from both populations is a stranger key; a path
+    // absent from the recorded population is genuinely new.
+    if (!Object.hasOwn(recordedFiles, file) && !Object.hasOwn(countedFiles, file)) {
       throw new Error(`stranger key in fileOccurrencesHighWaterMarks: ${file}`);
     }
   }
@@ -283,13 +288,14 @@ function validateFileHighWaterMarks(population, currentPopulation, source, { all
       throw new Error(`bad value in fileOccurrencesHighWaterMarks for ${file}: unexpected key ${unexpectedKeys[0]}`);
     }
   }
-  for (const [file, occurrences] of Object.entries(countedFiles)) {
-    // A genuinely new link-bearing file has no historical key yet; the
-    // sanctioned generator adds that key in populationDecision. Existing
-    // counted files must already be represented, or a shrink can be hidden.
-    if (occurrences.internalOccurrences > 0 &&
-        Object.hasOwn(population.fileOccurrences, file) &&
-        !Object.hasOwn(marks, file)) {
+  for (const [file, occurrences] of Object.entries(recordedFiles)) {
+    // This is deliberately based on the recorded population. A recorded
+    // link-bearing file remains required when its new count is zero or the
+    // path disappeared; otherwise a last-link removal or rename could hide a
+    // missing key behind the new-file exception.
+    const currentOccurrences = countedFiles[file]?.internalOccurrences ?? 0;
+    if (occurrences.internalOccurrences > 0 && currentOccurrences === 0 &&
+        !allowShrink && !Object.hasOwn(marks, file)) {
       throw new Error(`incomplete fileOccurrencesHighWaterMarks: missing link-bearing file ${file}`);
     }
   }
@@ -317,10 +323,14 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrink =
         Math.max(oldPopulation[HIGH_WATER_KEYS[key]], newPopulation[key]),
       ])),
       fileOccurrencesHighWaterMarks: Object.fromEntries(
-        Object.keys(newPopulation.fileOccurrences ?? {}).sort().map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
-          key,
-          Math.max(oldPopulation.fileOccurrencesHighWaterMarks?.[file]?.[key] ?? 0, newPopulation.fileOccurrences?.[file]?.[key] ?? 0),
-        ]))]),
+        Object.keys(newPopulation.fileOccurrences ?? {}).sort()
+          .filter((file) => !(allowShrink &&
+            (oldPopulation.fileOccurrences?.[file]?.internalOccurrences ?? 0) > 0 &&
+            (newPopulation.fileOccurrences?.[file]?.internalOccurrences ?? 0) === 0))
+          .map((file) => [file, Object.fromEntries(FILE_COUNT_KEYS.map((key) => [
+            key,
+            Math.max(oldPopulation.fileOccurrencesHighWaterMarks?.[file]?.[key] ?? 0, newPopulation.fileOccurrences?.[file]?.[key] ?? 0),
+          ]))]),
       ),
       shrinkHistory: currentShrinks.length ? [
         ...oldPopulation.shrinkHistory,
