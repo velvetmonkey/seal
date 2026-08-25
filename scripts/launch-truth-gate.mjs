@@ -53,6 +53,39 @@ function requireMatch(source, pattern, message) {
   if (!pattern.test(source)) fail(message);
 }
 
+function repositoryLinks(source) {
+  return source.match(/(?:https?:\/\/|\/\/)[^\s<>()]+|git@github\.com:[^\s<>()]+/gi) ?? [];
+}
+
+function repositoryLinkVerdict(link) {
+  let host;
+  let pathname;
+  let username = '';
+  if (link.startsWith('git@github.com:')) {
+    host = 'github.com';
+    pathname = `/${link.slice('git@github.com:'.length).split(/[?#]/, 1)[0]}`;
+  } else {
+    const parsed = new URL(link.startsWith('//') ? `https:${link}` : link);
+    host = parsed.hostname;
+    pathname = parsed.pathname;
+    username = parsed.username;
+  }
+  if (host !== 'github.com') {
+    const githubImposter = host.includes('github.com') || pathname.includes('/github.com/');
+    return githubImposter ? 'sibling' : null;
+  }
+
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+  const owner = parts[0];
+  const repository = parts[1];
+  const repositoryName = repository.endsWith('.git') ? repository.slice(0, -4) : repository;
+  const isRepositoryBoundary = parts.length === 2 && (repositoryName === repository || repository.endsWith('.git'));
+  if (!isRepositoryBoundary) return null;
+  if (username || owner !== 'velvetmonkey' || repositoryName !== 'seal') return 'sibling';
+  return 'self';
+}
+
 if (process.argv.length !== 7) {
   fail(`expected five inputs (${Object.values(EXPECTED).join(', ')}); received ${process.argv.length - 2}`);
 }
@@ -65,6 +98,16 @@ const comparison = readRequired('guardrail comparison', comparisonPath);
 const landingPage = readRequired('landing page', landingPagePath);
 const version = readRequired('VERSION', new URL('../VERSION', import.meta.url)).trim();
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
+
+for (const link of repositoryLinks(readme)) {
+  let verdict;
+  try {
+    verdict = repositoryLinkVerdict(link);
+  } catch (error) {
+    fail(`README contains an unreadable repository URL: ${link}: ${error.message}`);
+  }
+  if (verdict === 'sibling') fail('README links a sibling repository; the developer route carries no repository family');
+}
 
 // --- README: the developer route, roadmap step 6 ---
 
@@ -103,8 +146,6 @@ if (!readme.includes("demo's key is generated fresh for that run")) fail('README
 // from git history and update this gate in the same change.
 if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
 if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
-if (/github\.com\/velvetmonkey\/(?!seal(?:\.git)?(?:[)\s/#?]|$))/.test(readme)) fail('README links a sibling repository; the developer route carries no repository family');
-
 // --- Landing page and comparison surfaces: corrections stay in place ---
 
 requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay'); // CLAIM-COVERAGE: docs/assurance/index.html
