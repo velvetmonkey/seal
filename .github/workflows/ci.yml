@@ -101,42 +101,77 @@ jobs:
           release_tag="v$(tr -d '\n' < VERSION)"
           artifact_name="seal-$release_tag-linux-x64"
           mkdir -p "$evidence_dir" "$release_dir"
-          gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$release_dir" \
-            --pattern SHA256SUMS --pattern "$artifact_name"
-          read -r expected_digest expected_bytes expected_name < "$release_dir/SHA256SUMS"
-          test "$expected_name" = "$artifact_name"
-          test "$(sha256sum "$release_dir/$artifact_name" | cut -d' ' -f1)" = "$expected_digest"
-          test "$(wc -c < "$release_dir/$artifact_name" | tr -d ' ')" = "$expected_bytes"
-          chmod +x "$release_dir/$artifact_name"
-          "$release_dir/$artifact_name" --sha256 "$expected_digest" --bytes "$expected_bytes" \
-            --prefix "$install_prefix"
-          printf 'y\n' | script --quiet --return \
-            --command "'$install_prefix/bin/seal' demo --dir '$demo_dir'" /dev/null \
-            | tee "$evidence_dir/demo-output.txt"
-          allow_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-ALLOW.json' -print -quit)"
-          block_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
-          checker="$(find "$install_prefix/lib/seal/store" -type f -path '*/checker/seal-receipt-check.mjs' -print -quit)"
-          test -n "$allow_receipt"
-          test -n "$block_receipt"
-          test -n "$checker"
-          node "$checker" "$allow_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
-            | tee "$evidence_dir/checker-output.txt"
-          node "$checker" "$block_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
-            | tee -a "$evidence_dir/checker-output.txt"
-          tampered_receipt="$evidence_dir/tampered-block.json"
-          node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); receipt.decision = "ALLOW"; fs.writeFileSync(process.argv[2], JSON.stringify(receipt, null, 2) + "\n");' \
-            "$block_receipt" "$tampered_receipt"
           set +e
-          node "$checker" "$tampered_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
-            | tee -a "$evidence_dir/checker-output.txt"
-          tampered_status="${PIPESTATUS[0]}"
+          release_view_output="$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" 2>&1)"
+          release_view_status=$?
           set -e
-          test "$tampered_status" -eq 1
-          SEAL_DEMO_TRANSCRIPT="$evidence_dir/demo-output.txt" \
-          SEAL_DEMO_CHECKER_TRANSCRIPT="$evidence_dir/checker-output.txt" \
-            node scripts/readme-demo-transcript-guard.mjs
-          cp "$allow_receipt" "$evidence_dir/demo-allow-receipt.json"
-          cp "$demo_dir/receipt-signer.pub" "$evidence_dir/demo-receipt-signer.pub"
+          if [[ "$release_view_status" -eq 0 ]]; then
+            gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$release_dir" \
+              --pattern SHA256SUMS --pattern "$artifact_name"
+            read -r expected_digest expected_bytes expected_name < "$release_dir/SHA256SUMS"
+            if [[ "$expected_name" != "$artifact_name" ]]; then
+              echo "::error::RELEASE_PROVENANCE_ASSET_NAME_MISMATCH: SHA256SUMS names $expected_name; expected $artifact_name."
+              exit 1
+            fi
+            actual_digest="$(sha256sum "$release_dir/$artifact_name" | cut -d' ' -f1)"
+            if [[ "$actual_digest" != "$expected_digest" ]]; then
+              echo "::error::RELEASE_PROVENANCE_DIGEST_MISMATCH: $artifact_name SHA-256 is $actual_digest; SHA256SUMS declares $expected_digest."
+              exit 1
+            fi
+            actual_bytes="$(wc -c < "$release_dir/$artifact_name" | tr -d ' ')"
+            if [[ "$actual_bytes" != "$expected_bytes" ]]; then
+              echo "::error::RELEASE_PROVENANCE_BYTE_COUNT_MISMATCH: $artifact_name has $actual_bytes bytes; SHA256SUMS declares $expected_bytes."
+              exit 1
+            fi
+            chmod +x "$release_dir/$artifact_name"
+            "$release_dir/$artifact_name" --sha256 "$expected_digest" --bytes "$expected_bytes" \
+              --prefix "$install_prefix"
+            printf 'y\n' | script --quiet --return \
+              --command "'$install_prefix/bin/seal' demo --dir '$demo_dir'" /dev/null \
+              | tee "$evidence_dir/demo-output.txt"
+            allow_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-ALLOW.json' -print -quit)"
+            block_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
+            checker="$(find "$install_prefix/lib/seal/store" -type f -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+            test -n "$allow_receipt"
+            test -n "$block_receipt"
+            test -n "$checker"
+            node "$checker" "$allow_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
+              | tee "$evidence_dir/checker-output.txt"
+            node "$checker" "$block_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
+              | tee -a "$evidence_dir/checker-output.txt"
+            tampered_receipt="$evidence_dir/tampered-block.json"
+            node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); receipt.decision = "ALLOW"; fs.writeFileSync(process.argv[2], JSON.stringify(receipt, null, 2) + "\n");' \
+              "$block_receipt" "$tampered_receipt"
+            set +e
+            node "$checker" "$tampered_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
+              | tee -a "$evidence_dir/checker-output.txt"
+            tampered_status="${PIPESTATUS[0]}"
+            set -e
+            test "$tampered_status" -eq 1
+            SEAL_DEMO_TRANSCRIPT="$evidence_dir/demo-output.txt" \
+            SEAL_DEMO_CHECKER_TRANSCRIPT="$evidence_dir/checker-output.txt" \
+              node scripts/readme-demo-transcript-guard.mjs
+            cp "$allow_receipt" "$evidence_dir/demo-allow-receipt.json"
+            cp "$demo_dir/receipt-signer.pub" "$evidence_dir/demo-receipt-signer.pub"
+          else
+            if [[ "$release_view_status" -ne 1 || "$release_view_output" != *"release not found"* ]]; then
+              echo "::error::RELEASE_PROVENANCE_RELEASE_LOOKUP_FAILED: gh release view exited $release_view_status: $release_view_output"
+              exit 1
+            fi
+            if [[ "$release_tag" != *-rc.* ]]; then
+              echo "::error::RELEASE_PROVENANCE_RELEASE_MISSING_FOR_FINAL: $release_tag is not published; final versions cannot use the bootstrap window."
+              exit 1
+            fi
+            loud_line="UNVERIFIED: NO RELEASE EXISTS FOR $release_tag; THIS RUN VERIFIED NOTHING ABOUT RELEASE ASSETS OR DEMO RECEIPT PROVENANCE."
+            echo "::warning::$loud_line"
+            printf '%s\n' "$loud_line" > "$evidence_dir/UNVERIFIED-NO-RELEASE.txt"
+            {
+              echo "## ⚠️ Demo receipt provenance UNVERIFIED"
+              echo
+              echo "**NO RELEASE EXISTS FOR $release_tag. THIS RUN VERIFIED NOTHING about release assets or demo receipt provenance.**"
+              echo "The bootstrap window applies only to pre-release tags containing -rc.; publishing remains gated by successful CI on this exact commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           git show "$GITHUB_SHA:.github/workflows/ci.yml" > "$evidence_dir/recorded-workflow.yml"
           tar -C "$evidence_dir" -czf "$RUNNER_TEMP/demo-receipt-evidence.tgz" .
       - name: Attest runner-produced demo receipt evidence
