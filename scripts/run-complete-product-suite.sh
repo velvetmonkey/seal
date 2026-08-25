@@ -4,6 +4,41 @@
 # expectation that the roster line compares against.
 set -uo pipefail
 
+declared_tests=()
+roster_reported=0
+
+report_roster_line() {
+  echo "$1"
+  roster_reported=1
+}
+
+report_unreconciled_exit() {
+  local status=$?
+  if (( roster_reported == 0 )); then
+    echo "ROSTER: unknown; driver exited $status before reconciliation"
+  fi
+}
+
+report_driver_signal() {
+  local signal="$1"
+  local status="$2"
+  if (( roster_reported == 0 )); then
+    echo "ROSTER: unknown; driver died at SIG$signal"
+    roster_reported=1
+  fi
+  trap - EXIT HUP INT TERM
+  exit "$status"
+}
+
+trap report_unreconciled_exit EXIT
+trap 'report_driver_signal HUP 129' HUP
+trap 'report_driver_signal INT 130' INT
+trap 'report_driver_signal TERM 143' TERM
+
+canonical_path() {
+  realpath -e -- "$1" 2>/dev/null || realpath -m -- "$1"
+}
+
 if [[ -v RUNNER_TEMP && ! -e "$RUNNER_TEMP" ]]; then
   supplied_runner_temp="$(realpath -m -- "$RUNNER_TEMP")"
   echo "::error::RUNNER_TEMP operator-supplied path does not exist: $supplied_runner_temp; the suite will not create it"
@@ -44,16 +79,21 @@ if [[ ! -r "$roster_file" ]]; then
 fi
 
 mapfile -t declared_names <"$roster_file"
-declared_tests=()
 roster_failures=()
+declaration_failures=()
+declare -A declared_name_set=() declared_set=()
 for name in "${declared_names[@]}"; do
   [[ -z "$name" ]] && continue
+  if [[ -n "${declared_name_set[$name]+x}" ]]; then
+    declaration_failures+=("duplicate declaration: $name")
+    continue
+  fi
+  declared_name_set["$name"]=1
   if [[ "$name" = /* ]]; then
     file="$name"
   else
     file="$test_root/$name"
   fi
-  declared_tests+=("$file")
   if [[ ! -e "$file" ]]; then
     roster_failures+=("missing: $file")
   elif [[ ! -f "$file" || ! -r "$file" ]]; then
@@ -61,16 +101,16 @@ for name in "${declared_names[@]}"; do
   elif [[ ! -s "$file" ]]; then
     roster_failures+=("empty: $file")
   fi
+  file="$(canonical_path "$file")"
+  if [[ -z "${declared_set[$file]+x}" ]]; then
+    declared_tests+=("$file")
+    declared_set["$file"]=1
+  fi
 done
 if (( ${#declared_tests[@]} == 0 )); then
   echo "::error::declared product-test roster under $test_root is empty"
   exit 1
 fi
-declare -A declared_set
-for file in "${declared_tests[@]}"; do
-  declared_set["$file"]=1
-done
-
 critical_manifest_file="${SEAL_CRITICAL_PROPERTY_MANIFEST:-$script_root/scripts/critical-property-manifest.tsv}"
 if [[ ! -f "$critical_manifest_file" ]]; then
   echo "CRITICAL PROPERTY MANIFEST entries: UNAVAILABLE"
@@ -114,6 +154,7 @@ for line in "${critical_manifest_lines[@]}"; do
   else
     proof_file="$test_root/$proof_name"
   fi
+  proof_file="$(canonical_path "$proof_file")"
   critical_properties+=("$property")
   critical_proof_files+=("$proof_file")
   critical_proof_tests+=("$proof_test")
@@ -172,10 +213,15 @@ else
   fi
 fi
 
-if (( ${#roster_failures[@]} > 0 || ${#critical_manifest_failures[@]} > 0 )); then
-  if (( ${#roster_failures[@]} > 0 )); then
-    echo "ROSTER: 0 of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
-    printf 'FAIL  product suite roster: declared test file %s\n' "${roster_failures[@]}"
+if (( ${#roster_failures[@]} > 0 || ${#declaration_failures[@]} > 0 || ${#critical_manifest_failures[@]} > 0 )); then
+  if (( ${#roster_failures[@]} > 0 || ${#declaration_failures[@]} > 0 )); then
+    report_roster_line "ROSTER: 0 of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
+    if (( ${#roster_failures[@]} > 0 )); then
+      printf 'FAIL  product suite roster: declared test file %s\n' "${roster_failures[@]}"
+    fi
+    if (( ${#declaration_failures[@]} > 0 )); then
+      printf '::error::product suite roster: %s\n' "${declaration_failures[@]}"
+    fi
   fi
   if (( ${#critical_manifest_failures[@]} > 0 )); then
     printf '::error::critical-property manifest: %s\n' "${critical_manifest_failures[@]}"
@@ -186,10 +232,15 @@ fi
 # Discovery rule: Every regular file recursively below test_directory whose basename
 # matches *.test.* is a product-suite test file and must appear in the declared
 # roster.
-mapfile -t present_tests < <(find "$test_directory" -mindepth 1 -type f -name '*.test.*' -print | sort)
-declare -A present_set
-for file in "${present_tests[@]}"; do
-  present_set["$file"]=1
+mapfile -t present_paths < <(find "$test_directory" -mindepth 1 -type f -name '*.test.*' -print | sort)
+present_tests=()
+declare -A present_set=()
+for file in "${present_paths[@]}"; do
+  file="$(canonical_path "$file")"
+  if [[ -z "${present_set[$file]+x}" ]]; then
+    present_tests+=("$file")
+    present_set["$file"]=1
+  fi
 done
 present_not_declared=()
 for file in "${present_tests[@]}"; do
@@ -257,37 +308,57 @@ if (( summary_status[todo] == 0 && summary[todo] != 0 )); then
   echo "::error::node --test reported ${summary[todo]} todo tests, expected 0"
   gate_status=1
 fi
-mapfile -t executed_tests < <(sed -n 's/^# product-suite-executed-file //p' "$output_file" | sort -u)
-
-declare -A executed_set
-for file in "${executed_tests[@]}"; do
+executed_tests=()
+execution_output_failures=()
+declare -A executed_set=()
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  file="$(canonical_path "$file")"
+  executed_tests+=("$file")
+  if [[ -n "${executed_set[$file]+x}" ]]; then
+    execution_output_failures+=("duplicate executed-file evidence: $file")
+  fi
   executed_set["$file"]=1
-done
+done < <(sed -n 's/^# product-suite-executed-file //p' "$output_file")
 
 declare -A executed_case_count passed_test_case_set
 case_count_output_failures=()
+
+
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 while IFS=$'\t' read -r file count extra; do
   if [[ -z "$file" || ! "$count" =~ ^[0-9]+$ || -n "$extra" ]]; then
     case_count_output_failures+=("malformed test-case count from reporter: $file $count $extra")
     continue
   fi
+  file="$(canonical_path "$file")"
   executed_case_count["$file"]="$count"
 done < <(sed -n 's/^# product-suite-test-case-count //p' "$output_file")
 while IFS=$'\t' read -r file test_name extra; do
   if [[ -n "$file" && -n "$test_name" && -z "$extra" ]]; then
+    file="$(canonical_path "$file")"
     passed_test_case_set["$file"$'\x1f'"$test_name"]=1
   fi
 done < <(sed -n 's/^# product-suite-passed-test-case //p' "$output_file")
 
 load_failed_tests=()
+declare -A load_failed_set=()
 while IFS= read -r file; do
+  file="$(canonical_path "$file")"
   if [[ -n "${declared_set[$file]+x}" ]]; then
     load_failed_tests+=("$file")
+    load_failed_set["$file"]=1
   fi
 done < <(sed -n 's/^not ok [0-9][0-9]* - //p' "$output_file" | sort -u)
 for file in "${load_failed_tests[@]}"; do
   echo "::error::declared test file failed to load: $file"
   unset 'executed_set[$file]'
+done
+roster_executed_tests=()
+for file in "${executed_tests[@]}"; do
+  if [[ -z "${load_failed_set[$file]+x}" ]]; then
+    roster_executed_tests+=("$file")
+  fi
 done
 declared_not_executed=()
 for file in "${declared_tests[@]}"; do
@@ -296,7 +367,7 @@ for file in "${declared_tests[@]}"; do
   fi
 done
 executed_not_declared=()
-for file in "${executed_tests[@]}"; do
+for file in "${roster_executed_tests[@]}"; do
   if [[ -z "${declared_set[$file]+x}" ]]; then
     executed_not_declared+=("$file")
   fi
@@ -319,13 +390,14 @@ if (( ${#case_count_output_failures[@]} > 0 )); then
   printf '::error::%s\n' "${case_count_output_failures[@]}"
   gate_status=1
 fi
+if (( ${#execution_output_failures[@]} > 0 )); then
+  printf '::error::%s\n' "${execution_output_failures[@]}"
+  gate_status=1
+fi
 if (( ${#declared_without_cases[@]} > 0 )); then
   printf '::error::declared test file registered zero test cases: %s\n' "${declared_without_cases[@]}"
   gate_status=1
 fi
-
-
-# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
 critical_proof_failures=()
 for index in "${!critical_properties[@]}"; do
   property="${critical_properties[$index]}"
@@ -341,8 +413,8 @@ if (( ${#critical_proof_failures[@]} > 0 )); then
   gate_status=1
 fi
 
-if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); then
-  echo "ROSTER: ${#executed_set[@]} of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
+if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 || ${#roster_executed_tests[@]} != ${#declared_tests[@]} )); then
+  report_roster_line "ROSTER: ${#roster_executed_tests[@]} of ${#declared_tests[@]} declared test files ran; refusing incomplete roster"
   if (( ${#declared_not_executed[@]} > 0 )); then
     printf '::error::INCOMPLETE ROSTER: declared test file did not run: %s\n' "${declared_not_executed[@]}"
   fi
@@ -351,7 +423,7 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 )); t
   fi
   gate_status=1
 else
-  echo "ROSTER: ${#executed_set[@]} of ${#declared_tests[@]} declared test files ran"
+  report_roster_line "ROSTER: ${#roster_executed_tests[@]} of ${#declared_tests[@]} declared test files ran"
 fi
 
 exit "$gate_status"

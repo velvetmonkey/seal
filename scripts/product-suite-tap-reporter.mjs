@@ -23,16 +23,14 @@ export default async function* productSuiteTapReporter(source) {
     !event.data.todo
   );
 
-  const executed = new Set(
-    events
-      .filter((event) =>
-        event.type === "test:complete" &&
-        event.data?.file &&
-        event.data.name === event.data.file
-      )
-      .map((event) => event.data.file),
-  );
-  for (const file of [...executed].sort()) {
+  const executed = events
+    .filter((event) =>
+      event.type === "test:complete" &&
+      event.data?.file &&
+      event.data.name === event.data.file
+    )
+    .map((event) => event.data.file);
+  for (const file of executed.sort()) {
     yield `# product-suite-executed-file ${file}\n`;
     yield `# product-suite-test-case-count ${file}\t${caseCounts.get(file) || 0}\n`;
   }

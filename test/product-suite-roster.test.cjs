@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = resolve(__dirname, "..");
@@ -148,6 +148,118 @@ test("a strict subset of the declared roster is a red finding", (t) => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /ROSTER: 2 of 3 declared test files ran; refusing incomplete roster/);
   assert.match(result.stdout, /INCOMPLETE ROSTER: declared test file did not run: .*three\.test\.cjs/);
+});
+
+test("an exact duplicate declaration is a named red finding with measured counts", (t) => {
+  const space = fixture();
+  writeFileSync(space.roster, "one.test.cjs\ntwo.test.cjs\ntwo.test.cjs\nthree.test.cjs\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: 0 of 3 declared test files ran; refusing incomplete roster/);
+  assert.match(result.stdout, /duplicate declaration: two\.test\.cjs/);
+});
+
+test("zero executed files prints a measured zero roster and names every declaration", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-zero.sh");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    'node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"',
+    'printf \'TAP version 13\\n1..0\\n# tests 0\\n# pass 0\\n# fail 0\\n# skipped 0\\n# todo 0\\n\' | tee "$output_file"',
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: 0 of 3 declared test files ran; refusing incomplete roster/);
+  for (const name of ["one", "two", "three"]) {
+    assert.match(result.stdout, new RegExp(`INCOMPLETE ROSTER: declared test file did not run: .*${name}\\.test\\.cjs`));
+  }
+  assert.doesNotMatch(result.stdout + result.stderr, /unbound variable/);
+});
+
+test("duplicate executed-file evidence is counted rather than deduplicated", (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-duplicate-executed.sh");
+  const one = join(space.tests, "one.test.cjs");
+  const two = join(space.tests, "two.test.cjs");
+  const three = join(space.tests, "three.test.cjs");
+  const synthetic = [
+    `# product-suite-executed-file ${one}`,
+    `# product-suite-executed-file ${two}`,
+    `# product-suite-executed-file ${two}`,
+    `# product-suite-executed-file ${three}`,
+    "# tests 3", "# pass 3", "# fail 0", "# skipped 0", "# todo 0",
+  ].join("\\n") + "\\n";
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    'node --test --test-reporter="$script_root/scripts/product-suite-tap-reporter.mjs" "${run_tests[@]}" 2>&1 | tee "$output_file"',
+    `printf '%b' '${synthetic}' | tee "$output_file"`,
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(copy, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: 4 of 3 declared test files ran; refusing incomplete roster/);
+  assert.match(result.stdout, /duplicate executed-file evidence: .*two\.test\.cjs/);
+});
+
+test("SIGTERM during the node phase prints an explicitly unknown roster", async (t) => {
+  const space = fixture();
+  const copy = join(space.root, "driver-signal.sh");
+  writeFileSync(join(space.tests, "two.test.cjs"), "require('node:test')('stay alive for signal', async () => { await new Promise((resolve) => setTimeout(resolve, 750)); });\n");
+  writeFileSync(copy, readFileSync(DRIVER, "utf8").replace(
+    "set +e\nnode --test",
+    "set +e\necho 'DRIVER NODE PHASE STARTED'\nnode --test",
+  ));
+  chmodSync(copy, 0o755);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+
+  const env = {
+    ...process.env,
+    RUNNER_TEMP: tmpdir(),
+    SEAL_PRODUCT_SCRIPT_ROOT: ROOT,
+    SEAL_PRODUCT_TEST_ROOT: space.tests,
+    SEAL_PRODUCT_TEST_DIR: space.tests,
+    SEAL_PRODUCT_TEST_ROSTER: space.roster,
+    SEAL_CRITICAL_PROPERTY_MANIFEST: space.manifest,
+  };
+  delete env.NODE_TEST_CONTEXT;
+  const result = await new Promise((resolveResult, reject) => {
+    const child = spawn("bash", [copy], { cwd: ROOT, env });
+    let stdout = "";
+    let stderr = "";
+    let signalled = false;
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (!signalled && stdout.includes("DRIVER NODE PHASE STARTED")) {
+        signalled = true;
+        child.kill("SIGTERM");
+      }
+    });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (status, signal) => resolveResult({ status, signal, stdout, stderr, signalled }));
+  });
+  assert.equal(result.signalled, true, result.stdout + result.stderr);
+  assert.equal(result.signal, null, result.stdout + result.stderr);
+  assert.equal(result.status, 143, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: unknown; driver died at SIGTERM/);
+  assert.doesNotMatch(result.stdout, /ROSTER: [0-9]+ of [0-9]+/);
+});
+
+test("a symlink and its target declare one canonical file", (t) => {
+  const space = fixture();
+  const target = join(space.tests, "three.test.cjs");
+  const alias = join(space.tests, "three-alias.test.cjs");
+  require("node:fs").symlinkSync(target, alias);
+  writeFileSync(space.roster, "one.test.cjs\ntwo.test.cjs\nthree.test.cjs\nthree-alias.test.cjs\n");
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(DRIVER, space.tests, space.roster, space.manifest);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /ROSTER: 3 of 3 declared test files ran/);
+  assert.doesNotMatch(result.stdout, /declared but absent|present but undeclared/);
 });
 
 test("a load failure and an assertion failure each remain visible with the short roster", (t) => {
