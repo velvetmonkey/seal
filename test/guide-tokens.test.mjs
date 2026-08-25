@@ -108,3 +108,74 @@ test("every refusal token the guide documents exists in the source", () => {
     `refusal tokens ${GUIDE} documents that no source file mints:\n${phantom.join("\n")}`,
   );
 });
+
+// These reviewed claims move from guide-claims.test.mjs. The token inventory
+// alone does not retain their explanatory prose or protect the second guide.
+const REVIEWED_GUIDES = [
+  {
+    file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
+    sha256: GUIDE_SHA256,
+    claims: [
+      ["You pointed `seal verify`", " at one of the gate's own receipts."].join(""),
+      "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
+      "Use that checker to learn whether the receipt is valid.",
+    ],
+  },
+  {
+    file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
+    sha256: "fb937dae67496bac3ff1de7c238b69d4424315ee25a425b4cf35324732fe53ac",
+    claims: [
+      ["One honest wrinkle: `seal verify`", " can leave a *kernel* receipt (a different format) in the same directory, and `seal status` then prints `Receipt unreadable: … (missing decision or receipt time)` for it."].join(""),
+      ["That line means only that this listing does not parse the kernel format; use `seal verify`", " to check a named kernel receipt."].join(""),
+    ],
+  },
+];
+
+function sha256(text) {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function occurrences(text, claim) {
+  return text.replace(/\s+/g, " ").split(claim).length - 1;
+}
+
+function assertPinned(entry, text) {
+  assert.ok(entry.claims.length > 0, `${entry.file}: reviewed claim inventory must not be empty`);
+  assert.equal(
+    sha256(text),
+    entry.sha256,
+    `${entry.file}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
+  );
+}
+
+test("reviewed guide files are content-addressed and retain each reviewed claim once", () => {
+  assert.ok(REVIEWED_GUIDES.length > 0, "REVIEWED_GUIDES must not be empty");
+  for (const entry of REVIEWED_GUIDES) {
+    const text = readFileSync(resolve(ROOT, entry.file), "utf8");
+    assertPinned(entry, text);
+    for (const claim of entry.claims) {
+      assert.equal(occurrences(text, claim), 1, `${entry.file}: reviewed claim must appear exactly once: ${claim}`);
+    }
+  }
+});
+
+test("whole-file pin rejects locator defeats and earlier claim tampering", () => {
+  const entry = REVIEWED_GUIDES[0];
+  const text = readFileSync(resolve(ROOT, entry.file), "utf8");
+  const heading = "### `spine_receipt_use_separate_checker`";
+  const falseClaim = "Nothing is wrong with the receipt.";
+  const rejects = [
+    ["whitespace real heading plus exact decoy", text.replace(heading, `###  \`spine_receipt_use_separate_checker\``) + `\n${heading}\n\n${entry.claims.join(" ")}\n${falseClaim}\n`],
+    ["case-different heading", text.replace(heading, "### `Spine_receipt_use_separate_checker`")],
+    ["backtick-different heading", text.replace(heading, "### spine_receipt_use_separate_checker")],
+    ["deleted reviewed body", text.replace(entry.claims[0], "")],
+    ["deleted reviewed sentence", text.replace("learn whether the receipt is valid.", "")],
+    ["novel assertion", `${text}\n${falseClaim}\n`],
+    ["deleted heading", text.replace(heading, "")],
+    ["renamed heading", text.replace(heading, "### `spine_receipt_use_other_checker`")],
+  ];
+  for (const [name, tampered] of rejects) {
+    assert.throws(() => assertPinned(entry, tampered), /content changed/, name);
+  }
+  assert.throws(() => assertPinned({ ...entry, claims: [] }, text), /inventory must not be empty/);
+});

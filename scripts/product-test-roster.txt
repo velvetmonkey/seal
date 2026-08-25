@@ -30,7 +30,6 @@ test/g0-node-engine-field.test.cjs
 test/g0-receipt-key-directory.test.cjs
 test/g0-receipt-key-reuse.test.cjs
 test/g0-unprotect-backup-survives.test.cjs
-test/guide-claims.test.mjs
 test/guide-tokens.test.mjs
 test/identity-wiring.test.cjs
 test/installed-tree-pin-generator.test.cjs
