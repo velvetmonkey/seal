@@ -62,9 +62,13 @@ printf 'y\n' | seal demo --dir ./seal-demo
 This is real output from `seal demo` (excerpted).
 
 ```text
+child calls observed: 0 (read from
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
+child calls observed: still 0 (read from
 Approve? [y/N] child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
+child calls observed: 1 (read from
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from
 ```
 
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
@@ -93,6 +97,8 @@ claude --version
 
 In a [Claude Code project](docs/guide/choosing-what-to-protect.md), make `.mcp.json` define the stdio server and tool to gate. This makes a small local project whose `db` server is Seal's demo server:
 
+The `git init -q` line makes this throw-away directory the Claude Code project root for the published v0.2.0-rc.2 CLI.
+
 ```bash
 mkdir -p seal-protect-demo
 cd seal-protect-demo
@@ -107,6 +113,7 @@ seal protect db demo.mutate
 ```
 
 ```output
+Project .mcp.json hash before protect:
 Protection: PENDING RESTART db.demo.mutate
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```

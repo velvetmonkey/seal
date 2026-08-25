@@ -18,6 +18,7 @@
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
+const path = require("node:path");
 const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
@@ -47,6 +48,7 @@ function createProxy(options) {
     signer,           // optional receipt-sealing keypair (V11-RECEIPT-01)
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
+    childCwd,         // project directory for relative stdio server commands
     beforeForward,    // optional fail-closed live drift check
     leaseFence,       // optional durable lease-generation fence
     onClientLine,     // (line) => void — what the MCP client receives
@@ -93,13 +95,16 @@ function createProxy(options) {
   }
 
   const childCommand = childArgv[0];
-  if ((childCommand.includes("/") || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+  const spawnCwd = childCwd || process.cwd();
+  const childCommandPath = path.isAbsolute(childCommand) ? childCommand : path.resolve(spawnCwd, childCommand);
+  if ((childCommand.includes("/") || childCommand.startsWith(".")) && !fs.existsSync(childCommandPath)) {
     const error = new Error(`protected server command is missing: ${childCommand}`);
     error.code = "protected_server_missing";
     throw error;
   }
 
   const child = spawn(childCommand, childArgv.slice(1), {
+    cwd: spawnCwd,
     stdio: ["pipe", "pipe", "inherit"],
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });

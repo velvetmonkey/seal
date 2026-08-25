@@ -3,8 +3,8 @@
 // Execute the README's bash fences in one clean, throw-away HOME and compare
 // the output fences which immediately follow them. This is deliberately a
 // small parser: an unlabelled or unknown fence is not silently guessed.
-import { chmodSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -47,7 +47,22 @@ function parse(text) {
 }
 
 function normalize(text, home) {
-  return text.replaceAll("\\r", "").replaceAll("/home/you", home).replaceAll(home, "<HOME>").replaceAll("/tmp/", "<TMP>/");
+  const temporaryRoot = tmpdir().replace(/[/\\]+$/, "");
+  return text
+    .replaceAll("\\r", "")
+    .replaceAll("/home/you", home)
+    .replaceAll(home, "<HOME>")
+    .replaceAll(`${temporaryRoot}/`, "<TMP>/")
+    .replaceAll("/tmp/", "<TMP>/");
+}
+
+function forbiddenHomePath(body) {
+  const patterns = [
+    { name: "/home/ absolute path", regex: /\/home\/(?!you(?:\/|$))[^/\s`"'<>]+(?:\/|$)/ },
+    { name: "/Users/ absolute path", regex: /\/Users\/[^/\s`"'<>]+(?:\/|$)/ },
+    { name: "C:\\Users\\ absolute path", regex: /[A-Za-z]:\\Users\\[^\\\s`"'<>]+(?:\\|$)/ },
+  ];
+  return patterns.find((pattern) => pattern.regex.test(body)) || null;
 }
 
 function removeWritableTree(path) {
@@ -81,13 +96,15 @@ if (commands.length === 0) {
   process.exit(1);
 }
 for (const fence of commands) {
-  if (/\/home\//.test(fence.body)) {
-    fail(`README.md:${fence.line} command fence contains /home/ absolute path`);
+  const forbidden = forbiddenHomePath(fence.body);
+  if (forbidden) {
+    fail(`README.md:${fence.line} command fence contains ${forbidden.name}`);
   }
 }
 for (const fence of fences.filter((item) => item.role === "output")) {
-  if (/\/home\/monkey\/scratch\//.test(fence.body)) {
-    fail(`README.md:${fence.line} output fence contains builder-local path /home/monkey/scratch/`);
+  const forbidden = forbiddenHomePath(fence.body);
+  if (forbidden) {
+    fail(`README.md:${fence.line} output fence contains builder-local ${forbidden.name}`);
   }
 }
 if (process.exitCode === 1) process.exit(1);
@@ -99,7 +116,9 @@ for (let i = 0; i < fences.length - 1; i += 1) {
   if (fences[i].role === "command" && fences[i + 1].role === "output") expected.set(fences[i].line, fences[i + 1]);
 }
 
-const home = mkdtempSync(join(tmpdir(), "seal-containerwalk-home-"));
+const homeRoot = process.env.CONTAINERWALK_HOME_ROOT || join(homedir(), ".cache");
+mkdirSync(homeRoot, { recursive: true, mode: 0o700 });
+const home = mkdtempSync(join(homeRoot, "seal-containerwalk-home-"));
 const work = mkdtempSync(join(tmpdir(), "seal-containerwalk-work-"));
 const script = join(work, "readme-commands.sh");
 writeFileSync(script, "set -euo pipefail\n" + commands.map((fence, index) => `\nprintf '\\nCONTAINERWALK_COMMAND ${index + 1} README.md:${fence.line}\\n'\n${fence.body}\n`).join(""));

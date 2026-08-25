@@ -3,6 +3,7 @@
 // Isolated CommonJS worker around the fixture's proven Node loader. Keeping
 // Emscripten's globals here prevents them from entering the long-lived proxy.
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 async function main() {
   const kernelRoot = path.resolve(process.argv[2]);
@@ -14,7 +15,7 @@ async function main() {
     process.stdin.on("error", reject);
   }));
   const runner = require(path.join(kernelRoot, "runner.cjs"));
-  const cfg = await import(`file://${path.join(kernelRoot, "seal-config.js")}`);
+  const cfg = await import(pathToFileURL(path.join(kernelRoot, "seal-config.js")).href);
 
   // The guarded entry follows the retry tool so even an altered tool is
   // mediated. Only the issue-time target is granted, so alteration denies.

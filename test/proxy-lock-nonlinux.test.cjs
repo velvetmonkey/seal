@@ -64,10 +64,17 @@ function workspace(prefix) {
 
 function ownedActiveState(ctx) {
   const projectRoot = fs.realpathSync(ctx.project);
+  const gitRoot = spawnSync("git", ["-C", projectRoot, "rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  const localRoot = gitRoot.status === 0 && gitRoot.stdout.trim()
+    ? fs.realpathSync(gitRoot.stdout.trim())
+    : projectRoot;
   const statePath = statePathFor(projectRoot, ctx.env);
   const definition = { type: "stdio", command: "/seal", args: ["__proxy", "--protect-state", statePath], env: {} };
   fs.writeFileSync(path.join(ctx.home, ".claude.json"), JSON.stringify({
-    projects: { [projectRoot]: { mcpServers: { db: definition } } },
+    projects: { [localRoot]: { mcpServers: { db: definition } } },
   }, null, 2) + "\n");
   return {
     schema: "seal.protect/v1",
@@ -82,6 +89,7 @@ function ownedActiveState(ctx) {
       scope: "local",
       serverName: "db",
       projectRoot,
+      claudeProjectRoot: localRoot,
       projectId: projectId(projectRoot),
       definition,
     },

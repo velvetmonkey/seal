@@ -60,6 +60,18 @@ function realProjectRoot(projectRoot) {
   try { return fs.realpathSync(root); } catch { return root; }
 }
 
+function claudeProjectRoot(projectRoot) {
+  const root = realProjectRoot(projectRoot);
+  const result = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status === 0 && result.stdout.trim()) {
+    try { return fs.realpathSync(result.stdout.trim()); } catch { return path.resolve(result.stdout.trim()); }
+  }
+  return root;
+}
+
 function dataHome(env = process.env) {
   return env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
 }
@@ -319,6 +331,7 @@ function claudeConfigPath(env = process.env) {
 }
 
 function currentLocalOverride(projectRoot, serverName, env = process.env) {
+  const localRoot = claudeProjectRoot(projectRoot);
   let config;
   try {
     config = JSON.parse(fs.readFileSync(claudeConfigPath(env), "utf8"));
@@ -329,15 +342,17 @@ function currentLocalOverride(projectRoot, serverName, env = process.env) {
       "The current local override is not the one Seal installed.\nNo configuration was changed.",
     );
   }
-  return config?.projects?.[realProjectRoot(projectRoot)]?.mcpServers?.[serverName] || null;
+  return config?.projects?.[localRoot]?.mcpServers?.[serverName] || null;
 }
 
 function installedLocalOverride({ root, serverName, sealBin, statePath }) {
+  const localRoot = claudeProjectRoot(root);
   return {
     installed: false,
     scope: "local",
     serverName,
     projectRoot: root,
+    claudeProjectRoot: localRoot,
     projectId: projectId(root),
     definition: {
       type: "stdio",
@@ -353,6 +368,7 @@ function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = proc
   const owned = state?.localOverride;
   if (!state || state.state === STATES.UNPROTECTED || !owned || owned.installed !== true ||
       owned.scope !== "local" || owned.serverName !== serverName || owned.projectRoot !== root ||
+      (owned.claudeProjectRoot !== undefined && owned.claudeProjectRoot !== claudeProjectRoot(root)) ||
       owned.projectId !== projectId(root) || state.serverName !== serverName ||
       state.projectRoot !== root || state.projectId !== projectId(root)) {
     throw ownershipRefusal("no_seal_owned_override");

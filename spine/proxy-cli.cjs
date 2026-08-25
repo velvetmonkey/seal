@@ -66,6 +66,7 @@ async function run(argv) {
         signer,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
+        childCwd: state.projectRoot,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
         leaseFence: () => {
           const current = require("./protection.cjs").readState(options.protectState);

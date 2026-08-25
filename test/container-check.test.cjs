@@ -45,12 +45,17 @@ test("a command failure names the command, exit code, and first error line", () 
 test("an output path from the builder is not normalized away", () => {
   const result = run("```bash\nprintf 'safe\\n'\n```\n```output\n\/home\/monkey\/scratch\/builder\/x\n```\n");
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /output fence contains builder-local path/);
-  assert.match(result.stderr, /\/home\/monkey\/scratch\//);
+  assert.match(result.stderr, /output fence contains builder-local \/home\/ absolute path/);
 });
 
-test("a command fence with a /home absolute path fails before it runs", () => {
-  const result = run("```bash\nprintf '%s\\n' /home/monkey/not-a-reader-path\n```\n");
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /command fence contains \/home\/ absolute path/);
+test("a command fence with an absolute home path fails before it runs", () => {
+  for (const [pathText, diagnostic] of [
+    ["/home/monkey/not-a-reader-path", /command fence contains \/home\/ absolute path/],
+    ["/Users/reader/not-a-reader-path", /command fence contains \/Users\/ absolute path/],
+    ["'C:\\Users\\reader\\not-a-reader-path'", /command fence contains C:\\Users\\ absolute path/],
+  ]) {
+    const result = run(`\`\`\`bash\nprintf '%s\\n' ${pathText}\n\`\`\`\n`);
+    assert.equal(result.status, 1, pathText);
+    assert.match(result.stderr, diagnostic);
+  }
 });

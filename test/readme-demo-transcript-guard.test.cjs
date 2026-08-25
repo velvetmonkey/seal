@@ -70,7 +70,7 @@ test("a deleted terminal capture is detected", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    "```text\nINPUT REQUIRED",
+    "```text\nchild calls observed:",
     "INPUT REQUIRED",
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
