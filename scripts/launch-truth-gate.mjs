@@ -103,7 +103,7 @@ if (!readme.includes("demo's key is generated fresh for that run")) fail('README
 // from git history and update this gate in the same change.
 if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
 if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
-if (/github\.com\/velvetmonkey\/(?!seal[)\s/])/.test(readme)) fail('README links a sibling repository; the developer route carries no repository family');
+if (/github\.com\/velvetmonkey\/(?!seal(?:\.git)?(?:[)\s/#?]|$))/.test(readme)) fail('README links a sibling repository; the developer route carries no repository family');
 
 // --- Landing page and comparison surfaces: corrections stay in place ---
 
