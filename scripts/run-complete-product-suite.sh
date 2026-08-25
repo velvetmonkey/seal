@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# Roster completeness label: INJECTED, not enforced.
+# It catches a declared test file that did not run, whether by accident, by a
+# crash, by a misconfiguration, or by a rename that was never followed through.
+# It does not catch an actor who can write to the executed-file record. That
+# record is written by the process being measured, so a consistent forgery is
+# believed. That is accepted in CI because no such actor exists there; the
+# record lives in the runner's own temporary directory for the life of one run.
+# Known escapes: a count header edited to match a truncated body, and a forged
+# snapshot that makes "at least N of M" print a floor that is not a floor.
 # The declared product-suite roster is versioned separately from runtime
 # discovery. Keep it separate from run_tests so missing files cannot shrink the
 # expectation that the roster line compares against.
@@ -487,7 +496,7 @@ if [[ -n "$record_untrusted_reason" ]]; then
     for file in "${known_missing_tests[@]}"; do
       roster_message+="; $file did not run"
     done
-    roster_message+="; the executed-file record is untrusted at $output_file: $record_untrusted_reason, so the count may be low"
+    roster_message+="; floor comes from the suite's self-written executed-file record, which is untrusted at $output_file: $record_untrusted_reason, so the count may be low"
     report_roster_line "$roster_message"
     exit 1
   fi

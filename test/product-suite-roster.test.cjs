@@ -122,7 +122,7 @@ test("a genuine short roster and a later record change are both reported", (t) =
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(copy, space.tests, space.roster, space.manifest);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /ROSTER: at least 2 of 3 declared test files ran; .*three\.test\.cjs did not run; the executed-file record is untrusted .*record changed after the test process finished, so the count may be low/);
+  assert.match(result.stdout, /ROSTER: at least 2 of 3 declared test files ran; .*three\.test\.cjs did not run; floor comes from the suite's self-written executed-file record, which is untrusted .*record changed after the test process finished, so the count may be low/);
 });
 
 test("a stable partial record whose entry count is short is unreadable", (t) => {
@@ -152,7 +152,7 @@ test("a genuine short roster and a stable partial record are both reported", (t)
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(copy, space.tests, space.roster, space.manifest);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /ROSTER: at least 1 of 3 declared test files ran; .*three\.test\.cjs did not run; the executed-file record is untrusted .*executed-file count says 3 but record contains 2 entries, so the count may be low/);
+  assert.match(result.stdout, /ROSTER: at least 1 of 3 declared test files ran; .*three\.test\.cjs did not run; floor comes from the suite's self-written executed-file record, which is untrusted .*executed-file count says 3 but record contains 2 entries, so the count may be low/);
 });
 
 test("an unwritable record directory fails before the test phase", (t) => {
