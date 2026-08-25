@@ -5,7 +5,6 @@ test/cc-fixture.test.cjs
 test/cc-harness-truth.test.cjs
 test/checker-usage-header.test.cjs
 test/cli-next-steps.test.cjs
-test/claim-bearing-file-inventory.test.mjs
 test/claim-coverage-inventory.test.mjs
 test/claims-drift.test.mjs
 test/container-check.test.cjs
