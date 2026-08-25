@@ -169,6 +169,7 @@ function populationSource(population) {
     "// records its shared blind spots.",
     "// High-water marks never move down automatically; accepted shrink history stays review-visible.",
     "export default {",
+    ...(population.populationRule === 1 ? ["  populationRule: 1,"] : []),
     `  internalOccurrences: ${population.internalOccurrences},`,
     `  externalOccurrences: ${population.externalOccurrences},`,
     `  internalOccurrencesHighWaterMark: ${population.internalOccurrencesHighWaterMark},`,
@@ -297,6 +298,7 @@ export function populationDecision(oldPopulation, newPopulation, { allowShrinkFi
     unauthorizedShrinks: [],
     unusedAuthorizations: [],
     population: {
+      populationRule: 1,
       ...newPopulation,
       ...Object.fromEntries(POPULATION_KEYS.map((key) => [
         HIGH_WATER_KEYS[key],
@@ -334,6 +336,10 @@ async function committedPopulation() {
   if (!recordedPopulation || typeof recordedPopulation !== "object" || Array.isArray(recordedPopulation)) {
     throw new Error("invalid population record: expected an object");
   }
+  const legacyPopulation = recordedPopulation.populationRule === undefined;
+  if (!legacyPopulation && recordedPopulation.populationRule !== 1) {
+    throw new Error(`invalid populationRule: ${String(recordedPopulation.populationRule)}`);
+  }
   const population = {};
   for (const key of POPULATION_KEYS) {
     const highWaterKey = HIGH_WATER_KEYS[key];
@@ -364,8 +370,15 @@ async function committedPopulation() {
   population.fileOccurrencesHighWaterMarks = recordedPopulation.fileOccurrencesHighWaterMarks;
   if (!Array.isArray(recordedPopulation.shrinkHistory)) throw new Error("invalid shrinkHistory: must be an array");
   population.shrinkHistory = recordedPopulation.shrinkHistory;
+  if (!legacyPopulation) population.populationRule = 1;
   if (populationSource(population) !== source) {
     throw new Error("population record is not canonical; comments, duplicate keys, or hand edits are not accepted");
+  }
+  if (legacyPopulation) {
+    // One-time migration from the layered record: the last generated current
+    // counts become the sole union-rule floor. Later authorized partial
+    // decreases retain that floor instead of re-baselining it.
+    population.fileOccurrencesHighWaterMarks = population.fileOccurrences;
   }
   return { population, source };
 }

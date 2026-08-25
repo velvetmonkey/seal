@@ -196,6 +196,7 @@ test("population changes and high-water decisions stay explicit without running 
     ])
       && equal.every(({ difference }) => difference === 0)
       && JSON.stringify(accepted.population) === JSON.stringify({
+        populationRule: 1,
         internalOccurrences: 1,
         externalOccurrences: 50,
         fileOccurrences: { "page.md": { internalOccurrences: 1, externalOccurrences: 0 } },

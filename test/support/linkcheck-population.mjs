@@ -5,6 +5,7 @@
 // records its shared blind spots.
 // High-water marks never move down automatically; accepted shrink history stays review-visible.
 export default {
+  populationRule: 1,
   internalOccurrences: 407,
   externalOccurrences: 50,
   internalOccurrencesHighWaterMark: 407,
@@ -1149,7 +1150,7 @@ export default {
       "externalOccurrences": 0
     },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": {
-      "internalOccurrences": 31,
+      "internalOccurrences": 28,
       "externalOccurrences": 0
     },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": {

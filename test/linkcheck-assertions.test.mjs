@@ -8,7 +8,6 @@ import path from "node:path";
 import test from "node:test";
 
 const LINKCHECK_TEST = path.resolve(import.meta.dirname, "linkcheck.test.mjs");
-const LINKCHECK_WRITE_TEST = path.resolve(import.meta.dirname, "linkcheck-write.test.mjs");
 const CONTROL_DOCUMENT = path.resolve(import.meta.dirname, "../docs/assurance/linkcheck-population-control.md");
 
 const REQUIRED_ASSERTIONS = [
@@ -28,6 +27,25 @@ const REQUIRED_ASSERTIONS = [
   ["per-file refusal names the lost occurrence", 'file: "docs/assurance/README.md"'],
 ];
 
+test("linkcheck assertion inventory refuses a removed assertion by name", () => {
+  const source = readFileSync(LINKCHECK_TEST, "utf8");
+  for (const [name, fragment] of REQUIRED_ASSERTIONS) {
+    assert.ok(source.includes(fragment), `linkcheck assertion missing: ${name}`);
+  }
+  const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
+  assert.equal(actualCount, 17, `linkcheck assertion inventory changed: expected 17 assertions, found ${actualCount}`);
+  const control = readFileSync(CONTROL_DOCUMENT, "utf8");
+  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md
+  assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
+  const writeSource = readFileSync(LINKCHECK_WRITE_TEST, "utf8");
+  for (const name of REQUIRED_WRITE_TESTS) {
+    assert.ok(writeSource.includes(name), `linkcheck write test missing: ${name}`);
+  }
+  const writeTestCount = (writeSource.match(/^test\("/gmu) || []).length;
+  assert.equal(writeTestCount, 19, `linkcheck write inventory changed: expected 19 tests, found ${writeTestCount}`);
+});
+
+const LINKCHECK_WRITE_TEST = path.resolve(import.meta.dirname, "linkcheck-write.test.mjs");
 const REQUIRED_WRITE_TESTS = [
   "defect 1: a named shrink does not sequentially re-baseline an unflagged write",
   "defect 2: comments and duplicate keys cannot poison a recorded file count",
@@ -49,21 +67,3 @@ const REQUIRED_WRITE_TESTS = [
   "a bare or unused allow-shrink authorization refuses",
   "the fixture cleanup removes every scratch mutation",
 ];
-
-test("linkcheck assertion inventory refuses a removed assertion by name", () => {
-  const source = readFileSync(LINKCHECK_TEST, "utf8");
-  for (const [name, fragment] of REQUIRED_ASSERTIONS) {
-    assert.ok(source.includes(fragment), `linkcheck assertion missing: ${name}`);
-  }
-  const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
-  assert.equal(actualCount, 17, `linkcheck assertion inventory changed: expected 17 assertions, found ${actualCount}`);
-  const writeSource = readFileSync(LINKCHECK_WRITE_TEST, "utf8");
-  for (const name of REQUIRED_WRITE_TESTS) {
-    assert.ok(writeSource.includes(name), `linkcheck write test missing: ${name}`);
-  }
-  const writeTestCount = (writeSource.match(/^test\("/gmu) || []).length;
-  assert.equal(writeTestCount, 19, `linkcheck write inventory changed: expected 19 tests, found ${writeTestCount}`);
-  const control = readFileSync(CONTROL_DOCUMENT, "utf8");
-  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md
-  assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
-});

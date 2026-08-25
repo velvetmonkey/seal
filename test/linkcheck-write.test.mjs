@@ -45,6 +45,7 @@ function populationSource({ fileOccurrences, fileOccurrencesHighWaterMarks = fil
     "// records its shared blind spots.",
     "// High-water marks never move down automatically; accepted shrink history stays review-visible.",
     "export default {",
+    "  populationRule: 1,",
     `  internalOccurrences: ${internalOccurrences},`,
     "  externalOccurrences: 0,",
     `  internalOccurrencesHighWaterMark: ${internalOccurrences},`,
