@@ -1,16 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Truth gate for the launch surfaces.
-//
-// Since roadmap step 6 the README is the developer route only: one badge,
-// four exercised beats, the canonical approval-origin sentence, and no
-// repository family, replay narrative or mesh claim. This gate holds that
-// shape, and holds the evaluator and comparison surfaces to the corrections
-// they already carry. If a removed claim is reintroduced, the gate fails
-// until the claim returns WITH its qualification and this gate is updated
-// deliberately in the same change.
 import fs from 'node:fs';
 import path from 'node:path';
-
 const EXPECTED = {
   readme: 'README.md',
   umbrellaWorkflow: '.github/workflows/ci.yml',
@@ -18,12 +9,10 @@ const EXPECTED = {
   comparison: 'docs/archive/WHY-DIFFERENT.md',
   landingPage: 'docs/assurance/index.html',
 };
-
 function fail(message) {
   console.error(`LAUNCH TRUTH FAIL: ${message}`);
   process.exit(1);
 }
-
 function readRequired(label, file) {
   if (!file) fail(`${label} input is absent`);
   let stat;
@@ -43,17 +32,14 @@ function readRequired(label, file) {
     fail(`${label} input is unreadable: ${file}: ${error.message}`);
   }
 }
-
 function workflowName(label, source) {
   const names = [...source.matchAll(/^name:\s*(.+?)\s*$/gm)].map((match) => match[1]);
   if (names.length !== 1) fail(`${label} must contain exactly one top-level name; found ${names.length}`);
   return names[0];
 }
-
 function requireMatch(source, pattern, message) {
   if (!pattern.test(source)) fail(message);
 }
-
 function repositoryLinks(source) {
   // Markdown occasionally wraps a long destination immediately after a path
   // slash. Reassemble that one lexical continuation before extracting tokens;
@@ -62,12 +48,24 @@ function repositoryLinks(source) {
     /((?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]*\/|git@github\.com:[^\s<>()\[\]{}"'`]*\/))[ \t]*\r?\n[ \t]*(?=[A-Za-z0-9%])/gi,
     '$1',
   );
-  return joinedContinuations.match(
+  const links = joinedContinuations.match(
     /(?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]+|git@github\.com:[^\s<>()\[\]{}"'`]+)/gi,
   ) ?? [];
+  for (const line of joinedContinuations.split(/\r?\n/u)) { const candidate = line.trim(); if (/^(?:(?:(?:https?|file|git\+https|git):)|\/\/|git@github\.com:)/iu.test(candidate)) links.push(candidate); }
+  return [...new Set(links.filter((link) => !link.startsWith('///')))];
 }
 
+/* RFC 3986 supplies the literal URL character set: unreserved, sub-delims,
+ * gen-delims, and percent. The gate no longer infers malformation from parser
+ * behaviour; this check is decided before parsing. */
+const RFC3986_LITERAL = /^[A-Za-z0-9._~!$&'()*+,;=:/?#\[\]@%-]+$/u;
+const VALID_PERCENT_ESCAPE = /%(?:[0-9A-Fa-f]{2})/gu;
+
+function hasInvalidRawUrlCharacters(token) { return !RFC3986_LITERAL.test(token) || token.replace(VALID_PERCENT_ESCAPE, '').includes('%'); }
+
 function repositoryLinkVerdict(link) {
+  if (link.startsWith('//')) throw new Error('scheme-relative URL is not allowed');
+
   let parsed;
   if (link.startsWith('git@github.com:')) {
     parsed = new URL(`ssh://github.com/${link.slice('git@github.com:'.length)}`);
@@ -75,8 +73,9 @@ function repositoryLinkVerdict(link) {
     parsed = new URL(link.startsWith('//') ? `https:${link}` : link);
   }
 
-  if (parsed.username || parsed.password) return 'sibling';
-  if (parsed.port) return 'sibling';
+  const allowedSchemes = new Set(['http:', 'https:', 'git+https:', 'git:', 'ssh:']);
+  if (!allowedSchemes.has(parsed.protocol)) throw new Error('unsupported URL scheme: ' + parsed.protocol);
+  if (!parsed.hostname) throw new Error('URL host is empty');
 
   const selfPaths = new Set([
     '/velvetmonkey/seal',
@@ -85,6 +84,8 @@ function repositoryLinkVerdict(link) {
     '/velvetmonkey/seal.git/',
   ]);
   if (parsed.hostname === 'github.com') {
+    // Sibling status is decided by the host and repository path alone; port
+    // numbers and userinfo components never decide repository classification.
     if (selfPaths.has(parsed.pathname)) return 'self';
 
     // These are the non-repository GitHub endpoints already required by the
@@ -119,6 +120,9 @@ const version = readRequired('VERSION', new URL('../VERSION', import.meta.url)).
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
 
 for (const link of repositoryLinks(readme)) {
+  if (hasInvalidRawUrlCharacters(link)) {
+    fail(`README contains a URL character that must be percent-encoded: ${link}`);
+  }
   let verdict;
   try {
     verdict = repositoryLinkVerdict(link);
@@ -153,10 +157,7 @@ const platformSentence = '**macOS source portability is CI-exercised for install
 const platformCount = readme.split(platformSentence).length - 1;
 if (platformCount !== 1 || /supports Linux x86-64 and macOS x64\/arm64|source builds support Linux x86-64 and macOS/i.test(readme)) fail(platformCount !== 1 ? `README must state the macOS portability and Protect boundary verbatim exactly once; found ${platformCount}` : 'README claims macOS support without excluding Protect');
 
-// The signed-receipt claim was the fifth false user-visible string in this
-// build: the demo signs receipts with a per-run key, the protected path
-// Protected activation creates or loads a durable signer (spine/proxy-cli.cjs),
-// while the demo uses a key generated for that run. Keep both lifetimes plain.
+// The signed-receipt claim was the fifth false user-visible string in this build; the demo signs per-run while the protected path uses a durable signer.
 if (!readme.includes('protected path creates or reuses a machine-local signing key')) fail('README must disclose the protected path\'s durable machine-local receipt key');
 if (!readme.includes("demo's key is generated fresh for that run")) fail('README must distinguish the demo\'s temporary receipt key from the protected path\'s durable key');
 
@@ -166,10 +167,9 @@ if (!readme.includes("demo's key is generated fresh for that run")) fail('README
 if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
 if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
 // --- Landing page and comparison surfaces: corrections stay in place ---
-
 requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay'); // CLAIM-COVERAGE: docs/assurance/index.html
 if (/replayed live-agent attack|see a live-agent attack blocked/i.test(landingPage)) fail('the landing page describes the replay as a live-agent attack');
-if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
+  if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
 
 requireMatch(comparison, /^LLM judges and prompt filters for agent tools work by judgment:/m, 'comparison must be narrowed to LLM judges and prompt filters'); // CLAIM-COVERAGE: docs/archive/WHY-DIFFERENT.md
 requireMatch(comparison, /when one of these heuristic guards guesses wrong it can fail\s+\*\*open\*\*/m, 'comparison must use the qualified “can fail open” claim');
