@@ -44,7 +44,7 @@ function repositoryLinks(source) {
   // Markdown occasionally wraps a long destination immediately after a path
   // slash. Reassemble that one lexical continuation before extracting tokens;
   // do not otherwise remove or collapse whitespace inside a URL.
-  const joinedContinuations = source.replace(
+  const joinedContinuations = withoutHtmlCommentClosers(source).replace(
     /((?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]*\/|git@github\.com:[^\s<>()\[\]{}"'`]*\/))[ \t]*\r?\n[ \t]*(?=[A-Za-z0-9%])/gi,
     '$1',
   );
@@ -184,6 +184,13 @@ requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}2
 
 console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the approval-origin and platform sentences, and the standing corrections all hold`);
 
+function withoutHtmlCommentClosers(source) {
+  // A paired HTML comment closer is carrier syntax, not destination text.
+  // Mask only the exact `-->` delimiter, preserving offsets and every byte of
+  // the comment's destination; a genuine `>` elsewhere remains rejectable.
+  return source.replace(/<!--[\s\S]*?-->/gu, (comment) => `${comment.slice(0, -3)}   `);
+}
+
 function literalCodeRanges(source) {
   const ranges = [];
   let fence = null;
@@ -222,8 +229,11 @@ function literalCodeRanges(source) {
 }
 
 function rawUrlDestinations(source) {
+  source = withoutHtmlCommentClosers(source);
   const codeRanges = literalCodeRanges(source);
-  const starts = source.matchAll(/(?<![A-Za-z0-9+.-])(?:(?:https?|git\+https|git):\/\/|\/\/|git@github\.com:)/giu);
+  // An exact HTML comment opener is a destination-start boundary even though
+  // its final byte is `-`; arbitrary hyphen-preceded schemes remain excluded.
+  const starts = source.matchAll(/(?:(?<=<!--)|(?<![A-Za-z0-9+.-]))(?:(?:https?|git\+https|git):\/\/|\/\/|git@github\.com:)/giu);
   const destinations = [];
 
   function markdownDestinationEnd(begin, enclosedEnd) {
