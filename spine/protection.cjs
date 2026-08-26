@@ -337,9 +337,12 @@ function currentLocalOverride(projectRoot, serverName, env = process.env) {
     config = JSON.parse(fs.readFileSync(claudeConfigPath(env), "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return null;
+    const reason = error instanceof SyntaxError
+      ? "SyntaxError: configuration is not valid JSON"
+      : error.message || error.code || error.name || "unknown read failure";
     throw ownershipRefusal(
-      "local_override_drifted",
-      "The current local override is not the one Seal installed.\nNo configuration was changed.",
+      "local_override_unreadable",
+      `The local Claude Code configuration could not be read: ${reason}\nNo configuration was changed.`,
     );
   }
   return config?.projects?.[localRoot]?.mcpServers?.[serverName] || null;

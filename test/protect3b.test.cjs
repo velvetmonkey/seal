@@ -189,6 +189,80 @@ test("unprotect refuses a developer-replaced local override and preserves it byt
   assert.equal(sha256(fs.readFileSync(overridePath)), beforeHash, "the developer's override must remain byte-identical");
 });
 
+test("status distinguishes unreadable local configuration from a drifted override", (t) => {
+  const root = tmpdir("seal-protect3b-override-read-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "override-read-data.txt")] });
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const overridePath = fakeLocalOverridePath(root);
+  const installedBytes = fs.readFileSync(overridePath);
+  t.after(() => {
+    try {
+      const stat = fs.lstatSync(overridePath);
+      if (stat.isDirectory()) fs.rmdirSync(overridePath);
+      else fs.chmodSync(overridePath, 0o600);
+    } catch {}
+  });
+
+  fs.writeFileSync(overridePath, '{"projects":');
+  const truncated = run(project, home, ["status"], env);
+  assert.notEqual(truncated.code, 0, truncated.out);
+  assert.match(truncated.out, /^REFUSED local_override_unreadable$/m);
+  assert.match(truncated.out, /^The local Claude Code configuration could not be read: SyntaxError: /m);
+  assert.doesNotMatch(truncated.out, /The current local override is not the one Seal installed/);
+
+  fs.writeFileSync(overridePath, installedBytes, { mode: 0o600 });
+  fs.chmodSync(overridePath, 0o000);
+  const mode000 = run(project, home, ["status"], env);
+  fs.chmodSync(overridePath, 0o600);
+  assert.notEqual(mode000.code, 0, mode000.out);
+  assert.match(mode000.out, /^REFUSED local_override_unreadable$/m);
+  assert.match(mode000.out, /EACCES/);
+
+  fs.unlinkSync(overridePath);
+  fs.mkdirSync(overridePath);
+  const directory = run(project, home, ["status"], env);
+  fs.rmdirSync(overridePath);
+  assert.notEqual(directory.code, 0, directory.out);
+  assert.match(directory.out, /^REFUSED local_override_unreadable$/m);
+  assert.match(directory.out, /EISDIR/);
+
+  const developerBytes = Buffer.from(JSON.stringify({
+    projects: { [project]: { mcpServers: { db: {
+      type: "stdio", command: "developer-command", args: ["--developer-owned"], env: {},
+    } } } },
+  }, null, 2) + "\n");
+  fs.writeFileSync(overridePath, developerBytes, { mode: 0o600 });
+  const drifted = run(project, home, ["status"], env);
+  assert.notEqual(drifted.code, 0, drifted.out);
+  assert.match(drifted.out, /^REFUSED local_override_drifted$/m);
+  assert.match(drifted.out, /^The current local override is not the one Seal installed\.$/m);
+  assert.match(drifted.out, /^No configuration was changed\.$/m);
+});
+
+test("unprotect treats a missing local configuration as absent", () => {
+  const root = tmpdir("seal-protect3b-config-absent-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "config-absent-data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+
+  fs.unlinkSync(fakeLocalOverridePath(root));
+  const unprotected = run(project, home, ["unprotect", "db"], env);
+  assert.equal(unprotected.code, 0, unprotected.out);
+  assert.doesNotMatch(unprotected.out, /^REFUSED /m);
+});
+
 test("protect names install-time refusals", () => {
   const root = tmpdir("seal-protect3b-refusals-");
   const project = path.join(root, "project");

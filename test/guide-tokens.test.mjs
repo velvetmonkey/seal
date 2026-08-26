@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "6657afac59df8c4021b5eb812227737d2fc9c997fc02389094c8b60e25e63c74";
+const GUIDE_SHA256 = "1a49ec4d98a4d35765fceb2674d3b801bbf26d3d4d7e10da78407519e5b7cf8a";
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
@@ -25,7 +25,7 @@ const SOURCES = [
   {
     file: "spine/protection.cjs",
     patterns: [
-      /new ProtectionError\(\s*"([a-z_]+)"/g,
+      /new ProtectionError\(\s*"([a-z_]+)"/g, /\bownershipRefusal\(\s*"([a-z_]+)"/g,
       /\bfail\("([a-z_]+)"/g,
       /\brefusal: "([a-z_]+)"/g,
       /\bcode: "([a-z_]+)"/g,

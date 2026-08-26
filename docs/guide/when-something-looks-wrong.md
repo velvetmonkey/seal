@@ -263,6 +263,22 @@ an earlier experiment, maybe something else using the same mechanism. Seal
 will not overwrite it. Look at it with `claude mcp get <server>`; remove it
 with `claude mcp remove --scope local <server>` if it is yours to remove.
 
+### `local_override_unreadable`
+
+Seal could not read or parse the local Claude Code configuration; the refusal
+names the underlying error, and no configuration was changed.
+
+### `local_override_drifted`
+
+Seal read the local Claude Code configuration and found that the server's
+local override is not the definition Seal installed. Restore that definition
+before trusting status or asking Seal to remove the override.
+
+### `no_seal_owned_override`
+
+Seal has no stored ownership proof for this server's local override, so it
+will not remove or reinterpret that override.
+
 ### `already_protected`
 
 This project already has recorded protection (the message names its state,
