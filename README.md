@@ -26,30 +26,30 @@ Both leave local evidence you can inspect before removing the throw-away files.
 
 Keep the printed receipt paths until you have checked them.
 
-Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
+Install the published Linux x86-64 release before you run the command. The release tag also identifies its `SHA256SUMS`. These commands download the binary and sibling receipt-checker asset from that release. Check both assets' digests and byte counts before you run them. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
 ```bash
-SEAL_VERSION=v0.2.0-rc.2
+SEAL_VERSION=v0.2.0-rc.3
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-read -r expected_digest expected_bytes expected_name < SHA256SUMS
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
-test "$actual_digest" = "$expected_digest"
-actual_bytes="$(wc -c < "$expected_name")"
-test "$actual_bytes" = "$expected_bytes"
-chmod +x "$expected_name"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs" # This checker does not enter the installed payload.
+read -r expected_digest expected_bytes expected_name < <(awk -v name="seal-$SEAL_VERSION-linux-x64" '$3 == name' SHA256SUMS); test "$expected_name" = "seal-$SEAL_VERSION-linux-x64"
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$actual_digest" = "$expected_digest"; actual_bytes="$(wc -c < "$expected_name")"; test "$actual_bytes" = "$expected_bytes"
+read -r checker_digest checker_bytes checker_name < <(awk '$3 == "seal-receipt-check.mjs"' SHA256SUMS); test "$checker_name" = "seal-receipt-check.mjs"
+if command -v shasum >/dev/null 2>&1; then checker_actual_digest="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then checker_actual_digest="$(sha256sum "$checker_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$checker_actual_digest" = "$checker_digest"; checker_actual_bytes="$(wc -c < "$checker_name")"; test "$checker_actual_bytes" = "$checker_bytes"
+checker="$(pwd -P)/$checker_name"; chmod +x "$expected_name"
 ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Requires Node 20+. The published Seal v0.2.0-rc.2 release asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
+Requires Node 20+. The published Seal v0.2.0-rc.3 release asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
 
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
-installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+installed seal 0.2.0-rc.3 linux-x64
+store: /home/you/.local/lib/seal/store/c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
 command: /home/you/.local/bin/seal
-tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+tree: c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
 ```
 
 ## See it work
@@ -75,9 +75,9 @@ one-use held: the replay did not run the call again; child calls observed: still
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
 
-The current install payload does not include the checker; the release workflow will publish
-a separate checker asset with the next release. Clone the [Seal source repository](https://github.com/velvetmonkey/seal)
-and run the checker from that source checkout. The repository root has no hand-maintained `SHA256SUMS`.
+The checker downloaded above is a sibling release asset covered by the same `SHA256SUMS`.
+It is not in the installed binary tree.
+Run the verified download when the demo prints a receipt and trusted public key.
 
 **macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.** Linux x86-64 is the supported Protect path; Windows and Linux ARM are unsupported.
 
@@ -98,7 +98,7 @@ claude --version
 
 In a [Claude Code project](docs/guide/choosing-what-to-protect.md), make `.mcp.json` define the stdio server and tool to gate. This makes a small local project whose `db` server is Seal's demo server:
 
-The `git init -q` line makes this throw-away directory the Claude Code project root for the published v0.2.0-rc.2 CLI.
+The `git init -q` line makes this throw-away directory the Claude Code project root for the published v0.2.0-rc.3 CLI.
 
 ```bash
 mkdir -p seal-protect-demo
@@ -107,7 +107,7 @@ git init -q
 printf '%s\n' '{"mcpServers":{"db":{"command":"seal","args":["__demo-server","./data.txt"]}}}' > .mcp.json
 ```
 
-With the published v0.2.0-rc.2 CLI, protect one tool:
+With the published v0.2.0-rc.3 CLI, protect one tool:
 
 ```bash
 seal protect db demo.mutate
@@ -136,18 +136,18 @@ The protected path creates or reuses a machine-local signing key. The demo's key
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
 trust. The demo prints a ready-to-run checker command for one of its receipts.
-Current install payload does not include checker; the release workflow will publish a separate checker asset with the next release.
-Clone the [Seal source repository](https://github.com/velvetmonkey/seal) and run the checker from that source checkout; use trusted public key printed by demo:
+The download block above sets `checker` to the verified sibling asset's absolute path.
+That path remains valid after the walkthrough changes into the protected project directory.
+Use it with the trusted public key printed by the demo:
 
 ```bash
-git clone https://github.com/velvetmonkey/seal.git seal-source && checker="./seal-source/checker/seal-receipt-check.mjs"
 receipt="$(find "$demo_dir/receipts" -name '*BLOCK.json' -print -quit)"
 node "$checker" "$receipt" --pubkey "$demo_dir/receipt-signer.pub"
 ```
 
-If the installed development tree does not contain the checker, use the
-[Seal source repository](https://github.com/velvetmonkey/seal) and substitute
-the receipt and public-key paths printed by your demo.
+The checker is not copied into the installed binary tree.
+If you start a new shell, set `checker` to the downloaded asset's absolute path.
+Use the receipt and public-key paths printed by your own demo run.
 
 ## Remove it
 
