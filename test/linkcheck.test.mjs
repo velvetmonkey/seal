@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { markdownDestinations } from "../scripts/linkcheck.mjs";
+import { countDestination, markdownDestinations } from "../scripts/linkcheck.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
@@ -129,22 +129,50 @@ test("clean CI family linkcheck exits 0 after checking every reference-parsed ta
   const { env, cleanup } = familyEnvironment();
   try {
     const result = run(ROOT, { ...env, LINKCHECK_REPORT_SCANNED_TARGETS: "1" });
-    assert.equal(result.status, 0, result.stdout + result.stderr);
     const targetLine = result.stdout.split("\n").find((line) => line.startsWith("link-check-targets: "));
     assert.ok(targetLine, "link checker must report the targets that actually reached check()");
     const scanned = JSON.parse(targetLine.slice("link-check-targets: ".length)).sort();
     assert.deepEqual(scanned, expectedTargets(), "every reference-parsed live target must reach check()");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.ok(
-      result.stdout.split("\n").filter(Boolean).every((line) => /^(?:BROKEN|EXTERNAL)  |^link-check-targets: |^link-check: /u.test(line)),
+      result.stdout.split("\n").filter(Boolean).every((line) => /^(?:BROKEN|UNVERIFIED)  |^link-check-targets: |^link-check: /u.test(line)),
       "link checker stdout must contain only structured diagnostic and summary lines",
     );
     assert.match(
       result.stdout,
-      /^link-check: \d+ internal links, \d+ external links, \d+ required live links, 0 broken$/mu,
-      "the checker must finish with no broken targets",
+      /^link-check: \d+ internal links, \d+ external links, \d+ required live links, 0 unverified, 0 broken$/mu,
+      "the checker must finish with no unverified or broken targets when every family root is present",
     );
   } finally {
     cleanup();
+  }
+});
+
+test("family target is unverified only while its family root is absent", () => {
+  const scratch = mkdtempSync(path.join(tmpdir(), "seal-linkcheck-family-outcome-"));
+  const familyRoot = path.join(scratch, "sister");
+  const roots = new Map([["sister", familyRoot]]);
+  const messages = [];
+  const originalLog = console.log;
+  console.log = (message) => messages.push(message);
+  try {
+    const absent = { internalOccurrences: 0, externalOccurrences: 0, unverified: 0, bad: 0 };
+    countDestination("README.md", "sister/docs/missing.md", scratch, roots, absent, true);
+    assert.deepEqual(absent, { internalOccurrences: 0, externalOccurrences: 1, unverified: 1, bad: 0 },
+      "absent family root must be counted as unverified without failing");
+
+    mkdirSync(familyRoot);
+    const present = { internalOccurrences: 0, externalOccurrences: 0, unverified: 0, bad: 0 };
+    countDestination("README.md", "sister/docs/missing.md", scratch, roots, present, true);
+    assert.deepEqual(present, { internalOccurrences: 0, externalOccurrences: 1, unverified: 0, bad: 1 },
+      "missing file beneath a present family root must be broken");
+    assert.deepEqual(messages, [
+      "UNVERIFIED  README.md -> sister/docs/missing.md",
+      "BROKEN  README.md -> sister/docs/missing.md",
+    ], "family diagnostics must distinguish absent root from missing target");
+  } finally {
+    console.log = originalLog;
+    rmSync(scratch, { recursive: true, force: true });
   }
 });
 
