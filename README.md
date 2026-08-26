@@ -75,9 +75,9 @@ one-use held: the replay did not run the call again; child calls observed: still
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
 
-The installed release tree includes the receipt checker, while an installed
-development tree does not; clone the [Seal source repository](https://github.com/velvetmonkey/seal)
-to get it. The repository root has no hand-maintained `SHA256SUMS`.
+The current install payload does not include the checker; a separate checker
+asset is now published with the release; clone the [Seal source repository](https://github.com/velvetmonkey/seal)
+to get that asset. The repository root has no hand-maintained `SHA256SUMS`.
 
 **macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.** Linux x86-64 is the supported Protect path; Windows and Linux ARM are unsupported.
 
@@ -136,11 +136,11 @@ The protected path creates or reuses a machine-local signing key. The demo's key
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
 trust. The demo prints a ready-to-run checker command for one of its receipts.
-To run the installed checker on the blocked receipt from the demo above, use
-the trusted public key printed by the demo:
+Current install payload does not include checker; a separate checker asset is currently
+published with release; download it; use trusted public key printed by demo:
 
 ```bash
-checker="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+checker="./seal-receipt-check.mjs"
 receipt="$(find "$demo_dir/receipts" -name '*BLOCK.json' -print -quit)"
 node "$checker" "$receipt" --pubkey "$demo_dir/receipt-signer.pub"
 ```
