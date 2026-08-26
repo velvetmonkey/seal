@@ -1,7 +1,7 @@
-# Install Seal v0.2.0-rc.2
+# Install Seal v0.2.0-rc.3
 
 macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. The immutable v0.2.0-rc.2 release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported.
+Protect is not supported on macOS yet. The published v0.2.0-rc.3 release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -19,7 +19,7 @@ answer "did I download the bytes the release named?" They do not answer
 ## Verify, then install
 
 ```bash
-SEAL_VERSION=v0.2.0-rc.2
+SEAL_VERSION=v0.2.0-rc.3
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 if [ ! -r SHA256SUMS ] || [ ! -s SHA256SUMS ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
@@ -34,16 +34,16 @@ chmod +x "$expected_name"
 ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-Success prints `installed seal 0.2.0-rc.2 linux-x64` and the store, command,
+Success prints `installed seal 0.2.0-rc.3 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
-The tree hash of the published v0.2.0-rc.2 asset is pinned here:
+The tree hash of the published v0.2.0-rc.3 asset is pinned here:
 
 **Seal installed-tree pin role:** `published-asset`
 ```output
-installed seal 0.2.0-rc.2 linux-x64
-store: /home/you/.local/lib/seal/store/8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+installed seal 0.2.0-rc.3 linux-x64
+store: /home/you/.local/lib/seal/store/c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
 command: /home/you/.local/bin/seal
-tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
+tree: c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
 ```
 
 Add `~/.local/bin` to PATH:
@@ -54,8 +54,9 @@ $ export PATH="$HOME/.local/bin:$PATH"
 
 Further distribution detail, including what each payload contains, is in
 [DISTRIBUTION.md](../assurance/distribution.md). The published payload in the transcript above
-includes the checker; the current development payload below does not. Clone the
-[Seal source repository](https://github.com/velvetmonkey/seal) to obtain it; see [evaluator-walk.md](../start/evaluator-walk.md).
+does not include the checker; download the sibling
+[`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
+and verify it against that release's `SHA256SUMS` asset; see [evaluator-walk.md](../start/evaluator-walk.md).
 
 ## Source-build tree pin
 
