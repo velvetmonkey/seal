@@ -39,16 +39,16 @@ test("the Protect section requires Claude Code and provides its availability che
   assert.ok(protect.includes("With the published v0.2.0-rc.2 CLI, protect one tool:"), "Protect must state its published-CLI scope");
 });
 
-test("the Remove section leaves the demo cleanup instruction fresh in the reader's memory", () => {
+test("the demo section names the printed directory as the cleanup target", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const remove = readme.indexOf("## Remove it");
-  const boundary = readme.indexOf("## The boundary");
-  const cleanupReminder = "Remove the exact temporary demo directory printed by your run after checking\nits receipt.";
+  const demo = readme.indexOf("## See it work");
+  const protect = readme.indexOf("## Protect something real");
+  const cleanupReminder = "When you are finished, remove the directory printed as `Demo directory: /absolute/path`.";
 
-  assert.ok(remove >= 0, "README must contain the Remove beat");
-  assert.ok(boundary > remove, "the boundary must follow the Remove beat");
-  assert.ok(readme.indexOf(cleanupReminder, remove) > remove, "the demo cleanup instruction must appear after Remove");
-  assert.ok(readme.indexOf(cleanupReminder, remove) < boundary, "the demo cleanup instruction must appear before the boundary");
+  assert.ok(demo >= 0, "README must contain the demo beat");
+  assert.ok(protect > demo, "the Protect beat must follow the demo beat");
+  assert.ok(readme.indexOf(cleanupReminder, demo) > demo, "the demo cleanup instruction must appear in the demo section");
+  assert.ok(readme.indexOf(cleanupReminder, demo) < protect, "the demo cleanup instruction must precede Protect");
 });
 
 test("both conventional help flags print the bare-command help and succeed", () => {

@@ -57,8 +57,9 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 The command supplies `y` to show the complete approve-once demonstration; run `seal demo` interactively to choose the response yourself.
 
 ```bash
-demo_dir="$(mktemp -d)" && printf '%s\n' seal-readme-demo > "$demo_dir/.seal-demo-directory" && printf 'y\n' | seal demo --dir "$demo_dir"
+demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
 ```
+When you are finished, remove the directory printed as `Demo directory: /absolute/path`.
 This is real output from `seal demo` (excerpted).
 
 ```text
@@ -164,17 +165,16 @@ delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
 remain until you or Claude Code remove them. Your project `.mcp.json` stays
 byte-for-byte unchanged.
 
-To remove Seal itself, make its read-only files writable first:
 
-```bash
-chmod u+w ~/.local/bin/seal && rm ~/.local/bin/seal
-chmod -R u+w ~/.local/lib/seal && rm -r ~/.local/lib/seal
-rm -r ~/.local/share/seal
-```
 
-Remove the exact temporary demo directory printed by your run after checking
-its receipt.
-`test -n "${demo_dir-}" && test "$(cat "$demo_dir/.seal-demo-directory" 2>/dev/null)" = seal-readme-demo && rm -r -- "$demo_dir"`
+
+
+
+
+
+
+
+
 
 ## The boundary
 

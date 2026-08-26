@@ -51,8 +51,8 @@ test("demo announces and retains its checker directory, and Remove explains its 
   assert.ok(fs.statSync(path.join(directory, "receipt-signer.pub")).isFile(), "the retained directory must keep the checker public key");
 
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /Remove the exact temporary demo directory printed by your run after checking/);
-  assert.match(readme, /rm -r ~\/\.local\/share\/seal/);
+  assert.match(readme, /When you are finished, remove the directory printed as `Demo directory: \/absolute\/path`\./);
+  assert.doesNotMatch(readme, /(?:^|[;&|\s])(rm|rmdir|unlink|trash)(?:\s|$)|-delete/);
 });
 
 test("the README exports the installed command directory after installation and before Protect", () => {
