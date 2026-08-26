@@ -119,7 +119,7 @@ const landingPage = readRequired('landing page', landingPagePath);
 const version = readRequired('VERSION', new URL('../VERSION', import.meta.url)).trim();
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) fail(`VERSION is not exact SemVer: ${version}`);
 
-for (const link of repositoryLinks(readme)) {
+for (const link of rawCheckedRepositoryLinks(readme)) {
   if (hasInvalidRawUrlCharacters(link)) {
     fail(`README contains a URL character that must be percent-encoded: ${link}`);
   }
@@ -183,3 +183,84 @@ if (/expected 51 production modules and 25 kernel-baseline assignments/.test(eva
 requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}28bb3ae7/, 'current fleet disposition must remain explicitly dated');
 
 console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the approval-origin and platform sentences, and the standing corrections all hold`);
+
+function literalCodeRanges(source) {
+  const ranges = [];
+  let fence = null;
+  let offset = 0;
+
+  for (const line of source.split(/(?<=\n)/u)) {
+    const content = line.replace(/\r?\n$/u, '');
+    const fenceMatch = content.match(/^ {0,3}(`{3,}|~{3,})/u);
+    if (fence) {
+      ranges.push([offset, offset + line.length]);
+      if (fenceMatch && fenceMatch[1][0] === fence.character && fenceMatch[1].length >= fence.length) fence = null;
+    } else if (fenceMatch) {
+      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
+      ranges.push([offset, offset + line.length]);
+    } else {
+      for (let index = 0; index < content.length;) {
+        if (content[index] !== '`') {
+          index += 1;
+          continue;
+        }
+        let end = index;
+        while (content[end] === '`') end += 1;
+        const marker = content.slice(index, end);
+        const close = content.indexOf(marker, end);
+        if (close === -1) {
+          index = end;
+          continue;
+        }
+        ranges.push([offset + index, offset + close + marker.length]);
+        index = close + marker.length;
+      }
+    }
+    offset += line.length;
+  }
+  return ranges;
+}
+
+function rawUrlDestinations(source) {
+  const codeRanges = literalCodeRanges(source);
+  const starts = source.matchAll(/(?<![A-Za-z0-9+.-])(?:(?:https?|git\+https|git):\/\/|\/\/|git@github\.com:)/giu);
+  const destinations = [];
+
+  for (const start of starts) {
+    const begin = start.index;
+    if (codeRanges.some(([from, to]) => begin >= from && begin < to)) continue;
+
+    const opener = source[begin - 1];
+    const closer = new Map([['(', ')'], ['<', '>'], ['"', '"'], ["'", "'"]]).get(opener);
+    let end = source.indexOf('\n', begin);
+    if (end === -1) end = source.length;
+
+    if (closer) {
+      if (opener === '(') {
+        let depth = 1;
+        for (let index = begin; index < end; index += 1) {
+          if (source[index] === opener) depth += 1;
+          if (source[index] === closer && --depth === 0) {
+            end = index;
+            break;
+          }
+        }
+      } else {
+        const enclosedEnd = source.indexOf(closer, begin);
+        if (enclosedEnd !== -1 && enclosedEnd < end) end = enclosedEnd;
+      }
+    }
+
+    destinations.push(source.slice(begin, end).replace(/\r$/u, ''));
+  }
+  return destinations;
+}
+
+function rawCheckedRepositoryLinks(source) {
+  for (const destination of rawUrlDestinations(source)) {
+    if (hasInvalidRawUrlCharacters(destination)) {
+      fail(`README contains a URL character that must be percent-encoded: ${destination}`);
+    }
+  }
+  return repositoryLinks(source);
+}
