@@ -136,8 +136,8 @@ The protected path creates or reuses a machine-local signing key. The demo's key
 public key you supply, and only when the decision, tool, arguments, and
 signature match its sealed commitments. Use a public key from a source you
 trust. The demo prints a ready-to-run checker command for one of its receipts.
-Current install payload does not include checker. Clone the [Seal source repository](https://github.com/velvetmonkey/seal)
-and run the checker from that source checkout; use trusted public key printed by demo:
+Current install payload does not include checker; the release workflow will publish a separate checker asset with the next release.
+Clone the [Seal source repository](https://github.com/velvetmonkey/seal) and run the checker from that source checkout; use trusted public key printed by demo:
 
 ```bash
 git clone https://github.com/velvetmonkey/seal.git seal-source && checker="./seal-source/checker/seal-receipt-check.mjs"
