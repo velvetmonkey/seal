@@ -50,6 +50,9 @@ installed seal 0.2.0-rc.3 linux-x64
 store: /home/you/.local/lib/seal/store/c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
 command: /home/you/.local/bin/seal
 tree: c81d89cbcba74d1b3936028b3203fdf4626e4711728ccfa16c0ada31af9717fb
+Next:
+  export PATH=/home/you/.local/bin:$PATH
+  seal demo
 ```
 
 ## See it work

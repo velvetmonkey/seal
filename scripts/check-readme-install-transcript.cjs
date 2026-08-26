@@ -85,7 +85,8 @@ function fetchBytes(url, redirects = 0) {
 function normalizeTranscript(text) {
   return text
     .replace(/^store: .*?\/\.local\/lib\/seal\/store\//m, "store: $HOME/.local/lib/seal/store/")
-    .replace(/^command: .*?\/\.local\/bin\/seal$/m, "command: $HOME/.local/bin/seal");
+    .replace(/^command: .*?\/\.local\/bin\/seal$/m, "command: $HOME/.local/bin/seal")
+    .replace(/^  export PATH=.*?\/\.local\/bin:\$PATH$/m, "  export PATH=$HOME/.local/bin:$PATH");
 }
 
 function firstDifference(expected, actual) {
