@@ -104,7 +104,6 @@ test("launch truth gate compares the complete self-repository path", () => {
     "https://github.com/velvetmonkey/seal",
     "https://github.com/velvetmonkey/seal.git/",
     "https://github.com/velvetmonkey/seal?tab=readme#top",
-    "//github.com/velvetmonkey/seal.git",
     "git@github.com:velvetmonkey/seal.git",
     "https://github.com:443/velvetmonkey/seal.git",
   ]) assert.equal(run(link).status, 0, link);
@@ -112,6 +111,7 @@ test("launch truth gate compares the complete self-repository path", () => {
     "https://github.com/extra/velvetmonkey/seal.git",
     "https://xn--githb-3we.com/velvetmonkey/seal.git",
     "https://github.com:444/velvetmonkey/seal.git",
+    "//github.com/velvetmonkey/seal.git",
     "https://github.com//velvetmonkey/seal",
     "https://github.com@evil.example/velvetmonkey/seal.git",
     "https://github.com/one/two/three/four/five/velvetmonkey/seal",
@@ -120,6 +120,24 @@ test("launch truth gate compares the complete self-repository path", () => {
     "https://github.com/velvetmonkey//seal.git",
     "https://github.com/velvetmonkey/seal.git/%2e%2e/seal-sapphire-reef.git",
     "https://github.com/velvetmonkey/seal.git%2Fextra",
+  ]) assert.notEqual(run(link).status, 0, link);
+  for (const link of [
+    "https://[2001:db8::1]/",
+    "https://example.com:8443/path",
+    "https://user:pass@example.com/path",
+    "https://example.com/a%20b/c%2Fd",
+    "https://bücher.example/path",
+    "https://example.com/path?aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "https://example.com./path",
+    "HTTPS://example.com/path",
+  ]) assert.equal(run(link).status, 0, link);
+  for (const link of [
+    "https:",
+    "https://:443",
+    "https://exa mple.com/path",
+    "https://example.com/\u0007bell",
+    "file:///etc/passwd",
+    "//example.com/path",
   ]) assert.notEqual(run(link).status, 0, link);
   rmSync(dir, { recursive: true, force: true });
 });
