@@ -354,7 +354,7 @@ jobs:
           fi
       - name: Run and count the complete product suite
         shell: bash
-        run: scripts/run-complete-product-suite.sh
+        run: scripts/capture-complete-product-suite.sh
 
   # demoteci4: this local job observes only values and artefacts it controls.
   # It usefully exercises the demo path, but cannot prove to itself that its
