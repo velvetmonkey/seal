@@ -29,3 +29,25 @@ These notes make no stranger-verification claim. See `test/no-verification-claim
 - Protect accepts a named set of guarded tools and persists their order while retaining compatibility with earlier single-tool state. See `docs/reference/multi-tool-semantics.md` and `test/protect3b.test.cjs`.
 
 - The current product restores honest version identity: the immutable v0.2.0-rc.2 notes remain tied to that tag, while these notes describe v0.2.0-rc.3.
+
+- Installation and Protect/status output now give next-step or undo guidance, and protected multi-tool scope is displayed as `server.{tool, tool}`. The platform help now distinguishes macOS install/demo/checker support from the Linux x86-64 Protect path. See `printGuidance` in `bin/seal` and `unsupportedPlatformText` in `spine/platform.cjs`.
+
+- Claude Code local overrides are now associated with the Git top-level, so running Protect from a subdirectory uses the same project override. Relative protected-server commands also run from the protected project directory. See `claudeProjectRoot` in `spine/protection.cjs` and `childCwd` in `spine/proxy-cli.cjs`.
+
+- The bundled demo server now also offers `demo.erase`, which empties its demo data file and reports the total tool-call count. See `ERASE_TOOL` in `spine/demo-server.cjs`.
+
+- A protected call can now refuse with `receipt_correlation_capacity_exceeded` when too many approvals are pending, or `receipt_correlation_missing` when its continuation has no recorded receipt correlation. See `createProxy` in `spine/proxy.cjs`.
+
+- The receipt checker can now be invoked directly from a path that needs URL encoding. See the executable-main check in `checker/seal-receipt-check.mjs`.
+
+- Installed artifacts now include `NOTICE`, use Linux/Darwin platform identifiers, and use the Apache-2.0 `LICENSE` and `NOTICE` legal materials. Protection state now records `guardTools` and the Claude project root while continuing to read earlier single-tool state. See `PAYLOAD_PATHS` in `scripts/build-dist.cjs`, `LICENSE`, `NOTICE`, and `readState` in `spine/protection.cjs`.
+
+- The README and documentation navigation have been reorganized around reader routes, including install, evaluator, guide, reference, assurance, and archive entry points. See `README.md` and `docs/reference/multi-tool-semantics.md`.
+
+## Known holes
+
+Published-release bytes, digests, and installation remain unverified when the published-installer test times out: that test skips on network failure, and no other check covers those published assets.
+
+The repository URL gate fails safe but over-rejects percent-encoded self paths and clone-valid SSH self URLs.
+
+The product-suite roster merge gate is injected, not enforced: a principal that controls the measured test process can also publish the executed-file record and its verdict.
