@@ -1,11 +1,11 @@
 # Link-check population cross-check limits
 
-Seal uses a family-fixture occurrence total assertion for the repository and
-sibling-family link population. The fixture clones six sibling repositories
-under the checkout's `.family/` directory. Because the checker recursively walks
-the checkout root, it counts Markdown links in those clones too: 409 internal
-occurrences in the family fixture, versus 256 in a plain checkout. The stored
-409 total is not a plain-checkout population.
+Seal uses a family-fixture link guard that clones six sibling repositories
+under the checkout's `.family/` directory. Because the checker recursively
+walks the checkout root, the occurrence counts in its summary include Markdown
+links in those clones. Those counts are diagnostic output, not a population
+assertion: legitimate source edits may add or remove repeated occurrences
+without changing the set of targets that must be checked.
 
 `test/linkcheck.test.mjs` compares the targets reported by `scripts/linkcheck.mjs`
 with targets reconstructed from repository sources. This is a **separate-source
@@ -19,6 +19,6 @@ measures agreement between the product extractor and this overlapping
 reconstruction; it does not establish complete target population coverage.
 
 It still catches some product-only omissions, including a target dropped after
-extraction and before `check()`, and it preserves the fixed family-fixture occurrence
-totals. Broader assurance requires a source with a genuinely distinct file list
-and extraction model.
+extraction and before `check()`. It also requires the checker to finish and report
+zero broken targets. Broader assurance requires a source with a genuinely
+distinct file list and extraction model.
