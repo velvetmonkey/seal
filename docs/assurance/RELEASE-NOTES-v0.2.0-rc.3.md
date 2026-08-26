@@ -46,8 +46,8 @@ These notes make no stranger-verification claim. See `test/no-verification-claim
 
 ## Known holes
 
-Published-release bytes, digests, and installation remain unverified when the published-installer test times out: that test skips on network failure, and no other check covers those published assets.
+The published-installer negative controls for a wrong digest and wrong byte count remain unverified when the published-installer test times out: that test skips on network failure. Other checks still cover the published asset: the fail-closed README transcript check validates its byte count and digest against `SHA256SUMS` and installs it, while the complete product suite independently checks the published payload tree against every declared published-asset pin.
 
-The repository URL gate accepts protocol-relative and default-port self URLs and literal `git@github.com:` self links; it rejects non-default-port origins, HTTPS userinfo, and raw URL characters, while percent-encoded and case-variant self paths remain classified as sibling references; scp-style links to hosts other than `github.com`, including `git@evil.example:velvetmonkey/seal.git` and `git@github.com.evil.example:velvetmonkey/seal.git`, are not extracted and therefore not classified.
+The repository URL gate accepts protocol-relative and default-port self URLs and literal `git@github.com:` self links; it rejects non-default-port origins, HTTPS userinfo, and raw URL characters, while percent-encoded and case-variant self paths remain classified as sibling references; scp-style links to hosts other than `github.com`, including `git@evil.example:velvetmonkey/seal.git` and `git@github.com.evil.example:velvetmonkey/seal.git`, are not extracted and therefore not classified. Separately, a `git@github.com:` link whose token is glued to surrounding syntax may not be extracted; an unextracted link is not classified rather than approved.
 
 The product-suite roster merge gate is injected, not enforced: a principal that controls the measured test process can also publish the executed-file record and its verdict.
