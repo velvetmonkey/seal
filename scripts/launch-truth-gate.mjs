@@ -226,6 +226,73 @@ function rawUrlDestinations(source) {
   const starts = source.matchAll(/(?<![A-Za-z0-9+.-])(?:(?:https?|git\+https|git):\/\/|\/\/|git@github\.com:)/giu);
   const destinations = [];
 
+  function markdownDestinationEnd(begin, enclosedEnd) {
+    const candidate = source.slice(begin, enclosedEnd);
+    const separator = candidate.search(/[ \t]/u);
+    if (separator === -1) return enclosedEnd;
+
+    // CommonMark titles are separated from the destination and consume the
+    // remainder of the carrier. Whitespace that does not introduce a title is
+    // still part of the raw destination and must be rejected.
+    const suffix = candidate.slice(separator);
+    const title = /^(?:[ \t]+(?:(?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:\((?:\\.|[^)\\])*\)))[ \t]*|[ \t]+)$/u;
+    return title.test(suffix) ? begin + separator : enclosedEnd;
+  }
+
+  function matchingRoundBracket(begin, lineEnd) {
+    let depth = 1;
+    let titleQuote = null;
+    let sawWhitespace = false;
+    for (let index = begin; index < lineEnd; index += 1) {
+      const character = source[index];
+      if (titleQuote) {
+        if (character === '\\') index += 1;
+        else if (character === titleQuote) titleQuote = null;
+        continue;
+      }
+      if (character === ' ' || character === '\t') {
+        sawWhitespace = true;
+        continue;
+      }
+      if (sawWhitespace && (character === '"' || character === "'")) {
+        titleQuote = character;
+        continue;
+      }
+      if (character === '(') depth += 1;
+      if (character === ')' && --depth === 0) return index;
+    }
+    return lineEnd;
+  }
+
+  function isReferenceDestination(begin) {
+    const lineStart = source.lastIndexOf('\n', begin - 1) + 1;
+    return /^ {0,3}\[[^\]]+\]:[ \t]*$/u.test(source.slice(lineStart, begin));
+  }
+
+  function isRepositoryToken(token) {
+    try {
+      return repositoryLinkVerdict(token) !== null;
+    } catch {
+      return true;
+    }
+  }
+
+  function proseDestinationEnd(begin, lineEnd) {
+    const candidate = source.slice(begin, lineEnd);
+    const separator = candidate.search(/[ \t]/u);
+    if (separator === -1) return lineEnd;
+    const prefix = candidate.slice(0, separator);
+    const remainder = candidate.slice(separator).trimStart();
+    const next = remainder.match(/^[^ \t\r\n<>"']+/u)?.[0] ?? '';
+
+    // A punctuation-led continuation, or a host interrupted before it becomes
+    // repository-shaped, is still the same destination. Ordinary following
+    // prose is outside it.
+    if (/^[./?#%:;,@&=+]/u.test(next)
+      || (!isRepositoryToken(prefix) && next && isRepositoryToken(prefix + next))) return lineEnd;
+    return begin + separator;
+  }
+
   for (const start of starts) {
     const begin = start.index;
     if (codeRanges.some(([from, to]) => begin >= from && begin < to)) continue;
@@ -237,18 +304,15 @@ function rawUrlDestinations(source) {
 
     if (closer) {
       if (opener === '(') {
-        let depth = 1;
-        for (let index = begin; index < end; index += 1) {
-          if (source[index] === opener) depth += 1;
-          if (source[index] === closer && --depth === 0) {
-            end = index;
-            break;
-          }
-        }
+        end = markdownDestinationEnd(begin, matchingRoundBracket(begin, end));
       } else {
         const enclosedEnd = source.indexOf(closer, begin);
         if (enclosedEnd !== -1 && enclosedEnd < end) end = enclosedEnd;
       }
+    } else if (isReferenceDestination(begin)) {
+      end = markdownDestinationEnd(begin, end);
+    } else {
+      end = proseDestinationEnd(begin, end);
     }
 
     destinations.push(source.slice(begin, end).replace(/\r$/u, ''));
