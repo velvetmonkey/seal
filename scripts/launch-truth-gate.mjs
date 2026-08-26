@@ -64,8 +64,6 @@ const VALID_PERCENT_ESCAPE = /%(?:[0-9A-Fa-f]{2})/gu;
 function hasInvalidRawUrlCharacters(token) { return !RFC3986_LITERAL.test(token) || token.replace(VALID_PERCENT_ESCAPE, '').includes('%'); }
 
 function repositoryLinkVerdict(link) {
-  if (link.startsWith('//')) throw new Error('scheme-relative URL is not allowed');
-
   let parsed;
   if (link.startsWith('git@github.com:')) {
     parsed = new URL(`ssh://github.com/${link.slice('git@github.com:'.length)}`);
@@ -76,6 +74,7 @@ function repositoryLinkVerdict(link) {
   const allowedSchemes = new Set(['http:', 'https:', 'git+https:', 'git:', 'ssh:']);
   if (!allowedSchemes.has(parsed.protocol)) throw new Error('unsupported URL scheme: ' + parsed.protocol);
   if (!parsed.hostname) throw new Error('URL host is empty');
+  if (parsed.username || parsed.password) throw new Error('URL userinfo is not allowed');
 
   const selfPaths = new Set([
     '/velvetmonkey/seal',
@@ -84,8 +83,9 @@ function repositoryLinkVerdict(link) {
     '/velvetmonkey/seal.git/',
   ]);
   if (parsed.hostname === 'github.com') {
-    // Sibling status is decided by the host and repository path alone; port
-    // numbers and userinfo components never decide repository classification.
+    // An explicit non-default port identifies a different origin; URL parses an explicit default port (for example :443 on https) as the empty port,
+    // so only a non-empty port needs to be rejected here.
+    if (parsed.port) return 'sibling';
     if (selfPaths.has(parsed.pathname)) return 'self';
 
     // These are the non-repository GitHub endpoints already required by the
