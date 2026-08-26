@@ -48,6 +48,6 @@ These notes make no stranger-verification claim. See `test/no-verification-claim
 
 Published-release bytes, digests, and installation remain unverified when the published-installer test times out: that test skips on network failure, and no other check covers those published assets.
 
-The repository URL gate fails safe but over-rejects percent-encoded and case-variant self paths, plus clone-valid SSH and HTTPS-userinfo self URLs.
+The repository URL gate accepts protocol-relative and default-port self URLs and literal `git@github.com:` self links; it rejects non-default-port origins, HTTPS userinfo, and raw URL characters, while percent-encoded and case-variant self paths remain classified as sibling references; scp-style links to hosts other than `github.com`, including `git@evil.example:velvetmonkey/seal.git` and `git@github.com.evil.example:velvetmonkey/seal.git`, are not extracted and therefore not classified.
 
 The product-suite roster merge gate is injected, not enforced: a principal that controls the measured test process can also publish the executed-file record and its verdict.
