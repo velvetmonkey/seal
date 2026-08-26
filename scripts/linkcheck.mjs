@@ -46,7 +46,7 @@ function countDestination(file, raw, sourceRoot, roots, counts, checkTargets, ro
   const target = targetFor(file, link, sourceRoot, roots, rootRelative);
   if (target.kind === "external") {
     counts.externalOccurrences++;
-    if (checkTargets && !existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
+    if (checkTargets && !existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
     return;
   }
   counts.internalOccurrences++;

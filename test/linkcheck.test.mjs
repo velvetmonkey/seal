@@ -134,6 +134,10 @@ test("clean CI family linkcheck exits 0 after checking every reference-parsed ta
     assert.ok(targetLine, "link checker must report the targets that actually reached check()");
     const scanned = JSON.parse(targetLine.slice("link-check-targets: ".length)).sort();
     assert.deepEqual(scanned, expectedTargets(), "every reference-parsed live target must reach check()");
+    assert.ok(
+      result.stdout.split("\n").filter(Boolean).every((line) => /^(?:BROKEN|EXTERNAL)  |^link-check-targets: |^link-check: /u.test(line)),
+      "link checker stdout must contain only structured diagnostic and summary lines",
+    );
     assert.match(
       result.stdout,
       /^link-check: \d+ internal links, \d+ external links, \d+ required live links, 0 broken$/mu,
