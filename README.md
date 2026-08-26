@@ -57,7 +57,7 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 The command supplies `y` to show the complete approve-once demonstration; run `seal demo` interactively to choose the response yourself.
 
 ```bash
-printf 'y\n' | seal demo --dir ./seal-demo
+demo_dir="$(mktemp -d)" && printf 'y\n' | seal demo --dir "$demo_dir"
 ```
 This is real output from `seal demo` (excerpted).
 
@@ -140,8 +140,8 @@ the trusted public key printed by the demo:
 
 ```bash
 checker="$(find "$HOME/.local/lib/seal/store" -path '*/checker/seal-receipt-check.mjs' -print -quit)"
-receipt="$(find ../seal-demo/receipts -name '*BLOCK.json' -print -quit)"
-node "$checker" "$receipt" --pubkey ../seal-demo/receipt-signer.pub
+receipt="$(find "$demo_dir/receipts" -name '*BLOCK.json' -print -quit)"
+node "$checker" "$receipt" --pubkey "$demo_dir/receipt-signer.pub"
 ```
 
 If the installed development tree does not contain the checker, use the
@@ -174,7 +174,7 @@ rm -r ~/.local/share/seal
 
 Remove the exact temporary demo directory printed by your run after checking
 its receipt.
-`rm -r ../seal-demo`
+`test -n "${demo_dir-}" && rm -r -- "$demo_dir"`
 
 ## The boundary
 

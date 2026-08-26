@@ -48,6 +48,6 @@ These notes make no stranger-verification claim. See `test/no-verification-claim
 
 Published-release bytes, digests, and installation remain unverified when the published-installer test times out: that test skips on network failure, and no other check covers those published assets.
 
-The repository URL gate fails safe but over-rejects percent-encoded self paths and clone-valid SSH self URLs.
+The repository URL gate fails safe but over-rejects percent-encoded and case-variant self paths, plus clone-valid SSH and HTTPS-userinfo self URLs.
 
 The product-suite roster merge gate is injected, not enforced: a principal that controls the measured test process can also publish the executed-file record and its verdict.
