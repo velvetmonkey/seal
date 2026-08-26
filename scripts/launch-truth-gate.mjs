@@ -62,21 +62,46 @@ function repositoryLinks(source) {
     /((?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]*\/|git@github\.com:[^\s<>()\[\]{}"'`]*\/))[ \t]*\r?\n[ \t]*(?=[A-Za-z0-9%])/gi,
     '$1',
   );
-  return joinedContinuations.match(
-    /(?<![A-Za-z0-9+.-])(?:(?:(?:https?|git\+https|git):\/\/|\/\/)[^\s<>()\[\]{}"'`]+|git@github\.com:[^\s<>()\[\]{}"'`]+)/gi,
-  ) ?? [];
+  const links = [];
+  const starts = joinedContinuations.matchAll(/(?<![A-Za-z0-9+.-])(?:git@github\.com:|(?:https?|git\+https|git|file):(?:(?:\/\/))?|\/\/)/gi);
+  for (const match of starts) {
+    const start = match.index;
+    let end = start;
+    while (end < joinedContinuations.length && !/[\r\n<>(){}"'`]/.test(joinedContinuations[end])) end += 1;
+    links.push(joinedContinuations.slice(start, end));
+  }
+  return links;
 }
 
-function repositoryLinkVerdict(link) {
+function repositoryURL(link) {
+  if (link.startsWith('//')) throw new Error('scheme-relative URL is not allowed');
+
   let parsed;
   if (link.startsWith('git@github.com:')) {
     parsed = new URL(`ssh://github.com/${link.slice('git@github.com:'.length)}`);
   } else {
-    parsed = new URL(link.startsWith('//') ? `https:${link}` : link);
+    parsed = new URL(link);
   }
 
-  if (parsed.username || parsed.password) return 'sibling';
-  if (parsed.port) return 'sibling';
+  const allowedSchemes = new Set(['http:', 'https:', 'git+https:', 'git:', 'ssh:']);
+  if (!allowedSchemes.has(parsed.protocol)) throw new Error(`unsupported URL scheme: ${parsed.protocol}`);
+  if (!parsed.hostname) throw new Error('URL host is empty');
+
+  const authorityStart = link.indexOf('://') === -1 ? -1 : link.indexOf('://') + 3;
+  if (authorityStart !== -1) {
+    const authorityEndOffset = link.slice(authorityStart).search(/[/?#]/);
+    const authorityEnd = authorityEndOffset === -1 ? -1 : authorityStart + authorityEndOffset;
+    const rawSuffix = authorityEnd === -1 ? '' : link.slice(authorityEnd);
+    if (rawSuffix !== `${parsed.pathname}${parsed.search}${parsed.hash}`) {
+      throw new Error('URL path, query and fragment must already be URL-encoded');
+    }
+  }
+
+  return parsed;
+}
+
+function repositoryLinkVerdict(link) {
+  const parsed = repositoryURL(link);
 
   const selfPaths = new Set([
     '/velvetmonkey/seal',
@@ -85,6 +110,9 @@ function repositoryLinkVerdict(link) {
     '/velvetmonkey/seal.git/',
   ]);
   if (parsed.hostname === 'github.com') {
+    // Repository identity is pinned to GitHub's default authority. A non-default
+    // GitHub port is a valid URL, but it is not the documented self repository.
+    if (parsed.port) return 'sibling';
     if (selfPaths.has(parsed.pathname)) return 'self';
 
     // These are the non-repository GitHub endpoints already required by the
