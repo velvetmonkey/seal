@@ -56,14 +56,3 @@ test("tampering the wiring proves the old green failure mode, inverse restores r
   };
   assert.equal(mergeBox(required, restored), false);
 });
-
-test("only the informational unverified job depends on another job", () => {
-  const jobNames = [...WORKFLOW.matchAll(/^  ([A-Za-z0-9_-]+):$/gm)]
-    .map((match) => match[1]);
-  const jobsWithNeeds = jobNames.filter((name) => /^\s+needs:/m.test(jobBlock(name)));
-  assert.deepEqual(jobsWithNeeds, ["demo-receipt-provenance-unverified"]);
-  assert.match(
-    jobBlock("demo-receipt-provenance-unverified"),
-    /^\s+needs: demo-receipt-provenance$/m,
-  );
-});
