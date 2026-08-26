@@ -147,7 +147,7 @@ jobs:
               exit 1
             fi
             gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$release_dir" \
-              --pattern SHA256SUMS --pattern "$artifact_name"
+              --pattern SHA256SUMS --pattern "$artifact_name" --pattern seal-receipt-check.mjs
             if [[ ! -f "$release_dir/SHA256SUMS" ]]; then
               echo "::error::RELEASE_PROVENANCE_ASSETS_MISSING: published release $release_tag has no SHA256SUMS asset."
               exit 1
@@ -175,10 +175,24 @@ jobs:
               | tee "$evidence_dir/demo-output.txt"
             allow_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-ALLOW.json' -print -quit)"
             block_receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
-            checker="$(find "$install_prefix/lib/seal/store" -type f -path '*/checker/seal-receipt-check.mjs' -print -quit)"
+            checker="$release_dir/seal-receipt-check.mjs"
+            sums="$release_dir/SHA256SUMS"
+            if [[ ! -f "$checker" ]]; then
+              echo '::error::published checker is absent'
+              exit 1
+            fi
+            if [[ ! -s "$checker" ]]; then
+              echo '::error::published checker is empty'
+              exit 1
+            fi
+            pin="$(awk '$3 == "seal-receipt-check.mjs" { print $1; exit }' "$sums")"
+            got="$(sha256sum "$checker" | awk '{ print $1 }')"
+            if [[ -z "$pin" || "$got" != "$pin" ]]; then
+              echo '::error::published checker digest does not match SHA256SUMS'
+              exit 1
+            fi
             test -n "$allow_receipt"
             test -n "$block_receipt"
-            test -n "$checker"
             node "$checker" "$allow_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
               | tee "$evidence_dir/checker-output.txt"
             node "$checker" "$block_receipt" --pubkey "$demo_dir/receipt-signer.pub" \
