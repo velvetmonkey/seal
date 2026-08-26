@@ -57,7 +57,7 @@ tree: 8531e01f662dcd4168b06dbbe101dab3b012d6e28498286bece3e42688dbb0c3
 The command supplies `y` to show the complete approve-once demonstration; run `seal demo` interactively to choose the response yourself.
 
 ```bash
-demo_dir="$(mktemp -d)" && printf 'y\n' | seal demo --dir "$demo_dir"
+demo_dir="$(mktemp -d)" && printf '%s\n' seal-readme-demo > "$demo_dir/.seal-demo-directory" && printf 'y\n' | seal demo --dir "$demo_dir"
 ```
 This is real output from `seal demo` (excerpted).
 
@@ -174,7 +174,7 @@ rm -r ~/.local/share/seal
 
 Remove the exact temporary demo directory printed by your run after checking
 its receipt.
-`test -n "${demo_dir-}" && rm -r -- "$demo_dir"`
+`test -n "${demo_dir-}" && test "$(cat "$demo_dir/.seal-demo-directory" 2>/dev/null)" = seal-readme-demo && rm -r -- "$demo_dir"`
 
 ## The boundary
 
