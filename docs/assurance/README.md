@@ -60,8 +60,8 @@ the Node CLI this repository ships.
    installed payload. Download it with the binary and verify both against that
    release's `SHA256SUMS` asset before using it.
    It imports no Seal module at check time, but copies the producer's
-   canonicalisation rule and uses the same Node crypto platform; read what
-   that does and does not establish.
+   canonicalisation rule and uses the same Node crypto platform; read [what
+   that does and does not establish](../guide/knowing-it-worked.md).
 6. [guide/github-actions-provenance.md](../guide/github-actions-provenance.md) —
    download and verify the GitHub-hosted runner's attested demo-receipt
    evidence, and read the boundary of that provenance claim.

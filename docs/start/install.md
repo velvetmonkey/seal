@@ -54,8 +54,7 @@ $ export PATH="$HOME/.local/bin:$PATH"
 
 Further distribution detail, including what each payload contains, is in
 [DISTRIBUTION.md](../assurance/distribution.md). The published payload in the transcript above
-does not include the checker; download the sibling
-[`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
+does not include the checker; download the sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
 and verify it against that release's `SHA256SUMS` asset; see [evaluator-walk.md](../start/evaluator-walk.md).
 
 ## Source-build tree pin
