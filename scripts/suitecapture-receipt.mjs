@@ -10,13 +10,13 @@ import { createHmac, createHash, randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-const FIELDS = ["at", "sha", "wrapper_exit", "runner_exit", "state", "tests", "pass", "fail", "cancelled", "skipped", "roster", "raw_sha256"];
+const FIELDS = ["at", "sha", "commit_identity", "runner", "capture_complete", "raw_status", "raw_bytes", "wrapper_exit", "runner_exit", "state", "tests", "pass", "fail", "cancelled", "skipped", "roster", "raw_sha256"];
 const stateDir = process.env.SEAL_SUITE_CAPTURE_DIR || join(process.env.XDG_STATE_HOME || join(process.env.HOME || ".", ".local", "state"), "seal");
 const receiptPath = process.env.SEAL_SUITE_RECEIPTS || join(stateDir, "product-suite-receipts.jsonl");
 const keyPath = process.env.SEAL_SUITE_CAPTURE_KEY || join(stateDir, "product-suite-capture.key");
 
 function usage() {
-  console.error("usage: suitecapture-receipt.mjs record --raw FILE --sha SHA --runner-exit N --wrapper-exit N | verify RECEIPT_FILE");
+  console.error("usage: suitecapture-receipt.mjs record --raw FILE --sha SHA --runner PATH --capture-complete 0|1 --runner-exit N --wrapper-exit N | verify RECEIPT_FILE");
   process.exitCode = 64;
 }
 
@@ -48,29 +48,51 @@ function record(argv) {
   };
   const rawPath = option("--raw");
   const sha = option("--sha");
+  const runner = option("--runner");
+  const captureComplete = option("--capture-complete") === "1";
   const runnerExit = Number(option("--runner-exit"));
   const wrapperExit = Number(option("--wrapper-exit"));
-  if (!rawPath || !sha || !Number.isInteger(runnerExit) || !Number.isInteger(wrapperExit)) return usage();
+  if (!rawPath || runner === undefined || sha === undefined || !Number.isInteger(runnerExit) || !Number.isInteger(wrapperExit)) return usage();
 
-  const output = readFileSync(rawPath, "utf8");
+  let output = "";
+  let rawStatus = "WHOLE";
+  try {
+    const raw = statSync(rawPath);
+    if (!raw.isFile()) rawStatus = "UNREADABLE";
+    else {
+      output = readFileSync(rawPath, "utf8");
+      if (output.length === 0) rawStatus = "EMPTY";
+      else if (!output.endsWith("\n")) rawStatus = "TRUNCATED";
+    }
+  } catch (error) {
+    rawStatus = error?.code === "ENOENT" ? "MISSING" : "UNREADABLE";
+  }
+  const commitIdentity = /^[0-9a-f]{40}([0-9a-f]{24})?$/i.test(sha) ? "REAL" : "MISSING";
   const receipt = {
     v: 1,
     at: new Date().toISOString(),
-    sha,
+    sha: commitIdentity === "REAL" ? sha : null,
+    commit_identity: commitIdentity,
+    runner,
+    capture_complete: captureComplete,
+    raw_status: rawStatus,
+    raw_bytes: rawStatus === "WHOLE" ? Buffer.byteLength(output) : null,
     wrapper_exit: wrapperExit,
     runner_exit: runnerExit,
-    state: "INCOMPLETE",
+    // REFUSED deliberately does not contain the success token COMPLETE: a
+    // substring scan or a skim cannot confuse a refused capture for a pass.
+    state: "REFUSED",
     tests: null,
     pass: null,
     fail: null,
     cancelled: null,
     skipped: null,
     roster: lastRoster(output),
-    raw_sha256: createHash("sha256").update(output).digest("hex"),
+    raw_sha256: rawStatus === "WHOLE" ? createHash("sha256").update(output).digest("hex") : null,
   };
   const totals = ["tests", "pass", "fail", "cancelled", "skipped"];
   const parsed = Object.fromEntries(totals.map((field) => [field, lastCanonical(output, field)]));
-  const complete = runnerExit === 0 && receipt.roster !== null && totals.every((field) => parsed[field] !== null);
+  const complete = captureComplete && rawStatus === "WHOLE" && commitIdentity === "REAL" && runnerExit === 0 && wrapperExit === 0 && receipt.roster !== null && totals.every((field) => parsed[field] !== null);
   if (complete) {
     receipt.state = "COMPLETE";
     Object.assign(receipt, parsed);
