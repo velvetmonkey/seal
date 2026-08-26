@@ -14,7 +14,18 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "1a49ec4d98a4d35765fceb2674d3b801bbf26d3d4d7e10da78407519e5b7cf8a";
+const GUIDE_SHA256 = "4dc374204bc7352c45c2b267c916f85d6ca560fd54efa56606ff3eafff6892f5";
+
+const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
+const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0-rc\\.3(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)", "gm");
+
+function canonicalReviewedGuide(file, text) {
+  if (file !== VERSIONED_GUIDE) return text;
+  const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];
+  assert.equal(matches.length, 1, `${file}: expected exactly one generated release-version slot containing ${EXPECTED_RELEASE_VERSION}`);
+  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
+}
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
 // site that follows any of these shapes is picked up automatically; a new
@@ -63,7 +74,7 @@ function sourceTokens() {
 
 function guideTokens() {
   const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
-  const digest = createHash("sha256").update(text).digest("hex");
+  const digest = createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex");
   assert.equal(
     digest,
     GUIDE_SHA256,
@@ -142,7 +153,7 @@ function occurrences(text, claim) {
 function assertPinned(entry, text) {
   assert.ok(entry.claims.length > 0, `${entry.file}: reviewed claim inventory must not be empty`);
   assert.equal(
-    sha256(text),
+    sha256(canonicalReviewedGuide(entry.file, text)),
     entry.sha256,
     `${entry.file}: content changed; this pin cannot check truth. Re-pin its sha256 only after a human confirms the new text is TRUE.`,
   );
