@@ -88,13 +88,14 @@ function repositoryURL(link) {
   if (!parsed.hostname) throw new Error('URL host is empty');
 
   const authorityStart = link.indexOf('://') === -1 ? -1 : link.indexOf('://') + 3;
+  // URL well-formedness follows the WHATWG URL Standard implemented by `new URL`.
+  // WHATWG/RFC 3986 disagreements remain undecided here: `https://example.com/foo%`, `https://example.com/%gg`, and `https://еxample.com/`.
+  // A suffix difference is encoding unless it is exactly generic path normalisation.
   if (authorityStart !== -1) {
-    const authorityEndOffset = link.slice(authorityStart).search(/[/?#]/);
-    const authorityEnd = authorityEndOffset === -1 ? -1 : authorityStart + authorityEndOffset;
-    const rawSuffix = authorityEnd === -1 ? '' : link.slice(authorityEnd);
-    if (rawSuffix !== `${parsed.pathname}${parsed.search}${parsed.hash}`) {
-      throw new Error('URL path, query and fragment must already be URL-encoded');
-    }
+    const authorityEndOffset = link.slice(authorityStart).search(/[/?#]/); const authorityEnd = authorityEndOffset === -1 ? -1 : authorityStart + authorityEndOffset;
+    const rawSuffix = authorityEnd === -1 ? '' : link.slice(authorityEnd); const rawPathEnd = rawSuffix.search(/[?#]/); const rawPath = rawPathEnd === -1 ? rawSuffix : rawSuffix.slice(0, rawPathEnd); const rawRest = rawPathEnd === -1 ? '' : rawSuffix.slice(rawPathEnd);
+    const normalisedSuffix = `${path.posix.normalize(rawPath || '/')}${rawRest}`; const parsedSuffix = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (rawSuffix !== parsedSuffix && normalisedSuffix !== parsedSuffix) throw new Error('URL path, query and fragment must already be URL-encoded');
   }
 
   return parsed;
@@ -194,7 +195,6 @@ if (!readme.includes("demo's key is generated fresh for that run")) fail('README
 if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
 if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
 // --- Landing page and comparison surfaces: corrections stay in place ---
-
 requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay'); // CLAIM-COVERAGE: docs/assurance/index.html
 if (/replayed live-agent attack|see a live-agent attack blocked/i.test(landingPage)) fail('the landing page describes the replay as a live-agent attack');
 if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
