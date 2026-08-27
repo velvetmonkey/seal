@@ -13,6 +13,10 @@ const require = createRequire(import.meta.url);
 const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function isRepositoryPage(file) {
+  return file === "README.md" || /\.(md|html)$/.test(file);
+}
+
 const files = [...new Set(["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
 function walk(dir, prefix = "") {
   const out = [];
@@ -47,17 +51,28 @@ export function countDestination(file, raw, sourceRoot, roots, counts, checkTarg
   if (target.kind === "external") {
     counts.externalOccurrences++;
     const [family] = link.split("/", 1);
-    if (checkTargets && !existsSync(roots.get(family))) {
+    if (!checkTargets) return;
+    const familyExists = existsSync(roots.get(family));
+    if (!familyExists) {
       console.log(`UNVERIFIED  ${file} -> ${link}`);
       counts.unverified++;
-    } else if (checkTargets && !existsSync(target.path)) {
-      console.log(`BROKEN  ${file} -> ${link}`);
-      counts.bad++;
+      unverifiedTargets.add(raw.trim());
+    } else {
+      const targetExists = existsSync(target.path);
+      checkedTargets.add(raw.trim());
+      if (!targetExists) {
+        console.log(`BROKEN  ${file} -> ${link}`);
+        counts.bad++;
+      }
     }
     return;
   }
   counts.internalOccurrences++;
-  if (checkTargets && !existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
+  if (checkTargets) {
+    const targetExists = existsSync(target.path);
+    checkedTargets.add(raw.trim());
+    if (!targetExists) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
+  }
 }
 
 function strings(value, out = []) {
@@ -107,6 +122,8 @@ function pathStrings(text) {
 }
 
 const scannedTargets = new Set();
+const checkedTargets = new Set();
+const unverifiedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 
 function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
@@ -150,19 +167,20 @@ function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
 
 function baselineTree(sourceRoot) {
   try {
-    const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    const gitOptions = { cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+    const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], gitOptions).trim();
+    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], gitOptions).trim();
     return { base, files: new Set(names ? names.split("\n") : []) };
-  } catch {
-    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    return { base, files: new Set(names ? names.split("\n") : []) };
+  } catch (error) {
+    const reason = (error.stderr?.toString() || error.message || "unknown error").trim().replace(/\s+/g, " ");
+    console.error(`REFUSE link-check baseline unresolved: origin/main: git merge-base HEAD origin/main failed: ${reason}`);
+    process.exit(1);
   }
 }
 
-function compareToBaseline(sourceRoot, actual, currentFiles) {
+function compareToBaseline(sourceRoot, actual) {
   const { base, files: baselineFiles } = baselineTree(sourceRoot);
-  const expectedFiles = [...currentFiles].filter((file) => baselineFiles.has(file));
+  const expectedFiles = [...baselineFiles];
   const expectedSource = (file) => execFileSync("git", ["show", `${base}:${file}`], { cwd: sourceRoot, encoding: "utf8" });
   const expected = countOccurrences({
     sourceRoot,
@@ -170,9 +188,9 @@ function compareToBaseline(sourceRoot, actual, currentFiles) {
     readText: expectedSource,
     checkTargets: false,
   });
-  const disagreements = Object.keys(expected.files).filter((file) => actual.files[file]).flatMap((file) => {
+  const disagreements = Object.keys(expected.files).flatMap((file) => {
     const oldCounts = expected.files[file];
-    const newCounts = actual.files[file];
+    const newCounts = actual.files[file] ?? { internalOccurrences: 0, externalOccurrences: 0 };
     return ["internalOccurrences", "externalOccurrences"].flatMap((key) =>
       newCounts[key] < oldCounts[key] ? [`${file} ${key} expected=${oldCounts[key]} actual=${newCounts[key]}`] : [],
     );
@@ -182,6 +200,8 @@ function compareToBaseline(sourceRoot, actual, currentFiles) {
 
 async function main() {
   scannedTargets.clear();
+  checkedTargets.clear();
+  unverifiedTargets.clear();
   const sourceFiles = walk(ROOT);
   const actual = countOccurrences({
     sourceRoot: ROOT,
@@ -191,7 +211,27 @@ async function main() {
   });
 
   if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
-    console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
+    console.log(`link-check-targets: ${JSON.stringify([...checkedTargets].sort())}`);
+  }
+
+  const uncheckedTargets = [...scannedTargets].filter((target) =>
+    !checkedTargets.has(target) && !unverifiedTargets.has(target),
+  ).sort();
+  if (uncheckedTargets.length) {
+    console.log(`REFUSE link-check targets not checked: ${uncheckedTargets.join(", ")}`);
+    actual.bad++;
+  }
+
+  const baselinePopulation = [...baselineTree(ROOT).files].filter(isRepositoryPage);
+  const livePopulation = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean)
+    .filter(isRepositoryPage));
+  const missingPopulation = baselinePopulation.filter((file) => !livePopulation.has(file));
+  if (missingPopulation.length) {
+    for (const file of missingPopulation) {
+      console.log(`REFUSE link-check population lost: ${file}`);
+    }
   }
 
   const requiredLiveLinks = new Map([
@@ -220,8 +260,8 @@ async function main() {
   }
 
   console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
-  if (actual.bad) return 1;
-  const comparison = compareToBaseline(ROOT, actual, sourceFiles);
+  if (actual.bad || missingPopulation.length) return 1;
+  const comparison = compareToBaseline(ROOT, actual);
   if (comparison.disagreements.length) {
     console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
     return 1;
