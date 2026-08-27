@@ -14,6 +14,11 @@ answer cannot substitute for the kernel decision. REPLAY obtains only the
 decision from a decision-only kernel runner; it does not load the producer's
 receipt assembler.
 
+The envelope carries a HOST route: `passthrough`, `forward`, `block`, or
+`error`. The kernel decision type is `Allow`/`Block`; the host maps one to the
+other. Nothing in the `seal` checkout reads either Lean tree, so this
+correspondence is maintained by hand across a repository boundary.
+
 ```json
 {
   "seal_receipt": "v2",
