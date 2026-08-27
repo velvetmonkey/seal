@@ -58,6 +58,7 @@ test/readme-demo-transcript-guard.test.cjs
 test/readme-protect-state-witness.test.cjs
 test/receipt-checker.test.cjs
 test/receipt-v2-verifier.test.mjs
+test/receipt-verdict-agreement.test.mjs
 test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
 test/release-matrix.test.mjs
