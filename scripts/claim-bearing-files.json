@@ -62,7 +62,7 @@
     "docs/guide/README.md": { "allowlistReason": "This guide-index sentence chooses which named guide a reader should open for a situation; the repository can validate those links but cannot execute or prove the reader-specific recommendation." },
     "docs/guide/choosing-what-to-protect.md": { "allowlistReason": "This operator decision guide gives situational advice that depends on the user's tools and threat model, not a fixed local test fixture." },
     "docs/guide/github-actions-provenance.md": { "allowlistReason": "This guide explains GitHub Actions provenance and depends on GitHub-hosted workflow and attestation state outside the repository." },
-    "docs/guide/knowing-it-worked.md": { "coveredBy": ["test/demo-witness.test.cjs:112"] },
+    "docs/guide/knowing-it-worked.md": { "coveredBy": ["test/demo-witness.test.cjs:101"] },
     "scripts/mandatory-doc-claim-bindings.json": { "allowlistReason": "This binding registry is coverage metadata: its embedded claim text identifies the mandatory document sentences, but it is not a reader-facing Seal assertion." },
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs:136"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs:127"] },

@@ -223,47 +223,62 @@ async function run(argv, sealBinPath) {
 
   for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
 
-  // THE SCOPE WITNESS. Not optional, not behind a flag: the demo ends by
-  // doing a harmless write that bypasses the gate, while the proxy is STILL
-  // RUNNING, and observes that Seal emitted nothing for it. The witness
-  // completes the demonstration; it does not apologise for it.
-  const outsidePath = path.join(dir, "outside.txt");
-  const receiptsBefore = fs.readdirSync(receiptsDir).length;
+  // Act 4 changes the same resource as the protected tool, but without
+  // crossing the proxy. Read all three witnesses from disk before and after:
+  // resource bytes, protected-server count, and Seal decision receipts.
+  const resolvedDataFile = canonicalPath(dataFile);
+  if (!isWithin(resolvedDataFile, dir)) {
+    fail(`the demo data file resolves outside its demo directory: ${resolvedDataFile}`);
+  }
+  const dataBefore = fs.readFileSync(resolvedDataFile);
+  const countBeforeDirectWrite = readCount(countFile);
+  const decisionsBeforeDirectWrite = fs.readdirSync(receiptsDir).length;
   console.log("");
-  console.log("SCOPE WITNESS");
+  console.log("OUTSIDE THE SEAL PATH");
   console.log("");
-  console.log("Seal controlled this path:");
-  console.log(`  demo client -> Seal -> demo MCP server -> ${TOOL}`);
+  console.log(`Writing directly to ${dataFile} without calling the MCP server...`);
   console.log("");
-  console.log("If a route to the same effect does not pass through the printed Seal path, Seal did not control it.");
-  console.log("");
-  console.log("Now the demo performs a harmless direct local write");
-  console.log("that does not cross the Seal gate.");
-  console.log("");
-  const fd = fs.openSync(outsidePath, "w", 0o600);
+  const fd = fs.openSync(resolvedDataFile, "a");
   try {
-    fs.writeSync(fd, "this harmless line was written directly, without crossing the Seal gate\n");
+    fs.writeSync(fd, "seal demo wrote this line directly\n");
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
-  if (!fs.readFileSync(outsidePath, "utf8").includes("without crossing the Seal gate")) {
-    fail("the direct write did not land; the witness would be false");
+  const dataAfter = fs.readFileSync(resolvedDataFile);
+  const countAfterDirectWrite = readCount(countFile);
+  const decisionsAfterDirectWrite = fs.readdirSync(receiptsDir).length;
+  if (dataAfter.equals(dataBefore)) {
+    fail("the direct write did not change the demo data file; the witness would be false");
   }
-  const receiptsAfter = fs.readdirSync(receiptsDir).length;
-  if (receiptsAfter !== receiptsBefore) {
-    fail(`the direct write produced ${receiptsAfter - receiptsBefore} Seal decision(s); the witness would be false`);
+  if (countAfterDirectWrite !== countBeforeDirectWrite) {
+    fail(`the direct write changed the protected-server count from ${countBeforeDirectWrite} to ${countAfterDirectWrite}; the witness would be false`);
   }
-  console.log("DIRECT WRITE SUCCEEDED");
-  console.log(`Seal decisions emitted: 0 (receipts in ${receiptsDir}: ${receiptsBefore} before the write, ${receiptsAfter} after)`);
+  if (decisionsAfterDirectWrite !== decisionsBeforeDirectWrite) {
+    fail(`the direct write produced ${decisionsAfterDirectWrite - decisionsBeforeDirectWrite} Seal decision(s); the witness would be false`);
+  }
+  console.log("File changed: yes");
+  console.log(`Protected-server call count: still ${countAfterDirectWrite}`);
+  console.log(`New Seal decisions: ${decisionsAfterDirectWrite - decisionsBeforeDirectWrite}`);
   console.log("");
-  console.log("Seal is a gate, not a sandbox: it controls the path through it, and only that path.");
+  console.log("Seal did not observe or authorise this write.");
   await proxy.stop();
-  console.log(`summary: approval matched the effect, one child call observed, replay refused; ${receiptPaths.length} receipts written; one write happened outside Seal.`);
   console.log("receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). This installed payload does not include checker/seal-receipt-check.mjs. Clone https://github.com/velvetmonkey/seal and run the checker from that source checkout. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform.");
   console.log(`  From the checkout root: node checker/seal-receipt-check.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.");
+  console.log("");
+  console.log("ENFORCED");
+  console.log("The approved demo.mutate call ran once; its replay was refused.");
+  console.log("");
+  console.log("NOT APPROVAL-GATED");
+  console.log(`The direct write to ${dataFile}.`);
+  console.log("");
+  console.log("NOT OBSERVED");
+  console.log(`That direct write; protected-server call count stayed ${countAfterDirectWrite} and Seal made 0 new decisions.`);
+  console.log("");
+  console.log("ASSURANCE");
+  console.log("authorization rule proved; product state and forwarding tested; client and machine trusted.");
   process.exit(0);
 }
 

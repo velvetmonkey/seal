@@ -359,8 +359,9 @@ test("installed artifact runs demo then protect and unprotect", async () => {
   });
   const code = await new Promise((resolve) => child.once("close", resolve));
   assert.equal(code, 0, out);
-  assert.match(out, /DIRECT WRITE SUCCEEDED/);
-  assert.match(out, /Seal decisions emitted: 0/);
+  assert.match(out, /File changed: yes/);
+  assert.match(out, /Protected-server call count: still 1/);
+  assert.match(out, /New Seal decisions: 0/);
 
   const project = path.join(built.out, "project");
   const home = path.join(built.out, "home");
