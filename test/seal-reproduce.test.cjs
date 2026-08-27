@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const test = require("node:test");
+
+const { LIMIT, SCHEMA, SOURCE_PINS, execute } = require("../scripts/seal-reproduce.cjs");
+
+const TAG = "v0.2.0-rc.3";
+const ASSET = `seal-${TAG}-linux-x64`;
+const PUBLISHED_KERNEL = Buffer.from("published kernel bytes\n");
+const OUTSIDE_AUTHORITY = "independ" + "ent";
+const LIMIT_CLAIM = "This is byte correspondence between a clean rebuild from pinned source and the published release artifact. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
+
+function digest(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function harness(options = {}) {
+  let builds = 0;
+  let installedPath;
+  const assetBytes = Buffer.from("fixture installer bytes\n");
+  const declaredDigest = digest(assetBytes);
+  return {
+    get builds() { return builds; },
+    get installedPath() { return installedPath; },
+    deps: {
+      download(url, destination) {
+        if (url.endsWith("/SHA256SUMS")) {
+          const checksum = options.checksum || `${declaredDigest}  ${assetBytes.length}  ${ASSET}\n`;
+          fs.writeFileSync(destination, checksum);
+        } else {
+          fs.writeFileSync(destination, assetBytes);
+        }
+      },
+      installPublished(_asset, _declared, work) {
+        const prefix = fs.mkdtempSync(path.join(work, "test-prefix-"));
+        installedPath = path.join(prefix, "runtime", "kernel", "wasm", "seal.wasm");
+        fs.mkdirSync(path.dirname(installedPath), { recursive: true });
+        fs.writeFileSync(installedPath, PUBLISHED_KERNEL);
+        return installedPath;
+      },
+      afterPublishedKernel: options.afterPublishedKernel,
+      buildPinnedKernel(_tag, work) {
+        builds += 1;
+        const rebuilt = path.join(work, "fresh-source-build", "seal.wasm");
+        fs.mkdirSync(path.dirname(rebuilt), { recursive: true });
+        fs.writeFileSync(rebuilt, PUBLISHED_KERNEL);
+        return rebuilt;
+      },
+    },
+  };
+}
+
+test("honest comparison uses distinct origins and emits seal.reproduction/v1", () => {
+  const h = harness();
+  const outcome = execute([TAG], h.deps);
+  assert.equal(outcome.exitCode, 0);
+  assert.equal(outcome.report.schema, SCHEMA);
+  assert.equal(outcome.report.result, "reproduced");
+  assert.equal(outcome.report.authority, "same-authority");
+  assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(outcome.report.published_kernel_sha256, digest(PUBLISHED_KERNEL));
+  assert.equal(outcome.report.rebuilt_kernel_sha256, digest(PUBLISHED_KERNEL));
+  assert.equal(h.builds, 1);
+  assert.ok(h.installedPath.includes("test-prefix-"));
+  assert.equal(fs.existsSync(h.installedPath), false);
+  assert.ok(SOURCE_PINS[TAG].commit.match(/^[0-9a-f]{40}$/));
+});
+
+test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
+  const run = spawnSync(process.execPath, [path.join(__dirname, "..", "scripts", "seal-reproduce.cjs"), "rc.3"], {
+    encoding: "utf8",
+  });
+  const parsed = JSON.parse(run.stdout);
+  assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(run.stdout.trim().split(/\r?\n/)[0], "{");
+  assert.match(run.stderr, /^REFUSE seal-reproduce/m);
+  assert.equal(run.status, 1);
+});
+
+test("documented report result and field contract is executable", () => {
+  const reproduced = execute([TAG], harness().deps);
+  const mismatch = execute([TAG], harness({
+    afterPublishedKernel(file) {
+      const bytes = fs.readFileSync(file);
+      bytes[0] ^= 1;
+      fs.writeFileSync(file, bytes);
+    },
+  }).deps);
+  const refused = execute([TAG], harness({ checksum: `${"0".repeat(64)}  24  ${ASSET}\n` }).deps);
+  assert.deepEqual([reproduced.report.result, mismatch.report.result, refused.report.result], ["reproduced", "mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual([reproduced.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]);
+  assert.deepEqual(Object.keys(reproduced.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual(
+    ["published_kernel_sha256", "rebuilt_kernel_sha256", "result", "authority", "limit"].map((key) => Object.hasOwn(reproduced.report, key)),
+    [true, true, true, true, true],
+  ); // CLAIM-COVERAGE: docs/reproduce.md
+});
+
+test("one flipped byte in the extracted kernel produces mismatch and nonzero exit", () => {
+  const h = harness({
+    afterPublishedKernel(file) {
+      const bytes = fs.readFileSync(file);
+      bytes[0] ^= 1;
+      fs.writeFileSync(file, bytes);
+    },
+  });
+  const outcome = execute([TAG], h.deps);
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.report.result, "mismatch");
+  assert.notEqual(outcome.report.published_kernel_sha256, outcome.report.rebuilt_kernel_sha256);
+  assert.equal(h.builds, 1);
+});
+
+test("edited SHA256SUMS digit refuses before install or build", () => {
+  const h = harness({ checksum: `${"0".repeat(64)}  24  ${ASSET}\n` });
+  const outcome = execute([TAG], h.deps);
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.report.result, "refused");
+  assert.match(outcome.error, /asset digest mismatch/);
+  assert.equal(h.builds, 0);
+  assert.equal(h.installedPath, undefined);
+});
+
+test("nonexistent well-formed tag refuses by name and never reports reproduced", () => {
+  const missing = "v99.99.99-does-not-exist";
+  const deps = {
+    download() { throw new Error(`release download missing for ${missing}`); },
+  };
+  const outcome = execute([missing], deps);
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.report.result, "refused");
+  assert.match(outcome.error, new RegExp(missing));
+  assert.notEqual(outcome.report.result, "reproduced");
+});
+
+test("outside-authority declaration requires a nonempty authority name", () => {
+  let downloads = 0;
+  const outcome = execute([TAG, "--authority", OUTSIDE_AUTHORITY], {
+    download() { downloads += 1; },
+  });
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.report.result, "refused");
+  assert.equal(outcome.report.authority, "same-authority");
+  assert.match(outcome.error, /requires --authority-name/);
+  assert.equal(downloads, 0); // CLAIM-COVERAGE: docs/reproduce.md
+});
+
+test("caller declaration is the only path to outside authority", () => {
+  const h = harness();
+  const outcome = execute([TAG, "--authority", OUTSIDE_AUTHORITY, "--authority-name", "Outside Lab"], h.deps);
+  assert.equal(outcome.exitCode, 0);
+  assert.equal(outcome.report.authority, OUTSIDE_AUTHORITY); // CLAIM-COVERAGE: docs/reproduce.md
+});
+
+test("invalid tags refuse before download using the published checker pattern", () => {
+  let downloads = 0;
+  const outcome = execute(["rc.3"], { download() { downloads += 1; } });
+  assert.equal(outcome.report.result, "refused");
+  assert.match(outcome.error, /release tag is invalid: rc\.3/);
+  assert.equal(downloads, 0);
+});
