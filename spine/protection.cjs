@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { platformSupport } = require("./platform.cjs");
+const { requireHelperPlatform } = require("../scripts/macos-helper.cjs");
 const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
@@ -555,9 +556,6 @@ function livePid(pid) {
 }
 
 const MACOS_PROCESS_START_WITNESS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
-// The boot-time lower bound must come from the macOS system binary, never
-// from a caller-controlled PATH entry.
-const MACOS_SYSCTL = "/usr/sbin/sysctl";
 // A direct sysctl helper should complete in milliseconds. One second leaves
 // ample scheduler headroom while ensuring a stuck witness cannot hold a lock.
 const MACOS_PROCESS_START_WITNESS_TIMEOUT_MS = 1000;
@@ -566,62 +564,116 @@ const MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS = 10;
 // implausibly old value as a lower bound would make that bound attacker-movable.
 const MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS = 946684800;
 
-function parseMacosProcessStartWitnessBounds(stdout, nowSeconds = Date.now() / 1000) {
-  if (typeof stdout !== "string") return null;
-  // Keep the complete structured field, but do not anchor trailing text:
-  // macOS appends a human-readable boot date. The boundary after seconds
-  // prevents partial decimal or exponent captures.
-  const match = /\{ sec = ([1-9]\d*)(?=[^\d.e])(?:,| ,) usec = \d+ \}/.exec(stdout);
-  if (!match || (stdout.match(/\bsec = /g) || []).length !== 1 ||
-      match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
-  const bootSeconds = Number(match[1]);
-  if (!Number.isSafeInteger(bootSeconds) || !Number.isFinite(nowSeconds) ||
-      bootSeconds < MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS || bootSeconds > nowSeconds) return null;
-  return { bootSeconds, nowSeconds };
+function readinessFailure(code, detail) {
+  return { ok: false, code, detail };
 }
 
-function macosProcessStartWitnessBounds() {
-  try {
-    const result = spawnSync(MACOS_SYSCTL, ["-n", "kern.boottime"], {
-      encoding: "utf8",
-      timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
-    });
-    if (!result || result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
-    return parseMacosProcessStartWitnessBounds(result.stdout);
-  } catch {
-    return null;
-  }
-}
-
-function parseMacosProcessStartWitness(result, bounds) {
-  if (!result || result.error || result.status !== 0) return null;
-  if (typeof result.stdout !== "string") return null;
-  const match = /^([1-9]\d*)\.(\d{6})\n?$/.exec(result.stdout);
-  if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS || !bounds) return null;
+function parseMacosTimestamp(text) {
+  const match = /^([1-9]\d*)\.(\d{6})$/.exec(text || "");
+  if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
   const seconds = Number(match[1]);
-  if (!Number.isSafeInteger(seconds) || seconds < bounds.bootSeconds || seconds > bounds.nowSeconds) return null;
-  return `${match[1]}.${match[2]}`;
+  const microseconds = Number(match[2]);
+  if (!Number.isSafeInteger(seconds) || !Number.isSafeInteger(microseconds)) return null;
+  return { seconds, microseconds, value: `${match[1]}.${match[2]}` };
 }
 
-function macosProcessStartWitness(pid) {
+function parseMacosProcessWitness(result, nowSeconds = Date.now() / 1000) {
+  if (result?.status === 2) {
+    return readinessFailure("macos_boot_time_unavailable", "native helper could not read the macOS boot time");
+  }
+  if (!result || result.error || result.status !== 0 || typeof result.stdout !== "string") {
+    return readinessFailure("macos_process_witness_failed", "native helper could not establish the process identity");
+  }
+  const bootLine = /^boot ([^\n]+)\n/.exec(result.stdout);
+  const boot = bootLine ? parseMacosTimestamp(bootLine[1]) : null;
+  if (!boot || !Number.isFinite(nowSeconds) ||
+      boot.seconds < MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS ||
+      boot.seconds + boot.microseconds / 1000000 > nowSeconds) {
+    return readinessFailure("macos_boot_time_unavailable", "native helper returned an invalid or implausible macOS boot time");
+  }
+  const match = /^boot ([^\n]+)\nprocess ([^\n]+)\n?$/.exec(result.stdout);
+  if (!match) {
+    return readinessFailure("macos_process_witness_failed", "native helper returned an invalid process identity record");
+  }
+  const processStart = parseMacosTimestamp(match[2]);
+  const bootValue = boot.seconds + boot.microseconds / 1000000;
+  const processValue = processStart && processStart.seconds + processStart.microseconds / 1000000;
+  if (!processStart || processValue < bootValue || processValue > nowSeconds) {
+    return readinessFailure("macos_process_witness_failed", "native helper returned an invalid or implausible process identity");
+  }
+  return {
+    ok: true,
+    bootTime: boot.value,
+    bootSeconds: boot.seconds,
+    nowSeconds,
+    witness: processStart.value,
+  };
+}
+
+function macosHelperReadiness(platform, arch) {
+  let stat;
   try {
-    const bounds = macosProcessStartWitnessBounds();
-    if (!bounds) return null;
-    return parseMacosProcessStartWitness(spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
+    stat = fs.statSync(MACOS_PROCESS_START_WITNESS_HELPER);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return readinessFailure("macos_helper_missing", `native helper is missing: ${MACOS_PROCESS_START_WITNESS_HELPER}`);
+    }
+    return readinessFailure("macos_helper_missing", `native helper cannot be inspected: ${error.message}`);
+  }
+  if (!stat.isFile()) {
+    return readinessFailure("macos_helper_missing", `native helper is not a regular file: ${MACOS_PROCESS_START_WITNESS_HELPER}`);
+  }
+  try {
+    fs.accessSync(MACOS_PROCESS_START_WITNESS_HELPER, fs.constants.X_OK);
+  } catch (error) {
+    return readinessFailure("macos_helper_not_executable", `native helper is not executable: ${error.message}`);
+  }
+  try {
+    requireHelperPlatform(MACOS_PROCESS_START_WITNESS_HELPER, `${platform}-${arch}`);
+  } catch (error) {
+    return readinessFailure("macos_helper_architecture", error.message.replace(/^REFUSE macos_helper_architecture:\s*/, ""));
+  }
+  return { ok: true };
+}
+
+function macosProcessWitness(pid, platform = "darwin", arch = process.arch, nowSeconds = Date.now() / 1000) {
+  const helper = macosHelperReadiness(platform, arch);
+  if (!helper.ok) return helper;
+  try {
+    return parseMacosProcessWitness(spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
       encoding: "utf8",
       timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
-    }), bounds);
-  } catch {
-    return null;
+    }), nowSeconds);
+  } catch (error) {
+    return readinessFailure("macos_process_witness_failed", `native helper invocation failed: ${error.message}`);
   }
+}
+
+function protectReadiness(env = process.env) {
+  const support = platformSupport(env);
+  if (support.platform !== "darwin" || !support.protectSupported) return { ok: true };
+  return macosProcessWitness(process.pid, support.platform, support.arch);
+}
+
+function requireProtectReadiness(env = process.env) {
+  const result = protectReadiness(env);
+  if (result.ok) return result;
+  throw new ProtectionError(
+    result.code,
+    `supported platform, but Protect is not ready on this machine: ${result.detail}`,
+  );
 }
 
 function processStartWitness(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return null;
-  if (platformSupport().platform === "darwin") return macosProcessStartWitness(pid);
+  const support = platformSupport();
+  if (support.platform === "darwin") {
+    const result = macosProcessWitness(pid, support.platform, support.arch);
+    return result.ok ? result.witness : null;
+  }
   // platformSupport's test-only override lets product-path tests exercise the
   // same unavailable witness that a real non-Linux host would produce.
-  if (platformSupport().platform !== "linux") return null;
+  if (support.platform !== "linux") return null;
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
     const close = stat.lastIndexOf(")");
@@ -634,19 +686,30 @@ function processStartWitness(pid) {
   }
 }
 
+function requireProcessStartWitness(pid) {
+  const support = platformSupport();
+  if (support.platform === "darwin") {
+    const result = macosProcessWitness(pid, support.platform, support.arch);
+    if (!result.ok) throw new ProtectionError(result.code, result.detail);
+    return result.witness;
+  }
+  const witness = processStartWitness(pid);
+  if (witness === null) {
+    throw new ProtectionError(
+      "process_witness_unavailable",
+      `cannot establish process-start witness for live pid ${pid}`,
+    );
+  }
+  return witness;
+}
+
 function lockPathFor(projectRoot, env = process.env) {
   return path.join(projectDirectory(projectRoot, env), "proxy.lock");
 }
 
 function lockOwnerIsLive(owner) {
   if (!owner || !livePid(owner.pid)) return false;
-  const witness = processStartWitness(owner.pid);
-  if (witness === null) {
-    throw new ProtectionError(
-      "process_witness_unavailable",
-      `cannot establish process-start witness for live pid ${owner.pid}`,
-    );
-  }
+  const witness = requireProcessStartWitness(owner.pid);
   return owner.startWitness === witness;
 }
 
@@ -657,13 +720,7 @@ function leaseMatches(lease, token) {
 
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
-  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
-  if (owner.startWitness === null) {
-    throw new ProtectionError(
-      "process_witness_unavailable",
-      `cannot establish process-start witness for live pid ${owner.pid}`,
-    );
-  }
+  const owner = { pid: process.pid, startWitness: requireProcessStartWitness(process.pid) };
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (;;) {
@@ -742,6 +799,7 @@ async function protect({
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
   }
   requireHumanApprovalOrigin(env);
+  requireProtectReadiness(env);
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   const existing = readState(statePath);
@@ -915,7 +973,7 @@ async function activationLease(statePath, env = process.env) {
       state: STATES.ACTIVE,
       lease: {
         pid: process.pid,
-        startWitness: processStartWitness(process.pid),
+        startWitness: requireProcessStartWitness(process.pid),
         generation,
         startedAt: new Date().toISOString(),
       },
@@ -956,12 +1014,12 @@ function doctor(env = process.env) {
       text: "REFUSED\n  Claude Code can automatically answer elicitation requests.\n  Human approval origin cannot be assumed in this configuration.\nREFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed\n",
     };
   }
-  const support = platformSupport();
-  if (support.installSupported && !support.protectSupported && support.protectReason) {
+  const readiness = protectReadiness(env);
+  if (!readiness.ok) {
     return {
       ok: false,
-      code: support.protectReason,
-      text: `REFUSED\n  Protect is unavailable: ${support.protectReason}.\nREFUSE ${support.protectReason}: the macOS process-start witness prerequisite failed\n`,
+      code: readiness.code,
+      text: `REFUSED\n  Supported platform, but Protect is not ready on this machine.\n  ${readiness.detail}\nREFUSE ${readiness.code}: ${readiness.detail}\n`,
     };
   }
   return {
@@ -971,10 +1029,10 @@ function doctor(env = process.env) {
 }
 
 function requireHumanApprovalOrigin(env = process.env) {
-  const verdict = doctor(env);
-  if (!verdict.ok && verdict.code === "elicitation_hook_configured") {
+  const hook = env.SEAL_ELICITATION_AUTO_RESPONSE || env.CLAUDE_ELICITATION_AUTO_RESPONSE;
+  if (hook) {
     throw new ProtectionError(
-      verdict.code,
+      "elicitation_hook_configured",
       "an auto-response hook is set; human approval origin cannot be assumed",
     );
   }
@@ -994,10 +1052,11 @@ module.exports = {
   loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
-  macosProcessStartWitnessBounds,
-  parseMacosProcessStartWitness,
-  parseMacosProcessStartWitnessBounds,
+  macosHelperReadiness,
+  macosProcessWitness,
+  parseMacosProcessWitness,
   processStartWitness,
+  protectReadiness,
   protectedToolNames,
   protect,
   protectionView,

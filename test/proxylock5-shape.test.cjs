@@ -105,7 +105,7 @@ test("current protection liveness verdicts use the witness gate", () => {
   const [predicateStart, predicateEnd] = functionRange(source, "lockOwnerIsLive");
   assert.ok(livePidUses[1] > predicateStart && livePidUses[1] < predicateEnd,
     "the only livePid call must be inside lockOwnerIsLive");
-  assert.match(source, /function lockOwnerIsLive\(owner\)\s*\{[\s\S]*?processStartWitness\(owner\.pid\)/);
+  assert.match(source, /function lockOwnerIsLive\(owner\)\s*\{[\s\S]*?requireProcessStartWitness\(owner\.pid\)/);
   assert.match(source, /if \(lockOwnerIsLive\(state\?\.lease\)\)/);
   assert.doesNotMatch(source, /if \([^\n]*livePid\([^\n]*\)[^\n]*\)\s*\{[\s\S]*?active_claude_session/);
 });

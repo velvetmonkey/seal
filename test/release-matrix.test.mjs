@@ -6,10 +6,13 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { manifestFromObserved, sha256, validateManifestShape } from "../scripts/release-manifest-lib.mjs";
+import integrity from "../spine/integrity.cjs";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const HELPER_PROVENANCE = "release-produced, not independ" + "ently reproduced";
+const { unpackPayload } = integrity;
+const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
 
 function machO(cpuType) {
   const bytes = Buffer.alloc(32);
@@ -38,7 +41,19 @@ test("the release manifest binds all three platform artifacts and native-helper 
       assert.equal(built.status, 0, built.stderr);
       const sourceName = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/)[2];
       const name = `seal-v${VERSION}-${platform}`;
-      artifacts.push({ name, bytes: fs.readFileSync(path.join(out, sourceName)) });
+      const bytes = fs.readFileSync(path.join(out, sourceName));
+      const payloadAt = bytes.indexOf(PAYLOAD_MARKER);
+      assert.ok(payloadAt >= 0, `${platform} artifact has no payload marker`);
+      const unpacked = unpackPayload(bytes.subarray(payloadAt + PAYLOAD_MARKER.length));
+      const paths = new Set(unpacked.files.map((file) => file.path));
+      for (const required of [
+        "spine/platform.cjs",
+        "spine/protection.cjs",
+        "runtime/macos-process-start-witness.c",
+        "scripts/macos-helper.cjs",
+      ]) assert.ok(paths.has(required), `${platform} artifact lacks contract implementation member ${required}`);
+      assert.equal(paths.has("runtime/macos-process-start-witness"), platform.startsWith("darwin-"));
+      artifacts.push({ name, bytes });
     }
     const checkerName = "seal-receipt-check.mjs";
     const checkerBytes = fs.readFileSync(path.join(ROOT, "checker", checkerName));

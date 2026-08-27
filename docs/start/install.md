@@ -65,7 +65,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: REGENERATE_AFTER_REBASE
+tree: f5dbbff96ed85294759884642512645bf9b6b3d159c14218a4912d167a948609
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`

@@ -43,6 +43,7 @@ const PAYLOAD_PATHS = [
   "runtime/kernel/runner.cjs",
   "runtime/kernel/wasm/seal.js",
   "runtime/kernel/wasm/seal.wasm",
+  "scripts/macos-helper.cjs",
   "scripts/seal-launch.cjs",
 ];
 

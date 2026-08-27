@@ -10,15 +10,15 @@ const {
   activationLease,
   lockPathFor,
   lockOwnerIsLive,
-  parseMacosProcessStartWitness,
-  parseMacosProcessStartWitnessBounds,
+  parseMacosProcessWitness,
   processStartWitness,
+  protectReadiness,
   projectId,
   protectionView,
   statePathFor,
 } = require("../spine/protection.cjs");
 const { createJournal, openJournal } = require("../spine/store.cjs");
-const { platformSupport } = require("../spine/platform.cjs");
+const { platformSupport, protectPlatformSupported } = require("../spine/platform.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
 const CLI = path.join(__dirname, "../bin/seal");
@@ -101,52 +101,49 @@ function ownedActiveState(ctx) {
   };
 }
 
-test("Darwin stays install-supported but Protect support reflects missing witness prerequisites", () => {
+test("Darwin support contract remains true when readiness is damaged", () => {
   withSimulatedDarwin(() => {
     const support = platformSupport();
     assert.equal(support.installSupported, true);
-    assert.equal(support.protectSupported, false);
+    assert.equal(support.protectSupported, true);
+    assert.equal(protectPlatformSupported("darwin", "arm64"), true);
+    assert.equal(protectReadiness().code, "macos_helper_missing");
     assert.equal(support.supported, true, "legacy supported answer remains the install/demo answer");
   });
 });
 
-test("macOS witness parser accepts only a successful non-epoch helper line", () => {
-  const bounds = { bootSeconds: 1700000000, nowSeconds: 1800000000 };
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }, bounds), "1787834912.322160");
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 1, stdout: "1787834912.322160\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "0.322160\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "not-a-witness\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "999999999999999999999999.000000\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1800000001.000000\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1699999999.000000\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.32216\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\nextra\n" }, bounds), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), null);
+test("macOS helper parser accepts a bounded boot and process pair", () => {
+  const result = parseMacosProcessWitness({
+    status: 0,
+    stdout: "boot 1700000000.000000\nprocess 1787834912.322160\n",
+  }, 1800000000);
+  assert.equal(result.ok, true);
+  assert.equal(result.bootTime, "1700000000.000000");
+  assert.equal(result.witness, "1787834912.322160");
+  for (const processValue of [
+    "not-a-witness", "1787834912.32216", "1.7e9", "1699999999.000000", "1800000001.000000",
+  ]) {
+    const refused = parseMacosProcessWitness({
+      status: 0,
+      stdout: `boot 1700000000.000000\nprocess ${processValue}\n`,
+    }, 1800000000);
+    assert.equal(refused.ok, false, processValue);
+    assert.equal(refused.code, "macos_process_witness_failed", processValue);
+  }
 });
 
-test("macOS boot-time witness bounds refuse malformed and implausible sysctl output", () => {
+test("macOS helper parser refuses malformed and implausible boot values", () => {
   const nowSeconds = 1800000000;
-  assert.deepEqual(
-    parseMacosProcessStartWitnessBounds("{ sec = 1700000000 , usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
-    { bootSeconds: 1700000000, nowSeconds },
-  );
-  assert.deepEqual(
-    parseMacosProcessStartWitnessBounds("{ sec = 1700000000, usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
-    { bootSeconds: 1700000000, nowSeconds },
-  );
-  for (const output of [
-    "{ sec = 1.7e9 , usec = 0 }\\n",
-    "{ sec = 1700000000. , usec = 0 }\\n",
-    "{ sec = +1700000000 , usec = 0 }\\n",
-    "{ sec = 1700000000  , usec = 0 }\\n",
-    "{ sec = 1e9 , usec = 0 }\\n",
-    "{ sec = -1700000000 , usec = 0 }\\n",
-    "{ sec = 1700000000 , usec = 0 } sec = 1700000000\\n",
-    "{ sec = 1800000001 , usec = 0 }\\n",
-    "{ sec = 1 , usec = 0 }\\n",
+  for (const boot of [
+    "1.7e9", "1700000000.", "+1700000000.000000", "1e9.000000",
+    "-1700000000.000000", "1800000001.000000", "1.000000",
   ]) {
-    assert.equal(parseMacosProcessStartWitnessBounds(output, nowSeconds), null, output);
+    const result = parseMacosProcessWitness({
+      status: 0,
+      stdout: `boot ${boot}\nprocess 1787834912.322160\n`,
+    }, nowSeconds);
+    assert.equal(result.ok, false, boot);
+    assert.equal(result.code, "macos_boot_time_unavailable", boot);
   }
 });
 
@@ -155,12 +152,12 @@ test("macOS without the helper keeps the process witness fail-closed", () => {
     assert.equal(processStartWitness(process.pid), null);
     assert.throws(
       () => lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
-      (error) => error.code === "process_witness_unavailable",
+      (error) => error.code === "macos_helper_missing",
     );
   });
 });
 
-test("seal protect on simulated Darwin without a helper agrees with protectSupported and refuses before changes", () => {
+test("seal protect on simulated Darwin reports readiness, not unsupported platform, before changes", () => {
   const ctx = workspace("protect-refusal");
   const result = spawnSync(process.execPath, [CLI, "protect", "db", "write"], {
     cwd: ctx.project,
@@ -174,9 +171,10 @@ test("seal protect on simulated Darwin without a helper agrees with protectSuppo
   });
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 1, output);
-  assert.match(output, /^REFUSE unsupported_platform: this is darwin-arm64$/m);
-  assert.equal(withSimulatedDarwin(() => platformSupport().protectSupported), false);
-  console.log(`protectSupported=false\n${output.trimEnd()}`);
+  assert.match(output, /REFUSE macos_helper_missing:/);
+  assert.doesNotMatch(output, /unsupported_platform|UNSUPPORTED PLATFORM/i);
+  assert.equal(withSimulatedDarwin(() => platformSupport().protectSupported), true);
+  console.log(`protectSupported=true readiness=macos_helper_missing\n${output.trimEnd()}`);
   assert.equal(fs.readdirSync(ctx.project).length, 0, "Protect refusal must not change project files");
   assert.equal(fs.existsSync(path.join(ctx.home, ".claude.json")), false, "Protect refusal must not change the user configuration");
   assert.equal(fs.existsSync(ctx.dataHome), false, "Protect refusal must not create protection state");
@@ -187,8 +185,7 @@ test("direct protectionView refuses when the live lease witness is unavailable",
     const ctx = workspace("view");
     assert.throws(
       () => protectionView(ownedActiveState(ctx), ctx.project, ctx.env),
-      (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+      (error) => error.code === "macos_helper_missing",
     );
   });
 });
@@ -203,8 +200,7 @@ test("direct activationLease refuses when the live lease witness is unavailable"
 
     await assert.rejects(
       activationLease(statePath, ctx.env),
-      (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+      (error) => error.code === "macos_helper_missing",
     );
   });
 });
@@ -218,8 +214,7 @@ test("direct acquireProjectLock refuses when the live lock witness is unavailabl
 
     assert.throws(
       () => acquireProjectLock(ctx.project, ctx.env),
-      (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+      (error) => error.code === "macos_helper_missing",
     );
   });
 });
@@ -229,8 +224,7 @@ test("direct acquireProjectLock refuses its first acquire when its witness is un
     const ctx = workspace("first-lock");
     assert.throws(
       () => acquireProjectLock(ctx.project, ctx.env),
-      (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+      (error) => error.code === "macos_helper_missing",
     );
     assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "refusal must not write a null-witness lock");
   });
