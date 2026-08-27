@@ -278,7 +278,7 @@ async function run(argv, sealBinPath) {
   console.log(`That direct write; protected-server call count stayed ${countAfterDirectWrite} and Seal made 0 new decisions.`);
   console.log("");
   console.log("ASSURANCE");
-  console.log("authorization rule proved; product state and forwarding tested; client and machine trusted.");
+  console.log("authorization rule tested; product state and forwarding tested; client and machine trusted.");
   process.exit(0);
 }
 
