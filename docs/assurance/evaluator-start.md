@@ -1,5 +1,7 @@
 # Seal: Evaluator Truth Surface
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Regenerated: 2026-08-09. This file separates proved, tested, reproduced,
 shipped, and open facts. It is still hand-generated from the two `CLAIMS.md`
 files, the fleet lock, the live verifier declarations, and the current
@@ -29,14 +31,16 @@ kernels, or repeated independent runs. `CANDIDATE` is not `SHIPPED`.
 
 | Source | Role | Backing |
 |---|---|---|
-| Canonical-core claims | Public claim ceiling for the v2 canonical core | [mcp-seal-dev CLAIMS.md:20-30](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md) |
+| Canonical-core claims | Public claim ceiling for the v2 canonical core | [`seal-host` CLAIMS.md:20-30](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md) |
 | Host claims | Public claim ceiling for the deployed multi-kernel host | `seal-host/CLAIMS.md:29-49` |
 | Shipped fleet identity | Exact repository commits and kernel hash | `seal-host/release/fleet-lock.json:1-31` |
 | Verifier contracts | Profile meanings and expected roster | `seal-assurance-kit/docs/VERIFY-PROFILES.md:88-206` |
 | Live verifier declarations | Actual profile selected by each copy | Section 4 below, with each live file and line |
-| Proof inventories | Curated public theorem references, counted in this rewrite | `mcp-seal-dev/docs/PROOF-REFERENCE.md:5-55`; `seal-host/docs/PROOF-REFERENCE.md:5-30` |
+| Proof inventories | Curated public theorem references, counted in this rewrite | `seal-host/docs/PROOF-REFERENCE.md:5-55`; `seal-host/docs/PROOF-REFERENCE.md:5-30` |
 
 ## 2. Historical artifact identity: 2026-07-31 candidate and shipped fleet
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 The rows in this section retain the measured 2026-07-31 record. They are not
 current fleet status; the dated correction above and the regenerated stop-ship
@@ -80,12 +84,14 @@ The limits are part of the result:
 
 ## 3. Proved, tested, deployed, and residual truth surface
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 | Name | Current result | Backing | Limit |
 |---|---|---|---|
-| V2 Allow witness and default deny | PROVED for the canonical core: an `Allow` carries parsed and validated approval evidence and canonical output; output is unreachable without it | [mcp-seal-dev CLAIMS.md:24-26](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); theorems `SealV2.non_bypass` at `SealV2/DecideTheorems.lean:67`, `SealV2.default_deny` at `:77`, and `SealV2.canonical_roundtrip` at `SealV2/SerializationTheorems.lean:1257` | Core only; not a whole deployment proof |
-| Approval lifecycle | PROVED in the model: issue, target bind, one-shot consume, and TTL expiry | [mcp-seal-dev CLAIMS.md:27](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); theorem `SealV2.replay_denied` at `SealV2/LifecycleTheorems.lean:84` and the lifecycle inventory at `docs/PROOF-REFERENCE.md:27` | Deployment durability and store identity are separate rows |
+| V2 Allow witness and default deny | PROVED for the canonical core: an `Allow` carries parsed and validated approval evidence and canonical output; output is unreachable without it | [`seal-host` CLAIMS.md:24-26](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); theorems `SealV2.non_bypass` at `SealV2/DecideTheorems.lean:67`, `SealV2.default_deny` at `:77`, and `SealV2.canonical_roundtrip` at `SealV2/SerializationTheorems.lean:1257` | Core only; not a whole deployment proof |
+| Approval lifecycle | PROVED in the model: issue, target bind, one-shot consume, and TTL expiry | [`seal-host` CLAIMS.md:27](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); theorem `SealV2.replay_denied` at `SealV2/LifecycleTheorems.lean:84` and the lifecycle inventory at `docs/PROOF-REFERENCE.md:27` | Deployment durability and store identity are separate rows |
 | Ed25519 canonical approval bytes | CODE plus trusted crypto leaf; the shim enforces RFC 8032 `S < L`; the recorded corpus was 62 of 62 invalid rejected and 88 of 88 valid accepted | [mcp-seal-dev CLAIMS.md:28,78-97](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); `c/seal_ed25519.c`; Wycheproof runner named in the claim | TweetNaCl group arithmetic remains trusted |
-| Principal non-influence | PROVED as a model property for fixed judged line and approval state | [mcp-seal-dev CLAIMS.md:29](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); theorem `SealV2.Effect.principal_non_influence` at `SealV2/PrincipalNonInfluence.lean:146` | Whether a decision exists and host behavior can still depend on principal |
+| Principal non-influence | PROVED as a model property for fixed judged line and approval state | [`seal-host` CLAIMS.md:29](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); theorem `SealV2.Effect.principal_non_influence` at `SealV2/PrincipalNonInfluence.lean:146` | Whether a decision exists and host behavior can still depend on principal |
 | Deployed host profile | IMPLEMENTED and deployed as `compatible`; `canonical-l0` is proved at the proof layer but is not the deployed path | `seal-host/CLAIMS.md:17-27`; `Host/Canonical.lean`; `Host/CanonicalL0.lean`; `Ffi.stepImpl` | Canonical AST is audit data, not the deployed mediation gate |
 | Conditional single-link non-bypass | PROVED for the pure routing implication and TESTED across the Rust sink bridge | `seal-host/CLAIMS.md:37`; theorem `Host.step_forward_non_bypass` at `Host/Composition.lean:504`; `rust/src/route.rs`; the single child-write sink in `rust/src/main.rs` | Model-to-binary correspondence is tested, not proved; only lines classified as `tools/call` are covered |
 | Passthrough perimeter | PROVED model result: a line is gate-decided exactly inside the classified perimeter and forwarded undecided when it escapes. Widened non-bypass fails for every escape, including a JSON-RPC batch | `seal-host/CLAIMS.md:44`; theorems `mediation_perimeter` at `Host/PassthroughPerimeter.lean:615` and `widened_non_bypass_fails` at `:661` | Child strictness is assumed; duplicate-key disagreement and the unwired strict profile remain open |
@@ -93,10 +99,12 @@ The limits are part of the result:
 | Multi-kernel composition | PROVED at model level for registered kernels, including the seven-kernel closed algebra | `seal-host/CLAIMS.md:33-34,46`; theorem `Host.registry_closed_algebra` at `Host/Composition.lean:541` | Liveness, config correctness, crypto, and IO realization are outside the theorem |
 | A6 signed-token cross-restart durability | TESTED and implemented: the production-channel nonce is durably reserved as a HOLD before Lean; the hold blocks a second presentation but is not yet a burn; the burn commits at RECORDED after the durable authorization-decision receipt exists; startup recovery reclaims every uncommitted hold, including one whose RECORDED receipt already exists, and never reclaims a committed burn | `seal-host/CLAIMS.md:69-82`; `seal-host/rust/src/replay_store.rs:4-15,274-355,382-431`; `seal-host/rust/src/main.rs:450-457`; restart backing in `seal-host/rust/tests/host_path.rs:1148-1232` | Only the Ed25519 signed-token production channel; accepted cross-store crash window: a RECORDED receipt can coexist with a reclaimable hold (`seal-host/CLAIMS.md:77-80`); the receipt-persisted/burn-uncommitted crash window has no crash-injection test, so its behavior follows from source ordering and the unconditional SQL predicate; legacy channels remain in memory |
 | A7 replay-store instance integrity | OPEN accepted limitation. The 0700 parent and 0600 file checks narrow substitution authority to host euid and root, but do not authenticate store identity | `seal-host/CLAIMS.md:61-80`; `rust/src/secure_fs.rs:14-96`; `rust/tests/replay_store_substitution.rs:121-179` | A conforming substituted store re-accepts a previously consumed nonce within TTL |
-| Numeric and parser equivalence | PARTIAL. The binary64 agreement guard refuses the measured numeric disagreement class; full per-server equivalence remains open | [mcp-seal-dev CLAIMS.md:77](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); `seal-host/CLAIMS.md:53`; `seal-host/docs/V31-DOWNSTREAM-PARSER-AGREEMENT.md:110-137` | Inputs and downstream parsers outside the measured corpus were not checked |
-| Response egress | NOT MEDIATED by the claim | [mcp-seal-dev CLAIMS.md:100-103](https://github.com/velvetmonkey/mcp-seal-dev/blob/main/CLAIMS.md); `seal-host/CLAIMS.md:101-104` | Never claim that Seal prevents response leaks |
+| Numeric and parser equivalence | PARTIAL. The binary64 agreement guard refuses the measured numeric disagreement class; full per-server equivalence remains open | [`seal-host` CLAIMS.md:77](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); `seal-host/CLAIMS.md:53`; `seal-host/docs/V31-DOWNSTREAM-PARSER-AGREEMENT.md:110-137` | Inputs and downstream parsers outside the measured corpus were not checked |
+| Response egress | NOT MEDIATED by the claim | [`seal-host` CLAIMS.md:100-103](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); `seal-host/CLAIMS.md:101-104` | Never claim that Seal prevents response leaks |
 
 ## 4. Live verifier profiles
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 The prose roster has one confirmed stale path: it places the host declaration
 in `rust/src/decision_receipt.rs`, while the live declaration is in
@@ -119,11 +127,13 @@ binding and an independent signer pin for its top result. `P-SELFAUDIT` says
 
 ## 5. Current theorem inventories and the module inventory gate
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Counting theorem names in the current curated proof-reference tables gives:
 
 | Inventory | Count | Method and backing |
 |---|---:|---|
-| `mcp-seal-dev` | 34 theorem names across 24 claim rows | Counted from `docs/PROOF-REFERENCE.md:5-55`: 6 V1, 10 V2 pipeline and lifecycle, 15 golden-path, 3 V2.3 principal rows |
+| `seal-host` | 34 theorem names across 24 claim rows | Counted from `docs/PROOF-REFERENCE.md:5-55`: 6 V1, 10 V2 pipeline and lifecycle, 15 golden-path, 3 V2.3 principal rows |
 | `seal-host` | 40 theorem names across 23 claim rows | Counted from `docs/PROOF-REFERENCE.md:5-30`, including every parenthesized companion theorem |
 
 These are curated public inventories, not counts of every theorem declaration
@@ -132,7 +142,7 @@ example, the host inventory says `Host.step_forward_non_bypass` is at
 `Host/Composition.lean:241`; the theorem is currently at line 504.
 
 The module axiom gate is derived evidence: run `lake exe module_axiom_check` in
-the public `mcp-seal-dev` tree. The command computes the production-module
+the public `seal-host` tree. The command computes the production-module
 count from the checked-out tree, reports the kernel-baseline assignment-list
 size, and fails if either population drifts from the gate's enumerated scope.
 GitHub Actions run `31054969690` completed successfully for public commit

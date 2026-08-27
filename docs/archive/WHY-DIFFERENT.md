@@ -4,6 +4,8 @@
 
 # Why a proof, not a prompt: Seal vs heuristic guards
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 LLM judges and prompt filters for agent tools work by judgment: a model or prompt-level
 heuristic classifies the request. Judgment is probabilistic — on the novel attack it has
 never seen, it guesses. And when one of these heuristic guards guesses wrong it can fail

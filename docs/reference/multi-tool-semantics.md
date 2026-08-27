@@ -187,6 +187,8 @@ with the omitted tool named when its state exposed only two guarded members.
 
 ## UNVERIFIED
 
-The protection state machine has no machine-checked model in the Lean kernel.
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
+The protection state machine has no machine-checked model in the `seal-host` Lean kernel.
 The coverage verdict is based on the shipped CLI and product spine test paths;
 no external Claude Code acceptance claim is made here.

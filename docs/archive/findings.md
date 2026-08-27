@@ -1,5 +1,7 @@
 # Seal Family — Public Surfaces Claim Audit (FINDINGS)
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 **Scope**: Top-level README + docs/ openers and matrices for the umbrella `seal/` repo. Representative claims sampled from README truthbox, "Why you can believe it", CLAIMS-MATRIX, LIMITATIONS, AUTHORIZATION-MESH, EVALUATOR-START, WHY-DIFFERENT.
 
 **Method**: Every claim below was re-read from the public docs, then cross-checked against shipped artifacts (Lean sources in mcp-seal / mcp-seal-dev layout, seal-host code/tests, seal-assurance-kit, seal-check, seal-live-demo scripts/asserts, seal-verify-action). "Backed?" cites concrete file:line or test name where the rule or conformance lives. No new guarantees added.
@@ -7,6 +9,8 @@
 **Collar**: All original honesty labels (truthbox, non-claims, "proves the KERNEL", TCB, "not tamper-IMPOSSIBLE", "AUTHORIZATION not INTENT", etc.) are preserved verbatim in README and docs. This table only audits; it does not change copy.
 
 ## Sampled Claims Table
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 | Claim (verbatim or close paraphrase from public surface) | Backed? | File:line / evidence | Action |
 |----------------------------------------------------------|---------|----------------------|--------|
@@ -32,6 +36,8 @@
 | Tamper-evident receipt re-derivable by anyone (PWA or kit). | Yes (tested) | seal/scripts/run-showcase.sh + PWA html served (replay grid); seal-assurance-kit + seal-check tests | keep |
 
 ## NEEDS BEN (unverified or out-of-scope in this pass)
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 - Full end-to-end live run of `bash scripts/run_local.sh` in this environment (Docker + Node required; the local ./scripts/run-showcase.sh + captured seal-demo.log + bundle evidence provide the showcase instead).
 - Exhaustive audit of every theorem in mcp-seal-dev (used local mcp-seal/SealCore/Safety.lean + Test/ + matrix as proxy; the matrix itself is the comprehensive view).
 - Public source links (including the mcp-seal-dev full tree) — backing via the linked repositories and the drift-guarded matrix.

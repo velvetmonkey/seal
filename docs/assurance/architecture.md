@@ -46,6 +46,8 @@ production configuration key.
 
 ## Assurance lineage — Seal family architecture
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
 One diagram, five roles: **decision core** (proven), **enforcement** (deployed), **receipt**
@@ -62,7 +64,7 @@ flowchart LR
         gw["Mediation boundary\n(gateway)"]
     end
 
-    subgraph kernel["Decision core — proven in Lean 4 (mcp-seal-dev)"]
+    subgraph kernel["Decision core — proven in Lean 4 (seal-host)"]
         core["default-deny · exact-target approval\nsingle-use · expiry · non-bypass"]
     end
 
@@ -87,7 +89,9 @@ flowchart LR
 
 ## What each box is (and what it is not)
 
-- **Decision core** (`mcp-seal-dev`) — the rulebook. Machine-checked Lean 4 theorems: default
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
+- **Decision core** (`seal-host`, the repository holding its Lean source) — the rulebook. Machine-checked Lean 4 theorems: default
   deny, allow **iff** a live approval record matches the exact target, single-use, expiry,
   non-bypass. Proven — but a *kernel* claim, not a whole-system claim; that the record was
   minted by the human you think is a custody assumption (truth box), not a theorem.
