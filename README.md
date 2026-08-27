@@ -213,10 +213,12 @@ request, Seal runs it. Approval expiry follows the local wall clock.
 The decision program is bundled as WebAssembly. Its byte-pinned answer is
 required before forwarding. A failure or disagreement refuses; there is no
 JavaScript authorization fallback. Single-tool and multi-tool protection are TESTED across all six shared state classes, including three-tool observations of `BROKEN`, `DRIFTED`, `STALE`, and `UNPROTECTED` atomicity.
-Receipts are signed records, not evidence that an event happened. The checker
-uses the same Node crypto platform and cannot find a defect shared by its rule
-or that platform. Formatting differences that do not change parsed JSON are not
-distinguished. Hosted checker checks kernel receipts; it refuses seal.spine/v1 proxy receipts. [seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
+Receipts are signed records, not evidence that an event happened. They use the
+`seal.receipt/v2` envelope.
+The independent checker replays the recorded inputs through the WASM kernel and
+reports structure, signature, kernel decision, authority, and occurrence separately.
+Positive `VERIFY` remains unavailable without an independent authority root and
+occurrence witness. [seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
 
 ## Links
 

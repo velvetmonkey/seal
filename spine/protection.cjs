@@ -178,7 +178,7 @@ function loadReceiptSigner(env = process.env, announce = () => {}) {
   }
 
   if (!privateExists) {
-    const signer = require("./receipt-seal.cjs").generateSigner();
+    const signer = require("./receipt-v2.cjs").generateSigner();
     const privatePem = signer.privateKey.export({ type: "pkcs8", format: "pem" });
     try {
       writeNewReceiptKey(locations.privateKey, privatePem, 0o600);
@@ -211,7 +211,7 @@ function loadReceiptSigner(env = process.env, announce = () => {}) {
   try {
     privateKey = crypto.createPrivateKey(privateBytes);
     publicKey = crypto.createPublicKey(privateKey);
-    derivedHex = require("./receipt-seal.cjs").publicKeyHex(publicKey);
+    derivedHex = require("./receipt-v2.cjs").publicKeyHex(publicKey);
   } catch (error) {
     throw new ProtectionError(RECEIPT_KEY_CODES.invalid, `private receipt key is invalid: ${locations.privateKey}: ${error.message}`);
   }

@@ -200,13 +200,13 @@ function readReceipts(state) {
     return {
       name,
       ...digest,
-      decision: body?.decision ?? null,
+      decision: body?.action ?? body?.verdict ?? null,
       tool: body?.tool ?? null,
       arguments: body?.arguments ?? null,
-      refusal: body?.refusal ?? null,
-      detail: body?.detail ?? null,
-      correlation: body?.approvalRequest?.correlation ?? null,
-      at: body?.at ?? null,
+      refusal: null,
+      detail: body?.reason ?? null,
+      correlation: null,
+      at: body?.now ?? null,
     };
   });
 }
@@ -498,11 +498,11 @@ function observeActivation(state, begin, end) {
 
 function observeNegotiation(state, begin, end) {
   const receipts = newReceipts(begin, end);
-  const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" && receipt.correlation);
+  const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED");
   const pairs = [];
   for (const offer of offers) {
-    const answer = receipts.find((receipt) => receipt.correlation === offer.correlation && receipt.name > offer.name && receipt.decision !== "INPUT_REQUIRED");
-    if (answer) pairs.push({ correlation: offer.correlation, offer: offer.name, answer: answer.name, answer_decision: answer.decision, answer_refusal: answer.refusal });
+    const answer = receipts.find((receipt) => receipt.name > offer.name && receipt.decision !== "INPUT_REQUIRED" && receipt.tool === offer.tool && JSON.stringify(receipt.arguments) === JSON.stringify(offer.arguments));
+    if (answer) pairs.push({ offer: offer.name, answer: answer.name, answer_decision: answer.decision });
   }
   const journalEvents = end.approvals_journal.events.slice(begin.approvals_journal.events.length);
   return {
@@ -599,12 +599,12 @@ function observeDecline(state, begin, end) {
   const declinedNoteInEffect = typeof end.effect_text === "string" && end.effect_text.includes(NOTES.decline);
   const receipts = newReceipts(begin, end);
   const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
-    receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline && receipt.correlation);
+    receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline);
   const declinedPairs = offers.flatMap((offer) => receipts
-    .filter((receipt) => receipt.name > offer.name && receipt.correlation === offer.correlation &&
-      receipt.decision === "BLOCK" && receipt.refusal === "declined" &&
+    .filter((receipt) => receipt.name > offer.name &&
+      receipt.decision === "BLOCK" &&
       receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline)
-    .map((receipt) => ({ correlation: offer.correlation, offer: offer.name, decline: receipt.name })));
+    .map((receipt) => ({ offer: offer.name, decline: receipt.name })));
   const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline);
   return {
     observed: declinedPairs.length > 0 && dialog.observed && added.length === 0 &&

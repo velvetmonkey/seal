@@ -106,7 +106,7 @@ export function legacyManifestFromObserved({
   if (`v${payload.version}` !== tag) refuse("artifact_mismatch", `payload version ${payload.version} disagrees with tag ${tag}`);
   const expectedName = `seal-${tag}-${payload.platform}`;
   if (artifactName !== expectedName) refuse("artifact_mismatch", `artifact name ${artifactName} disagrees with payload identity ${expectedName}`);
-  if (checkerName !== "seal-receipt-check.mjs") refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
+  if (!["seal-receipt-check.mjs", "seal-receipt-v2.mjs"].includes(checkerName)) refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
   const sums = parseChecksumsCount(checksumsBytes, 2);
   for (const [name, bytes] of [[artifactName, artifactBytes], [checkerName, checkerBytes]]) {
     const entry = sums.get(name);
@@ -146,7 +146,7 @@ export function manifestFromObserved({
   if (!Array.isArray(artifacts) || artifacts.length !== 3) {
     refuse("artifact_mismatch", `release must supply exactly three platform artifacts, found ${artifacts?.length ?? 0}`);
   }
-  if (checkerName !== "seal-receipt-check.mjs") refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
+  if (!["seal-receipt-check.mjs", "seal-receipt-v2.mjs"].includes(checkerName)) refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
   const sums = parseChecksums(checksumsBytes);
   const artifactFacts = artifacts.map(({ name, bytes }) => {
     const payload = payloadFacts(bytes);
@@ -227,7 +227,7 @@ export function validateManifestShape(manifest) {
   if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "darwin-x64", "linux-x64"])) {
     refuse("invalid", `artifact platforms are invalid: ${platforms.join(", ")}`);
   }
-  if (manifest.checker.name !== "seal-receipt-check.mjs") refuse("invalid", `checker.name is invalid: ${manifest.checker.name}`);
+  if (!["seal-receipt-check.mjs", "seal-receipt-v2.mjs"].includes(manifest.checker.name)) refuse("invalid", `checker.name is invalid: ${manifest.checker.name}`);
   digest(manifest.checker.sha256, "checker.sha256");
   positiveInteger(manifest.checker.bytes, "checker.bytes");
   if (manifest.checksums.name !== "SHA256SUMS") refuse("invalid", `checksums.name is invalid: ${manifest.checksums.name}`);

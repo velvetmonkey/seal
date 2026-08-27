@@ -10,6 +10,6 @@ function probe(root) { const { loadReceiptSigner } = require(path.join(root, "sp
 if (process.argv[2] === "--probe") { try { probe(process.argv[3]); } catch (error) { console.error(error.stack || error.message); process.exit(1); } process.exit(0); }
 test("receipt signer reuse returns the same public identity", () => {
   probe(ROOT); const mutant = copyTree(); const file = path.join(mutant, "spine", "protection.cjs"); const source = fs.readFileSync(file, "utf8"); const needle = "  return { privateKey, publicKey, publicKeyHex: publicHex };\n";
-  assert.equal(source.split(needle).length - 1, 1, "receipt key reuse mutation site must be unique"); fs.writeFileSync(file, source.replace(needle, '  return require("./receipt-seal.cjs").generateSigner();\n'));
+  assert.equal(source.split(needle).length - 1, 1, "receipt key reuse mutation site must be unique"); fs.writeFileSync(file, source.replace(needle, '  return require("./receipt-v2.cjs").generateSigner();\n'));
   const result = spawnSync(process.execPath, [__filename, "--probe", mutant], { encoding: "utf8" }); assert.notEqual(result.status, 0, "receipt signer rotation mutant unexpectedly passed"); assert.match(`${result.stdout}\n${result.stderr}`, /receipt signer identity claim failed: repeated load changed publicKeyHex/);
 });

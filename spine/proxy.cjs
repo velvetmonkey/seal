@@ -119,16 +119,14 @@ function createProxy(options) {
   const childOut = readline.createInterface({ input: child.stdout, terminal: false });
   childOut.on("line", (line) => onClientLine(line));
 
-  function emitReceipt(decision, frame, extra) {
-    const receiptPath = receipts.emit({
-      at: Date.now(),
-      decision,
+  function emitReceipt(action, frame, extra, kernelReceipt) {
+    const receipt = kernelReceipt || contract.receiptFor({
       tool: frame.params?.name,
-      arguments: frame.params?.arguments ?? {},
-      child: { argv: childArgv },
-      ...extra,
+      args: frame.params?.arguments ?? {},
+      accepted: false,
     });
-    decisionSink({ decision, refusal: extra?.refusal, receiptPath });
+    const receiptPath = receipts.emit(receipt, action);
+    decisionSink({ decision: action, refusal: extra?.refusal, receiptPath });
     return receiptPath;
   }
 
@@ -176,7 +174,7 @@ function createProxy(options) {
       }
       const decision = contract.begin({ tool, args });
       if (decision.kind === "refuse") {
-        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
         respond(frame.id, refusalResult(decision.refusal, decision.detail));
         return;
       }
@@ -198,7 +196,7 @@ function createProxy(options) {
     const decision = contract.retry({ tool, args, requestState, inputResponses });
     if (correlation === undefined) {
       if (decision.kind === "refuse") {
-        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail });
+        emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
         respond(frame.id, refusalResult(decision.refusal, decision.detail));
         return;
       }
@@ -212,7 +210,7 @@ function createProxy(options) {
     if (decision.kind === "refuse") {
       const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
       receiptExtra.approvalRequest = approvalRequest;
-      emitReceipt("BLOCK", frame, receiptExtra);
+      emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
       respond(frame.id, refusalResult(decision.refusal, decision.detail));
       return;
     }
@@ -221,7 +219,7 @@ function createProxy(options) {
     if (!canForward(frame)) return;
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
-    emitReceipt("ALLOW", frame, receiptExtra);
+    emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
     child.stdin.write(JSON.stringify({
       jsonrpc: "2.0", id: frame.id, method: frame.method,
       params: { name: tool, arguments: args },

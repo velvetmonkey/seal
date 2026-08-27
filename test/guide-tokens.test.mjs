@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "17bec263eb13e4cc7dc01dd63e44bbb1d73383a5b94279c3853350d601db4178";
+const GUIDE_SHA256 = "b44b409ebd6af3221f546e222a3932b9a9beaf9e901c5a6b09322e294717f7a8";
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
@@ -47,12 +47,12 @@ const SOURCES = [
   { file: "spine/platform.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "unsupported_platform" },
   { file: "spine/integrity.cjs", patterns: [/\.code = "([a-z_]+)"/g, /\bcode: "([a-z_]+)"/g], sentinel: "artifact_truncated" },
   { file: "spine/version.cjs", patterns: [/error\.code = "([a-z_]+)"/g], sentinel: "version_mismatch" },
-  { file: "bin/seal", patterns: [/\b(spine_receipt_use_separate_checker)\b/g, /runtimeRefusal\("([a-z_]+)"/g], sentinel: "spine_receipt_use_separate_checker" },
+  { file: "bin/seal", patterns: [/runtimeRefusal\("([a-z_]+)"/g], sentinel: "runtime_cache_unreadable" },
   { file: "scripts/install.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "pin_missing" },
   { file: "scripts/seal-launch.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "install_record_missing" },
   { file: "scripts/build-dist.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "node_missing" },
   { file: "scripts/macos-helper.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "macos_helper_architecture" },
-  { file: "checker/seal-receipt-check.mjs", patterns: [/new Refusal\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "signature_invalid" },
+  { file: "checker/seal-receipt-v2.mjs", patterns: [/fail\([^,]+, "([a-z_]+)"\)/g, /REFUSE ([a-z_]+):/g], sentinel: "signature_mismatch" },
 ];
 
 function sourceTokens() {
@@ -128,17 +128,16 @@ const REVIEWED_GUIDES = [
     file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
     sha256: GUIDE_SHA256,
     claims: [
-      ["You pointed `seal verify`", " at one of the gate's own receipts."].join(""),
-      "The format is recognized, but this binary does not verify its own receipts; the message hands you the separate checker command to run instead.",
-      "Use that checker to learn whether the receipt is valid.",
+      "Receipt refusals use the same tokens whether you invoke the installed `seal verify` command or the standalone v2 checker.",
+      "The producer, command, and checker all use `seal.receipt/v2`; there is no second receipt format to select.",
     ],
   },
   {
     file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
-    sha256: "5e193f5da31c0b9df79efa57c2220eb911bc8b230dbdd19257f3a70e0389b9bb",
+    sha256: "bd4f838650419785394ab7a29a2d8dabbe557fe9ef76083b51a5381b6a064a91",
     claims: [
-      ["One honest wrinkle: `seal verify`", " can leave a *kernel* receipt (a different format) in the same directory, and `seal status` then prints `Receipt unreadable: … (missing decision or receipt time)` for it."].join(""),
-      ["That line means only that this listing does not parse the kernel format; use `seal verify`", " to check a named kernel receipt."].join(""),
+      "Producer output and the kernel replay path now share the one `seal.receipt/v2` envelope.",
+      "`seal status` reads its `action`, kernel `verdict`, and exact kernel `now`; `seal verify` validates and replays that same file.",
     ],
   },
 ];
@@ -174,17 +173,17 @@ test("reviewed guide files are content-addressed and retain each reviewed claim 
 test("whole-file pin rejects locator defeats and earlier claim tampering", () => {
   const entry = REVIEWED_GUIDES[0];
   const text = readFileSync(resolve(ROOT, entry.file), "utf8");
-  const heading = "### `spine_receipt_use_separate_checker`";
+  const heading = "### `read_failed`";
   const falseClaim = "Nothing is wrong with the receipt.";
   const rejects = [
-    ["whitespace real heading plus exact decoy", text.replace(heading, `###  \`spine_receipt_use_separate_checker\``) + `\n${heading}\n\n${entry.claims.join(" ")}\n${falseClaim}\n`],
-    ["case-different heading", text.replace(heading, "### `Spine_receipt_use_separate_checker`")],
-    ["backtick-different heading", text.replace(heading, "### spine_receipt_use_separate_checker")],
-    ["deleted reviewed body", text.replace(entry.claims[0], "")],
-    ["deleted reviewed sentence", text.replace("learn whether the receipt is valid.", "")],
+    ["whitespace real heading plus exact decoy", text.replace(heading, `###  \`read_failed\``) + `\n${heading}\n\n${entry.claims.join(" ")}\n${falseClaim}\n`],
+    ["case-different heading", text.replace(heading, "### `Read_failed`")],
+    ["backtick-different heading", text.replace(heading, "### read_failed")],
+    ["deleted reviewed body", text.replace("Receipt refusals use the same tokens", "Receipt refusals use different tokens")],
+    ["deleted reviewed sentence", text.replace("there is no second receipt format", "there is another receipt format")],
     ["novel assertion", `${text}\n${falseClaim}\n`],
     ["deleted heading", text.replace(heading, "")],
-    ["renamed heading", text.replace(heading, "### `spine_receipt_use_other_checker`")],
+    ["renamed heading", text.replace(heading, "### `receipt_read_failed`")],
   ];
   for (const [name, tampered] of rejects) {
     assert.throws(() => assertPinned(entry, tampered), /content changed/, name);

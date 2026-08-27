@@ -14,7 +14,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 
 const { createProxy, StoreError } = require("./proxy.cjs");
-const { generateSigner } = require("./receipt-seal.cjs");
+const { generateSigner } = require("./receipt-v2.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { TOOL } = require("./demo-server.cjs");
@@ -263,8 +263,8 @@ async function run(argv, sealBinPath) {
   console.log("");
   console.log("Seal did not observe or authorise this write.");
   await proxy.stop();
-  console.log("receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). This installed payload does not include checker/seal-receipt-check.mjs. Clone https://github.com/velvetmonkey/seal and run the checker from that source checkout. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform.");
-  console.log(`  From the checkout root: node checker/seal-receipt-check.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey ${JSON.stringify(pubkeyPath)}`);
+  console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened.");
+  console.log(`  From the checkout root: node checker/seal-receipt-v2.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})"`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.");
   console.log("");

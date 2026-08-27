@@ -411,12 +411,32 @@ Seal found the named cached runtime path but could not read it. Make that path
 readable, then run the printed `seal verify` command. Seal did not replace the
 cached runtime file.
 
-### `spine_receipt_use_separate_checker`
+### `duplicate_member`
 
-You pointed `seal verify` at one of the gate's own receipts. The format is
-recognized, but this binary does not verify its own receipts; the message
-hands you the separate checker command to run instead. Use that checker to
-learn whether the receipt is valid.
+The receipt JSON repeats an object member name. Duplicate names make the
+meaning parser-dependent, so the checker refuses before validation.
+
+### `number_not_canonical`
+
+The receipt contains a number that is not a finite safe integer. The v2
+canonical form permits only integers that JavaScript and the kernel can carry
+without rounding.
+
+### `value_not_canonical`
+
+Canonicalisation encountered a value outside JSON's null, boolean, string,
+safe-integer, array, and object forms. The checker does not coerce it.
+
+### `inert_input`
+
+The receipt supplies non-empty `grants` or `forecasts`, which the current
+kernel does not consume. They must be empty so signed-but-ignored input cannot
+appear to affect replay.
+
+Receipt refusals use the same tokens whether you invoke the installed
+`seal verify` command or the standalone v2 checker. The producer, command,
+and checker all use `seal.receipt/v2`; there is no second receipt format to
+select.
 
 ## Platform and version refusals
 
@@ -551,86 +571,39 @@ untrustworthy and reinstall from a verified artifact.
 
 ## From the receipt checker
 
-`checker/seal-receipt-check.mjs` accepts a receipt only when every recorded
-fact matches its sealed commitment under a key you supplied. Each refusal
-names the first thing that did not. For any `*_mismatch` token: the receipt
-does not prove what it appears to say — do not rely on it, and keep it as
-evidence that something rewrote it. This is a separate process which imports
-no Seal module at check time, not a separately implemented checker: it
-copies the producer's canonicalisation rule and shares Node crypto, so it
-cannot detect a defect common to those parts.
+`checker/seal-receipt-v2.mjs` implements the four v2 verbs: READ, VALIDATE,
+REPLAY, and VERIFY. It was landed before the producer and does not import the
+producer's assembler or canonicaliser. See [the normative v2 contract](../SEAL-RECEIPT-V2.md)
+for the full refusal boundary.
 
-### `unreadable_receipt`
+### `read_failed` and `duplicate_member`
 
-The receipt path does not exist or is not readable JSON. Check the path
-first; this is the mundane one.
+The received bytes are not an unambiguous UTF-8 JSON document. Truncation,
+ill-formed UTF-8, and duplicate names at any depth refuse here.
 
-### `not_a_receipt`
+### `member_order` and `number_not_canonical`
 
-The file parsed, but is not a JSON object at all.
+The envelope does not use the fixed v2 top-level order, or a number is not a
+finite safe integer. Object members inside values retain insertion order;
+they are never sorted.
 
-### `unknown_format`
+### `commitment_mismatch`
 
-The file is JSON but not a `seal.spine/v1` receipt. Pointing the checker at
-a `seal verify`-style kernel receipt lands here — that format has its own
-command.
+The arguments or kernel configuration no longer hash to the recorded replay
+commitment. Keep the receipt as tamper evidence and do not rely on it.
 
-### `unsealed`
+### `input_mismatch` and `inert_input`
 
-The receipt carries no seal block, so there is nothing to check it against.
-Current demo and protected-path receipts carry a seal. This refusal can still
-describe an older receipt or a JSON file produced by something else; inspect
-its source before deciding what the missing seal means.
+The granted capabilities do not exactly match the approval targets, or a
+reserved input channel was populated even though the current kernel does not
+consume it.
 
-### `unknown_algorithm`
+### `signature_mismatch`
 
-The seal names an algorithm the checker does not know (it accepts
-`ed25519`). An altered or foreign seal.
+The signature is malformed or does not verify under the caller-supplied key.
+A receipt-embedded key is never trusted as authority.
 
-### `incomplete_receipt`
+### `verdict_mismatch`
 
-The receipt is missing one of the fields (`decision`, `tool`, `arguments`)
-the seal commits to, so it cannot be checked.
-
-### `decision_binding_mismatch`
-
-The recorded decision does not match its sealed commitment — the decision
-was edited after sealing (exercised by flipping ALLOW to BLOCK).
-
-### `tool_binding_mismatch`
-
-The recorded tool name was altered after sealing.
-
-### `arguments_binding_mismatch`
-
-The recorded arguments were altered after sealing.
-
-### `effect_binding_mismatch`
-
-The combined tool-plus-arguments commitment fails even though the individual
-ones pass — someone repaired a commitment to match an edited field
-(exercised by doing exactly that). Defence in depth doing its job.
-
-### `signature_malformed`
-
-The seal's signature is missing or not even signature-shaped.
-
-### `signature_invalid`
-
-The signature does not verify under the key you supplied. Either the receipt
-was altered (and its commitments repaired wholesale), or your key is not the
-sealer's key. Both readings matter: the check is only as meaningful as where
-your key came from.
-
-### `pubkey_invalid`
-
-The supplied public key is unusable — not a 32-byte hex key.
-
-### `pubkey_missing`
-
-The `--pubkey` argument is neither 64 hex characters nor a readable file.
-
-### `checker_error`
-
-An unexpected internal error while checking — not a verdict on the receipt.
-Not reached in our runs. Re-run; if it persists, report it with the receipt.
+Replaying the exact recorded inputs through the WASM kernel produced a
+different verdict. The receipt does not establish the decision it records.

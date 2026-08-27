@@ -113,6 +113,19 @@ function createApprovalContract({
     return { kind: "refuse", refusal, detail };
   }
 
+  function receiptFor({ tool, args, accepted = false }) {
+    const kernelNow = Math.floor(now() / 1000);
+    return kernelAdapter.authorize({
+      epoch: 1,
+      issuedTool: tool,
+      issuedArgs: args ?? {},
+      retryTool: tool,
+      retryArgs: args ?? {},
+      accepted,
+      now: kernelNow,
+    }).receipt_record;
+  }
+
   // Persist a status transition BEFORE it takes effect in memory: an append
   // that fails must fail the transition, never leave memory ahead of the
   // journal.
@@ -253,6 +266,7 @@ function createApprovalContract({
       if (!fence?.ok) return refuse(REFUSALS.LEASE_GENERATION_MISMATCH, fence?.detail || "this proxy no longer owns the active lease generation");
     }
     let kernel;
+    const kernelNow = Math.floor(now() / 1000);
     try {
       kernel = kernelAdapter.authorize({
         epoch: 1,
@@ -261,7 +275,7 @@ function createApprovalContract({
         retryTool: tool,
         retryArgs: args ?? {},
         accepted: nodeAuthorized,
-        now: Math.floor(now() / 1000),
+        now: kernelNow,
       });
     } catch (error) {
       if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
@@ -272,15 +286,15 @@ function createApprovalContract({
     const kernelAuthorized = kernel.verdict === "ALLOW";
     if (nodeAuthorized !== kernelAuthorized) {
       const side = nodeAuthorized ? "kernel" : "Node";
-      return refuse(
+      return { ...refuse(
         REFUSALS.AUTHORIZATION_DISAGREEMENT,
         `${side} refused while ${side === "kernel" ? "Node" : "kernel"} allowed; authorization disagreement fails closed`,
-      );
+      ), receipt: kernel.receipt_record };
     }
     if (!nodeAuthorized) {
-      if (!contextMatches) return refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding");
-      if (!toolMatches) return refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool");
-      return refuse(REFUSALS.ARGUMENTS_ALTERED, "Node and kernel refused: retry effect differs from the exact issue-time effect");
+      if (!contextMatches) return { ...refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding"), receipt: kernel.receipt_record };
+      if (!toolMatches) return { ...refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool"), receipt: kernel.receipt_record };
+      return { ...refuse(REFUSALS.ARGUMENTS_ALTERED, "Node and kernel refused: retry effect differs from the exact issue-time effect"), receipt: kernel.receipt_record };
     }
 
     // 7. Atomically consume BEFORE the caller may forward anything.
@@ -296,6 +310,7 @@ function createApprovalContract({
 
     return {
       kind: "allow",
+      receipt: kernel.receipt_record,
       evidence: {
         handle_returned_unaltered: true,
         effect_matches_bound_bytes: true,
@@ -336,7 +351,7 @@ function createApprovalContract({
     });
   }
 
-  return { begin, retry, REFUSALS, connectionEpoch };
+  return { begin, retry, receiptFor, REFUSALS, connectionEpoch };
 }
 
 module.exports = { createApprovalContract, REFUSALS };

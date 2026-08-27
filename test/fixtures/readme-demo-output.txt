@@ -17,9 +17,9 @@ child calls observed: 1 (read from /home/monkey/scratch/runner-temp/tty-demo/chi
 replaying the identical retry with the same requestState…
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
 one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787839150371-3393353-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787839153800-3393353-0002-ALLOW.json
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787839153804-3393353-0003-BLOCK.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867994562-610297-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995050-610297-0002-ALLOW.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995507-610297-0003-BLOCK.json
 
 OUTSIDE THE SEAL PATH
 
@@ -30,8 +30,8 @@ Protected-server call count: still 1
 New Seal decisions: 0
 
 Seal did not observe or authorise this write.
-receipts are claims, not proofs. Check one with the separate-process checker (V11-RECEIPT-01). This installed payload does not include checker/seal-receipt-check.mjs. Clone https://github.com/velvetmonkey/seal and run the checker from that source checkout. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished. It cannot detect a defect shared by that rule or platform.
-  From the checkout root: node checker/seal-receipt-check.mjs "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787839153804-3393353-0003-BLOCK.json" --pubkey "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub"
+receipts are claims, not proofs. The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened.
+  From the checkout root: node checker/seal-receipt-v2.mjs "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995507-610297-0003-BLOCK.json" --pubkey "$(cat "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub")"
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
   Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.
 

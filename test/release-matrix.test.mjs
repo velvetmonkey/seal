@@ -55,7 +55,7 @@ test("the release manifest binds all three platform artifacts and native-helper 
       assert.equal(paths.has("runtime/macos-process-start-witness"), platform.startsWith("darwin-"));
       artifacts.push({ name, bytes });
     }
-    const checkerName = "seal-receipt-check.mjs";
+    const checkerName = "seal-receipt-v2.mjs";
     const checkerBytes = fs.readFileSync(path.join(ROOT, "checker", checkerName));
     const lines = [...artifacts, { name: checkerName, bytes: checkerBytes }]
       .map(({ name, bytes }) => `${sha256(bytes)}  ${bytes.length}  ${name}\n`)

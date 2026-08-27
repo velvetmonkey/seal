@@ -28,7 +28,6 @@ test("every local rc.3 release-note citation resolves to a nonempty regular file
     ".github/workflows/macos.yml",
     ".github/workflows/release.yml",
     "README.md",
-    "checker/seal-receipt-check.mjs",
     "contract/contract.cjs",
     "docs/assurance/architecture.md",
     "docs/assurance/distribution.md",

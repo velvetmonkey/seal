@@ -65,7 +65,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 04c07766b188e2f69c1205d8b09bb14b03b4bc0e091dc57617b0d8e271b861ed
+tree: 3c6f0654a225c177b80d50a18916709f90d59c9abdc428c80fa701407234f671
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
@@ -76,8 +76,8 @@ change.
 ### Installed-tree hash definition
 
 The installed tree is exactly the regular payload files named by the artifact's
-payload manifest (the build excludes `checker/seal-receipt-check.mjs` for a
-fresh build). Order those relative slash-separated paths by bytewise
+payload manifest (a fresh build includes `checker/seal-receipt-v2.mjs` for
+`seal verify`). Order those relative slash-separated paths by bytewise
 lexicographic path order. For each file, SHA-256 its exact payload bytes and
 form one UTF-8 line: `<file-sha256><two spaces><decimal byte count><two
 spaces><path><newline>`. Concatenate those lines without another separator and

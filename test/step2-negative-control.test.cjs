@@ -18,7 +18,7 @@ function tempDir(prefix) {
 }
 
 function copyRunnableProduct(destination) {
-  for (const name of ["bin", "contract", "spine"]) {
+  for (const name of ["bin", "contract", "spine", "runtime"]) {
     fs.cpSync(path.join(ROOT, name), path.join(destination, name), { recursive: true });
   }
   fs.mkdirSync(path.join(destination, "scripts"));

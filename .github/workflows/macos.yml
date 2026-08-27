@@ -104,10 +104,13 @@ jobs:
           set -euo pipefail
           receipt="$(find "$RUNNER_TEMP/macos-demo/receipts" -type f -name '*-ALLOW.json' -print -quit)"
           test -n "$receipt"
-          checker="$RUNNER_TEMP/seal-receipt-check.mjs"
-          cp checker/seal-receipt-check.mjs "$checker"
+          prefix="$RUNNER_TEMP/macos-prefix"
+          store="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")"
+          # checker/seal-receipt-v2.mjs runs here with its installed runtime sibling.
+          checker="$store/checker/seal-receipt-v2.mjs"
+          public_key="$(tr -d '\n' < "$RUNNER_TEMP/macos-demo/receipt-signer.pub")"
           set +e
-          node "$checker" "$receipt" --pubkey "$RUNNER_TEMP/macos-demo/receipt-signer.pub" > "$RUNNER_TEMP/macos-receipt-check.log" 2>&1
+          node "$checker" "$receipt" --pubkey "$public_key" > "$RUNNER_TEMP/macos-receipt-check.log" 2>&1
           checker_status=$?
           set -e
           cat "$RUNNER_TEMP/macos-receipt-check.log"
