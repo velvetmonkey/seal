@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+// Standing rule "proven means strict", ruled 2026-08-27.
+// Declaration: the exact assertions lock only the ALLOW receipt field
+// evidence.authorization_rule, the last line of `seal demo` stdout, and the
+// first README line matching /^authorization rule /. They do not cover demo
+// stdout non-last lines, extra README lines, docs/assurance/architecture.md,
+// docs/assurance/RELEASE-NOTES-*.md, `seal --help` output, checker output, or
+// the receipt field human_present_detail. This control deliberately does not
+// scan prose; those surfaces are a declared queue item, not covered here.
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const test = require("node:test");
+
+const ROOT = path.join(__dirname, "..");
+const SEAL = path.join(ROOT, "bin", "seal");
+const EXPECTED_AUTHORIZATION_RULE = "TESTED";
+const EXPECTED_DEMO_CLOSING_LINE = "authorization rule tested; product state and forwarding tested; client and machine trusted.";
+
+function assertExactSurfaces(output, receipt, readme) {
+  assert.equal(receipt.evidence.authorization_rule, EXPECTED_AUTHORIZATION_RULE, "ALLOW receipt authorization_rule must be exactly TESTED");
+  const closingLine = output.trimEnd().split("\n").at(-1);
+  assert.equal(closingLine, EXPECTED_DEMO_CLOSING_LINE, "seal demo closing line changed");
+  const readmeLine = readme.match(/^authorization rule [^\n]+$/mu)?.[0];
+  assert.equal(readmeLine, closingLine, "README assurance line must equal the demo closing line");
+}
+
+function runDemo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-provedlie-control-"));
+  try {
+    const output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
+      cwd: ROOT, input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+    });
+    const allow = fs.readdirSync(path.join(dir, "receipts")).find((name) => name.endsWith("-ALLOW.json"));
+    const receipt = JSON.parse(fs.readFileSync(path.join(dir, "receipts", allow), "utf8"));
+    return { output, receipt };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("the three exact authorization claim surfaces stay aligned", () => {
+  const { output, receipt } = runDemo();
+  assertExactSurfaces(output, receipt, fs.readFileSync(path.join(ROOT, "README.md"), "utf8"));
+});
+
+test("the three exact surfaces go red when physically tampered", () => {
+  const { output, receipt } = runDemo();
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+
+  const tamperedReceipt = structuredClone(receipt);
+  tamperedReceipt.evidence.authorization_rule = "PROVED";
+  assert.throws(() => assertExactSurfaces(output, tamperedReceipt, readme), /exactly TESTED/);
+  console.log("RED receipt authorization_rule=PROVED: ALLOW receipt authorization_rule must be exactly TESTED");
+
+  const tamperedOutput = output.replace(EXPECTED_DEMO_CLOSING_LINE, "authorization rule proved; product state and forwarding tested; client and machine trusted.");
+  assert.throws(() => assertExactSurfaces(tamperedOutput, receipt, readme), /seal demo closing line changed/);
+  console.log("RED demo closing line tamper: seal demo closing line changed");
+
+  const tamperedReadme = readme.replace(EXPECTED_DEMO_CLOSING_LINE, "authorization rule proved; product state and forwarding tested; client and machine trusted.");
+  assert.throws(() => assertExactSurfaces(output, receipt, tamperedReadme), /README assurance line must equal the demo closing line/);
+  console.log("RED README assurance line tamper: README assurance line must equal the demo closing line");
+});

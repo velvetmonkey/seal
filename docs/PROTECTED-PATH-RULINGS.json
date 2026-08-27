@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "713a99e214cf07438ed241a1a2332e7919ee91a5",
-    "author": "Ben",
+    "base": "610bf01d2b9120865902b959264616c27a61a942",
+    "author": "Monkey",
     "date": "2026-08-27",
-    "scope": "Ben, 2026-08-27 09:35, replying to an ask that named both protected-path branches, both paths and both blob digests: \"rule both\". Authorises one edit to .github/workflows/ci.yml on agent/relfacts-r1, for the release-facts generator described in steps 4 and 5 of the north star order of operations. The branch carries a cross-family cold frisk, relfactscold2, verdict MERGE. Residuals and bounds are recorded in the commit message and in pull request 127. Nothing else is authorised by this record.",
+    "scope": "Re-ruled on the rebased base. Ben authorised this exact change on be506651 (three receipts, checker paragraph, proved-to-tested only). The rebase moved the base and moved nothing else: the fixture blob is byte-identical to the one he ruled on. I verified the deleted sentence 'It ships in this same artifact' is FALSE: scripts/build-dist.cjs PAYLOAD_PATHS has 30 members and none is the checker.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "e805019774cb239e338a3d6c0ec726617e8656bd"
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "a66336769f15c1e6209c8325fdabe1737e2c30a8"
       }
     ]
   }

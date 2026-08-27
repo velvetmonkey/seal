@@ -88,7 +88,7 @@ The direct write to
 NOT OBSERVED
 That direct write; protected-server call count stayed 1 and Seal made 0 new decisions.
 ASSURANCE
-authorization rule proved; product state and forwarding tested; client and machine trusted.
+authorization rule tested; product state and forwarding tested; client and machine trusted.
 ```
 <!-- generated from published release; do not edit -->
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;

@@ -303,7 +303,7 @@ function createApprovalContract({
         same_connection_epoch: true,
         one_use_consumed_now: true,
         approval_nonce: record.approval_nonce,
-        authorization_rule: "PROVED",
+        authorization_rule: "TESTED",
         state_machine: "TESTED",
         kernel: {
           verdict: kernel.verdict,

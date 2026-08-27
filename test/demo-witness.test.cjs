@@ -124,7 +124,7 @@ test("Act 4 appears after replay refusal and before the final screen", () => {
   assert.ok(replayAt >= 0, "demo output must include the replay refusal");
   assert.ok(act4At > replayAt, "Act 4 must follow the replay refusal");
   assert.ok(finalScreenAt > act4At, "the final screen must follow Act 4");
-  assert.ok(result.out.endsWith("authorization rule proved; product state and forwarding tested; client and machine trusted.\n"));
+  assert.ok(result.out.endsWith("authorization rule tested; product state and forwarding tested; client and machine trusted.\n"));
 });
 
 // --- the internal-harness controls ------------------------------------------
