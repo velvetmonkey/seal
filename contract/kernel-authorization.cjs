@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Named product adapter for the proved authorization kernel. Node owns retry
+// Named product adapter for the authorization kernel. Node owns retry
 // state; this adapter answers only whether the issue-time authorization binds
 // the exact retried tool, arguments, context, and affirmative answer.
 const crypto = require("node:crypto");
