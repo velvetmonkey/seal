@@ -82,8 +82,36 @@ function main() {
     fail(`published installer failed (exit ${error.status ?? "unknown"})`);
   }
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
+  if (
+    typeof record.treeSha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.treeSha256) ||
+    record.store !== path.posix.join("lib", "seal", "store", record.treeSha256)
+  ) {
+    fail(`installer recorded an invalid store value: ${record.store}`);
+  }
   const installed = path.join(prefix, record.store, "runtime", "kernel", "wasm", "seal.wasm");
-  if (!fs.existsSync(installed)) fail(`installer did not place seal.wasm at its recorded install path: ${installed}`);
+  let prefixResolved;
+  try {
+    prefixResolved = fs.realpathSync(prefix);
+  } catch (error) {
+    fail(`cannot resolve install prefix ${prefix}: ${error.message}`);
+  }
+  let installedStat;
+  try {
+    installedStat = fs.lstatSync(installed);
+  } catch (error) {
+    fail(`cannot inspect installed path ${installed}: ${error.message}`);
+  }
+  if (!installedStat.isFile()) fail(`installed path is not a regular file: ${installed}`);
+  let installedResolved;
+  try {
+    installedResolved = fs.realpathSync(installed);
+  } catch (error) {
+    fail(`cannot resolve installed path ${installed}: ${error.message}`);
+  }
+  const prefixBoundary = prefixResolved.endsWith(path.sep) ? prefixResolved : `${prefixResolved}${path.sep}`;
+  if (installedResolved !== prefixResolved && !installedResolved.startsWith(prefixBoundary)) {
+    fail(`resolved installed path escapes prefix: ${installedResolved} (prefix ${prefixResolved})`);
+  }
   const installedDigest = sha256(installed);
   const tracked = arg("--tracked-wasm") || path.join(ROOT, "runtime", "kernel", "wasm", "seal.wasm");
   const trackedDigest = sha256(tracked);
