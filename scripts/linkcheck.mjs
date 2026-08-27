@@ -47,17 +47,28 @@ export function countDestination(file, raw, sourceRoot, roots, counts, checkTarg
   if (target.kind === "external") {
     counts.externalOccurrences++;
     const [family] = link.split("/", 1);
-    if (checkTargets && !existsSync(roots.get(family))) {
+    if (!checkTargets) return;
+    const familyExists = existsSync(roots.get(family));
+    if (!familyExists) {
       console.log(`UNVERIFIED  ${file} -> ${link}`);
       counts.unverified++;
-    } else if (checkTargets && !existsSync(target.path)) {
-      console.log(`BROKEN  ${file} -> ${link}`);
-      counts.bad++;
+      unverifiedTargets.add(raw.trim());
+    } else {
+      const targetExists = existsSync(target.path);
+      checkedTargets.add(raw.trim());
+      if (!targetExists) {
+        console.log(`BROKEN  ${file} -> ${link}`);
+        counts.bad++;
+      }
     }
     return;
   }
   counts.internalOccurrences++;
-  if (checkTargets && !existsSync(target.path)) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
+  if (checkTargets) {
+    const targetExists = existsSync(target.path);
+    checkedTargets.add(raw.trim());
+    if (!targetExists) { console.log(`BROKEN  ${file} -> ${link}`); counts.bad++; }
+  }
 }
 
 function strings(value, out = []) {
@@ -107,6 +118,8 @@ function pathStrings(text) {
 }
 
 const scannedTargets = new Set();
+const checkedTargets = new Set();
+const unverifiedTargets = new Set();
 const re = /\]\(([^)]+)\)|(?:href|src)\s*=\s*"([^"]+)"/g;
 
 function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
@@ -182,6 +195,8 @@ function compareToBaseline(sourceRoot, actual, currentFiles) {
 
 async function main() {
   scannedTargets.clear();
+  checkedTargets.clear();
+  unverifiedTargets.clear();
   const sourceFiles = walk(ROOT);
   const actual = countOccurrences({
     sourceRoot: ROOT,
@@ -191,7 +206,27 @@ async function main() {
   });
 
   if (process.env.LINKCHECK_REPORT_SCANNED_TARGETS === "1") {
-    console.log(`link-check-targets: ${JSON.stringify([...scannedTargets].sort())}`);
+    console.log(`link-check-targets: ${JSON.stringify([...checkedTargets].sort())}`);
+  }
+
+  const uncheckedTargets = [...scannedTargets].filter((target) =>
+    !checkedTargets.has(target) && !unverifiedTargets.has(target),
+  ).sort();
+  if (uncheckedTargets.length) {
+    console.log(`REFUSE link-check targets not checked: ${uncheckedTargets.join(", ")}`);
+    actual.bad++;
+  }
+
+  const baselinePopulation = baselineTree(ROOT).files;
+  const expectedPopulation = [...baselinePopulation].filter((file) =>
+    file === "README.md" || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/")),
+  ).length;
+  const actualPopulation = sourceFiles.filter((file) =>
+    file === "README.md" || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/")),
+  ).length;
+  const populationShrank = actualPopulation < expectedPopulation;
+  if (populationShrank) {
+    console.log(`REFUSE link-check population shrank: expected=${expectedPopulation} actual=${actualPopulation}`);
   }
 
   const requiredLiveLinks = new Map([
@@ -220,7 +255,7 @@ async function main() {
   }
 
   console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
-  if (actual.bad) return 1;
+  if (actual.bad || populationShrank) return 1;
   const comparison = compareToBaseline(ROOT, actual, sourceFiles);
   if (comparison.disagreements.length) {
     console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
