@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Build and tamper-test the macOS process-start witness helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o runtime/macos-process-start-witness
+          node scripts/macos-process-witness-evidence.cjs | tee "$RUNNER_TEMP/macos-process-witness.log"
       - name: Build and run the documented macOS install ritual
         shell: bash
         run: |

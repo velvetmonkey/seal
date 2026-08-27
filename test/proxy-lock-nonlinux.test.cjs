@@ -9,6 +9,9 @@ const {
   acquireProjectLock,
   activationLease,
   lockPathFor,
+  lockOwnerIsLive,
+  parseMacosProcessStartWitness,
+  processStartWitness,
   projectId,
   protectionView,
   statePathFor,
@@ -103,6 +106,24 @@ test("Darwin is install-supported but not Protect-supported", () => {
     assert.equal(support.installSupported, true);
     assert.equal(support.protectSupported, false);
     assert.equal(support.supported, true, "legacy supported answer remains the install/demo answer");
+  });
+});
+
+test("macOS witness parser accepts only a successful non-epoch helper line", () => {
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), "1787834912.322160");
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "" }), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 1, stdout: "1787834912.322160\n" }), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "0.322160\n" }), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "not-a-witness\n" }), null);
+});
+
+test("macOS without the helper keeps the process witness fail-closed", () => {
+  withSimulatedDarwin(() => {
+    assert.equal(processStartWitness(process.pid), null);
+    assert.throws(
+      () => lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
+      (error) => error.code === "process_witness_unavailable",
+    );
   });
 });
 

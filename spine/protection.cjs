@@ -554,10 +554,31 @@ function livePid(pid) {
   }
 }
 
+const MACOS_PROCESS_START_WITNESS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
+
+function parseMacosProcessStartWitness(result) {
+  if (!result || result.error || result.status !== 0) return null;
+  if (typeof result.stdout !== "string") return null;
+  const match = /^([1-9]\d*)\.(\d{6})\n?$/.exec(result.stdout);
+  return match ? `${match[1]}.${match[2]}` : null;
+}
+
+function macosProcessStartWitness(pid) {
+  try {
+    return parseMacosProcessStartWitness(spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
+      encoding: "utf8",
+    }));
+  } catch {
+    return null;
+  }
+}
+
 function processStartWitness(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (platformSupport().platform === "darwin") return macosProcessStartWitness(pid);
   // platformSupport's test-only override lets product-path tests exercise the
   // same unavailable witness that a real non-Linux host would produce.
-  if (!Number.isInteger(pid) || pid <= 0 || platformSupport().platform !== "linux") return null;
+  if (platformSupport().platform !== "linux") return null;
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
     const close = stat.lastIndexOf(")");
@@ -916,6 +937,7 @@ module.exports = {
   loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
+  parseMacosProcessStartWitness,
   processStartWitness,
   protectedToolNames,
   protect,
