@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+name: SAME-AUTHORITY POST-RELEASE REPRODUCTION
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to inspect
+        required: true
+        default: v0.2.0-rc.3
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  same-authority-post-release-reproduction:
+    name: SAME-AUTHORITY POST-RELEASE REPRODUCTION
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: SAME-AUTHORITY POST-RELEASE REPRODUCTION
+        run: |
+          node scripts/check-published-kernel.cjs --release-tag "$RELEASE_TAG"
