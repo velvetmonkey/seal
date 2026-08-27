@@ -565,10 +565,10 @@ const MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS = 946684800;
 
 function parseMacosProcessStartWitnessBounds(stdout, nowSeconds = Date.now() / 1000) {
   if (typeof stdout !== "string") return null;
-  // `sysctl -n kern.boottime` has exactly this structured prefix. Parsing the
-  // complete field, rather than a word-boundary prefix, rejects decimals,
-  // exponents, duplicate fields, and every other altered shape.
-  const match = /^\{ sec = ([1-9]\d*) , usec = \d+ \}(?: [^\r\n]*)?\n?$/.exec(stdout);
+  // Keep the complete structured field, but do not anchor trailing text:
+  // macOS appends a human-readable boot date. The boundary after seconds
+  // prevents partial decimal or exponent captures.
+  const match = /\{ sec = ([1-9]\d*)(?=[^\d.e])(?:,| ,) usec = \d+ \}/.exec(stdout);
   if (!match || (stdout.match(/\bsec = /g) || []).length !== 1 ||
       match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
   const bootSeconds = Number(match[1]);

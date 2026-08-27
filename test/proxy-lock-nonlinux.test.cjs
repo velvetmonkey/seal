@@ -131,6 +131,10 @@ test("macOS boot-time witness bounds refuse malformed and implausible sysctl out
     parseMacosProcessStartWitnessBounds("{ sec = 1700000000 , usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
     { bootSeconds: 1700000000, nowSeconds },
   );
+  assert.deepEqual(
+    parseMacosProcessStartWitnessBounds("{ sec = 1700000000, usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
+    { bootSeconds: 1700000000, nowSeconds },
+  );
   for (const output of [
     "{ sec = 1.7e9 , usec = 0 }\\n",
     "{ sec = 1700000000. , usec = 0 }\\n",
