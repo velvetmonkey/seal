@@ -144,9 +144,35 @@ jobs:
             ${{ runner.temp }}/macos-dist/SHA256SUMS
           if-no-files-found: warn
 
+  linux-build-evidence:
+    name: linux-x64 build evidence
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Linux artifact and checksum declaration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-dist.cjs --platform linux-x64 --out "$RUNNER_TEMP/linux-dist"
+      - name: Upload Linux artifact and checksum declaration
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-evidence-linux-x64
+          path: |
+            ${{ runner.temp }}/linux-dist/seal-v*-linux-x64
+            ${{ runner.temp }}/linux-dist/SHA256SUMS
+          if-no-files-found: error
+
   release-matrix-evidence:
     name: Three-artifact checksum evidence
-    needs: macos-install-demo-receipt
+    needs:
+      - macos-install-demo-receipt
+      - linux-build-evidence
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -159,11 +185,14 @@ jobs:
         with:
           pattern: macos-build-evidence-darwin-*
           path: ${{ runner.temp }}/macos
-      - name: Build Linux and verify three distinct artifact checksums
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-build-evidence-linux-x64
+          path: ${{ runner.temp }}/linux
+      - name: Verify three distinct artifact checksums
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/build-dist.cjs --platform linux-x64 --out "$RUNNER_TEMP/linux"
           mapfile -d '' sums_files < <(find "$RUNNER_TEMP/macos" "$RUNNER_TEMP/linux" -type f -name SHA256SUMS -print0 | sort -z)
           : > "$RUNNER_TEMP/SHA256SUMS"
           for sums in "${sums_files[@]}"; do
