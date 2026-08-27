@@ -162,7 +162,7 @@ jobs:
             --label-out "$RUNNER_TEMP/claude-code-label.txt" \
             "${client_identity_args[@]}"
 
-      - name: Publish the immutable release
+      - name: Create the draft release to be verified
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -216,10 +216,116 @@ jobs:
             "$RUNNER_TEMP/dist/SHA256SUMS" \
             "$RUNNER_TEMP/dist/release-manifest.json" \
             "${prerelease[@]}" \
-            --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+            --draft --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-final-assets
+          path: |
+            ${{ runner.temp }}/dist/seal-v*-linux-x64
+            ${{ runner.temp }}/dist/seal-v*-darwin-arm64
+            ${{ runner.temp }}/dist/seal-v*-darwin-x64
+            ${{ runner.temp }}/dist/seal-receipt-check.mjs
+            ${{ runner.temp }}/dist/SHA256SUMS
+            ${{ runner.temp }}/dist/release-manifest.json
+          if-no-files-found: error
+
+  rebuild-kernel:
+    name: Build the pinned Lean kernel once
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild the kernel from its tag-pinned Lean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin="$(node - "$GITHUB_REF_NAME" <<'NODE'
+          const { SOURCE_PINS } = require('./scripts/seal-reproduce.cjs');
+          const pin = SOURCE_PINS[process.argv[2]];
+          if (!pin) process.exit(1);
+          process.stdout.write(`${pin.repository} ${pin.commit}`);
+          NODE
+          )" || { echo "REFUSE published_kernel: no pinned fresh-Lean recipe for $GITHUB_REF_NAME" >&2; exit 1; }
+          read -r repository commit <<<"$pin"
+          git clone --depth 1 "$repository" "$RUNNER_TEMP/pinned-source"
+          git -C "$RUNNER_TEMP/pinned-source" fetch --depth 1 origin "$commit"
+          git -C "$RUNNER_TEMP/pinned-source" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/pinned-source" rev-parse HEAD)" = "$commit"
+          cd "$RUNNER_TEMP/pinned-source"
+          wasm_dir=wasm-spike
+          scripts_dir=scripts
+          mcp_dir=.lake/packages/mcp-seal
+          bash "$wasm_dir"/provision_toolchain.sh
+          python3 "$scripts_dir"/install_pinned_elan.py --mathlib-cache
+          if [[ ! -d "$mcp_dir" ]]; then /home/monkey/bin/leanbuild update; fi
+          bash "$mcp_dir"/c/build.sh
+          /home/monkey/bin/leanbuild build
+          cd "$wasm_dir"
+          for script in build_runtime_wasm.sh build_base.sh build_core.sh build_closure.sh; do bash "$script"; done
+          runner=build_wasm.sh
+          bash "$runner" strict
+          output_dir=build-core
+          kernel=seal.wasm
+          cp "$output_dir"/"$kernel" "$RUNNER_TEMP/rebuilt-seal.wasm"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fresh-rebuilt-kernel
+          path: ${{ runner.temp }}/rebuilt-seal.wasm
+          if-no-files-found: error
+
+  verify-draft:
+    name: Verify downloaded draft ${{ matrix.platform }} artifact
+    needs: [release, rebuild-kernel]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: darwin-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: fresh-rebuilt-kernel
+          path: ${{ runner.temp }}/rebuilt
+      - name: Download the draft bytes a stranger would receive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/draft"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/draft" \
+            --pattern "SHA256SUMS" --pattern "seal-${GITHUB_REF_NAME}-${{ matrix.platform }}"
+      - name: Compare downloaded draft kernel and execute it on its matching runner
+        run: |
+          node scripts/check-published-kernel.cjs --release-tag "$GITHUB_REF_NAME" --platform "${{ matrix.platform }}" \
+            --checksums "$RUNNER_TEMP/draft/SHA256SUMS" \
+            --asset "$RUNNER_TEMP/draft/seal-${GITHUB_REF_NAME}-${{ matrix.platform }}" \
+            --rebuilt-wasm "$RUNNER_TEMP/rebuilt/rebuilt-seal.wasm" --exercise
+
+  publish:
+    name: Publish only the verified draft
+    needs: verify-draft
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the verified draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-final-assets
+          path: ${{ runner.temp }}/dist
       - name: Attest release assets
-        # Human post-release verification workflow path: .github/workflows/release.yml
-        # CI release-download provenance remains absent here: .github/workflows/ci.yml
         uses: actions/attest@v4
         with:
           subject-path: |
@@ -233,7 +339,7 @@ jobs:
   release-docs:
     # Publication is complete before this job starts. A documentation failure
     # can report or delay the follow-up commit, but cannot alter the release.
-    needs: release
+    needs: publish
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
