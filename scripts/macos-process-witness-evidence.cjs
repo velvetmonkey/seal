@@ -4,7 +4,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { lockOwnerIsLive, processStartWitness } = require("../spine/protection.cjs");
+const { lockOwnerIsLive, macosProcessWitness, processStartWitness } = require("../spine/protection.cjs");
 
 const helper = path.join(__dirname, "../runtime/macos-process-start-witness");
 
@@ -17,9 +17,18 @@ function stop(process) {
 }
 
 function witnessFor(process) {
-  const witness = processStartWitness(process.pid);
-  assert.match(witness, /^[1-9]\d*\.\d{6}$/);
-  return witness;
+  let result;
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    result = macosProcessWitness(process.pid);
+    if (result.ok) {
+      assert.match(result.witness, /^[1-9]\d*\.\d{6}$/);
+      if (attempt > 1) console.log(`witness-ready pid=${process.pid} attempt=${attempt}`);
+      return result.witness;
+    }
+    console.log(`witness-not-ready pid=${process.pid} attempt=${attempt} code=${result.code} detail=${result.detail}`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+  }
+  assert.fail(`process witness did not become ready for pid ${process.pid}: ${result.code}: ${result.detail}`);
 }
 
 assert.equal(process.platform, "darwin", "this evidence script requires macOS");
@@ -44,9 +53,10 @@ try {
   assert.equal(processStartWitness(process.pid), null);
   assert.throws(
     () => lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
-    (error) => error.code === "process_witness_unavailable",
+    (error) => error.code === "macos_helper_missing" && error.refusal === true,
   );
-  console.log("helper-missing witness=null lock=process_witness_unavailable");
+  console.log("contract=Darwin live-owner checks preserve precise native readiness refusals");
+  console.log("helper-missing witness=null lock=macos_helper_missing refusal=true");
 } finally {
   fs.renameSync(unavailable, helper);
 }

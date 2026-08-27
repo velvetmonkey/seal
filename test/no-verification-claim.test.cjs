@@ -3,9 +3,10 @@
 // arm's-length verification. Our binary re-deriving our own receipt is not an
 // outside check, and only the separately published checker may say verified.
 //
-// The two banned strings are built from fragments on purpose, so this guard
-// file itself does not contain them — a repo-wide grep for the literals must
-// stay empty even with this test present.
+// One exact, subject-bearing negated provenance sentence is permitted. An
+// allowlist entry that does not name its subject is a skeleton key: a control
+// that cannot tell what a sentence is about cannot tell whether it is true.
+// Positive product-reproduction prose remains forbidden.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -19,27 +20,30 @@ const README = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const ARTIFACT = `seal-v${VERSION}-linux-x64`;
 const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
-const BANNED = ["PASS" + " VERIFIED", "independ" + "ent"];
+const BANNED = ["PASS" + " VERIFIED"];
+const INDEPENDENCE = "independent";
+const ALLOWED_NEGATED_PROVENANCE = "The native macOS process-start witness helper is release-produced, not independently reproduced.";
+const POSITIVE_INDEPENDENCE_CLAIM = /\bindependent(?:ly)?\b/i;
 const DOC_BANNED_CLAIMS = [
   {
     label: "two-checker independence claim",
-    pattern: new RegExp(`\\btwo\\s+${BANNED[1]}\\s+checkers?\\b`, "i"),
+    pattern: new RegExp(`\\btwo\\s+${INDEPENDENCE}\\s+checkers?\\b`, "i"),
   },
   {
     label: "published-checker independence claim",
-    pattern: new RegExp(`\\b${BANNED[1]}\\s+checking\\s+belongs\\s+to\\s+separately\\s+published\\s+checker\\s+surfaces\\b`, "i"),
+    pattern: new RegExp(`\\b${INDEPENDENCE}\\s+checking\\s+belongs\\s+to\\s+separately\\s+published\\s+checker\\s+surfaces\\b`, "i"),
   },
   {
     label: "product receipt-independence claim",
-    pattern: new RegExp(`product(?:'s)?[^\\n]{0,120}${BANNED[1]}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
+    pattern: new RegExp(`product(?:'s)?[^\\n]{0,120}${INDEPENDENCE}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
   },
   {
     label: "seal-verify independence claim",
-    pattern: new RegExp(`seal verify[^\\n]{0,80}${BANNED[1]}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
+    pattern: new RegExp(`seal verify[^\\n]{0,80}${INDEPENDENCE}ly\\s+(?:verif(?:y|ies|ied)|re-deriv(?:e|es|ed))`, "i"),
   },
   {
     label: "receipt verification-independence claim",
-    pattern: new RegExp(`receipt[^\\n]{0,80}verify ${BANNED[1]}ly`, "i"),
+    pattern: new RegExp(`receipt[^\\n]{0,80}verify ${INDEPENDENCE}ly`, "i"),
   },
 ];
 
@@ -68,6 +72,10 @@ function isTemporaryDirectory(directory) {
   return path.resolve(directory) === path.resolve(os.tmpdir());
 }
 
+function hasPositiveIndependentReproductionClaim(text) {
+  return POSITIVE_INDEPENDENCE_CLAIM.test(text.replace(ALLOWED_NEGATED_PROVENANCE, ""));
+}
+
 function scan(dir, hits) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
@@ -80,6 +88,9 @@ function scan(dir, hits) {
       // Skip this guard's own fragment definition (it never forms the literal).
       if (full === __filename) continue;
       if (text.includes(needle)) hits.push(`${path.relative(ROOT, full)}: ${needle}`);
+    }
+    if (full !== __filename && hasPositiveIndependentReproductionClaim(text)) {
+      hits.push(`${path.relative(ROOT, full)}: positive independently reproduced claim`);
     }
   }
 }
@@ -119,6 +130,19 @@ test("no banned verification claim survives in product surfaces or docs/", () =>
   const scanned = scanDocs(path.join(ROOT, "docs"), DOC_BANNED_CLAIMS, hits);
   assert.ok(scanned > 0, "docs claim scan examined no files");
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
+});
+
+test("only one exact subject-bearing native-helper provenance sentence is allowed", () => {
+  assert.equal(hasPositiveIndependentReproductionClaim(ALLOWED_NEGATED_PROVENANCE), false);
+  console.log(`SILENT exact negated provenance: ${ALLOWED_NEGATED_PROVENANCE}`);
+  const falseWasm = "The WASM kernel is release-produced, not independently reproduced.";
+  assert.equal(hasPositiveIndependentReproductionClaim(falseWasm), true);
+  console.log(`RED false different-subject provenance: ${falseWasm}`);
+  const doubled = `${ALLOWED_NEGATED_PROVENANCE}${ALLOWED_NEGATED_PROVENANCE}`;
+  assert.equal(hasPositiveIndependentReproductionClaim(doubled), true);
+  console.log(`RED doubled permitted sentence: ${doubled}`);
+  assert.equal(hasPositiveIndependentReproductionClaim("independently reproduced"), true);
+  console.log("RED positive provenance: independently reproduced");
 });
 
 test("no stale doctor or kernel allocation claim survives in docs/", () => {

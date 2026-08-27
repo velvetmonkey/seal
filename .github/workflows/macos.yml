@@ -8,8 +8,20 @@ on:
 
 jobs:
   macos-install-demo-receipt:
-    name: macOS install, demo, and receipt check
-    runs-on: macos-latest
+    name: ${{ matrix.platform }} install, demo, Protect helper, and receipt check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+            wrong_arch: x86_64
+            wrong_platform: darwin-x64
+          - platform: darwin-x64
+            runner: macos-15-intel
+            wrong_arch: arm64
+            wrong_platform: darwin-arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,16 +33,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cc -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o runtime/macos-process-start-witness
+          test "darwin-$(node -p 'process.arch')" = "${{ matrix.platform }}"
+          cc -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o "$RUNNER_TEMP/macos-process-start-witness"
+          node scripts/macos-helper.cjs --helper "$RUNNER_TEMP/macos-process-start-witness" --platform "${{ matrix.platform }}"
+          cp "$RUNNER_TEMP/macos-process-start-witness" runtime/macos-process-start-witness
           node scripts/macos-process-witness-evidence.cjs | tee "$RUNNER_TEMP/macos-process-witness.log"
+      - name: Refuse a deliberately wrong-architecture helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrong="$RUNNER_TEMP/macos-process-start-witness-wrong"
+          cc -arch "${{ matrix.wrong_arch }}" -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o "$wrong"
+          set +e
+          output="$(node scripts/macos-helper.cjs --helper "$wrong" --platform "${{ matrix.platform }}" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output" | tee "$RUNNER_TEMP/wrong-architecture.log"
+          test "$status" -eq 1
+          test "$output" = "REFUSE macos_helper_architecture: expected ${{ matrix.platform }} helper, got ${{ matrix.wrong_platform }}"
       - name: Build and run the documented macOS install ritual
         shell: bash
         run: |
           set -euo pipefail
-          platform="darwin-$(node -p 'process.arch')"
+          platform="${{ matrix.platform }}"
           dist="$RUNNER_TEMP/macos-dist"
           prefix="$RUNNER_TEMP/macos-prefix"
-          node scripts/build-dist.cjs --platform "$platform" --out "$dist"
+          node scripts/build-dist.cjs --platform "$platform" --macos-helper "$RUNNER_TEMP/macos-process-start-witness" --out "$dist"
           read -r expected_digest expected_bytes expected_name < "$dist/SHA256SUMS"
           expected_stem="$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')"
           test "$expected_name" = "$expected_stem-$platform"
@@ -109,6 +137,71 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-build-evidence
-          path: ${{ runner.temp }}/*.log
+          name: macos-build-evidence-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/macos-dist/seal-v*-darwin-*
+            ${{ runner.temp }}/macos-dist/SHA256SUMS
           if-no-files-found: warn
+
+  linux-build-evidence:
+    name: linux-x64 build evidence
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Linux artifact and checksum declaration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-dist.cjs --platform linux-x64 --out "$RUNNER_TEMP/linux-dist"
+      - name: Upload Linux artifact and checksum declaration
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-evidence-linux-x64
+          path: |
+            ${{ runner.temp }}/linux-dist/seal-v*-linux-x64
+            ${{ runner.temp }}/linux-dist/SHA256SUMS
+          if-no-files-found: error
+
+  release-matrix-evidence:
+    name: Three-artifact checksum evidence
+    needs:
+      - macos-install-demo-receipt
+      - linux-build-evidence
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-build-evidence-darwin-*
+          path: ${{ runner.temp }}/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-build-evidence-linux-x64
+          path: ${{ runner.temp }}/linux
+      - name: Verify three distinct artifact checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' sums_files < <(find "$RUNNER_TEMP/macos" "$RUNNER_TEMP/linux" -type f -name SHA256SUMS -print0 | sort -z)
+          : > "$RUNNER_TEMP/SHA256SUMS"
+          for sums in "${sums_files[@]}"; do
+            cat "$sums" >> "$RUNNER_TEMP/SHA256SUMS"
+          done
+          line_count="$(wc -l < "$RUNNER_TEMP/SHA256SUMS")"
+          unique_count="$(awk '{ print $1 }' "$RUNNER_TEMP/SHA256SUMS" | sort -u | wc -l)"
+          test "$line_count" -eq 3
+          test "$unique_count" -eq 3
+          for sums in "${sums_files[@]}"; do
+            (cd "$(dirname "$sums")" && awk '{ print $1 "  " $3 }' SHA256SUMS | sha256sum -c -)
+          done

@@ -97,7 +97,16 @@ function runArtifact(file, args, opts = {}) {
 
 function buildArtifact(platform = "linux-x64") {
   const out = tmpdir("seal-dist3d-build-");
-  const built = runNode([BUILD, "--platform", platform, "--out", out]);
+  const args = [BUILD, "--platform", platform, "--out", out];
+  if (platform.startsWith("darwin-")) {
+    const helper = path.join(out, `helper-${platform}`);
+    const bytes = Buffer.alloc(32);
+    bytes.writeUInt32LE(0xfeedfacf, 0);
+    bytes.writeUInt32LE(platform === "darwin-arm64" ? 0x0100000c : 0x01000007, 4);
+    fs.writeFileSync(helper, bytes, { mode: 0o755 });
+    args.push("--macos-helper", helper);
+  }
+  const built = runNode(args);
   assert.equal(built.code, 0, built.out);
   // The file is named for the product identity of the tree it was built from,
   // which is the bare release version only at the tag.
@@ -338,12 +347,11 @@ test("darwin-arm64 is admitted on the product path", () => {
   assert.equal(result.stdout.trim(), VERSION);
 });
 
-test("help distinguishes macOS portability from the supported Protect path", () => {
+test("help states Linux and macOS product parity", () => {
   const result = runNode([path.join(ROOT, "bin", "seal")]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.stdout, /macOS source portability is CI-exercised for install, demo and receipt checking\./);
-  assert.match(result.stdout, /Protect is not supported on macOS yet\./);
-  assert.doesNotMatch(result.stdout, /Linux x86-64 and macOS x64\/arm64/);
+  assert.match(result.stdout, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.doesNotMatch(result.stdout, /Protect is not supported on macOS yet\./);
 });
 
 test("installed artifact runs demo then protect and unprotect", async () => {

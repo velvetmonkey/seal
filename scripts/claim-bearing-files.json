@@ -5,7 +5,7 @@
     "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:180"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
-    "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs:95"] },
+    "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs:102"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
     "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52"] },
     ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },
@@ -53,7 +53,7 @@
     "docs/archive/PUBLIC-FLIP-CHECKLIST.md": { "allowlistReason": "This release-readiness checklist depends on human publication decisions and external service state, neither available to a repository-local check." },
     "docs/assurance/README.md": { "allowlistReason": "The only Seal-language in this index is the stated scope of links to named manuals; link destinations are checked by scripts/linkcheck.mjs, while suitability of that navigation is an editorial decision rather than a product-behavior claim." },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": { "allowlistReason": "Release notes are a dated historical record; their shipped-release assertions require release provenance outside a source-tree behavior test." },
-    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": { "coveredBy": ["test/release-notes.test.cjs:10"] },
+    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": { "coveredBy": ["test/release-notes.test.cjs:11"] },
     "docs/archive/REPO-TOPOLOGY.md": { "allowlistReason": "The topology maps a wider Seal family of repositories, most of which are not present here, so local code cannot check its relationship claims." },
     "docs/archive/ROADMAP-KERNEL-OUTWARD.md": { "allowlistReason": "The roadmap contains planned milestones and explicit unverified work; future commitments are not executable claims with a local test oracle." },
     "docs/archive/TRUTH-BOX.md": { "coveredBy": ["test/claims-drift.test.mjs:15"] },
@@ -65,8 +65,8 @@
     "docs/guide/github-actions-provenance.md": { "allowlistReason": "This guide explains GitHub Actions provenance and depends on GitHub-hosted workflow and attestation state outside the repository." },
     "docs/guide/knowing-it-worked.md": { "coveredBy": ["test/demo-witness.test.cjs:101"] },
     "scripts/mandatory-doc-claim-bindings.json": { "allowlistReason": "This binding registry is coverage metadata: its embedded claim text identifies the mandatory document sentences, but it is not a reader-facing Seal assertion." },
-    "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs:136"] },
-    "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs:127"] },
+    "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs:137"] },
+    "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs:128"] },
     "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:16", "scripts/launch-truth-gate.mjs:170"] }
   }
 }

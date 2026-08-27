@@ -13,6 +13,7 @@ test/coldwalk-polish.test.cjs
 test/demo-receipts-store.test.cjs
 test/demo-server-tools.test.cjs
 test/demo-witness.test.cjs
+test/darwin-readiness.test.cjs
 test/dist3d.test.cjs
 test/dist-pin.test.cjs
 test/docs-fenced-languages.test.mjs
@@ -42,6 +43,7 @@ test/limits-list.test.cjs
 test/linkcheck.test.mjs
 test/linkcheck-assertions.test.mjs
 test/live-page-claim-guard.test.mjs
+test/macos-helper.test.cjs
 test/no-verification-claim.test.cjs
 test/multi-tool-semantics-doc.test.cjs
 test/product-suite-roster.test.cjs
@@ -57,6 +59,7 @@ test/readme-protect-state-witness.test.cjs
 test/receipt-checker.test.cjs
 test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
+test/release-matrix.test.mjs
 test/reinstall.test.cjs
 test/release-notes.test.cjs
 test/release-docs.test.mjs

@@ -15,7 +15,7 @@ const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
 const REQUIRED_MANDATORY_CLAIMS = {
   "README.md": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
   "docs/guide/knowing-it-worked.md": "Seal makes the approved call and the executed call the same call: same tool,",
-  "docs/reproduce.md": "`result` is `reproduced`, `mismatch`, or `refused`.",
+  "docs/reproduce.md": "`result` is `artifact-kernel-match`, `artifact-kernel-mismatch`, or `refused`.",
 };
 
 // A text file is claim-bearing when it contains a declarative, present-tense
