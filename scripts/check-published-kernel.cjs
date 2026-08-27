@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// SAME-AUTHORITY LINUX-X64 ARTIFACT KERNEL CORRESPONDENCE: the artifact
-// publisher and this check share one authority. This proves selected bytes match tracked bytes;
-// it does not create an independent build or source of truth.
+// SAME-AUTHORITY RELEASE-ARTIFACT KERNEL CORRESPONDENCE: the artifact
+// publisher and this check share one authority. This proves selected bytes match one supplied
+// fresh rebuild; it does not create an independent build or source of truth.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { unpackPayload } = require("../spine/integrity.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const DEFAULT_TAG = "v0.2.0-rc.3";
+const PLATFORMS = new Set(["linux-x64", "darwin-arm64", "darwin-x64"]);
+const NATIVE_HELPER_LIMIT = "the native macOS helper is release-produced, not independently reproduced, and is not covered by this result";
 
 function fail(message) {
   process.stderr.write(`REFUSE published_kernel: ${message}\n`);
@@ -118,9 +121,9 @@ function main() {
   if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(tag)) fail(`release tag is invalid: ${tag}`);
   const platform = arg("--platform") || process.env.RELEASE_PLATFORM || "linux-x64";
   const assetName = `seal-${tag}-${platform}`;
-  if (platform !== "linux-x64") {
-    fail(`platform ${platform} selects artifact ${assetName}; this checker only checks the linux-x64 artifact kernel, and the native macOS helper is release-produced, not independently reproduced, and is not covered by this result`);
-  }
+  if (!PLATFORMS.has(platform)) fail(`unsupported platform ${platform}; expected linux-x64, darwin-arm64, or darwin-x64`);
+  const rebuilt = requiredArg("--rebuilt-wasm");
+  if (!fs.existsSync(rebuilt) || !fs.lstatSync(rebuilt).isFile()) fail(`fresh rebuilt kernel is unavailable: ${rebuilt}`);
   const work = fs.mkdtempSync(path.join(arg("--work-dir") || os.tmpdir(), "seal-published-kernel-"));
   const asset = arg("--asset") || path.join(work, assetName);
   const checksums = arg("--checksums") || path.join(work, "SHA256SUMS");
@@ -142,65 +145,54 @@ function main() {
     fail(`asset digest mismatch: published ${published.digest}, downloaded ${assetDigest}`);
   }
 
+  // Kernel correspondence is platform-independent: inspect the payload bytes
+  // directly instead of asking this host to run an artifact for another host.
+  const marker = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
+  const artifactBytes = fs.readFileSync(asset);
+  const payloadAt = artifactBytes.indexOf(marker);
+  if (payloadAt < 0) fail(`artifact has no payload marker: ${assetName}`);
+  let unpacked;
+  try {
+    unpacked = unpackPayload(artifactBytes.subarray(payloadAt + marker.length));
+  } catch (error) {
+    fail(`cannot unpack downloaded artifact ${assetName}: ${error.message}`);
+  }
+  if (unpacked.manifest.platform !== platform) fail(`artifact payload platform is ${unpacked.manifest.platform}, not requested ${platform}`);
+  const kernel = unpacked.files.find((file) => file.path === "runtime/kernel/wasm/seal.wasm");
+  if (!kernel) fail(`artifact payload has no runtime/kernel/wasm/seal.wasm: ${assetName}`);
+  const installedDigest = sha256Hex(kernel.data);
+  const rebuiltDigest = sha256(rebuilt);
+
+  process.stdout.write("SAME-AUTHORITY RELEASE-ARTIFACT KERNEL CORRESPONDENCE\n");
+  process.stdout.write(`selected artifact: ${assetName}\n`);
+  process.stdout.write(`Coverage: ${NATIVE_HELPER_LIMIT}.\n`);
+  process.stdout.write("Limit: the artifact publisher and this check share one authority; this proves the selected artifact's installed kernel bytes match one supplied fresh rebuild, and it does not resist a hostile published installer that plants believable bytes.\n");
+  process.stdout.write(`downloaded artifact embedded seal.wasm: ${installedDigest}\n`);
+  process.stdout.write(`fresh rebuilt seal.wasm: ${rebuiltDigest}\n`);
+  if (installedDigest !== rebuiltDigest) {
+    fail(`kernel digest mismatch: downloaded artifact embedded ${installedDigest}; fresh rebuilt ${rebuiltDigest}`);
+  }
+  process.stdout.write(`PASS ${assetName} kernel: downloaded artifact and fresh rebuild agree\n`);
+  if (!process.argv.includes("--exercise")) {
+    process.stdout.write(`Execution: NOT CHECKED. REFUSE execution claim for ${platform}: rerun on a matching ${platform} runner with --exercise.\n`);
+    return;
+  }
+  const runtimePlatform = process.platform === "darwin" ? `darwin-${process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : process.arch}` : `${process.platform}-${process.arch}`;
+  if (runtimePlatform !== platform) {
+    fail(`execution for ${platform} requires a matching ${platform} runner; this runner is ${runtimePlatform}. ${NATIVE_HELPER_LIMIT}`);
+  }
   const prefix = fs.mkdtempSync(path.join(work, "prefix-"));
   const installerCwd = fs.mkdtempSync(path.join(work, "installer-cwd-"));
   try {
     fs.chmodSync(asset, 0o555);
     execFileSync(asset, ["--sha256", published.digest, "--bytes", String(published.bytes), "--prefix", prefix], { cwd: installerCwd, stdio: "inherit" });
+    const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
+    if (platform.startsWith("darwin-")) execFileSync(path.join(prefix, record.store, "runtime", "macos-process-start-witness"), [String(process.pid)], { stdio: "inherit" });
+    execFileSync(path.join(prefix, "bin", "seal"), ["demo", "--dir", path.join(work, "demo")], { input: "y\n", stdio: ["pipe", "inherit", "inherit"] });
   } catch (error) {
-    fail(`published installer failed (exit ${error.status ?? "unknown"})`);
+    fail(`downloaded ${platform} artifact execution failed (exit ${error.status ?? "unknown"})`);
   }
-  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
-  if (
-    typeof record.treeSha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.treeSha256) ||
-    record.store !== path.posix.join("lib", "seal", "store", record.treeSha256)
-  ) {
-    fail(`installer recorded an invalid store value: ${record.store}`);
-  }
-  const installed = path.join(prefix, record.store, "runtime", "kernel", "wasm", "seal.wasm");
-  let prefixResolved;
-  try {
-    prefixResolved = fs.realpathSync(prefix);
-  } catch (error) {
-    fail(`cannot resolve install prefix ${prefix}: ${error.message}`);
-  }
-  let installedStat;
-  try {
-    installedStat = fs.lstatSync(installed);
-  } catch (error) {
-    fail(`cannot inspect installed path ${installed}: ${error.message}`);
-  }
-  if (!installedStat.isFile()) fail(`installed path is not a regular file: ${installed}`);
-  let installedResolved;
-  try {
-    installedResolved = fs.realpathSync(installed);
-  } catch (error) {
-    fail(`cannot resolve installed path ${installed}: ${error.message}`);
-  }
-  const prefixBoundary = prefixResolved.endsWith(path.sep) ? prefixResolved : `${prefixResolved}${path.sep}`;
-  if (installedResolved !== prefixResolved && !installedResolved.startsWith(prefixBoundary)) {
-    fail(`resolved installed path escapes prefix: ${installedResolved} (prefix ${prefixResolved})`);
-  }
-  verifyInstalledTree(record, path.join(prefix, record.store), prefixResolved);
-  const installedDigest = sha256(installed);
-  const tracked = arg("--tracked-wasm") || path.join(ROOT, "runtime", "kernel", "wasm", "seal.wasm");
-  const trackedDigest = sha256(tracked);
-  const manifestPath = arg("--manifest") || path.join(ROOT, "runtime-manifest.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const manifestDigest = manifest.files?.["kernel/wasm/seal.wasm"];
-  if (!/^[0-9a-f]{64}$/.test(manifestDigest || "")) fail(`runtime-manifest.json has no valid kernel digest`);
-
-  process.stdout.write("SAME-AUTHORITY LINUX-X64 ARTIFACT KERNEL CORRESPONDENCE\n");
-  process.stdout.write(`selected artifact: ${assetName}\n`);
-  process.stdout.write("Coverage: the native macOS helper is release-produced, not independently reproduced, and is not covered by this result.\n");
-  process.stdout.write("Limit: the artifact publisher and this check share one authority; this proves the selected artifact's installed kernel bytes match tracked bytes, and it does not resist a hostile published installer that plants believable bytes.\n");
-  process.stdout.write(`published installed seal.wasm: ${installedDigest}\n`);
-  process.stdout.write(`tracked runtime/kernel/wasm/seal.wasm: ${trackedDigest}\n`);
-  process.stdout.write(`runtime-manifest.json kernel pin: ${manifestDigest}\n`);
-  if (installedDigest !== trackedDigest || installedDigest !== manifestDigest || trackedDigest !== manifestDigest) {
-    fail(`kernel digest mismatch: published installed ${installedDigest}; tracked ${trackedDigest}; manifest ${manifestDigest}`);
-  }
-  process.stdout.write(`PASS ${assetName} kernel: all three digests agree\n`);
+  process.stdout.write(`PASS ${assetName} execution: downloaded artifact ran on matching ${platform} runner\n`);
 }
 
 main();
