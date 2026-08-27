@@ -51,6 +51,17 @@ try {
   fs.renameSync(unavailable, helper);
 }
 
+const hanging = `${helper}.hanging`;
+fs.renameSync(helper, hanging);
+fs.writeFileSync(helper, "#!/bin/sh\nsleep 2\n", { mode: 0o755 });
+try {
+  assert.equal(processStartWitness(process.pid), null);
+  console.log("helper-hanging witness=null");
+} finally {
+  fs.unlinkSync(helper);
+  fs.renameSync(hanging, helper);
+}
+
 let sameSecond = false;
 for (let attempt = 0; attempt < 4 && !sameSecond; attempt += 1) {
   const first = child();
