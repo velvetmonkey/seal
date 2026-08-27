@@ -167,13 +167,14 @@ function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
 
 function baselineTree(sourceRoot) {
   try {
-    const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
+    const gitOptions = { cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+    const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], gitOptions).trim();
+    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], gitOptions).trim();
     return { base, files: new Set(names ? names.split("\n") : []) };
-  } catch {
-    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    const names = execFileSync("git", ["ls-tree", "-r", "--name-only", base], { cwd: sourceRoot, encoding: "utf8" }).trim();
-    return { base, files: new Set(names ? names.split("\n") : []) };
+  } catch (error) {
+    const reason = (error.stderr?.toString() || error.message || "unknown error").trim().replace(/\s+/g, " ");
+    console.error(`REFUSE link-check baseline unresolved: origin/main: git merge-base HEAD origin/main failed: ${reason}`);
+    process.exit(1);
   }
 }
 
