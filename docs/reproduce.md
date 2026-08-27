@@ -1,7 +1,13 @@
 # Compare a release kernel with a fresh pinned-source build
 
-Run the release comparison from a Linux x86-64 machine with Node 20 or newer, Git, Curl, Python,
-Emscripten prerequisites, and the repository's pinned Lean toolchain prerequisites available:
+Run the release comparison on a Linux x86-64 machine with network access and at least 8 GiB free.
+It requires Node 20 or newer, Git, Curl, Python 3, Bash, `awk`, `df`, `mv`, `sha256sum`, `stat`, a
+system C compiler available as `cc`, and GNU `ld`. Install
+[elan](https://lean-lang.org/install/) and ensure its `lake` executable is on `PATH`. The pinned
+source recipe verifies and installs elan v4.2.3, selects the repository's
+`leanprover/lean4:v4.28.0` toolchain, restores its Mathlib cache, and provisions the pinned
+Emscripten 6.0.0 and patched Lean WASM source trees; those toolchain versions are not left to the
+reader to choose.
 
 ```bash
 tag="v$(cat VERSION)"
@@ -12,8 +18,20 @@ The command checks only `seal-<tag>-linux-x64`. It downloads that artifact and `
 when the declared byte count or SHA-256 does not match the downloaded asset, installs into a new
 temporary prefix, and hashes the installed `runtime/kernel/wasm/seal.wasm`. Separately, it checks
 out the release's pinned `seal-host` source commit, provisions the pinned toolchains, builds the
-Lean source once through `/home/monkey/bin/leanbuild`, runs the `kernel-reproduce` WASM recipe, and
+Lean source once through `lake`, runs the `kernel-reproduce` WASM recipe, and
 hashes that fresh output. The two compared byte strings therefore come from different origins.
+
+`lake` is the portable default. A machine that must serialize Lean builds can select an executable
+launcher by name or path; the value is one executable, not a shell command with arguments:
+
+```bash
+SEAL_LEAN_LAUNCHER=/path/to/serializing-lake-wrapper \
+  node scripts/seal-reproduce.cjs "$tag" --platform linux-x64
+```
+
+The launcher receives `update` or `build` as its argument. If neither `lake` nor the configured
+launcher can be started, the script names the missing launcher and points to the elan installation
+instead of reporting a bare spawn failure.
 
 Standard output is one `seal.artifact-kernel-correspondence/v1` JSON object. Child-command progress and refusal
 messages go to standard error. An `artifact-kernel-match` returns exit status 0; `artifact-kernel-mismatch` and `refused`
