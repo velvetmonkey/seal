@@ -10,23 +10,7 @@ Seal stops that call and asks you before the tool runs.
 
 One exact call. One approval. One use.
 
-## Before you start
-
-This is a clean-machine walkthrough for the published Linux x86-64 release.
-It keeps every command in the order a new reader needs to run it.
-
-Use a disposable project directory and a writable local tools directory.
-The walkthrough creates both and leaves your project `.mcp.json` unchanged.
-
-The commands fetch a release asset and verify its supplied digest and byte count.
-Compare those values with release information obtained through a separate channel.
-
-The demo is approve-once; Protect uses Claude Code's local override.
-Both leave local evidence you can inspect before removing the throw-away files.
-
-Keep the printed receipt paths until you have checked them.
-
-Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
+## Install
 
 ```bash
 SEAL_VERSION=v0.2.0-rc.2
@@ -43,6 +27,22 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Requires Node 20+. The published Seal v0.2.0-rc.2 release asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
+
+## Before you start
+This is a clean-machine walkthrough for the published Linux x86-64 release.
+It keeps every command in the order a new reader needs to run it.
+
+Use a disposable project directory and a writable local tools directory.
+The walkthrough creates both and leaves your project `.mcp.json` unchanged.
+
+The commands fetch a release asset and verify its supplied digest and byte count.
+Compare those values with release information obtained through a separate channel.
+
+The demo is approve-once; Protect uses Claude Code's local override.
+Both leave local evidence you can inspect before removing the throw-away files.
+
+Keep the printed receipt paths until you have checked them.
+Install the published Linux x86-64 release before you run the command. These commands fetch the binary and its `SHA256SUMS` from the same release. Check the digest and byte count before you run it. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
