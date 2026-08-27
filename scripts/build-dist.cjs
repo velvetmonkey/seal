@@ -34,6 +34,7 @@ const PAYLOAD_PATHS = [
   "contract/kernel-authorization.cjs",
   "contract/kernel-authorization-worker.cjs",
   "contract/renderer.cjs",
+  "runtime/macos-process-start-witness.c",
   "runtime/kernel/kernel.js",
   "runtime/kernel/seal-config.js",
   "runtime/kernel/receipt-format.js",

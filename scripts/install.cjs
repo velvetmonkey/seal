@@ -4,6 +4,7 @@
 // artifact: the payload is appended after the marker. It never searches
 // PATH for another seal, and it will not install without an operator pin.
 const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -90,6 +91,17 @@ function parseArgs(argv) {
     refuse("unknown_flag", `unknown installer flag: ${flag}`);
   }
   return out;
+}
+
+function buildMacosProcessStartWitness(storeRoot) {
+  const source = path.join(storeRoot, "runtime", "macos-process-start-witness.c");
+  const helper = path.join(storeRoot, "runtime", "macos-process-start-witness");
+  const result = spawnSync("cc", ["-Wall", "-Wextra", "-Werror", source, "-o", helper], { encoding: "utf8" });
+  if (result.error || result.status !== 0) {
+    const detail = (result.stderr || result.error?.message || "compiler failed").trim();
+    refuse("macos_helper_build_failed", detail);
+  }
+  fs.chmodSync(helper, 0o555);
 }
 
 function writeFileDeep(target, data, mode) {
@@ -257,6 +269,7 @@ function main() {
     const mode = file.path === "bin/seal" || file.path.endsWith("/seal-launch.cjs") ? 0o555 : 0o444;
     verifyOrWriteStoreFile(path.join(storeRoot, file.path), file, mode);
   }
+  if (manifest.platform.startsWith("darwin-")) buildMacosProcessStartWitness(storeRoot);
 
   const launchSrc = files.find((file) => file.path === "scripts/seal-launch.cjs");
   if (!launchSrc) refuse("artifact_missing", "payload has no scripts/seal-launch.cjs");
