@@ -89,7 +89,7 @@ test("the witness is Linux /proc stat field 22", () => {
   assert.ok(processStartWitness(process.pid).length > 0);
 });
 
-test("independent live Linux processes have distinct process-start witnesses", async () => {
+test("separate live Linux processes have distinct process-start witnesses", async () => {
   const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   try {
     const parentWitness = processStartWitness(process.pid);
