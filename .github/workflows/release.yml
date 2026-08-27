@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
   actions: read
   id-token: write
   attestations: write
@@ -82,6 +83,13 @@ jobs:
           read -r digest bytes checksum_name < "$RUNNER_TEMP/dist/SHA256SUMS"
           test "$checksum_name" = "$artifact_name"
           grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
+          node scripts/create-release-manifest.mjs \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" \
+            --artifact "$artifact" \
+            --checker "$checker" \
+            --checksums "$RUNNER_TEMP/dist/SHA256SUMS" \
+            --out "$RUNNER_TEMP/dist/release-manifest.json"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
             "Seal v${version}." \
@@ -107,6 +115,7 @@ jobs:
             "$artifact" \
             "$checker" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
+            "$RUNNER_TEMP/dist/release-manifest.json" \
             "${prerelease[@]}" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
       - name: Attest release assets
@@ -118,3 +127,56 @@ jobs:
             ${{ runner.temp }}/dist/seal-v*-linux-x64
             ${{ runner.temp }}/dist/seal-receipt-check.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
+            ${{ runner.temp }}/dist/release-manifest.json
+
+  release-docs:
+    # Publication is complete before this job starts. A documentation failure
+    # can report or delay the follow-up commit, but cannot alter the release.
+    needs: release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Open or refresh the post-publication documentation pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEAL_EXPECTED_RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          branch="release-docs/$GITHUB_REF_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          pr_number=""
+          for attempt in 1 2 3; do
+            git fetch origin main '+refs/heads/release-docs/*:refs/remotes/origin/release-docs/*'
+            base_sha="$(git rev-parse origin/main)"
+            git checkout -B "$branch" "$base_sha"
+            node scripts/generate-release-docs.mjs
+            if git diff --quiet -- README.md docs/start/install.md; then
+              echo "release docs already name $GITHUB_REF_NAME on main $base_sha"
+              exit 0
+            fi
+            git add README.md docs/start/install.md
+            git commit -m "docs: generate install blocks for $GITHUB_REF_NAME"
+            git push --force-with-lease origin "HEAD:refs/heads/$branch"
+            pr_number="$(gh pr list --state open --base main --head "$branch" --json number --jq '.[0].number')"
+            if [[ -z "$pr_number" ]]; then
+              pr_url="$(gh pr create --base main --head "$branch" \
+                --title "docs: publish install facts for $GITHUB_REF_NAME" \
+                --body "Generated from the published $GITHUB_REF_NAME release. Review and required checks must pass before merge.")"
+              pr_number="${pr_url##*/}"
+            fi
+            remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+            if [[ "$remote_main" = "$base_sha" ]]; then
+              echo "::notice::release documentation is ready for human review in PR #$pr_number"
+              exit 0
+            fi
+            echo "main moved from $base_sha to $remote_main while preparing PR #$pr_number; regenerating (attempt $attempt of 3)"
+          done
+          echo "::error::main kept moving while release documentation PR #$pr_number was refreshed; the PR remains visible and a human can rerun this job"
+          exit 1
