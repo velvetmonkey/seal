@@ -7,7 +7,9 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const NOTES = path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md`); // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md
+const NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md";
+const NOTES = path.join(ROOT, NOTES_RELATIVE); // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md
+assert.equal(NOTES_RELATIVE, `docs/assurance/RELEASE-NOTES-v${VERSION}.md`);
 
 test("release notes state the platform and protected-receipt signing boundary", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
