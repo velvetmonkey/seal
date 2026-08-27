@@ -74,6 +74,8 @@ the Node CLI this repository ships.
    cross-check measures, and its shared blind spots.
 9. [reproduce.md](../reproduce.md) — compare the kernel installed from a published
    release artifact with a fresh build from that release's pinned source.
+10. [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md) — the Phase A v2 receipt schema,
+    canonicalisation rule, four verbs, and trust ceilings.
 
 ## I want to operate Seal day to day
 
