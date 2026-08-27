@@ -136,8 +136,8 @@ jobs:
         run: |
           set -euo pipefail
           version="$(tr -d '\n' < VERSION)"
-          checker="$RUNNER_TEMP/dist/seal-receipt-check.mjs"
-          cp checker/seal-receipt-check.mjs "$checker"
+          checker="$RUNNER_TEMP/dist/seal-receipt-v2.mjs"
+          cp checker/seal-receipt-v2.mjs "$checker"
           : > "$RUNNER_TEMP/dist/SHA256SUMS"
           for target in "$RUNNER_TEMP"/dist/seal-v${version}-linux-x64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-arm64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-x64 "$checker"; do
             printf '%s  %s  %s\n' "$(sha256sum "$target" | awk '{ print $1 }')" "$(wc -c < "$target" | tr -d ' ')" "$(basename "$target")" >> "$RUNNER_TEMP/dist/SHA256SUMS"
@@ -173,10 +173,10 @@ jobs:
           version="$(tr -d '\n' < VERSION)"
           artifact="$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
           artifact_name="$(basename "$artifact")"
-          checker="$RUNNER_TEMP/dist/seal-receipt-check.mjs"
+          checker="$RUNNER_TEMP/dist/seal-receipt-v2.mjs"
           read -r digest bytes checksum_name < <(awk '$3 ~ /-linux-x64$/ { print; exit }' "$RUNNER_TEMP/dist/SHA256SUMS")
           test "$checksum_name" = "$artifact_name"
-          grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
+          grep -F "seal-receipt-v2.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
           node scripts/create-release-manifest.mjs \
             --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" \
@@ -226,7 +226,7 @@ jobs:
             ${{ runner.temp }}/dist/seal-v*-linux-x64
             ${{ runner.temp }}/dist/seal-v*-darwin-arm64
             ${{ runner.temp }}/dist/seal-v*-darwin-x64
-            ${{ runner.temp }}/dist/seal-receipt-check.mjs
+            ${{ runner.temp }}/dist/seal-receipt-v2.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
             ${{ runner.temp }}/dist/release-manifest.json
 

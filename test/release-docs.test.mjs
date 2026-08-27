@@ -49,7 +49,7 @@ function releaseAssets() {
   const artifactName = `seal-v${version}-linux-x64`;
   fs.renameSync(path.join(directory, builtName), path.join(directory, artifactName));
   const checkerName = "seal-receipt-check.mjs";
-  fs.copyFileSync(path.join(ROOT, "checker", checkerName), path.join(directory, checkerName));
+  fs.writeFileSync(path.join(directory, checkerName), "historical v0.2.0-rc.3 checker fixture\n");
   const checkerBytes = fs.readFileSync(path.join(directory, checkerName));
   const checkerLine = `${sha256(checkerBytes)}  ${checkerBytes.length}  ${checkerName}\n`;
   const artifactBytes = fs.readFileSync(path.join(directory, artifactName));

@@ -44,7 +44,7 @@ test("a fresh-build marker wins when prose incidentally mentions releases/downlo
     "Unlike releases/download/, this builds the checkout.",
     "**Seal installed-tree pin role:** `fresh-build`",
     "```text",
-    `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-check.mjs" receipt.json`,
+    `node "/scratch/.local/lib/seal/store/${freshShape}/checker/seal-receipt-v2.mjs" receipt.json`,
     "```",
   ].join("\n");
   const hits = quotedTreeHashHits(text, "fresh.md");

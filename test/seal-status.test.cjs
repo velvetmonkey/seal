@@ -122,7 +122,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ decision: "APPROVE", at: "2026-08-16T12:00:00.000Z" }));
+  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
@@ -132,7 +132,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, new RegExp(`^Receipts: 1 stored in ${receiptDir}$`, "m"));
-  assert.match(result.out, /^Most recent \(by write time\): APPROVE at receipt time 2026-08-16T12:00:00\.000Z \(approved\.json\)$/m);
+  assert.match(result.out, /^Most recent \(by write time\): APPROVE at receipt time 1786896000 \(approved\.json\)$/m);
 });
 
 test("status says an existing empty receipt directory has no recorded decision", () => {
@@ -237,7 +237,7 @@ test("status names receipt files when none can be parsed", () => {
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
     `Receipts: 1 stored in ${receiptDir}\n` +
-    "Receipt unreadable: not-a-receipt.json (missing decision or receipt time)\n" +
+    "Receipt unreadable: not-a-receipt.json (missing v2 verdict or kernel time)\n" +
     "Most recent: receipt files exist, but none could be read as a receipt\n");
 });
 

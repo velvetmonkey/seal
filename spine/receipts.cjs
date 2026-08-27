@@ -6,21 +6,20 @@
 // into the same directory can never collide with an earlier session.
 const fs = require("node:fs");
 const path = require("node:path");
-const { sealReceipt } = require("./receipt-seal.cjs");
+const { canonical, sealReceipt } = require("./receipt-v2.cjs");
 
 function openReceiptEmitter(directory, signer) {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   let sequence = 0;
   return {
-    emit(record) {
+    emit(record, action) {
       sequence += 1;
-      const name = `receipt-${Date.now()}-${process.pid}-${String(sequence).padStart(4, "0")}-${record.decision}.json`;
+      const name = `receipt-${Date.now()}-${process.pid}-${String(sequence).padStart(4, "0")}-${action}.json`;
       const target = path.join(directory, name);
-      let body = { receipt: "seal.spine/v1", ...record };
-      if (signer) body = sealReceipt(signer, body);
+      const body = sealReceipt(signer, record, action);
       const fd = fs.openSync(target, "wx", 0o600);
       try {
-        fs.writeSync(fd, JSON.stringify(body, null, 2) + "\n");
+        fs.writeSync(fd, canonical(body));
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);

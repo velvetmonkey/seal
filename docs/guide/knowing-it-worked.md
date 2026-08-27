@@ -3,12 +3,9 @@
 Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a
-receipt that has been altered. The checker independently implements Seal's
-receipt canonicalisation rule, without the sealer's input-refusal branches,
-and uses the same Node crypto platform. Run
-`node scripts/check-receipt-canonicalization.mjs` from the repository root to
-see the shared statements and deliberate omissions. This page walks all three,
-from real runs.
+receipt that has been altered. The producer and checker obey the fixed member
+order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches only the WASM kernel,
+not the producer's assembler. This page walks all three from real runs.
 
 ## The approval prompt, line by line
 
@@ -118,42 +115,53 @@ This signed example is from `seal demo`:
 
 ```json
 {
-  "receipt": "seal.spine/v1",
-  "at": 1786796243578,
-  "decision": "ALLOW",
+  "seal_receipt": "v2",
   "tool": "demo.mutate",
+  "action": "ALLOW",
   "arguments": {
     "line": "seal demo wrote this line"
   },
-  ...
+  "now": 1786796243,
+  "kernel_config": { "...": "the exact config given to the kernel" },
+  "granted_capabilities": [{ "target": "..." }],
+  "kernel_inputs": { "approvals": ["..."], "votes": "", "grants": "", "forecasts": "" },
+  "verdict": "ALLOW",
+  "reason": "every gating kernel allows",
+  "replay": { "args_sha256": "...", "config_sha256": "..." },
+  "signature": { "algorithm": "ed25519", "key_id": "...", "value": "..." }
 }
 ```
 
-Receipts are claims written by the gate, not proofs — so they are checked by
-a separate process that imports no Seal module at runtime and needs a public
-key you already trust as input. Its canonicalisation independently implements
-the producer's receipt rule and deliberately omits the producer-only refusal
-branches. Both still use Node crypto, so a platform defect can affect both.
-Run `node scripts/check-receipt-canonicalization.mjs` from the repository root
-to inspect the exact shared statements and omissions.
+Receipts are claims written by the gate, not proofs. The independently landed
+v2 checker reads the document, validates its commitments, and replays its exact
+inputs through the WASM kernel. Supply a public key you already trust if you
+also want the signature row checked.
 
 ```bash
-$ node seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
+$ node checker/seal-receipt-v2.mjs receipt-…-0002-ALLOW.json --pubkey "$(cat receipt-signer.pub)"
 ```
 
 ```output
-ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt has the same canonical parsed value that this key signed. Semantically irrelevant JSON formatting differences are not distinguished. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story.
+Document structure       VALID
+Signature and bindings   VALID
+Kernel decision          REPRODUCED
+Authority key            UNPINNED / CALLER-SUPPLIED
+Event occurrence         NOT ESTABLISHED
+                         ------------------
+READ      available
+VALIDATE  available
+REPLAY    available
+VERIFY    UNVERIFIED
 ```
 
-Change one recorded fact — here, the decision — and the checker names what
-was touched:
+Change the arguments without repairing their commitment and the checker refuses:
 
 ```bash
-$ node seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
+$ node checker/seal-receipt-v2.mjs tampered-receipt.json --pubkey "$(cat receipt-signer.pub)"
 ```
 
 ```output
-REFUSE decision_binding_mismatch: the recorded decision does not match its sealed commitment
+REFUSE commitment_mismatch: arguments commitment mismatch
 ```
 
 Two caveats the checker itself insists on, repeated here because they are the
@@ -162,16 +170,11 @@ whole meaning of the check:
 - The key must come from a source you already trust, not from beside the
   receipt. Checking a receipt against the sealer's own key (as the demo does)
   proves only self-consistency — a hostile sealer could sign its own.
-- The current installed payload does not include the checker. Download the
-  sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
-  and verify it against the `SHA256SUMS` asset attached to that same release.
-- The checker is runtime-separate, not implementation-independent: it copies
-  the producer's canonicalisation rule and shares the Node crypto platform.
-  It cannot expose a defect common to those parts.
+- The v2 verifier was landed before this producer and does not import the
+  producer's assembler or canonicaliser.
 
-One routing note: `seal verify` is **not** the command for these receipts. It
-handles a different, older receipt format, and pointed at one of its own
-gate receipts it tells you so and exits — use the checker above instead.
+`seal verify PATH` runs the same v2 read/validate/replay path without treating a
+receipt-embedded key as authority.
 
 ## The limit, stated plainly
 

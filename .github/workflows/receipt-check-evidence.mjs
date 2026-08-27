@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
 const EVIDENCE_DOMAIN = "seal.ci-receipt-check-evidence/v1\n";
 
@@ -50,8 +50,8 @@ function evidenceDigest(record) {
 }
 
 function signedIdentity(receipt) {
-  if (!receipt.seal || typeof receipt.seal !== "object") return sha256("unsealed");
-  return sha256(JSON.stringify(receipt.seal));
+  if (!receipt.signature || typeof receipt.signature !== "object") return sha256("unsigned");
+  return sha256(JSON.stringify(receipt.signature));
 }
 
 async function check([checkerPath, receiptPath, pubkeyPath, challenge, resultPath]) {
@@ -63,17 +63,22 @@ async function check([checkerPath, receiptPath, pubkeyPath, challenge, resultPat
   const receiptBytes = readFileSync(receiptPath);
   const receipt = parseJson(receiptBytes, "receipt");
   const pubkey = readFileSync(pubkeyPath, "utf8").trim();
-  const { checkReceipt } = await import(pathToFileURL(checkerPath).href);
 
   let outcome = "accept";
   let code = "ok";
   let exitCode = 0;
-  try {
-    const checked = checkReceipt(receipt, pubkey);
-    if (checked?.accepted !== true) refuse("checker returned without accepting or refusing");
-  } catch (error) {
+  const checked = spawnSync(process.execPath, [checkerPath, receiptPath, "--pubkey", pubkey], { encoding: "utf8" });
+  if (checked.error) refuse(`checker could not start: ${checked.error.message}`);
+  if (checked.status === 0) {
+    if (!/Document structure       VALID/.test(checked.stdout)
+      || !/Signature and bindings   VALID/.test(checked.stdout)
+      || !/Kernel decision          REPRODUCED/.test(checked.stdout)
+      || !/VERIFY    UNVERIFIED/.test(checked.stdout)) {
+      refuse("checker returned success without the required v2 rows");
+    }
+  } else {
     outcome = "refuse";
-    code = typeof error?.code === "string" ? error.code : "checker_error";
+    code = checked.stdout.match(/^REFUSE ([a-z_]+):/)?.[1] || "checker_error";
     exitCode = 1;
   }
 
@@ -108,8 +113,8 @@ function validate([originalPath, tamperedPath, challenge, acceptPath, refusePath
     }
   }
   if (accept.outcome !== "accept" || accept.code !== "ok") refuse("live receipt was not accepted");
-  if (rejected.outcome !== "refuse" || rejected.code !== "decision_binding_mismatch") {
-    refuse("tampered receipt was not refused for decision_binding_mismatch");
+  if (rejected.outcome !== "refuse" || rejected.code !== "signature_mismatch") {
+    refuse("tampered receipt was not refused for signature_mismatch");
   }
   if (accept.input_sha256 !== sha256(originalBytes)) refuse("ACCEPT evidence names different receipt bytes");
   if (rejected.input_sha256 !== sha256(tamperedBytes)) refuse("REFUSE evidence names different receipt bytes");

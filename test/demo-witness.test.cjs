@@ -68,13 +68,9 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.match(run.out, /Protected-server call count: still 1/);
   assert.match(run.out, /New Seal decisions: 0/);
   assert.match(run.out, /Seal did not observe or authorise this write\./);
-  assert.match(
-    run.out,
-    /receipts are claims, not proofs\. Check one with the separate-process checker \(V11-RECEIPT-01\)\. This installed payload does not include checker\/seal-receipt-check\.mjs\. Clone https:\/\/github\.com\/velvetmonkey\/seal and run the checker from that source checkout\. It imports no Seal module at check time, but carries a byte-identical copy of Seal's canonicalisation rule and uses the same Node crypto platform\. It can detect a changed canonical parsed value against your trusted key; semantically irrelevant JSON formatting differences are not distinguished\. It cannot detect a defect shared by that rule or platform\./,
-    "demo must state the runtime/process boundary, copied canonicalisation and shared crypto limit, and the source-checkout acquisition path",
-  );
+  assert.match(run.out, /The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened\./);
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
-  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-check\.mjs/, "demo must name the checker path inside the cloned source checkout"); assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
+  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-v2\.mjs/, "demo must name the v2 checker path inside the source checkout"); assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
   assert.match(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must name the online browser instrument beside the checker command");
   assert.match(run.out, /does not establish that this setup routes calls through Seal/, "demo must state the online page's setup limit");
 
@@ -82,7 +78,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   // directory holds exactly the three gate decisions and no more.
   const receiptFiles = fs.readdirSync(path.join(dir, "receipts")).sort();
   assert.equal(receiptFiles.length, 3, receiptFiles.join(","));
-  const decisions = receiptFiles.map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")).decision).sort();
+  const decisions = receiptFiles.map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")).action).sort();
   assert.deepEqual(decisions, ["ALLOW", "BLOCK", "INPUT_REQUIRED"]);
   for (const f of receiptFiles) {
     const receipt = JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8"));
@@ -96,7 +92,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   const sameCallClaim = "Seal makes the approved call and the executed call the same call: same tool,";
   const allowedReceipt = receiptFiles
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")))
-    .find((receipt) => receipt.decision === "ALLOW");
+    .find((receipt) => receipt.action === "ALLOW");
   const dataLines = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8").trimEnd().split("\n");
   assert.equal(dataLines[0], allowedReceipt.arguments.line, sameCallClaim); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
   assert.equal(dataLines[1], "seal demo wrote this line directly");

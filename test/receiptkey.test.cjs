@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
-const CHECKER = path.join(ROOT, "checker", "seal-receipt-check.mjs");
+const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
 const SCRATCH = process.env.RUNNER_TEMP
   ? path.join(process.env.RUNNER_TEMP, "receiptkey")
   : "/home/monkey/scratch/receiptkey";
@@ -98,16 +98,17 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   assert.ok(receiptName, "protected proxy did not emit its decision receipt");
   const receiptPath = path.join(ctx.receiptsDir, receiptName);
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
-  assert.equal(receipt.seal.alg, "ed25519", "signer was dropped before receipt emission");
+  assert.equal(receipt.signature.algorithm, "ed25519", "signer was dropped before receipt emission");
 
   const keys = receiptKeyPaths(ctx.env);
   assert.equal(fs.statSync(keys.directory).mode & 0o777, 0o700);
   assert.equal(fs.statSync(keys.privateKey).mode & 0o777, 0o600);
   assert.equal(fs.statSync(keys.publicKey).mode & 0o777, 0o644);
-  const checked = require("node:child_process").spawnSync(process.execPath, [CHECKER, receiptPath, "--pubkey", keys.publicKey], { encoding: "utf8" });
+  const checked = require("node:child_process").spawnSync(process.execPath, [CHECKER, receiptPath, "--pubkey", fs.readFileSync(keys.publicKey, "utf8").trim()], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stdout + checked.stderr);
-  assert.match(checked.stdout, /^ACCEPT INPUT_REQUIRED demo\.mutate /);
-  assert.match(checked.stdout, /It does not show the decision happened/);
+  assert.match(checked.stdout, /Signature and bindings   VALID/);
+  assert.match(checked.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(checked.stdout, /Event occurrence         NOT ESTABLISHED/);
 });
 
 test("receipt key absence generates, while ambiguous private-key states refuse by name", () => {

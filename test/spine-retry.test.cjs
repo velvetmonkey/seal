@@ -88,7 +88,7 @@ test("seal demo: input_required, approve once, replay refused, then direct write
 
   const receiptPaths = [...run.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
   assert.equal(receiptPaths.length, 3, `expected 3 receipts\n${run.out}`);
-  const decisions = receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")).decision);
+  const decisions = receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")).action);
   assert.deepEqual(decisions, ["INPUT_REQUIRED", "ALLOW", "BLOCK"]);
 
   assert.doesNotMatch(run.out, /verif/i);
@@ -182,11 +182,9 @@ test("receipt correlations refuse loudly at capacity without orphaning live appr
   proxy.write(JSON.stringify({ ...callParams("first pending", { requestState: firstState, inputResponses: ACCEPT }), id: 4 }));
   assert.equal(decisions.at(-1).decision, "ALLOW", "the live approval retained its receipt correlation at capacity");
   const receiptFiles = fs.readdirSync(receiptsDir);
-  const inputCorrelations = receiptFiles
-    .filter((name) => name.endsWith("-INPUT_REQUIRED.json"))
-    .map((name) => JSON.parse(fs.readFileSync(path.join(receiptsDir, name), "utf8")).approvalRequest.correlation);
   const allowReceipt = JSON.parse(fs.readFileSync(path.join(receiptsDir, receiptFiles.find((name) => name.endsWith("-ALLOW.json"))), "utf8"));
-  assert.ok(inputCorrelations.includes(allowReceipt.approvalRequest.correlation));
+  assert.equal(allowReceipt.action, "ALLOW");
+  assert.equal(allowReceipt.verdict, "ALLOW");
 
   proxy.write(JSON.stringify({ ...callParams("slot reopened"), id: 5 }));
   assert.equal(responses.find((response) => response.id === 5).result.resultType, "input_required");
@@ -200,7 +198,7 @@ function receiptFor(dir, decision) {
   return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
 }
 
-test("INPUT_REQUIRED receipt records a non-replayable approval correlation", async (t) => {
+test("INPUT_REQUIRED receipt carries no retry credential or correlation", async (t) => {
   const dir = tmpdir("seal-receipt-correlation-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
@@ -212,14 +210,14 @@ test("INPUT_REQUIRED receipt records a non-replayable approval correlation", asy
   assert.equal(opened.result.resultType, "input_required");
   const receipt = receiptFor(dir, "INPUT_REQUIRED");
   assert.ok(!Object.hasOwn(receipt, "requestState"), "a receipt must never carry the retry credential");
-  assert.match(receipt.approvalRequest?.correlation || "", /^seal-receipt-correlation\/v1\.[0-9a-f]{64}$/);
-  assert.notEqual(receipt.approvalRequest.correlation, opened.result.requestState);
+  assert.ok(!Object.hasOwn(receipt, "approvalRequest"), "the v2 envelope has no private correlation channel");
+  assert.equal(receipt.action, "INPUT_REQUIRED");
 
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
 
-test("approved retry receipt correlates with its INPUT_REQUIRED receipt", async (t) => {
+test("approved retry and INPUT_REQUIRED receipts share the exact call", async (t) => {
   const dir = tmpdir("seal-receipt-approved-retry-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
@@ -232,7 +230,7 @@ test("approved retry receipt correlates with its INPUT_REQUIRED receipt", async 
   const flowed = await responseFor(2);
   assert.ok(!flowed.result.isError, JSON.stringify(flowed));
   assert.equal(readCount(`${dataFile}.count`), "1");
-  assert.equal(receiptFor(dir, "ALLOW").approvalRequest.correlation, receiptFor(dir, "INPUT_REQUIRED").approvalRequest.correlation);
+  assert.deepEqual(receiptFor(dir, "ALLOW").arguments, receiptFor(dir, "INPUT_REQUIRED").arguments);
 
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
@@ -253,7 +251,7 @@ test("retry using only an INPUT_REQUIRED receipt is refused as state_malformed",
   proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry"), id: 1 }) + "\n");
   await responseFor(1);
   const receipt = receiptFor(dir, "INPUT_REQUIRED");
-  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry", { requestState: receipt.approvalRequest.correlation, inputResponses: ACCEPT }), id: 2 }) + "\n");
+  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry", { requestState: receipt.action, inputResponses: ACCEPT }), id: 2 }) + "\n");
   const refused = await responseFor(2);
   assert.equal(refused.result.isError, true);
   assert.match(refused.result.content[0].text, /state_malformed/);

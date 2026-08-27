@@ -136,12 +136,10 @@ function status() {
     }
     try {
       const receipt = JSON.parse(fs.readFileSync(target, "utf8"));
-      // Status reports the receipts the product actually writes: spine
-      // receipts carry `decision` and `at`. Kernel receipts (verdict/now)
-      // are a separate format handled by `seal verify` on an explicit path,
-      // not surfaced here.
-      if (typeof receipt.decision !== "string" || receipt.at === undefined) throw new Error("missing decision or receipt time");
-      observed.push({ target, name: entry.name, verdict: receipt.decision, now: receipt.at, mtimeMs: stat.mtimeMs });
+      if (receipt.seal_receipt !== "v2" || typeof receipt.verdict !== "string" || receipt.now === undefined) {
+        throw new Error("missing v2 verdict or kernel time");
+      }
+      observed.push({ target, name: entry.name, verdict: receipt.action || receipt.verdict, now: receipt.now, mtimeMs: stat.mtimeMs });
     } catch (error) {
       console.log(`Receipt unreadable: ${entry.name} (${error.message})`);
     }
@@ -325,28 +323,10 @@ async function verify(receiptPath) {
   let text;
   try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
-  let parsed;
-  try { parsed = JSON.parse(text); } catch { throw new Error(`receipt is not valid JSON: ${absolute}`); }
-  // Spine receipts (what the product actually writes) are checked by the
-  // SEPARATE checker, on purpose (V11-RECEIPT-01): the product does
-  // not verify its own receipts. Recognise the format and route there rather
-  // than crash it through the kernel verifier as an "unrecognized" schema.
-  if (parsed && parsed.receipt === "seal.spine/v1") {
-    console.error(`seal: spine_receipt_use_separate_checker: ${absolute} is a seal.spine/v1 receipt; this binary does not verify its own receipts.`);
-    console.error(`This installed payload does not include checker/seal-receipt-check.mjs. Clone https://github.com/velvetmonkey/seal and run the checker from that source checkout.`);
-    console.error(`Then, from the checkout root: node checker/seal-receipt-check.mjs ${shellWord(absolute)} --pubkey <a key you already trust>`);
-    process.exitCode = 2;
-    return;
-  }
-  const runtime = await ensureRuntime(absolute);
-  const verifier = require(path.join(runtime, "src/verify.cjs"));
-  const result = await verifier.verifyDetailed(absolute);
-  if (result.ok) {
-    console.log("RE-DERIVED  this binary re-derived the approved decision from the saved receipt (checking is a separate tool's job)");
-    process.exitCode = 0;
-  } else {
-    process.exitCode = result.exitCode || 1;
-  }
+  const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
+  const result = await verifier.verify(text);
+  console.log(verifier.format(result));
+  process.exitCode = 0;
 }
 
 async function protectCommand(args) {

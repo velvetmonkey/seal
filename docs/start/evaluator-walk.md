@@ -6,10 +6,9 @@ receipt checker as a sibling release asset. It does not embed a captured transcr
 attempts to keep a hand-maintained transcript honest on a moving branch already
 failed. Run the commands; read what they print.
 
-The checker is **not** in a source-built installed store.
-`scripts/build-dist.cjs` excludes `checker/seal-receipt-check.mjs` from that
-payload. Run the copy from the checkout that you built; do not look for it
-under `~/.local/lib/seal/store/`.
+The source-built installed store includes `checker/seal-receipt-v2.mjs` because
+`seal verify` uses that same v2 judge. The judge does not import the producer's
+assembler or canonicaliser.
 
 For the product's named-set capability, protect both bundled demo tools in one
 declaration: `seal protect db demo.mutate demo.erase`. `seal status` reports
@@ -33,27 +32,26 @@ the demo's key with the checkout checker in the current directory:
 
 ```bash
 $ SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -print -quit)"
-$ node checker/seal-receipt-check.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ node checker/seal-receipt-v2.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")"
 ```
 
-A matching receipt prints `ACCEPT BLOCK demo.mutate` and then states the
-limit of that result: this shows the receipt has the same canonical parsed
-value that this key signed. It does not show the decision happened.
+A matching receipt prints the five rows, including `Kernel decision REPRODUCED`,
+`Event occurrence NOT ESTABLISHED`, and `VERIFY UNVERIFIED`.
 
 That key is the one this demo used to sign the receipt, so checking
 against it proves only self-consistency — a hostile sealer could sign its
 own. To prove anything, supply a key you obtained from a source you
 already trust.
 
-## Tamper the recorded decision
+## Tamper the recorded arguments
 
 ```bash
-$ sed 's/"decision": "BLOCK"/"decision": "ALLOW"/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
-$ node checker/seal-receipt-check.mjs "$SEAL_DEMO_DIR/tampered.json" --pubkey "$SEAL_DEMO_DIR/receipt-signer.pub"
+$ sed 's/seal demo wrote this line/altered line/' "$SEAL_BLOCK_RECEIPT" > "$SEAL_DEMO_DIR/tampered.json"
+$ node checker/seal-receipt-v2.mjs "$SEAL_DEMO_DIR/tampered.json" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")"
 $ test "$?" -eq 1
 ```
 
-The checker must refuse. The refusal names `decision_binding_mismatch`.
+The checker must refuse. The refusal names `commitment_mismatch`.
 
 ## What this does not prove
 

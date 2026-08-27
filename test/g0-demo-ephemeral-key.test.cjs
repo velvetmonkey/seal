@@ -25,7 +25,7 @@ function runDemo(root, dir) {
 function assertSignerIdentity(root, dir) {
   const receipt = fs.readdirSync(path.join(dir, "receipts")).find((name) => name.endsWith("-ALLOW.json"));
   const pubkey = path.join(dir, "receipt-signer.pub");
-  const checker = spawnSync(process.execPath, [path.join(root, "checker", "seal-receipt-check.mjs"), path.join(dir, "receipts", receipt), "--pubkey", pubkey], { encoding: "utf8" });
+  const checker = spawnSync(process.execPath, [path.join(root, "checker", "seal-receipt-v2.mjs"), path.join(dir, "receipts", receipt), "--pubkey", fs.readFileSync(pubkey, "utf8").trim()], { encoding: "utf8" });
   assert.equal(checker.status, 0, `demo signer identity claim failed: receipt signature did not verify with receipt-signer.pub\n${checker.stdout}\n${checker.stderr}`);
 }
 

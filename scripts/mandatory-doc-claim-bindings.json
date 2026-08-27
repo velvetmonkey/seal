@@ -10,7 +10,7 @@
     "docs/guide/knowing-it-worked.md": [
       {
         "sentence": "Seal makes the approved call and the executed call the same call: same tool,",
-        "proof": "test/demo-witness.test.cjs:101"
+        "proof": "test/demo-witness.test.cjs:97"
       }
     ],
     "docs/reproduce.md": [

@@ -98,14 +98,14 @@ test("real MCP retry uses the proved authorization kernel and forwards only its 
   assert.equal(fs.readFileSync(`${run.data}.count`, "utf8").trim(), "1");
   const allowReceiptName = fs.readdirSync(run.receipts).find((name) => name.endsWith("-ALLOW.json"));
   const receipt = JSON.parse(fs.readFileSync(path.join(run.receipts, allowReceiptName), "utf8"));
-  assert.equal(receipt.evidence.authorization_rule, "TESTED");
-  assert.equal(receipt.evidence.state_machine, "TESTED");
-  assert.equal(receipt.evidence.kernel.verdict, "ALLOW");
-  const raw = JSON.parse(receipt.evidence.kernel.raw);
-  const audit = JSON.parse(raw.audit);
-  assert.equal(audit.verdict, "allow");
-  assert.deepEqual(audit.certs.map((cert) => cert.kernel), ["safety", "temporal"]);
-  assert.match(audit.request_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(receipt.seal_receipt, "v2");
+  assert.equal(receipt.action, "ALLOW");
+  assert.equal(receipt.verdict, "ALLOW");
+  assert.equal(receipt.tool, TOOL);
+  assert.deepEqual(receipt.arguments, ARGS);
+  assert.deepEqual(receipt.granted_capabilities.map(({ target }) => target), receipt.kernel_inputs.approvals);
+  assert.equal(receipt.kernel_inputs.grants, "");
+  assert.equal(receipt.kernel_inputs.forecasts, "");
   run.child.stdin.end();
 });
 

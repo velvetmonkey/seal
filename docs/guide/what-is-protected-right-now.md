@@ -199,11 +199,9 @@ Most recent: receipts may exist, but the receipt directory cannot be read; check
 The directory's permissions block reading; fix them and run `seal status`
 again.
 
-One honest wrinkle: `seal verify` can leave a *kernel* receipt (a different
-format) in the same directory, and `seal status` then prints
-`Receipt unreadable: … (missing decision or receipt time)` for it. That line
-means only that this listing does not parse the kernel format; use `seal verify`
-to check a named kernel receipt.
+Producer output and the kernel replay path now share the one
+`seal.receipt/v2` envelope. `seal status` reads its `action`, kernel `verdict`,
+and exact kernel `now`; `seal verify` validates and replays that same file.
 
 ## `seal doctor`
 

@@ -33,16 +33,29 @@ async function main() {
     temporal: { policies: [] },
   };
   const issuedTarget = cfg.guardTarget(request.issuedTool, request.issuedArgs);
+  const approvals = request.accepted ? [issuedTarget] : [];
+  const grantedCapabilities = approvals.map((target) => ({ target }));
+  const kernelInputs = { approvals, votes: "", grants: "", forecasts: "" };
   const result = await runner.decide(config, {
     tool: request.retryTool,
     args: request.retryArgs,
-    approvals: request.accepted ? [issuedTarget] : [],
+    approvals,
     now: request.now,
   });
   process.stdout.write(JSON.stringify({
     verdict: result.verdict,
     raw: result.raw,
     receipt: result.receipt,
+    receipt_record: {
+      tool: request.retryTool,
+      arguments: request.retryArgs,
+      now: request.now,
+      kernel_config: config,
+      granted_capabilities: grantedCapabilities,
+      kernel_inputs: kernelInputs,
+      verdict: result.verdict,
+      reason: result.receipt.reason,
+    },
     issued_target: issuedTarget,
   }));
 }
