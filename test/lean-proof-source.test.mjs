@@ -8,7 +8,13 @@ const ROOT = resolve(import.meta.dirname, "..");
 const SOURCE_HOLDER = "seal-host";
 const DOCUMENTATION_FILE = /\.(?:md|mdx|html)$/iu;
 // Keep this semantic family broad: a new phrasing must be sourced too.
-const LEAN_PROOF_PROPERTY = /(?:\b(?:proved|proven|verified)\b[\s\S]{0,180}\bLean(?:\s+\d+)?\b|\bLean(?:\s+\d+)?\b[\s\S]{0,180}\b(?:theorems?|proofs?|proved|proven|verified|machine[- ]checked)\b|\bmachine[- ]checked\b[\s\S]{0,180}\b(?:Lean|theorems?|proofs?|property)\b)/giu;
+const LEAN_PROOF_PROPERTY_SOURCE = String.raw`(?:\b(?:proved|proven|verified)\b[\s\S]{0,180}\bLean(?:\s+\d+)?\b|\bLean(?:\s+\d+)?\b[\s\S]{0,180}\b(?:theorems?|proofs?|proved|proven|verified|machine[- ]checked)\b|\bmachine[- ]checked\b[\s\S]{0,180}\b(?:Lean|theorems?|proofs?|property)\b)`;
+
+function leanProofProperty() {
+  // The global matcher is intentionally new for each scan: its lastIndex is
+  // mutable, so sharing one between callers would make a later scan partial.
+  return new RegExp(LEAN_PROOF_PROPERTY_SOURCE, "giu");
+}
 
 function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
@@ -68,13 +74,15 @@ function sectionAt(text, position) {
 function hasSourceBinding(section) {
   const visible = proseText(section);
   const sentences = visible.split(/(?<=[.!?])\s+/u);
+  if (/\b(?:does\s+not|did\s+not|cannot|can['’]t|never)\s+(?:name|identify|provide)\b[^.!?]{0,80}\bproof\s+source\b/iu.test(visible)) return false;
   return sentences.some((sentence) => {
-    if (!/\bseal-host\b/iu.test(sentence) || /\b(?:not|no|never|without|may|might|could|would|should)\b/iu.test(sentence)) return false;
+    if (!/\bseal-host\b/iu.test(sentence) || /\b(?:not|no|never|without|hardly|false|may|might|could|would|should|was|were|will\s+be|fails\s+to|removed)\b|\bisn['’]t\b/iu.test(sentence)) return false;
 
     // A named proof-source label is itself an affirmative declaration.  The
     // remaining productions cover ordinary prose, in either word order.
-    return /\bLean\s+proof\s+source\s*:\s*[^.!?]{0,180}\bseal-host\b/iu.test(sentence)
-      || /\bseal-host\b\s+(?:is|remains|serves\s+as)\s+(?:(?:a|an|the|our|this|that)\s+)?(?:reader-facing\s+)?(?:Lean\s+)?(?:proof\s+)?(?:source|index|atlas)\b/iu.test(sentence)
+    return /\bLean\s+proof\s+source\s*:\s*(?:the\s+)?\bseal-host\b\s*[.!?]$/iu.test(sentence)
+      || /\bLean\s+proof\s+source\s*:\s*[^.!?]{0,120}\breader-facing\s+(?:Lean\s+)?(?:proof\s+)?(?:index|atlas)\b/iu.test(sentence)
+      || /\bseal-host\b\s+is\s+(?:(?:a|an|the|our|this|that)\s+)?reader-facing\s+(?:Lean\s+)?(?:proof\s+)?(?:index|atlas)\b/iu.test(sentence)
       || /\b(?:Lean\s+)?(?:theorems?|proofs?|proof\s+(?:source|index|properties?))\b[^.!?]{0,120}\b(?:(?:live|reside)\s+in|are\s+(?:held\s+)?(?:in|at)|come\s+from)\s+(?:the\s+)?\bseal-host\b/iu.test(sentence)
       || /\bseal-host\b\s+(?:holds|contains|hosts)\s+(?:the\s+)?(?:Lean\s+)?(?:theorems?|proofs?)\b/iu.test(sentence);
   });
@@ -91,10 +99,19 @@ function isDeniedClaim(text, claim) {
   return /\b(?:not|no|never|without)\b/iu.test(sentenceAt(text, claim.index));
 }
 
+function claimIndex(match) {
+  // A property match may begin with a nearby source declaration.  Attribute it
+  // to the assertion word itself, which can be under a later heading.
+  const assertion = /\b(?:proved|proven|verified|machine[- ]checked)\b/iu.exec(match[0]);
+  return match.index + (assertion?.index ?? 0);
+}
+
 function hasUnsourcedClaims(text) {
-  LEAN_PROOF_PROPERTY.lastIndex = 0;
-  const claims = [...text.matchAll(LEAN_PROOF_PROPERTY)];
-  return claims.some((claim) => !isDeniedClaim(text, claim) && !hasSourceBinding(sectionAt(text, claim.index)));
+  const claims = [...text.matchAll(leanProofProperty())];
+  return claims.some((claim) => {
+    const attributedClaim = { ...claim, index: claimIndex(claim) };
+    return !isDeniedClaim(text, attributedClaim) && !hasSourceBinding(sectionAt(text, attributedClaim.index));
+  });
 }
 
 function unsourcedClaims(file) {
@@ -120,43 +137,58 @@ test("no documentation path leaves the merge-base population", () => {
 
 test("the proof-property predicate catches novel wording", () => {
   const novel = "The zygomorphic decision property is machine-checked by Lean calculus.";
-  assert.equal(LEAN_PROOF_PROPERTY.test(novel), true, relative(ROOT, "docs/assurance/scratch-tamper.md"));
+  assert.equal(hasUnsourcedClaims(novel), true, relative(ROOT, "docs/assurance/scratch-tamper.md"));
 });
 
 test("tamper: direct source declaration passes", () => {
-  assert.equal(hasSourceBinding("Lean proof source: seal-host."), true);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. Lean proof source: seal-host."), false);
 });
 
 test("tamper: theorem-location declaration passes", () => {
-  assert.equal(hasSourceBinding("The Lean theorems for this claim live in [seal-host](https://github.com/velvetmonkey/seal-host/)."), true);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. The Lean theorems for this claim live in [seal-host](https://github.com/velvetmonkey/seal-host/)."), false);
 });
 
 test("tamper: source label with theorem holder passes", () => {
-  assert.equal(hasSourceBinding("Lean proof source: [seal-host](https://github.com/velvetmonkey/seal-host/) holds the theorems for this claim."), true);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. Lean proof source: [seal-host](https://github.com/velvetmonkey/seal-host/) holds the theorems for this claim."), false);
 });
 
 test("tamper: possessive proof-index declaration and list item pass", () => {
-  assert.equal(hasSourceBinding("seal-host is our reader-facing proof index."), true);
-  assert.equal(hasSourceBinding("- **Lean proof source:** seal-host is the reader-facing atlas."), true);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. seal-host is our reader-facing proof index."), false);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. - **Lean proof source:** seal-host is the reader-facing atlas."), false);
 });
 
 test("tamper: wrapped multi-line declaration passes", () => {
-  assert.equal(hasSourceBinding("**Lean proof source:** [seal-host](https://github.com/velvetmonkey/seal-host/) is the reader-facing\nindex for this claim."), true);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. **Lean proof source:** [seal-host](https://github.com/velvetmonkey/seal-host/) is the reader-facing\nindex for this claim."), false);
 });
 
 test("tamper: negated source declaration fails", () => {
-  assert.equal(hasSourceBinding("The proof source is not seal-host."), false);
-  assert.equal(hasSourceBinding("**Lean proof source:** seal-host may become the reader-facing atlas."), false);
+  for (const declaration of [
+    "Lean proof source: seal-host is hardly the reader-facing atlas.",
+    "Lean proof source: seal-host fails to be the reader-facing atlas.",
+    "Lean proof source: we removed seal-host.",
+    "This page does not name a proof source. Lean proof source: seal-host is the reader-facing atlas.",
+    "Lean proof source: seal-host isn't the reader-facing atlas.",
+    "Lean proof source: seal-host was the reader-facing atlas.",
+    "Lean proof source: seal-host will be the reader-facing atlas.",
+    "Lean proof source: it is false that seal-host is the reader-facing destination for this claim.",
+  ]) assert.equal(hasUnsourcedClaims(`The gate is proven in Lean 4. ${declaration}`), true, declaration);
 });
 
 test("a nested heading starts a new reader-visible claim section", () => {
   const text = "# Overview\n\n**Lean proof source:** seal-host is the reader-facing atlas.\n\n## Deep claim\n\nThe gate is proven in Lean 4.";
-  const claim = [...text.matchAll(LEAN_PROOF_PROPERTY)][0];
-  assert.equal(hasSourceBinding(sectionAt(text, claim.index)), false);
+  assert.equal(hasUnsourcedClaims(text), true);
 });
 
 test("tamper: bare URL without a declaration fails", () => {
-  assert.equal(hasSourceBinding("https://github.com/velvetmonkey/seal-host/"), false);
+  assert.equal(hasUnsourcedClaims("The gate is proven in Lean 4. https://github.com/velvetmonkey/seal-host/"), true);
+});
+
+test("entry-point scans have no shared regex state", () => {
+  const unsourced = "## Claim\n\nThe gate is proven in Lean 4.";
+  assert.equal(hasUnsourcedClaims(unsourced), true);
+  assert.equal(hasUnsourcedClaims(unsourced), true);
+  assert.equal(hasUnsourcedClaims("The zygomorphic decision property is machine-checked by Lean calculus."), true);
+  assert.equal(hasUnsourcedClaims(unsourced), true);
 });
 
 test("a denial is not a proof-property claim, but an unsourced affirmative claim fails", () => {
