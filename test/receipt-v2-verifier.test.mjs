@@ -111,3 +111,10 @@ test("number token and parsed-value controls match the specification", () => {
   assert.throws(() => canonical({ now: 1.5 }), (e) => e.code === "number_not_canonical");
   console.log("NUMBER 1.5: READ GREEN -> canonical REFUSE (number_not_canonical)");
 });
+
+test("Unicode boundary controls match the specification", () => {
+  assert.equal(canonical("\ud800"), '"\\ud800"');
+  assert.throws(() => read(new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0xc3, 0x28, 0x7d])), (e) => e.code === "read_failed");
+  console.log('SURROGATE emission: GREEN ("\\ud800")');
+  console.log("ILL-FORMED UTF-8 receive: REFUSE (read_failed)");
+});
