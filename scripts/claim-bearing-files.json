@@ -7,7 +7,6 @@
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
     "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52"] },
-    ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },
     ".github/workflows/release.yml": { "allowlistReason": "The candidate is the release-job assertion that its Linux artifact name exists; CI executes this workflow only on release publication, outside a repository-local fixture." },
     "checker/seal-receipt-check.mjs": { "allowlistReason": "Its comments describe the checker isolation boundary; checker/seal-receipt-check.mjs is the implementation that must be independently audited rather than a separate product claim surface." },
     "harness/claude-code/cc-harness.cjs": { "allowlistReason": "The candidate describes a synthetic Claude Code fixture and explicitly labels it synthetic; that external-client simulation is not a claim about a shipped Seal command." },

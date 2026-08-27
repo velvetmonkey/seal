@@ -565,9 +565,9 @@ function parseDarwinProcessStartWitness(output) {
 
 function darwinProcessStartWitness(pid) {
   try {
-    // sysctl(8) accepts the numeric MIB for the KERN_PROC_PID node; its
-    // name parser cannot append a PID to the named kern.proc.pid prefix.
-    const result = spawnSync("sysctl", ["-n", `1.14.1.${pid}`], {
+    // The extended kern.proc.pid name selects the kernel-owned kinfo_proc
+    // record for this PID.
+    const result = spawnSync("sysctl", ["-n", `kern.proc.pid.${pid}`], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
