@@ -32,6 +32,70 @@ function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function sha256Hex(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function treeDigest(files) {
+  const lines = [...files]
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .map((file) => `${file.sha256}  ${file.bytes}  ${file.path}\n`)
+    .join("");
+  return sha256Hex(Buffer.from(lines, "utf8"));
+}
+
+function verifyInstalledTree(record, storeRoot, prefixResolved) {
+  if (!Array.isArray(record.files)) fail("installer record has no files array");
+  const observed = [];
+  const storeResolved = fs.realpathSync(storeRoot);
+  const storeBoundary = storeResolved.endsWith(path.sep) ? storeResolved : `${storeResolved}${path.sep}`;
+  const prefixBoundary = prefixResolved.endsWith(path.sep) ? prefixResolved : `${prefixResolved}${path.sep}`;
+  if (storeResolved !== prefixResolved && !storeResolved.startsWith(prefixBoundary)) {
+    fail(`resolved store path escapes prefix: ${storeResolved} (prefix ${prefixResolved})`);
+  }
+  for (const file of record.files) {
+    if (
+      !file || typeof file.path !== "string" || file.path.length === 0 ||
+      file.path.split("/").includes("..") || path.posix.isAbsolute(file.path) ||
+      !/^[0-9a-f]{64}$/.test(file.sha256 || "") || !Number.isSafeInteger(file.bytes) || file.bytes < 0
+    ) {
+      fail(`installer record has an invalid file entry: ${JSON.stringify(file)}`);
+    }
+    const installedFile = path.join(storeRoot, file.path);
+    let stat;
+    try {
+      stat = fs.lstatSync(installedFile);
+    } catch (error) {
+      fail(`cannot inspect installed tree file ${installedFile}: ${error.message}`);
+    }
+    if (!stat.isFile()) fail(`installed tree path is not a regular file: ${installedFile}`);
+    let resolved;
+    try {
+      resolved = fs.realpathSync(installedFile);
+    } catch (error) {
+      fail(`cannot resolve installed tree file ${installedFile}: ${error.message}`);
+    }
+    if (resolved !== storeResolved && !resolved.startsWith(storeBoundary)) {
+      fail(`resolved installed tree file escapes store: ${resolved} (store ${storeResolved})`);
+    }
+    const bytes = fs.readFileSync(installedFile);
+    const actualSha256 = sha256Hex(bytes);
+    if (bytes.length !== file.bytes || actualSha256 !== file.sha256) {
+      fail(
+        `installed tree file mismatch for ${file.path}: record ${file.sha256}/${file.bytes}; ` +
+        `installed ${actualSha256}/${bytes.length}`,
+      );
+    }
+    observed.push({ path: file.path, sha256: actualSha256, bytes: bytes.length });
+  }
+  const observedTree = treeDigest(observed);
+  const recordTree = treeDigest(record.files);
+  if (recordTree !== record.treeSha256 || observedTree !== record.treeSha256) {
+    fail(`installed tree digest mismatch: declared ${record.treeSha256}; record ${recordTree}; installed ${observedTree}`);
+  }
+  return observedTree;
+}
+
 function download(url, destination) {
   try {
     execFileSync("curl", ["-fsSL", "--retry", "3", "--retry-delay", "1", "-o", destination, url], { stdio: "inherit" });
@@ -75,9 +139,10 @@ function main() {
   }
 
   const prefix = fs.mkdtempSync(path.join(work, "prefix-"));
+  const installerCwd = fs.mkdtempSync(path.join(work, "installer-cwd-"));
   try {
     fs.chmodSync(asset, 0o555);
-    execFileSync(asset, ["--sha256", published.digest, "--bytes", String(published.bytes), "--prefix", prefix], { stdio: "inherit" });
+    execFileSync(asset, ["--sha256", published.digest, "--bytes", String(published.bytes), "--prefix", prefix], { cwd: installerCwd, stdio: "inherit" });
   } catch (error) {
     fail(`published installer failed (exit ${error.status ?? "unknown"})`);
   }
@@ -112,6 +177,7 @@ function main() {
   if (installedResolved !== prefixResolved && !installedResolved.startsWith(prefixBoundary)) {
     fail(`resolved installed path escapes prefix: ${installedResolved} (prefix ${prefixResolved})`);
   }
+  verifyInstalledTree(record, path.join(prefix, record.store), prefixResolved);
   const installedDigest = sha256(installed);
   const tracked = arg("--tracked-wasm") || path.join(ROOT, "runtime", "kernel", "wasm", "seal.wasm");
   const trackedDigest = sha256(tracked);
@@ -121,7 +187,7 @@ function main() {
   if (!/^[0-9a-f]{64}$/.test(manifestDigest || "")) fail(`runtime-manifest.json has no valid kernel digest`);
 
   process.stdout.write("SAME-AUTHORITY POST-RELEASE REPRODUCTION\n");
-  process.stdout.write("Limit: the release publisher and this check share one authority; this proves published bytes match tracked bytes, not independent reproduction.\n");
+  process.stdout.write("Limit: the release publisher and this check share one authority; this proves published bytes match tracked bytes, not independent reproduction, and it does not resist a hostile published installer that plants believable bytes.\n");
   process.stdout.write(`published installed seal.wasm: ${installedDigest}\n`);
   process.stdout.write(`tracked runtime/kernel/wasm/seal.wasm: ${trackedDigest}\n`);
   process.stdout.write(`runtime-manifest.json kernel pin: ${manifestDigest}\n`);
