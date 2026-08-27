@@ -38,6 +38,16 @@ function visibleText(text) {
     .replace(/https?:\/\/[^\s)>\]]+/gu, "");
 }
 
+function proseText(text) {
+  return visibleText(text)
+    .replace(/[*_`]/gu, "")
+    // Headings are reader-visible boundaries, not prefixes to the first prose
+    // sentence beneath them (which may itself contain a negation).
+    .replace(/^(?:#{1,6}\s+.*)$/gmu, "$&.\n")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 function sectionAt(text, position) {
   // A reader following an anchor sees that heading's section, not its H1 parent.
   const withoutCode = text.replace(/```[\s\S]*?```/gu, (block) => " ".repeat(block.length));
@@ -56,16 +66,40 @@ function sectionAt(text, position) {
 }
 
 function hasSourceBinding(section) {
-  const visible = visibleText(section);
-  // The label and direct copula are intentional: this is a reader-facing
-  // declaration, not an inference from nearby words or a URL destination.
-  return /^\s*(?:\*\*)?Lean\s+proof\s+source\s*:(?:\*\*)?\s*[^.\n]{0,100}\bseal-host\b[^.\n]{0,100}\bis\s+(?:a|an|the)\s+reader-facing\b[^.\n]{0,160}[.!]/imu.test(visible);
+  const visible = proseText(section);
+  const sentences = visible.split(/(?<=[.!?])\s+/u);
+  return sentences.some((sentence) => {
+    if (!/\bseal-host\b/iu.test(sentence) || /\b(?:not|no|never|without|may|might|could|would|should)\b/iu.test(sentence)) return false;
+
+    // A named proof-source label is itself an affirmative declaration.  The
+    // remaining productions cover ordinary prose, in either word order.
+    return /\bLean\s+proof\s+source\s*:\s*[^.!?]{0,180}\bseal-host\b/iu.test(sentence)
+      || /\bseal-host\b\s+(?:is|remains|serves\s+as)\s+(?:(?:a|an|the|our|this|that)\s+)?(?:reader-facing\s+)?(?:Lean\s+)?(?:proof\s+)?(?:source|index|atlas)\b/iu.test(sentence)
+      || /\b(?:Lean\s+)?(?:theorems?|proofs?|proof\s+(?:source|index|properties?))\b[^.!?]{0,120}\b(?:(?:live|reside)\s+in|are\s+(?:held\s+)?(?:in|at)|come\s+from)\s+(?:the\s+)?\bseal-host\b/iu.test(sentence)
+      || /\bseal-host\b\s+(?:holds|contains|hosts)\s+(?:the\s+)?(?:Lean\s+)?(?:theorems?|proofs?)\b/iu.test(sentence);
+  });
+}
+
+function sentenceAt(text, position) {
+  const start = Math.max(text.lastIndexOf("\n", position), text.lastIndexOf(".", position), text.lastIndexOf("!", position), text.lastIndexOf("?", position)) + 1;
+  const rest = text.slice(position);
+  const endMatch = /[.!?\n]/u.exec(rest);
+  return text.slice(start, endMatch ? position + endMatch.index + 1 : text.length);
+}
+
+function isDeniedClaim(text, claim) {
+  return /\b(?:not|no|never|without)\b/iu.test(sentenceAt(text, claim.index));
+}
+
+function hasUnsourcedClaims(text) {
+  LEAN_PROOF_PROPERTY.lastIndex = 0;
+  const claims = [...text.matchAll(LEAN_PROOF_PROPERTY)];
+  return claims.some((claim) => !isDeniedClaim(text, claim) && !hasSourceBinding(sectionAt(text, claim.index)));
 }
 
 function unsourcedClaims(file) {
   const text = readFileSync(resolve(ROOT, file), "utf8");
-  const claims = [...text.matchAll(LEAN_PROOF_PROPERTY)];
-  return claims.some((claim) => !hasSourceBinding(sectionAt(text, claim.index)));
+  return hasUnsourcedClaims(text);
 }
 
 test("every tracked Lean proof-property document binds its claim to seal-host", () => {
@@ -89,8 +123,28 @@ test("the proof-property predicate catches novel wording", () => {
   assert.equal(LEAN_PROOF_PROPERTY.test(novel), true, relative(ROOT, "docs/assurance/scratch-tamper.md"));
 });
 
-test("a binding is an affirmative declaration visible beside the claim", () => {
-  assert.equal(hasSourceBinding("**Lean proof source:** seal-host is the reader-facing atlas for this claim."), true);
+test("tamper: direct source declaration passes", () => {
+  assert.equal(hasSourceBinding("Lean proof source: seal-host."), true);
+});
+
+test("tamper: theorem-location declaration passes", () => {
+  assert.equal(hasSourceBinding("The Lean theorems for this claim live in [seal-host](https://github.com/velvetmonkey/seal-host/)."), true);
+});
+
+test("tamper: source label with theorem holder passes", () => {
+  assert.equal(hasSourceBinding("Lean proof source: [seal-host](https://github.com/velvetmonkey/seal-host/) holds the theorems for this claim."), true);
+});
+
+test("tamper: possessive proof-index declaration and list item pass", () => {
+  assert.equal(hasSourceBinding("seal-host is our reader-facing proof index."), true);
+  assert.equal(hasSourceBinding("- **Lean proof source:** seal-host is the reader-facing atlas."), true);
+});
+
+test("tamper: wrapped multi-line declaration passes", () => {
+  assert.equal(hasSourceBinding("**Lean proof source:** [seal-host](https://github.com/velvetmonkey/seal-host/) is the reader-facing\nindex for this claim."), true);
+});
+
+test("tamper: negated source declaration fails", () => {
   assert.equal(hasSourceBinding("The proof source is not seal-host."), false);
   assert.equal(hasSourceBinding("**Lean proof source:** seal-host may become the reader-facing atlas."), false);
 });
@@ -101,7 +155,11 @@ test("a nested heading starts a new reader-visible claim section", () => {
   assert.equal(hasSourceBinding(sectionAt(text, claim.index)), false);
 });
 
-test("visible text keeps an honest link label but discards a bare URL", () => {
-  assert.equal(hasSourceBinding("**Lean proof source:** [seal-host](https://github.com/velvetmonkey/seal-host/) is the reader-facing atlas."), true);
-  assert.equal(hasSourceBinding("**Lean proof source:** https://github.com/velvetmonkey/seal-host/ is the reader-facing atlas."), false);
+test("tamper: bare URL without a declaration fails", () => {
+  assert.equal(hasSourceBinding("https://github.com/velvetmonkey/seal-host/"), false);
+});
+
+test("a denial is not a proof-property claim, but an unsourced affirmative claim fails", () => {
+  assert.equal(hasUnsourcedClaims("## UNVERIFIED\n\nThe state machine has no machine-checked model in the seal-host Lean kernel."), false);
+  assert.equal(hasUnsourcedClaims("## Claim\n\nThe gate is proven in Lean 4."), true);
 });
