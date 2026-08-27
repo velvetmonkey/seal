@@ -10,6 +10,7 @@ Seal stops that call and asks you before the tool runs.
 
 One exact call. One approval. One use.
 
+<!-- generated from published release; do not edit -->
 ## Before you start
 
 This is a clean-machine walkthrough for the published Linux x86-64 release.
@@ -28,7 +29,6 @@ Keep the printed receipt paths until you have checked them.
 
 Install the published Linux x86-64 release before you run the command. The release tag also identifies its `SHA256SUMS`. These commands download the binary and sibling receipt-checker asset from that release. Check both assets' digests and byte counts before you run them. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
-<!-- generated from release-manifest.json; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.0-rc.3
 artifact_name="seal-v0.2.0-rc.3-linux-x64"; artifact_sha256="2b1710ece93295543b820b081734d9014f1d9bc4cf4dd772d7d59023858a46b4"; artifact_bytes=6151598
@@ -43,7 +43,7 @@ if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$arti
 read -r checker_sum checker_count checker_entry < <(awk -v name="$checker_name" '$3 == name' "$sums_name"); test "$checker_entry" = "$checker_name"; test "$checker_sum" = "$checker_sha256"; test "$checker_count" = "$checker_bytes"; if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; else checker_actual="$(sha256sum "$checker_name" | awk '{print $1}')"; fi; test "$checker_actual" = "$checker_sha256"; test "$(wc -c < "$checker_name" | tr -d ' ')" = "$checker_bytes"
 checker="$(pwd -P)/$checker_name"; chmod +x "$expected_name"; ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local; export PATH="$HOME/.local/bin:$PATH"
 ```
-Requires Node 20+. The published Seal v0.2.0-rc.3 release asset is Linux x86-64, from commit `8dc16042cc1e865651185778df38dd114ff9ba3d`, and its manifest uses `seal.release/v1`. Protect also needs Claude Code's `claude` command.
+Requires Node 20+. The published Seal v0.2.0-rc.3 release asset is Linux x86-64, from commit `8dc16042cc1e865651185778df38dd114ff9ba3d`. Protect also needs Claude Code's `claude` command.
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.3 linux-x64
@@ -90,14 +90,14 @@ That direct write; protected-server call count stayed 1 and Seal made 0 new deci
 ASSURANCE
 authorization rule proved; product state and forwarding tested; client and machine trusted.
 ```
-<!-- generated from release-manifest.json; do not edit -->
+<!-- generated from published release; do not edit -->
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
-<!-- end generated release docs -->
 
 The checker downloaded above is a sibling release asset covered by the same `SHA256SUMS`.
 It is not in the installed binary tree.
 Run the verified download when the demo prints a receipt and trusted public key.
+<!-- end generated release docs -->
 
 **macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.** Linux x86-64 is the supported Protect path; Windows and Linux ARM are unsupported.
 
@@ -126,7 +126,7 @@ cd seal-protect-demo
 git init -q
 printf '%s\n' '{"mcpServers":{"db":{"command":"seal","args":["__demo-server","./data.txt"]}}}' > .mcp.json
 ```
-<!-- generated from release-manifest.json; do not edit -->
+<!-- generated from published release; do not edit -->
 With the published v0.2.0-rc.3 CLI, protect one tool:
 <!-- end generated release docs -->
 ```bash
@@ -224,5 +224,7 @@ distinguished. Hosted checker checks kernel receipts; it refuses seal.spine/v1 p
 - [Choose what to protect](docs/guide/choosing-what-to-protect.md)
 - [Know whether it worked](docs/guide/knowing-it-worked.md)
 - [Refusal codes and the documentation index](docs/assurance/README.md)
-- [Limitations and assurance material](docs/assurance/README.md)
+<!-- generated from published release; do not edit -->
+- [Limitations and assurance material](docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#what-seal-does-not-cover)
+<!-- end generated release docs -->
 - Apache-2.0. See [LICENSE](LICENSE).

@@ -1,9 +1,8 @@
-<!-- generated from release-manifest.json; do not edit -->
+<!-- generated from published release; do not edit -->
 # Install Seal v0.2.0-rc.3
-The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) was published from commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d); its `release-manifest.json` uses schema `seal.release/v1`. macOS source portability is CI-exercised for install, demo and receipt checking.
+The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) publishes `seal-v0.2.0-rc.3-linux-x64`, `seal-receipt-check.mjs`, and `SHA256SUMS`; its tag resolves to commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d). macOS source portability is CI-exercised for install, demo and receipt checking.
 Protect is not supported on macOS yet. The published release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported. Node 20+ is required.
 The installer refuses before changing anything on an unsupported or mismatched platform.
-<!-- end generated release docs -->
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
 short form is the same install without the named refusals spelled out. Use
@@ -18,8 +17,9 @@ answer "did I download the bytes the release named?" They do not answer
 "is the publisher honest?"
 
 ## Verify, then install
+<!-- end generated release docs -->
 
-<!-- generated from release-manifest.json; do not edit -->
+<!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.0-rc.3
 artifact_name="seal-v0.2.0-rc.3-linux-x64"; artifact_sha256="2b1710ece93295543b820b081734d9014f1d9bc4cf4dd772d7d59023858a46b4"; artifact_bytes=6151598

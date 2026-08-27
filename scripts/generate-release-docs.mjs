@@ -4,13 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
+  isLegacyReleaseTag,
   manifestFromObserved,
   validateManifestAgainstObserved,
   validateManifestShape,
 } from "./release-manifest-lib.mjs";
 
-const ROOT = path.join(import.meta.dirname, "..");
-const SENTINEL = "<!-- generated from release-manifest.json; do not edit -->";
+const ROOT = path.resolve(process.env.SEAL_RELEASE_DOCS_ROOT || path.join(import.meta.dirname, ".."));
+const SENTINEL = "<!-- generated from published release; do not edit -->";
 const END = "<!-- end generated release docs -->";
 const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
@@ -121,6 +122,9 @@ async function remoteManifest() {
   const manifestAssets = release.assets.filter((asset) => asset.name === "release-manifest.json");
   if (manifestAssets.length > 1) refuse("asset_population", `${release.tag_name} publishes more than one release-manifest.json`);
   if (manifestAssets.length === 0) {
+    if (!isLegacyReleaseTag(release.tag_name)) {
+      refuse("manifest_absent", `${release.tag_name} must publish exactly one release-manifest.json, found 0`);
+    }
     const artifacts = release.assets.filter((asset) => asset.name.startsWith(`seal-${release.tag_name}-`) && asset.name !== "seal-receipt-check.mjs");
     if (artifacts.length !== 1) refuse("legacy_asset_population", `${release.tag_name} has no manifest and does not have one unambiguous Seal artifact`);
     const observed = await observedFromRelease(release, {
@@ -129,7 +133,7 @@ async function remoteManifest() {
       checksums: "SHA256SUMS",
     });
     process.stderr.write(`COMPAT release_docs_legacy: ${release.tag_name} predates release-manifest.json; derived and verified its facts from published assets\n`);
-    return manifestFromObserved(observed);
+    return { manifest: manifestFromObserved(observed), manifestPublished: false };
   }
   let manifest;
   try {
@@ -144,7 +148,7 @@ async function remoteManifest() {
     checker: manifest.checker.name,
     checksums: manifest.checksums.name,
   });
-  return validateManifestAgainstObserved(manifest, observed);
+  return { manifest: validateManifestAgainstObserved(manifest, observed), manifestPublished: true };
 }
 
 function localManifest(manifestPath, assetsDir, commitSha) {
@@ -161,7 +165,7 @@ function localManifest(manifestPath, assetsDir, commitSha) {
     try { return fs.readFileSync(target); }
     catch (error) { refuse("asset_read", `${target}: ${error.message}`); }
   };
-  return validateManifestAgainstObserved(manifest, {
+  return { manifest: validateManifestAgainstObserved(manifest, {
     tag: manifest.tag,
     commitSha,
     artifactName: manifest.artifact.name,
@@ -170,7 +174,7 @@ function localManifest(manifestPath, assetsDir, commitSha) {
     checkerBytes: read(manifest.checker.name),
     checksumsName: manifest.checksums.name,
     checksumsBytes: read(manifest.checksums.name),
-  });
+  }), manifestPublished: true };
 }
 
 function platformSentence(platform) {
@@ -184,11 +188,38 @@ function version(manifest) {
   return manifest.tag.slice(1);
 }
 
-function readmeRegions(manifest) {
+function releaseSentence(manifest, manifestPublished) {
+  const releaseUrl = `https://github.com/${REPOSITORY}/releases/tag/${manifest.tag}`;
+  const commitUrl = `https://github.com/${REPOSITORY}/commit/${manifest.commitSha}`;
+  const assets = `\`${manifest.artifact.name}\`, \`${manifest.checker.name}\`, and \`${manifest.checksums.name}\``;
+  const observable = `The [${manifest.tag} release](${releaseUrl}) publishes ${assets}; its tag resolves to commit [\`${manifest.commitSha}\`](${commitUrl}).`;
+  if (!manifestPublished) return observable;
+  return `${observable} Its \`release-manifest.json\` uses schema \`${manifest.schema}\`.`;
+}
+
+function readmeRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
   return [
     [
       SENTINEL,
+      "## Before you start",
+      "",
+      `This is a clean-machine walkthrough for the published ${platform} release.`,
+      "It keeps every command in the order a new reader needs to run it.",
+      "",
+      "Use a disposable project directory and a writable local tools directory.",
+      "The walkthrough creates both and leaves your project `.mcp.json` unchanged.",
+      "",
+      "The commands fetch a release asset and verify its supplied digest and byte count.",
+      "Compare those values with release information obtained through a separate channel.",
+      "",
+      "The demo is approve-once; Protect uses Claude Code's local override.",
+      "Both leave local evidence you can inspect before removing the throw-away files.",
+      "",
+      "Keep the printed receipt paths until you have checked them.",
+      "",
+      `Install the published ${platform} release before you run the command. The release tag also identifies its \`${manifest.checksums.name}\`. These commands download the binary and sibling receipt-checker asset from that release. Check both assets' digests and byte counts before you run them. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.`,
+      "",
       "```bash",
       `SEAL_VERSION=${manifest.tag}`,
       `artifact_name=${JSON.stringify(manifest.artifact.name)}; artifact_sha256=${JSON.stringify(manifest.artifact.sha256)}; artifact_bytes=${manifest.artifact.bytes}`,
@@ -203,7 +234,9 @@ function readmeRegions(manifest) {
       'read -r checker_sum checker_count checker_entry < <(awk -v name="$checker_name" \'$3 == name\' "$sums_name"); test "$checker_entry" = "$checker_name"; test "$checker_sum" = "$checker_sha256"; test "$checker_count" = "$checker_bytes"; if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name" | awk \'{print $1}\')"; else checker_actual="$(sha256sum "$checker_name" | awk \'{print $1}\')"; fi; test "$checker_actual" = "$checker_sha256"; test "$(wc -c < "$checker_name" | tr -d \' \')" = "$checker_bytes"',
       'checker="$(pwd -P)/$checker_name"; chmod +x "$expected_name"; ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local; export PATH="$HOME/.local/bin:$PATH"',
       "```",
-      `Requires Node ${manifest.minimumNodeMajor}+. The published Seal ${manifest.tag} release asset is ${platform}, from commit \`${manifest.commitSha}\`, and its manifest uses \`${manifest.schema}\`. Protect also needs Claude Code's \`claude\` command.`,
+      manifestPublished
+        ? `Requires Node ${manifest.minimumNodeMajor}+. The published Seal ${manifest.tag} release asset is ${platform}, from commit \`${manifest.commitSha}\`, and its \`release-manifest.json\` uses \`${manifest.schema}\`. Protect also needs Claude Code's \`claude\` command.`
+        : `Requires Node ${manifest.minimumNodeMajor}+. The published Seal ${manifest.tag} release asset is ${platform}, from commit \`${manifest.commitSha}\`. Protect also needs Claude Code's \`claude\` command.`,
       "<!-- Seal installed-tree pin role: published-asset -->",
       "```output",
       `installed seal ${version(manifest)} ${manifest.platform}`,
@@ -220,6 +253,10 @@ function readmeRegions(manifest) {
       SENTINEL,
       `At the exact release tag, your build writes \`${manifest.artifact.name}\` in your own \`dist/\` directory;`,
       manifest.artifact.name,
+      "",
+      `The checker downloaded above is a sibling release asset covered by the same \`${manifest.checksums.name}\`.`,
+      "It is not in the installed binary tree.",
+      "Run the verified download when the demo prints a receipt and trusted public key.",
       END,
     ].join("\n"),
     [
@@ -227,20 +264,37 @@ function readmeRegions(manifest) {
       `With the published ${manifest.tag} CLI, protect one tool:`,
       END,
     ].join("\n"),
+    [
+      SENTINEL,
+      `- [Limitations and assurance material](docs/assurance/RELEASE-NOTES-${manifest.tag}.md#what-seal-does-not-cover)`,
+      END,
+    ].join("\n"),
   ];
 }
 
-function installRegions(manifest) {
+function installRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
-  const releaseUrl = `https://github.com/${REPOSITORY}/releases/tag/${manifest.tag}`;
-  const commitUrl = `https://github.com/${REPOSITORY}/commit/${manifest.commitSha}`;
   return [
     [
       SENTINEL,
       `# Install Seal ${manifest.tag}`,
-      `The [${manifest.tag} release](${releaseUrl}) was published from commit [\`${manifest.commitSha}\`](${commitUrl}); its \`release-manifest.json\` uses schema \`${manifest.schema}\`. macOS source portability is CI-exercised for install, demo and receipt checking.`,
+      `${releaseSentence(manifest, manifestPublished)} macOS source portability is CI-exercised for install, demo and receipt checking.`,
       `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
       "The installer refuses before changing anything on an unsupported or mismatched platform.",
+      "",
+      "This page is the SHA256SUMS verification wall. The [README](../../README.md)",
+      "short form is the same install without the named refusals spelled out. Use",
+      "this page when you want every check to fail closed in the shell, before the",
+      "binary runs.",
+      "",
+      "The digest comparison below is *your* check, with the OS SHA-256 tool,",
+      `against the \`${manifest.checksums.name}\` asset attached to the same GitHub release. That is`,
+      "not the installer checking itself. The `--sha256` / `--bytes` flags are a",
+      "second pin the installer demands and will refuse without. Together they",
+      'answer "did I download the bytes the release named?" They do not answer',
+      '"is the publisher honest?"',
+      "",
+      "## Verify, then install",
       END,
     ].join("\n"),
     [
@@ -297,6 +351,93 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function generatedClaims(relative, expectedRegions) {
+  const target = path.join(ROOT, relative);
+  const document = fs.readFileSync(target, "utf8");
+  const pattern = new RegExp(`${SENTINEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([\\s\\S]*?)${END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+  const regions = [...document.matchAll(pattern)].map((match) => match[1]);
+  if (regions.length !== expectedRegions) {
+    return { relative, text: regions.join("\n"), failures: [`has ${regions.length} generated regions; expected ${expectedRegions}`] };
+  }
+  return { relative, text: regions.join("\n"), failures: [] };
+}
+
+function values(text, pattern) {
+  return [...text.matchAll(pattern)].map((match) => match[1] ?? match[0]);
+}
+
+function checkPublishedClaims(document, facts) {
+  const { manifest, manifestPublished } = facts;
+  const requireAll = (label, actual, expected, minimum = 1) => {
+    if (actual.length < minimum) document.failures.push(`${label} is absent`);
+    const wrong = [...new Set(actual.filter((value) => String(value) !== String(expected)))];
+    if (wrong.length) document.failures.push(`${label} names ${wrong.join(", ")}; release names ${expected}`);
+  };
+  const releaseTags = [
+    ...values(document.text, /\bSEAL_VERSION=(v[^\s]+)\b/g),
+    ...values(document.text, /\/releases\/(?:tag|download)\/(v[^/)]+)[/)]/g),
+    ...values(document.text, /\bRELEASE-NOTES-(v[^/]+?)\.md\b/g),
+    ...values(document.text, /\bpublished (?:Seal )?(v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?) (?:release|CLI)/g),
+    ...values(document.text, /^# Install Seal (v[^\s]+)$/gm),
+  ];
+  requireAll("release tag", releaseTags, manifest.tag);
+  requireAll("artifact", values(document.text, /\bseal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-[a-z0-9]+-[a-z0-9]+\b/g), manifest.artifact.name);
+  requireAll("tag commit", values(document.text, /\b([0-9a-f]{40})\b/g), manifest.commitSha);
+  requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
+  requireAll("checker byte count", values(document.text, /\bchecker_bytes=(\d+)\b/g), manifest.checker.bytes);
+
+  const digests = values(document.text, /\b([0-9a-f]{64})\b/g);
+  const allowedDigests = new Set([
+    manifest.artifact.sha256,
+    manifest.checker.sha256,
+    manifest.checksums.sha256,
+    manifest.artifact.installedTreeSha256,
+  ]);
+  const unknownDigests = [...new Set(digests.filter((digest) => !allowedDigests.has(digest)))];
+  if (unknownDigests.length) document.failures.push(`digest is not published release data: ${unknownDigests.join(", ")}`);
+  for (const [label, digest] of [
+    ["artifact digest", manifest.artifact.sha256],
+    ["checker digest", manifest.checker.sha256],
+    ["SHA256SUMS digest", manifest.checksums.sha256],
+    ["installed-tree digest", manifest.artifact.installedTreeSha256],
+  ]) {
+    if (!digests.includes(digest)) document.failures.push(`${label} is absent`);
+  }
+
+  const schemas = values(document.text, /\b(seal\.release\/v\d+)\b/g);
+  const manifestNames = values(document.text, /\b(release-manifest\.json)\b/g);
+  if (manifestPublished) {
+    requireAll("manifest schema", schemas, manifest.schema);
+    requireAll("manifest asset", manifestNames, "release-manifest.json");
+  } else {
+    if (schemas.length) document.failures.push(`claims manifest schema ${[...new Set(schemas)].join(", ")} but the release publishes no manifest`);
+    if (manifestNames.length) document.failures.push("claims release-manifest.json but the release publishes no such asset");
+  }
+
+  requireAll("minimum Node major", values(document.text, /\bNode (?:>= )?(\d+)\+?/g), manifest.minimumNodeMajor);
+  if (!document.text.includes(manifest.checker.name)) document.failures.push(`checker asset ${manifest.checker.name} is absent`);
+  if (!document.text.includes(manifest.checksums.name)) document.failures.push(`checksum asset ${manifest.checksums.name} is absent`);
+  if (!document.text.includes(platformSentence(manifest.platform))) document.failures.push(`platform ${platformSentence(manifest.platform)} is absent`);
+  return document;
+}
+
+function verifyDocsAgainstRelease(facts) {
+  const documents = [
+    checkPublishedClaims(generatedClaims("README.md", 4), facts),
+    checkPublishedClaims(generatedClaims("docs/start/install.md", 2), facts),
+  ];
+  const failed = documents.filter((document) => document.failures.length);
+  if (failed.length) {
+    for (const document of failed) {
+      for (const failure of document.failures) {
+        process.stderr.write(`FAIL release docs disagree with published release: ${document.relative}: ${failure}\n`);
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
 function option(name) {
   const at = process.argv.indexOf(name);
   return at < 0 ? undefined : process.argv[at + 1];
@@ -309,28 +450,27 @@ async function main() {
   if ([manifestPath, assetsDir, localCommit].some(Boolean) && ![manifestPath, assetsDir, localCommit].every(Boolean)) {
     refuse("arguments", "--manifest, --assets-dir, and --tag-commit must be supplied together");
   }
-  const manifest = manifestPath
+  const facts = manifestPath
     ? localManifest(path.resolve(manifestPath), path.resolve(assetsDir), localCommit)
     : await remoteManifest();
-  const changes = [
-    replaceRegions("README.md", readmeRegions(manifest)),
-    replaceRegions("docs/start/install.md", installRegions(manifest)),
-  ];
-  const stale = changes.filter((change) => change.original !== change.rewritten);
   if (process.argv.includes("--check")) {
-    if (stale.length) {
-      for (const change of stale) process.stderr.write(`FAIL release docs stale: ${change.relative}\n`);
+    if (!verifyDocsAgainstRelease(facts)) {
       process.exitCode = 1;
       return;
     }
-    process.stdout.write(`PASS release docs match latest published release ${manifest.tag}\n`);
+    process.stdout.write(`PASS release docs match latest published release ${facts.manifest.tag}\n`);
     return;
   }
+  const changes = [
+    replaceRegions("README.md", readmeRegions(facts)),
+    replaceRegions("docs/start/install.md", installRegions(facts)),
+  ];
+  const stale = changes.filter((change) => change.original !== change.rewritten);
   for (const change of stale) {
     fs.writeFileSync(change.target, change.rewritten);
     process.stdout.write(`updated ${change.relative}\n`);
   }
-  if (!stale.length) process.stdout.write(`unchanged release docs for ${manifest.tag}\n`);
+  if (!stale.length) process.stdout.write(`unchanged release docs for ${facts.manifest.tag}\n`);
 }
 
 main().catch((error) => {

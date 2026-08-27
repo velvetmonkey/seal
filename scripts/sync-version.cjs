@@ -52,9 +52,9 @@ for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((
   replaceIfPresent(path.join("docs", "assurance", file), priorReleaseNotesPattern, releaseNotes);
 }
 // Reader-facing routes outside assurance cite the release-note filename too.
-// Keep those links attached to the note when VERSION renames it.
+// README's route is owned by generate-release-docs.mjs and must continue to
+// name the published release while VERSION advances to the next candidate.
 for (const file of [
-  "README.md",
   "docs/archive/CLAIMS-MATRIX.md",
   "docs/archive/TRUTH-BOX.md",
   "docs/archive/LIMITATIONS.md",

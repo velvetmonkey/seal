@@ -82,7 +82,7 @@ function staleVersionMatches(root, version) {
   return readerFacingMarkdownFiles(root)
     .filter((file) => {
       const humanMaintained = fs.readFileSync(file, "utf8").replace(
-        /<!-- generated from release-manifest\.json; do not edit -->[\s\S]*?<!-- end generated release docs -->/g,
+        /<!-- generated from published release; do not edit -->[\s\S]*?<!-- end generated release docs -->/g,
         "",
       );
       return oldLiteral.test(humanMaintained);

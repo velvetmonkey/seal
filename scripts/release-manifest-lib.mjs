@@ -10,6 +10,11 @@ const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
 const HEX = /^[0-9a-f]{64}$/;
 const TAG = /^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const COMMIT = /^[0-9a-f]{40}$/;
+export const LEGACY_RELEASE_TAGS = Object.freeze(["v0.2.0-rc.1", "v0.2.0-rc.2", "v0.2.0-rc.3"]);
+
+export function isLegacyReleaseTag(tag) {
+  return LEGACY_RELEASE_TAGS.includes(tag);
+}
 
 export function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");

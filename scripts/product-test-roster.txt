@@ -57,6 +57,7 @@ test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
 test/reinstall.test.cjs
 test/release-notes.test.cjs
+test/release-docs.test.mjs
 test/seal-flow-diagram.test.mjs
 test/seal-status.test.cjs
 test/seal-verify.test.cjs
