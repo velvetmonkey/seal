@@ -101,11 +101,11 @@ function ownedActiveState(ctx) {
   };
 }
 
-test("Darwin is install-supported but not Protect-supported", () => {
+test("Darwin is install- and Protect-supported", () => {
   withSimulatedDarwin(() => {
     const support = platformSupport();
     assert.equal(support.installSupported, true);
-    assert.equal(support.protectSupported, false);
+    assert.equal(support.protectSupported, true);
     assert.equal(support.supported, true, "legacy supported answer remains the install/demo answer");
   });
 });
@@ -160,7 +160,7 @@ test("macOS without the helper keeps the process witness fail-closed", () => {
   });
 });
 
-test("seal protect refuses Darwin before changing project files", () => {
+test("seal protect on simulated Darwin reaches ordinary product validation before changing project files", () => {
   const ctx = workspace("protect-refusal");
   const result = spawnSync(process.execPath, [CLI, "protect", "db", "write"], {
     cwd: ctx.project,
@@ -174,7 +174,8 @@ test("seal protect refuses Darwin before changing project files", () => {
   });
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 1, output);
-  assert.match(output, /^REFUSE unsupported_platform: Protect is not supported on macOS yet; this is darwin-arm64$/m);
+  assert.match(output, /^seal: REFUSE project_server_absent:/m);
+  assert.doesNotMatch(output, /unsupported_platform/);
   assert.equal(fs.readdirSync(ctx.project).length, 0, "Protect refusal must not change project files");
   assert.equal(fs.existsSync(path.join(ctx.home, ".claude.json")), false, "Protect refusal must not change the user configuration");
   assert.equal(fs.existsSync(ctx.dataHome), false, "Protect refusal must not create protection state");

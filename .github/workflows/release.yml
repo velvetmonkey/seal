@@ -13,7 +13,87 @@ permissions:
   attestations: write
 
 jobs:
+  build-artifacts:
+    name: Build ${{ matrix.platform }} release artifact
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: darwin-arm64
+            runner: macos-15
+            wrong_arch: x86_64
+            wrong_platform: darwin-x64
+          - platform: darwin-x64
+            runner: macos-15-intel
+            wrong_arch: arm64
+            wrong_platform: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require the release tag and source identity
+        run: |
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "v$(tr -d '\n' < VERSION)"
+      - name: Compile and exercise the matching macOS helper
+        if: startsWith(matrix.platform, 'darwin-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper="$RUNNER_TEMP/macos-process-start-witness"
+          cc -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o "$helper"
+          node scripts/macos-helper.cjs --helper "$helper" --platform "${{ matrix.platform }}"
+          cp "$helper" runtime/macos-process-start-witness
+          node scripts/macos-process-witness-evidence.cjs
+      - name: Refuse a deliberately wrong-architecture macOS helper
+        if: startsWith(matrix.platform, 'darwin-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrong="$RUNNER_TEMP/macos-process-start-witness-wrong"
+          cc -arch "${{ matrix.wrong_arch }}" -Wall -Wextra -Werror runtime/macos-process-start-witness.c -o "$wrong"
+          set +e
+          output="$(node scripts/macos-helper.cjs --helper "$wrong" --platform "${{ matrix.platform }}" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -eq 1
+          test "$output" = "REFUSE macos_helper_architecture: expected ${{ matrix.platform }} helper, got ${{ matrix.wrong_platform }}"
+      - name: Build the platform artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--platform "${{ matrix.platform }}" --out "$RUNNER_TEMP/dist")
+          if [[ "${{ matrix.platform }}" == darwin-* ]]; then
+            args+=(--macos-helper "$RUNNER_TEMP/macos-process-start-witness")
+          fi
+          node scripts/build-dist.cjs "${args[@]}"
+      - name: Install and demo the Darwin artifact
+        if: startsWith(matrix.platform, 'darwin-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r digest bytes name < "$RUNNER_TEMP/dist/SHA256SUMS"
+          artifact="$RUNNER_TEMP/dist/$name"
+          "$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$RUNNER_TEMP/prefix"
+          "$RUNNER_TEMP/prefix/lib/seal/store/$(node -p "require('$RUNNER_TEMP/prefix/lib/seal/install.json').treeSha256")/runtime/macos-process-start-witness" $$
+          printf 'y\n' | "$RUNNER_TEMP/prefix/bin/seal" demo --dir "$RUNNER_TEMP/demo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/dist/seal-v*-${{ matrix.platform }}
+            ${{ runner.temp }}/dist/seal-v*-${{ matrix.platform }}.meta.json
+          if-no-files-found: error
+
   release:
+    needs: build-artifacts
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +118,37 @@ jobs:
       # job in ci.yml instead of asking origin themselves.
       - name: Refuse to publish when release tags cannot be read
         run: node scripts/check-version-identity.cjs
-      - name: Build the one Linux x86-64 install artifact
-        run: node scripts/build-dist.cjs --out "$RUNNER_TEMP/dist"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: ${{ runner.temp }}/dist
+          merge-multiple: true
       - name: Require the artifact name to be the released identity
         run: node scripts/check-artifact-identity.cjs --dist "$RUNNER_TEMP/dist"
       - name: Require the artifact version to match the tag
         run: |
           version="$(tr -d '\n' < VERSION)"
           test "$GITHUB_REF_NAME" = "v$version"
-          test -f "$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
-          grep -F "seal-v${version}-linux-x64" "$RUNNER_TEMP/dist/SHA256SUMS"
+          for platform in linux-x64 darwin-arm64 darwin-x64; do
+            test -f "$RUNNER_TEMP/dist/seal-v${version}-${platform}"
+          done
+      - name: Assemble the complete checksum ledger
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\n' < VERSION)"
+          checker="$RUNNER_TEMP/dist/seal-receipt-check.mjs"
+          cp checker/seal-receipt-check.mjs "$checker"
+          : > "$RUNNER_TEMP/dist/SHA256SUMS"
+          for target in "$RUNNER_TEMP"/dist/seal-v${version}-linux-x64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-arm64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-x64 "$checker"; do
+            printf '%s  %s  %s\n' "$(sha256sum "$target" | awk '{ print $1 }')" "$(wc -c < "$target" | tr -d ' ')" "$(basename "$target")" >> "$RUNNER_TEMP/dist/SHA256SUMS"
+          done
+          test "$(awk '{ print $1 }' "$RUNNER_TEMP/dist/SHA256SUMS" | sort -u | wc -l)" -eq 4
+          for platform in linux-x64 darwin-arm64 darwin-x64; do
+            grep -F "seal-v${version}-${platform}" "$RUNNER_TEMP/dist/SHA256SUMS"
+          done
       - name: Claude Code evidence must name this exact artifact
         run: |
-          read -r digest bytes name < "$RUNNER_TEMP/dist/SHA256SUMS"
+          read -r digest bytes name < <(awk '$3 ~ /-linux-x64$/ { print; exit }' "$RUNNER_TEMP/dist/SHA256SUMS")
           # Manual acceptance evidence gates the release only when it exists,
           # and only when it names THIS artifact: a pack whose recorded file
           # hashes or artifact identity do not hold fails the release, while an
@@ -76,27 +174,26 @@ jobs:
           artifact="$RUNNER_TEMP/dist/seal-v${version}-linux-x64"
           artifact_name="$(basename "$artifact")"
           checker="$RUNNER_TEMP/dist/seal-receipt-check.mjs"
-          cp checker/seal-receipt-check.mjs "$checker"
-          checker_digest="$(sha256sum "$checker" | awk '{ print $1 }')"
-          checker_bytes="$(wc -c < "$checker" | tr -d ' ')"
-          printf '%s  %s  %s\n' "$checker_digest" "$checker_bytes" "seal-receipt-check.mjs" >> "$RUNNER_TEMP/dist/SHA256SUMS"
-          read -r digest bytes checksum_name < "$RUNNER_TEMP/dist/SHA256SUMS"
+          read -r digest bytes checksum_name < <(awk '$3 ~ /-linux-x64$/ { print; exit }' "$RUNNER_TEMP/dist/SHA256SUMS")
           test "$checksum_name" = "$artifact_name"
           grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
           node scripts/create-release-manifest.mjs \
             --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" \
-            --artifact "$artifact" \
+            --artifact "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+            --artifact "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+            --artifact "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
             --checker "$checker" \
             --checksums "$RUNNER_TEMP/dist/SHA256SUMS" \
             --out "$RUNNER_TEMP/dist/release-manifest.json"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
             "Seal v${version}." \
-            "macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet." \
-            "Linux x86-64 is the supported Protect path. Windows, Linux ARM and other platforms are unsupported." \
+            "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64." \
+            "The native macOS process-start witness helper is release-produced, not independently reproduced." \
+            "Windows, Linux ARM and other platforms are unsupported." \
             '' \
-            "The installable artifact is the single file \`${artifact_name}\`." \
+            "For Linux x86-64, the installable artifact is \`${artifact_name}\`." \
             'Its command is generated from the built artifact and `SHA256SUMS`:' \
             '' \
             "    ./${artifact_name} --sha256 ${digest} --bytes ${bytes} --prefix ~/.local" \
@@ -112,7 +209,9 @@ jobs:
             prerelease+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" \
-            "$artifact" \
+            "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+            "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+            "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
             "$checker" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
             "$RUNNER_TEMP/dist/release-manifest.json" \
@@ -125,6 +224,8 @@ jobs:
         with:
           subject-path: |
             ${{ runner.temp }}/dist/seal-v*-linux-x64
+            ${{ runner.temp }}/dist/seal-v*-darwin-arm64
+            ${{ runner.temp }}/dist/seal-v*-darwin-x64
             ${{ runner.temp }}/dist/seal-receipt-check.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
             ${{ runner.temp }}/dist/release-manifest.json

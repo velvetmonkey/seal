@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "775121e6d6fe265c9291bc88d708d050ef97fd16fe2d33a65f59917db33631e2";
+const GUIDE_SHA256 = "17bec263eb13e4cc7dc01dd63e44bbb1d73383a5b94279c3853350d601db4178";
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
@@ -51,6 +51,7 @@ const SOURCES = [
   { file: "scripts/install.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "pin_missing" },
   { file: "scripts/seal-launch.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "install_record_missing" },
   { file: "scripts/build-dist.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "node_missing" },
+  { file: "scripts/macos-helper.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "macos_helper_architecture" },
   { file: "checker/seal-receipt-check.mjs", patterns: [/new Refusal\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "signature_invalid" },
 ];
 

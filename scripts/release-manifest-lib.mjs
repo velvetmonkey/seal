@@ -45,7 +45,7 @@ function digest(value, label) {
   if (typeof value !== "string" || !HEX.test(value)) refuse("invalid", `${label} must be a lowercase SHA-256`);
 }
 
-export function parseChecksums(bytes) {
+function parseChecksumsCount(bytes, expected) {
   const text = bytes.toString("utf8");
   const entries = new Map();
   for (const [index, line] of text.split(/\r?\n/).entries()) {
@@ -57,8 +57,12 @@ export function parseChecksums(bytes) {
     if (!Number.isSafeInteger(count) || count <= 0) refuse("checksums_invalid", `SHA256SUMS line ${index + 1} has an invalid byte count`);
     entries.set(match[3], { sha256: match[1], bytes: count });
   }
-  if (entries.size !== 2) refuse("checksums_invalid", `SHA256SUMS must name exactly two payload assets, found ${entries.size}`);
+  if (entries.size !== expected) refuse("checksums_invalid", `SHA256SUMS must name exactly ${expected} release assets, found ${entries.size}`);
   return entries;
+}
+
+export function parseChecksums(bytes) {
+  return parseChecksumsCount(bytes, 4);
 }
 
 function payloadFacts(artifactBytes) {
@@ -88,39 +92,25 @@ function payloadFacts(artifactBytes) {
     platform: unpacked.manifest.platform,
     minimumNodeMajor: Number(engineMatch[1]),
     installedTreeSha256: recomputedTree,
+    hasNativeHelper: unpacked.files.some((file) => file.path === "runtime/macos-process-start-witness"),
   };
 }
 
-export function manifestFromObserved({
-  tag,
-  commitSha,
-  artifactName,
-  artifactBytes,
-  checkerName,
-  checkerBytes,
-  checksumsName,
-  checksumsBytes,
+export function legacyManifestFromObserved({
+  tag, commitSha, artifactName, artifactBytes, checkerName, checkerBytes, checksumsName, checksumsBytes,
 }) {
   if (!TAG.test(tag)) refuse("invalid", `tag is invalid: ${tag}`);
   if (!COMMIT.test(commitSha)) refuse("invalid", `commitSha is invalid: ${commitSha}`);
   if (checksumsName !== "SHA256SUMS") refuse("invalid", `checksum asset must be SHA256SUMS, got ${checksumsName}`);
   const payload = payloadFacts(artifactBytes);
   if (`v${payload.version}` !== tag) refuse("artifact_mismatch", `payload version ${payload.version} disagrees with tag ${tag}`);
-  const expectedArtifactName = `seal-${tag}-${payload.platform}`;
-  if (artifactName !== expectedArtifactName) {
-    refuse("artifact_mismatch", `artifact name ${artifactName} disagrees with payload identity ${expectedArtifactName}`);
-  }
+  const expectedName = `seal-${tag}-${payload.platform}`;
+  if (artifactName !== expectedName) refuse("artifact_mismatch", `artifact name ${artifactName} disagrees with payload identity ${expectedName}`);
   if (checkerName !== "seal-receipt-check.mjs") refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
-  const sums = parseChecksums(checksumsBytes);
-  const observed = [
-    [artifactName, artifactBytes],
-    [checkerName, checkerBytes],
-  ];
-  for (const [name, bytes] of observed) {
+  const sums = parseChecksumsCount(checksumsBytes, 2);
+  for (const [name, bytes] of [[artifactName, artifactBytes], [checkerName, checkerBytes]]) {
     const entry = sums.get(name);
-    if (!entry) refuse("checksums_mismatch", `SHA256SUMS does not name ${name}`);
-    const actualDigest = sha256(bytes);
-    if (entry.sha256 !== actualDigest || entry.bytes !== bytes.length) {
+    if (!entry || entry.sha256 !== sha256(bytes) || entry.bytes !== bytes.length) {
       refuse("checksums_mismatch", `SHA256SUMS disagrees with published bytes for ${name}`);
     }
   }
@@ -136,6 +126,68 @@ export function manifestFromObserved({
       bytes: artifactBytes.length,
       installedTreeSha256: payload.installedTreeSha256,
     },
+    checker: { name: checkerName, sha256: sha256(checkerBytes), bytes: checkerBytes.length },
+    checksums: { name: checksumsName, sha256: sha256(checksumsBytes) },
+  };
+}
+
+export function manifestFromObserved({
+  tag,
+  commitSha,
+  artifacts,
+  checkerName,
+  checkerBytes,
+  checksumsName,
+  checksumsBytes,
+}) {
+  if (!TAG.test(tag)) refuse("invalid", `tag is invalid: ${tag}`);
+  if (!COMMIT.test(commitSha)) refuse("invalid", `commitSha is invalid: ${commitSha}`);
+  if (checksumsName !== "SHA256SUMS") refuse("invalid", `checksum asset must be SHA256SUMS, got ${checksumsName}`);
+  if (!Array.isArray(artifacts) || artifacts.length !== 3) {
+    refuse("artifact_mismatch", `release must supply exactly three platform artifacts, found ${artifacts?.length ?? 0}`);
+  }
+  if (checkerName !== "seal-receipt-check.mjs") refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
+  const sums = parseChecksums(checksumsBytes);
+  const artifactFacts = artifacts.map(({ name, bytes }) => {
+    const payload = payloadFacts(bytes);
+    if (`v${payload.version}` !== tag) refuse("artifact_mismatch", `payload version ${payload.version} disagrees with tag ${tag}`);
+    const expectedName = `seal-${tag}-${payload.platform}`;
+    if (name !== expectedName) refuse("artifact_mismatch", `artifact name ${name} disagrees with payload identity ${expectedName}`);
+    const darwin = payload.platform === "darwin-arm64" || payload.platform === "darwin-x64";
+    if (darwin && !payload.hasNativeHelper) refuse("artifact_mismatch", `${name} has no native process-start witness helper`);
+    if (!darwin && payload.hasNativeHelper) refuse("artifact_mismatch", `${name} unexpectedly carries a macOS process-start witness helper`);
+    return {
+      platform: payload.platform,
+      name,
+      sha256: sha256(bytes),
+      bytes: bytes.length,
+      installedTreeSha256: payload.installedTreeSha256,
+      ...(darwin ? { nativeHelperProvenance: "release-produced, not independently reproduced" } : {}),
+      minimumNodeMajor: payload.minimumNodeMajor,
+    };
+  }).sort((left, right) => left.platform.localeCompare(right.platform));
+  const platforms = artifactFacts.map((artifact) => artifact.platform);
+  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "darwin-x64", "linux-x64"])) {
+    refuse("artifact_mismatch", `artifact platforms must be darwin-arm64, darwin-x64, linux-x64; got ${platforms.join(", ")}`);
+  }
+  const minimumNodeMajors = new Set(artifactFacts.map((artifact) => artifact.minimumNodeMajor));
+  if (minimumNodeMajors.size !== 1) refuse("artifact_mismatch", "artifacts disagree on minimum Node major");
+  for (const artifact of artifactFacts) delete artifact.minimumNodeMajor;
+  const observed = [...artifacts.map(({ name, bytes }) => [name, bytes]), [checkerName, checkerBytes]];
+  for (const [name, bytes] of observed) {
+    const entry = sums.get(name);
+    if (!entry) refuse("checksums_mismatch", `SHA256SUMS does not name ${name}`);
+    const actualDigest = sha256(bytes);
+    if (entry.sha256 !== actualDigest || entry.bytes !== bytes.length) {
+      refuse("checksums_mismatch", `SHA256SUMS disagrees with published bytes for ${name}`);
+    }
+  }
+  return {
+    schema: "seal.release/v2",
+    tag,
+    commitSha,
+    minimumNodeMajor: [...minimumNodeMajors][0],
+    artifacts: artifactFacts,
     checker: {
       name: checkerName,
       sha256: sha256(checkerBytes),
@@ -149,19 +201,32 @@ export function manifestFromObserved({
 }
 
 export function validateManifestShape(manifest) {
-  exactKeys(manifest, ["schema", "tag", "commitSha", "platform", "minimumNodeMajor", "artifact", "checker", "checksums"], "manifest");
-  exactKeys(manifest.artifact, ["name", "sha256", "bytes", "installedTreeSha256"], "manifest.artifact");
+  exactKeys(manifest, ["schema", "tag", "commitSha", "minimumNodeMajor", "artifacts", "checker", "checksums"], "manifest");
   exactKeys(manifest.checker, ["name", "sha256", "bytes"], "manifest.checker");
   exactKeys(manifest.checksums, ["name", "sha256"], "manifest.checksums");
-  if (manifest.schema !== "seal.release/v1") refuse("invalid", `unsupported schema ${manifest.schema}`);
+  if (manifest.schema !== "seal.release/v2") refuse("invalid", `unsupported schema ${manifest.schema}`);
   if (!TAG.test(manifest.tag)) refuse("invalid", `tag is invalid: ${manifest.tag}`);
   if (!COMMIT.test(manifest.commitSha)) refuse("invalid", `commitSha is invalid: ${manifest.commitSha}`);
-  if (!/^[a-z0-9]+-[a-z0-9]+$/.test(manifest.platform)) refuse("invalid", `platform is invalid: ${manifest.platform}`);
   positiveInteger(manifest.minimumNodeMajor, "minimumNodeMajor");
-  if (typeof manifest.artifact.name !== "string" || !manifest.artifact.name) refuse("invalid", "artifact.name is absent");
-  digest(manifest.artifact.sha256, "artifact.sha256");
-  positiveInteger(manifest.artifact.bytes, "artifact.bytes");
-  digest(manifest.artifact.installedTreeSha256, "artifact.installedTreeSha256");
+  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 3) refuse("invalid", "artifacts must contain exactly three entries");
+  for (const [index, artifact] of manifest.artifacts.entries()) {
+    const darwin = artifact?.platform === "darwin-arm64" || artifact?.platform === "darwin-x64";
+    exactKeys(artifact, darwin
+      ? ["platform", "name", "sha256", "bytes", "installedTreeSha256", "nativeHelperProvenance"]
+      : ["platform", "name", "sha256", "bytes", "installedTreeSha256"], `artifacts[${index}]`);
+    if (!/^[a-z0-9]+-[a-z0-9]+$/.test(artifact.platform)) refuse("invalid", `artifact platform is invalid: ${artifact.platform}`);
+    if (typeof artifact.name !== "string" || !artifact.name) refuse("invalid", `artifacts[${index}].name is absent`);
+    digest(artifact.sha256, `artifacts[${index}].sha256`);
+    positiveInteger(artifact.bytes, `artifacts[${index}].bytes`);
+    digest(artifact.installedTreeSha256, `artifacts[${index}].installedTreeSha256`);
+    if (darwin && artifact.nativeHelperProvenance !== "release-produced, not independently reproduced") {
+      refuse("invalid", `artifacts[${index}] has incorrect native-helper provenance`);
+    }
+  }
+  const platforms = manifest.artifacts.map((artifact) => artifact.platform);
+  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "darwin-x64", "linux-x64"])) {
+    refuse("invalid", `artifact platforms are invalid: ${platforms.join(", ")}`);
+  }
   if (manifest.checker.name !== "seal-receipt-check.mjs") refuse("invalid", `checker.name is invalid: ${manifest.checker.name}`);
   digest(manifest.checker.sha256, "checker.sha256");
   positiveInteger(manifest.checker.bytes, "checker.bytes");

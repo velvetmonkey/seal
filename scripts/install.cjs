@@ -4,7 +4,6 @@
 // artifact: the payload is appended after the marker. It never searches
 // PATH for another seal, and it will not install without an operator pin.
 const crypto = require("node:crypto");
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -91,17 +90,6 @@ function parseArgs(argv) {
     refuse("unknown_flag", `unknown installer flag: ${flag}`);
   }
   return out;
-}
-
-function buildMacosProcessStartWitness(storeRoot) {
-  const source = path.join(storeRoot, "runtime", "macos-process-start-witness.c");
-  const helper = path.join(storeRoot, "runtime", "macos-process-start-witness");
-  const result = spawnSync("cc", ["-Wall", "-Wextra", "-Werror", source, "-o", helper], { encoding: "utf8" });
-  if (result.error || result.status !== 0) {
-    const detail = (result.stderr || result.error?.message || "compiler failed").trim();
-    refuse("macos_helper_build_failed", detail);
-  }
-  fs.chmodSync(helper, 0o555);
 }
 
 function writeFileDeep(target, data, mode) {
@@ -197,8 +185,7 @@ function main() {
       "UNSUPPORTED PLATFORM",
       "",
       "Seal v0.2.0-rc.3.",
-      "macOS source portability is CI-exercised for install, demo and receipt checking.",
-      "Protect is not supported on macOS yet.",
+      "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
       "",
       "No files were changed.",
       "",
@@ -266,10 +253,14 @@ function main() {
 
   for (const file of files) {
     if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
-    const mode = file.path === "bin/seal" || file.path.endsWith("/seal-launch.cjs") ? 0o555 : 0o444;
+    const mode = file.path === "bin/seal" || file.path.endsWith("/seal-launch.cjs") ||
+      file.path === "runtime/macos-process-start-witness" ? 0o555 : 0o444;
     verifyOrWriteStoreFile(path.join(storeRoot, file.path), file, mode);
   }
-  if (manifest.platform.startsWith("darwin-")) buildMacosProcessStartWitness(storeRoot);
+  if (manifest.platform.startsWith("darwin-") &&
+      !files.some((file) => file.path === "runtime/macos-process-start-witness")) {
+    refuse("artifact_missing", "macOS payload has no process-start witness helper");
+  }
 
   const launchSrc = files.find((file) => file.path === "scripts/seal-launch.cjs");
   if (!launchSrc) refuse("artifact_missing", "payload has no scripts/seal-launch.cjs");

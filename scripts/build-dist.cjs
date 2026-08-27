@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Build one platform-labelled install artifact. No native compilation or key.
+// Build one platform-labelled install artifact. The macOS helper supplied by
+// the matching release runner is release-produced, not independently reproduced.
 const fs = require("node:fs");
 const path = require("node:path");
 require("./sync-version.cjs");
 const { packPayload, sha256Hex, SUPPORTED_PLATFORMS } = require("../spine/integrity.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 const { productIdentity, artifactName } = require("./product-identity.cjs");
+const { requireHelperPlatform } = require("./macos-helper.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const MARKER = "\n// --SEAL-PAYLOAD--\n";
@@ -59,9 +61,9 @@ function main() {
     process.stderr.write(`REFUSE unsupported_platform: cannot build artifact for ${platform || "<absent>"}\n`);
     process.exit(1);
   }
-  // The payload is named by VERSION and stays byte-identical across commits,
-  // so the published pin can be committed. The FILE is named by the product
-  // identity, so an untagged build cannot pass for the release.
+  // The FILE is named by the product identity, so an untagged build cannot
+  // pass for the release. Darwin payloads and tree digests are platform-bound
+  // because they include the matching native helper.
   const identity = productIdentity({ root: ROOT, version });
   const outDir = process.argv.includes("--out")
     ? path.resolve(process.argv[process.argv.indexOf("--out") + 1])
@@ -71,6 +73,18 @@ function main() {
   const staging = fs.mkdtempSync(path.join(outDir, ".stage-"));
   try {
     for (const rel of PAYLOAD_PATHS) copyInto(staging, rel);
+    if (platform.startsWith("darwin-")) {
+      const helperAt = process.argv.indexOf("--macos-helper");
+      const helper = helperAt >= 0 ? process.argv[helperAt + 1] : undefined;
+      if (!helper) {
+        process.stderr.write(`REFUSE macos_helper_absent: ${platform} requires --macos-helper built on its matching release runner\n`);
+        process.exit(1);
+      }
+      requireHelperPlatform(helper, platform);
+      const destination = path.join(staging, "runtime", "macos-process-start-witness");
+      fs.copyFileSync(helper, destination);
+      fs.chmodSync(destination, 0o555);
+    }
     const { payload, manifest } = packPayload(staging, version, platform);
     const installerSrc = fs.readFileSync(path.join(ROOT, "scripts", "install.cjs"), "utf8")
       .replace(/^#!\/usr\/bin\/env node\n/, "");
@@ -107,6 +121,12 @@ function main() {
       sha256: digest,
       bytes: artifact.length,
       treeSha256: manifest.treeSha256,
+      ...(platform.startsWith("darwin-") ? {
+        nativeHelper: {
+          path: "runtime/macos-process-start-witness",
+          provenance: "release-produced, not independently reproduced",
+        },
+      } : {}),
     };
     fs.writeFileSync(path.join(outDir, `${name}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
     process.stdout.write(`${dest}\n`);

@@ -10,16 +10,29 @@ function argument(name) {
   return process.argv[at + 1];
 }
 
+function argumentsFor(name) {
+  const values = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    if (process.argv[index] === name) {
+      if (!process.argv[index + 1]) throw new Error(`missing ${name}`);
+      values.push(process.argv[index + 1]);
+    }
+  }
+  return values;
+}
+
 try {
-  const artifact = path.resolve(argument("--artifact"));
+  const artifacts = argumentsFor("--artifact").map((artifact) => path.resolve(artifact));
   const checker = path.resolve(argument("--checker"));
   const checksums = path.resolve(argument("--checksums"));
   const out = path.resolve(argument("--out"));
   const manifest = manifestFromObserved({
     tag: argument("--tag"),
     commitSha: argument("--commit"),
-    artifactName: path.basename(artifact),
-    artifactBytes: fs.readFileSync(artifact),
+    artifacts: artifacts.map((artifact) => ({
+      name: path.basename(artifact),
+      bytes: fs.readFileSync(artifact),
+    })),
     checkerName: path.basename(checker),
     checkerBytes: fs.readFileSync(checker),
     checksumsName: path.basename(checksums),

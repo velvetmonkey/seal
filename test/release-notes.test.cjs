@@ -42,27 +42,18 @@ test("v0.2.0-rc.2 release notes retain the immutable tag's Linux-only platform c
   assert.doesNotMatch(notes, /v0\.2\.0-rc\.2 supports Linux x86-64 and macOS/);
 });
 
-test("every current platform-claim surface excludes macOS Protect support", () => {
+test("current product and release surfaces state macOS Protect parity", () => {
   const claimSites = [
     ".github/workflows/release.yml",
-    "README.md",
     "bin/seal",
-    "docs/assurance/README.md",
-    "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
-    "docs/assurance/distribution.md",
-    "docs/assurance/index.html",
-    "docs/guide/README.md",
-    "docs/guide/when-something-looks-wrong.md",
-    "docs/start/install.md",
     "scripts/install.cjs",
     "scripts/seal-launch.cjs",
     "spine/platform.cjs",
   ];
   for (const file of claimSites) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, /macOS source portability is CI-exercised for install, demo and receipt checking\./, `${file}: portability boundary`);
-    assert.match(text, /Protect is not supported on macOS yet\./, `${file}: Protect boundary`);
-    assert.doesNotMatch(text, /supports Linux x86-64 and macOS x64\/arm64|source builds support Linux x86-64 and macOS/i, `${file}: overbroad platform claim`);
+    assert.match(text, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
+    assert.doesNotMatch(text, /Protect is not supported on macOS yet\./, `${file}: retired exclusion`);
   }
 });
 

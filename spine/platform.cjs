@@ -9,7 +9,8 @@ function platformSupport() {
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
   const installSupported = platform === "linux" && arch === "x64"
     || platform === "darwin" && (arch === "x64" || arch === "arm64");
-  const protectSupported = platform === "linux" && arch === "x64";
+  const protectSupported = platform === "linux" && arch === "x64"
+    || platform === "darwin" && (arch === "x64" || arch === "arm64");
   return { supported: installSupported, installSupported, protectSupported, platform, arch };
 }
 
@@ -18,8 +19,7 @@ function unsupportedPlatformText() {
     "UNSUPPORTED PLATFORM",
     "",
     "Seal v0.2.0-rc.3.",
-    "macOS source portability is CI-exercised for install, demo and receipt checking.",
-    "Protect is not supported on macOS yet.",
+    "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",
     "",
@@ -39,11 +39,7 @@ function requireProtectSupportedPlatform() {
   const { protectSupported, platform, arch } = platformSupport();
   if (protectSupported) return;
   process.stderr.write(unsupportedPlatformText());
-  if (platform === "darwin") {
-    process.stderr.write(`REFUSE unsupported_platform: Protect is not supported on macOS yet; this is ${platform}-${arch}\n`);
-  } else {
-    process.stderr.write(`REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
-  }
+  process.stderr.write(`REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
   process.exit(1);
 }
 

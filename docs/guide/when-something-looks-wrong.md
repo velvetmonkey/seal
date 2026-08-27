@@ -469,12 +469,17 @@ artifact being installed. Do not overwrite it blindly. Choose a fresh prefix,
 or repair the existing install only after determining why it no longer
 verifies; then rerun the verified artifact.
 
-### `macos_helper_build_failed`
+### `macos_helper_absent`
 
-On macOS, the installer could not compile the bundled process-start witness
-helper with `cc`. The install cannot safely continue without that helper.
-Install the Xcode Command Line Tools (or repair the reported compiler error),
-remove the partial install, and rerun the verified artifact.
+A Darwin artifact build did not receive the native process-start witness helper
+from its matching release runner. No artifact was packed. Compile the helper on
+that runner and pass its path with `--macos-helper`.
+
+### `macos_helper_architecture`
+
+The supplied native process-start witness helper is not a thin Mach-O for the
+Darwin artifact's named architecture. No artifact was packed. Compile it on the
+matching runner and check the helper against that platform before retrying.
 
 ### `pin_missing`
 

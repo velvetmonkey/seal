@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   isLegacyReleaseTag,
-  manifestFromObserved,
+  legacyManifestFromObserved,
   validateManifestAgainstObserved,
   validateManifestShape,
 } from "./release-manifest-lib.mjs";
@@ -117,6 +117,34 @@ async function observedFromRelease(release, names) {
   };
 }
 
+async function observedMatrixFromRelease(release, manifest) {
+  const artifactAssets = manifest.artifacts.map((artifact) => oneAsset(release, artifact.name));
+  const checkerAsset = oneAsset(release, manifest.checker.name);
+  const checksumsAsset = oneAsset(release, manifest.checksums.name);
+  const [artifactBytes, checkerBytes, checksumsBytes, commitSha] = await Promise.all([
+    Promise.all(artifactAssets.map(fetchBytes)),
+    fetchBytes(checkerAsset),
+    fetchBytes(checksumsAsset),
+    tagCommit(release.tag_name),
+  ]);
+  return {
+    tag: release.tag_name,
+    commitSha,
+    artifacts: artifactAssets.map((asset, index) => ({ name: asset.name, bytes: artifactBytes[index] })),
+    checkerName: checkerAsset.name,
+    checkerBytes,
+    checksumsName: checksumsAsset.name,
+    checksumsBytes,
+  };
+}
+
+function documentationManifest(manifest) {
+  if (!Array.isArray(manifest.artifacts)) return manifest;
+  const artifact = manifest.artifacts.find((candidate) => candidate.platform === "linux-x64");
+  if (!artifact) refuse("platform", "release manifest has no linux-x64 documentation artifact");
+  return { ...manifest, artifact, platform: artifact.platform };
+}
+
 async function remoteManifest() {
   const release = await latestPublishedRelease();
   const manifestAssets = release.assets.filter((asset) => asset.name === "release-manifest.json");
@@ -133,7 +161,7 @@ async function remoteManifest() {
       checksums: "SHA256SUMS",
     });
     process.stderr.write(`COMPAT release_docs_legacy: ${release.tag_name} predates release-manifest.json; derived and verified its facts from published assets\n`);
-    return { manifest: manifestFromObserved(observed), manifestPublished: false };
+    return { manifest: legacyManifestFromObserved(observed), manifestPublished: false };
   }
   let manifest;
   try {
@@ -143,12 +171,8 @@ async function remoteManifest() {
   }
   validateManifestShape(manifest);
   if (manifest.tag !== release.tag_name) refuse("release_mismatch", `manifest tag ${manifest.tag} is not latest release ${release.tag_name}`);
-  const observed = await observedFromRelease(release, {
-    artifact: manifest.artifact.name,
-    checker: manifest.checker.name,
-    checksums: manifest.checksums.name,
-  });
-  return { manifest: validateManifestAgainstObserved(manifest, observed), manifestPublished: true };
+  const observed = await observedMatrixFromRelease(release, manifest);
+  return { manifest: documentationManifest(validateManifestAgainstObserved(manifest, observed)), manifestPublished: true };
 }
 
 function localManifest(manifestPath, assetsDir, commitSha) {
@@ -165,16 +189,16 @@ function localManifest(manifestPath, assetsDir, commitSha) {
     try { return fs.readFileSync(target); }
     catch (error) { refuse("asset_read", `${target}: ${error.message}`); }
   };
-  return { manifest: validateManifestAgainstObserved(manifest, {
+  const observed = {
     tag: manifest.tag,
     commitSha,
-    artifactName: manifest.artifact.name,
-    artifactBytes: read(manifest.artifact.name),
+    artifacts: manifest.artifacts.map((artifact) => ({ name: artifact.name, bytes: read(artifact.name) })),
     checkerName: manifest.checker.name,
     checkerBytes: read(manifest.checker.name),
     checksumsName: manifest.checksums.name,
     checksumsBytes: read(manifest.checksums.name),
-  }), manifestPublished: true };
+  };
+  return { manifest: documentationManifest(validateManifestAgainstObserved(manifest, observed)), manifestPublished: true };
 }
 
 function platformSentence(platform) {
@@ -191,7 +215,8 @@ function version(manifest) {
 function releaseSentence(manifest, manifestPublished) {
   const releaseUrl = `https://github.com/${REPOSITORY}/releases/tag/${manifest.tag}`;
   const commitUrl = `https://github.com/${REPOSITORY}/commit/${manifest.commitSha}`;
-  const assets = `\`${manifest.artifact.name}\`, \`${manifest.checker.name}\`, and \`${manifest.checksums.name}\``;
+  const artifactNames = (manifest.artifacts || [manifest.artifact]).map((artifact) => `\`${artifact.name}\``);
+  const assets = `${artifactNames.join(", ")}, \`${manifest.checker.name}\`, and \`${manifest.checksums.name}\``;
   const observable = `The [${manifest.tag} release](${releaseUrl}) publishes ${assets}; its tag resolves to commit [\`${manifest.commitSha}\`](${commitUrl}).`;
   if (!manifestPublished) return observable;
   return `${observable} Its \`release-manifest.json\` uses schema \`${manifest.schema}\`.`;
@@ -219,6 +244,7 @@ function readmeRegions({ manifest, manifestPublished }) {
       "Keep the printed receipt paths until you have checked them.",
       "",
       `Install the published ${platform} release before you run the command. The release tag also identifies its \`${manifest.checksums.name}\`. These commands download the binary and sibling receipt-checker asset from that release. Check both assets' digests and byte counts before you run them. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.`,
+      ...(manifest.artifacts ? ["", "The native macOS process-start witness helper is release-produced, not independently reproduced."] : []),
       "",
       "```bash",
       `SEAL_VERSION=${manifest.tag}`,
@@ -278,8 +304,12 @@ function installRegions({ manifest, manifestPublished }) {
     [
       SENTINEL,
       `# Install Seal ${manifest.tag}`,
-      `${releaseSentence(manifest, manifestPublished)} macOS source portability is CI-exercised for install, demo and receipt checking.`,
-      `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+      manifest.artifacts
+        ? `${releaseSentence(manifest, manifestPublished)} Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.`
+        : `${releaseSentence(manifest, manifestPublished)} macOS source portability is CI-exercised for install, demo and receipt checking.`,
+      manifest.artifacts
+        ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`
+        : `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
       "The installer refuses before changing anything on an unsupported or mismatched platform.",
       "",
       "This page is the SHA256SUMS verification wall. The [README](../../README.md)",
@@ -381,7 +411,16 @@ function checkPublishedClaims(document, facts) {
     ...values(document.text, /^# Install Seal (v[^\s]+)$/gm),
   ];
   requireAll("release tag", releaseTags, manifest.tag);
-  requireAll("artifact", values(document.text, /\bseal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-[a-z0-9]+-[a-z0-9]+\b/g), manifest.artifact.name);
+  const namedArtifacts = values(document.text, /\bseal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-[a-z0-9]+-[a-z0-9]+\b/g);
+  if (manifest.artifacts) {
+    const expectedArtifacts = new Set(manifest.artifacts.map((artifact) => artifact.name));
+    const unknownArtifacts = [...new Set(namedArtifacts.filter((name) => !expectedArtifacts.has(name)))];
+    const missingArtifacts = [...expectedArtifacts].filter((name) => !namedArtifacts.includes(name));
+    if (unknownArtifacts.length) document.failures.push(`artifact names are not published release data: ${unknownArtifacts.join(", ")}`);
+    if (missingArtifacts.length) document.failures.push(`published artifacts are absent: ${missingArtifacts.join(", ")}`);
+  } else {
+    requireAll("artifact", namedArtifacts, manifest.artifact.name);
+  }
   requireAll("tag commit", values(document.text, /\b([0-9a-f]{40})\b/g), manifest.commitSha);
   requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
   requireAll("checker byte count", values(document.text, /\bchecker_bytes=(\d+)\b/g), manifest.checker.bytes);
