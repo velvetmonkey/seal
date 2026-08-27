@@ -9,34 +9,56 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const MACOS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
+// sysctl is part of the macOS system volume at this path on both Intel and
+// Apple-silicon hosts. Never let the caller's PATH choose a boot-time bound.
+const MACOS_SYSCTL = "/usr/sbin/sysctl";
 const MACOS_WITNESS_TIMEOUT_MS = 1000;
 const MACOS_MIN_BOOT_SECONDS = 946684800;
 
 function macosProtectPrerequisites() {
   try {
     const helper = fs.statSync(MACOS_HELPER);
-    if (!helper.isFile()) return false;
+    if (!helper.isFile()) return { supported: false, reason: "macos_process_start_witness_not_file" };
     fs.accessSync(MACOS_HELPER, fs.constants.X_OK);
     const nowSeconds = Date.now() / 1000;
-    const boot = spawnSync("sysctl", ["-n", "kern.boottime"], {
+    const boot = spawnSync(MACOS_SYSCTL, ["-n", "kern.boottime"], {
       encoding: "utf8",
       timeout: MACOS_WITNESS_TIMEOUT_MS,
     });
     const bootMatch = /\{ sec = ([1-9]\d*)(?=[^\d.e])(?:,| ,) usec = \d+ \}/.exec(boot.stdout || "");
-    if (boot.error || boot.status !== 0 || !bootMatch ||
-        (boot.stdout.match(/\bsec = /g) || []).length !== 1) return false;
+    if (boot.error?.code === "ETIMEDOUT") return { supported: false, reason: "macos_sysctl_timeout" };
+    if (boot.error || boot.status !== 0) return { supported: false, reason: "macos_sysctl_unavailable" };
+    if (!bootMatch || (boot.stdout.match(/\bsec = /g) || []).length !== 1) {
+      return { supported: false, reason: "macos_boot_time_invalid" };
+    }
     const bootSeconds = Number(bootMatch[1]);
-    if (!Number.isSafeInteger(bootSeconds) || bootSeconds < MACOS_MIN_BOOT_SECONDS || bootSeconds > nowSeconds) return false;
+    if (!Number.isSafeInteger(bootSeconds) || bootSeconds < MACOS_MIN_BOOT_SECONDS || bootSeconds > nowSeconds) {
+      return { supported: false, reason: "macos_boot_time_invalid" };
+    }
     const witness = spawnSync(MACOS_HELPER, [String(process.pid)], {
       encoding: "utf8",
       timeout: MACOS_WITNESS_TIMEOUT_MS,
     });
     const witnessMatch = /^([1-9]\d*)\.\d{6}\n?$/.exec(witness.stdout || "");
-    if (witness.error || witness.status !== 0 || !witnessMatch) return false;
+    if (witness.error?.code === "ETIMEDOUT") {
+      return { supported: false, reason: "macos_process_start_witness_timeout" };
+    }
+    if (witness.error || witness.status !== 0) {
+      return { supported: false, reason: "macos_process_start_witness_unavailable" };
+    }
+    if (!witnessMatch) return { supported: false, reason: "macos_process_start_witness_invalid" };
     const startSeconds = Number(witnessMatch[1]);
-    return Number.isSafeInteger(startSeconds) && startSeconds >= bootSeconds && startSeconds <= nowSeconds;
-  } catch {
-    return false;
+    if (!Number.isSafeInteger(startSeconds) || startSeconds < bootSeconds || startSeconds > nowSeconds) {
+      return { supported: false, reason: "macos_process_start_witness_invalid" };
+    }
+    return { supported: true };
+  } catch (error) {
+    return {
+      supported: false,
+      reason: error?.code === "EACCES"
+        ? "macos_process_start_witness_not_executable"
+        : "macos_process_start_witness_unavailable",
+    };
   }
 }
 
@@ -45,9 +67,19 @@ function platformSupport() {
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
   const installSupported = platform === "linux" && arch === "x64"
     || platform === "darwin" && (arch === "x64" || arch === "arm64");
+  const macosPrerequisites = platform === "darwin" && (arch === "x64" || arch === "arm64")
+    ? macosProtectPrerequisites()
+    : null;
   const protectSupported = platform === "linux" && arch === "x64"
-    || platform === "darwin" && (arch === "x64" || arch === "arm64") && macosProtectPrerequisites();
-  return { supported: installSupported, installSupported, protectSupported, platform, arch };
+    || macosPrerequisites?.supported === true;
+  return {
+    supported: installSupported,
+    installSupported,
+    protectSupported,
+    ...(macosPrerequisites && !macosPrerequisites.supported ? { protectReason: macosPrerequisites.reason } : {}),
+    platform,
+    arch,
+  };
 }
 
 function unsupportedPlatformText() {

@@ -555,6 +555,9 @@ function livePid(pid) {
 }
 
 const MACOS_PROCESS_START_WITNESS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
+// The boot-time lower bound must come from the macOS system binary, never
+// from a caller-controlled PATH entry.
+const MACOS_SYSCTL = "/usr/sbin/sysctl";
 // A direct sysctl helper should complete in milliseconds. One second leaves
 // ample scheduler headroom while ensuring a stuck witness cannot hold a lock.
 const MACOS_PROCESS_START_WITNESS_TIMEOUT_MS = 1000;
@@ -579,7 +582,7 @@ function parseMacosProcessStartWitnessBounds(stdout, nowSeconds = Date.now() / 1
 
 function macosProcessStartWitnessBounds() {
   try {
-    const result = spawnSync("sysctl", ["-n", "kern.boottime"], {
+    const result = spawnSync(MACOS_SYSCTL, ["-n", "kern.boottime"], {
       encoding: "utf8",
       timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
     });
@@ -953,6 +956,14 @@ function doctor(env = process.env) {
       text: "REFUSED\n  Claude Code can automatically answer elicitation requests.\n  Human approval origin cannot be assumed in this configuration.\nREFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed\n",
     };
   }
+  const support = platformSupport();
+  if (support.installSupported && !support.protectSupported && support.protectReason) {
+    return {
+      ok: false,
+      code: support.protectReason,
+      text: `REFUSED\n  Protect is unavailable: ${support.protectReason}.\nREFUSE ${support.protectReason}: the macOS process-start witness prerequisite failed\n`,
+    };
+  }
   return {
     ok: true,
     text: "ASSUMPTION\n  Seal has not established whether this Claude Code configuration can\n  automatically answer elicitation requests.\n",
@@ -961,7 +972,7 @@ function doctor(env = process.env) {
 
 function requireHumanApprovalOrigin(env = process.env) {
   const verdict = doctor(env);
-  if (!verdict.ok) {
+  if (!verdict.ok && verdict.code === "elicitation_hook_configured") {
     throw new ProtectionError(
       verdict.code,
       "an auto-response hook is set; human approval origin cannot be assumed",
@@ -983,6 +994,7 @@ module.exports = {
   loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
+  macosProcessStartWitnessBounds,
   parseMacosProcessStartWitness,
   parseMacosProcessStartWitnessBounds,
   processStartWitness,

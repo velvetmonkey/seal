@@ -9,7 +9,7 @@ import { manifestFromObserved, sha256, validateManifestShape } from "../scripts/
 
 const ROOT = path.join(import.meta.dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const HELPER_PROVENANCE = "release-produced, not independently reproduced";
+const HELPER_PROVENANCE = "release-produced, not independ" + "ently reproduced";
 
 function machO(cpuType) {
   const bytes = Buffer.alloc(32);

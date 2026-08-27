@@ -3,8 +3,10 @@
 // arm's-length verification. Our binary re-deriving our own receipt is not an
 // outside check, and only the separately published checker may say verified.
 //
-// Exact negated provenance is permitted. Positive product-reproduction prose
-// remains forbidden.
+// One exact, subject-bearing negated provenance sentence is permitted. An
+// allowlist entry that does not name its subject is a skeleton key: a control
+// that cannot tell what a sentence is about cannot tell whether it is true.
+// Positive product-reproduction prose remains forbidden.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -20,7 +22,7 @@ const ARTIFACT = `seal-v${VERSION}-linux-x64`;
 const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
 const BANNED = ["PASS" + " VERIFIED"];
 const INDEPENDENCE = "independent";
-const ALLOWED_NEGATED_PROVENANCE = "release-produced, not independently reproduced";
+const ALLOWED_NEGATED_PROVENANCE = "The native macOS process-start witness helper is release-produced, not independently reproduced.";
 const POSITIVE_INDEPENDENCE_CLAIM = /\bindependent(?:ly)?\b/i;
 const DOC_BANNED_CLAIMS = [
   {
@@ -71,7 +73,7 @@ function isTemporaryDirectory(directory) {
 }
 
 function hasPositiveIndependentReproductionClaim(text) {
-  return POSITIVE_INDEPENDENCE_CLAIM.test(text.replaceAll(ALLOWED_NEGATED_PROVENANCE, ""));
+  return POSITIVE_INDEPENDENCE_CLAIM.test(text.replace(ALLOWED_NEGATED_PROVENANCE, ""));
 }
 
 function scan(dir, hits) {
@@ -130,9 +132,15 @@ test("no banned verification claim survives in product surfaces or docs/", () =>
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
 });
 
-test("the exact negated native-helper provenance passes and its positive polarity fails", () => {
+test("only one exact subject-bearing native-helper provenance sentence is allowed", () => {
   assert.equal(hasPositiveIndependentReproductionClaim(ALLOWED_NEGATED_PROVENANCE), false);
   console.log(`SILENT exact negated provenance: ${ALLOWED_NEGATED_PROVENANCE}`);
+  const falseWasm = "The WASM kernel is release-produced, not independently reproduced.";
+  assert.equal(hasPositiveIndependentReproductionClaim(falseWasm), true);
+  console.log(`RED false different-subject provenance: ${falseWasm}`);
+  const doubled = `${ALLOWED_NEGATED_PROVENANCE}${ALLOWED_NEGATED_PROVENANCE}`;
+  assert.equal(hasPositiveIndependentReproductionClaim(doubled), true);
+  console.log(`RED doubled permitted sentence: ${doubled}`);
   assert.equal(hasPositiveIndependentReproductionClaim("independently reproduced"), true);
   console.log("RED positive provenance: independently reproduced");
 });

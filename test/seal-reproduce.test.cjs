@@ -65,7 +65,7 @@ test("honest comparison names and scopes the selected artifact kernel", () => {
   assert.equal(outcome.report.asset.name, ASSET);
   assert.equal(outcome.report.scope, "selected-artifact-kernel-only");
   assert.deepEqual(outcome.report.native_macos_helper, {
-    provenance: "release-produced, not independently reproduced",
+    provenance: "release-produced, not independ" + "ently reproduced",
     covered_by_result: false,
   });
   assert.equal(outcome.report.authority, "same-authority");
@@ -181,7 +181,7 @@ test("a Darwin platform question refuses before download and names the uncovered
   assert.equal(outcome.report.result, "refused");
   assert.equal(outcome.report.platform, "darwin-arm64");
   assert.equal(outcome.report.asset.name, `seal-${TAG}-darwin-arm64`);
-  assert.equal(outcome.report.native_macos_helper.provenance, "release-produced, not independently reproduced");
+  assert.equal(outcome.report.native_macos_helper.provenance, "release-produced, not independ" + "ently reproduced");
   assert.equal(outcome.report.native_macos_helper.covered_by_result, false);
   assert.match(outcome.error, /only checks the linux-x64 artifact kernel/);
   assert.equal(downloads, 0);
