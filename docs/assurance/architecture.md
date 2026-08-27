@@ -62,7 +62,7 @@ flowchart LR
         gw["Mediation boundary\n(gateway)"]
     end
 
-    subgraph kernel["Decision core — proven in Lean 4 (mcp-seal-dev)"]
+    subgraph kernel["Decision core — proven in Lean 4 (seal-host)"]
         core["default-deny · exact-target approval\nsingle-use · expiry · non-bypass"]
     end
 
@@ -87,7 +87,7 @@ flowchart LR
 
 ## What each box is (and what it is not)
 
-- **Decision core** (`mcp-seal-dev`) — the rulebook. Machine-checked Lean 4 theorems: default
+- **Decision core** (`seal-host`, the repository holding its Lean source) — the rulebook. Machine-checked Lean 4 theorems: default
   deny, allow **iff** a live approval record matches the exact target, single-use, expiry,
   non-bypass. Proven — but a *kernel* claim, not a whole-system claim; that the record was
   minted by the human you think is a custody assumption (truth box), not a theorem.

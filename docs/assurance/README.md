@@ -128,7 +128,8 @@ ruled on and explicitly never built; each says so in its opening lines.
 These files describe the wider Seal family (a Rust host, Lean proof kernels,
 a verifier fleet) rather than the Node CLI in this repository, whose gate is a
 JavaScript approval contract. Do not read them as claims about this product.
-Their disposition is an open ruling.
+Their Lean proof source is held in `seal-host`, not in this repository. Their
+disposition is an open ruling.
 
 - [AUTHORIZATION-MESH.md](../archive/AUTHORIZATION-MESH.md) — fleet coordination
   theorems; no fleet exists in this repository.

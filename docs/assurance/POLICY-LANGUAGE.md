@@ -16,6 +16,11 @@ ruling (`docs/archive/REPO-TOPOLOGY.md`): one merged repository, so file paths b
 against today's `seal-host` / `mcp-seal-dev` layout and survive the merge
 unchanged as subtrees.
 
+Lean-source provenance: every Lean proof property asserted in this draft refers
+to source held in `seal-host`, not to source shipped by this Node CLI. The
+`mcp-seal-dev` paths below are historical topology references, not a claim that
+this repository contains Lean source.
+
 ---
 
 ## 1. The design bet
@@ -207,7 +212,7 @@ Constraints enforced by the parser (violations are hard errors, not warnings):
 
 That is the entire language. **Every construct is listed above.** In
 particular, and deliberately, the language has *none* of the following, some of
-which the frozen V1 language (`mcp-seal-dev/Seal/Policy.lean`, `MatchSpec`)
+which the frozen V1 language (`seal-host/Seal/Policy.lean`, `MatchSpec`)
 does have — boxpol is not a superset of V1 and must not be described as one:
 
 - no `starts_with` (V1 has it) — string prefix breaks complement-with-finite-
@@ -236,7 +241,7 @@ schema attribute. Two ways it can be produced, and the schema declares which:
    the schema, labeled UNVERIFIED in every bundle, and differential-tested
    with its own corpus (§9, "SQLTestSuite").
 
-UNKNOWN (settles by inspection of `mcp-seal-dev` tool plumbing during V3.3):
+UNKNOWN (settles by inspection of `seal-host` tool plumbing during V3.3):
 whether the V3.3 Postgres sink can be constructor-mode. Today the mediated
 surface passes raw tool arguments through MCP `tools/call`; an agent that
 authors SQL needs lens mode. The bundle's UNKNOWN section must name which mode
@@ -246,7 +251,7 @@ is deployed, because the meaning of every claim depends on it.
 
 **Revision after reading the repository** (was: bespoke s-expressions). The
 signed artifact is a **SealV2 canonical JSON document**
-(`mcp-seal-dev/SealV2/Parser.lean` `IsCanonical`, serializer in
+(`seal-host/SealV2/Parser.lean` `IsCanonical`, serializer in
 `SealV2/Serialization.lean` with injectivity theorems in
 `SealV2/SerializationTheorems.lean` — `escapeString_injective`,
 `serializeString_injective`, …). The repository already owns a verified
@@ -1000,7 +1005,7 @@ cannot accumulate silently because the drifted state does not compile. This is
 SPARK's justified exception with the review board replaced by a gate plus
 version control — which is exactly what a one-person project has instead of a
 review board. The weaker form of the same idiom also exists in the tree and
-is instructive: `mcp-seal-dev/Test/Axioms.lean` is `#print axioms` only — it
+is instructive: `seal-host/Test/Axioms.lean` is `#print axioms` only — it
 prints the assumption sets into evidence output but pins nothing, so drift
 there must be *noticed* rather than *caught*. The delta between those two
 files is precisely the delta between social and mechanical discipline, and
