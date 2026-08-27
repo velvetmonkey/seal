@@ -537,6 +537,26 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   assert.match(refused.out, /Human approval origin cannot be assumed/);
 });
 
+test("protect refuses both auto-response hooks before creating protection state", () => {
+  for (const variable of ["SEAL_ELICITATION_AUTO_RESPONSE", "CLAUDE_ELICITATION_AUTO_RESPONSE"]) {
+    const root = tmpdir(`seal-protect3b-doctor-gate-${variable.toLowerCase()}-`);
+    const project = path.join(root, "project");
+    const home = path.join(root, "home");
+    fs.mkdirSync(project);
+    fs.mkdirSync(home);
+    const fakeBin = fakeClaudeBin(root);
+    const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, [variable]: "accept" };
+    writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "doctor-gate-data.txt")] });
+
+    const result = run(project, home, ["protect", "db", "demo.mutate"], env);
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, /^seal: REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed$/m);
+    assert.doesNotMatch(result.out, /^Protection: (?:PENDING RESTART|ACTIVE) /m);
+    assert.equal(fs.existsSync(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") })), false);
+    assert.equal(fs.existsSync(fakeLocalOverridePath(root)), false);
+  }
+});
+
 test("status renders a dead activation lease as STALE, not active", () => {
   const root = tmpdir("seal-protect3b-dead-lease-");
   const project = path.join(root, "project");

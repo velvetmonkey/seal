@@ -61,6 +61,20 @@ test("a dead lease is replaceable and increments the generation", async () => {
   assert.equal(activated.lease.startWitness, processStartWitness(process.pid));
 });
 
+test("activation refuses both auto-response hooks without promoting state", async () => {
+  for (const variable of ["SEAL_ELICITATION_AUTO_RESPONSE", "CLAUDE_ELICITATION_AUTO_RESPONSE"]) {
+    const setup = setupLeaseState();
+    await assert.rejects(
+      activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome, [variable]: "accept" }),
+      (error) => error.code === "elicitation_hook_configured" &&
+        /human approval origin cannot be assumed/.test(error.message),
+    );
+    const stored = JSON.parse(fs.readFileSync(setup.statePath, "utf8"));
+    assert.equal(stored.state, "PENDING RESTART");
+    assert.equal(stored.lease, null);
+  }
+});
+
 test("a live lease is not replaced and a second starter is refused", async () => {
   const setup = setupLeaseState();
   const first = await activationLease(setup.statePath, { XDG_DATA_HOME: setup.dataHome });
