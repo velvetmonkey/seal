@@ -7,6 +7,7 @@ altered receipt fields produce distinct named refusals	test/receipt-checker.test
 repairing altered receipt commitments cannot bypass the signature	test/receipt-checker.test.cjs	the signature is the unforgeable backstop: repairing commitments still refuses
 the standalone checker runs without the Seal binary	test/receipt-checker.test.cjs	the checker runs with the seal binary absent (copied to a clean dir)
 the checker takes its verifying key out of band	test/receipt-checker.test.cjs	the checker refuses to take its verifying key from inside the receipt
+current producer receipt facts remain frozen	test/receipt-vectors.test.cjs	captured producer receipt facts remain frozen
 an absent receipt path fails closed	test/seal-verify.test.cjs	verify distinguishes an uninspectable path from unreadable receipt contents
 empty malformed and non-receipt inputs fail closed	test/seal-verify.test.cjs	verify refuses empty, malformed, and non-receipt JSON paths
 an absent approval store fails closed	test/spine-retry.test.cjs	absent approval store: a refusal, not an empty store

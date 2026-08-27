@@ -1,5 +1,6 @@
 {
   "files": {
+    "conformance/receipt-vectors/producer-baseline-610bf01d.json": { "coveredBy": ["test/receipt-vectors.test.cjs:9"] },
     "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
     "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:9"] },
     "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:180"] },

@@ -54,6 +54,7 @@ test/proxy-lock.test.cjs
 test/readme-demo-transcript-guard.test.cjs
 test/readme-protect-state-witness.test.cjs
 test/receipt-checker.test.cjs
+test/receipt-vectors.test.cjs
 test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
 test/reinstall.test.cjs

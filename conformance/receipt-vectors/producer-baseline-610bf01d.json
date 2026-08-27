@@ -1,0 +1,326 @@
+{
+  "vector_set": "producer-baseline-610bf01d",
+  "source_commit": "610bf01d2b9120865902b959264616c27a61a942",
+  "captured_at": "2026-08-27",
+  "spine": {
+    "capture": {
+      "producer_command": "printf y\\n | node bin/seal demo --dir <temporary-directory>",
+      "receipt_kind": "ALLOW",
+      "anchoring_fixture": true
+    },
+    "body": {
+      "receipt": "seal.spine/v1",
+      "at": 1787845658544,
+      "decision": "ALLOW",
+      "tool": "demo.mutate",
+      "arguments": {
+        "line": "seal demo wrote this line"
+      },
+      "child": {
+        "argv": [
+          "/usr/bin/node",
+          "/home/monkey/src/seal/bin/seal",
+          "__demo-server",
+          "/tmp/seal-receiptvectors-spine-yfIztn/child/data.txt"
+        ]
+      },
+      "evidence": {
+        "handle_returned_unaltered": true,
+        "effect_matches_bound_bytes": true,
+        "within_expiry": true,
+        "same_connection_epoch": true,
+        "one_use_consumed_now": true,
+        "approval_nonce": "51536ea8923d27d00ec83cc2467362da",
+        "authorization_rule": "PROVED",
+        "state_machine": "TESTED",
+        "kernel": {
+          "verdict": "ALLOW",
+          "raw": "{\"audit\":\"{\\\"certs\\\":[{\\\"certHash\\\":\\\"9988708011512853706\\\",\\\"kernel\\\":\\\"safety\\\",\\\"reason\\\":\\\"8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697\\\",\\\"verdict\\\":\\\"allow\\\"},{\\\"certHash\\\":\\\"12756644985251018087\\\",\\\"kernel\\\":\\\"temporal\\\",\\\"reason\\\":\\\"trace ok (1 events)\\\",\\\"verdict\\\":\\\"allow\\\"}],\\\"epoch\\\":1,\\\"request_sha256\\\":\\\"e91da1b25254f7b0e0306c5986a007fd6c55136e7f20f4d4c40029ccebcfde52\\\",\\\"tool\\\":\\\"demo.mutate\\\",\\\"verdict\\\":\\\"allow\\\"}\",\"route\":\"forward\"}",
+          "issued_target": "8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697",
+          "wasm_sha256": "28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657"
+        },
+        "human_present": "unknown",
+        "human_present_detail": "a client holding the correct handle can fabricate an acceptance; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property"
+      },
+      "approvalRequest": {
+        "correlation": "seal-receipt-correlation/v1.850db8609367aeb4d6fff18a10d4708e62de8c8bc90eee4365e0e06fcbc5ae17"
+      },
+      "seal": {
+        "alg": "ed25519",
+        "decision_sha256": "25a2778c67ba986882a577479bff5aa3a854b34635d6647cdf11e08550169503",
+        "tool_sha256": "b062f030d5c12e5eb6e8ae7bf085758df7e4a5b2ddb5c3d517d0725e16cc71f7",
+        "args_sha256": "45377eab0d80b38e554d8beb5501a14b83b6c38fd270221f8a1a6775ae46810a",
+        "effect_sha256": "271e80a001f0e1f863305ae1bdc7202d038920eaae0c1451f7637f08da8c522e",
+        "sig": "3505e03c76e60a6f8ab3e169d2e01d6e2855df5beb84bde0926a6547f1d4378b5c412c554ceb0731e84fef338fcdb2322359326b7757a6f26cae46c00a07e50d"
+      }
+    },
+    "public_key_hex": "1830ebb37346f5c5ab9710c067a027decf3a258661b9460f03d95fbb4cfb0d62",
+    "expected": {
+      "canonical_body_without_signature_utf8": "{\"approvalRequest\":{\"correlation\":\"seal-receipt-correlation/v1.850db8609367aeb4d6fff18a10d4708e62de8c8bc90eee4365e0e06fcbc5ae17\"},\"arguments\":{\"line\":\"seal demo wrote this line\"},\"at\":1787845658544,\"child\":{\"argv\":[\"/usr/bin/node\",\"/home/monkey/src/seal/bin/seal\",\"__demo-server\",\"/tmp/seal-receiptvectors-spine-yfIztn/child/data.txt\"]},\"decision\":\"ALLOW\",\"evidence\":{\"approval_nonce\":\"51536ea8923d27d00ec83cc2467362da\",\"authorization_rule\":\"PROVED\",\"effect_matches_bound_bytes\":true,\"handle_returned_unaltered\":true,\"human_present\":\"unknown\",\"human_present_detail\":\"a client holding the correct handle can fabricate an acceptance; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property\",\"kernel\":{\"issued_target\":\"8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697\",\"raw\":\"{\\\"audit\\\":\\\"{\\\\\\\"certs\\\\\\\":[{\\\\\\\"certHash\\\\\\\":\\\\\\\"9988708011512853706\\\\\\\",\\\\\\\"kernel\\\\\\\":\\\\\\\"safety\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"},{\\\\\\\"certHash\\\\\\\":\\\\\\\"12756644985251018087\\\\\\\",\\\\\\\"kernel\\\\\\\":\\\\\\\"temporal\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"trace ok (1 events)\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"}],\\\\\\\"epoch\\\\\\\":1,\\\\\\\"request_sha256\\\\\\\":\\\\\\\"e91da1b25254f7b0e0306c5986a007fd6c55136e7f20f4d4c40029ccebcfde52\\\\\\\",\\\\\\\"tool\\\\\\\":\\\\\\\"demo.mutate\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"}\\\",\\\"route\\\":\\\"forward\\\"}\",\"verdict\":\"ALLOW\",\"wasm_sha256\":\"28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657\"},\"one_use_consumed_now\":true,\"same_connection_epoch\":true,\"state_machine\":\"TESTED\",\"within_expiry\":true},\"receipt\":\"seal.spine/v1\",\"seal\":{\"alg\":\"ed25519\",\"args_sha256\":\"45377eab0d80b38e554d8beb5501a14b83b6c38fd270221f8a1a6775ae46810a\",\"decision_sha256\":\"25a2778c67ba986882a577479bff5aa3a854b34635d6647cdf11e08550169503\",\"effect_sha256\":\"271e80a001f0e1f863305ae1bdc7202d038920eaae0c1451f7637f08da8c522e\",\"tool_sha256\":\"b062f030d5c12e5eb6e8ae7bf085758df7e4a5b2ddb5c3d517d0725e16cc71f7\"},\"tool\":\"demo.mutate\"}",
+      "canonical_body_without_signature_hex": "7b22617070726f76616c52657175657374223a7b22636f7272656c6174696f6e223a227365616c2d726563656970742d636f7272656c6174696f6e2f76312e38353064623836303933363761656234643666666631386131306434373038653632646538633862633930656565343336356530653036666362633561653137227d2c22617267756d656e7473223a7b226c696e65223a227365616c2064656d6f2077726f74652074686973206c696e65227d2c226174223a313738373834353635383534342c226368696c64223a7b2261726776223a5b222f7573722f62696e2f6e6f6465222c222f686f6d652f6d6f6e6b65792f7372632f7365616c2f62696e2f7365616c222c225f5f64656d6f2d736572766572222c222f746d702f7365616c2d72656365697074766563746f72732d7370696e652d7966497a746e2f6368696c642f646174612e747874225d7d2c226465636973696f6e223a22414c4c4f57222c2265766964656e6365223a7b22617070726f76616c5f6e6f6e6365223a223531353336656138393233643237643030656338336363323436373336326461222c22617574686f72697a6174696f6e5f72756c65223a2250524f564544222c226566666563745f6d6174636865735f626f756e645f6279746573223a747275652c2268616e646c655f72657475726e65645f756e616c7465726564223a747275652c2268756d616e5f70726573656e74223a22756e6b6e6f776e222c2268756d616e5f70726573656e745f64657461696c223a226120636c69656e7420686f6c64696e672074686520636f72726563742068616e646c652063616e2066616272696361746520616e20616363657074616e63653b20666f726d20656c696369746174696f6e20706c616365732074686520636c69656e7420696e7369646520746865207472757374656420617070726f76616c2d6f726967696e20626f756e6461727920e280942061206465636c6172656420617373756d7074696f6e2c206e6f7420616e20656e666f726365642070726f7065727479222c226b65726e656c223a7b226973737565645f746172676574223a2238616263336562653033626165316166373133666231333566646137353863636333323364613635323164336365383537656334313436326333393332363937222c22726177223a227b5c2261756469745c223a5c227b5c5c5c2263657274735c5c5c223a5b7b5c5c5c2263657274486173685c5c5c223a5c5c5c22393938383730383031313531323835333730365c5c5c222c5c5c5c226b65726e656c5c5c5c223a5c5c5c227361666574795c5c5c222c5c5c5c22726561736f6e5c5c5c223a5c5c5c22386162633365626530336261653161663731336662313335666461373538636363333233646136353231643363653835376563343134363263333933323639375c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d2c7b5c5c5c2263657274486173685c5c5c223a5c5c5c2231323735363634343938353235313031383038375c5c5c222c5c5c5c226b65726e656c5c5c5c223a5c5c5c2274656d706f72616c5c5c5c222c5c5c5c22726561736f6e5c5c5c223a5c5c5c227472616365206f6b202831206576656e7473295c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d5d2c5c5c5c2265706f63685c5c5c223a312c5c5c5c22726571756573745f7368613235365c5c5c223a5c5c5c22653931646131623235323534663762306530333036633539383661303037666436633535313336653766323066346434633430303239636365626366646535325c5c5c222c5c5c5c22746f6f6c5c5c5c223a5c5c5c2264656d6f2e6d75746174655c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d5c222c5c22726f7574655c223a5c22666f72776172645c227d222c2276657264696374223a22414c4c4f57222c227761736d5f736861323536223a2232386262336165373139383533353731363365336236353137393165326137306334363265613564313331336135396234393637643463323065613737363537227d2c226f6e655f7573655f636f6e73756d65645f6e6f77223a747275652c2273616d655f636f6e6e656374696f6e5f65706f6368223a747275652c2273746174655f6d616368696e65223a22544553544544222c2277697468696e5f657870697279223a747275657d2c2272656365697074223a227365616c2e7370696e652f7631222c227365616c223a7b22616c67223a2265643235353139222c22617267735f736861323536223a2234353337376561623064383062333865353534643862656235353031613134623833623663333866643237303232316638613161363737356165343638313061222c226465636973696f6e5f736861323536223a2232356132373738633637626139383638383261353737343739626666356161336138353462333436333564363634376364663131653038353530313639353033222c226566666563745f736861323536223a2232373165383061303031663065316638363333303561653162646337323032643033383932306561616530633134353166373633376630386461386335323265222c22746f6f6c5f736861323536223a2262303632663033306435633132653565623665386165376266303835373538646637653461356232646462356333643531376430373235653136636337316637227d2c22746f6f6c223a2264656d6f2e6d7574617465227d",
+      "signature_preimage_utf8": "seal.receipt-seal/v1\n{\"approvalRequest\":{\"correlation\":\"seal-receipt-correlation/v1.850db8609367aeb4d6fff18a10d4708e62de8c8bc90eee4365e0e06fcbc5ae17\"},\"arguments\":{\"line\":\"seal demo wrote this line\"},\"at\":1787845658544,\"child\":{\"argv\":[\"/usr/bin/node\",\"/home/monkey/src/seal/bin/seal\",\"__demo-server\",\"/tmp/seal-receiptvectors-spine-yfIztn/child/data.txt\"]},\"decision\":\"ALLOW\",\"evidence\":{\"approval_nonce\":\"51536ea8923d27d00ec83cc2467362da\",\"authorization_rule\":\"PROVED\",\"effect_matches_bound_bytes\":true,\"handle_returned_unaltered\":true,\"human_present\":\"unknown\",\"human_present_detail\":\"a client holding the correct handle can fabricate an acceptance; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property\",\"kernel\":{\"issued_target\":\"8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697\",\"raw\":\"{\\\"audit\\\":\\\"{\\\\\\\"certs\\\\\\\":[{\\\\\\\"certHash\\\\\\\":\\\\\\\"9988708011512853706\\\\\\\",\\\\\\\"kernel\\\\\\\":\\\\\\\"safety\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"8abc3ebe03bae1af713fb135fda758ccc323da6521d3ce857ec41462c3932697\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"},{\\\\\\\"certHash\\\\\\\":\\\\\\\"12756644985251018087\\\\\\\",\\\\\\\"kernel\\\\\\\":\\\\\\\"temporal\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"trace ok (1 events)\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"}],\\\\\\\"epoch\\\\\\\":1,\\\\\\\"request_sha256\\\\\\\":\\\\\\\"e91da1b25254f7b0e0306c5986a007fd6c55136e7f20f4d4c40029ccebcfde52\\\\\\\",\\\\\\\"tool\\\\\\\":\\\\\\\"demo.mutate\\\\\\\",\\\\\\\"verdict\\\\\\\":\\\\\\\"allow\\\\\\\"}\\\",\\\"route\\\":\\\"forward\\\"}\",\"verdict\":\"ALLOW\",\"wasm_sha256\":\"28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657\"},\"one_use_consumed_now\":true,\"same_connection_epoch\":true,\"state_machine\":\"TESTED\",\"within_expiry\":true},\"receipt\":\"seal.spine/v1\",\"seal\":{\"alg\":\"ed25519\",\"args_sha256\":\"45377eab0d80b38e554d8beb5501a14b83b6c38fd270221f8a1a6775ae46810a\",\"decision_sha256\":\"25a2778c67ba986882a577479bff5aa3a854b34635d6647cdf11e08550169503\",\"effect_sha256\":\"271e80a001f0e1f863305ae1bdc7202d038920eaae0c1451f7637f08da8c522e\",\"tool_sha256\":\"b062f030d5c12e5eb6e8ae7bf085758df7e4a5b2ddb5c3d517d0725e16cc71f7\"},\"tool\":\"demo.mutate\"}",
+      "signature_preimage_hex": "7365616c2e726563656970742d7365616c2f76310a7b22617070726f76616c52657175657374223a7b22636f7272656c6174696f6e223a227365616c2d726563656970742d636f7272656c6174696f6e2f76312e38353064623836303933363761656234643666666631386131306434373038653632646538633862633930656565343336356530653036666362633561653137227d2c22617267756d656e7473223a7b226c696e65223a227365616c2064656d6f2077726f74652074686973206c696e65227d2c226174223a313738373834353635383534342c226368696c64223a7b2261726776223a5b222f7573722f62696e2f6e6f6465222c222f686f6d652f6d6f6e6b65792f7372632f7365616c2f62696e2f7365616c222c225f5f64656d6f2d736572766572222c222f746d702f7365616c2d72656365697074766563746f72732d7370696e652d7966497a746e2f6368696c642f646174612e747874225d7d2c226465636973696f6e223a22414c4c4f57222c2265766964656e6365223a7b22617070726f76616c5f6e6f6e6365223a223531353336656138393233643237643030656338336363323436373336326461222c22617574686f72697a6174696f6e5f72756c65223a2250524f564544222c226566666563745f6d6174636865735f626f756e645f6279746573223a747275652c2268616e646c655f72657475726e65645f756e616c7465726564223a747275652c2268756d616e5f70726573656e74223a22756e6b6e6f776e222c2268756d616e5f70726573656e745f64657461696c223a226120636c69656e7420686f6c64696e672074686520636f72726563742068616e646c652063616e2066616272696361746520616e20616363657074616e63653b20666f726d20656c696369746174696f6e20706c616365732074686520636c69656e7420696e7369646520746865207472757374656420617070726f76616c2d6f726967696e20626f756e6461727920e280942061206465636c6172656420617373756d7074696f6e2c206e6f7420616e20656e666f726365642070726f7065727479222c226b65726e656c223a7b226973737565645f746172676574223a2238616263336562653033626165316166373133666231333566646137353863636333323364613635323164336365383537656334313436326333393332363937222c22726177223a227b5c2261756469745c223a5c227b5c5c5c2263657274735c5c5c223a5b7b5c5c5c2263657274486173685c5c5c223a5c5c5c22393938383730383031313531323835333730365c5c5c222c5c5c5c226b65726e656c5c5c5c223a5c5c5c227361666574795c5c5c222c5c5c5c22726561736f6e5c5c5c223a5c5c5c22386162633365626530336261653161663731336662313335666461373538636363333233646136353231643363653835376563343134363263333933323639375c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d2c7b5c5c5c2263657274486173685c5c5c223a5c5c5c2231323735363634343938353235313031383038375c5c5c222c5c5c5c226b65726e656c5c5c5c223a5c5c5c2274656d706f72616c5c5c5c222c5c5c5c22726561736f6e5c5c5c223a5c5c5c227472616365206f6b202831206576656e7473295c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d5d2c5c5c5c2265706f63685c5c5c223a312c5c5c5c22726571756573745f7368613235365c5c5c223a5c5c5c22653931646131623235323534663762306530333036633539383661303037666436633535313336653766323066346434633430303239636365626366646535325c5c5c222c5c5c5c22746f6f6c5c5c5c223a5c5c5c2264656d6f2e6d75746174655c5c5c222c5c5c5c22766572646963745c5c5c223a5c5c5c22616c6c6f775c5c5c227d5c222c5c22726f7574655c223a5c22666f72776172645c227d222c2276657264696374223a22414c4c4f57222c227761736d5f736861323536223a2232386262336165373139383533353731363365336236353137393165326137306334363265613564313331336135396234393637643463323065613737363537227d2c226f6e655f7573655f636f6e73756d65645f6e6f77223a747275652c2273616d655f636f6e6e656374696f6e5f65706f6368223a747275652c2273746174655f6d616368696e65223a22544553544544222c2277697468696e5f657870697279223a747275657d2c2272656365697074223a227365616c2e7370696e652f7631222c227365616c223a7b22616c67223a2265643235353139222c22617267735f736861323536223a2234353337376561623064383062333865353534643862656235353031613134623833623663333866643237303232316638613161363737356165343638313061222c226465636973696f6e5f736861323536223a2232356132373738633637626139383638383261353737343739626666356161336138353462333436333564363634376364663131653038353530313639353033222c226566666563745f736861323536223a2232373165383061303031663065316638363333303561653162646337323032643033383932306561616530633134353166373633376630386461386335323265222c22746f6f6c5f736861323536223a2262303632663033306435633132653565623665386165376266303835373538646637653461356232646462356333643531376430373235653136636337316637227d2c22746f6f6c223a2264656d6f2e6d7574617465227d",
+      "commitments": {
+        "decision_sha256": "25a2778c67ba986882a577479bff5aa3a854b34635d6647cdf11e08550169503",
+        "tool_sha256": "b062f030d5c12e5eb6e8ae7bf085758df7e4a5b2ddb5c3d517d0725e16cc71f7",
+        "args_sha256": "45377eab0d80b38e554d8beb5501a14b83b6c38fd270221f8a1a6775ae46810a",
+        "effect_sha256": "271e80a001f0e1f863305ae1bdc7202d038920eaae0c1451f7637f08da8c522e"
+      },
+      "signature_hex": "3505e03c76e60a6f8ab3e169d2e01d6e2855df5beb84bde0926a6547f1d4378b5c412c554ceb0731e84fef338fcdb2322359326b7757a6f26cae46c00a07e50d",
+      "checker": {
+        "exit_code": 0,
+        "stdout": "ACCEPT ALLOW demo.mutate — decision, tool, arguments and signature all match the sealed commitments. This shows the receipt has the same canonical parsed value that this key signed. Semantically irrelevant JSON formatting differences are not distinguished. It does not show the decision happened: anyone who could use that machine's Seal key could have signed a different story."
+      },
+      "ruled_rows": {
+        "document_structure": {
+          "outcome": "ACCEPTED BY CURRENT NARROW CHECKER",
+          "limit": "not a full schema or raw-document validation"
+        },
+        "signature": "MATCH",
+        "kernel_decision_replay": "NOT CHECKED",
+        "authority_key": "UNPINNED",
+        "event_occurrence": "NOT ESTABLISHED"
+      }
+    }
+  },
+  "kernel": {
+    "capture": {
+      "producer_command": "runtime/kernel/runner.cjs decide with the recorded config and call",
+      "receipt_kind": "ALLOW",
+      "anchoring_fixture": true
+    },
+    "input": {
+      "config": {
+        "epoch": 1,
+        "safety": {
+          "approval": {
+            "control_file": "X",
+            "ttl_seconds": 120
+          },
+          "tools": [
+            {
+              "name": "db.execute",
+              "mode": "guarded",
+              "match": {
+                "type": "contains_any_ci",
+                "arg": "sql",
+                "needles": [
+                  "drop",
+                  "delete",
+                  "truncate"
+                ]
+              },
+              "target": [
+                {
+                  "full_arguments": true
+                }
+              ]
+            },
+            {
+              "name": "payments.send",
+              "mode": "guarded",
+              "match": {
+                "type": "always"
+              },
+              "target": [
+                {
+                  "full_arguments": true
+                }
+              ]
+            },
+            {
+              "name": "approve",
+              "mode": "deny",
+              "match": {
+                "type": "always"
+              },
+              "target": []
+            }
+          ]
+        },
+        "temporal": {
+          "policies": []
+        },
+        "consensus": {
+          "roster": [
+            1,
+            2,
+            3
+          ],
+          "votes_file": "X",
+          "high_stakes": [
+            "payments.send"
+          ]
+        }
+      },
+      "call": {
+        "tool": "db.execute",
+        "args": {
+          "database": "prod",
+          "sql": "drop table users"
+        },
+        "approvals": [
+          "85545fe075783b72f2703c8b4769da0b5ef1962bc2e8ecf62e3c9bf366a65aca"
+        ],
+        "now": 1000
+      }
+    },
+    "body": {
+      "seal_receipt": "v2",
+      "tool": "db.execute",
+      "arguments": {
+        "database": "prod",
+        "sql": "drop table users"
+      },
+      "args_hash": "46657b69f15f78859ead6dd0d416cbfc9809922757ba90aa16a56b7d73afafc8",
+      "now": 1000,
+      "canonical_request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"db.execute\",\"arguments\":{\"database\":\"prod\",\"sql\":\"drop table users\"}}}",
+      "canonical_request_sha256": "460d746ba064ab9398885158dddfd6d32f1722b0efe0d3b6085c8441e9127793",
+      "bypass": false,
+      "verdict": "ALLOW",
+      "authorization": "approval",
+      "reason": "every gating kernel allows",
+      "deny_kernel": null,
+      "approval": {
+        "approval_identity": {
+          "channel": "interactive"
+        },
+        "policy_hash": "4b182be04cfcb0645570ee66c177ef8eb8d315ef67a9046abbf2a58c7ff81334"
+      },
+      "certs": [
+        {
+          "kernel": "safety",
+          "verdict": "allow",
+          "reason": "85545fe075783b72f2703c8b4769da0b5ef1962bc2e8ecf62e3c9bf366a65aca",
+          "certHash": "1840626157184464420"
+        },
+        {
+          "kernel": "temporal",
+          "verdict": "allow",
+          "reason": "trace ok (1 events)",
+          "certHash": "12756644985251018087"
+        }
+      ],
+      "emitted_bytes": "{\"audit\":\"{\\\"certs\\\":[{\\\"certHash\\\":\\\"1840626157184464420\\\",\\\"kernel\\\":\\\"safety\\\",\\\"reason\\\":\\\"85545fe075783b72f2703c8b4769da0b5ef1962bc2e8ecf62e3c9bf366a65aca\\\",\\\"verdict\\\":\\\"allow\\\"},{\\\"certHash\\\":\\\"12756644985251018087\\\",\\\"kernel\\\":\\\"temporal\\\",\\\"reason\\\":\\\"trace ok (1 events)\\\",\\\"verdict\\\":\\\"allow\\\"}],\\\"epoch\\\":1,\\\"request_sha256\\\":\\\"460d746ba064ab9398885158dddfd6d32f1722b0efe0d3b6085c8441e9127793\\\",\\\"tool\\\":\\\"db.execute\\\",\\\"verdict\\\":\\\"allow\\\"}\",\"route\":\"forward\"}",
+      "kernel_identity": {
+        "wasm_sha256": "28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657",
+        "self_verified": true,
+        "note": "Binary identity of the evaluator actually executed. Hashed in your browser from the loaded bytes and compared to a pinned constant. This is the ONLY thing verified here."
+      },
+      "asserted_provenance": {
+        "verified_in_browser": false,
+        "lean_toolchain": "leanprover/lean4:v4.28.0",
+        "axioms": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "note": "What the public Lean proofs ASSERT about the kernel source. NOT verified in your browser and NOT part of the hash above."
+      },
+      "kernel_config": {
+        "epoch": 1,
+        "safety": {
+          "approval": {
+            "control_file": "X",
+            "ttl_seconds": 120
+          },
+          "tools": [
+            {
+              "name": "db.execute",
+              "mode": "guarded",
+              "match": {
+                "type": "contains_any_ci",
+                "arg": "sql",
+                "needles": [
+                  "drop",
+                  "delete",
+                  "truncate"
+                ]
+              },
+              "target": [
+                {
+                  "full_arguments": true
+                }
+              ]
+            },
+            {
+              "name": "payments.send",
+              "mode": "guarded",
+              "match": {
+                "type": "always"
+              },
+              "target": [
+                {
+                  "full_arguments": true
+                }
+              ]
+            },
+            {
+              "name": "approve",
+              "mode": "deny",
+              "match": {
+                "type": "always"
+              },
+              "target": []
+            }
+          ]
+        },
+        "temporal": {
+          "policies": []
+        },
+        "consensus": {
+          "roster": [
+            1,
+            2,
+            3
+          ],
+          "votes_file": "X",
+          "high_stakes": [
+            "payments.send"
+          ]
+        }
+      },
+      "granted_capabilities": [
+        {
+          "target": "85545fe075783b72f2703c8b4769da0b5ef1962bc2e8ecf62e3c9bf366a65aca"
+        }
+      ]
+    },
+    "expected": {
+      "request_and_hash_inputs": {
+        "arguments_json_utf8": "{\"database\":\"prod\",\"sql\":\"drop table users\"}",
+        "canonical_request_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"db.execute\",\"arguments\":{\"database\":\"prod\",\"sql\":\"drop table users\"}}}",
+        "kernel_config_json_utf8": "{\"epoch\":1,\"safety\":{\"approval\":{\"control_file\":\"X\",\"ttl_seconds\":120},\"tools\":[{\"name\":\"db.execute\",\"mode\":\"guarded\",\"match\":{\"type\":\"contains_any_ci\",\"arg\":\"sql\",\"needles\":[\"drop\",\"delete\",\"truncate\"]},\"target\":[{\"full_arguments\":true}]},{\"name\":\"payments.send\",\"mode\":\"guarded\",\"match\":{\"type\":\"always\"},\"target\":[{\"full_arguments\":true}]},{\"name\":\"approve\",\"mode\":\"deny\",\"match\":{\"type\":\"always\"},\"target\":[]}]},\"temporal\":{\"policies\":[]},\"consensus\":{\"roster\":[1,2,3],\"votes_file\":\"X\",\"high_stakes\":[\"payments.send\"]}}"
+      },
+      "hashes": {
+        "args_hash": "46657b69f15f78859ead6dd0d416cbfc9809922757ba90aa16a56b7d73afafc8",
+        "canonical_request_sha256": "460d746ba064ab9398885158dddfd6d32f1722b0efe0d3b6085c8441e9127793",
+        "approval_policy_hash": "4b182be04cfcb0645570ee66c177ef8eb8d315ef67a9046abbf2a58c7ff81334"
+      },
+      "raw_emitted_bytes": "{\"audit\":\"{\\\"certs\\\":[{\\\"certHash\\\":\\\"1840626157184464420\\\",\\\"kernel\\\":\\\"safety\\\",\\\"reason\\\":\\\"85545fe075783b72f2703c8b4769da0b5ef1962bc2e8ecf62e3c9bf366a65aca\\\",\\\"verdict\\\":\\\"allow\\\"},{\\\"certHash\\\":\\\"12756644985251018087\\\",\\\"kernel\\\":\\\"temporal\\\",\\\"reason\\\":\\\"trace ok (1 events)\\\",\\\"verdict\\\":\\\"allow\\\"}],\\\"epoch\\\":1,\\\"request_sha256\\\":\\\"460d746ba064ab9398885158dddfd6d32f1722b0efe0d3b6085c8441e9127793\\\",\\\"tool\\\":\\\"db.execute\\\",\\\"verdict\\\":\\\"allow\\\"}\",\"route\":\"forward\"}",
+      "outcomes": {
+        "document_structure": "VALID",
+        "signature": "NOT CHECKED",
+        "kernel_decision_replay": "REPRODUCED",
+        "authority_key": "NOT CHECKED",
+        "event_occurrence": "NOT ESTABLISHED"
+      }
+    }
+  },
+  "distinguishing": {
+    "body": {
+      "z": 1,
+      "a": 2,
+      "nested": {
+        "z": 3,
+        "a": 4
+      }
+    },
+    "expected": {
+      "spine_canonical_utf8": "{\"a\":2,\"nested\":{\"a\":4,\"z\":3},\"z\":1}",
+      "spine_signature_preimage_hex": "7365616c2e726563656970742d7365616c2f76310a7b2261223a322c226e6573746564223a7b2261223a342c227a223a337d2c227a223a317d",
+      "kernel_unsigned_json_utf8": "{\"z\":1,\"a\":2,\"nested\":{\"z\":3,\"a\":4}}",
+      "kernel_signature_preimage_hex": "7365616c2e6f626a6563742d622f76310000000000000000247b227a223a312c2261223a322c226e6573746564223a7b227a223a332c2261223a347d7d"
+    }
+  }
+}
