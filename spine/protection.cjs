@@ -671,6 +671,7 @@ async function protect({
   if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
   }
+  requireHumanApprovalOrigin(env);
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   const existing = readState(statePath);
@@ -789,6 +790,7 @@ function markBroken(statePath, state, error) {
 }
 
 async function activationLease(statePath, env = process.env) {
+  requireHumanApprovalOrigin(env);
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
   const lock = acquireProjectLock(initial.projectRoot, env);
@@ -888,6 +890,16 @@ function doctor(env = process.env) {
     ok: true,
     text: "ASSUMPTION\n  Seal has not established whether this Claude Code configuration can\n  automatically answer elicitation requests.\n",
   };
+}
+
+function requireHumanApprovalOrigin(env = process.env) {
+  const verdict = doctor(env);
+  if (!verdict.ok) {
+    throw new ProtectionError(
+      verdict.code,
+      "an auto-response hook is set; human approval origin cannot be assumed",
+    );
+  }
 }
 
 module.exports = {
