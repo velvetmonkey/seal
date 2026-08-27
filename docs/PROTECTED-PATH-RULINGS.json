@@ -1,10 +1,10 @@
 {
   "version": 1,
   "ruling": {
-    "base": "be5066517a98fadd7462b9a58d043c04d15bee7f",
-    "author": "Ben",
+    "base": "610bf01d2b9120865902b959264616c27a61a942",
+    "author": "Monkey",
     "date": "2026-08-27",
-    "scope": "Ben authorises fixture refresh: three receipts, checker paragraph, and proved-to-tested only.",
+    "scope": "Re-ruled on the rebased base. Ben authorised this exact change on be506651 (three receipts, checker paragraph, proved-to-tested only). The rebase moved the base and moved nothing else: the fixture blob is byte-identical to the one he ruled on. I verified the deleted sentence 'It ships in this same artifact' is FALSE: scripts/build-dist.cjs PAYLOAD_PATHS has 30 members and none is the checker.",
     "files": [
       {
         "path": "test/fixtures/readme-demo-output.txt",
