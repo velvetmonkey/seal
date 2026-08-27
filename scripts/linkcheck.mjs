@@ -13,6 +13,10 @@ const require = createRequire(import.meta.url);
 const { Parser: CommonMarkParser } = require("./vendor/commonmark.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function isRepositoryPage(file) {
+  return file === "README.md" || /\.(md|html)$/.test(file);
+}
+
 const files = [...new Set(["README.md", ...walk(ROOT).filter((f) => /\.(md|html)$/.test(f) && !f.startsWith("node_modules/"))])];
 function walk(dir, prefix = "") {
   const out = [];
@@ -193,11 +197,6 @@ function compareToBaseline(sourceRoot, actual) {
   return { base, expected, disagreements };
 }
 
-function isRepositoryPage(file) {
-  return file === "README.md"
-    || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/") && !file.startsWith(".family/"));
-}
-
 async function main() {
   scannedTargets.clear();
   checkedTargets.clear();
@@ -222,12 +221,16 @@ async function main() {
     actual.bad++;
   }
 
-  const baselinePopulation = baselineTree(ROOT).files;
-  const expectedPopulation = [...baselinePopulation].filter(isRepositoryPage).length;
-  const actualPopulation = sourceFiles.filter(isRepositoryPage).length;
-  const populationShrank = actualPopulation < expectedPopulation;
-  if (populationShrank) {
-    console.log(`REFUSE link-check population shrank: expected=${expectedPopulation} actual=${actualPopulation}`);
+  const baselinePopulation = [...baselineTree(ROOT).files].filter(isRepositoryPage);
+  const livePopulation = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean)
+    .filter(isRepositoryPage));
+  const missingPopulation = baselinePopulation.filter((file) => !livePopulation.has(file));
+  if (missingPopulation.length) {
+    for (const file of missingPopulation) {
+      console.log(`REFUSE link-check population lost: ${file}`);
+    }
   }
 
   const requiredLiveLinks = new Map([
@@ -256,7 +259,7 @@ async function main() {
   }
 
   console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
-  if (actual.bad || populationShrank) return 1;
+  if (actual.bad || missingPopulation.length) return 1;
   const comparison = compareToBaseline(ROOT, actual);
   if (comparison.disagreements.length) {
     console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
