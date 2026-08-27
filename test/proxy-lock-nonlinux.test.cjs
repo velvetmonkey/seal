@@ -9,6 +9,7 @@ const {
   acquireProjectLock,
   activationLease,
   lockPathFor,
+  parseDarwinProcessStartWitness,
   projectId,
   protectionView,
   statePathFor,
@@ -106,6 +107,17 @@ test("Darwin is install-supported but not Protect-supported", () => {
   });
 });
 
+test("Darwin sysctl p_starttime output yields a microsecond process-start witness", () => {
+  const captured = `struct extern_proc {\n  struct timeval p_starttime = { tv_sec = 1722499201, tv_usec = 42 };\n};\n`;
+  assert.equal(parseDarwinProcessStartWitness(captured), "1722499201.000042");
+});
+
+test("Darwin sysctl parser fails closed for malformed and empty output", () => {
+  assert.equal(parseDarwinProcessStartWitness(""), null);
+  assert.equal(parseDarwinProcessStartWitness("p_starttime = { tv_sec = nope, tv_usec = 42 }"), null);
+  assert.equal(parseDarwinProcessStartWitness("p_starttime = { tv_sec = 1722499201, tv_usec = 1000000 }"), null);
+});
+
 test("seal protect refuses Darwin before changing project files", () => {
   const ctx = workspace("protect-refusal");
   const result = spawnSync(process.execPath, [CLI, "protect", "db", "write"], {
@@ -165,6 +177,53 @@ test("direct acquireProjectLock refuses when the live lock witness is unavailabl
       (error) => error.code === "process_witness_unavailable" &&
         /cannot establish process-start witness/.test(error.message),
     );
+  });
+});
+
+test("Darwin lock refuses when sysctl is unavailable", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("missing-sysctl");
+    const lockPath = lockPathFor(ctx.project, ctx.env);
+    const previousPath = process.env.PATH;
+    process.env.PATH = path.join(ctx.root, "no-sysctl-here");
+    try {
+      fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startWitness: null }) + "\n", { mode: 0o600 });
+      assert.throws(
+        () => acquireProjectLock(ctx.project, ctx.env),
+        (error) => error.code === "process_witness_unavailable" &&
+          /cannot establish process-start witness/.test(error.message),
+      );
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+});
+
+test("Darwin lock refuses when sysctl output is empty or malformed", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("bad-sysctl-output");
+    const lockPath = lockPathFor(ctx.project, ctx.env);
+    const previousPath = process.env.PATH;
+    const sysctlPath = path.join(ctx.root, "sysctl");
+    process.env.PATH = ctx.root;
+    try {
+      for (const output of ["", "not a kinfo_proc"]) {
+        fs.writeFileSync(sysctlPath, `#!/bin/sh\nprintf '%s' ${JSON.stringify(output)}\n`, { mode: 0o700 });
+        fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+        fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startWitness: null }) + "\n", { mode: 0o600 });
+        assert.throws(
+          () => acquireProjectLock(ctx.project, ctx.env),
+          (error) => error.code === "process_witness_unavailable" &&
+            /cannot establish process-start witness/.test(error.message),
+        );
+        fs.unlinkSync(lockPath);
+      }
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
   });
 });
 

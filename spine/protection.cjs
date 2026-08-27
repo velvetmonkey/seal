@@ -554,10 +554,36 @@ function livePid(pid) {
   }
 }
 
+function parseDarwinProcessStartWitness(output) {
+  if (typeof output !== "string") return null;
+  const match = output.match(/\bp_starttime\s*=\s*\{\s*tv_sec\s*=\s*(\d+)\s*,\s*tv_usec\s*=\s*(\d+)\s*\}/);
+  if (!match) return null;
+  const [, seconds, microseconds] = match;
+  if (seconds === "0" || Number(microseconds) > 999999) return null;
+  return `${seconds}.${microseconds.padStart(6, "0")}`;
+}
+
+function darwinProcessStartWitness(pid) {
+  try {
+    // sysctl(8) accepts the numeric MIB for the KERN_PROC_PID node; its
+    // name parser cannot append a PID to the named kern.proc.pid prefix.
+    const result = spawnSync("sysctl", ["-n", `1.14.1.${pid}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (result.error || result.status !== 0) return null;
+    return parseDarwinProcessStartWitness(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
 function processStartWitness(pid) {
   // platformSupport's test-only override lets product-path tests exercise the
   // same unavailable witness that a real non-Linux host would produce.
-  if (!Number.isInteger(pid) || pid <= 0 || platformSupport().platform !== "linux") return null;
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (platformSupport().platform === "darwin") return darwinProcessStartWitness(pid);
+  if (platformSupport().platform !== "linux") return null;
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
     const close = stat.lastIndexOf(")");
@@ -904,6 +930,7 @@ module.exports = {
   loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
+  parseDarwinProcessStartWitness,
   processStartWitness,
   protectedToolNames,
   protect,

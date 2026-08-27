@@ -89,6 +89,18 @@ test("the witness is Linux /proc stat field 22", () => {
   assert.ok(processStartWitness(process.pid).length > 0);
 });
 
+test("independent live Linux processes have distinct process-start witnesses", async () => {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  try {
+    const parentWitness = processStartWitness(process.pid);
+    const childWitness = processStartWitness(child.pid);
+    assert.notEqual(childWitness, parentWitness);
+  } finally {
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+});
+
 test("the shared owner predicate reads live and dead Linux owners correctly", () => {
   const liveOwner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
   assert.equal(lockOwnerIsLive(liveOwner), true);

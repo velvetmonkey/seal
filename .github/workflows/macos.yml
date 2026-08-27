@@ -17,6 +17,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify the macOS process-start witness against sysctl
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '
+            const { spawnSync } = require("node:child_process");
+            const { lockOwnerIsLive, parseDarwinProcessStartWitness, processStartWitness } = require("./spine/protection.cjs");
+            const result = spawnSync("sysctl", ["-n", `1.14.1.${process.pid}`], { encoding: "utf8" });
+            if (result.error || result.status !== 0) process.exit(1);
+            const input = result.stdout;
+            process.stdout.write(input);
+            const parsed = parseDarwinProcessStartWitness(input);
+            const witness = processStartWitness(process.pid);
+            console.log(`parsed=${parsed}`);
+            console.log(`witness=${witness}`);
+            if (typeof parsed !== "string" || witness !== parsed) process.exit(1);
+            if (!lockOwnerIsLive({ pid: process.pid, startWitness: witness })) process.exit(1);
+          '
       - name: Build and run the documented macOS install ritual
         shell: bash
         run: |
