@@ -55,6 +55,7 @@ test/proxy-lock-nonlinux.test.cjs
 test/proxy-lock.test.cjs
 test/readme-demo-transcript-guard.test.cjs
 test/readme-protect-state-witness.test.cjs
+test/receipt-canonicalization-conformance.test.mjs
 test/receipt-checker.test.cjs
 test/receipt-v2-verifier.test.mjs
 test/receipt-verdict-agreement.test.mjs

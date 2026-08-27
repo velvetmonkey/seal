@@ -15,6 +15,7 @@ altered retry arguments cannot reach the child	test/approval-contract.test.cjs	r
 a consumed approval cannot run the child twice	test/approval-contract.test.cjs	refusal 3: replayed approval already consumed; child stays at exactly 1
 physical kernel corruption has no JavaScript fallback	test/kernel-bridge.test.cjs	physical wasm corruption refuses by name with no JavaScript fallback
 a hung authorization kernel fails closed at its deadline	test/kernel-bridge.test.cjs	a hung kernel worker reaches its product deadline and refuses closed
+receipt producer and checker retain specified insertion order	test/receipt-canonicalization-conformance.test.mjs	producer and checker canonicalisers conform to the v2 insertion-order specification
 linkcheck assertion removal is refused by name	test/linkcheck-assertions.test.mjs	linkcheck assertion inventory refuses a removed assertion by name
 a misspelled protected tool is refused before state is written	test/tool-validation.test.cjs	protect refuses a misspelled tool and names every observed tool
 a vanished protected tool makes activation visibly broken	test/tool-validation.test.cjs	activation becomes visibly BROKEN when the protected tool vanished
