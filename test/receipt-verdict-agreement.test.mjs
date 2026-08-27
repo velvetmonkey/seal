@@ -30,7 +30,7 @@ const cases = [
 // The envelope carries a HOST route (passthrough, forward, block, error). The
 // kernel decision type is Allow/Block; the host maps one to the other. Nothing
 // in the seal checkout reads either Lean tree, so this correspondence is
-// maintained by hand across a repository boundary; see the receipt spec.
+// maintained by hand across a repository boundary; see docs/SEAL-RECEIPT-V2.md. // CLAIM-COVERAGE: docs/SEAL-RECEIPT-V2.md
 // The shipped composition exposes no route-domain enumeration, so the host
 // route list and its expected set are checked in both directions below.
 const HOST_ROUTE_DOMAIN = Object.freeze(["passthrough", "forward", "block", "error"]);

@@ -1,8 +1,8 @@
 # `seal.receipt/v2` (Phase A)
 
 This is the normative Phase A contract. It is written before the Phase B
-producer. The verifier implements it independently and does not import a
-producer canonicaliser.
+producer. Seal implements the Phase A contract independently and does not import
+a producer canonicaliser.
 
 ## Envelope
 
