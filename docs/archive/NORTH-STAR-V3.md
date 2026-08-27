@@ -63,6 +63,8 @@ position among the settled four.
 
 ### Status at a glance
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Added 2026-07-26. Before this, answering "how far along are we" meant reading the
 whole file and then digging on disk. **Keep this current or delete it**, because a
 status board that lags is the same defect as a stale `PINS.md` row.
@@ -152,6 +154,8 @@ ordered four; it fixes how the surrounding work factory obtains human
 confirmation. **Status: RULED, NOT STARTED.**
 
 ### V3.1 Close the gap between the proofs and the bytes
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 **All five product seats independently named this as the thing a serious reviewer
 attacks within five minutes.** Qwen put it most sharply: "How do you know the JSON

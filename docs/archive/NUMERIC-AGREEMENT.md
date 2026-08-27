@@ -15,6 +15,8 @@ signed shape and is off the clock.
 
 ## 1. The defect, stated exactly
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Vector `i_number_neg_int_huge_exp.json`, one wire line, one approval:
 
 ```text

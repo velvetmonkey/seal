@@ -42,6 +42,8 @@ the Node CLI this repository ships.
 
 ## I want to check the evidence myself
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 1. The [`SHA256SUMS` release asset](https://github.com/velvetmonkey/seal/releases)
    and [scripts/build-dist.cjs](../../scripts/build-dist.cjs) — download a binary
    and the `SHA256SUMS` asset attached to the same release, then compare the
@@ -124,6 +126,8 @@ ruled on and explicitly never built; each says so in its opening lines.
   checklist used before the family repositories became public.
 
 ## Family material — not claims about this CLI
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 These files describe the wider Seal family (a Rust host, Lean proof kernels,
 a verifier fleet) rather than the Node CLI in this repository, whose gate is a

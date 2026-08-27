@@ -19,6 +19,8 @@ mediate transparently, contradicting proper support for MCP 2026-07-28.
 
 ## 1. Evidence boundary and current collision
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The MCP evidence in this document is pinned to the official `2026-07-28` tag,
 commit
 [`5f5440bb26a62e2cf3440b92da5a667efa03b267`](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/5f5440bb26a62e2cf3440b92da5a667efa03b267).

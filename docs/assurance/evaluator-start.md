@@ -40,6 +40,8 @@ kernels, or repeated independent runs. `CANDIDATE` is not `SHIPPED`.
 
 ## 2. Historical artifact identity: 2026-07-31 candidate and shipped fleet
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The rows in this section retain the measured 2026-07-31 record. They are not
 current fleet status; the dated correction above and the regenerated stop-ship
 table in Section 6 state what superseded them.
@@ -82,6 +84,8 @@ The limits are part of the result:
 
 ## 3. Proved, tested, deployed, and residual truth surface
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 | Name | Current result | Backing | Limit |
 |---|---|---|---|
 | V2 Allow witness and default deny | PROVED for the canonical core: an `Allow` carries parsed and validated approval evidence and canonical output; output is unreachable without it | [`seal-host` CLAIMS.md:24-26](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); theorems `SealV2.non_bypass` at `SealV2/DecideTheorems.lean:67`, `SealV2.default_deny` at `:77`, and `SealV2.canonical_roundtrip` at `SealV2/SerializationTheorems.lean:1257` | Core only; not a whole deployment proof |
@@ -99,6 +103,8 @@ The limits are part of the result:
 | Response egress | NOT MEDIATED by the claim | [`seal-host` CLAIMS.md:100-103](https://github.com/velvetmonkey/seal-host/blob/main/CLAIMS.md); `seal-host/CLAIMS.md:101-104` | Never claim that Seal prevents response leaks |
 
 ## 4. Live verifier profiles
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 The prose roster has one confirmed stale path: it places the host declaration
 in `rust/src/decision_receipt.rs`, while the live declaration is in
@@ -120,6 +126,8 @@ binding and an independent signer pin for its top result. `P-SELFAUDIT` says
 `SELF-CONSISTENT`, never independent `VERIFIED`.
 
 ## 5. Current theorem inventories and the module inventory gate
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 Counting theorem names in the current curated proof-reference tables gives:
 

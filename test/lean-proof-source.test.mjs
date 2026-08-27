@@ -31,30 +31,35 @@ function mergeBase() {
 function visibleText(text) {
   return text
     .replace(/<!--[\s\S]*?-->/gu, "")
+    // A link's label is what a reader sees; its destination is not.  Preserve
+    // the former before removing URLs, so neither kind can manufacture a name.
+    .replace(/\[([^\]]+)\]\([^\n)]*\)/gu, "$1")
+    .replace(/<https?:\/\/[^>]+>/gu, "")
     .replace(/https?:\/\/[^\s)>\]]+/gu, "");
 }
 
 function sectionAt(text, position) {
-  // A document's H1 section is its reader-visible source declaration scope.
-  // Nested headings organise claims; they do not silently replace that declaration.
+  // A reader following an anchor sees that heading's section, not its H1 parent.
   const withoutCode = text.replace(/```[\s\S]*?```/gu, (block) => " ".repeat(block.length));
-  const headings = [...withoutCode.matchAll(/^#\s+.*$/gmu)];
-  let start = 0;
+  const headings = [...withoutCode.matchAll(/^(#{1,6})\s+.*$/gmu)].map((heading) => ({
+    index: heading.index,
+    level: heading[1].length,
+  }));
+  let current;
   for (const heading of headings) {
     if (heading.index > position) break;
-    start = heading.index;
+    current = heading;
   }
-  const end = headings.find((heading) => heading.index > position)?.index ?? text.length;
-  return text.slice(start, end);
+  if (!current) return text.slice(0, headings[0]?.index ?? text.length);
+  const end = headings.find((heading) => heading.index > current.index && heading.level <= current.level)?.index ?? text.length;
+  return text.slice(current.index, end);
 }
 
 function hasSourceBinding(section) {
   const visible = visibleText(section);
-  return /\b(?:Lean\s+(?:proof\s+)?source|proof\s+source|source\s+holder)\b[^.\n]{0,120}\bseal-host\b/iu.test(visible)
-    || /\bLean\s+proof\s+propert(?:y|ies)\b[^.]{0,120}\bsource\s+held\b[^.]{0,120}\bseal-host\b/iu.test(visible)
-    || /\bseal-host\b[^.\n]{0,120}\b(?:holds?|hosts?|contains?)\b[^.\n]{0,80}\bLean\s+(?:proof\s+)?source\b/iu.test(visible)
-    || /\bseal-host\b[^.\n]{0,120}\b(?:repository|repo)\b[^.\n]{0,80}\b(?:holds?|holding)\b[^.\n]{0,80}\bLean\s+(?:proof\s+)?source\b/iu.test(visible)
-    || /\bseal-host\b[^.\n]{0,80}\bLean\s+kernel\b/iu.test(visible);
+  // The label and direct copula are intentional: this is a reader-facing
+  // declaration, not an inference from nearby words or a URL destination.
+  return /^\s*(?:\*\*)?Lean\s+proof\s+source\s*:(?:\*\*)?\s*[^.\n]{0,100}\bseal-host\b[^.\n]{0,100}\bis\s+(?:a|an|the)\s+reader-facing\b[^.\n]{0,160}[.!]/imu.test(visible);
 }
 
 function unsourcedClaims(file) {
@@ -82,4 +87,21 @@ test("no documentation path leaves the merge-base population", () => {
 test("the proof-property predicate catches novel wording", () => {
   const novel = "The zygomorphic decision property is machine-checked by Lean calculus.";
   assert.equal(LEAN_PROOF_PROPERTY.test(novel), true, relative(ROOT, "docs/assurance/scratch-tamper.md"));
+});
+
+test("a binding is an affirmative declaration visible beside the claim", () => {
+  assert.equal(hasSourceBinding("**Lean proof source:** seal-host is the reader-facing atlas for this claim."), true);
+  assert.equal(hasSourceBinding("The proof source is not seal-host."), false);
+  assert.equal(hasSourceBinding("**Lean proof source:** seal-host may become the reader-facing atlas."), false);
+});
+
+test("a nested heading starts a new reader-visible claim section", () => {
+  const text = "# Overview\n\n**Lean proof source:** seal-host is the reader-facing atlas.\n\n## Deep claim\n\nThe gate is proven in Lean 4.";
+  const claim = [...text.matchAll(LEAN_PROOF_PROPERTY)][0];
+  assert.equal(hasSourceBinding(sectionAt(text, claim.index)), false);
+});
+
+test("visible text keeps an honest link label but discards a bare URL", () => {
+  assert.equal(hasSourceBinding("**Lean proof source:** [seal-host](https://github.com/velvetmonkey/seal-host/) is the reader-facing atlas."), true);
+  assert.equal(hasSourceBinding("**Lean proof source:** https://github.com/velvetmonkey/seal-host/ is the reader-facing atlas."), false);
 });

@@ -1,5 +1,7 @@
 # POLICY-LANGUAGE.md — boxpol: the seal policy language and its analyzer
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Status: draft specification v1, 2026-07-26. Written for Ben's evaluation and for a
 competent stranger to implement from. Supersedes nothing; it specifies the design
 answered on 2026-07-26 in response to the "tiny DSL vs Cedar" question, revised
@@ -24,6 +26,8 @@ this repository contains Lean source.
 ---
 
 ## 1. The design bet
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 **Bet.** A policy language whose denotation is a finite union of boxes over a
 typed, finite attribute space, so that every analysis the sign-off ceremony
@@ -249,6 +253,8 @@ is deployed, because the meaning of every claim depends on it.
 
 ### 2.4 Canonical form
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 **Revision after reading the repository** (was: bespoke s-expressions). The
 signed artifact is a **SealV2 canonical JSON document**
 (`seal-host/SealV2/Parser.lean` `IsCanonical`, serializer in
@@ -325,6 +331,8 @@ A total order, `deny < approve < allow`. `meet` is minimum:
 | allow   | deny | approve | allow   |
 
 ### 3.2 Evaluation
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 For request record `r` and policy `P`:
 
@@ -500,6 +508,8 @@ endpoint.
    by running the kernel.
 
 ### 4.3 What is proved in Lean, and what is not
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 Proved (these are the analyzer's soundness; without them it is decoration):
 
@@ -704,6 +714,8 @@ witness.
 
 ### 5.3 The renderer cannot lie its way into enforcement
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The rendered page is for the human; the gate is for the machine. Every claim
 line carries a certificate id; the bundle embeds the machine-readable claims;
 and **the host, at policy load, re-runs the verified entailment checker over
@@ -818,6 +830,8 @@ anyway.
 
 ## 8. The tripwire
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The UNKNOWN entries in §5.1 are honest physics: the **world exceeding the
 model** (lens gaps, clock gaps, state-persistence gaps). An UNKNOWN entry
 whose cause is a **policy construct** — an atom the analyzer could not decide,
@@ -865,6 +879,8 @@ of both routes are known quantities.
 
 ## 9. What must be built
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Two design rules size everything: **one reader** (policy bytes parsed once,
 in Lean; the signer reads the kernel's reprint) and **generators untrusted,
 checkers verified** (everything displayed carries a certificate; you verify
@@ -904,6 +920,8 @@ side of it.
 ---
 
 ## 10. Revisions forced by reading the code (not silently applied)
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 1. **Canonical form: s-expressions → SealV2 canonical JSON.** The original
    answer specified a rigid s-expression grammar, reasoning "not JSON — JSON
@@ -989,6 +1007,8 @@ is **computed by machinery at least as trusted as what checks the claim** —
 this is clause (i) of §12.3, and it recurs in all three answers.
 
 ### 12.1 Q1 — refusal vs justified exception is the wrong dichotomy; the selector is machine-enumerability
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 The reviewer asks whether a justified-exception model exists whose discipline
 is enforced mechanically rather than socially. It exists, and seal-host
@@ -1177,6 +1197,8 @@ never wired into the artifact the human signs. Fixed below.
 ---
 
 ## 13. Frisk corrections (Monkey, 2026-07-26 02:00, read-only lane `boxpolfrisk`)
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 §2 to §9 were checked claim by claim against the working trees. **33 of 38
 checkable claims resolved TRUE at the named file and line, and none were

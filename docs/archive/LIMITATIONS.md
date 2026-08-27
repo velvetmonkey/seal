@@ -21,6 +21,8 @@ equality for those two files, so edit here first, then mirror.
 
 ## Trust boundaries
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The Node product's kernel config is signed by an Ed25519 key generated inside
 the same worker that supplies the config. The rejected `demo-pk` stub is not on
 the decision path, but the replacement is still demo-grade self-authorization,
