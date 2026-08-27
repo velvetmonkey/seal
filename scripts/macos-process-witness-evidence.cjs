@@ -44,9 +44,10 @@ try {
   assert.equal(processStartWitness(process.pid), null);
   assert.throws(
     () => lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
-    (error) => error.code === "process_witness_unavailable",
+    (error) => error.code === "macos_helper_missing" && error.refusal === true,
   );
-  console.log("helper-missing witness=null lock=process_witness_unavailable");
+  console.log("contract=Darwin live-owner checks preserve precise native readiness refusals");
+  console.log("helper-missing witness=null lock=macos_helper_missing refusal=true");
 } finally {
   fs.renameSync(unavailable, helper);
 }

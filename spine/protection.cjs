@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { platformSupport } = require("./platform.cjs");
-const { requireHelperPlatform } = require("../scripts/macos-helper.cjs");
+const { helperPlatform } = require("../scripts/macos-helper.cjs");
 const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
@@ -313,11 +313,19 @@ function protectedToolNames(state) {
   return [...new Set(state.guardTools)];
 }
 
-function writeState(statePath, state) {
+function writeState(statePath, state, { beforeCommit } = {}) {
   fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
   const temporary = `${statePath}.tmp-${process.pid}`;
-  fs.writeFileSync(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
-  fs.renameSync(temporary, statePath);
+  try {
+    fs.writeFileSync(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+    if (beforeCommit) beforeCommit();
+    fs.renameSync(temporary, statePath);
+  } catch (error) {
+    try { fs.unlinkSync(temporary); } catch (unlinkError) {
+      if (unlinkError.code !== "ENOENT") error.cleanupError = unlinkError;
+    }
+    throw error;
+  }
 }
 
 function ownershipRefusal(code, message = "") {
@@ -568,6 +576,84 @@ function readinessFailure(code, detail) {
   return { ok: false, code, detail };
 }
 
+function macosHelperIdentity(stat, bytes) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    size: stat.size.toString(),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+    sha256: sha256(bytes),
+  };
+}
+
+function sameMacosHelperIdentity(left, right) {
+  return left && right && Object.keys(left).every((key) => left[key] === right[key]);
+}
+
+function describeMacosHelperIdentity(identity) {
+  if (!identity) return "unavailable";
+  return `dev=${identity.device} ino=${identity.inode} size=${identity.size} mtimeNs=${identity.mtimeNs} ctimeNs=${identity.ctimeNs} sha256=${identity.sha256}`;
+}
+
+function inspectMacosHelper({ expectedPlatform } = {}) {
+  let fd;
+  try {
+    fd = fs.openSync(MACOS_PROCESS_START_WITNESS_HELPER, "r");
+    const stat = fs.fstatSync(fd, { bigint: true });
+    if (!stat.isFile()) {
+      return readinessFailure("macos_helper_missing", `native helper is not a regular file: ${MACOS_PROCESS_START_WITNESS_HELPER}`);
+    }
+    try {
+      fs.accessSync(MACOS_PROCESS_START_WITNESS_HELPER, fs.constants.X_OK);
+    } catch (error) {
+      return readinessFailure("macos_helper_not_executable", `native helper is not executable: ${error.message}`);
+    }
+    const bytes = fs.readFileSync(fd);
+    if (expectedPlatform) {
+      let actual;
+      try {
+        actual = helperPlatform(bytes);
+      } catch (error) {
+        return readinessFailure("macos_helper_architecture", error.message.replace(/^REFUSE macos_helper_architecture:\s*/, ""));
+      }
+      if (actual !== expectedPlatform) {
+        return readinessFailure("macos_helper_architecture", `expected ${expectedPlatform} helper, got ${actual}`);
+      }
+    }
+    return { ok: true, identity: macosHelperIdentity(stat, bytes) };
+  } catch (error) {
+    const action = error?.code === "ENOENT" ? "is missing" : "cannot be inspected";
+    return readinessFailure("macos_helper_missing", `native helper ${action}: ${MACOS_PROCESS_START_WITNESS_HELPER}${error?.code === "ENOENT" ? "" : `: ${error.message}`}`);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+function helperSubstitutionFailure(expected, observed, phase) {
+  return readinessFailure(
+    "macos_helper_substituted",
+    `native helper identity changed ${phase}; expected ${describeMacosHelperIdentity(expected)}; observed ${describeMacosHelperIdentity(observed)}`,
+  );
+}
+
+function compareMacosHelperIdentity(expected, phase) {
+  const current = inspectMacosHelper();
+  if (!current.ok) return helperSubstitutionFailure(expected, null, phase);
+  if (!sameMacosHelperIdentity(expected, current.identity)) {
+    return helperSubstitutionFailure(expected, current.identity, phase);
+  }
+  return { ok: true };
+}
+
+// This identity fence does not make its comparison and the following act
+// atomic. It makes helper substitution detectable at the explicit fence.
+function requireMacosHelperIdentity(expected, phase) {
+  if (!expected) return;
+  const comparison = compareMacosHelperIdentity(expected, phase);
+  if (!comparison.ok) throw new ProtectionError(comparison.code, comparison.detail);
+}
+
 function parseMacosTimestamp(text) {
   const match = /^([1-9]\d*)\.(\d{6})$/.exec(text || "");
   if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
@@ -611,42 +697,31 @@ function parseMacosProcessWitness(result, nowSeconds = Date.now() / 1000) {
 }
 
 function macosHelperReadiness(platform, arch) {
-  let stat;
-  try {
-    stat = fs.statSync(MACOS_PROCESS_START_WITNESS_HELPER);
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return readinessFailure("macos_helper_missing", `native helper is missing: ${MACOS_PROCESS_START_WITNESS_HELPER}`);
-    }
-    return readinessFailure("macos_helper_missing", `native helper cannot be inspected: ${error.message}`);
-  }
-  if (!stat.isFile()) {
-    return readinessFailure("macos_helper_missing", `native helper is not a regular file: ${MACOS_PROCESS_START_WITNESS_HELPER}`);
-  }
-  try {
-    fs.accessSync(MACOS_PROCESS_START_WITNESS_HELPER, fs.constants.X_OK);
-  } catch (error) {
-    return readinessFailure("macos_helper_not_executable", `native helper is not executable: ${error.message}`);
-  }
-  try {
-    requireHelperPlatform(MACOS_PROCESS_START_WITNESS_HELPER, `${platform}-${arch}`);
-  } catch (error) {
-    return readinessFailure("macos_helper_architecture", error.message.replace(/^REFUSE macos_helper_architecture:\s*/, ""));
-  }
-  return { ok: true };
+  return inspectMacosHelper({ expectedPlatform: `${platform}-${arch}` });
 }
 
 function macosProcessWitness(pid, platform = "darwin", arch = process.arch, nowSeconds = Date.now() / 1000) {
   const helper = macosHelperReadiness(platform, arch);
   if (!helper.ok) return helper;
+  const beforeExecution = compareMacosHelperIdentity(helper.identity, "between architecture gate and execution");
+  if (!beforeExecution.ok) return beforeExecution;
+  let execution;
+  let invocationError;
   try {
-    return parseMacosProcessWitness(spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
+    execution = spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
       encoding: "utf8",
       timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
-    }), nowSeconds);
+    });
   } catch (error) {
-    return readinessFailure("macos_process_witness_failed", `native helper invocation failed: ${error.message}`);
+    invocationError = error;
   }
+  const afterExecution = compareMacosHelperIdentity(helper.identity, "during native witness execution");
+  if (!afterExecution.ok) return afterExecution;
+  if (invocationError) {
+    return readinessFailure("macos_process_witness_failed", `native helper invocation failed: ${invocationError.message}`);
+  }
+  const parsed = parseMacosProcessWitness(execution, nowSeconds);
+  return parsed.ok ? { ...parsed, helperIdentity: helper.identity } : parsed;
 }
 
 function protectReadiness(env = process.env) {
@@ -686,12 +761,12 @@ function processStartWitness(pid) {
   }
 }
 
-function requireProcessStartWitness(pid) {
+function requireProcessStartWitnessBinding(pid) {
   const support = platformSupport();
   if (support.platform === "darwin") {
     const result = macosProcessWitness(pid, support.platform, support.arch);
     if (!result.ok) throw new ProtectionError(result.code, result.detail);
-    return result.witness;
+    return { witness: result.witness, helperIdentity: result.helperIdentity };
   }
   const witness = processStartWitness(pid);
   if (witness === null) {
@@ -700,7 +775,11 @@ function requireProcessStartWitness(pid) {
       `cannot establish process-start witness for live pid ${pid}`,
     );
   }
-  return witness;
+  return { witness, helperIdentity: null };
+}
+
+function requireProcessStartWitness(pid) {
+  return requireProcessStartWitnessBinding(pid).witness;
 }
 
 function lockPathFor(projectRoot, env = process.env) {
@@ -720,11 +799,13 @@ function leaseMatches(lease, token) {
 
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
-  const owner = { pid: process.pid, startWitness: requireProcessStartWitness(process.pid) };
+  const witness = requireProcessStartWitnessBinding(process.pid);
+  const owner = { pid: process.pid, startWitness: witness.witness };
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (;;) {
     try {
+      requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
       const fd = fs.openSync(filePath, "wx", 0o600);
       try {
         fs.writeSync(fd, JSON.stringify(owner) + "\n");
@@ -968,17 +1049,20 @@ async function activationLease(statePath, env = process.env) {
     }
     const existingLease = state.lease;
     const generation = Number.isInteger(existingLease?.generation) ? existingLease.generation + 1 : 1;
+    const witness = requireProcessStartWitnessBinding(process.pid);
     const next = {
       ...state,
       state: STATES.ACTIVE,
       lease: {
         pid: process.pid,
-        startWitness: requireProcessStartWitness(process.pid),
+        startWitness: witness.witness,
         generation,
         startedAt: new Date().toISOString(),
       },
     };
-    writeState(statePath, next);
+    writeState(statePath, next, {
+      beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
+    });
     lock.release();
     Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: lock.recovered });

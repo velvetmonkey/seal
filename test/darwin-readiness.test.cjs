@@ -19,7 +19,7 @@ function isolatedTree(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-darwin-readiness-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ["spine", "scripts", "runtime"]) fs.mkdirSync(path.join(root, directory));
-  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "scripts/macos-helper.cjs"]) {
+  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
     fs.copyFileSync(path.join(ROOT, relative), path.join(root, relative));
   }
   return {
@@ -35,12 +35,20 @@ function withPlatform(platform, arch, fn) {
   const previousArch = process.env.SEAL_SPINE_ARCH;
   process.env.SEAL_SPINE_PLATFORM = platform;
   process.env.SEAL_SPINE_ARCH = arch;
-  try { return fn(); }
-  finally {
+  const restore = () => {
     if (previousPlatform === undefined) delete process.env.SEAL_SPINE_PLATFORM;
     else process.env.SEAL_SPINE_PLATFORM = previousPlatform;
     if (previousArch === undefined) delete process.env.SEAL_SPINE_ARCH;
     else process.env.SEAL_SPINE_ARCH = previousArch;
+  };
+  try {
+    const result = fn();
+    if (result && typeof result.then === "function") return result.finally(restore);
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
   }
 }
 
@@ -128,6 +136,24 @@ test("one helper child returns boot and process facts together", (t) => {
   console.log(`call=${calls[0].command} ${calls[0].args.join(" ")}\nboot=${result.bootTime}\nprocess=${result.witness}\nchild-process-tally=${calls.length}`);
 });
 
+test("witness execution detects a helper replacement after the architecture gate", (t) => {
+  const ctx = isolatedTree(t);
+  writeHelper(ctx);
+  let replaced = false;
+  const loaded = loadProtection(ctx, () => {
+    writeHelper(ctx);
+    replaced = true;
+    return { status: 0, stdout: "boot 1700000000.000000\nprocess 1750000000.123456\n" };
+  });
+  t.after(loaded.restore);
+  const result = withPlatform("darwin", "arm64", loaded.protection.protectReadiness);
+  assert.equal(replaced, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "macos_helper_substituted");
+  console.log(`execution-tamper helper=replaced-after-architecture-gate witness=REFUSED code=${result.code}`);
+  console.log(`execution-detail=${result.detail}`);
+});
+
 test("the boot-time plausibility floor survives the native output change", (t) => {
   const ctx = isolatedTree(t);
   const loaded = loadProtection(ctx, () => assert.fail("parser test must spawn nothing"));
@@ -162,6 +188,117 @@ test("lease acquisition rechecks a helper replaced after preflight", (t) => {
       },
     );
     assert.equal(fs.existsSync(loaded.protection.lockPathFor(project, env)), false);
+  });
+});
+
+test("project-lock commit refuses a helper replacement after the witness gate", (t) => {
+  const ctx = isolatedTree(t);
+  writeHelper(ctx);
+  const loaded = loadProtection(ctx, () => ({
+    status: 0,
+    stdout: "boot 1700000000.000000\nprocess 1750000000.123456\n",
+  }));
+  t.after(loaded.restore);
+  withPlatform("darwin", "arm64", () => {
+    const project = path.join(ctx.root, "lock-project");
+    fs.mkdirSync(project);
+    const env = { XDG_DATA_HOME: path.join(ctx.root, "lock-data") };
+    const lockPath = loaded.protection.lockPathFor(project, env);
+    const lockDirectory = path.dirname(lockPath);
+    const originalMkdirSync = fs.mkdirSync;
+    let replaced = false;
+    fs.mkdirSync = (target, options) => {
+      const result = originalMkdirSync(target, options);
+      if (!replaced && target === lockDirectory) {
+        replaced = true;
+        writeHelper(ctx);
+      }
+      return result;
+    };
+    try {
+      assert.throws(
+        () => loaded.protection.acquireProjectLock(project, env),
+        (error) => {
+          console.log(`lock-tamper helper=replaced-after-gate commit=REFUSED code=${error.code}`);
+          console.log(`lock-detail=${error.message}`);
+          return error.code === "macos_helper_substituted" && error.refusal === true;
+        },
+      );
+    } finally {
+      fs.mkdirSync = originalMkdirSync;
+    }
+    assert.equal(replaced, true);
+    assert.equal(fs.existsSync(lockPath), false, "the lock write must not commit");
+    console.log(`lock-exists=${fs.existsSync(lockPath)}`);
+  });
+});
+
+test("ACTIVE lease commit refuses a helper replacement after the witness gate", async (t) => {
+  const ctx = isolatedTree(t);
+  writeHelper(ctx);
+  const loaded = loadProtection(ctx, () => ({
+    status: 0,
+    stdout: "boot 1700000000.000000\nprocess 1750000000.123456\n",
+  }));
+  t.after(loaded.restore);
+  await withPlatform("darwin", "arm64", async () => {
+    const project = path.join(ctx.root, "lease-project");
+    const dataHome = path.join(ctx.root, "lease-data");
+    fs.mkdirSync(project);
+    const server = {
+      command: process.execPath,
+      args: [path.join(ROOT, "bin/seal"), "__demo-server", path.join(ctx.root, "demo-data.txt")],
+    };
+    fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: { db: server } }) + "\n");
+    const projectServer = loaded.protection.readProjectServer(project, "db");
+    const env = { XDG_DATA_HOME: dataHome };
+    const statePath = loaded.protection.statePathFor(project, env);
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({
+      schema: "seal.protect/v1",
+      sealVersion: fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim(),
+      state: "PENDING RESTART",
+      projectRoot: fs.realpathSync(project),
+      projectId: loaded.protection.projectId(project),
+      serverName: "db",
+      guardTool: "demo.mutate",
+      projectServerDigest: projectServer.serverDigest,
+      projectServer: projectServer.server,
+      childArgv: projectServer.childArgv,
+      childEnv: projectServer.childEnv,
+      discoveryTimeoutMs: 5000,
+      lease: null,
+    }, null, 2) + "\n");
+
+    const temporary = `${statePath}.tmp-${process.pid}`;
+    const originalWriteFileSync = fs.writeFileSync;
+    let replaced = false;
+    fs.writeFileSync = (target, data, options) => {
+      const result = originalWriteFileSync(target, data, options);
+      if (!replaced && target === temporary) {
+        replaced = true;
+        writeHelper(ctx);
+      }
+      return result;
+    };
+    try {
+      await assert.rejects(
+        loaded.protection.activationLease(statePath, env),
+        (error) => {
+          console.log(`lease-tamper helper=replaced-after-gate commit=REFUSED code=${error.code}`);
+          console.log(`lease-detail=${error.message}`);
+          return error.code === "macos_helper_substituted" && error.refusal === true;
+        },
+      );
+    } finally {
+      fs.writeFileSync = originalWriteFileSync;
+    }
+    assert.equal(replaced, true);
+    const stored = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    assert.equal(stored.state, "PENDING RESTART");
+    assert.equal(stored.lease, null);
+    assert.equal(fs.existsSync(temporary), false, "the uncommitted temporary state must be removed");
+    console.log(`stored-state=${stored.state} stored-lease=${stored.lease} temporary-exists=${fs.existsSync(temporary)}`);
   });
 });
 
