@@ -29,7 +29,7 @@ jobs:
           path: .interpreted/seal-host
           persist-credentials: false
 
-      - name: Provision Lean 4.28.0 and build the pinned import graph
+      - name: Provision pinned Lean and build the pinned import graph
         uses: leanprover/lean-action@v1
         with:
           lake-package-directory: .interpreted/seal-host
@@ -41,4 +41,7 @@ jobs:
           use-mathlib-cache: true
 
       - name: Run the interpreted-Lean versus shipped-WASM differential
-        run: node --test test-support/authorization-seam-differential.test.cjs
+        run: |
+          export ELAN_TOOLCHAIN="$(cat "$SEAL_INTERPRETED_LEAN_ROOT/lean-toolchain")"
+          echo "Resolved ELAN_TOOLCHAIN=$ELAN_TOOLCHAIN from $SEAL_INTERPRETED_LEAN_ROOT/lean-toolchain"
+          node --test test-support/authorization-seam-differential.test.cjs
