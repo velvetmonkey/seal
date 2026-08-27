@@ -12,6 +12,44 @@
         "sentence": "Seal makes the approved call and the executed call the same call: same tool,",
         "proof": "test/demo-witness.test.cjs:101"
       }
+    ],
+    "docs/reproduce.md": [
+      {
+        "sentence": "Standard output is one `seal.reproduction/v1` JSON object.",
+        "proof": "test/seal-reproduce.test.cjs:79"
+      },
+      {
+        "sentence": "A correspondence returns exit status 0; `mismatch` and `refused` return nonzero.",
+        "proof": "test/seal-reproduce.test.cjs:95"
+      },
+      {
+        "sentence": "The asset object reports `name`, `declared_sha256`, `declared_bytes`, `observed_sha256`, and `observed_bytes`.",
+        "proof": "test/seal-reproduce.test.cjs:97"
+      },
+      {
+        "sentence": "The top level also reports the published and rebuilt kernel digests, `result`, `authority`, and the claim limit.",
+        "proof": "test/seal-reproduce.test.cjs:101"
+      },
+      {
+        "sentence": "`result` is `reproduced`, `mismatch`, or `refused`.",
+        "proof": "test/seal-reproduce.test.cjs:95"
+      },
+      {
+        "sentence": "It reports `independent` only when both options are present;",
+        "proof": "test/seal-reproduce.test.cjs:157"
+      },
+      {
+        "sentence": "requesting `independent` without a nonempty name refuses before any download.",
+        "proof": "test/seal-reproduce.test.cjs:150"
+      },
+      {
+        "sentence": "This is byte correspondence between a clean rebuild from pinned source and the published release artifact. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.",
+        "proof": "test/seal-reproduce.test.cjs:65"
+      },
+      {
+        "sentence": "The comparison says nothing about whether the policy rule is desirable.",
+        "proof": "test/seal-reproduce.test.cjs:65"
+      }
     ]
   }
 }

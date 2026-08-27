@@ -5,6 +5,7 @@
     "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:180"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
+    "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs:95"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
     "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52"] },
     ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },

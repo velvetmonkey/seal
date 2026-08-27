@@ -10,11 +10,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = "scripts/claim-bearing-files.json";
 // Ben's first narrow slice. Add a path here to widen the mandatory prose gate.
-const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md"];
+const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md", "docs/reproduce.md"];
 const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
 const REQUIRED_MANDATORY_CLAIMS = {
   "README.md": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
   "docs/guide/knowing-it-worked.md": "Seal makes the approved call and the executed call the same call: same tool,",
+  "docs/reproduce.md": "`result` is `reproduced`, `mismatch`, or `refused`.",
 };
 
 // A text file is claim-bearing when it contains a declarative, present-tense
@@ -129,6 +130,10 @@ function mandatoryClaimUnits(file) {
       || /\bSeal\s+has\s+made\s+every\b/i.test(unit));
 }
 
+function normalizedProse(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function checkMandatoryBindings() {
   if (!MANDATORY_DOC_FILES.some((file) => tracked.has(file))) return;
   let bindings;
@@ -142,15 +147,22 @@ function checkMandatoryBindings() {
     if (!entry?.coveredBy?.length || entry.allowlistReason) fail(`${file}: mandatory document cannot use allowlist/debt coverage`);
     const fileBindings = bindings.files[file];
     if (!Array.isArray(fileBindings) || fileBindings.length === 0) { fail(`${file}: mandatory claim binding list is empty`); continue; }
+    const fileText = normalizedProse(readText(file) ?? "");
     const bySentence = new Map(fileBindings.map((binding) => [binding.sentence, binding.proof]));
     if (!bySentence.has(REQUIRED_MANDATORY_CLAIMS[file])) fail(`${file}: required binding missing: ${REQUIRED_MANDATORY_CLAIMS[file]}`);
+    for (const binding of fileBindings) {
+      if (typeof binding?.sentence !== "string" || typeof binding?.proof !== "string") {
+        fail(`${file}: binding must contain sentence and proof`);
+        continue;
+      }
+      if (!fileText.includes(normalizedProse(binding.sentence))) fail(`${file}: bound claim sentence is absent from the document: ${binding.sentence}`);
+    }
     for (const sentence of mandatoryClaimUnits(file)) {
       const proof = bySentence.get(sentence);
       if (!proof) { fail(`${file}: unbound claim sentence: ${sentence}`); continue; }
       const problem = referenceProvesFile(proof, file, tracked);
       if (problem) fail(`${file}: binding for sentence ${JSON.stringify(sentence)} ${JSON.stringify(proof)} ${problem}`);
     }
-    for (const binding of fileBindings) if (typeof binding?.sentence !== "string" || typeof binding?.proof !== "string") fail(`${file}: binding must contain sentence and proof`);
   }
 }
 let manifest;
