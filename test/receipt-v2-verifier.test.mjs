@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
-import { canonical, format, sha256, verify } from "../checker/seal-receipt-v2.mjs";
+import { canonical, format, read, sha256, verify } from "../checker/seal-receipt-v2.mjs";
+import { CFG_STANDARD, guardTarget } from "../runtime/kernel/seal-config.js";
 
 const cfg = { epoch: 1, safety: { approval: { control_file: "X", ttl_seconds: 120 }, tools: [{ name: "db.execute", mode: "guarded", match: { type: "contains_any_ci", arg: "sql", needles: ["drop"] }, target: [{ full_arguments: true }] }] }, temporal: { policies: [] } };
 const keys = generateKeyPairSync("ed25519");
@@ -18,6 +19,10 @@ function envelope(verdict = "BLOCK") {
   return r;
 }
 const text = (r) => JSON.stringify(r);
+function resign(r) {
+  const unsigned = { ...r }; delete unsigned.signature;
+  return { ...unsigned, signature: { algorithm: "ed25519", key_id: "phase-a-test", value: sign(null, Buffer.from(canonical(unsigned)), keys.privateKey).toString("hex") } };
+}
 const expectRed = async (label, input, code) => { await assert.rejects(() => verify(input, { publicKeyHex: pub }), (e) => e.code === code, label); };
 
 test("v2 positive signed receipt and all five rows", async () => {
@@ -59,4 +64,50 @@ test("unsigned receipt still replays, and a valid signature without a key is not
   assert.equal(noKey.verify, false);
   console.log("UNSIGNED REPLAY: available");
   console.log(format(noKey));
+});
+
+test("every recorded input channel is consumed or refuses tampering", async () => {
+  const args = { amount: 40000, to: "supplier-77" };
+  const target = guardTarget("payments.send", args);
+  const quorum = '{"acceptor":1,"value":"payments.send"}\n{"acceptor":2,"value":"payments.send"}\n';
+  const base = { seal_receipt: "v2", tool: "payments.send", arguments: args, now: 1000,
+    kernel_config: CFG_STANDARD, granted_capabilities: [{ target }],
+    kernel_inputs: { approvals: [target], votes: quorum, grants: "", forecasts: "" },
+    verdict: "ALLOW", reason: "consensus satisfied", replay: { args_sha256: sha256(canonical(args)), config_sha256: sha256(canonical(CFG_STANDARD)) } };
+  assert.equal((await verify(text(resign(base)))).replay, true);
+  const cases = [
+    ["votes", { ...base, kernel_inputs: { ...base.kernel_inputs, votes: "" } }, "verdict_mismatch"],
+    ["grants", { ...base, kernel_inputs: { ...base.kernel_inputs, grants: "tampered" } }, "inert_input"],
+    ["forecasts", { ...base, kernel_inputs: { ...base.kernel_inputs, forecasts: "tampered" } }, "inert_input"],
+    ["granted_capabilities", { ...base, granted_capabilities: [{ target: "0".repeat(64) }] }, "input_mismatch"],
+  ];
+  for (const [channel, altered, code] of cases) {
+    await expectRed(channel, text(resign(altered)), code);
+    console.log(`CHANNEL ${channel}: REFUSE (${code})`);
+  }
+  console.log("CHANNEL approvals: consumed by decision input");
+});
+
+test("duplicates are rejected at every depth after name unescaping", async () => {
+  const good = text(envelope());
+  const nested = good.replace('"arguments":{"database":"prod","sql":"drop table users"}',
+    '"arguments":{"database":"prod","nested":{"x":1,"x":2},"sql":"drop table users"}');
+  const escaped = good.replace('"arguments":{"database":"prod","sql":"drop table users"}',
+    '"arguments":{"database":"prod","\\u0064atabase":"prod","sql":"drop table users"}');
+  for (const [label, bad] of [["nested", nested], ["escaped-name", escaped]]) {
+    assert.throws(() => read(bad), (e) => e.code === "duplicate_member");
+    assert.doesNotThrow(() => read(good));
+    console.log(`VECTOR ${label} duplicate: RED (duplicate_member) -> GREEN`);
+  }
+});
+
+test("number token and parsed-value controls match the specification", () => {
+  for (const token of ["1000.0", "1e3"]) {
+    const parsed = read(`{"now":${token}}`);
+    assert.equal(parsed.now, 1000);
+    console.log(`NUMBER ${token}: READ GREEN -> parsed 1000`);
+  }
+  assert.doesNotThrow(() => read('{"now":1.5}'));
+  assert.throws(() => canonical({ now: 1.5 }), (e) => e.code === "number_not_canonical");
+  console.log("NUMBER 1.5: READ GREEN -> canonical REFUSE (number_not_canonical)");
 });

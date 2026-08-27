@@ -2,6 +2,7 @@
 // Phase A verifier. It does not import a producer or its canonicaliser.
 import { createHash, createPublicKey, verify as edVerify } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { TextDecoder } from "node:util";
 import { pathToFileURL } from "node:url";
 
 const ORDER = ["seal_receipt", "tool", "action", "arguments", "now", "kernel_config", "granted_capabilities", "kernel_inputs", "verdict", "reason", "replay", "signature"];
@@ -36,7 +37,16 @@ function scanDocument(text) {
   ws(); value(); ws(); if (i !== text.length) fail("trailing or truncated JSON", "read_failed");
 }
 
-export function read(text) { scanDocument(text); try { return JSON.parse(text); } catch (e) { fail(`JSON parse failed: ${e.message}`, "read_failed"); } }
+export function read(input) {
+  let text;
+  if (typeof input === "string") text = input;
+  else if (input instanceof Uint8Array) {
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(input); }
+    catch (e) { fail(`ill-formed UTF-8: ${e.message}`, "read_failed"); }
+  } else fail("receipt must be UTF-8 bytes or a string", "read_failed");
+  scanDocument(text);
+  try { return JSON.parse(text); } catch (e) { fail(`JSON parse failed: ${e.message}`, "read_failed"); }
+}
 
 function validate(r) {
   if (!r || typeof r !== "object" || Array.isArray(r)) fail("envelope is not an object");
@@ -49,6 +59,10 @@ function validate(r) {
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
   if (!Array.isArray(r.kernel_inputs.approvals) || !r.kernel_inputs.approvals.every((x) => typeof x === "string")) fail("approvals must be strings");
   for (const k of ["votes", "grants", "forecasts"]) if (typeof r.kernel_inputs[k] !== "string") fail(`kernel_inputs.${k} must be a string`);
+  const targets = r.granted_capabilities.map((g) => g && g.target);
+  if (!r.granted_capabilities.every((g) => g && typeof g === "object" && typeof g.target === "string") ||
+      JSON.stringify(targets) !== JSON.stringify(r.kernel_inputs.approvals))
+    fail("granted capabilities do not match approvals", "input_mismatch");
   if (!["ALLOW", "BLOCK", "ERROR"].includes(r.verdict) || typeof r.reason !== "string") fail("verdict and reason are required");
   if (!r.replay || !HEX64.test(r.replay.args_sha256) || !HEX64.test(r.replay.config_sha256)) fail("replay commitments are required");
   if (r.replay.args_sha256 !== sha256(canonical(r.arguments))) fail("arguments commitment mismatch", "commitment_mismatch");
@@ -56,8 +70,14 @@ function validate(r) {
 }
 
 export async function replay(r) {
-  const mod = await import(new URL("../runtime/kernel/runner.cjs", import.meta.url));
-  const x = await mod.default.decide(r.kernel_config, { tool: r.tool, args: r.arguments, approvals: r.kernel_inputs.approvals, now: r.now });
+  if (r.kernel_inputs.grants !== "" || r.kernel_inputs.forecasts !== "")
+    fail("grants and forecasts are inert in the current kernel and must be empty", "inert_input");
+  const mod = await import(new URL("../runtime/kernel/decision-runner.cjs", import.meta.url));
+  const x = await mod.default.decide(r.kernel_config, {
+    tool: r.tool, args: r.arguments, approvals: r.kernel_inputs.approvals, now: r.now,
+    votes: r.kernel_inputs.votes, grants: r.kernel_inputs.grants, forecasts: r.kernel_inputs.forecasts,
+    granted_capabilities: r.granted_capabilities,
+  });
   if (x.verdict !== r.verdict) fail(`recorded verdict ${r.verdict} does not reproduce as ${x.verdict}`, "verdict_mismatch");
   return x;
 }
