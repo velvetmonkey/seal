@@ -13,7 +13,7 @@ const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
 const PUBLISHED_KERNEL = Buffer.from("published kernel bytes\n");
 const OUTSIDE_AUTHORITY = "independ" + "ent";
-const LIMIT_CLAIM = "This is byte correspondence between a clean rebuild from pinned source and the published release artifact. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
+const LIMIT_CLAIM = "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
 
 function digest(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -55,12 +55,19 @@ function harness(options = {}) {
   };
 }
 
-test("honest comparison uses distinct origins and emits seal.reproduction/v1", () => {
+test("honest comparison names and scopes the selected artifact kernel", () => {
   const h = harness();
   const outcome = execute([TAG], h.deps);
   assert.equal(outcome.exitCode, 0);
   assert.equal(outcome.report.schema, SCHEMA);
-  assert.equal(outcome.report.result, "reproduced");
+  assert.equal(outcome.report.result, "artifact-kernel-match");
+  assert.equal(outcome.report.platform, "linux-x64");
+  assert.equal(outcome.report.asset.name, ASSET);
+  assert.equal(outcome.report.scope, "selected-artifact-kernel-only");
+  assert.deepEqual(outcome.report.native_macos_helper, {
+    provenance: "release-produced, not independently reproduced",
+    covered_by_result: false,
+  });
   assert.equal(outcome.report.authority, "same-authority");
   assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md
   assert.equal(outcome.report.published_kernel_sha256, digest(PUBLISHED_KERNEL));
@@ -83,7 +90,7 @@ test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
 });
 
 test("documented report result and field contract is executable", () => {
-  const reproduced = execute([TAG], harness().deps);
+  const matched = execute([TAG], harness().deps);
   const mismatch = execute([TAG], harness({
     afterPublishedKernel(file) {
       const bytes = fs.readFileSync(file);
@@ -92,12 +99,12 @@ test("documented report result and field contract is executable", () => {
     },
   }).deps);
   const refused = execute([TAG], harness({ checksum: `${"0".repeat(64)}  24  ${ASSET}\n` }).deps);
-  assert.deepEqual([reproduced.report.result, mismatch.report.result, refused.report.result], ["reproduced", "mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md
-  assert.deepEqual([reproduced.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]);
-  assert.deepEqual(Object.keys(reproduced.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual([matched.report.result, mismatch.report.result, refused.report.result], ["artifact-kernel-match", "artifact-kernel-mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual([matched.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual(Object.keys(matched.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md
   assert.deepEqual(
-    ["published_kernel_sha256", "rebuilt_kernel_sha256", "result", "authority", "limit"].map((key) => Object.hasOwn(reproduced.report, key)),
-    [true, true, true, true, true],
+    ["published_kernel_sha256", "rebuilt_kernel_sha256", "scope", "native_macos_helper", "result", "authority", "limit"].map((key) => Object.hasOwn(matched.report, key)),
+    [true, true, true, true, true, true, true],
   ); // CLAIM-COVERAGE: docs/reproduce.md
 });
 
@@ -111,7 +118,7 @@ test("one flipped byte in the extracted kernel produces mismatch and nonzero exi
   });
   const outcome = execute([TAG], h.deps);
   assert.equal(outcome.exitCode, 1);
-  assert.equal(outcome.report.result, "mismatch");
+  assert.equal(outcome.report.result, "artifact-kernel-mismatch");
   assert.notEqual(outcome.report.published_kernel_sha256, outcome.report.rebuilt_kernel_sha256);
   assert.equal(h.builds, 1);
 });
@@ -126,7 +133,7 @@ test("edited SHA256SUMS digit refuses before install or build", () => {
   assert.equal(h.installedPath, undefined);
 });
 
-test("nonexistent well-formed tag refuses by name and never reports reproduced", () => {
+test("nonexistent well-formed tag refuses by name and never reports an artifact-kernel match", () => {
   const missing = "v99.99.99-does-not-exist";
   const deps = {
     download() { throw new Error(`release download missing for ${missing}`); },
@@ -135,7 +142,7 @@ test("nonexistent well-formed tag refuses by name and never reports reproduced",
   assert.equal(outcome.exitCode, 1);
   assert.equal(outcome.report.result, "refused");
   assert.match(outcome.error, new RegExp(missing));
-  assert.notEqual(outcome.report.result, "reproduced");
+  assert.notEqual(outcome.report.result, "artifact-kernel-match");
 });
 
 test("outside-authority declaration requires a nonempty authority name", () => {
@@ -163,4 +170,20 @@ test("invalid tags refuse before download using the published checker pattern", 
   assert.equal(outcome.report.result, "refused");
   assert.match(outcome.error, /release tag is invalid: rc\.3/);
   assert.equal(downloads, 0);
+});
+
+test("a Darwin platform question refuses before download and names the uncovered artifact", () => {
+  let downloads = 0;
+  const outcome = execute([TAG, "--platform", "darwin-arm64"], {
+    download() { downloads += 1; },
+  });
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.report.result, "refused");
+  assert.equal(outcome.report.platform, "darwin-arm64");
+  assert.equal(outcome.report.asset.name, `seal-${TAG}-darwin-arm64`);
+  assert.equal(outcome.report.native_macos_helper.provenance, "release-produced, not independently reproduced");
+  assert.equal(outcome.report.native_macos_helper.covered_by_result, false);
+  assert.match(outcome.error, /only checks the linux-x64 artifact kernel/);
+  assert.equal(downloads, 0);
+  console.log(JSON.stringify(outcome.report));
 });

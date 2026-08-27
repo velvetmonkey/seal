@@ -7,8 +7,9 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
-const SCHEMA = "seal.reproduction/v1";
-const LIMIT = "This is byte correspondence between a clean rebuild from pinned source and the published release artifact. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
+const SCHEMA = "seal.artifact-kernel-correspondence/v1";
+const LIMIT = "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
+const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SOURCE_PINS = Object.freeze({
   "v0.2.0-rc.3": Object.freeze({
@@ -31,12 +32,13 @@ function refuse(message) {
   throw new Refusal(message);
 }
 
-function emptyReport(tag, authority = "same-authority") {
+function emptyReport(tag, authority = "same-authority", platform = "linux-x64") {
   return {
     schema: SCHEMA,
     tag: tag ?? null,
+    platform,
     asset: {
-      name: tag && TAG_PATTERN.test(tag) ? `seal-${tag}-linux-x64` : null,
+      name: tag && TAG_PATTERN.test(tag) ? `seal-${tag}-${platform}` : null,
       declared_sha256: null,
       declared_bytes: null,
       observed_sha256: null,
@@ -44,6 +46,11 @@ function emptyReport(tag, authority = "same-authority") {
     },
     published_kernel_sha256: null,
     rebuilt_kernel_sha256: null,
+    scope: "selected-artifact-kernel-only",
+    native_macos_helper: {
+      provenance: NATIVE_HELPER_PROVENANCE,
+      covered_by_result: false,
+    },
     result: "refused",
     authority,
     limit: LIMIT,
@@ -52,15 +59,17 @@ function emptyReport(tag, authority = "same-authority") {
 
 function parseArguments(argv) {
   let tag;
+  let platform = "linux-x64";
   let requestedAuthority = "same-authority";
   let authorityName;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--authority" || token === "--authority-name") {
+    if (token === "--authority" || token === "--authority-name" || token === "--platform") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) refuse(`${token} needs a value`);
       if (token === "--authority") requestedAuthority = value;
-      else authorityName = value;
+      else if (token === "--authority-name") authorityName = value;
+      else platform = value;
       index += 1;
     } else if (token.startsWith("--")) {
       refuse(`unknown option: ${token}`);
@@ -70,12 +79,15 @@ function parseArguments(argv) {
       refuse(`unexpected argument: ${token}`);
     }
   }
-  if (!tag) refuse("usage: node scripts/seal-reproduce.cjs <tag> [--authority same-authority|independent] [--authority-name <string>]");
-  return { tag, requestedAuthority, authorityName };
+  if (!tag) refuse("usage: node scripts/seal-reproduce.cjs <tag> [--platform linux-x64] [--authority same-authority|independent] [--authority-name <string>]");
+  return { tag, platform, requestedAuthority, authorityName };
 }
 
 function validateRequest(parsed) {
   if (!TAG_PATTERN.test(parsed.tag)) refuse(`release tag is invalid: ${parsed.tag}`);
+  if (parsed.platform !== "linux-x64") {
+    refuse(`platform ${parsed.platform} selects artifact seal-${parsed.tag}-${parsed.platform}; this tool only checks the linux-x64 artifact kernel`);
+  }
   if (!new Set(["same-authority", "independent"]).has(parsed.requestedAuthority)) {
     refuse(`authority is invalid: ${parsed.requestedAuthority}`);
   }
@@ -237,7 +249,7 @@ function execute(argv, deps = DEFAULT_DEPS) {
   let report = emptyReport(null);
   try {
     parsed = parseArguments(argv);
-    report = emptyReport(parsed.tag);
+    report = emptyReport(parsed.tag, "same-authority", parsed.platform);
     const authority = validateRequest(parsed);
     report.authority = authority;
 
@@ -260,8 +272,8 @@ function execute(argv, deps = DEFAULT_DEPS) {
 
     const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
     report.rebuilt_kernel_sha256 = sha256File(rebuiltKernel);
-    report.result = report.published_kernel_sha256 === report.rebuilt_kernel_sha256 ? "reproduced" : "mismatch";
-    return { report, exitCode: report.result === "reproduced" ? 0 : 1, error: null };
+    report.result = report.published_kernel_sha256 === report.rebuilt_kernel_sha256 ? "artifact-kernel-match" : "artifact-kernel-mismatch";
+    return { report, exitCode: report.result === "artifact-kernel-match" ? 0 : 1, error: null };
   } catch (error) {
     const message = error instanceof Refusal ? error.message : `unexpected failure: ${error.message}`;
     return { report, exitCode: 1, error: message };

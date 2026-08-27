@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// SAME-AUTHORITY POST-RELEASE REPRODUCTION: the release publisher and this
-// check share one authority. This proves published bytes match tracked bytes;
+// SAME-AUTHORITY LINUX-X64 ARTIFACT KERNEL CORRESPONDENCE: the artifact
+// publisher and this check share one authority. This proves selected bytes match tracked bytes;
 // it does not create an independent build or source of truth.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -116,7 +116,11 @@ function readPublishedEntry(checksums, assetName) {
 function main() {
   const tag = arg("--release-tag") || process.env.RELEASE_TAG || DEFAULT_TAG;
   if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(tag)) fail(`release tag is invalid: ${tag}`);
-  const assetName = `seal-${tag}-linux-x64`;
+  const platform = arg("--platform") || process.env.RELEASE_PLATFORM || "linux-x64";
+  const assetName = `seal-${tag}-${platform}`;
+  if (platform !== "linux-x64") {
+    fail(`platform ${platform} selects artifact ${assetName}; this checker only checks the linux-x64 artifact kernel, and the native macOS helper is release-produced, not independently reproduced, and is not covered by this result`);
+  }
   const work = fs.mkdtempSync(path.join(arg("--work-dir") || os.tmpdir(), "seal-published-kernel-"));
   const asset = arg("--asset") || path.join(work, assetName);
   const checksums = arg("--checksums") || path.join(work, "SHA256SUMS");
@@ -186,15 +190,17 @@ function main() {
   const manifestDigest = manifest.files?.["kernel/wasm/seal.wasm"];
   if (!/^[0-9a-f]{64}$/.test(manifestDigest || "")) fail(`runtime-manifest.json has no valid kernel digest`);
 
-  process.stdout.write("SAME-AUTHORITY POST-RELEASE REPRODUCTION\n");
-  process.stdout.write("Limit: the release publisher and this check share one authority; this proves published bytes match tracked bytes, not independent reproduction, and it does not resist a hostile published installer that plants believable bytes.\n");
+  process.stdout.write("SAME-AUTHORITY LINUX-X64 ARTIFACT KERNEL CORRESPONDENCE\n");
+  process.stdout.write(`selected artifact: ${assetName}\n`);
+  process.stdout.write("Coverage: the native macOS helper is release-produced, not independently reproduced, and is not covered by this result.\n");
+  process.stdout.write("Limit: the artifact publisher and this check share one authority; this proves the selected artifact's installed kernel bytes match tracked bytes, and it does not resist a hostile published installer that plants believable bytes.\n");
   process.stdout.write(`published installed seal.wasm: ${installedDigest}\n`);
   process.stdout.write(`tracked runtime/kernel/wasm/seal.wasm: ${trackedDigest}\n`);
   process.stdout.write(`runtime-manifest.json kernel pin: ${manifestDigest}\n`);
   if (installedDigest !== trackedDigest || installedDigest !== manifestDigest || trackedDigest !== manifestDigest) {
     fail(`kernel digest mismatch: published installed ${installedDigest}; tracked ${trackedDigest}; manifest ${manifestDigest}`);
   }
-  process.stdout.write("PASS all three kernel digests agree\n");
+  process.stdout.write(`PASS ${assetName} kernel: all three digests agree\n`);
 }
 
 main();

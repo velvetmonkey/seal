@@ -4,13 +4,49 @@
 // so both boundaries and their refusals are testable.
 // Seal supports only the explicit install/demo platform pairs below; Protect
 // support is separately narrower.
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+const MACOS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
+const MACOS_WITNESS_TIMEOUT_MS = 1000;
+const MACOS_MIN_BOOT_SECONDS = 946684800;
+
+function macosProtectPrerequisites() {
+  try {
+    const helper = fs.statSync(MACOS_HELPER);
+    if (!helper.isFile()) return false;
+    fs.accessSync(MACOS_HELPER, fs.constants.X_OK);
+    const nowSeconds = Date.now() / 1000;
+    const boot = spawnSync("sysctl", ["-n", "kern.boottime"], {
+      encoding: "utf8",
+      timeout: MACOS_WITNESS_TIMEOUT_MS,
+    });
+    const bootMatch = /\{ sec = ([1-9]\d*)(?=[^\d.e])(?:,| ,) usec = \d+ \}/.exec(boot.stdout || "");
+    if (boot.error || boot.status !== 0 || !bootMatch ||
+        (boot.stdout.match(/\bsec = /g) || []).length !== 1) return false;
+    const bootSeconds = Number(bootMatch[1]);
+    if (!Number.isSafeInteger(bootSeconds) || bootSeconds < MACOS_MIN_BOOT_SECONDS || bootSeconds > nowSeconds) return false;
+    const witness = spawnSync(MACOS_HELPER, [String(process.pid)], {
+      encoding: "utf8",
+      timeout: MACOS_WITNESS_TIMEOUT_MS,
+    });
+    const witnessMatch = /^([1-9]\d*)\.\d{6}\n?$/.exec(witness.stdout || "");
+    if (witness.error || witness.status !== 0 || !witnessMatch) return false;
+    const startSeconds = Number(witnessMatch[1]);
+    return Number.isSafeInteger(startSeconds) && startSeconds >= bootSeconds && startSeconds <= nowSeconds;
+  } catch {
+    return false;
+  }
+}
+
 function platformSupport() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
   const installSupported = platform === "linux" && arch === "x64"
     || platform === "darwin" && (arch === "x64" || arch === "arm64");
   const protectSupported = platform === "linux" && arch === "x64"
-    || platform === "darwin" && (arch === "x64" || arch === "arm64");
+    || platform === "darwin" && (arch === "x64" || arch === "arm64") && macosProtectPrerequisites();
   return { supported: installSupported, installSupported, protectSupported, platform, arch };
 }
 

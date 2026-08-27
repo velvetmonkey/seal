@@ -15,40 +15,40 @@
     ],
     "docs/reproduce.md": [
       {
-        "sentence": "Standard output is one `seal.reproduction/v1` JSON object.",
-        "proof": "test/seal-reproduce.test.cjs:79"
+        "sentence": "Standard output is one `seal.artifact-kernel-correspondence/v1` JSON object.",
+        "proof": "test/seal-reproduce.test.cjs:86"
       },
       {
-        "sentence": "A correspondence returns exit status 0; `mismatch` and `refused` return nonzero.",
-        "proof": "test/seal-reproduce.test.cjs:95"
+        "sentence": "An `artifact-kernel-match` returns exit status 0; `artifact-kernel-mismatch` and `refused` return nonzero.",
+        "proof": "test/seal-reproduce.test.cjs:103"
       },
       {
         "sentence": "The asset object reports `name`, `declared_sha256`, `declared_bytes`, `observed_sha256`, and `observed_bytes`.",
-        "proof": "test/seal-reproduce.test.cjs:97"
+        "proof": "test/seal-reproduce.test.cjs:104"
       },
       {
-        "sentence": "The top level also reports the published and rebuilt kernel digests, `result`, `authority`, and the claim limit.",
-        "proof": "test/seal-reproduce.test.cjs:101"
+        "sentence": "The top level also reports the published and rebuilt kernel digests, selected `platform`, artifact-kernel `scope`, native-helper coverage, `result`, `authority`, and the claim limit.",
+        "proof": "test/seal-reproduce.test.cjs:108"
       },
       {
-        "sentence": "`result` is `reproduced`, `mismatch`, or `refused`.",
-        "proof": "test/seal-reproduce.test.cjs:95"
+        "sentence": "`result` is `artifact-kernel-match`, `artifact-kernel-mismatch`, or `refused`.",
+        "proof": "test/seal-reproduce.test.cjs:102"
       },
       {
         "sentence": "It reports `independent` only when both options are present;",
-        "proof": "test/seal-reproduce.test.cjs:157"
+        "proof": "test/seal-reproduce.test.cjs:164"
       },
       {
         "sentence": "requesting `independent` without a nonempty name refuses before any download.",
-        "proof": "test/seal-reproduce.test.cjs:150"
+        "proof": "test/seal-reproduce.test.cjs:157"
       },
       {
-        "sentence": "This is byte correspondence between a clean rebuild from pinned source and the published release artifact. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.",
-        "proof": "test/seal-reproduce.test.cjs:65"
+        "sentence": "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.",
+        "proof": "test/seal-reproduce.test.cjs:72"
       },
       {
         "sentence": "The comparison says nothing about whether the policy rule is desirable.",
-        "proof": "test/seal-reproduce.test.cjs:65"
+        "proof": "test/seal-reproduce.test.cjs:72"
       }
     ]
   }
