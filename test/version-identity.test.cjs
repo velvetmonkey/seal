@@ -80,7 +80,13 @@ function readerFacingMarkdownFiles(root) {
 function staleVersionMatches(root, version) {
   const oldLiteral = staleVersionLiteral(version);
   return readerFacingMarkdownFiles(root)
-    .filter((file) => oldLiteral.test(fs.readFileSync(file, "utf8")))
+    .filter((file) => {
+      const humanMaintained = fs.readFileSync(file, "utf8").replace(
+        /<!-- generated from release-manifest\.json; do not edit -->[\s\S]*?<!-- end generated release docs -->/g,
+        "",
+      );
+      return oldLiteral.test(humanMaintained);
+    })
     .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
     .sort();
 }
@@ -121,7 +127,7 @@ test("every emitted release identity derives from VERSION", () => {
   const binary = run(process.execPath, [path.join(ROOT, "bin", "seal"), "--version"]);
   assert.equal(binary.code, 0, binary.stderr);
   assert.equal(binary.stdout.trim(), VERSION);
-  for (const file of ["README.md", "docs/guide/when-something-looks-wrong.md"]) {
+  for (const file of ["docs/guide/when-something-looks-wrong.md"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`\\bv${VERSION}\\b`), `${file} must carry bare v${VERSION}`);
   }
 
@@ -169,7 +175,7 @@ test("every emitted release identity derives from VERSION", () => {
   assert.equal(fs.readFileSync(path.join(ROOT, "SHA256SUMS"), "utf8").trim(), "");
 });
 
-test("sync leaves no old product version in the named reader-facing search surface", () => {
+test("sync leaves no old product version in human-maintained reader-facing prose", () => {
   const oldVersion = VERSION;
   const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-stale-"));
   fs.cpSync(ROOT, scratch, {
@@ -182,10 +188,15 @@ test("sync leaves no old product version in the named reader-facing search surfa
         && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
     },
   });
+  const publishedDocs = ["README.md", "docs/start/install.md"];
+  const publishedBeforeCut = new Map(publishedDocs.map((file) => [file, fs.readFileSync(path.join(scratch, file), "utf8")]));
   const bumpedVersion = VERSION === "9.9.9" ? "9.9.10" : "9.9.9";
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
+  for (const file of publishedDocs) {
+    assert.equal(fs.readFileSync(path.join(scratch, file), "utf8"), publishedBeforeCut.get(file), `${file} must continue to describe the latest published release during a cut`);
+  }
   assert.deepEqual(
     staleVersionMatches(scratch, oldVersion),
     [],

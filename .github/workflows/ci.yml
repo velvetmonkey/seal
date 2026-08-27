@@ -238,6 +238,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Release docs must match the latest published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/generate-release-docs.mjs --check
       - name: Refuse independently rolled executable populations
         run: node scripts/check-executable-population-callers.mjs
       - uses: actions/checkout@v4

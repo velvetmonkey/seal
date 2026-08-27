@@ -1,8 +1,9 @@
+<!-- generated from release-manifest.json; do not edit -->
 # Install Seal v0.2.0-rc.3
-
-macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. The published v0.2.0-rc.3 release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported.
+The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) was published from commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d); its `release-manifest.json` uses schema `seal.release/v1`. macOS source portability is CI-exercised for install, demo and receipt checking.
+Protect is not supported on macOS yet. The published release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported. Node 20+ is required.
 The installer refuses before changing anything on an unsupported or mismatched platform.
+<!-- end generated release docs -->
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
 short form is the same install without the named refusals spelled out. Use
@@ -18,22 +19,21 @@ answer "did I download the bytes the release named?" They do not answer
 
 ## Verify, then install
 
+<!-- generated from release-manifest.json; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.0-rc.3
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-if [ ! -r SHA256SUMS ] || [ ! -s SHA256SUMS ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
-read -r expected_digest expected_bytes expected_name < SHA256SUMS
-if [ -z "$expected_digest" ] || [ -z "$expected_bytes" ] || [ -z "$expected_name" ]; then echo "SHA256SUMS is missing, unreadable, or empty" >&2; exit 1; fi
-if [ "$expected_name" != "seal-$SEAL_VERSION-linux-x64" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
-if [ "$actual_digest" != "$expected_digest" ]; then echo "release artifact digest does not match SHA256SUMS" >&2; exit 1; fi
-actual_bytes="$(wc -c < "$expected_name")"
-if [ "$actual_bytes" != "$expected_bytes" ]; then echo "release artifact byte count does not match SHA256SUMS" >&2; exit 1; fi
-chmod +x "$expected_name"
-./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
+artifact_name="seal-v0.2.0-rc.3-linux-x64"; artifact_sha256="2b1710ece93295543b820b081734d9014f1d9bc4cf4dd772d7d59023858a46b4"; artifact_bytes=6151598
+checker_name="seal-receipt-check.mjs"; checker_sha256="324e15191f093f72fe0f3e7f7bd0a791a5dc0e6ea261f3cd8c029fbc25997649"; checker_bytes=10749
+sums_name="SHA256SUMS"; sums_sha256="7c03029aba5aa10fd04d003b0a5a1604dd9b87f25990a6c5142ab9ded04bedd7"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name"
+if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$sums_actual" = "$sums_sha256"
+read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" '$3 == name' "$sums_name"); test "$expected_name" = "$artifact_name"; test "$expected_digest" = "$artifact_sha256"; test "$expected_bytes" = "$artifact_bytes"
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$artifact_name" | awk '{print $1}')"; fi; test "$actual_digest" = "$artifact_sha256"; test "$(wc -c < "$artifact_name" | tr -d ' ')" = "$artifact_bytes"
+read -r checker_sum checker_count checker_entry < <(awk -v name="$checker_name" '$3 == name' "$sums_name"); test "$checker_entry" = "$checker_name"; test "$checker_sum" = "$checker_sha256"; test "$checker_count" = "$checker_bytes"; if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; else checker_actual="$(sha256sum "$checker_name" | awk '{print $1}')"; fi; test "$checker_actual" = "$checker_sha256"; test "$(wc -c < "$checker_name" | tr -d ' ')" = "$checker_bytes"
+chmod +x "$expected_name"; ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
-
 Success prints `installed seal 0.2.0-rc.3 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
 The tree hash of the published v0.2.0-rc.3 asset is pinned here:
@@ -56,9 +56,9 @@ Further distribution detail, including what each payload contains, is in
 [DISTRIBUTION.md](../assurance/distribution.md). The published payload in the transcript above
 does not include the checker; download the sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
 and verify it against that release's `SHA256SUMS` asset; see [evaluator-walk.md](../start/evaluator-walk.md).
+<!-- end generated release docs -->
 
 ## Source-build tree pin
-
 A build of this checkout (not the published release asset) writes
 `dist/seal-v<identity>-linux-x64`. That tree digest is a different claim
 from the published-asset pin above:

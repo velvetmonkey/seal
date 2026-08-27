@@ -28,22 +28,22 @@ Keep the printed receipt paths until you have checked them.
 
 Install the published Linux x86-64 release before you run the command. The release tag also identifies its `SHA256SUMS`. These commands download the binary and sibling receipt-checker asset from that release. Check both assets' digests and byte counts before you run them. For provenance, compare them with release information you got from a separate channel. See the [full install guide](docs/start/install.md) for source builds.
 
+<!-- generated from release-manifest.json; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.0-rc.3
+artifact_name="seal-v0.2.0-rc.3-linux-x64"; artifact_sha256="2b1710ece93295543b820b081734d9014f1d9bc4cf4dd772d7d59023858a46b4"; artifact_bytes=6151598
+checker_name="seal-receipt-check.mjs"; checker_sha256="324e15191f093f72fe0f3e7f7bd0a791a5dc0e6ea261f3cd8c029fbc25997649"; checker_bytes=10749
+sums_name="SHA256SUMS"; sums_sha256="7c03029aba5aa10fd04d003b0a5a1604dd9b87f25990a6c5142ab9ded04bedd7"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs" # This checker does not enter the installed payload.
-read -r expected_digest expected_bytes expected_name < <(awk -v name="seal-$SEAL_VERSION-linux-x64" '$3 == name' SHA256SUMS); test "$expected_name" = "seal-$SEAL_VERSION-linux-x64"
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$actual_digest" = "$expected_digest"; actual_bytes="$(wc -c < "$expected_name")"; test "$actual_bytes" = "$expected_bytes"
-read -r checker_digest checker_bytes checker_name < <(awk '$3 == "seal-receipt-check.mjs"' SHA256SUMS); test "$checker_name" = "seal-receipt-check.mjs"
-if command -v shasum >/dev/null 2>&1; then checker_actual_digest="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then checker_actual_digest="$(sha256sum "$checker_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$checker_actual_digest" = "$checker_digest"; checker_actual_bytes="$(wc -c < "$checker_name")"; test "$checker_actual_bytes" = "$checker_bytes"
-checker="$(pwd -P)/$checker_name"; chmod +x "$expected_name"
-./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
-export PATH="$HOME/.local/bin:$PATH"
+if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$sums_actual" = "$sums_sha256"
+read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" '$3 == name' "$sums_name"); test "$expected_name" = "$artifact_name"; test "$expected_digest" = "$artifact_sha256"; test "$expected_bytes" = "$artifact_bytes"
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$artifact_name" | awk '{print $1}')"; fi; test "$actual_digest" = "$artifact_sha256"; test "$(wc -c < "$artifact_name" | tr -d ' ')" = "$artifact_bytes"
+read -r checker_sum checker_count checker_entry < <(awk -v name="$checker_name" '$3 == name' "$sums_name"); test "$checker_entry" = "$checker_name"; test "$checker_sum" = "$checker_sha256"; test "$checker_count" = "$checker_bytes"; if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; else checker_actual="$(sha256sum "$checker_name" | awk '{print $1}')"; fi; test "$checker_actual" = "$checker_sha256"; test "$(wc -c < "$checker_name" | tr -d ' ')" = "$checker_bytes"
+checker="$(pwd -P)/$checker_name"; chmod +x "$expected_name"; ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local; export PATH="$HOME/.local/bin:$PATH"
 ```
-
-Requires Node 20+. The published Seal v0.2.0-rc.3 release asset is Linux x86-64. Protect also needs Claude Code's `claude` command.
-
+Requires Node 20+. The published Seal v0.2.0-rc.3 release asset is Linux x86-64, from commit `8dc16042cc1e865651185778df38dd114ff9ba3d`, and its manifest uses `seal.release/v1`. Protect also needs Claude Code's `claude` command.
 <!-- Seal installed-tree pin role: published-asset -->
 ```output
 installed seal 0.2.0-rc.3 linux-x64
@@ -54,7 +54,7 @@ Next:
   export PATH=/home/you/.local/bin:$PATH
   seal demo
 ```
-
+<!-- end generated release docs -->
 ## See it work
 
 The command supplies `y` to show the complete approve-once demonstration; run `seal demo` interactively to choose the response yourself.
@@ -90,9 +90,10 @@ That direct write; protected-server call count stayed 1 and Seal made 0 new deci
 ASSURANCE
 authorization rule proved; product state and forwarding tested; client and machine trusted.
 ```
-
+<!-- generated from release-manifest.json; do not edit -->
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;
 seal-v0.2.0-rc.3-linux-x64
+<!-- end generated release docs -->
 
 The checker downloaded above is a sibling release asset covered by the same `SHA256SUMS`.
 It is not in the installed binary tree.
@@ -117,7 +118,7 @@ claude --version
 
 In a [Claude Code project](docs/guide/choosing-what-to-protect.md), make `.mcp.json` define the stdio server and tool to gate. This makes a small local project whose `db` server is Seal's demo server:
 
-The `git init -q` line makes this throw-away directory the Claude Code project root for the published v0.2.0-rc.3 CLI.
+The `git init -q` line makes this throw-away directory the Claude Code project root for the published CLI.
 
 ```bash
 mkdir -p seal-protect-demo
@@ -125,9 +126,9 @@ cd seal-protect-demo
 git init -q
 printf '%s\n' '{"mcpServers":{"db":{"command":"seal","args":["__demo-server","./data.txt"]}}}' > .mcp.json
 ```
-
+<!-- generated from release-manifest.json; do not edit -->
 With the published v0.2.0-rc.3 CLI, protect one tool:
-
+<!-- end generated release docs -->
 ```bash
 seal protect db demo.mutate
 ```
@@ -179,8 +180,7 @@ seal unprotect db
 `unprotect` prints the `.mcp.json` hash before and after (the same value when
 the project file was unchanged), then `Protection: - outside Seal`.
 
-Unprotect asks Claude Code to remove only Seal's local override. It does not
-delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
+Unprotect asks Claude Code to remove only Seal's local override. It does not delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
 remain until you or Claude Code remove them. Your project `.mcp.json` stays
 byte-for-byte unchanged.
 
@@ -224,5 +224,5 @@ distinguished. Hosted checker checks kernel receipts; it refuses seal.spine/v1 p
 - [Choose what to protect](docs/guide/choosing-what-to-protect.md)
 - [Know whether it worked](docs/guide/knowing-it-worked.md)
 - [Refusal codes and the documentation index](docs/assurance/README.md)
-- [Limitations and assurance material](docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#what-seal-does-not-cover)
+- [Limitations and assurance material](docs/assurance/README.md)
 - Apache-2.0. See [LICENSE](LICENSE).

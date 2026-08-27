@@ -82,6 +82,13 @@ jobs:
           read -r digest bytes checksum_name < "$RUNNER_TEMP/dist/SHA256SUMS"
           test "$checksum_name" = "$artifact_name"
           grep -F "seal-receipt-check.mjs" "$RUNNER_TEMP/dist/SHA256SUMS"
+          node scripts/create-release-manifest.mjs \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" \
+            --artifact "$artifact" \
+            --checker "$checker" \
+            --checksums "$RUNNER_TEMP/dist/SHA256SUMS" \
+            --out "$RUNNER_TEMP/dist/release-manifest.json"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
             "Seal v${version}." \
@@ -107,6 +114,7 @@ jobs:
             "$artifact" \
             "$checker" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
+            "$RUNNER_TEMP/dist/release-manifest.json" \
             "${prerelease[@]}" \
             --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
       - name: Attest release assets
@@ -118,3 +126,34 @@ jobs:
             ${{ runner.temp }}/dist/seal-v*-linux-x64
             ${{ runner.temp }}/dist/seal-receipt-check.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
+            ${{ runner.temp }}/dist/release-manifest.json
+
+  release-docs:
+    # Publication is complete before this job starts. A documentation failure
+    # can report or delay the follow-up commit, but cannot alter the release.
+    needs: release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rewrite docs from the latest published release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEAL_EXPECTED_RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/generate-release-docs.mjs
+      - name: Commit the post-publication documentation update
+        run: |
+          if git diff --quiet -- README.md docs/start/install.md; then
+            echo "release docs already name $GITHUB_REF_NAME"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/start/install.md
+          git commit -m "docs: generate install blocks for $GITHUB_REF_NAME"
+          git push origin HEAD:main

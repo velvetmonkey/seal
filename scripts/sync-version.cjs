@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// VERSION is the one declared release identity. This script materializes it in
-// package metadata and reader-facing release copy before a release build.
+// VERSION is the candidate build identity. This script materializes it in
+// package metadata and candidate-facing copy. Published-release install copy
+// is owned by generate-release-docs.mjs and must survive a cut unchanged.
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -67,16 +68,6 @@ replaceIfPresent("docs/assurance/index.html", priorReleaseNotesPattern, releaseN
 replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
 replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
 
-// The README is the published-release front door.  Its shell version slot and
-// reader-facing prose must follow VERSION rather than retaining a prior tag.
-replace("README.md", /^SEAL_VERSION=v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/gm, `SEAL_VERSION=v${version}`);
-replaceIfPresent("README.md", /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
-replaceIfPresent("README.md", /published v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? CLI/g, `published v${version} CLI`);
-replaceIfPresent("docs/start/install.md", /^# Install Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/gm, `# Install Seal v${version}`);
-replaceIfPresent("docs/start/install.md", /published v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? release asset/g, `published v${version} release asset`);
-replaceIfPresent("docs/start/install.md", /^SEAL_VERSION=v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/gm, `SEAL_VERSION=v${version}`);
-replaceIfPresent("docs/start/install.md", /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
-replaceIfPresent("docs/start/install.md", /published v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? asset/g, `published v${version} asset`);
 replaceIfPresent("docs/start/evaluator-walk.md", /published GitHub release `v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`/g, `published GitHub release \`v${version}\``);
 
 for (const file of ["docs/assurance/distribution.md", path.join("docs/assurance", releaseNotes), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
@@ -145,8 +136,6 @@ function renameArtifact(match) {
   const development = match.match(/-dev\.g([0-9a-f]{7,40})-linux-x64$/);
   return development ? `seal-v${version}-dev.g${development[1]}-linux-x64` : `seal-v${version}-linux-x64`;
 }
-replace("README.md", ARTIFACT_NAME, renameArtifact);
-replaceIfPresent("README.md", /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
 // Download instructions derive the artifact name from the checksum asset from
 // the same release, so these guides intentionally have no versioned filename.
 replaceIfPresent("docs/assurance/distribution.md", ARTIFACT_NAME, renameArtifact);
@@ -157,11 +146,9 @@ replaceIfPresent("docs/guide/README.md", /installed seal \d+\.\d+\.\d+(?:-[0-9A-
 // source checkout. Keep every live reader route to that asset on VERSION.
 const RECEIPT_CHECKER_RELEASE_ASSET = /\/velvetmonkey\/seal\/releases\/download\/v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\/seal-receipt-check\.mjs/g;
 for (const file of [
-  "README.md",
   "docs/assurance/README.md",
   path.join("docs", "assurance", releaseNotes),
   "docs/assurance/distribution.md",
-  "docs/start/install.md",
   "docs/guide/knowing-it-worked.md",
 ]) {
   replaceIfPresent(file, RECEIPT_CHECKER_RELEASE_ASSET, `/velvetmonkey/seal/releases/download/v${version}/seal-receipt-check.mjs`);
