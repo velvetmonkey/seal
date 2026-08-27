@@ -173,9 +173,9 @@ function baselineTree(sourceRoot) {
   }
 }
 
-function compareToBaseline(sourceRoot, actual, currentFiles) {
+function compareToBaseline(sourceRoot, actual) {
   const { base, files: baselineFiles } = baselineTree(sourceRoot);
-  const expectedFiles = [...currentFiles].filter((file) => baselineFiles.has(file));
+  const expectedFiles = [...baselineFiles];
   const expectedSource = (file) => execFileSync("git", ["show", `${base}:${file}`], { cwd: sourceRoot, encoding: "utf8" });
   const expected = countOccurrences({
     sourceRoot,
@@ -183,14 +183,19 @@ function compareToBaseline(sourceRoot, actual, currentFiles) {
     readText: expectedSource,
     checkTargets: false,
   });
-  const disagreements = Object.keys(expected.files).filter((file) => actual.files[file]).flatMap((file) => {
+  const disagreements = Object.keys(expected.files).flatMap((file) => {
     const oldCounts = expected.files[file];
-    const newCounts = actual.files[file];
+    const newCounts = actual.files[file] ?? { internalOccurrences: 0, externalOccurrences: 0 };
     return ["internalOccurrences", "externalOccurrences"].flatMap((key) =>
       newCounts[key] < oldCounts[key] ? [`${file} ${key} expected=${oldCounts[key]} actual=${newCounts[key]}`] : [],
     );
   });
   return { base, expected, disagreements };
+}
+
+function isRepositoryPage(file) {
+  return file === "README.md"
+    || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/") && !file.startsWith(".family/"));
 }
 
 async function main() {
@@ -218,12 +223,8 @@ async function main() {
   }
 
   const baselinePopulation = baselineTree(ROOT).files;
-  const expectedPopulation = [...baselinePopulation].filter((file) =>
-    file === "README.md" || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/")),
-  ).length;
-  const actualPopulation = sourceFiles.filter((file) =>
-    file === "README.md" || (/\.(md|html)$/.test(file) && !file.startsWith("node_modules/")),
-  ).length;
+  const expectedPopulation = [...baselinePopulation].filter(isRepositoryPage).length;
+  const actualPopulation = sourceFiles.filter(isRepositoryPage).length;
   const populationShrank = actualPopulation < expectedPopulation;
   if (populationShrank) {
     console.log(`REFUSE link-check population shrank: expected=${expectedPopulation} actual=${actualPopulation}`);
@@ -256,7 +257,7 @@ async function main() {
 
   console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
   if (actual.bad || populationShrank) return 1;
-  const comparison = compareToBaseline(ROOT, actual, sourceFiles);
+  const comparison = compareToBaseline(ROOT, actual);
   if (comparison.disagreements.length) {
     console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
     return 1;
