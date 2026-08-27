@@ -95,7 +95,7 @@ function repositoryLinkVerdict(link) {
       '/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg',
       '/velvetmonkey/seal/actions/workflows/ci.yml',
       '/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS',
-      '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64',
+      '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64', '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs',
     ]);
     return nonRepositoryPaths.has(parsed.pathname) ? null : 'sibling';
   }

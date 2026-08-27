@@ -138,7 +138,7 @@ Run `node scripts/check-receipt-canonicalization.mjs` from the repository root
 to inspect the exact shared statements and omissions.
 
 ```bash
-$ node checker/seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs receipt-…-0002-ALLOW.json --pubkey receipt-signer.pub
 ```
 
 ```output
@@ -149,7 +149,7 @@ Change one recorded fact — here, the decision — and the checker names what
 was touched:
 
 ```bash
-$ node checker/seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
+$ node seal-receipt-check.mjs tampered-receipt.json --pubkey receipt-signer.pub
 ```
 
 ```output
@@ -162,9 +162,9 @@ whole meaning of the check:
 - The key must come from a source you already trust, not from beside the
   receipt. Checking a receipt against the sealer's own key (as the demo does)
   proves only self-consistency — a hostile sealer could sign its own.
-- The current installed payload does not include the checker. Clone the
-  [Seal source repository](https://github.com/velvetmonkey/seal) and use
-  `checker/seal-receipt-check.mjs` from that checkout.
+- The current installed payload does not include the checker. Download the
+  sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
+  and verify it against the `SHA256SUMS` asset attached to that same release.
 - The checker is runtime-separate, not implementation-independent: it copies
   the producer's canonicalisation rule and shares the Node crypto platform.
   It cannot expose a defect common to those parts.

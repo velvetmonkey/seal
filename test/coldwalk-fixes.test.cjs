@@ -33,10 +33,11 @@ test("the Protect and Remove sections identify Claude Code's retained home files
 
 test("the Protect section requires Claude Code and provides its availability check", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
   const protect = readme.slice(readme.indexOf("## Protect something real"), readme.indexOf("## Remove it"));
 
   assert.ok(protect.includes("First check that Claude Code is available:\n\n```bash\nclaude --version\n```"), "Protect must show the exact Claude Code availability command");
-  assert.ok(protect.includes("With the published v0.2.0-rc.2 CLI, protect one tool:"), "Protect must state its published-CLI scope");
+  assert.ok(protect.includes(`With the published v${version} CLI, protect one tool:`), "Protect must state its published-CLI scope");
 });
 
 test("the demo section names the printed directory as the cleanup target", () => {
