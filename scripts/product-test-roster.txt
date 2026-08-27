@@ -61,6 +61,7 @@ test/release-notes.test.cjs
 test/release-docs.test.mjs
 test/seal-flow-diagram.test.mjs
 test/seal-status.test.cjs
+test/seal-reproduce.test.cjs
 test/seal-verify.test.cjs
 test/spine-retry.test.cjs
 test/step2-negative-control.test.cjs

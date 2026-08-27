@@ -72,6 +72,8 @@ the Node CLI this repository ships.
    site manifest.
 8. [assurance/linkcheck-population-control.md](linkcheck-population-control.md) — what the link-check population
    cross-check measures, and its shared blind spots.
+9. [reproduce.md](../reproduce.md) — compare the kernel installed from a published
+   release artifact with a fresh build from that release's pinned source.
 
 ## I want to operate Seal day to day
 
