@@ -469,6 +469,13 @@ artifact being installed. Do not overwrite it blindly. Choose a fresh prefix,
 or repair the existing install only after determining why it no longer
 verifies; then rerun the verified artifact.
 
+### `macos_helper_build_failed`
+
+On macOS, the installer could not compile the bundled process-start witness
+helper with `cc`. The install cannot safely continue without that helper.
+Install the Xcode Command Line Tools (or repair the reported compiler error),
+remove the partial install, and rerun the verified artifact.
+
 ### `pin_missing`
 
 You ran the artifact without `--sha256`. The pin is required, on purpose:

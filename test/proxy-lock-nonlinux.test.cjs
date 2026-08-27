@@ -9,6 +9,10 @@ const {
   acquireProjectLock,
   activationLease,
   lockPathFor,
+  lockOwnerIsLive,
+  parseMacosProcessStartWitness,
+  parseMacosProcessStartWitnessBounds,
+  processStartWitness,
   projectId,
   protectionView,
   statePathFor,
@@ -106,6 +110,56 @@ test("Darwin is install-supported but not Protect-supported", () => {
   });
 });
 
+test("macOS witness parser accepts only a successful non-epoch helper line", () => {
+  const bounds = { bootSeconds: 1700000000, nowSeconds: 1800000000 };
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }, bounds), "1787834912.322160");
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 1, stdout: "1787834912.322160\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "0.322160\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "not-a-witness\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "999999999999999999999999.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1800000001.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1699999999.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.32216\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\nextra\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), null);
+});
+
+test("macOS boot-time witness bounds refuse malformed and implausible sysctl output", () => {
+  const nowSeconds = 1800000000;
+  assert.deepEqual(
+    parseMacosProcessStartWitnessBounds("{ sec = 1700000000 , usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
+    { bootSeconds: 1700000000, nowSeconds },
+  );
+  assert.deepEqual(
+    parseMacosProcessStartWitnessBounds("{ sec = 1700000000, usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
+    { bootSeconds: 1700000000, nowSeconds },
+  );
+  for (const output of [
+    "{ sec = 1.7e9 , usec = 0 }\\n",
+    "{ sec = 1700000000. , usec = 0 }\\n",
+    "{ sec = +1700000000 , usec = 0 }\\n",
+    "{ sec = 1700000000  , usec = 0 }\\n",
+    "{ sec = 1e9 , usec = 0 }\\n",
+    "{ sec = -1700000000 , usec = 0 }\\n",
+    "{ sec = 1700000000 , usec = 0 } sec = 1700000000\\n",
+    "{ sec = 1800000001 , usec = 0 }\\n",
+    "{ sec = 1 , usec = 0 }\\n",
+  ]) {
+    assert.equal(parseMacosProcessStartWitnessBounds(output, nowSeconds), null, output);
+  }
+});
+
+test("macOS without the helper keeps the process witness fail-closed", () => {
+  withSimulatedDarwin(() => {
+    assert.equal(processStartWitness(process.pid), null);
+    assert.throws(
+      () => lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
+      (error) => error.code === "process_witness_unavailable",
+    );
+  });
+});
+
 test("seal protect refuses Darwin before changing project files", () => {
   const ctx = workspace("protect-refusal");
   const result = spawnSync(process.execPath, [CLI, "protect", "db", "write"], {
@@ -168,6 +222,18 @@ test("direct acquireProjectLock refuses when the live lock witness is unavailabl
   });
 });
 
+test("direct acquireProjectLock refuses its first acquire when its witness is unavailable", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("first-lock");
+    assert.throws(
+      () => acquireProjectLock(ctx.project, ctx.env),
+      (error) => error.code === "process_witness_unavailable" &&
+        /cannot establish process-start witness/.test(error.message),
+    );
+    assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "refusal must not write a null-witness lock");
+  });
+});
+
 test("journal lock refuses when a live owner has no process-start witness", () => {
   withSimulatedDarwin(() => {
     const ctx = workspace("journal-lock");
@@ -184,5 +250,21 @@ test("journal lock refuses when a live owner has no process-start witness", () =
       (error) => error.code === "process_witness_unavailable" &&
         /cannot establish process-start witness/.test(error.message),
     );
+  });
+});
+
+test("journal lock refuses its first acquire when its witness is unavailable", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("journal-first-lock");
+    const journalPath = path.join(ctx.root, "approval.ndjson");
+    createJournal(journalPath);
+    let callbackRan = false;
+    assert.throws(
+      () => openJournal(journalPath).withLock(() => { callbackRan = true; }),
+      (error) => error.code === "process_witness_unavailable" &&
+        /cannot establish process-start witness/.test(error.message),
+    );
+    assert.equal(callbackRan, false, "journal callback must not run after a null-witness refusal");
+    assert.equal(fs.existsSync(`${journalPath}.lock`), false, "refusal must not write a null-witness lock");
   });
 });
