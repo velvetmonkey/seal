@@ -55,4 +55,4 @@ async function decide(config, input) {
   return { raw, verdict: parseVerdict(raw) };
 }
 
-module.exports = { decide };
+module.exports = { decide, parseVerdict };
