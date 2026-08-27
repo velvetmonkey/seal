@@ -1,5 +1,7 @@
 # Roadmap, kernel outward: north star graft
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Set 2026-07-25; grafted 2026-07-27 after Ben asked for the north star and the
 working roadmap to become one ordered plan.
 

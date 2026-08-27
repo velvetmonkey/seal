@@ -1,5 +1,7 @@
 # Numeric agreement: remediation spec for the V3.1 parser disagreement
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Status: **ACCEPTED**. Ben ruled Option B on 2026-07-26 19:46. Written earlier the
 same day after `v31run` measured the first cross-parser disagreement on an
 approved request.

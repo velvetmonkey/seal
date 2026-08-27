@@ -4,6 +4,8 @@
 
 # The Authorization Mesh: verified coordination-free single-use
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Seal is a machine-checked authorization gate for AI agents. This is the **mesh layer**: when you run a fleet of seal gates over shared approvals, four machine-checked theorems establish that a one-shot approval stays single-use across a network partition, and that guarantee applies to the real gate.
 
 ## The one claim

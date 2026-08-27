@@ -4,6 +4,8 @@
 
 # Seal claims matrix
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 One table: every load-bearing claim, marked **Proven** (a machine-checked Lean 4 theorem),
 **Tested** (a named, rerunnable CI gate or test), **Assumed** (trusted computing base — declared,
 not proved), or **Not claimed** (things Seal deliberately does not say).

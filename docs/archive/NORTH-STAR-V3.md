@@ -1,5 +1,7 @@
 # North Star V3
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Written 2026-07-25 after the topology-C ruling, the adversarial council `12c998e1`
 and a five-seat neutral product assessment. Supersedes `NORTH-STAR-ADJUSTED.md`
 for PRIORITY and SCOPE. That document's diagnosis still stands and is not

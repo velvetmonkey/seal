@@ -1,5 +1,7 @@
 # Seal Family — Public Surfaces Claim Audit (FINDINGS)
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 **Scope**: Top-level README + docs/ openers and matrices for the umbrella `seal/` repo. Representative claims sampled from README truthbox, "Why you can believe it", CLAIMS-MATRIX, LIMITATIONS, AUTHORIZATION-MESH, EVALUATOR-START, WHY-DIFFERENT.
 
 **Method**: Every claim below was re-read from the public docs, then cross-checked against shipped artifacts (Lean sources in mcp-seal / mcp-seal-dev layout, seal-host code/tests, seal-assurance-kit, seal-check, seal-live-demo scripts/asserts, seal-verify-action). "Backed?" cites concrete file:line or test name where the rule or conformance lives. No new guarantees added.

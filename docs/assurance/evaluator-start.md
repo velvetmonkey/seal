@@ -1,5 +1,7 @@
 # Seal: Evaluator Truth Surface
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 Regenerated: 2026-08-09. This file separates proved, tested, reproduced,
 shipped, and open facts. It is still hand-generated from the two `CLAIMS.md`
 files, the fleet lock, the live verifier declarations, and the current

@@ -1,5 +1,7 @@
 # MCP 2026-07-28 `_meta` partition specification
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+
 **Ruling, 2026-07-28 21:47:** Ben selected **Option A — commit everything**. The
 complete validated `_meta` object, including unknown keys, enters the effect
 commitment and guard/typed target. **Status: RULED, NOT STARTED.** This document
