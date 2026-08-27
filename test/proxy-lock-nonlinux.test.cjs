@@ -11,6 +11,7 @@ const {
   lockPathFor,
   lockOwnerIsLive,
   parseMacosProcessStartWitness,
+  parseMacosProcessStartWitnessBounds,
   processStartWitness,
   projectId,
   protectionView,
@@ -124,6 +125,27 @@ test("macOS witness parser accepts only a successful non-epoch helper line", () 
   assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), null);
 });
 
+test("macOS boot-time witness bounds refuse malformed and implausible sysctl output", () => {
+  const nowSeconds = 1800000000;
+  assert.deepEqual(
+    parseMacosProcessStartWitnessBounds("{ sec = 1700000000 , usec = 322160 } Thu Nov 14 00:00:00 2023\\n", nowSeconds),
+    { bootSeconds: 1700000000, nowSeconds },
+  );
+  for (const output of [
+    "{ sec = 1.7e9 , usec = 0 }\\n",
+    "{ sec = 1700000000. , usec = 0 }\\n",
+    "{ sec = +1700000000 , usec = 0 }\\n",
+    "{ sec = 1700000000  , usec = 0 }\\n",
+    "{ sec = 1e9 , usec = 0 }\\n",
+    "{ sec = -1700000000 , usec = 0 }\\n",
+    "{ sec = 1700000000 , usec = 0 } sec = 1700000000\\n",
+    "{ sec = 1800000001 , usec = 0 }\\n",
+    "{ sec = 1 , usec = 0 }\\n",
+  ]) {
+    assert.equal(parseMacosProcessStartWitnessBounds(output, nowSeconds), null, output);
+  }
+});
+
 test("macOS without the helper keeps the process witness fail-closed", () => {
   withSimulatedDarwin(() => {
     assert.equal(processStartWitness(process.pid), null);
@@ -224,5 +246,21 @@ test("journal lock refuses when a live owner has no process-start witness", () =
       (error) => error.code === "process_witness_unavailable" &&
         /cannot establish process-start witness/.test(error.message),
     );
+  });
+});
+
+test("journal lock refuses its first acquire when its witness is unavailable", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("journal-first-lock");
+    const journalPath = path.join(ctx.root, "approval.ndjson");
+    createJournal(journalPath);
+    let callbackRan = false;
+    assert.throws(
+      () => openJournal(journalPath).withLock(() => { callbackRan = true; }),
+      (error) => error.code === "process_witness_unavailable" &&
+        /cannot establish process-start witness/.test(error.message),
+    );
+    assert.equal(callbackRan, false, "journal callback must not run after a null-witness refusal");
+    assert.equal(fs.existsSync(`${journalPath}.lock`), false, "refusal must not write a null-witness lock");
   });
 });

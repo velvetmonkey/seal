@@ -559,6 +559,23 @@ const MACOS_PROCESS_START_WITNESS_HELPER = path.join(__dirname, "../runtime/maco
 // ample scheduler headroom while ensuring a stuck witness cannot hold a lock.
 const MACOS_PROCESS_START_WITNESS_TIMEOUT_MS = 1000;
 const MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS = 10;
+// 2000-01-01T00:00:00Z. macOS did not exist before this epoch and treating an
+// implausibly old value as a lower bound would make that bound attacker-movable.
+const MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS = 946684800;
+
+function parseMacosProcessStartWitnessBounds(stdout, nowSeconds = Date.now() / 1000) {
+  if (typeof stdout !== "string") return null;
+  // `sysctl -n kern.boottime` has exactly this structured prefix. Parsing the
+  // complete field, rather than a word-boundary prefix, rejects decimals,
+  // exponents, duplicate fields, and every other altered shape.
+  const match = /^\{ sec = ([1-9]\d*) , usec = \d+ \}(?: [^\r\n]*)?\n?$/.exec(stdout);
+  if (!match || (stdout.match(/\bsec = /g) || []).length !== 1 ||
+      match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
+  const bootSeconds = Number(match[1]);
+  if (!Number.isSafeInteger(bootSeconds) || !Number.isFinite(nowSeconds) ||
+      bootSeconds < MACOS_PROCESS_START_WITNESS_MIN_BOOT_SECONDS || bootSeconds > nowSeconds) return null;
+  return { bootSeconds, nowSeconds };
+}
 
 function macosProcessStartWitnessBounds() {
   try {
@@ -567,12 +584,7 @@ function macosProcessStartWitnessBounds() {
       timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
     });
     if (!result || result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
-    const match = /\bsec = ([1-9]\d*)\b/.exec(result.stdout);
-    if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
-    const bootSeconds = Number(match[1]);
-    const nowSeconds = Date.now() / 1000;
-    if (!Number.isSafeInteger(bootSeconds) || !Number.isFinite(nowSeconds) || bootSeconds > nowSeconds) return null;
-    return { bootSeconds, nowSeconds };
+    return parseMacosProcessStartWitnessBounds(result.stdout);
   } catch {
     return null;
   }
@@ -972,6 +984,7 @@ module.exports = {
   lockPathFor,
   lockOwnerIsLive,
   parseMacosProcessStartWitness,
+  parseMacosProcessStartWitnessBounds,
   processStartWitness,
   protectedToolNames,
   protect,

@@ -10,7 +10,7 @@
 // caller exits non-zero and never approves over it.
 const fs = require("node:fs");
 const path = require("node:path");
-const { lockOwnerIsLive, processStartWitness } = require("./protection.cjs");
+const { ProtectionError, lockOwnerIsLive, processStartWitness } = require("./protection.cjs");
 
 class StoreError extends Error {}
 
@@ -54,6 +54,12 @@ function readEvents(filePath) {
 function withFileLock(filePath, callback) {
   const lockPath = `${filePath}.lock`;
   const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  if (owner.startWitness === null) {
+    throw new ProtectionError(
+      "process_witness_unavailable",
+      `cannot establish process-start witness for live pid ${owner.pid}`,
+    );
+  }
   for (;;) {
     try {
       const fd = fs.openSync(lockPath, "wx", 0o600);
