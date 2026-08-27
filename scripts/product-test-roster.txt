@@ -66,3 +66,4 @@ test/step2-negative-control.test.cjs
 test/tool-validation.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
+test/authorization-seam-differential.test.cjs
