@@ -110,11 +110,18 @@ test("Darwin is install-supported but not Protect-supported", () => {
 });
 
 test("macOS witness parser accepts only a successful non-epoch helper line", () => {
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), "1787834912.322160");
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "" }), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 1, stdout: "1787834912.322160\n" }), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "0.322160\n" }), null);
-  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "not-a-witness\n" }), null);
+  const bounds = { bootSeconds: 1700000000, nowSeconds: 1800000000 };
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }, bounds), "1787834912.322160");
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 1, stdout: "1787834912.322160\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "0.322160\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "not-a-witness\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "999999999999999999999999.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1800000001.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1699999999.000000\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.32216\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\nextra\n" }, bounds), null);
+  assert.equal(parseMacosProcessStartWitness({ status: 0, stdout: "1787834912.322160\n" }), null);
 });
 
 test("macOS without the helper keeps the process witness fail-closed", () => {
@@ -186,6 +193,18 @@ test("direct acquireProjectLock refuses when the live lock witness is unavailabl
       (error) => error.code === "process_witness_unavailable" &&
         /cannot establish process-start witness/.test(error.message),
     );
+  });
+});
+
+test("direct acquireProjectLock refuses its first acquire when its witness is unavailable", () => {
+  withSimulatedDarwin(() => {
+    const ctx = workspace("first-lock");
+    assert.throws(
+      () => acquireProjectLock(ctx.project, ctx.env),
+      (error) => error.code === "process_witness_unavailable" &&
+        /cannot establish process-start witness/.test(error.message),
+    );
+    assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "refusal must not write a null-witness lock");
   });
 });
 

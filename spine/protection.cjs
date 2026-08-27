@@ -555,19 +555,47 @@ function livePid(pid) {
 }
 
 const MACOS_PROCESS_START_WITNESS_HELPER = path.join(__dirname, "../runtime/macos-process-start-witness");
+// A direct sysctl helper should complete in milliseconds. One second leaves
+// ample scheduler headroom while ensuring a stuck witness cannot hold a lock.
+const MACOS_PROCESS_START_WITNESS_TIMEOUT_MS = 1000;
+const MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS = 10;
 
-function parseMacosProcessStartWitness(result) {
+function macosProcessStartWitnessBounds() {
+  try {
+    const result = spawnSync("sysctl", ["-n", "kern.boottime"], {
+      encoding: "utf8",
+      timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
+    });
+    if (!result || result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
+    const match = /\bsec = ([1-9]\d*)\b/.exec(result.stdout);
+    if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS) return null;
+    const bootSeconds = Number(match[1]);
+    const nowSeconds = Date.now() / 1000;
+    if (!Number.isSafeInteger(bootSeconds) || !Number.isFinite(nowSeconds) || bootSeconds > nowSeconds) return null;
+    return { bootSeconds, nowSeconds };
+  } catch {
+    return null;
+  }
+}
+
+function parseMacosProcessStartWitness(result, bounds) {
   if (!result || result.error || result.status !== 0) return null;
   if (typeof result.stdout !== "string") return null;
   const match = /^([1-9]\d*)\.(\d{6})\n?$/.exec(result.stdout);
-  return match ? `${match[1]}.${match[2]}` : null;
+  if (!match || match[1].length > MACOS_PROCESS_START_WITNESS_MAX_SECONDS_DIGITS || !bounds) return null;
+  const seconds = Number(match[1]);
+  if (!Number.isSafeInteger(seconds) || seconds < bounds.bootSeconds || seconds > bounds.nowSeconds) return null;
+  return `${match[1]}.${match[2]}`;
 }
 
 function macosProcessStartWitness(pid) {
   try {
+    const bounds = macosProcessStartWitnessBounds();
+    if (!bounds) return null;
     return parseMacosProcessStartWitness(spawnSync(MACOS_PROCESS_START_WITNESS_HELPER, [String(pid)], {
       encoding: "utf8",
-    }));
+      timeout: MACOS_PROCESS_START_WITNESS_TIMEOUT_MS,
+    }), bounds);
   } catch {
     return null;
   }
@@ -615,6 +643,12 @@ function leaseMatches(lease, token) {
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
   const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  if (owner.startWitness === null) {
+    throw new ProtectionError(
+      "process_witness_unavailable",
+      `cannot establish process-start witness for live pid ${owner.pid}`,
+    );
+  }
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (;;) {
