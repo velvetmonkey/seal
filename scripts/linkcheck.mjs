@@ -37,7 +37,7 @@ function targetFor(file, link, sourceRoot, roots, rootRelative = false) {
   return { kind: "internal", path: resolve(rootRelative ? sourceRoot : dirname(`${sourceRoot}/${file}`), link) };
 }
 
-function countDestination(file, raw, sourceRoot, roots, counts, checkTargets, rootRelative = false) {
+export function countDestination(file, raw, sourceRoot, roots, counts, checkTargets, rootRelative = false) {
   let link = raw.trim();
   if (!link || link.startsWith("#") || link.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(link)) return;
   if (checkTargets) scannedTargets.add(link);
@@ -46,7 +46,14 @@ function countDestination(file, raw, sourceRoot, roots, counts, checkTargets, ro
   const target = targetFor(file, link, sourceRoot, roots, rootRelative);
   if (target.kind === "external") {
     counts.externalOccurrences++;
-    if (checkTargets && !existsSync(target.path)) console.log(`EXTERNAL  ${file} -> ${link}`);
+    const [family] = link.split("/", 1);
+    if (checkTargets && !existsSync(roots.get(family))) {
+      console.log(`UNVERIFIED  ${file} -> ${link}`);
+      counts.unverified++;
+    } else if (checkTargets && !existsSync(target.path)) {
+      console.log(`BROKEN  ${file} -> ${link}`);
+      counts.bad++;
+    }
     return;
   }
   counts.internalOccurrences++;
@@ -117,7 +124,7 @@ function countOccurrences({ sourceRoot, sourceFiles, readText, checkTargets }) {
     f !== "scripts/mandatory-doc-claim-bindings.json"
       && (/^\.github\//.test(f) || /^scripts\//.test(f)) && /\.(json|ya?ml)$/i.test(f),
   );
-  const counts = { internalOccurrences: 0, externalOccurrences: 0, bad: 0, files: {} };
+  const counts = { internalOccurrences: 0, externalOccurrences: 0, unverified: 0, bad: 0, files: {} };
   for (const file of [...new Set([...files, ...dataFiles])].sort()) {
     counts.files[file] = { internalOccurrences: 0, externalOccurrences: 0 };
   }
@@ -212,7 +219,7 @@ async function main() {
     }
   }
 
-  console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.bad} broken`);
+  console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
   if (actual.bad) return 1;
   const comparison = compareToBaseline(ROOT, actual, sourceFiles);
   if (comparison.disagreements.length) {
