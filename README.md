@@ -73,6 +73,22 @@ Approve? [y/N] child replied through the shared proxy: "demo server: appended 26
 child calls observed: 1 (read from
 BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
 one-use held: the replay did not run the call again; child calls observed: still 1 (read from
+
+OUTSIDE THE SEAL PATH
+Writing directly to
+File changed: yes
+Protected-server call count: still 1
+New Seal decisions: 0
+Seal did not observe or authorise this write.
+
+ENFORCED
+The approved demo.mutate call ran once; its replay was refused.
+NOT APPROVAL-GATED
+The direct write to
+NOT OBSERVED
+That direct write; protected-server call count stayed 1 and Seal made 0 new decisions.
+ASSURANCE
+authorization rule proved; product state and forwarding tested; client and machine trusted.
 ```
 
 At the exact release tag, your build writes `seal-v0.2.0-rc.3-linux-x64` in your own `dist/` directory;

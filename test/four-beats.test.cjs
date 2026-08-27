@@ -168,8 +168,9 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   });
   const demoCode = await new Promise((resolve) => demo.once("close", resolve));
   assert.equal(demoCode, 0, demoOut);
-  assert.match(demoOut, /DIRECT WRITE SUCCEEDED/);
-  assert.match(demoOut, /Seal decisions emitted: 0/);
+  assert.match(demoOut, /File changed: yes/);
+  assert.match(demoOut, /Protected-server call count: still 1/);
+  assert.match(demoOut, /New Seal decisions: 0/);
 
   // CHECK — the checker published beside the artifact, not `seal verify`, not a key we mint.
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));

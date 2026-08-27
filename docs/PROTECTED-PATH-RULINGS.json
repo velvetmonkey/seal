@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "5360f9b94933f91c445e9fa238488568d15d50ec",
+    "base": "f74a62b49c5a5cc74bad41d31ecc381ccb5fbdbe",
     "author": "Ben",
-    "date": "2026-08-25",
-    "scope": "Ben, 2026-08-25 09:44, replying to the Monkey's ask about ci.yml being a protected path: \"The fix is in ci.yml, which is the protected path you have not ruled on. Those two open items are the same knot. Give me the word and I will send a lane to make the job distinguish 'this version is not published yet' from 'this version is published and wrong', with the second still failing hard. < do it\". Ben confirmed the record on 2026-08-25 13:34 with \"1 write it\", and the Monkey recorded it at his instruction. Authorises editing .github/workflows/ci.yml for ONE purpose: break the release bootstrap deadlock, so a pre-release version whose release does not exist yet can reach a green CI run. Kernel WASM digest, kernel head, fixtures, corpus and release.yml remain outside scope.",
+    "date": "2026-08-27",
+    "scope": "Ben, 2026-08-27 09:35, replying to an ask that named both protected-path branches, both paths and both blob digests: \"rule both\". Authorises one edit to test/fixtures/readme-demo-output.txt on agent/demoact4-r1, because the demo transcript for Act 4 was regenerated and the recorded bytes no longer matched. Reproduction evidence and its bounds are recorded in the commit message and in pull request 126. Nothing else is authorised by this record.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "41d09b8123e17238f738b236ec278032c6f66d8f"
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "93e9fa37412d50bd418ae4c5aef53cc3ccd11a10"
       }
     ]
   }

@@ -57,7 +57,7 @@ function attach(child) {
 
 // --- demo acceptance --------------------------------------------------------
 
-test("seal demo: input_required, approve once, replay refused; counts from the child's file", async (t) => {
+test("seal demo: input_required, approve once, replay refused, then direct write; counts from the child's file", async (t) => {
   const dir = tmpdir("seal-spine2-demo-");
   const countFile = path.join(dir, "child", "data.txt.count");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
@@ -93,7 +93,10 @@ test("seal demo: input_required, approve once, replay refused; counts from the c
 
   assert.doesNotMatch(run.out, /verif/i);
   const data = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8");
-  assert.equal(data.split("\n").filter(Boolean).length, 1);
+  assert.deepEqual(data.split("\n").filter(Boolean), [
+    "seal demo wrote this line",
+    "seal demo wrote this line directly",
+  ]);
 });
 
 test("seal demo: declining sends a decline retry; child stays at 0", async (t) => {
