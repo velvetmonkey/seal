@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: velvetmonkey/seal-host
-          ref: 018d1a346db233b7faa1ea6d8e9c88054b978e49
+          ref: d1af738b1f17966a18d7f86c51392b5cd3b8b0a1
           path: .interpreted/seal-host
           persist-credentials: false
 
@@ -35,7 +35,7 @@ jobs:
           lake-package-directory: .interpreted/seal-host
           auto-config: false
           build: true
-          build-args: Ffi
+          build-args: +Ffi:c.o.export
           test: false
           lint: false
           use-mathlib-cache: true
