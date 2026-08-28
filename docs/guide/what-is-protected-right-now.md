@@ -14,7 +14,7 @@ $ seal status
 ```
 
 ```output
-Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
+Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
 Next:
   1. Restart Claude Code in this project.
@@ -152,7 +152,7 @@ than reinterpret another binary's records.
 ## The Runtime line
 
 ```output
-Runtime: present seal-assurance-kit@962823b22d179f3354f8b8cf1a7091029a23c715
+Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 ```
 
 The runtime is a pinned, hash-checked component that only `seal verify`
