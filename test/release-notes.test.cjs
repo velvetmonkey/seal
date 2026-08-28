@@ -7,19 +7,36 @@ const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md";
-const NOTES = path.join(ROOT, NOTES_RELATIVE); // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md
-assert.equal(NOTES_RELATIVE, `docs/assurance/RELEASE-NOTES-v${VERSION}.md`);
+const NOTES_RELATIVE = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`;
+const RC3_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md
+const FINAL_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0.md
+const RC3_NOTES = path.join(ROOT, RC3_NOTES_RELATIVE);
 
-test("release notes state the platform and protected-receipt signing boundary", () => {
+const NOTES = path.join(ROOT, NOTES_RELATIVE);
+
+test("the current VERSION has a release note with the same identity", () => {
+  assert.equal(NOTES_RELATIVE, FINAL_NOTES_RELATIVE);
+  assert.equal(path.basename(NOTES), `RELEASE-NOTES-v${VERSION}.md`);
+  assert.match(fs.readFileSync(NOTES, "utf8"), new RegExp(`^# Seal v${VERSION.replaceAll(".", "\\.")} release notes$`, "m"));
+});
+
+test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, /macOS source portability is CI-exercised for install, demo and receipt checking\./, `${NOTES}: macOS portability claim`);
-  assert.match(notes, /Protect is not supported on macOS yet\./, `${NOTES}: Protect macOS exclusion`);
-  assert.doesNotMatch(notes, /supports Linux x86-64 and macOS x64\/arm64/, `${NOTES}: overbroad platform claim`);
-  assert.match(notes, /Both paths write signed receipt files/);
-  assert.match(notes, /the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory/);
-  assert.match(notes, /The checker accepts a receipt only against the public key you supply/);
+  assert.match(notes, /supports install, demo, receipt checking, and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(notes, /one `seal\.receipt\/v2` envelope/);
+  assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
+  assert.match(notes, /Positive VERIFY is unreachable in this release/);
+  assert.match(notes, /formatted result is `UNVERIFIED`/);
+  assert.doesNotMatch(notes, /\bPROVED\b/, "the final release note must make zero PROVED claims");
+});
+
+test("rc.3 release-note identity and platform boundary remain immutable", () => {
+  const notes = fs.readFileSync(RC3_NOTES, "utf8");
+  assert.match(notes, /^# Seal v0\.2\.0-rc\.3 release notes$/m);
+  assert.match(notes, /macOS source portability is CI-exercised for install, demo and receipt checking\./);
+  assert.match(notes, /Protect is not supported on macOS yet\./);
+  assert.doesNotMatch(notes, /supports Linux x86-64 and macOS x64\/arm64/);
 });
 
 test("replacement rc.3 citations retain their specific evidence", () => {

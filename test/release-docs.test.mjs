@@ -30,24 +30,38 @@ function run(args, env) {
 
 function docsRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-docs-"));
-  fs.mkdirSync(path.join(root, "docs", "start"), { recursive: true });
   fs.copyFileSync(path.join(ROOT, "README.md"), path.join(root, "README.md"));
-  fs.copyFileSync(path.join(ROOT, "docs", "start", "install.md"), path.join(root, "docs", "start", "install.md"));
+  fs.cpSync(path.join(ROOT, "docs"), path.join(root, "docs"), { recursive: true });
   return root;
 }
 
-function releaseAssets() {
+function releaseAssets(tag) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-assets-"));
-  const build = spawnSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", directory], {
-    cwd: ROOT,
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-source-"));
+  const archive = spawnSync("git", ["archive", "--format=tar", tag], { cwd: ROOT, maxBuffer: 128 * 1024 * 1024 });
+  assert.equal(archive.status, 0, archive.stderr?.toString() || `cannot archive ${tag}`);
+  const extracted = spawnSync("tar", ["-xf", "-", "-C", source], { input: archive.stdout, maxBuffer: 128 * 1024 * 1024 });
+  assert.equal(extracted.status, 0, extracted.stderr?.toString() || `cannot extract ${tag}`);
+  for (const args of [
+    ["init", "-q"],
+    ["config", "user.name", "release fixture"],
+    ["config", "user.email", "release-fixture@example.invalid"],
+    ["add", "."],
+    ["commit", "-qm", `fixture ${tag}`],
+    ["tag", tag],
+  ]) {
+    const git = spawnSync("git", args, { cwd: source, encoding: "utf8" });
+    assert.equal(git.status, 0, git.stderr);
+  }
+  const build = spawnSync(process.execPath, [path.join(source, "scripts", "build-dist.cjs"), "--out", directory], {
+    cwd: source,
     encoding: "utf8",
   });
   assert.equal(build.status, 0, build.stderr);
   const builtName = fs.readdirSync(directory).find((name) => /^seal-v.*-linux-x64$/.test(name));
   assert.ok(builtName);
-  const version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-  const artifactName = `seal-v${version}-linux-x64`;
-  fs.renameSync(path.join(directory, builtName), path.join(directory, artifactName));
+  const artifactName = `seal-${tag}-linux-x64`;
+  assert.equal(builtName, artifactName);
   const checkerName = "seal-receipt-check.mjs";
   fs.writeFileSync(path.join(directory, checkerName), "historical v0.2.0-rc.3 checker fixture\n");
   const checkerBytes = fs.readFileSync(path.join(directory, checkerName));
@@ -88,7 +102,7 @@ async function withReleaseServer(release, bytes, callback) {
 }
 
 test("legacy docs state release-listing facts and check compares claims with that release", async () => {
-  const assets = releaseAssets();
+  const assets = releaseAssets("v0.2.0-rc.3");
   const release = {
     id: 3,
     tag_name: "v0.2.0-rc.3",

@@ -364,11 +364,11 @@ jobs:
             base_sha="$(git rev-parse origin/main)"
             git checkout -B "$branch" "$base_sha"
             node scripts/generate-release-docs.mjs
-            if git diff --quiet -- README.md docs/start/install.md; then
+            if git diff --quiet -- README.md docs; then
               echo "release docs already name $GITHUB_REF_NAME on main $base_sha"
               exit 0
             fi
-            git add README.md docs/start/install.md
+            git add README.md docs
             git commit -m "docs: generate install blocks for $GITHUB_REF_NAME"
             git push --force-with-lease origin "HEAD:refs/heads/$branch"
             pr_number="$(gh pr list --state open --base main --head "$branch" --json number --jq '.[0].number')"

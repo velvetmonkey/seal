@@ -381,6 +381,68 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function replacePublishedSurface(relative, replacements) {
+  const target = path.join(ROOT, relative);
+  const original = fs.readFileSync(target, "utf8");
+  let rewritten = original;
+  for (const [pattern, replacement, label] of replacements) {
+    const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+    const everyOccurrence = new RegExp(pattern.source, flags);
+    if (![...rewritten.matchAll(everyOccurrence)].length) {
+      refuse("published_surface_marker", `${relative}: ${label} marker is absent`);
+    }
+    rewritten = rewritten.replace(everyOccurrence, replacement);
+  }
+  return { relative, target, original, rewritten };
+}
+
+function publishedSurfaceChanges(manifest) {
+  const tag = manifest.tag;
+  const releaseNotes = `RELEASE-NOTES-${tag}.md`;
+  const version = tag.slice(1);
+  const checkerUrl = `https://github.com/${REPOSITORY}/releases/download/${tag}/${manifest.checker.name}`;
+  const notePattern = new RegExp(`RELEASE-NOTES-v${SEMVER}\\.md`);
+  const archiveScopeFiles = [
+    "docs/archive/AUTHORIZATION-MESH.md",
+    "docs/archive/CLAIMS-MATRIX.md",
+    "docs/archive/LIMITATIONS.md",
+    "docs/archive/TRUTH-BOX.md",
+    "docs/archive/WHAT-SEAL-IS.md",
+    "docs/archive/WHY-DIFFERENT.md",
+    "docs/assurance/architecture.md",
+  ];
+  return [
+    ...archiveScopeFiles.map((relative) => replacePublishedSurface(relative, [
+      [notePattern, releaseNotes, "published release-note route"],
+    ])),
+    replacePublishedSurface("docs/assurance/README.md", [
+      [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
+      [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
+      [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
+      [new RegExp(`(?<=^2\\. \\[“What Seal does not cover” in the release notes\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) —$)`, "m"), releaseNotes, "limitations release-note route"],
+      [new RegExp(`https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/seal-receipt-check\\.mjs`), checkerUrl, "checker release route"],
+      [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
+    ]),
+    replacePublishedSurface("docs/assurance/distribution.md", [
+      [new RegExp(`https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/seal-receipt-check\\.mjs`), checkerUrl, "checker release route"],
+    ]),
+    replacePublishedSurface("docs/assurance/index.html", [
+      [new RegExp(`(?<=href=")RELEASE-NOTES-v${SEMVER}\\.md(?=">Release notes</a>)`), releaseNotes, "release-note navigation"],
+    ]),
+    replacePublishedSurface("docs/start/evaluator-walk.md", [
+      [new RegExp("(?<=published GitHub release `)v" + SEMVER + "(?=`)"), tag, "published release identity"],
+    ]),
+    replacePublishedSurface("docs/guide/README.md", [
+      [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
+      [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
+      [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],
+    ]),
+  ];
+}
+
 function generatedClaims(relative, expectedRegions) {
   const target = path.join(ROOT, relative);
   const document = fs.readFileSync(target, "utf8");
@@ -492,18 +554,25 @@ async function main() {
   const facts = manifestPath
     ? localManifest(path.resolve(manifestPath), path.resolve(assetsDir), localCommit)
     : await remoteManifest();
+  const generatedRegionChanges = [
+    replaceRegions("README.md", readmeRegions(facts)),
+    replaceRegions("docs/start/install.md", installRegions(facts)),
+  ];
+  const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
+  const changes = [...generatedRegionChanges, ...publishedPointerChanges];
   if (process.argv.includes("--check")) {
-    if (!verifyDocsAgainstRelease(facts)) {
+    // Legacy generated regions are checked by their published facts below;
+    // forcing old prose through today's template would rewrite history. The
+    // separately owned navigation pointers do have one canonical current form.
+    const stale = publishedPointerChanges.filter((change) => change.original !== change.rewritten);
+    for (const change of stale) process.stderr.write(`FAIL release docs stale: ${change.relative}\n`);
+    if (!verifyDocsAgainstRelease(facts) || stale.length) {
       process.exitCode = 1;
       return;
     }
     process.stdout.write(`PASS release docs match latest published release ${facts.manifest.tag}\n`);
     return;
   }
-  const changes = [
-    replaceRegions("README.md", readmeRegions(facts)),
-    replaceRegions("docs/start/install.md", installRegions(facts)),
-  ];
   const stale = changes.filter((change) => change.original !== change.rewritten);
   for (const change of stale) {
     fs.writeFileSync(change.target, change.rewritten);
