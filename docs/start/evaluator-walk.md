@@ -35,8 +35,9 @@ $ SEAL_BLOCK_RECEIPT="$(find "$SEAL_DEMO_DIR/receipts" -name '*-BLOCK.json' -pri
 $ node checker/seal-receipt-v2.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")"
 ```
 
-A matching receipt prints the five rows, including `Kernel decision REPRODUCED`,
-`Event occurrence NOT ESTABLISHED`, and `VERIFY UNVERIFIED`.
+A matching receipt prints the five rows described in [Receipt operations](../reference/receipt-operations.md),
+including `Kernel decision REPRODUCED`, `Event occurrence NOT ESTABLISHED`,
+and `VERIFY UNVERIFIED`.
 
 That key is the one this demo used to sign the receipt, so checking
 against it proves only self-consistency — a hostile sealer could sign its
