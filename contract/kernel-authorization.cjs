@@ -24,8 +24,45 @@ function sha256File(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-function elapsedMs(started) {
-  return Number(process.hrtime.bigint() - started) / 1e6;
+function measuredPhase(clock, started, finished) {
+  if (typeof started !== "bigint" || typeof finished !== "bigint" || finished < started) {
+    throw new KernelAuthorizationError("kernel_output_refused", `invalid ${clock} timing phase`);
+  }
+  return {
+    timestamps: { started_ns: started.toString(), finished_ns: finished.toString() },
+    milliseconds: Number(finished - started) / 1e6,
+  };
+}
+
+function workerTiming(stderr) {
+  const prefix = "SEAL_KERNEL_TIMING ";
+  const lines = stderr.split(/\r?\n/);
+  const line = lines.find((candidate) => candidate.startsWith(prefix));
+  if (!line) {
+    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned no timing timestamps");
+  }
+  let timing;
+  try {
+    timing = JSON.parse(line.slice(prefix.length));
+  } catch {
+    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned unreadable timing timestamps");
+  }
+  const names = [
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ];
+  if (timing.clock !== "child_process_hrtime_ns" || !timing.phases || !names.every((name) => {
+    const phase = timing.phases[name];
+    return phase && /^\d+$/.test(phase.started_ns || "") && /^\d+$/.test(phase.finished_ns || "")
+      && BigInt(phase.finished_ns) >= BigInt(phase.started_ns);
+  })) {
+    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid timing timestamps");
+  }
+  return { timing, names };
 }
 
 function expectedWasmSha(manifestPath) {
@@ -65,9 +102,15 @@ function createKernelAuthorizationAdapter({
         );
       }
 
-      const workerStarted = process.hrtime.bigint();
+      const requestSerializationStarted = process.hrtime.bigint();
+      const serializedRequest = JSON.stringify(input);
+      const requestSerializationFinished = process.hrtime.bigint();
+      // This timestamp is deliberately retained although it cannot form a
+      // duration with the child's first-instruction timestamp: hrtime clocks
+      // are process-local. See the explicit UNMEASURED entry below.
+      const parentSpawnInvoked = process.hrtime.bigint();
       const child = spawnSync(process.execPath, [workerPath, kernelRoot], {
-        input: JSON.stringify(input),
+        input: serializedRequest,
         encoding: "utf8",
         timeout: workerTimeoutMs,
         killSignal: "SIGKILL",
@@ -86,6 +129,7 @@ function createKernelAuthorizationAdapter({
         const detail = (child.stderr || child.stdout || `worker exited ${child.status}`).trim();
         throw new KernelAuthorizationError("kernel_execution_refused", detail);
       }
+      const responseDeserializationStarted = process.hrtime.bigint();
       let answer;
       try {
         answer = JSON.parse(child.stdout);
@@ -95,23 +139,41 @@ function createKernelAuthorizationAdapter({
       if (answer.verdict !== "ALLOW" && answer.verdict !== "BLOCK") {
         throw new KernelAuthorizationError("kernel_output_refused", `kernel returned unexpected verdict ${JSON.stringify(answer.verdict)}`);
       }
-      const reported = answer.kernel_timing_ms;
-      if (!reported || !["wasm_load", "decision_execution", "response"].every((key) => Number.isFinite(reported[key]) && reported[key] >= 0)) {
-        throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid timing output");
-      }
-      const totalMs = elapsedMs(workerStarted);
-      // The worker cannot observe Node process creation. The residual is the
-      // process creation/startup and request-delivery phase, separately from
-      // wasm loading, decision execution, and response construction.
-      const workerCreationMs = Math.max(0, totalMs - reported.wasm_load - reported.decision_execution - reported.response);
+      const responseDeserializationFinished = process.hrtime.bigint();
+      const { timing: childTiming, names: childPhaseNames } = workerTiming(child.stderr || "");
+      const parentPhases = {
+        parent_request_serialization: measuredPhase(
+          "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
+        ),
+        parent_response_deserialization: measuredPhase(
+          "parent_process_hrtime_ns", responseDeserializationStarted, responseDeserializationFinished,
+        ),
+      };
+      const childPhases = Object.fromEntries(childPhaseNames.map((name) => {
+        const phase = childTiming.phases[name];
+        return [name, {
+          timestamps: phase,
+          milliseconds: Number(BigInt(phase.finished_ns) - BigInt(phase.started_ns)) / 1e6,
+        }];
+      }));
       return {
         ...answer,
         wasm_sha256: computed,
-        kernel_timing_ms: {
-          worker_creation: workerCreationMs,
-          wasm_load: reported.wasm_load,
-          decision_execution: reported.decision_execution,
-          response: reported.response,
+        kernel_timing_timestamps: {
+          parent_process_hrtime_ns: {
+            ...Object.fromEntries(Object.entries(parentPhases).map(([name, phase]) => [name, phase.timestamps])),
+            parent_spawn_invoked_ns: parentSpawnInvoked.toString(),
+          },
+          child_process_hrtime_ns: Object.fromEntries(Object.entries(childPhases).map(([name, phase]) => [name, phase.timestamps])),
+        },
+        kernel_timing_ms: Object.fromEntries([
+          ...Object.entries(parentPhases),
+          ...Object.entries(childPhases),
+        ].map(([name, phase]) => [name, phase.milliseconds])),
+        kernel_timing_unmeasured: {
+          parent_spawn_to_first_child_instruction: "UNMEASURED: parent_process_hrtime_ns and child_process_hrtime_ns have no shared epoch; no cross-clock subtraction is reported.",
+          request_pipe_delivery: "UNMEASURED: parent request serialization and child request-read timestamps are on separate process clocks.",
+          response_pipe_return: "UNMEASURED: child response serialization and parent response-deserialization timestamps are on separate process clocks.",
         },
       };
     },

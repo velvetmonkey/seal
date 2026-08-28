@@ -127,6 +127,41 @@ test("authorization rows are presented to the real kernel and alterations are de
   }
 });
 
+test("kernel timing publishes only same-clock timestamp pairs and names cross-process gaps", () => {
+  const answer = createKernelAuthorizationAdapter().authorize({
+    epoch: 1,
+    issuedTool: TOOL,
+    issuedArgs: ARGS,
+    retryTool: TOOL,
+    retryArgs: ARGS,
+    accepted: true,
+    now: 1000,
+  });
+  const expected = [
+    "parent_request_serialization",
+    "parent_response_deserialization",
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ];
+  assert.deepEqual(Object.keys(answer.kernel_timing_ms).sort(), expected.sort());
+  assert.equal("worker_creation" in answer.kernel_timing_ms, false);
+  for (const [clock, phases] of Object.entries(answer.kernel_timing_timestamps)) {
+    for (const [name, timestamps] of Object.entries(phases)) {
+      if (name === "parent_spawn_invoked_ns") continue;
+      assert.match(timestamps.started_ns, /^\d+$/, `${clock}/${name} start`);
+      assert.match(timestamps.finished_ns, /^\d+$/, `${clock}/${name} finish`);
+      assert.ok(BigInt(timestamps.finished_ns) >= BigInt(timestamps.started_ns), `${clock}/${name} order`);
+    }
+  }
+  assert.match(answer.kernel_timing_unmeasured.parent_spawn_to_first_child_instruction, /^UNMEASURED:/);
+  assert.match(answer.kernel_timing_unmeasured.request_pipe_delivery, /^UNMEASURED:/);
+  assert.match(answer.kernel_timing_unmeasured.response_pipe_return, /^UNMEASURED:/);
+});
+
 test("Node state rows refuse without consulting the authorization kernel", () => {
   const never = { authorize() { throw new Error("kernel must not be called for a state refusal"); } };
   let clock = 1000;
