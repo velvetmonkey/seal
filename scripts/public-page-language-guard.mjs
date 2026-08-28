@@ -62,7 +62,8 @@ function proseOnly(text, extension) {
       .replace(/(`+)(?:[^`]|`(?!\1))*\1/gu, " ")
       .replace(/“[^”\n]*”|"[^"\n]*"/gu, " ");
   }
-  return lines.join("\n");
+  prose = lines.join("\n");
+  return prose.replace(/\p{Cf}/gu, "").replace(/\p{Pd}/gu, "-");
 }
 
 function phrasePattern(phrase) {
