@@ -126,9 +126,16 @@ function duplicateBases(rulings) {
 }
 
 function rulingListIsIntact(mergeBase, head) {
-  const headDocument = readRulings(head, false);
-  if (!headDocument) return true;
-  if (headDocument.legacy || headDocument.invalid) {
+  const headDocument = readRulings(head, true);
+  const baseDocument = readRulings(mergeBase, true);
+  if (!baseDocument) return true;
+  if (!headDocument) {
+    for (const ruling of baseDocument.rulings) {
+      process.stderr.write(`PROTECTED_PATH_RULING_DROPPED: base=${ruling?.base || ""} author=${ruling?.author || ""}.\n`);
+    }
+    return baseDocument.rulings.length === 0;
+  }
+  if (headDocument.invalid) {
     process.stderr.write("PROTECTED_PATH_RULING_LEGACY_SHAPE: HEAD ruling document must use the rulings list shape.\n");
     return false;
   }
@@ -137,8 +144,6 @@ function rulingListIsIntact(mergeBase, head) {
     process.stderr.write(`PROTECTED_PATH_RULING_AMBIGUOUS: duplicate base token(s): ${ambiguous.join(", ")}.\n`);
     return false;
   }
-  const baseDocument = readRulings(mergeBase, true);
-  if (!baseDocument) return true;
   if (baseDocument.invalid || !headDocument) {
     const dropped = baseDocument.invalid ? [] : baseDocument.rulings;
     for (const ruling of dropped) {
