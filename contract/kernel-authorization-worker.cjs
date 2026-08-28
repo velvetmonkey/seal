@@ -4,6 +4,7 @@
 // Emscripten's globals here prevents them from entering the long-lived proxy.
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const fs = require("node:fs");
 
 function timestamp() {
   return process.hrtime.bigint();
@@ -28,6 +29,26 @@ function emitPhaseStart(name, started) {
     started_ns: started.toString(),
   })}\n`);
 }
+
+function activeResources() {
+  return {
+    handles: process._getActiveHandles().map((handle) => handle.constructor?.name || "unknown").sort(),
+    requests: process._getActiveRequests().map((request) => request.constructor?.name || "unknown").sort(),
+  };
+}
+
+function lifecycleRecord(name, detail = {}) {
+  return { clock: "child_process_hrtime_ns", name, timestamp_ns: timestamp().toString(), ...detail };
+}
+
+function emitLifecycle(name, detail) {
+  process.stderr.write(`SEAL_KERNEL_LIFECYCLE ${JSON.stringify(lifecycleRecord(name, detail))}\n`);
+}
+
+process.on("beforeExit", () => emitLifecycle("beforeExit", { active_resources: activeResources() }));
+process.on("exit", () => {
+  fs.writeSync(2, `SEAL_KERNEL_LIFECYCLE ${JSON.stringify(lifecycleRecord("exit", { active_resources: activeResources() }))}\n`);
+});
 
 async function main() {
   const kernelRoot = path.resolve(process.argv[2]);
@@ -109,7 +130,12 @@ async function main() {
   const serializedResponse = JSON.stringify(response);
   const responseFinished = timestamp();
   emitPhase("child_response_construction_and_serialization", responseStarted, responseFinished);
-  process.stdout.write(serializedResponse);
+  emitLifecycle("response_generated", { active_resources: activeResources() });
+  emitLifecycle("response_write_started");
+  process.stdout.write(serializedResponse, () => {
+    emitLifecycle("stdout_write_callback_completed");
+    process.exit(0);
+  });
 }
 
 main().catch((error) => {

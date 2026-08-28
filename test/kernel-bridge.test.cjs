@@ -279,6 +279,39 @@ Module._load = function(request, parent, isMain) {
   t.diagnostic(`timeout refusal received by caller: ${JSON.stringify(refused)}`);
 });
 
+test("a response write that does not flush reports completed security work and lifecycle state", (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-response-write-")), "block.cjs");
+  fs.writeFileSync(control, `
+const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...rest) {
+  if (typeof chunk === "string" && chunk.includes('"receipt_record"')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+  }
+  return write(chunk, ...rest);
+};
+`);
+  const originalNodeOptions = process.env.NODE_OPTIONS;
+  process.env.NODE_OPTIONS = `${originalNodeOptions ? `${originalNodeOptions} ` : ""}--require=${control}`;
+  t.after(() => {
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    fs.rmSync(path.dirname(control), { recursive: true, force: true });
+  });
+  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const refused = acceptedRetry(contract, fresh(contract));
+  assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
+  assert.equal(refused.timing.kernel_timing_active_phase, null);
+  assert.deepEqual(Object.keys(refused.timing.kernel_timing_lifecycle).sort(), ["response_generated", "response_write_started"]);
+  for (const phase of [
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ]) assert.equal(typeof refused.timing.kernel_timing_ms[phase], "number", phase);
+});
+
 function blockingPreload(phase) {
   const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
   const controls = {

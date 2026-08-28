@@ -51,12 +51,34 @@ const CHILD_GAP_NAMES = [
   ["decision_execution", "child_response_construction_and_serialization", "decision_execution_to_response_construction"],
 ];
 
+const LIFECYCLE_NAMES = new Set([
+  "response_generated",
+  "response_write_started",
+  "stdout_write_callback_completed",
+  "beforeExit",
+  "exit",
+]);
+
 function workerTiming(stderr, { requireAll } = { requireAll: true }) {
   const prefix = "SEAL_KERNEL_TIMING_PHASE ";
   const startPrefix = "SEAL_KERNEL_TIMING_PHASE_START ";
   const phases = {};
   const starts = {};
+  const lifecycle = {};
   for (const line of stderr.split(/\r?\n/)) {
+    if (line.startsWith("SEAL_KERNEL_LIFECYCLE ")) {
+      try {
+        const record = JSON.parse(line.slice("SEAL_KERNEL_LIFECYCLE ".length));
+        if (record.clock !== "child_process_hrtime_ns" || !LIFECYCLE_NAMES.has(record.name) || !/^\d+$/.test(record.timestamp_ns || "")) {
+          if (requireAll) throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid lifecycle timestamps");
+          continue;
+        }
+        lifecycle[record.name] = record;
+      } catch (error) {
+        if (error instanceof KernelAuthorizationError || requireAll) throw error;
+      }
+      continue;
+    }
     const isStart = line.startsWith(startPrefix);
     if (!isStart && !line.startsWith(prefix)) continue;
     let record;
@@ -85,10 +107,10 @@ function workerTiming(stderr, { requireAll } = { requireAll: true }) {
   if (active.length > 1) {
     throw new KernelAuthorizationError("kernel_output_refused", "kernel worker published more than one active timing phase");
   }
-  return { phases, starts, activePhase: active[0] || null };
+  return { phases, starts, lifecycle, activePhase: active[0] || null };
 }
 
-function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, childStarts, activePhase, deadlineMs }) {
+function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, childStarts, lifecycle, activePhase, deadlineMs }) {
   const parentPhases = {
     parent_request_serialization: measuredPhase(
       "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
@@ -127,6 +149,7 @@ function timingPublication({ requestSerializationStarted, requestSerializationFi
   }
   return {
     kernel_timing_deadline_ms: deadlineMs,
+    kernel_timing_lifecycle: lifecycle,
     kernel_timing_timestamps: {
       parent_process_hrtime_ns: {
         parent_request_serialization: parentPhases.parent_request_serialization.timestamps,
@@ -211,6 +234,7 @@ function createKernelAuthorizationAdapter({
           parentSpawnReturned,
           childPhases: childTiming.phases,
           childStarts: childTiming.starts,
+          lifecycle: childTiming.lifecycle,
           activePhase: childTiming.activePhase,
           deadlineMs: workerTimeoutMs,
         }));
@@ -283,6 +307,7 @@ function createKernelAuthorizationAdapter({
           }]),
         ].map(([name, phase]) => [name, phase.milliseconds])),
         kernel_timing_active_phase: null,
+        kernel_timing_lifecycle: childTiming.lifecycle,
         kernel_timing_unmeasured: {
           parent_spawn_to_first_child_instruction: "UNMEASURED: parent_process_hrtime_ns and child_process_hrtime_ns have no shared epoch; no cross-clock subtraction is reported.",
           request_pipe_delivery: "UNMEASURED: parent request serialization and child request-read timestamps are on separate process clocks.",
