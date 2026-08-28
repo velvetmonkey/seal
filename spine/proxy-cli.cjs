@@ -9,7 +9,7 @@ const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
 const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolNames, ProtectionError } = require("./protection.cjs");
 const { requireProtectSupportedPlatform } = require("./platform.cjs");
-const { printKernelTiming } = require("../bin/seal");
+const { printKernelTiming } = require("./presentation.cjs");
 
 function parseArgs(argv) {
   const options = { initStore: false };
