@@ -11,3 +11,6 @@ The vector covers READ, VALIDATE, REPLAY, the unsigned-signature boundary, and
 the currently unreachable VERIFY result. It does not cover a valid signature,
 authority-root or occurrence-witness formats, producer output, or proof that a
 downstream event occurred.
+
+Previous: [Multi-tool semantics](../multi-tool-semantics.md).
+Up: [Reference](../README.md).

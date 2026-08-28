@@ -1,0 +1,51 @@
+{
+  "root": { "path": "docs/README.md", "label": "Documentation map" },
+  "sections": [
+    {
+      "name": "start",
+      "pages": [
+        { "path": "docs/start/README.md", "label": "Start" },
+        { "path": "docs/start/install.md", "label": "Install" },
+        { "path": "docs/start/evaluator-walk.md", "label": "Evaluator walk" }
+      ]
+    },
+    {
+      "name": "guide",
+      "pages": [
+        { "path": "docs/guide/README.md", "label": "Guide" },
+        { "path": "docs/guide/choosing-what-to-protect.md", "label": "Choosing what to protect" },
+        { "path": "docs/guide/knowing-it-worked.md", "label": "Knowing it worked" },
+        { "path": "docs/guide/github-actions-provenance.md", "label": "GitHub Actions provenance" }
+      ]
+    },
+    {
+      "name": "reference",
+      "pages": [
+        { "path": "docs/reference/README.md", "label": "Reference" },
+        { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
+        { "path": "docs/reference/multi-tool-semantics.md", "label": "Multi-tool semantics" },
+        { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt operations vector set v1" }
+      ]
+    },
+    {
+      "name": "assurance",
+      "pages": [
+        { "path": "docs/assurance/README.md", "label": "Assurance" },
+        { "path": "docs/assurance/evaluator-start.md", "label": "Evaluator truth surface" },
+        { "path": "docs/assurance/architecture.md", "label": "Architecture" },
+        { "path": "docs/assurance/distribution.md", "label": "Distribution" },
+        { "path": "docs/assurance/version-identity.md", "label": "Version identity" },
+        { "path": "docs/assurance/claude-code-evidence.md", "label": "Claude Code evidence" }
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "path": "docs/guide/what-is-protected-right-now.md",
+      "reason": "The reviewed-guide digest pin forbids a footer change without a human ruling.",
+      "footer": [
+        { "role": "Next", "label": "Knowing it worked", "target": "knowing-it-worked.md" }
+      ]
+    }
+  ]
+}

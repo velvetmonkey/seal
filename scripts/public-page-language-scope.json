@@ -26,10 +26,12 @@
     "docs/guide/what-is-protected-right-now.md",
     "docs/guide/when-something-looks-wrong.md",
     "docs/reference/multi-tool-semantics.md",
+    "docs/reference/README.md",
     "docs/reference/receipt-operations-v1/README.md",
     "docs/reference/receipt-operations.md",
     "docs/reproduce.md",
     "docs/start/evaluator-walk.md",
+    "docs/start/README.md",
     "docs/start/install.md"
   ]
 }

@@ -259,3 +259,6 @@ directory, and
 appears in this repository at all. Committing a real pack is the deliberate act
 of the person who performed the run, in a commit that changes that test and
 this page's status row together.
+
+Previous: [Version identity](version-identity.md).
+Up: [Assurance](README.md).
