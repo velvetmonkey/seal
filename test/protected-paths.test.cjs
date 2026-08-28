@@ -301,7 +301,23 @@ test("a head that appends a ruling and keeps the old rulings is accepted", (t) =
   const initial = git(root, ["rev-parse", "HEAD"]);
   writeRulings(root, [testRecord(initial, "base-author")]);
   const base = git(root, ["rev-parse", "HEAD"]);
-  writeRulings(root, [testRecord(initial, "base-author"), testRecord(base, "new-author")]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: appended\n");
+  git(root, ["add", ".github/workflows/ci.yml"]);
+  git(root, ["commit", "-qm", "append protected change"]);
+  writeRulings(root, [
+    testRecord(initial, "base-author"),
+    {
+      base,
+      author: "new-author",
+      date: "2026-08-28",
+      scope: "test appended ruling",
+      files: [{
+        path: ".github/workflows/ci.yml",
+        blob: git(root, ["rev-parse", "HEAD:.github/workflows/ci.yml"]),
+      }],
+    },
+  ]);
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
