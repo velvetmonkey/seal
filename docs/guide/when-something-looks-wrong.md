@@ -417,6 +417,13 @@ cached runtime file.
 The receipt JSON repeats an object member name. Duplicate names make the
 meaning parser-dependent, so the checker refuses before validation.
 
+### `unexpected_member`
+
+The signature object contains a member that the checker does not allow. The
+checker refuses the receipt; the signature object must contain exactly
+`algorithm` and `value`. Remove the unexpected member and obtain a new valid
+receipt before you run the checker again.
+
 ### `number_not_canonical`
 
 The receipt contains a number that is not a finite safe integer. The v2
