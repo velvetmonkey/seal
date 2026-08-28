@@ -19,6 +19,9 @@ const BANNED = [
   "independent verifier",
 ];
 const BARE_INDEPENDENCE = /(?<![\p{L}\p{N}_])(?:checker|verifier)\s+is\s+independent(?!\s+of\b)/giu;
+const PROVED_CLASS = /(?<![\p{L}\p{N}_])(?:proved|proven|machine[- ]checked)(?![\p{L}\p{N}_])/giu;
+const EXPLICIT_FAMILY_SUBJECT = /\b(?:seal-host|policy[- ]language|budgetcore|v1)\b/iu;
+const EXPLICIT_NEGATION = /\b(?:not|no|never|without)\s*$/iu;
 
 function fail(message) {
   process.stderr.write(`FAIL public-page language guard: ${message}\n`);
@@ -69,6 +72,13 @@ function phrasePattern(phrase) {
   return new RegExp(`(?<![\\p{L}\\p{N}_])${body}(?![\\p{L}\\p{N}_])`, "giu");
 }
 
+function sentenceAt(text, position) {
+  const start = Math.max(text.lastIndexOf("\n", position), text.lastIndexOf(".", position), text.lastIndexOf("!", position), text.lastIndexOf("?", position)) + 1;
+  const rest = text.slice(position);
+  const endMatch = /[.!?\n]/u.exec(rest);
+  return text.slice(start, endMatch ? position + endMatch.index + 1 : text.length);
+}
+
 let scope;
 try {
   scope = JSON.parse(readFileSync(SCOPE, "utf8"));
@@ -106,6 +116,14 @@ for (const relative of scope.pages) {
   for (const match of prose.matchAll(BARE_INDEPENDENCE)) {
     const line = prose.slice(0, match.index).split("\n").length;
     fail(`${relative}:${line} contains a bare independent description of the checker or verifier; name the axis with "is independent of"`);
+  }
+  for (const match of prose.matchAll(PROVED_CLASS)) {
+    const before = prose.slice(Math.max(0, match.index - 24), match.index);
+    const sentence = sentenceAt(prose, match.index);
+    const context = prose.slice(Math.max(0, match.index - 160), match.index + 160);
+    if (EXPLICIT_NEGATION.test(before) || EXPLICIT_FAMILY_SUBJECT.test(sentence) || EXPLICIT_FAMILY_SUBJECT.test(context)) continue;
+    const line = prose.slice(0, match.index).split("\n").length;
+    fail(`${relative}:${line} contains an unscoped proved-class claim: ${match[0]}`);
   }
 }
 

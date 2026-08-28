@@ -50,7 +50,7 @@ production configuration key.
 
 This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
-One diagram, five roles: **decision core** (proven), **enforcement** (deployed), **receipt**
+One diagram, five roles: **seal-host decision core** (proven), **enforcement** (deployed), **receipt**
 (evidence), **conformance** (ties bodies to the proof), **coverage** (audits the policy).
 Solid arrows are the runtime path; dashed arrows are evidence and audit paths.
 
@@ -81,7 +81,7 @@ flowchart LR
     receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
     verify -.-> action["seal-verify-action:\ndownstream-stricter fork of\nthe verify closure, as a CI gate"]
 
-    conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven kernel"] -.-> gw
+    conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven seal-host kernel"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw
 
     demo["seal-live-demo:\none command, real containers,\nBLOCK vs bypass, replayable evidence"] -.-> receipt
@@ -91,9 +91,9 @@ flowchart LR
 
 **Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
-- **Decision core** (`seal-host`, the repository holding its Lean source) — the rulebook. Machine-checked Lean 4 theorems: default
+- **Decision core** (`seal-host`, the repository holding its Lean source) — the seal-host rulebook. The seal-host kernel has machine-checked Lean 4 theorems: default
   deny, allow **iff** a live approval record matches the exact target, single-use, expiry,
-  non-bypass. Proven — but a *kernel* claim, not a whole-system claim; that the record was
+  non-bypass. The seal-host kernel is proven — but this is a *kernel* claim, not a whole-system claim; that the record was
   minted by the human you think is a custody assumption (truth box), not a theorem.
 - **Enforcement** (`seal-host`) — the guard at the door. The Rust MCP host that routes every
   guarded call through the kernel and forwards only the exact approved bytes. The Rust glue is
@@ -109,7 +109,7 @@ flowchart LR
   defect in shared kernel or format logic can make them agree on the same wrong
   answer.
 - **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
-  deployed bodies (Rust, wasm, JS) agree with the proven kernel byte-for-byte over a corpus.
+  deployed bodies (Rust, wasm, JS) agree with the proven seal-host kernel byte-for-byte over a corpus.
   Evidence, not a universal theorem.
 - **Coverage** (`seal scan`) — audits a policy against a tool inventory: uncovered tools,
   redundant rules, calls the policy cannot distinguish.
