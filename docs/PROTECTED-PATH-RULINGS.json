@@ -1,26 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "a47b8f96209a282b92d6813377d590d8ab11abf8",
+    "base": "c97706b3a5fc10136f3455dd41b2a94f9fdb0ea9",
     "author": "Ben",
-    "date": "2026-08-27",
-    "scope": "R2 Phase B ruling: 'the spine receipt must become the kernel receipt and honor the same process and claims'; 'ship v2'; and full permission to push onwards. This covers the CI caller update, the producer-derived demo captures, and the installed-tree generator assertion required to replace seal.spine/v1 with seal.receipt/v2. The pre-landed judge, vectors, route-agreement test, v2 specification, and published-asset anchor are unchanged.",
+    "date": "2026-08-28",
+    "scope": "Lean launcher path work order: no file under .github may contain /home/monkey, and a CI check must fail when one does. This covers only adding that check to the product-suite job in ci.yml; no pin, fixture, receipt implementation, or VERSION change is authorized.",
     "files": [
       {
         "path": ".github/workflows/ci.yml",
-        "blob": "1a2770d15adc40818cf5024c9a5e2e69a5b4cbcb"
-      },
-      {
-        "path": "test/fixtures/readme-demo-checker-output.txt",
-        "blob": "7cc72bfac5f266876034b788d0b91e491832cf9c"
-      },
-      {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "e24191e41b3ed8135e67aa54d479147f978804da"
-      },
-      {
-        "path": "test/installed-tree-pin-generator.test.cjs",
-        "blob": "cecdbb4cf70b0c7586205b58a9f7fe1a6b3f7d18"
+        "blob": "6627903c25acdb7fefe850fff29e891eada62fd5"
       }
     ]
   }
