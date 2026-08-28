@@ -10,6 +10,7 @@ const ROOT = path.resolve(__dirname, "..");
 const SCHEMA = "seal.artifact-kernel-correspondence/v1";
 const LIMIT = "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
 const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced";
+const LEAN_LAUNCHER_ENV = "SEAL_LEAN_LAUNCHER";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SOURCE_PINS = Object.freeze({
   "v0.2.0": Object.freeze({
@@ -140,11 +141,21 @@ function verifyAsset(assetFile, declared, report) {
 }
 
 function child(command, args, options = {}) {
+  const { label, missingMessage, ...execOptions } = options;
   try {
-    execFileSync(command, args, { ...options, stdio: ["ignore", 2, 2] });
+    execFileSync(command, args, { ...execOptions, stdio: ["ignore", 2, 2] });
   } catch (error) {
-    refuse(`${options.label || path.basename(command)} failed (exit ${error.status ?? "unknown"})`);
+    if (error.code === "ENOENT" && missingMessage) refuse(missingMessage);
+    refuse(`${label || path.basename(command)} failed (exit ${error.status ?? "unknown"})`);
   }
+}
+
+function leanLauncher(environment = process.env) {
+  return environment[LEAN_LAUNCHER_ENV] || "lake";
+}
+
+function leanLauncherMissingMessage(launcher) {
+  return `Lean launcher ${JSON.stringify(launcher)} was not found. Install elan from https://lean-lang.org/install/ and ensure its lake executable is on PATH, or set ${LEAN_LAUNCHER_ENV} to an executable name or path.`;
 }
 
 function download(url, destination) {
@@ -222,15 +233,17 @@ function buildPinnedKernel(tag, work) {
   const pin = SOURCE_PINS[tag];
   if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
   const source = path.join(work, "pinned-source");
+  const launcher = leanLauncher();
+  const missingMessage = leanLauncherMissingMessage(launcher);
   clonePinnedSource(pin, source);
 
   child("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
   child("python3", ["scripts/install_pinned_elan.py", "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   if (!fs.existsSync(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    child("/home/monkey/bin/leanbuild", ["update"], { cwd: source, label: "materialize manifest-pinned dependencies" });
+    child(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
   }
   child("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
-  child("/home/monkey/bin/leanbuild", ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs" });
+  child(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
     ["./build_base.sh", []],
@@ -302,12 +315,15 @@ if (require.main === module) main();
 
 module.exports = {
   LIMIT,
+  LEAN_LAUNCHER_ENV,
   SCHEMA,
   SOURCE_PINS,
   TAG_PATTERN,
   download,
   execute,
   installPublished,
+  leanLauncher,
+  leanLauncherMissingMessage,
   makeTreeRemovable,
   readPublishedEntry,
   sha256Bytes,

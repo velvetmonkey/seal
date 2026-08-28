@@ -7,7 +7,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { LIMIT, SCHEMA, SOURCE_PINS, execute } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
 const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
@@ -186,4 +186,12 @@ test("a Darwin platform question refuses before download and names the uncovered
   assert.match(outcome.error, /only checks the linux-x64 artifact kernel/);
   assert.equal(downloads, 0);
   console.log(JSON.stringify(outcome.report));
+});
+
+test("Lean launcher defaults to portable lake and accepts the serialization override", () => {
+  assert.equal(leanLauncher({}), "lake");
+  assert.equal(leanLauncher({ [LEAN_LAUNCHER_ENV]: "/opt/serialized lake" }), "/opt/serialized lake");
+  assert.match(leanLauncherMissingMessage("lake"), /Install elan/);
+  assert.match(leanLauncherMissingMessage("lake"), /ensure its lake executable is on PATH/);
+  assert.match(leanLauncherMissingMessage("lake"), new RegExp(LEAN_LAUNCHER_ENV));
 });
