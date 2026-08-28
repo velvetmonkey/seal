@@ -32,7 +32,7 @@ correspondence is maintained by hand across a repository boundary.
   "verdict": "ALLOW | BLOCK | ERROR",
   "reason": "string",
   "replay": {"args_sha256": "sha256", "config_sha256": "sha256"},
-  "signature": {"algorithm": "ed25519", "key_id": "string", "value": "128 hex"}
+  "signature": {"algorithm": "ed25519", "value": "128 hex"}
 }
 ```
 
