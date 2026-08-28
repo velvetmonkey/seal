@@ -16,6 +16,7 @@ a consumed approval cannot run the child twice	test/approval-contract.test.cjs	r
 physical kernel corruption has no JavaScript fallback	test/kernel-bridge.test.cjs	physical wasm corruption refuses by name with no JavaScript fallback
 a hung authorization kernel fails closed at its deadline	test/kernel-bridge.test.cjs	a hung kernel worker reaches its product deadline and refuses closed
 every shipped local require target is shipped	test/payload-require-graph.test.cjs	the shipped payload require graph is closed
+the shipped payload contains no test environment hook	test/payload-test-hook.test.cjs	the shipped payload refuses test environment hooks
 receipt producer and checker retain specified insertion order	test/receipt-canonicalization-conformance.test.mjs	producer and checker canonicalisers conform to the v2 insertion-order specification
 linkcheck assertion removal is refused by name	test/linkcheck-assertions.test.mjs	linkcheck assertion inventory refuses a removed assertion by name
 a misspelled protected tool is refused before state is written	test/tool-validation.test.cjs	protect refuses a misspelled tool and names every observed tool
