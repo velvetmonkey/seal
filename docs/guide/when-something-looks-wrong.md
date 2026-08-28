@@ -443,7 +443,7 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0-rc.3. macOS source portability is CI-exercised for install, demo and receipt checking.
+v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
 Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
 

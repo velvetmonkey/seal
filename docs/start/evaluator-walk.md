@@ -1,7 +1,7 @@
 # Evaluator walk
 
 This is the forensic receipt walk for a source build of this checkout. It is
-not the path for the published GitHub release `v0.2.0-rc.3`, which supplies the
+not the path for the published GitHub release `v0.2.0`, which supplies the
 receipt checker as a sibling release asset. It does not embed a captured transcript: three
 attempts to keep a hand-maintained transcript honest on a moving branch already
 failed. Run the commands; read what they print.

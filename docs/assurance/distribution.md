@@ -1,6 +1,6 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0-rc.3. macOS source portability is CI-exercised for install, demo and receipt checking.
+Seal v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
 Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
 Windows, Linux ARM and other platforms are not supported.
 It ships **one** installable artifact, for **Linux x86-64**.
@@ -57,7 +57,7 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The current install payload excludes `seal-receipt-check.mjs`. Download the sibling
-[`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs)
+[`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0/seal-receipt-check.mjs)
 and verify it against the `SHA256SUMS` asset attached to that same release before
 running it. The launcher never searches `PATH` for another `seal`.
 The checker imports no Seal module at check time, but copies the receipt

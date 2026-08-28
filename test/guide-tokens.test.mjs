@@ -18,7 +18,7 @@ const GUIDE_SHA256 = "9392ef608880e11f14a667325947a3142b5d495a4aceba56e78f0ae42b
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
-const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0-rc\\.3(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)", "gm");
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)", "gm");
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;
