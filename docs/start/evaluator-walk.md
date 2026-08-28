@@ -73,3 +73,4 @@ See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contain
 
 Previous: [Install](install.md).
 Up: [Start](README.md).
+Next: [Guide](../guide/README.md).

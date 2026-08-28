@@ -33,8 +33,9 @@ function markdownFiles(dir, prefix = "") {
 }
 
 test("declared documentation navigation footers match the section chains", () => {
-  const declared = new Set();
-  for (const section of navigation.sections) {
+  const declared = new Set([navigation.root.path]);
+  assert.equal(existsSync(resolve(ROOT, navigation.root.path)), true, `navigation declares missing ${navigation.root.path}`);
+  for (const [sectionIndex, section] of navigation.sections.entries()) {
     assert.ok(section.pages.length > 1, `${section.name}: chain needs at least two pages`);
     for (const [index, page] of section.pages.entries()) {
       assert.equal(declared.has(page.path), false, `navigation declares ${page.path} more than once`);
@@ -47,8 +48,8 @@ test("declared documentation navigation footers match the section chains", () =>
       }
       const up = index === 0 ? navigation.root : section.pages[0];
       expected.push({ role: "Up", label: up.label, target: relativeLink(page.path, up.path) });
-      if (index + 1 < section.pages.length) {
-        const next = section.pages[index + 1];
+      const next = section.pages[index + 1] || navigation.sections[sectionIndex + 1]?.pages[0];
+      if (next) {
         expected.push({ role: "Next", label: next.label, target: relativeLink(page.path, next.path) });
       }
       const text = readFileSync(resolve(ROOT, page.path), "utf8");
@@ -64,13 +65,12 @@ test("declared documentation navigation footers match the section chains", () =>
     assert.deepEqual(footer(text), exception.footer, exception.path);
     assert.equal(footerAtEnd(text, exception.footer), true, `${exception.path}: navigation footer is not at the end of the page`);
   }
-  for (const file of markdownFiles(resolve(ROOT, "docs"))) {
-    const path = `docs/${file}`;
-    if (path.startsWith("docs/archive/")) continue;
-    if (path.startsWith("docs/guide/")) {
-      assert.equal(declared.has(path), true, `${path}: undeclared page has no navigation footer`);
-      continue;
-    }
-    if (!declared.has(path)) assert.deepEqual(footer(readFileSync(resolve(ROOT, path), "utf8")), [], `${path}: undeclared navigation footer`);
-  }
+  const markdown = markdownFiles(resolve(ROOT, "docs")).map((file) => `docs/${file}`).sort();
+  const nonArchive = markdown.filter((path) => !path.startsWith("docs/archive/"));
+  const undeclared = nonArchive.filter((path) => !declared.has(path));
+  assert.deepEqual(
+    undeclared,
+    [],
+    `documentation pages missing navigation declarations (docs/archive/** is excluded):\n${undeclared.join("\n")}`,
+  );
 });

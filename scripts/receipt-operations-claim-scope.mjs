@@ -16,6 +16,7 @@ export const nonBehavioralSentences = new Set([
   "Next: [Multi-tool semantics](multi-tool-semantics.md).",
   "Previous: [Multi-tool semantics](../multi-tool-semantics.md).",
   "Up: [Reference](../README.md).",
+  "Next: [Assurance](../../assurance/README.md).",
 ]);
 
 // The only currently reviewed documentation-only claims. A CHECKED row may

@@ -42,15 +42,60 @@
   "exceptions": [
     {
       "path": "docs/guide/when-something-looks-wrong.md",
-      "reason": "digest-pinned, edit needs a human ruling",
-      "footer": []
+      "reason": "digest-pinned guide page",
+      "footer": [
+        { "role": "Up", "label": "Guide", "target": "README.md" },
+        { "role": "Next", "label": "What is protected right now", "target": "what-is-protected-right-now.md" }
+      ]
     },
     {
       "path": "docs/guide/what-is-protected-right-now.md",
-      "reason": "digest-pinned, edit needs a human ruling",
+      "reason": "digest-pinned guide page",
       "footer": [
+        { "role": "Previous", "label": "When something looks wrong", "target": "when-something-looks-wrong.md" },
+        { "role": "Up", "label": "Guide", "target": "README.md" },
         { "role": "Next", "label": "Knowing it worked", "target": "knowing-it-worked.md" }
       ]
+    },
+    {
+      "path": "docs/SEAL-RECEIPT-V2.md",
+      "reason": "standalone receipt format specification",
+      "footer": []
+    },
+    {
+      "path": "docs/reproduce.md",
+      "reason": "standalone reproduction procedure",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/POLICY-LANGUAGE.md",
+      "reason": "standalone policy language analysis",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md",
+      "reason": "superseded release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/installed-tree-pin-control.md",
+      "reason": "standalone control description",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/linkcheck-population-control.md",
+      "reason": "standalone control description",
+      "footer": []
     }
   ]
 }
