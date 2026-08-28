@@ -188,3 +188,26 @@ test("launch truth gate compares the complete self-repository path", () => {
   ]) assert.notEqual(run(link).status, 0, link);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("README installer check executes the command without restoring the installed-tree transcript", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "seal-frontdoor-installer-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const readmePath = join(dir, "README.md");
+  const artifact = join(dir, "fixture-installer");
+  const tree = "a".repeat(64);
+  writeFileSync(readmePath, readFileSync(resolve(ROOT, "README.md"), "utf8"));
+  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal 0.2.0-rc.3 linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
+  const env = {
+    ...process.env,
+    SEAL_INSTALL_TRANSCRIPT_README: readmePath,
+    SEAL_INSTALL_TRANSCRIPT_ARTIFACT: artifact,
+  };
+  const green = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(green.status, 0, green.stdout + green.stderr);
+  assert.match(green.stdout, /installed-tree transcript stays off the front page/);
+
+  writeFileSync(readmePath, `${readFileSync(readmePath, "utf8")}\n<!-- Seal installed-tree pin role: published-asset -->\n`);
+  const red = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(red.status, 1, red.stdout + red.stderr);
+  assert.match(red.stderr, /must not carry an installed-tree transcript/);
+});
