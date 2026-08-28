@@ -282,6 +282,21 @@ test("a head that drops a base ruling is refused and names the record", (t) => {
   assert.match(result.stderr, new RegExp(`${initial}.*base-author`));
 });
 
+test("deleting the whole ruling document is refused and names every base record", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "badges")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  rmSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"));
+  git(root, ["add", "-u"]);
+  git(root, ["commit", "-qm", "delete ruling document"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_DROPPED/);
+  assert.match(result.stderr, new RegExp(`${initial}.*badges`));
+});
+
 test("the stale frontdoor3 replacement of the badges ruling is refused", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -340,11 +355,12 @@ test("a head with two rulings for one base is refused as ambiguous", (t) => {
   assert.match(result.stderr, new RegExp(base));
 });
 
-test("a head with the old single-object ruling shape is refused", (t) => {
+test("a head with the old single-object ruling shape is accepted as one list entry", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const initial = git(root, ["rev-parse", "HEAD"]);
-  writeRulings(root, [testRecord(initial)]);
+  const second = `${"a".repeat(40)}`;
+  writeRulings(root, [testRecord(initial), testRecord(second, "second")]);
   const base = git(root, ["rev-parse", "HEAD"]);
   writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), JSON.stringify({
     version: 1,
@@ -354,7 +370,8 @@ test("a head with the old single-object ruling shape is refused", (t) => {
   git(root, ["commit", "-qm", "restore legacy shape"]);
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /PROTECTED_PATH_RULING_LEGACY_SHAPE/);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_DROPPED/);
+  assert.match(result.stderr, new RegExp(`${second}.*second`));
 });
 
 test("deleting the superset check makes the dropped-ruling test accept the tamper", (t) => {
