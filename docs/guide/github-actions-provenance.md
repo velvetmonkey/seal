@@ -14,3 +14,4 @@ release assets.
 
 Previous: [Knowing it worked](knowing-it-worked.md).
 Up: [Guide](README.md).
+Next: [Reference](../reference/README.md).
