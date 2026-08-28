@@ -105,3 +105,7 @@ chmod +x "dist/$expected_name"
 ```
 
 macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+
+Previous: [Start](README.md).
+Up: [Start](README.md).
+Next: [Evaluator walk](evaluator-walk.md).

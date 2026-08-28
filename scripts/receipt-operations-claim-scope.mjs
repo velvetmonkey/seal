@@ -11,6 +11,11 @@ export const claimFiles = [
 export const nonBehavioralSentences = new Set([
   "From the checkout root, run the linked v1 vector with Node 20 or newer:",
   "Run it from the repository root:",
+  "Previous: [Reference](README.md).",
+  "Up: [Reference](README.md).",
+  "Next: [Multi-tool semantics](multi-tool-semantics.md).",
+  "Previous: [Multi-tool semantics](../multi-tool-semantics.md).",
+  "Up: [Reference](../README.md).",
 ]);
 
 // The only currently reviewed documentation-only claims. A CHECKED row may

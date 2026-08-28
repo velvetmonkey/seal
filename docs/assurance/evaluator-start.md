@@ -205,4 +205,8 @@ One prior command row is retained as an explicit gap:
   checked.
 - A second credential-free build on another host or architecture: not checked.
 - Browser replay exact command: NO BACKING.
+
+Previous: [Assurance](README.md).
+Up: [Assurance](README.md).
+Next: [Architecture](architecture.md).
 - The removed quickstart commands and their claimed results: not checked.

@@ -12,4 +12,5 @@ It is planned as a separate `release.published` workflow; this repository does
 not currently provide that workflow or a verification procedure for downloaded
 release assets.
 
-Next: [Knowing it worked](knowing-it-worked.md).
+Previous: [Knowing it worked](knowing-it-worked.md).
+Up: [Guide](README.md).

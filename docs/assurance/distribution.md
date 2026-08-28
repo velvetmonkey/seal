@@ -71,3 +71,7 @@ For `seal protect`, MCP discovery has a 5000ms deadline per phase by
 default. Slow but legitimate servers can use
 `seal protect --timeout-ms MILLISECONDS SERVER TOOL`; timeout refusals name
 that flag, and the selected deadline is retained for the activation re-check.
+
+Previous: [Architecture](architecture.md).
+Up: [Assurance](README.md).
+Next: [Version identity](version-identity.md).
