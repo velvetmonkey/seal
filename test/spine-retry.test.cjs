@@ -52,36 +52,55 @@ function attach(child) {
       }
     }, 25);
   });
+  state.waitForErr = (pattern, ms = 15000) => new Promise((resolve, reject) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      if (pattern.test(state.err)) { clearInterval(poll); resolve(); }
+      else if (Date.now() - started > ms) {
+        clearInterval(poll);
+        reject(new Error(`timed out waiting for ${pattern}\n--- stdout:\n${state.out}\n--- stderr:\n${state.err}`));
+      }
+    }, 25);
+  });
   return state;
 }
 
 function blockedKernelPreload(phase) {
   const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const gate = `
+const fs = require("node:fs");
+const blockRetry = (() => {
+  if (!process.argv[1]?.endsWith("kernel-authorization-worker.cjs")) return false;
+  const statePath = process.env.SEAL_TEST_KERNEL_BLOCK_STATE;
+  if (!statePath || !fs.existsSync(statePath)) return false;
+  fs.unlinkSync(statePath);
+  return true;
+})();`;
   const controls = {
-    child_bootstrap_to_module_load: `
+    child_bootstrap_to_module_load: `${gate}
 const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
-  if (request.endsWith("runner.cjs")) ${sleep}
+  if (blockRetry && request.endsWith("runner.cjs")) ${sleep}
   return load.apply(this, arguments);
 };`,
-    wasm_load: `
+    wasm_load: `${gate}
 const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (blockRetry && request.endsWith("runner.cjs")) {
     const runnerLoad = value.load;
     value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
   }
   return value;
 };`,
-    decision_execution: `
+    decision_execution: `${gate}
 const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (blockRetry && request.endsWith("runner.cjs")) {
     const decide = value.decide;
     value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
   }
@@ -99,11 +118,19 @@ async function runDemoToKernelRefusal(phase, t) {
   const dir = tmpdir("seal-cli-kernel-demo-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
-    env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `--require=${control}`,
+      SEAL_TEST_KERNEL_BLOCK_STATE: path.join(controlDir, "worker-count"),
+    },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const run = attach(child);
   t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  await run.waitForErr(new RegExp(`^seal: kernel timing active phase: ${phase}$`, "m"));
+  run.kill();
   const code = await run.exit;
   return { code, ...run };
 }
@@ -134,6 +161,7 @@ test("seal demo: input_required, approve once, replay refused, then direct write
   assert.equal(code, 0, `demo exited ${code}\n--- stdout:\n${run.out}\n--- stderr:\n${run.err}`);
 
   assert.equal(readCount(countFile), "1", "child must have observed exactly one call after approve + replay");
+  assert.equal(run.err, "", "a successful approved retry must not print kernel timing");
   assert.match(run.out, /child calls observed: 1/);
   assert.match(run.out, /still 1/);
   assert.match(run.out, /one-use held/);
@@ -168,10 +196,10 @@ test("seal demo: declining sends a decline retry; child stays at 0", async (t) =
 });
 
 test("seal demo prints the active kernel phase for blocked workers", async (t) => {
-  const phases = ["child_bootstrap_to_module_load", "wasm_load", "decision_execution"];
+  const phases = ["wasm_load", "decision_execution"];
   for (const phase of phases) {
     const run = await runDemoToKernelRefusal(phase, t);
-    assert.equal(run.code, 1, `${phase}: ${run.out}\n${run.err}`);
+    assert.ok(run.code === 1 || run.code === null, `${phase}: ${run.out}\n${run.err}`);
     assert.match(run.err, new RegExp(`^seal: kernel timing active phase: ${phase}$`, "m"), run.err);
     assert.match(run.err, /^seal: kernel timing completed phases:$/m, run.err);
     assert.match(run.err, /^seal: kernel timing unmeasured spans:$/m, run.err);

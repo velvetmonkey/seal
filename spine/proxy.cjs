@@ -212,6 +212,12 @@ function createProxy(options) {
       receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
       respond(frame.id, refusalResult(decision.refusal, decision.detail));
+      if (decision.timing) {
+        const error = new Error(decision.detail);
+        error.code = decision.refusal;
+        Object.assign(error, decision.timing);
+        throw error;
+      }
       return;
     }
     // The contract has already journaled the one-use consumption (fsynced)

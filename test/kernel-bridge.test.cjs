@@ -259,6 +259,7 @@ Module._load = function(request, parent, isMain) {
     "request_parse_to_wasm_load",
     "request_read_to_request_parse",
     "wasm_load",
+    "wasm_load_to_decision_execution",
   ]);
   assert.deepEqual(Object.keys(refused.timing.kernel_timing_ms).sort(), [
     "child_bootstrap_to_module_load",
@@ -270,6 +271,7 @@ Module._load = function(request, parent, isMain) {
     "request_parse_to_wasm_load",
     "request_read_to_request_parse",
     "wasm_load",
+    "wasm_load_to_decision_execution",
   ]);
   assert.equal(refused.timing.kernel_timing_active_phase, "decision_execution");
   assert.equal("decision_execution" in refused.timing.kernel_timing_ms, false);
@@ -363,6 +365,28 @@ process.stdout.write(JSON.stringify(result));`;
     assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED, `${phase}: ${JSON.stringify(refused)}`);
     assert.equal(refused.timing.kernel_timing_active_phase, phase, phase);
   }
+});
+
+test("an active wasm load publishes the gap from request parse to its start", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-active-gap-")), "block.cjs");
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  fs.writeFileSync(control, blockingPreload("wasm_load"));
+  const program = `
+const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
+const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
+const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
+process.stdout.write(JSON.stringify(result));`;
+  const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
+    env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+    timeout: 10000,
+  });
+  const refused = JSON.parse(stdout);
+  assert.equal(refused.timing.kernel_timing_active_phase, "wasm_load");
+  assert.equal(typeof refused.timing.kernel_timing_ms.request_parse_to_wasm_load, "number");
+  assert.ok(refused.timing.kernel_timing_ms.request_parse_to_wasm_load >= 0);
+  assert.match(refused.timing.kernel_timing_timestamps.child_process_hrtime_ns.request_parse_to_wasm_load.finished_ns, /^\d+$/);
 });
 
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {

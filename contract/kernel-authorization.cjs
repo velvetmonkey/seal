@@ -90,7 +90,7 @@ function workerTiming(stderr, { requireAll } = { requireAll: true }) {
   return { phases, starts, activePhase: active[0] || NO_ACTIVE_PHASE };
 }
 
-function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, activePhase }) {
+function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, childStarts, activePhase }) {
   const parentPhases = {
     parent_request_serialization: measuredPhase(
       "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
@@ -103,10 +103,11 @@ function timingPublication({ requestSerializationStarted, requestSerializationFi
   const childGaps = Object.fromEntries(CHILD_GAP_NAMES.flatMap(([finished, started, name]) => {
     const left = childPhases[finished];
     const right = childPhases[started];
-    if (!left || !right) return [];
+    const rightStarted = right?.started_ns || childStarts[started];
+    if (!left || !rightStarted) return [];
     return [[name, {
-      timestamps: { started_ns: left.finished_ns, finished_ns: right.started_ns },
-      milliseconds: Number(BigInt(right.started_ns) - BigInt(left.finished_ns)) / 1e6,
+      timestamps: { started_ns: left.finished_ns, finished_ns: rightStarted },
+      milliseconds: Number(BigInt(rightStarted) - BigInt(left.finished_ns)) / 1e6,
     }]];
   }));
   const parentWorkerWait = measuredPhase(
@@ -210,6 +211,7 @@ function createKernelAuthorizationAdapter({
           parentSpawnInvoked,
           parentSpawnReturned,
           childPhases: childTiming.phases,
+          childStarts: childTiming.starts,
           activePhase: childTiming.activePhase,
         }));
         throw timeout;
