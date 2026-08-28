@@ -28,5 +28,3 @@ export const claims = [
   { file: "docs/reference/receipt-operations-v1/README.md", status: "CHECKED", text: "The vector covers READ, VALIDATE, REPLAY, the unsigned-signature boundary, and the currently unreachable VERIFY result.", reason: "The test executes the vector and asserts read=true, validate=true, replay=true, signature=false, and verify=false." },
   { file: "docs/reference/receipt-operations-v1/README.md", status: "DECLARED", text: "It does not cover a valid signature, authority-root or occurrence-witness formats, producer output, or proof that a downstream event occurred.", reason: "Absence of all future formats, producer output, and real-world occurrence cannot be exhaustively established by this single-vector runtime test; the page records the explicit scope limitation." },
 ];
-
-export const claimFiles = [...new Set(claims.map((claim) => claim.file))];
