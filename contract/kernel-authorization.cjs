@@ -51,8 +51,6 @@ const CHILD_GAP_NAMES = [
   ["decision_execution", "child_response_construction_and_serialization", "decision_execution_to_response_construction"],
 ];
 
-const NO_ACTIVE_PHASE = "child_died_before_first_instruction";
-
 function workerTiming(stderr, { requireAll } = { requireAll: true }) {
   const prefix = "SEAL_KERNEL_TIMING_PHASE ";
   const startPrefix = "SEAL_KERNEL_TIMING_PHASE_START ";
@@ -87,10 +85,10 @@ function workerTiming(stderr, { requireAll } = { requireAll: true }) {
   if (active.length > 1) {
     throw new KernelAuthorizationError("kernel_output_refused", "kernel worker published more than one active timing phase");
   }
-  return { phases, starts, activePhase: active[0] || NO_ACTIVE_PHASE };
+  return { phases, starts, activePhase: active[0] || null };
 }
 
-function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, childStarts, activePhase }) {
+function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, parentSpawnReturned, childPhases, childStarts, activePhase, deadlineMs }) {
   const parentPhases = {
     parent_request_serialization: measuredPhase(
       "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
@@ -121,13 +119,14 @@ function timingPublication({ requestSerializationStarted, requestSerializationFi
   if (Object.keys(childPhases).length) {
     unmeasured.child_last_completed_phase_to_parent_timeout_return = "UNMEASURED: the last completed child phase and the parent timeout return use process clocks with no shared epoch.";
   }
-  if (activePhase !== NO_ACTIVE_PHASE) {
+  if (activePhase) {
     unmeasured.child_active_phase_start_to_parent_timeout_return = "UNMEASURED: the active child phase start and the parent timeout return use process clocks with no shared epoch.";
   }
   if (activePhase === "decision_execution") {
     unmeasured.decision_execution_start_to_parent_timeout_return = "UNMEASURED: the decision execution start and the parent timeout return use process clocks with no shared epoch.";
   }
   return {
+    kernel_timing_deadline_ms: deadlineMs,
     kernel_timing_timestamps: {
       parent_process_hrtime_ns: {
         parent_request_serialization: parentPhases.parent_request_serialization.timestamps,
@@ -213,6 +212,7 @@ function createKernelAuthorizationAdapter({
           childPhases: childTiming.phases,
           childStarts: childTiming.starts,
           activePhase: childTiming.activePhase,
+          deadlineMs: workerTimeoutMs,
         }));
         throw timeout;
       }

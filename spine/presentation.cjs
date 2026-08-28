@@ -3,9 +3,17 @@
 function printKernelTiming(error, writeLine = (line) => console.error(line)) {
   if (!error || typeof error !== "object" || !("kernel_timing_active_phase" in error)) return;
   const activePhase = error.kernel_timing_active_phase;
-  writeLine(`seal: kernel timing active phase: ${activePhase}`);
-  if (activePhase === "child_died_before_first_instruction") {
-    writeLine("seal: kernel worker died before its first instruction.");
+  if (activePhase) {
+    writeLine(`seal: kernel timing active phase: ${activePhase}`);
+  } else if (Number.isFinite(error.kernel_timing_deadline_ms)) {
+    const completed = error.kernel_timing_ms && typeof error.kernel_timing_ms === "object"
+      ? Object.keys(error.kernel_timing_ms).some((name) => name.startsWith("child_"))
+      : false;
+    if (completed) {
+      writeLine(`seal: kernel worker did not answer within its ${error.kernel_timing_deadline_ms} ms deadline.`);
+    } else {
+      writeLine(`seal: kernel worker did not publish a child timing phase within its ${error.kernel_timing_deadline_ms} ms deadline.`);
+    }
   }
   if (error.kernel_timing_ms && typeof error.kernel_timing_ms === "object") {
     writeLine("seal: kernel timing completed phases:");
