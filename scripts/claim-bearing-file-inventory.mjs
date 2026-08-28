@@ -13,7 +13,7 @@ const MANIFEST = "scripts/claim-bearing-files.json";
 const MANDATORY_DOC_FILES = ["README.md", "docs/guide/knowing-it-worked.md", "docs/reproduce.md"];
 const MANDATORY_BINDINGS = "scripts/mandatory-doc-claim-bindings.json";
 const REQUIRED_MANDATORY_CLAIMS = {
-  "README.md": "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.",
+  "README.md": "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.",
   "docs/guide/knowing-it-worked.md": "Seal makes the approved call and the executed call the same call: same tool,",
   "docs/reproduce.md": "`result` is `artifact-kernel-match`, `artifact-kernel-mismatch`, or `refused`.",
 };

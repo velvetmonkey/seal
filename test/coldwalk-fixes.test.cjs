@@ -17,7 +17,7 @@ function runSeal(args) {
 }
 
 test("the Protect and Remove sections identify Claude Code's retained home files", () => {
-  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const readme = fs.readFileSync(path.join(ROOT, "docs", "guide", "choosing-what-to-protect.md"), "utf8");
   const protection = fs.readFileSync(path.join(ROOT, "spine", "protection.cjs"), "utf8");
   const prose = readme.replace(/\s+/g, " ");
   const retainedFiles = "Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/`. ";
@@ -27,24 +27,24 @@ test("the Protect and Remove sections identify Claude Code's retained home files
   assert.match(protection, /spawnSync\("claude", args/);
   assert.match(protection, /"mcp", "add", "--scope", "local", serverName/);
   assert.match(protection, /"mcp", "remove", "--scope", "local", serverName/);
-  assert.ok(prose.includes(retainedFiles + noSealWrite + "."), "README must state that Seal invokes Claude Code but writes neither retained file");
-  assert.ok(prose.includes(removal), "README must state that Unprotect leaves Claude Code's retained files in place");
+  assert.ok(prose.includes(retainedFiles + noSealWrite + "."), "protection guide must state that Seal invokes Claude Code but writes neither retained file");
+  assert.ok(prose.includes(removal), "protection guide must state that Unprotect leaves Claude Code's retained files in place");
 });
 
 test("the Protect section requires Claude Code and provides its availability check", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const publishedVersion = readme.match(/^SEAL_VERSION=(v[^\s]+)$/m)?.[1];
-  const protect = readme.slice(readme.indexOf("## Protect something real"), readme.indexOf("## Remove it"));
+  const protect = readme.slice(readme.indexOf("## Protect a real tool set"), readme.indexOf("## Remove it"));
 
-  assert.ok(protect.includes("First check that Claude Code is available:\n\n```bash\nclaude --version\n```"), "Protect must show the exact Claude Code availability command");
+  assert.match(protect, /```bash[\s\S]*?claude --version[\s\S]*?```/, "Protect must show the exact Claude Code availability command");
   assert.ok(publishedVersion, "README must name its published release");
-  assert.ok(protect.includes(`With the published ${publishedVersion} CLI, protect one tool:`), "Protect must state its published-CLI scope");
+  assert.ok(protect.includes("seal protect db demo.mutate demo.erase"), "Protect must show the named-set command");
 });
 
 test("the demo section names the printed directory as the cleanup target", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const demo = readme.indexOf("## See it work");
-  const protect = readme.indexOf("## Protect something real");
+  const demo = readme.indexOf("## Try Seal in two minutes");
+  const protect = readme.indexOf("## Protect a real tool set");
   const cleanupReminder = "When you are finished, remove the directory printed as `Demo directory: /absolute/path`.";
 
   assert.ok(demo >= 0, "README must contain the demo beat");

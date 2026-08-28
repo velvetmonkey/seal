@@ -222,7 +222,7 @@ function releaseSentence(manifest, manifestPublished) {
   return `${observable} Its \`release-manifest.json\` uses schema \`${manifest.schema}\`.`;
 }
 
-function readmeRegions({ manifest, manifestPublished }) {
+function legacyReadmeRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
   return [
     [
@@ -296,6 +296,40 @@ function readmeRegions({ manifest, manifestPublished }) {
       END,
     ].join("\n"),
   ];
+}
+
+function readmeRegions({ manifest }) {
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
+  const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
+    `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the`,
+    `> published \`${manifest.tag}\`, which carries the previous receipt format and Linux-only Protect support.`,
+    "",
+  ];
+  return [[
+    SENTINEL,
+    ...divergence,
+    "```bash",
+    `SEAL_VERSION=${manifest.tag}`,
+    `artifact_name=${JSON.stringify(manifest.artifact.name)}`,
+    `artifact_sha256=${JSON.stringify(manifest.artifact.sha256)}`,
+    `artifact_bytes=${manifest.artifact.bytes}`,
+    `sums_name=${JSON.stringify(manifest.checksums.name)}`,
+    `sums_sha256=${JSON.stringify(manifest.checksums.sha256)}`,
+    `curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/${manifest.checksums.name}"`,
+    'curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"',
+    'if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk \'{print $1}\')"; else sums_actual="$(sha256sum "$sums_name" | awk \'{print $1}\')"; fi',
+    'test "$sums_actual" = "$sums_sha256"',
+    'read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" \'$3 == name\' "$sums_name")',
+    'test "$expected_name" = "$artifact_name" && test "$expected_digest" = "$artifact_sha256" && test "$expected_bytes" = "$artifact_bytes"',
+    'if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk \'{print $1}\')"; else actual_digest="$(sha256sum "$artifact_name" | awk \'{print $1}\')"; fi',
+    'test "$actual_digest" = "$artifact_sha256" && test "$(wc -c < "$artifact_name" | tr -d \' \')" = "$artifact_bytes"',
+    'chmod +x "$expected_name"',
+    './"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local',
+    'export PATH="$HOME/.local/bin:$PATH"',
+    "```",
+    END,
+  ].join("\n")];
 }
 
 function installRegions({ manifest, manifestPublished }) {
@@ -522,9 +556,25 @@ function checkPublishedClaims(document, facts) {
   return document;
 }
 
+function checkReadmePublishedClaims(facts) {
+  const document = generatedClaims("README.md", 1);
+  const { manifest } = facts;
+  for (const expected of [
+    `SEAL_VERSION=${manifest.tag}`,
+    `artifact_name=${JSON.stringify(manifest.artifact.name)}`,
+    `artifact_sha256=${JSON.stringify(manifest.artifact.sha256)}`,
+    `artifact_bytes=${manifest.artifact.bytes}`,
+    `sums_name=${JSON.stringify(manifest.checksums.name)}`,
+    `sums_sha256=${JSON.stringify(manifest.checksums.sha256)}`,
+  ]) {
+    if (document.text.split(expected).length - 1 !== 1) document.failures.push(`published install fact is absent or duplicated: ${expected}`);
+  }
+  return document;
+}
+
 function verifyDocsAgainstRelease(facts) {
   const documents = [
-    checkPublishedClaims(generatedClaims("README.md", 4), facts),
+    checkReadmePublishedClaims(facts),
     checkPublishedClaims(generatedClaims("docs/start/install.md", 2), facts),
   ];
   const failed = documents.filter((document) => document.failures.length);

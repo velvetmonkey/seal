@@ -49,7 +49,7 @@ if (process.argv[2] === "--probe") {
 
 test("demo uses a fresh ephemeral signing key for each run", () => {
   probe(ROOT);
-  assert.match(fs.readFileSync(path.join(ROOT, "README.md"), "utf8"), /The demo's key is generated fresh for that run\./);
+  assert.match(fs.readFileSync(path.join(ROOT, "docs", "start", "evaluator-walk.md"), "utf8"), /The demo's key is generated fresh for that run\./);
 
   const mutant = copyTree();
   const file = path.join(mutant, "spine", "demo.cjs");

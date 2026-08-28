@@ -13,7 +13,7 @@ const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
 test("README shows the terminal approval capture instead of the process graphic", () => {
   assert.doesNotMatch(readme, /assets\/seal-flow\.svg/);
-  assert.match(readme, /INPUT REQUIRED[\s\S]*?BLOCKED/);
+  assert.match(readme, /before approval: 0 calls\nafter approval:  1 call\nafter replay:    1 call - refused\noutside Seal:    effect succeeded, 0 Seal decisions/);
 });
 
 test("renderer reproduces the committed SVG bytes", () => {

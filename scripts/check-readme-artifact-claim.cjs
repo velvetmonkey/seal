@@ -29,13 +29,11 @@ for (const line of artifactLines) {
   }
 }
 
-const exact = artifactLines.filter((line) => line.trim() === expected);
-if (exact.length !== 1) failures.push(`expected exactly one tag-time artifact claim ${expected}; found ${exact.length}`);
-const explanation = `At the exact release tag, your build writes \`${expected}\` in your own \`dist/\` directory;`;
-if (!readme.includes(explanation)) failures.push(`README must explain that ${expected} appears in the reader's own dist/ directory`);
+const exact = artifactLines.filter((line) => line.includes(`artifact_name="${expected}"`));
+if (exact.length !== 1) failures.push(`expected exactly one published artifact assignment ${expected}; found ${exact.length}`);
 
 if (failures.length) {
   for (const failure of failures) console.error(`FAIL  ${failure}`);
   process.exit(1);
 }
-console.log(`PASS  README artifact claim is the tag-time filename: ${expected}`);
+console.log(`PASS  README artifact claim is the published filename: ${expected}`);

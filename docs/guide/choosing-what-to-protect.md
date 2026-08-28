@@ -94,6 +94,9 @@ The three user-visible changes are:
 3. **It printed the hash of your `.mcp.json`** so you can see it was not
    touched. `seal protect` never edits that file.
 
+Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/`.
+Seal invokes Claude Code but writes neither file.
+
 `PENDING RESTART` means the gate is installed but not yet standing: Claude
 Code only picks up the override when it starts. Restart Claude Code in this
 project and the state becomes `ACTIVE`. Until then, calls to the server go
@@ -145,5 +148,9 @@ project is back to plain Claude Code. If a Claude Code
 session is still running with the wrapper, `seal unprotect` refuses with
 `active_claude_session` until you stop it — taking the gate down mid-session
 is exactly the kind of silent change the gate exists to prevent.
+
+Unprotect asks Claude Code to remove only Seal's local override. It does not
+delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
+remain until you or Claude Code remove them.
 
 Next: [What is protected right now](what-is-protected-right-now.md).

@@ -104,6 +104,8 @@ test("the release manifest binds all platforms and publication rewrites every re
       "--tag-commit", "a".repeat(40),
     ], { cwd: ROOT, encoding: "utf8", env: { ...process.env, SEAL_RELEASE_DOCS_ROOT: docsRoot } });
     assert.equal(generated.status, 0, generated.stderr);
+    const readme = fs.readFileSync(path.join(docsRoot, "README.md"), "utf8");
+    assert.doesNotMatch(readme, /The current source is the unreleased/);
     const install = fs.readFileSync(path.join(docsRoot, "docs", "start", "install.md"), "utf8");
     assert.ok(install.includes(`The native macOS process-start witness helper is ${HELPER_PROVENANCE}.`));
     for (const artifact of manifest.artifacts) assert.match(install, new RegExp(artifact.name.replaceAll(".", "\\.")));

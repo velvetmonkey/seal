@@ -165,7 +165,7 @@ test("every emitted release identity derives from VERSION", () => {
   assert.ok(publishedVersion, "README must name the published release version");
   assert.doesNotThrow(() => fs.statSync(path.join(ROOT, ".git")));
   assert.equal(run("git", ["cat-file", "-e", `v${publishedVersion}^{commit}`], { cwd: ROOT }).code, 0, `published v${publishedVersion} tag must resolve`);
-  for (const file of ["README.md", "docs/guide/README.md"]) {
+  for (const file of ["docs/start/install.md", "docs/guide/README.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${publishedVersion.replaceAll(".", "\\.")} linux-x64`));
   }
