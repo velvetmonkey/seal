@@ -24,6 +24,10 @@ function sha256File(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function elapsedMs(started) {
+  return Number(process.hrtime.bigint() - started) / 1e6;
+}
+
 function expectedWasmSha(manifestPath) {
   let manifest;
   try {
@@ -61,6 +65,7 @@ function createKernelAuthorizationAdapter({
         );
       }
 
+      const workerStarted = process.hrtime.bigint();
       const child = spawnSync(process.execPath, [workerPath, kernelRoot], {
         input: JSON.stringify(input),
         encoding: "utf8",
@@ -90,7 +95,25 @@ function createKernelAuthorizationAdapter({
       if (answer.verdict !== "ALLOW" && answer.verdict !== "BLOCK") {
         throw new KernelAuthorizationError("kernel_output_refused", `kernel returned unexpected verdict ${JSON.stringify(answer.verdict)}`);
       }
-      return { ...answer, wasm_sha256: computed };
+      const reported = answer.kernel_timing_ms;
+      if (!reported || !["wasm_load", "decision_execution", "response"].every((key) => Number.isFinite(reported[key]) && reported[key] >= 0)) {
+        throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid timing output");
+      }
+      const totalMs = elapsedMs(workerStarted);
+      // The worker cannot observe Node process creation. The residual is the
+      // process creation/startup and request-delivery phase, separately from
+      // wasm loading, decision execution, and response construction.
+      const workerCreationMs = Math.max(0, totalMs - reported.wasm_load - reported.decision_execution - reported.response);
+      return {
+        ...answer,
+        wasm_sha256: computed,
+        kernel_timing_ms: {
+          worker_creation: workerCreationMs,
+          wasm_load: reported.wasm_load,
+          decision_execution: reported.decision_execution,
+          response: reported.response,
+        },
+      };
     },
   };
 }
