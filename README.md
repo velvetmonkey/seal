@@ -126,10 +126,9 @@ Seal`; the project `.mcp.json` remains byte-for-byte unchanged.
 Seal is a formally anchored authorization gate for selected MCP `tools/call`
 effects.
 
-The authorization rule has a Lean proof of its decision model; the shipped rule is TESTED.
-The proof artifact is not part of the downloaded product or the release build. The theorem covers
-the decision model. A tested correspondence ties the model to the shipped WASM. The
-`interpreted Lean vs shipped WASM` job runs that correspondence.
+Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED.
+Release incorporation: The theorem artifact does not yet ship and run in the released build graph.
+Semantic correspondence: The theorem concerns `SealV2.decide`. The shipped authorization path is `sealHostStep -> stepImpl -> Host.dispatch`. Their correspondence is tested, not proved. The `interpreted Lean vs shipped WASM` job runs the correspondence test.
 The proof-bearing source compiles reproducibly to the WASM the product uses,
 and a tested Node runtime enforces it with durable one-use state,
 configuration-drift refusal, concurrent-proxy fencing and signed receipts.
