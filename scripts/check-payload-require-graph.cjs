@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Check that every local CommonJS require in the shipped graph is shipped.
+// Check that every local JavaScript loader in the shipped graph is shipped.
 const fs = require("node:fs");
 const path = require("node:path");
 const { PAYLOAD_PATHS } = require("./build-dist.cjs");
@@ -8,6 +8,13 @@ const { PAYLOAD_PATHS } = require("./build-dist.cjs");
 const ROOT = path.join(__dirname, "..");
 const STRING = /^(?:"([^"]+)"|'([^']+)')$/;
 const JOIN = /^path\.join\(\s*(ROOT|path\.resolve\(__dirname,\s*"\.\."\)|kernelRoot)\s*,\s*([\s\S]+)\)$/;
+const FILE_URL = /^pathToFileURL\(\s*([\s\S]+)\s*\)\.href$/;
+const MODULE_URL = /^new URL\(\s*((?:"[^"]+")|(?:'[^']+'))\s*,\s*import\.meta\.url\s*\)$/;
+const NON_REQUIRE_RUNTIME_INPUTS = [
+  { source: "contract/kernel-authorization.cjs", loader: "spawnSync", target: "contract/kernel-authorization-worker.cjs" },
+  { source: "runtime/kernel/decision-runner.cjs", loader: "readFileSync", target: "runtime/kernel/wasm/seal.js" },
+  { source: "runtime/kernel/runner.cjs", loader: "readFileSync", target: "runtime/kernel/wasm/seal.js" },
+];
 
 function refuse(code, reason) {
   throw new Error(`REFUSE ${code}: ${reason}`);
@@ -36,9 +43,17 @@ function splitJoinArguments(text) {
   return parts;
 }
 
-function requireExpressions(text) {
+function resolveJoinBase(name, source) {
+  if (name === "kernelRoot") return path.join(ROOT, "runtime", "kernel");
+  if (name === "path.resolve(__dirname, \"..\")") return ROOT;
+  const text = fs.readFileSync(source, "utf8");
+  if (/\bconst\s+ROOT\s*=\s*path\.resolve\(\s*__dirname\s*\)\s*;/.test(text)) return path.dirname(source);
+  return ROOT;
+}
+
+function callExpressions(text, name) {
   const calls = [];
-  const startPattern = /\brequire\s*\(/g;
+  const startPattern = new RegExp(`\\b${name}\\s*\\(`, "g");
   let match;
   while ((match = startPattern.exec(text)) !== null) {
     let depth = 1;
@@ -56,11 +71,22 @@ function requireExpressions(text) {
         depth -= 1;
       }
     }
-    if (depth !== 0) refuse("payload_require_unclosed", `require at line ${lineNumber(text, match.index)} has no closing parenthesis`);
+    if (depth !== 0) refuse("payload_require_unclosed", `${name} at line ${lineNumber(text, match.index)} has no closing parenthesis`);
     calls.push({ expression: text.slice(startPattern.lastIndex, index - 1).trim(), index: match.index });
     startPattern.lastIndex = index;
   }
   return calls;
+}
+
+function staticImportSpecifiers(text) {
+  const imports = [];
+  const pattern = /\bimport\s+(?!\()(?:(?!;)[\s\S])*?\bfrom\s+("[^"]+"|'[^']+')/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const expression = match[1];
+    imports.push({ expression, index: match.index });
+  }
+  return imports;
 }
 
 function resolveLocalRequire(expression, source, index) {
@@ -72,7 +98,7 @@ function resolveLocalRequire(expression, source, index) {
   }
   const join = expression.match(JOIN);
   if (join) {
-    const base = join[1] === "kernelRoot" ? path.join(ROOT, "runtime", "kernel") : ROOT;
+    const base = resolveJoinBase(join[1], source);
     const segments = splitJoinArguments(join[2]);
     if (segments.length === 0 || segments.some((segment) => !STRING.test(segment))) {
       refuse("payload_require_dynamic", `${path.relative(ROOT, source)}:${lineNumber(fs.readFileSync(source, "utf8"), index)}: ${expression}`);
@@ -83,6 +109,15 @@ function resolveLocalRequire(expression, source, index) {
     refuse("payload_require_dynamic", `${path.relative(ROOT, source)}:${lineNumber(fs.readFileSync(source, "utf8"), index)}: ${expression}`);
   }
   refuse("payload_require_dynamic", `${path.relative(ROOT, source)}:${lineNumber(fs.readFileSync(source, "utf8"), index)}: ${expression}`);
+}
+
+function resolveLocalImport(expression, source, index, dynamic) {
+  if (!dynamic) return resolveLocalRequire(expression, source, index);
+  const fileUrl = expression.match(FILE_URL);
+  if (fileUrl) return resolveLocalRequire(fileUrl[1], source, index);
+  const moduleUrl = expression.match(MODULE_URL);
+  if (moduleUrl) return resolveLocalRequire(moduleUrl[1], source, index);
+  return resolveLocalRequire(expression, source, index);
 }
 
 function resolveFile(file) {
@@ -97,18 +132,32 @@ function checkPayloadRequireGraph(payloadPaths = PAYLOAD_PATHS) {
   const queue = [...shipped];
   const visited = new Set();
   const edges = [];
+  for (const input of NON_REQUIRE_RUNTIME_INPUTS) {
+    const source = resolveFile(path.resolve(ROOT, input.source));
+    const target = resolveFile(path.resolve(ROOT, input.target));
+    if (!shipped.has(source)) refuse("payload_require_unshipped", `${input.source} is a declared ${input.loader} source but is not shipped`);
+    if (!shipped.has(target)) refuse("payload_require_unshipped", `${input.source} ${input.loader} loads ${input.target}`);
+    edges.push(`${input.source} -> ${input.target} (${input.loader})`);
+  }
   while (queue.length > 0) {
     const source = queue.shift();
     if (visited.has(source) || (!/\.(?:cjs|js|mjs)$/.test(source) && path.basename(source) !== "seal")) continue;
     visited.add(source);
     const text = fs.readFileSync(source, "utf8");
-    for (const match of requireExpressions(text)) {
-      const target = resolveLocalRequire(match.expression, source, match.index);
+    const loaders = [
+      ...callExpressions(text, "require").map((match) => ({ ...match, kind: "require", dynamic: false })),
+      ...staticImportSpecifiers(text).map((match) => ({ ...match, kind: "import", dynamic: false })),
+      ...callExpressions(text, "import").map((match) => ({ ...match, kind: "import", dynamic: true })),
+    ].sort((left, right) => left.index - right.index);
+    for (const match of loaders) {
+      const target = match.kind === "require"
+        ? resolveLocalRequire(match.expression, source, match.index)
+        : resolveLocalImport(match.expression, source, match.index, match.dynamic);
       if (target === null) continue;
       const resolved = resolveFile(target);
       const relative = path.relative(ROOT, resolved);
-      if (!shipped.has(resolved)) refuse("payload_require_unshipped", `${path.relative(ROOT, source)} requires ${relative}`);
-      edges.push(`${path.relative(ROOT, source)} -> ${relative}`);
+      if (!shipped.has(resolved)) refuse("payload_require_unshipped", `${path.relative(ROOT, source)} ${match.kind}s ${relative}`);
+      edges.push(`${path.relative(ROOT, source)} -> ${relative} (${match.dynamic ? "import()" : match.kind})`);
       queue.push(resolved);
     }
   }
@@ -118,7 +167,7 @@ function checkPayloadRequireGraph(payloadPaths = PAYLOAD_PATHS) {
 if (require.main === module) {
   try {
     const result = checkPayloadRequireGraph();
-    process.stdout.write(`PASS payload require graph: ${result.visited.length} files, ${result.edges.length} local requires\n`);
+    process.stdout.write(`PASS payload require graph: ${result.visited.length} files, ${result.edges.length} local loaders\n`);
     for (const edge of result.edges) process.stdout.write(`${edge}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
@@ -126,4 +175,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { checkPayloadRequireGraph };
+module.exports = { NON_REQUIRE_RUNTIME_INPUTS, checkPayloadRequireGraph, resolveLocalImport };
