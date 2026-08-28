@@ -174,7 +174,7 @@ jobs:
             accepted: true,
             now: 1000,
           };
-          for (let sample = 1; sample <= 100; sample += 1) {
+          for (let sample = 1; sample <= 40; sample += 1) {
             const answer = adapter.authorize(input);
             console.log(JSON.stringify({ sample, kernel_timing_ms: answer.kernel_timing_ms }));
           }

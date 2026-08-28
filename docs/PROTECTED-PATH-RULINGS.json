@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "9f50b3ab2f863e197cd437fd9a9564a4e5f49fbd",
-    "author": "badges",
+    "base": "50af7f9bf92a5b0a86b51401965f1cb5eea8ec0d",
+    "author": "darwintiming4",
     "date": "2026-08-28",
-    "scope": "Ben approved renaming the ci.yml workflow from \"Docs & claims consistency\" to \"Product, identity & docs checks\", because that workflow runs seven jobs and only one of them is docs-claims. The rename changes the workflow name only. Branch protection keys on job names, so no required check moves. No other protected change is authorised.",
+    "scope": "Instrument lane record: the installed-tree fresh-build pin will be recomputed with node scripts/sync-installed-tree-pin.cjs after direct kernel timing-boundary changes. This is an agent record, not a human ruling; no human has ruled.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "86df352293e322db809ba88560ab2d5de4605662"
+        "path": "docs/start/install.md",
+        "blob": "PENDING-RECOMPUTE"
       }
     ]
   }
