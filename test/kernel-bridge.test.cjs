@@ -55,7 +55,7 @@ function acceptedRetry(contract, state, overrides = {}) {
   });
 }
 
-function proxyHarness(t) {
+function proxyHarness(t, env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-real-path-"));
   const store = path.join(dir, "approvals.journal");
   const receipts = path.join(dir, "receipts");
@@ -64,7 +64,7 @@ function proxyHarness(t) {
   const child = spawn(process.execPath, [
     SEAL, "__proxy", "--guard", TOOL, "--store", store, "--receipts", receipts,
     "--", process.execPath, SEAL, "__demo-server", data,
-  ], { stdio: ["pipe", "pipe", "pipe"] });
+  ], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { try { child.kill("SIGKILL"); } catch {} });
   let out = "", err = "";
   child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
@@ -108,6 +108,63 @@ test("real MCP retry uses the proved authorization kernel and forwards only its 
   assert.deepEqual(receipt.granted_capabilities.map(({ target }) => target), receipt.kernel_inputs.approvals);
   assert.equal(receipt.kernel_inputs.grants, "");
   assert.equal(receipt.kernel_inputs.forecasts, "");
+  run.child.stdin.end();
+});
+
+test("real MCP timeout after all child phases reports that worker exit was not observed", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-timeout-")), "delay-response.cjs");
+  fs.writeFileSync(control, `
+const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...rest) {
+  if (process.argv[1]?.endsWith("kernel-authorization-worker.cjs") && typeof chunk === "string" && chunk.includes('"verdict":"ALLOW"')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+  }
+  return write(chunk, ...rest);
+};
+`);
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 5000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
+  assert.doesNotMatch(refused.result.content[0].text, /null|undefined/);
+  run.child.stdin.end();
+});
+
+test("real MCP timeout while a child phase runs still names that phase", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-phase-")), "delay-decision.cjs");
+  fs.writeFileSync(control, `
+const Module = require("node:module");
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = originalLoad.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = value.decide;
+    value.decide = async function(...args) {
+      if (args[1]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+      return decide.apply(this, args);
+    };
+  }
+  return value;
+};
+`);
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.match(refused.result.content[0].text, /kernel deadline while running decision_execution/);
   run.child.stdin.end();
 });
 

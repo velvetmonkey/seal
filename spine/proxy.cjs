@@ -136,7 +136,11 @@ function createProxy(options) {
 
   function refusalResult(refusal, detail, timing) {
     const phase = timing?.kernel_timing_active_phase;
-    const phaseDetail = phase === undefined ? "" : ` (kernel deadline while running ${phase})`;
+    const phaseDetail = typeof phase === "string" && phase.length > 0
+      ? ` (kernel deadline while running ${phase})`
+      : timing === undefined
+        ? ""
+        : " (kernel worker exit was not observed after all measured phases completed)";
     return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}${phaseDetail}` }], isError: true };
   }
 
