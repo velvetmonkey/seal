@@ -211,7 +211,7 @@ test("a hung kernel worker reaches its product deadline and refuses closed", () 
   assert.ok(elapsed < 7000, `worker did not return promptly: ${elapsed} ms`);
 });
 
-test("an injected delayed decision publishes completed phases before the unchanged deadline refuses closed", (t) => {
+test("an injected delayed decision carries completed phases through the shipped retry refusal", (t) => {
   const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-delay-")), "delay-kernel-decision.cjs");
   fs.writeFileSync(control, `
 const Module = require("node:module");
@@ -235,36 +235,29 @@ Module._load = function(request, parent, isMain) {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     fs.rmSync(path.dirname(control), { recursive: true, force: true });
   });
-  let error;
-  try {
-    createKernelAuthorizationAdapter().authorize({
-      epoch: 1, issuedTool: TOOL, issuedArgs: ARGS, retryTool: TOOL, retryArgs: ARGS, accepted: true, now: 1000,
-    });
-  } catch (caught) {
-    error = caught;
-  }
-  assert.equal(error?.code, "kernel_execution_refused");
-  assert.match(error?.message || "", /exceeded its 5000 ms deadline/);
-  const published = Object.keys(error.kernel_timing_timestamps.child_process_hrtime_ns).sort();
+  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const refused = acceptedRetry(contract, fresh(contract));
+  assert.equal(refused.kind, "refuse");
+  assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
+  assert.match(refused.detail, /exceeded its 5000 ms deadline/);
+  assert.ok(refused.timing, "the returned refusal carries timing");
+  const published = Object.keys(refused.timing.kernel_timing_timestamps.child_process_hrtime_ns).sort();
   assert.deepEqual(published, [
     "child_bootstrap_to_module_load",
     "child_request_parse",
     "child_request_read",
     "wasm_load",
   ]);
-  assert.deepEqual(Object.keys(error.kernel_timing_ms).sort(), [
+  assert.deepEqual(Object.keys(refused.timing.kernel_timing_ms).sort(), [
     "child_bootstrap_to_module_load",
     "child_request_parse",
     "child_request_read",
     "parent_request_serialization",
     "wasm_load",
   ]);
-  assert.equal("decision_execution" in error.kernel_timing_ms, false);
-  assert.equal("child_response_construction_and_serialization" in error.kernel_timing_ms, false);
-  t.diagnostic(`timeout timing publication: ${JSON.stringify({
-    kernel_timing_timestamps: error.kernel_timing_timestamps,
-    kernel_timing_ms: error.kernel_timing_ms,
-  })}`);
+  assert.equal("decision_execution" in refused.timing.kernel_timing_ms, false);
+  assert.equal("child_response_construction_and_serialization" in refused.timing.kernel_timing_ms, false);
+  t.diagnostic(`timeout refusal received by caller: ${JSON.stringify(refused)}`);
 });
 
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {
