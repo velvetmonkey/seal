@@ -282,6 +282,7 @@ function createApprovalContract({
         const timing = error.kernel_timing_timestamps === undefined ? undefined : {
           kernel_timing_timestamps: error.kernel_timing_timestamps,
           kernel_timing_ms: error.kernel_timing_ms,
+          kernel_timing_active_phase: error.kernel_timing_active_phase,
           kernel_timing_unmeasured: error.kernel_timing_unmeasured,
         };
         return refuse(error.code, `${error.message}; Node authorization did not override the kernel refusal`, timing);

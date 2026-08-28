@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn, execFile, execFileSync } = require("node:child_process");
+const { promisify } = require("node:util");
 const test = require("node:test");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
@@ -19,6 +20,7 @@ const HANGING_WORKER = path.join(ROOT, "test-support", "hanging-kernel-worker.cj
 const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
+const execFileAsync = promisify(execFile);
 
 test("the production kernel has one runtime location and the retired fixture path is absent", () => {
   assert.equal(DEFAULT_KERNEL_ROOT, path.join(ROOT, "runtime", "kernel"));
@@ -140,12 +142,18 @@ test("kernel timing publishes only same-clock timestamp pairs and names cross-pr
   const expected = [
     "parent_request_serialization",
     "parent_response_deserialization",
+    "parent_kernel_worker_wait",
     "child_bootstrap_to_module_load",
     "child_request_read",
     "child_request_parse",
     "wasm_load",
     "decision_execution",
     "child_response_construction_and_serialization",
+    "module_load_to_request_read",
+    "request_read_to_request_parse",
+    "request_parse_to_wasm_load",
+    "wasm_load_to_decision_execution",
+    "decision_execution_to_response_construction",
   ];
   assert.deepEqual(Object.keys(answer.kernel_timing_ms).sort(), expected.sort());
   assert.equal("worker_creation" in answer.kernel_timing_ms, false);
@@ -160,6 +168,7 @@ test("kernel timing publishes only same-clock timestamp pairs and names cross-pr
   assert.match(answer.kernel_timing_unmeasured.parent_spawn_to_first_child_instruction, /^UNMEASURED:/);
   assert.match(answer.kernel_timing_unmeasured.request_pipe_delivery, /^UNMEASURED:/);
   assert.match(answer.kernel_timing_unmeasured.response_pipe_return, /^UNMEASURED:/);
+  assert.equal(answer.kernel_timing_active_phase, null);
 });
 
 test("Node state rows refuse without consulting the authorization kernel", () => {
@@ -246,18 +255,114 @@ Module._load = function(request, parent, isMain) {
     "child_bootstrap_to_module_load",
     "child_request_parse",
     "child_request_read",
+    "module_load_to_request_read",
+    "request_parse_to_wasm_load",
+    "request_read_to_request_parse",
     "wasm_load",
   ]);
   assert.deepEqual(Object.keys(refused.timing.kernel_timing_ms).sort(), [
     "child_bootstrap_to_module_load",
     "child_request_parse",
     "child_request_read",
+    "module_load_to_request_read",
+    "parent_kernel_worker_wait",
     "parent_request_serialization",
+    "request_parse_to_wasm_load",
+    "request_read_to_request_parse",
     "wasm_load",
   ]);
+  assert.equal(refused.timing.kernel_timing_active_phase, "decision_execution");
   assert.equal("decision_execution" in refused.timing.kernel_timing_ms, false);
   assert.equal("child_response_construction_and_serialization" in refused.timing.kernel_timing_ms, false);
   t.diagnostic(`timeout refusal received by caller: ${JSON.stringify(refused)}`);
+});
+
+function blockingPreload(phase) {
+  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const controls = {
+    child_bootstrap_to_module_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request.endsWith("runner.cjs")) ${sleep}
+  return load.apply(this, arguments);
+};`,
+    child_request_read: `
+const stdinOn = process.stdin.on;
+process.stdin.on = function(event, listener) {
+  if (event === "data") return stdinOn.call(this, event, (...args) => { ${sleep} return listener(...args); });
+  return stdinOn.call(this, event, listener);
+};`,
+    child_request_parse: `
+const parse = JSON.parse;
+JSON.parse = function(text, ...rest) {
+  if (typeof text === "string" && text.startsWith('{"epoch":')) ${sleep}
+  return parse.call(this, text, ...rest);
+};`,
+    wasm_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const runnerLoad = value.load;
+    value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
+  }
+  return value;
+};`,
+    decision_execution: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = value.decide;
+    value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
+  }
+  return value;
+};`,
+    child_response_construction_and_serialization: `
+const stringify = JSON.stringify;
+JSON.stringify = function(value, ...rest) {
+  if (value && value.verdict && value.receipt_record) ${sleep}
+  return stringify.call(this, value, ...rest);
+};`,
+  };
+  return controls[phase];
+}
+
+test("each blocked worker phase names itself in the timeout refusal", async (t) => {
+  const phases = [
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ];
+  const controls = [];
+  t.after(() => controls.forEach((control) => fs.rmSync(path.dirname(control), { recursive: true, force: true })));
+  const results = await Promise.all(phases.map(async (phase) => {
+    const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-phase-")), "block.cjs");
+    controls.push(control);
+    fs.writeFileSync(control, blockingPreload(phase));
+    const program = `
+const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
+const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
+const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
+process.stdout.write(JSON.stringify(result));`;
+    const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
+      env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+      timeout: 10000,
+    });
+    return [phase, JSON.parse(stdout)];
+  }));
+  for (const [phase, refused] of results) {
+    assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED, `${phase}: ${JSON.stringify(refused)}`);
+    assert.equal(refused.timing.kernel_timing_active_phase, phase, phase);
+  }
 });
 
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {
