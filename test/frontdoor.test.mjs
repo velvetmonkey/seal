@@ -255,3 +255,19 @@ test("README installer check executes the command without restoring the installe
   assert.equal(red.status, 1, red.stdout + red.stderr);
   assert.match(red.stderr, /must not carry an installed-tree transcript/);
 });
+
+test("scope tokens are not placed inside slash compounds", () => {
+  const languageScope = JSON.parse(readFileSync(resolve(ROOT, "scripts", "public-page-language-scope.json"), "utf8"));
+  const scopeTokenCompound = /\/\[(?:seal-host|policy-language|budgetcore|v1)\]|\[(?:seal-host|policy-language|budgetcore|v1)\]\//u;
+  const findMangles = (relative, text) => text.split("\n")
+    .flatMap((line, index) => (scopeTokenCompound.test(line) ? [`${relative}:${index + 1}:${line}`] : []));
+  const deliberate = findMangles("page.md", "The family claims proven [seal-host]/tested/assumed status.");
+  assert.deepEqual(deliberate, ["page.md:1:The family claims proven [seal-host]/tested/assumed status."]);
+  console.log(`RED scope-token compound control:\n${deliberate.join("\n")}`);
+
+  const population = languageScope.pages.flatMap((relative) => (
+    findMangles(relative, readFileSync(resolve(ROOT, relative), "utf8"))
+  ));
+  assert.deepEqual(population, []);
+  console.log(`PASS scope-token compound control: ${languageScope.pages.length} fixed pages`);
+});
