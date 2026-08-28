@@ -78,9 +78,10 @@ specification, not a shared implementation; vectors are the boundary.
 
 `READ` parses received bytes with duplicate and truncation checks. `VALIDATE`
 checks the v2 shape and commitments. `REPLAY` runs the recorded kernel inputs
-and compares the verdict; it does not require a signature. `VERIFY` additionally
-requires a caller-supplied public key and an occurrence witness. A receipt key
-is never trusted, and a signature alone never establishes occurrence.
+and compares the verdict; it does not require a signature. `VERIFY` accepts a
+caller-supplied public key, but refuses `authorityRoot` and `occurrenceWitness`
+because the v2 verifier cannot check those inputs. A receipt key is never
+trusted, and a signature alone never establishes occurrence.
 
 The verifier reports five independent rows:
 
@@ -97,6 +98,5 @@ REPLAY    available
 VERIFY    UNVERIFIED
 ```
 
-Positive `VERIFY` is unavailable until both an independently provisioned
-authority root and an occurrence witness are supplied. No receipt bytes can
-establish the latter.
+Positive `VERIFY` is unreachable in the v2 verifier: `verify` is always false,
+and no receipt bytes can establish authority or occurrence.

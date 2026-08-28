@@ -74,8 +74,12 @@ the Node CLI this repository ships.
    cross-check measures, and its shared blind spots.
 9. [reproduce.md](../reproduce.md) — compare the kernel installed from a published
    release artifact with a fresh build from that release's pinned source.
-10. [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md) — the Phase A v2 receipt schema,
-    canonicalisation rule, four verbs, and trust ceilings.
+10. [Receipt operations](../reference/receipt-operations.md) — the canonical
+    four-verb reference, checked output, vectors, and trust ceiling.
+11. [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md) — the Phase A v2 receipt schema
+    and canonicalisation rule.
+12. [Receipt operations vector set v1](../reference/receipt-operations-v1/README.md) —
+    the runnable fixture used by the reference conformance check.
 
 ## I want to operate Seal day to day
 

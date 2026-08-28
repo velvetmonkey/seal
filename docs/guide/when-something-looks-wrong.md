@@ -571,9 +571,9 @@ untrustworthy and reinstall from a verified artifact.
 
 ## From the receipt checker
 
-`checker/seal-receipt-v2.mjs` implements the four v2 verbs: READ, VALIDATE,
-REPLAY, and VERIFY. It was landed before the producer and does not import the
-producer's assembler or canonicaliser. See [the normative v2 contract](../SEAL-RECEIPT-V2.md)
+The canonical meaning of the four v2 verbs is in [Receipt operations](../reference/receipt-operations.md).
+The checker was landed before the producer and does not import the producer's
+assembler or canonicaliser. See [the normative v2 contract](../SEAL-RECEIPT-V2.md)
 for the full refusal boundary.
 
 ### `read_failed` and `duplicate_member`

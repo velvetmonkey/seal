@@ -217,8 +217,9 @@ Receipts are signed records, not evidence that an event happened. They use the
 `seal.receipt/v2` envelope.
 The independent checker replays the recorded inputs through the WASM kernel and
 reports structure, signature, kernel decision, authority, and occurrence separately.
-Positive `VERIFY` remains unavailable without an independent authority root and
-occurrence witness. [seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
+See the [canonical receipt operations reference](docs/reference/receipt-operations.md)
+for the four verbs and the explicit refusal of unchecked trust inputs.
+[seal-check](https://velvetmonkey.github.io/seal-check/) has no backend, accounts, or telemetry. The landing page has **zero `<button>` controls**.
 
 ## Links
 

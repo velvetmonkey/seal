@@ -132,10 +132,11 @@ This signed example is from `seal demo`:
 }
 ```
 
-Receipts are claims written by the gate, not proofs. The independently landed
-v2 checker reads the document, validates its commitments, and replays its exact
-inputs through the WASM kernel. Supply a public key you already trust if you
-also want the signature row checked.
+For the canonical meaning of receipt operations and their trust ceiling, see
+[Receipt operations](../reference/receipt-operations.md). The independently
+landed v2 checker reads the document, validates its commitments, and replays
+its exact inputs through the WASM kernel. Supply a public key you already trust
+if you also want the signature row checked.
 
 ```bash
 $ node checker/seal-receipt-v2.mjs receipt-…-0002-ALLOW.json --pubkey "$(cat receipt-signer.pub)"
