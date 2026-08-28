@@ -235,37 +235,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Rebuild the kernel from its tag-pinned Lean source
-        shell: bash
-        run: |
-          set -euo pipefail
-          pin="$(node - "$GITHUB_REF_NAME" <<'NODE'
-          const { SOURCE_PINS } = require('./scripts/seal-reproduce.cjs');
-          const pin = SOURCE_PINS[process.argv[2]];
-          if (!pin) process.exit(1);
-          process.stdout.write(`${pin.repository} ${pin.commit}`);
-          NODE
-          )" || { echo "REFUSE published_kernel: no pinned fresh-Lean recipe for $GITHUB_REF_NAME" >&2; exit 1; }
-          read -r repository commit <<<"$pin"
-          git clone --depth 1 "$repository" "$RUNNER_TEMP/pinned-source"
-          git -C "$RUNNER_TEMP/pinned-source" fetch --depth 1 origin "$commit"
-          git -C "$RUNNER_TEMP/pinned-source" checkout --detach FETCH_HEAD
-          test "$(git -C "$RUNNER_TEMP/pinned-source" rev-parse HEAD)" = "$commit"
-          cd "$RUNNER_TEMP/pinned-source"
-          wasm_dir=wasm-spike
-          scripts_dir=scripts
-          mcp_dir=.lake/packages/mcp-seal
-          bash "$wasm_dir"/provision_toolchain.sh
-          python3 "$scripts_dir"/install_pinned_elan.py --mathlib-cache
-          if [[ ! -d "$mcp_dir" ]]; then /home/monkey/bin/leanbuild update; fi
-          bash "$mcp_dir"/c/build.sh
-          /home/monkey/bin/leanbuild build
-          cd "$wasm_dir"
-          for script in build_runtime_wasm.sh build_base.sh build_core.sh build_closure.sh; do bash "$script"; done
-          runner=build_wasm.sh
-          bash "$runner" strict
-          output_dir=build-core
-          kernel=seal.wasm
-          cp "$output_dir"/"$kernel" "$RUNNER_TEMP/rebuilt-seal.wasm"
+        run: node scripts/seal-reproduce.cjs build-pinned-kernel "$GITHUB_REF_NAME" --output "$RUNNER_TEMP/rebuilt-seal.wasm"
       - uses: actions/upload-artifact@v4
         with:
           name: fresh-rebuilt-kernel

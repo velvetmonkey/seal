@@ -7,7 +7,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
 const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
@@ -191,7 +191,40 @@ test("a Darwin platform question refuses before download and names the uncovered
 test("Lean launcher defaults to portable lake and accepts the serialization override", () => {
   assert.equal(leanLauncher({}), "lake");
   assert.equal(leanLauncher({ [LEAN_LAUNCHER_ENV]: "/opt/serialized lake" }), "/opt/serialized lake");
+  assert.equal(leanLauncher({ [LEAN_LAUNCHER_ENV]: "" }), "lake");
   assert.match(leanLauncherMissingMessage("lake"), /Install elan/);
   assert.match(leanLauncherMissingMessage("lake"), /ensure its lake executable is on PATH/);
   assert.match(leanLauncherMissingMessage("lake"), new RegExp(LEAN_LAUNCHER_ENV));
+});
+
+test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
+  const outputDirectory = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
+  t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
+  const output = path.join(outputDirectory, "rebuilt-seal.wasm");
+  let observedTag;
+  let observedWork;
+  const outcome = executeBuildPinned([TAG, "--output", output], {
+    buildPinnedKernel(tag, work) {
+      observedTag = tag;
+      observedWork = work;
+      const rebuilt = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+      fs.mkdirSync(path.dirname(rebuilt), { recursive: true });
+      fs.writeFileSync(rebuilt, PUBLISHED_KERNEL);
+      return rebuilt;
+    },
+  });
+  assert.equal(outcome.exitCode, 0);
+  assert.equal(observedTag, TAG);
+  assert.equal(fs.existsSync(observedWork), false);
+  assert.deepEqual(fs.readFileSync(output), PUBLISHED_KERNEL);
+});
+
+test("rebuild-only entry point refuses an unpinned tag before building", () => {
+  let builds = 0;
+  const outcome = executeBuildPinned(["not-a-tag", "--output", "unused.wasm"], {
+    buildPinnedKernel() { builds += 1; },
+  });
+  assert.equal(outcome.exitCode, 1);
+  assert.match(outcome.error, /release tag is invalid/);
+  assert.equal(builds, 0);
 });

@@ -102,6 +102,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Refuse development-box paths in workflows
+        run: node scripts/check-workflow-host-paths.cjs
       # This is the enforced collision brake. It runs in the required check
       # itself, so no upstream result can turn a collision into a skipped pass.
       - name: Require one released version to identify one commit

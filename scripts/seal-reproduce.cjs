@@ -88,6 +88,31 @@ function parseArguments(argv) {
   return { tag, platform, requestedAuthority, authorityName };
 }
 
+function parseBuildPinnedArguments(argv) {
+  let tag;
+  let output;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--output") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) refuse("--output needs a value");
+      output = value;
+      index += 1;
+    } else if (token.startsWith("--")) {
+      refuse(`unknown option: ${token}`);
+    } else if (tag === undefined) {
+      tag = token;
+    } else {
+      refuse(`unexpected argument: ${token}`);
+    }
+  }
+  if (!tag || !output) {
+    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
+  }
+  if (!TAG_PATTERN.test(tag)) refuse(`release tag is invalid: ${tag}`);
+  return { tag, output: path.resolve(output) };
+}
+
 function validateRequest(parsed) {
   if (!TAG_PATTERN.test(parsed.tag)) refuse(`release tag is invalid: ${parsed.tag}`);
   if (parsed.platform !== "linux-x64") {
@@ -260,6 +285,29 @@ function buildPinnedKernel(tag, work) {
 
 const DEFAULT_DEPS = Object.freeze({ download, installPublished, buildPinnedKernel });
 
+function executeBuildPinned(argv, deps = DEFAULT_DEPS) {
+  let parsed;
+  let work;
+  try {
+    parsed = parseBuildPinnedArguments(argv);
+    work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-rebuild-pinned-"));
+    if (pathWithin(work, ROOT) || work === ROOT) refuse(`work directory must be outside the source checkout: ${work}`);
+    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
+    fs.copyFileSync(rebuiltKernel, parsed.output);
+    return { tag: parsed.tag, output: parsed.output, exitCode: 0, error: null };
+  } catch (error) {
+    const message = error instanceof Refusal ? error.message : `unexpected failure: ${error.message}`;
+    return { tag: parsed?.tag ?? null, output: parsed?.output ?? null, exitCode: 1, error: message };
+  } finally {
+    if (work) {
+      try {
+        makeTreeRemovable(work);
+        fs.rmSync(work, { recursive: true, force: true });
+      } catch {}
+    }
+  }
+}
+
 function execute(argv, deps = DEFAULT_DEPS) {
   let parsed;
   let work;
@@ -305,7 +353,15 @@ function execute(argv, deps = DEFAULT_DEPS) {
 }
 
 function main() {
-  const outcome = execute(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === "build-pinned-kernel") {
+    const outcome = executeBuildPinned(argv.slice(1));
+    if (outcome.error) process.stderr.write(`REFUSE seal-rebuild-pinned ${outcome.tag ?? "<no-tag>"}: ${outcome.error}\n`);
+    else process.stdout.write(`BUILT pinned kernel ${outcome.tag} at ${outcome.output}\n`);
+    process.exitCode = outcome.exitCode;
+    return;
+  }
+  const outcome = execute(argv);
   if (outcome.error) process.stderr.write(`REFUSE seal-reproduce ${outcome.report.tag ?? "<no-tag>"}: ${outcome.error}\n`);
   process.stdout.write(`${JSON.stringify(outcome.report, null, 2)}\n`);
   process.exitCode = outcome.exitCode;
@@ -321,6 +377,7 @@ module.exports = {
   TAG_PATTERN,
   download,
   execute,
+  executeBuildPinned,
   installPublished,
   leanLauncher,
   leanLauncherMissingMessage,
