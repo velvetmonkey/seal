@@ -94,12 +94,26 @@ function checkSignature(r, keyHex) {
 
 export async function verify(text, { publicKeyHex, authorityRoot, occurrenceWitness } = {}) {
   const r = read(text); validate(r);
-  const signed = checkSignature(r, publicKeyHex || authorityRoot);
+  // Phase A has no authority-chain or occurrence-witness format to validate.
+  // Refuse those inputs explicitly: their presence is not evidence. Until the
+  // formats and checks exist, positive VERIFY is deliberately unreachable.
+  if (authorityRoot !== undefined) fail("authority roots cannot be checked by the v2 verifier");
+  if (occurrenceWitness !== undefined) fail("occurrence witnesses cannot be checked by the v2 verifier");
+  const signed = checkSignature(r, publicKeyHex);
   await replay(r);
-  return { read: true, validate: true, replay: true, signature: signed, authority: Boolean(authorityRoot), occurrence: Boolean(occurrenceWitness), verify: signed && Boolean(authorityRoot) && Boolean(occurrenceWitness), receipt: r };
+  return {
+    read: true,
+    validate: true,
+    replay: true,
+    signature: signed,
+    authority: signed ? "UNPINNED / CALLER-SUPPLIED" : "NOT ESTABLISHED",
+    occurrence: "NOT ESTABLISHED",
+    verify: false,
+    receipt: r,
+  };
 }
 
-export function format(result) { return `Document structure       ${result.read ? "VALID" : "INVALID"}\nSignature and bindings   ${result.signature ? "VALID" : "UNVERIFIED"}\nKernel decision          ${result.replay ? "REPRODUCED" : "NOT REPRODUCED"}\nAuthority key            UNPINNED / CALLER-SUPPLIED\nEvent occurrence         ${result.occurrence ? "WITNESSED" : "NOT ESTABLISHED"}\n                         ------------------\nREAD      ${result.read ? "available" : "unavailable"}\nVALIDATE  ${result.validate ? "available" : "unavailable"}\nREPLAY    ${result.replay ? "available" : "unavailable"}\nVERIFY    ${result.verify ? "VERIFIED" : "UNVERIFIED"}`; }
+export function format(result) { return `Document structure       ${result.read ? "VALID" : "INVALID"}\nSignature and bindings   ${result.signature ? "VALID" : "UNVERIFIED"}\nKernel decision          ${result.replay ? "REPRODUCED" : "NOT REPRODUCED"}\nAuthority key            ${result.authority}\nEvent occurrence         ${result.occurrence}\n                         ------------------\nREAD      ${result.read ? "available" : "unavailable"}\nVALIDATE  ${result.validate ? "available" : "unavailable"}\nREPLAY    ${result.replay ? "available" : "unavailable"}\nVERIFY    ${result.verify ? "VERIFIED" : "UNVERIFIED"}`; }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
