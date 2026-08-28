@@ -7,7 +7,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
 const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
@@ -191,7 +191,67 @@ test("a Darwin platform question refuses before download and names the uncovered
 test("Lean launcher defaults to portable lake and accepts the serialization override", () => {
   assert.equal(leanLauncher({}), "lake");
   assert.equal(leanLauncher({ [LEAN_LAUNCHER_ENV]: "/opt/serialized lake" }), "/opt/serialized lake");
+  assert.equal(leanLauncher({ [LEAN_LAUNCHER_ENV]: "" }), "lake");
   assert.match(leanLauncherMissingMessage("lake"), /Install elan/);
   assert.match(leanLauncherMissingMessage("lake"), /ensure its lake executable is on PATH/);
   assert.match(leanLauncherMissingMessage("lake"), new RegExp(LEAN_LAUNCHER_ENV));
+});
+
+test("same-process rebuild resolves the executable declared by the pinned installer without GITHUB_PATH", (t) => {
+  const fixture = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
+  t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
+  const home = path.join(fixture, "home");
+  const emptyPath = path.join(fixture, "empty-path");
+  const installer = path.join(fixture, "install_pinned_elan.py");
+  const githubPath = path.join(fixture, "github-path");
+  const installedDirectory = path.join(home, ".fixture-elan", "from-installer");
+  const installedLauncher = path.join(installedDirectory, "lake");
+  fs.mkdirSync(installedDirectory, { recursive: true });
+  fs.mkdirSync(emptyPath);
+  fs.writeFileSync(installer, 'bin_directory = Path.home() / ".fixture-elan" / "from-installer"\n');
+  fs.writeFileSync(installedLauncher, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  fs.writeFileSync(githubPath, `${path.join(fixture, "decoy-bin")}\n`);
+
+  const environment = { HOME: home, PATH: emptyPath, GITHUB_PATH: githubPath };
+  assert.equal(leanLauncher(environment, installer), installedLauncher);
+  assert.equal(fs.readFileSync(githubPath, "utf8"), `${path.join(fixture, "decoy-bin")}\n`);
+  assert.equal(leanLauncher({ ...environment, [LEAN_LAUNCHER_ENV]: "/override/lake" }, installer), "/override/lake");
+});
+
+test("pinned Lean toolchain CI check exercises every post-installer child environment", () => {
+  const { checkPinnedLeanLauncher } = require("../scripts/check-pinned-lean-launcher.cjs");
+  const realRepositoryRoot = path.resolve(__dirname, "..");
+  assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);
+});
+
+test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
+  const outputDirectory = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
+  t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
+  const output = path.join(outputDirectory, "rebuilt-seal.wasm");
+  let observedTag;
+  let observedWork;
+  const outcome = executeBuildPinned([TAG, "--output", output], {
+    buildPinnedKernel(tag, work) {
+      observedTag = tag;
+      observedWork = work;
+      const rebuilt = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+      fs.mkdirSync(path.dirname(rebuilt), { recursive: true });
+      fs.writeFileSync(rebuilt, PUBLISHED_KERNEL);
+      return rebuilt;
+    },
+  });
+  assert.equal(outcome.exitCode, 0);
+  assert.equal(observedTag, TAG);
+  assert.equal(fs.existsSync(observedWork), false);
+  assert.deepEqual(fs.readFileSync(output), PUBLISHED_KERNEL);
+});
+
+test("rebuild-only entry point refuses an unpinned tag before building", () => {
+  let builds = 0;
+  const outcome = executeBuildPinned(["not-a-tag", "--output", "unused.wasm"], {
+    buildPinnedKernel() { builds += 1; },
+  });
+  assert.equal(outcome.exitCode, 1);
+  assert.match(outcome.error, /release tag is invalid/);
+  assert.equal(builds, 0);
 });

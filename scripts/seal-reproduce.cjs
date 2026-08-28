@@ -88,6 +88,31 @@ function parseArguments(argv) {
   return { tag, platform, requestedAuthority, authorityName };
 }
 
+function parseBuildPinnedArguments(argv) {
+  let tag;
+  let output;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--output") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) refuse("--output needs a value");
+      output = value;
+      index += 1;
+    } else if (token.startsWith("--")) {
+      refuse(`unknown option: ${token}`);
+    } else if (tag === undefined) {
+      tag = token;
+    } else {
+      refuse(`unexpected argument: ${token}`);
+    }
+  }
+  if (!tag || !output) {
+    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
+  }
+  if (!TAG_PATTERN.test(tag)) refuse(`release tag is invalid: ${tag}`);
+  return { tag, output: path.resolve(output) };
+}
+
 function validateRequest(parsed) {
   if (!TAG_PATTERN.test(parsed.tag)) refuse(`release tag is invalid: ${parsed.tag}`);
   if (parsed.platform !== "linux-x64") {
@@ -150,12 +175,58 @@ function child(command, args, options = {}) {
   }
 }
 
-function leanLauncher(environment = process.env) {
-  return environment[LEAN_LAUNCHER_ENV] || "lake";
+function installerBinDirectory(installerFile, environment) {
+  let source;
+  try {
+    source = fs.readFileSync(installerFile, "utf8");
+  } catch {
+    return null;
+  }
+  const declaration = source.match(/^\s*bin_directory\s*=\s*Path\.home\(\)(?<suffix>(?:\s*\/\s*(?:"[^"\r\n]+"|'[^'\r\n]+'))+)\s*$/mu);
+  if (!declaration) return null;
+  const components = [];
+  const componentPattern = /\s*\/\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)')/gmu;
+  let consumed = "";
+  for (const match of declaration.groups.suffix.matchAll(componentPattern)) {
+    consumed += match[0];
+    const component = match[1] ?? match[2];
+    if (component === "." || component === ".." || component.includes("/") || component.includes("\\")) return null;
+    components.push(component);
+  }
+  if (components.length === 0 || consumed.trim() !== declaration.groups.suffix.trim()) return null;
+  return path.join(environment.HOME || os.homedir(), ...components);
+}
+
+function leanLauncher(environment = process.env, installerFile) {
+  if (environment[LEAN_LAUNCHER_ENV]) return environment[LEAN_LAUNCHER_ENV];
+  if (installerFile) {
+    const binDirectory = installerBinDirectory(installerFile, environment);
+    const installed = binDirectory && path.join(binDirectory, "lake");
+    if (installed) {
+      try {
+        if (fs.statSync(installed).isFile()) {
+          fs.accessSync(installed, fs.constants.X_OK);
+          return installed;
+        }
+      } catch {}
+    }
+  }
+  return "lake";
 }
 
 function leanLauncherMissingMessage(launcher) {
   return `Lean launcher ${JSON.stringify(launcher)} was not found. Install elan from https://lean-lang.org/install/ and ensure its lake executable is on PATH, or set ${LEAN_LAUNCHER_ENV} to an executable name or path.`;
+}
+
+function environmentForLeanLauncher(environment, launcher) {
+  const launcherDirectory = path.dirname(launcher);
+  if (launcherDirectory === ".") return environment;
+  return {
+    ...environment,
+    PATH: environment.PATH
+      ? `${launcherDirectory}${path.delimiter}${environment.PATH}`
+      : launcherDirectory,
+  };
 }
 
 function download(url, destination) {
@@ -229,21 +300,31 @@ function clonePinnedSource(pin, destination) {
   if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
 }
 
-function buildPinnedKernel(tag, work) {
+function buildPinnedKernel(tag, work, operations = {}) {
+  const runChild = operations.child || child;
+  const cloneSource = operations.clonePinnedSource || clonePinnedSource;
+  const exists = operations.existsSync || fs.existsSync;
+  const environment = operations.environment || process.env;
   const pin = SOURCE_PINS[tag];
   if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
   const source = path.join(work, "pinned-source");
-  const launcher = leanLauncher();
-  const missingMessage = leanLauncherMissingMessage(launcher);
-  clonePinnedSource(pin, source);
+  cloneSource(pin, source);
 
-  child("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
-  child("python3", ["scripts/install_pinned_elan.py", "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
-  if (!fs.existsSync(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    child(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
+  runChild("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
+  const installer = path.join(source, "scripts", "install_pinned_elan.py");
+  runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
+  const launcher = leanLauncher(environment, installer);
+  const missingMessage = leanLauncherMissingMessage(launcher);
+  const postInstallerEnvironment = environmentForLeanLauncher(environment, launcher);
+  const postInstallerChild = (command, args, options = {}) => runChild(command, args, {
+    ...options,
+    env: postInstallerEnvironment,
+  });
+  if (!exists(path.join(source, ".lake", "packages", "mcp-seal"))) {
+    postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
   }
-  child("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
-  child(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
+  postInstallerChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
+  postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
     ["./build_base.sh", []],
@@ -251,14 +332,37 @@ function buildPinnedKernel(tag, work) {
     ["./build_closure.sh", []],
     ["./build_wasm.sh", ["strict"]],
   ]) {
-    child(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
+    postInstallerChild(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
   }
   const rebuilt = path.join(source, "wasm-spike", "build-core", "seal.wasm");
-  if (!fs.existsSync(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
+  if (!exists(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
   return rebuilt;
 }
 
 const DEFAULT_DEPS = Object.freeze({ download, installPublished, buildPinnedKernel });
+
+function executeBuildPinned(argv, deps = DEFAULT_DEPS) {
+  let parsed;
+  let work;
+  try {
+    parsed = parseBuildPinnedArguments(argv);
+    work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-rebuild-pinned-"));
+    if (pathWithin(work, ROOT) || work === ROOT) refuse(`work directory must be outside the source checkout: ${work}`);
+    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
+    fs.copyFileSync(rebuiltKernel, parsed.output);
+    return { tag: parsed.tag, output: parsed.output, exitCode: 0, error: null };
+  } catch (error) {
+    const message = error instanceof Refusal ? error.message : `unexpected failure: ${error.message}`;
+    return { tag: parsed?.tag ?? null, output: parsed?.output ?? null, exitCode: 1, error: message };
+  } finally {
+    if (work) {
+      try {
+        makeTreeRemovable(work);
+        fs.rmSync(work, { recursive: true, force: true });
+      } catch {}
+    }
+  }
+}
 
 function execute(argv, deps = DEFAULT_DEPS) {
   let parsed;
@@ -305,7 +409,15 @@ function execute(argv, deps = DEFAULT_DEPS) {
 }
 
 function main() {
-  const outcome = execute(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === "build-pinned-kernel") {
+    const outcome = executeBuildPinned(argv.slice(1));
+    if (outcome.error) process.stderr.write(`REFUSE seal-rebuild-pinned ${outcome.tag ?? "<no-tag>"}: ${outcome.error}\n`);
+    else process.stdout.write(`BUILT pinned kernel ${outcome.tag} at ${outcome.output}\n`);
+    process.exitCode = outcome.exitCode;
+    return;
+  }
+  const outcome = execute(argv);
   if (outcome.error) process.stderr.write(`REFUSE seal-reproduce ${outcome.report.tag ?? "<no-tag>"}: ${outcome.error}\n`);
   process.stdout.write(`${JSON.stringify(outcome.report, null, 2)}\n`);
   process.exitCode = outcome.exitCode;
@@ -319,8 +431,10 @@ module.exports = {
   SCHEMA,
   SOURCE_PINS,
   TAG_PATTERN,
+  buildPinnedKernel,
   download,
   execute,
+  executeBuildPinned,
   installPublished,
   leanLauncher,
   leanLauncherMissingMessage,
