@@ -389,8 +389,12 @@ function replacePublishedSurface(relative, replacements) {
   const original = fs.readFileSync(target, "utf8");
   let rewritten = original;
   for (const [pattern, replacement, label] of replacements) {
-    if (!pattern.test(rewritten)) refuse("published_surface_marker", `${relative}: ${label} marker is absent`);
-    rewritten = rewritten.replace(pattern, replacement);
+    const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+    const everyOccurrence = new RegExp(pattern.source, flags);
+    if (![...rewritten.matchAll(everyOccurrence)].length) {
+      refuse("published_surface_marker", `${relative}: ${label} marker is absent`);
+    }
+    rewritten = rewritten.replace(everyOccurrence, replacement);
   }
   return { relative, target, original, rewritten };
 }

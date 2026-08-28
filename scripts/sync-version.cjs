@@ -12,6 +12,15 @@ const version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) throw new Error(`VERSION is not exact SemVer: ${version}`);
 
+// A candidate is not releasable until its reader-facing record exists. This is
+// deliberately a presence check only: release notes are human-maintained,
+// immutable release records, so version synchronization must never create,
+// rename, move, or rewrite one.
+const releaseNotes = path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${version}.md`);
+if (!fs.existsSync(releaseNotes) || !fs.statSync(releaseNotes).isFile()) {
+  throw new Error(`current release notes are absent: docs/assurance/RELEASE-NOTES-v${version}.md`);
+}
+
 function replace(file, expression, replacement) {
   const target = path.join(ROOT, file);
   const before = fs.readFileSync(target, "utf8");

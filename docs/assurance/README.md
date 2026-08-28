@@ -21,6 +21,10 @@ the Node CLI this repository ships.
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
+   The record prepared with the final release tree is
+   [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md). Generated
+   current-release routes stay tied to published facts and are updated by the
+   post-publication documentation workflow.
 5. [assurance/distribution.md](distribution.md) — what the one installable artifact is,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.

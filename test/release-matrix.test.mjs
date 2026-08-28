@@ -21,7 +21,7 @@ function machO(cpuType) {
   return bytes;
 }
 
-test("the release manifest binds all three platform artifacts and native-helper provenance", () => {
+test("the release manifest binds all platforms and publication rewrites every release-note label and href", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-matrix-"));
   try {
     const artifacts = [];
@@ -86,6 +86,17 @@ test("the release manifest binds all three platform artifacts and native-helper 
     fs.mkdirSync(docsRoot, { recursive: true });
     fs.copyFileSync(path.join(ROOT, "README.md"), path.join(docsRoot, "README.md"));
     fs.cpSync(path.join(ROOT, "docs"), path.join(docsRoot, "docs"), { recursive: true });
+    const mismatchPath = path.join(docsRoot, "docs", "archive", "AUTHORIZATION-MESH.md");
+    const mismatch = fs.readFileSync(mismatchPath, "utf8").replace(
+      "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
+      "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+    );
+    assert.match(
+      mismatch,
+      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\(\.\.\/assurance\/RELEASE-NOTES-v0\.2\.0-rc\.3\.md\)/,
+      "fixture must reproduce the mismatched final-version label and rc.3 href",
+    );
+    fs.writeFileSync(mismatchPath, mismatch);
     const generated = spawnSync(process.execPath, [
       path.join(ROOT, "scripts", "generate-release-docs.mjs"),
       "--manifest", manifestPath,
@@ -96,6 +107,17 @@ test("the release manifest binds all three platform artifacts and native-helper 
     const install = fs.readFileSync(path.join(docsRoot, "docs", "start", "install.md"), "utf8");
     assert.ok(install.includes(`The native macOS process-start witness helper is ${HELPER_PROVENANCE}.`));
     for (const artifact of manifest.artifacts) assert.match(install, new RegExp(artifact.name.replaceAll(".", "\\.")));
+    const rewrittenMismatch = fs.readFileSync(mismatchPath, "utf8");
+    assert.match(
+      rewrittenMismatch,
+      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\(\.\.\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\)/,
+      "publication must retarget every release-note occurrence",
+    );
+    assert.doesNotMatch(
+      rewrittenMismatch,
+      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\([^)]*RELEASE-NOTES-v(?!0\.2\.0\.md)[^)]*\)/,
+      "a final-version label must not retain a prerelease href",
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

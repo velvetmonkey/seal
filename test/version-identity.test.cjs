@@ -81,6 +81,9 @@ function staleVersionMatches(root, version) {
   const oldLiteral = staleVersionLiteral(version);
   return readerFacingMarkdownFiles(root)
     .filter((file) => {
+      if (/^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(path.basename(file))) {
+        return false; // Immutable release records retain the version they describe.
+      }
       const humanMaintained = fs.readFileSync(file, "utf8").replace(
         /<!-- generated from published release; do not edit -->[\s\S]*?<!-- end generated release docs -->/g,
         "",
@@ -202,6 +205,11 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     "docs/archive/WHAT-SEAL-IS.md",
     "docs/archive/WHY-DIFFERENT.md",
   ];
+  const bumpedVersion = VERSION === "9.9.9" ? "9.9.10" : "9.9.9";
+  fs.writeFileSync(
+    path.join(scratch, "docs", "assurance", `RELEASE-NOTES-v${bumpedVersion}.md`),
+    `# Seal v${bumpedVersion} release notes\n`,
+  );
   const publishedBeforeCut = new Map(publishedDocs.map((file) => [file, fs.readFileSync(path.join(scratch, file), "utf8")]));
   const notesDirectory = path.join(scratch, "docs", "assurance");
   const historicalNotes = fs.readdirSync(notesDirectory).filter((file) => /^RELEASE-NOTES-.*\.md$/.test(file)).sort();
@@ -210,7 +218,6 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     ["docs/assurance/distribution.md", fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(/\/releases\/download\/v[^/]+\/seal-receipt-check\.mjs/)?.[0]],
     ["docs/assurance/index.html", fs.readFileSync(path.join(scratch, "docs/assurance/index.html"), "utf8").match(/RELEASE-NOTES-v[^\"]+\.md/)?.[0]],
   ]);
-  const bumpedVersion = VERSION === "9.9.9" ? "9.9.10" : "9.9.9";
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
@@ -242,6 +249,25 @@ test("sync leaves no old product version in human-maintained reader-facing prose
   );
 });
 
+test("sync refuses when the current VERSION release note is absent", () => {
+  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-notes-"));
+  fs.cpSync(ROOT, scratch, {
+    recursive: true,
+    filter(source) {
+      const relative = path.relative(ROOT, source);
+      const temporary = path.relative(ROOT, path.resolve(os.tmpdir()));
+      return ![".family", ".git", "dist", "kernel", temporary].includes(relative)
+        && !relative.startsWith(`${temporary}${path.sep}`)
+        && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
+    },
+  });
+  const currentNotes = path.join(scratch, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md`);
+  fs.rmSync(currentNotes);
+  const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
+  assert.notEqual(sync.code, 0, "sync must go red when the current release note is absent");
+  assert.match(sync.stderr, new RegExp(`current release notes are absent: docs/assurance/RELEASE-NOTES-v${VERSION.replaceAll(".", "\\.")}\\.md`));
+});
+
 test("stale-version scope preserves a historical release-note filename in a live document", () => {
   assertStaleMatches(
     "0.2.0",
@@ -250,6 +276,17 @@ test("stale-version scope preserves a historical release-note filename in a live
     },
     [],
     "release-note paths identify immutable history rather than candidate version state",
+  );
+});
+
+test("stale-version scope preserves an immutable release-note body", () => {
+  assertStaleMatches(
+    "0.2.0",
+    {
+      "docs/assurance/RELEASE-NOTES-v0.2.0.md": "# Seal v0.2.0 release notes\n\nSeal v0.2.0 remains this record's identity.\n",
+    },
+    [],
+    "an immutable release record must retain the version it describes",
   );
 });
 
