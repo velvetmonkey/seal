@@ -282,6 +282,19 @@ test("a head that drops a base ruling is refused and names the record", (t) => {
   assert.match(result.stderr, new RegExp(`${initial}.*base-author`));
 });
 
+test("the stale frontdoor3 replacement of the badges ruling is refused", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "badges")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord("55b9689e5c6d9905e6030196b304f0c8b64677f4", "frontdoor3")]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_DROPPED/);
+  assert.match(result.stderr, new RegExp(`${initial}.*badges`));
+});
+
 test("a head that appends a ruling and keeps the old rulings is accepted", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
