@@ -419,10 +419,10 @@ meaning parser-dependent, so the checker refuses before validation.
 
 ### `unexpected_member`
 
-The signature object contains a member that the checker does not allow. The
-checker refuses the receipt; the signature object must contain exactly
-`algorithm` and `value`. Remove the unexpected member and obtain a new valid
-receipt before you run the checker again.
+The signature object contains one or more members that the checker does not
+allow. The checker refuses the receipt and names every member it did not allow;
+the signature object must contain exactly `algorithm` and `value`. Remove every
+named member and obtain a new valid receipt before you run the checker again.
 
 ### `number_not_canonical`
 
