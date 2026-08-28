@@ -21,15 +21,24 @@ function emitPhase(name, started, finished) {
   })}\n`);
 }
 
+function emitPhaseStart(name, started) {
+  process.stderr.write(`SEAL_KERNEL_TIMING_PHASE_START ${JSON.stringify({
+    clock: "child_process_hrtime_ns",
+    name,
+    started_ns: started.toString(),
+  })}\n`);
+}
+
 async function main() {
-  const childFirstInstruction = timestamp();
   const kernelRoot = path.resolve(process.argv[2]);
   const moduleLoadStarted = timestamp();
+  emitPhaseStart("child_bootstrap_to_module_load", moduleLoadStarted);
   const runner = require(path.join(kernelRoot, "runner.cjs"));
   const cfg = await import(pathToFileURL(path.join(kernelRoot, "seal-config.js")).href);
   const moduleLoadFinished = timestamp();
-  emitPhase("child_bootstrap_to_module_load", childFirstInstruction, moduleLoadFinished);
+  emitPhase("child_bootstrap_to_module_load", moduleLoadStarted, moduleLoadFinished);
   const requestReadStarted = timestamp();
+  emitPhaseStart("child_request_read", requestReadStarted);
   const requestText = await new Promise((resolve, reject) => {
     let text = "";
     process.stdin.setEncoding("utf8");
@@ -40,10 +49,12 @@ async function main() {
   const requestReadFinished = timestamp();
   emitPhase("child_request_read", requestReadStarted, requestReadFinished);
   const requestParseStarted = timestamp();
+  emitPhaseStart("child_request_parse", requestParseStarted);
   const request = JSON.parse(requestText);
   const requestParseFinished = timestamp();
   emitPhase("child_request_parse", requestParseStarted, requestParseFinished);
   const wasmLoadStarted = timestamp();
+  emitPhaseStart("wasm_load", wasmLoadStarted);
   await runner.load();
   const wasmLoadFinished = timestamp();
   emitPhase("wasm_load", wasmLoadStarted, wasmLoadFinished);
@@ -68,6 +79,7 @@ async function main() {
   const grantedCapabilities = approvals.map((target) => ({ target }));
   const kernelInputs = { approvals, votes: "", grants: "", forecasts: "" };
   const decisionStarted = timestamp();
+  emitPhaseStart("decision_execution", decisionStarted);
   const result = await runner.decide(config, {
     tool: request.retryTool,
     args: request.retryArgs,
@@ -77,6 +89,7 @@ async function main() {
   const decisionFinished = timestamp();
   emitPhase("decision_execution", decisionStarted, decisionFinished);
   const responseStarted = timestamp();
+  emitPhaseStart("child_response_construction_and_serialization", responseStarted);
   const response = {
     verdict: result.verdict,
     raw: result.raw,
