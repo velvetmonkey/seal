@@ -233,6 +233,26 @@ function printFailureGuidance(command, error, context, writeLine = (line) => con
   const next = failureGuidance(command, error, context);
   if (next.length > 0) printGuidance({ next }, writeLine);
 }
+function printKernelTiming(error, writeLine = (line) => console.error(line)) {
+  if (!error || typeof error !== "object" || !("kernel_timing_active_phase" in error)) return;
+  const activePhase = error.kernel_timing_active_phase;
+  writeLine(`seal: kernel timing active phase: ${activePhase}`);
+  if (activePhase === "child_died_before_first_instruction") {
+    writeLine("seal: kernel worker died before its first instruction.");
+  }
+  if (error.kernel_timing_ms && typeof error.kernel_timing_ms === "object") {
+    writeLine("seal: kernel timing completed phases:");
+    for (const [phase, milliseconds] of Object.entries(error.kernel_timing_ms)) {
+      writeLine(`seal:   ${phase}: ${milliseconds} ms`);
+    }
+  }
+  if (error.kernel_timing_unmeasured && typeof error.kernel_timing_unmeasured === "object") {
+    writeLine("seal: kernel timing unmeasured spans:");
+    for (const [span, declaration] of Object.entries(error.kernel_timing_unmeasured)) {
+      writeLine(`seal:   ${span}: ${declaration}`);
+    }
+  }
+}
 async function fetchBytes(url) {
   let response;
   try {
@@ -427,6 +447,7 @@ main().catch((error) => {
   }
   const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";
   console.error(`seal: ${prefix}${error.message}`);
+  printKernelTiming(error);
   printFailureGuidance(process.argv[2], error);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
   process.exitCode = 1;
