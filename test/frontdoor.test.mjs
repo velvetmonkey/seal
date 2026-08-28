@@ -167,6 +167,10 @@ test("public proved-class claims fail and explicit denials pass", (t) => {
     "BudgetCore is proven, and Seal's shipped authorization rule is proved end to end.",
     "The V1 model is machine-checked, but this product's shipped decision path is proven.",
     "The seal-host policy is proved; Seal's shipped approval binding is machine-checked.",
+    "The proven seal-host kernel makes this product's shipped authorization path proven.",
+    "The seal-host kernel is proven: this product's shipped authorization path is proved.",
+    "The seal-host kernel is proven — this product's shipped authorization path is machine-checked.",
+    "The seal-host kernel, which is proven [seal-host], supports\nthis product's shipped authorization path, which is proved.",
   ]) {
     const red = runGuard(claim);
     assert.notEqual(red.status, 0, claim);
@@ -176,7 +180,8 @@ test("public proved-class claims fail and explicit denials pass", (t) => {
   for (const allowed of [
     "This Node CLI's authorization binding is TESTED, not PROVEN.",
     "The TCB is trusted, not proven.",
-    "The policy-language apparatus uses one typed seam, and the seam's enumeration is machine-checked.",
+    "The seal-host kernel is proven [seal-host].",
+    "The policy-language model is machine-checked [policy-language].",
   ]) {
     const green = runGuard(allowed);
     assert.equal(green.status, 0, green.stdout + green.stderr);

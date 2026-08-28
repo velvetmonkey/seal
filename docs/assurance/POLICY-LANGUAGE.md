@@ -60,7 +60,7 @@ artifact. Two escape routes exist and both fail the sizing test:
 
 1. **Trust the solver.** Reasonable for AWS. Incoherent here: this project's
    entire identity (`docs/archive/NORTH-STAR-V3.md` §1, §5) is that the decision function is
-   policy-language model is machine-checked and every claim carries its scope line. "The policy the
+   policy-language model is machine-checked [policy-language] and every claim carries its scope line. "The policy the
    human signed was compared against its predecessor by machinery outside the
    proof boundary" is exactly the asterisk the project exists to not have —
    attached to the one artifact whose meaning the human is attesting.
@@ -350,7 +350,7 @@ An `approve` verdict binds the human's approval to the SHA-256 digest of the
 **canonical request record bytes** — uniform, not rule-supplied. This is a
 deliberate simplification relative to the frozen V1 semantics, where guard
 targets are rule-supplied templates and two matching guards can disagree, which
-is why V1's ambiguity-fail-closed theorem is proven
+is why V1's ambiguity-fail-closed theorem is proven [v1]
 `Host.PolicyOverlap.conflicting_guards_ambiguous`. In boxpol two approving
 rules always bind the same digest, so the ambiguous case is unrepresentable
 rather than handled.
@@ -618,7 +618,7 @@ approval traffic is capped. Previous policy: deny-all.
    Chicago business hours. Every query goes through a human. It can
    never write. Cap the approval traffic.
 
- POLICY-LANGUAGE MODEL CLAIMS — each machine-checked against core by verified entailment.
+ POLICY-LANGUAGE MODEL CLAIMS — each machine-checked [policy-language] against core by verified entailment.
  Claims speak the MODEL's language (lens output), not ground truth;
  model-vs-world gaps live in UNKNOWN, below, on purpose.
 
@@ -846,7 +846,7 @@ and `construct` pages someone.
 Why an incident: the failure mode this system is most likely to die of
 (named independently by all four readers) is expressiveness creep
 reintroducing rubber-stamping wearing formal clothes — claims quietly migrate
-from policy-language model machine-checked to prose, the page keeps its layout and its checkmarks,
+from policy-language model machine-checked [policy-language] to prose, the page keeps its layout and its checkmarks,
 signers habituate, and two years later humans are rubber-stamping
 machine-authored policy *with Lean proof digests attached*, which is strictly
 worse than never building the apparatus, because the apparatus now projects
@@ -896,7 +896,7 @@ checkers verified** (everything displayed carries a certificate; you verify
 | 4 | Grid: partitions, Lemma B, Lemma A | Lean | ~300 + ~400 proof | **Verified** — the substrate |
 | 5 | Comparison + entailment + soundness (P4, P5); size-bound refusal | Lean | ~250 + ~400 proof | **Verified** — the sign-off primitive and the whole point of the route. Schedule risk lives here. Fallback if proofs drag: certificate style — unverified generator emits the cell trace, a small verified checker validates it; proofs shrink by half (Kimi) |
 | 6 | Load-gate: re-run entailment over (core, claims) at policy load; refuse on failure | Lean + host glue | ~150 | **Verified** checker, trusted-but-tested glue; composes with `SignedPolicy` verify-first gate |
-| 7 | Windowed budget automaton (`per hour`) + proofs | Lean, extends `BudgetCore` | ~100 + ~150 proof | **Verified**, else `per hour` claims stay PENDING forever; `per session` needs nothing — `BudgetCore` is done and proven in the policy-language model |
+| 7 | Windowed budget automaton (`per hour`) + proofs | Lean, extends `BudgetCore` | ~100 + ~150 proof | **Verified**, else `per hour` claims stay PENDING forever; `per session` needs nothing — `BudgetCore` is done and proven [budgetcore] in the policy-language model |
 | 8 | Pretty-syntax parser + printer | Rust | ~800 | Untrusted (authoring only; signature binds canonical form) |
 | 9 | Witness + boundary generators | Rust | ~500 | Untrusted — every output replays through the kernel with a receipt |
 | 10 | Teach-back generator + grader + transcript binding | Rust | ~800 | Generator untrusted; grader trusted-but-trivial (compares kernel receipts); balance rule is code, not judgment |
@@ -1090,7 +1090,7 @@ upstream of the decision logic and cannot condition it: a lens produces the
 attribute record (it changes what the *inputs* mean), and the analyzer's
 theorems quantify over all attribute records unconditionally — there is no
 annotation, directive, or stub that alters a verdict. The gap-closure is
-the policy-language apparatus is squeezed into one typed seam, and the seam's enumeration is machine-checked:
+the policy-language apparatus is squeezed into one typed seam, and the seam's enumeration is machine-checked [policy-language]:
 every attribute is `provides`-covered by exactly one lens or by the
 descriptor, and an uncovered attribute is a schema error (§2.1). That
 coverage rule is clause (ii) of §12.3 enforced at the parser.
@@ -1101,7 +1101,7 @@ out of the analyzed artifact entirely (constructor mode being the limit
 case, where the gap is deleted rather than relocated). The accurate
 restatement of the position, replacing the slogan: **the gap-closing
 apparatus may never condition the analysis; it may only produce inputs, its
-policy-language enumeration is machine-checked, and its behavior is counted, not trusted.**
+policy-language enumeration is machine-checked [policy-language], and its behavior is counted, not trusted.**
 
 ### 12.3 Q3 — one statement, three instances with unequal grip, and a fourth thing that must not wear the same clothes
 
@@ -1109,7 +1109,7 @@ The single formal statement exists. Stated so it can fail:
 
 > **Total accounting.** A claim artifact is admissible iff it is a triple
 > (D, C, R) where D is a denominator fixed *outside* the tool; C ⊆ D is where
-> the policy-language guarantee is machine-checked; R = D \ C is the residual; and
+> the policy-language guarantee is machine-checked [policy-language]; R = D \ C is the residual; and
 > (i) R is produced, or checked, by machinery at least as trusted as what
 >     checks C — computed, never authored;
 > (ii) C ∪ R = D holds by construction, not by the author's diligence;

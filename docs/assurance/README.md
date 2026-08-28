@@ -149,7 +149,7 @@ disposition is an open ruling.
 
 - [AUTHORIZATION-MESH.md](../archive/AUTHORIZATION-MESH.md) — fleet coordination
   theorems; no fleet exists in this repository.
-- [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md) — the seal-host family's proven/tested/assumed
+- [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md) — the seal-host family's proven [seal-host]/tested/assumed
   claims ladder.
 - [WHAT-SEAL-IS.md](../archive/WHAT-SEAL-IS.md) — the object-capability account, built
   around a signed approval token this CLI does not use.
