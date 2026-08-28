@@ -197,6 +197,32 @@ test("Lean launcher defaults to portable lake and accepts the serialization over
   assert.match(leanLauncherMissingMessage("lake"), new RegExp(LEAN_LAUNCHER_ENV));
 });
 
+test("same-process rebuild resolves the executable declared by the pinned installer without GITHUB_PATH", (t) => {
+  const fixture = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
+  t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
+  const home = path.join(fixture, "home");
+  const emptyPath = path.join(fixture, "empty-path");
+  const installer = path.join(fixture, "install_pinned_elan.py");
+  const githubPath = path.join(fixture, "github-path");
+  const installedDirectory = path.join(home, ".fixture-elan", "from-installer");
+  const installedLauncher = path.join(installedDirectory, "lake");
+  fs.mkdirSync(installedDirectory, { recursive: true });
+  fs.mkdirSync(emptyPath);
+  fs.writeFileSync(installer, 'bin_directory = Path.home() / ".fixture-elan" / "from-installer"\n');
+  fs.writeFileSync(installedLauncher, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  fs.writeFileSync(githubPath, `${path.join(fixture, "decoy-bin")}\n`);
+
+  const environment = { HOME: home, PATH: emptyPath, GITHUB_PATH: githubPath };
+  assert.equal(leanLauncher(environment, installer), installedLauncher);
+  assert.equal(fs.readFileSync(githubPath, "utf8"), `${path.join(fixture, "decoy-bin")}\n`);
+  assert.equal(leanLauncher({ ...environment, [LEAN_LAUNCHER_ENV]: "/override/lake" }, installer), "/override/lake");
+});
+
+test("pinned Lean launcher CI check exercises the same-process handoff", () => {
+  const { checkPinnedLeanLauncher } = require("../scripts/check-pinned-lean-launcher.cjs");
+  assert.deepEqual(checkPinnedLeanLauncher(), []);
+});
+
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
   const outputDirectory = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
   t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));

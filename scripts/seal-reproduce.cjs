@@ -175,8 +175,43 @@ function child(command, args, options = {}) {
   }
 }
 
-function leanLauncher(environment = process.env) {
-  return environment[LEAN_LAUNCHER_ENV] || "lake";
+function installerBinDirectory(installerFile, environment) {
+  let source;
+  try {
+    source = fs.readFileSync(installerFile, "utf8");
+  } catch {
+    return null;
+  }
+  const declaration = source.match(/^\s*bin_directory\s*=\s*Path\.home\(\)(?<suffix>(?:\s*\/\s*(?:"[^"\r\n]+"|'[^'\r\n]+'))+)\s*$/mu);
+  if (!declaration) return null;
+  const components = [];
+  const componentPattern = /\s*\/\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)')/gmu;
+  let consumed = "";
+  for (const match of declaration.groups.suffix.matchAll(componentPattern)) {
+    consumed += match[0];
+    const component = match[1] ?? match[2];
+    if (component === "." || component === ".." || component.includes("/") || component.includes("\\")) return null;
+    components.push(component);
+  }
+  if (components.length === 0 || consumed.trim() !== declaration.groups.suffix.trim()) return null;
+  return path.join(environment.HOME || os.homedir(), ...components);
+}
+
+function leanLauncher(environment = process.env, installerFile) {
+  if (environment[LEAN_LAUNCHER_ENV]) return environment[LEAN_LAUNCHER_ENV];
+  if (installerFile) {
+    const binDirectory = installerBinDirectory(installerFile, environment);
+    const installed = binDirectory && path.join(binDirectory, "lake");
+    if (installed) {
+      try {
+        if (fs.statSync(installed).isFile()) {
+          fs.accessSync(installed, fs.constants.X_OK);
+          return installed;
+        }
+      } catch {}
+    }
+  }
+  return "lake";
 }
 
 function leanLauncherMissingMessage(launcher) {
@@ -258,12 +293,13 @@ function buildPinnedKernel(tag, work) {
   const pin = SOURCE_PINS[tag];
   if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
   const source = path.join(work, "pinned-source");
-  const launcher = leanLauncher();
-  const missingMessage = leanLauncherMissingMessage(launcher);
   clonePinnedSource(pin, source);
 
   child("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
-  child("python3", ["scripts/install_pinned_elan.py", "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
+  const installer = path.join(source, "scripts", "install_pinned_elan.py");
+  child("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
+  const launcher = leanLauncher(process.env, installer);
+  const missingMessage = leanLauncherMissingMessage(launcher);
   if (!fs.existsSync(path.join(source, ".lake", "packages", "mcp-seal"))) {
     child(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
   }
