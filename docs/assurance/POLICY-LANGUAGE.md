@@ -1109,7 +1109,7 @@ The single formal statement exists. Stated so it can fail:
 
 > **Total accounting.** A claim artifact is admissible iff it is a triple
 > (D, C, R) where D is a denominator fixed *outside* the tool; C ⊆ D is where
-> the guarantee is machine-checked; R = D \ C is the residual; and
+> the policy-language guarantee is machine-checked; R = D \ C is the residual; and
 > (i) R is produced, or checked, by machinery at least as trusted as what
 >     checks C — computed, never authored;
 > (ii) C ∪ R = D holds by construction, not by the author's diligence;
