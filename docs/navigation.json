@@ -41,8 +41,13 @@
   ],
   "exceptions": [
     {
+      "path": "docs/guide/when-something-looks-wrong.md",
+      "reason": "digest-pinned, edit needs a human ruling",
+      "footer": []
+    },
+    {
       "path": "docs/guide/what-is-protected-right-now.md",
-      "reason": "The reviewed-guide digest pin forbids a footer change without a human ruling.",
+      "reason": "digest-pinned, edit needs a human ruling",
       "footer": [
         { "role": "Next", "label": "Knowing it worked", "target": "knowing-it-worked.md" }
       ]

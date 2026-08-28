@@ -18,6 +18,12 @@ function footer(text) {
   }));
 }
 
+function footerAtEnd(text, entries) {
+  if (entries.length === 0) return true;
+  const block = entries.map(({ role, label, target }) => `${role}: [${label}](${target}).`).join("\n");
+  return text.trimEnd().endsWith(block);
+}
+
 function markdownFiles(dir, prefix = "") {
   return readdirSync(resolve(dir, prefix), { withFileTypes: true }).flatMap((entry) => {
     const file = `${prefix}${prefix ? "/" : ""}${entry.name}`;
@@ -45,18 +51,26 @@ test("declared documentation navigation footers match the section chains", () =>
         const next = section.pages[index + 1];
         expected.push({ role: "Next", label: next.label, target: relativeLink(page.path, next.path) });
       }
-      assert.deepEqual(footer(readFileSync(resolve(ROOT, page.path), "utf8")), expected, page.path);
+      const text = readFileSync(resolve(ROOT, page.path), "utf8");
+      assert.deepEqual(footer(text), expected, page.path);
+      assert.equal(footerAtEnd(text, expected), true, `${page.path}: navigation footer is not at the end of the page`);
     }
   }
   for (const exception of navigation.exceptions) {
     assert.equal(declared.has(exception.path), false, `exception is also chained: ${exception.path}`);
     declared.add(exception.path);
     assert.equal(existsSync(resolve(ROOT, exception.path)), true, `navigation declares missing ${exception.path}`);
-    assert.deepEqual(footer(readFileSync(resolve(ROOT, exception.path), "utf8")), exception.footer, exception.path);
+    const text = readFileSync(resolve(ROOT, exception.path), "utf8");
+    assert.deepEqual(footer(text), exception.footer, exception.path);
+    assert.equal(footerAtEnd(text, exception.footer), true, `${exception.path}: navigation footer is not at the end of the page`);
   }
   for (const file of markdownFiles(resolve(ROOT, "docs"))) {
     const path = `docs/${file}`;
     if (path.startsWith("docs/archive/")) continue;
+    if (path.startsWith("docs/guide/")) {
+      assert.equal(declared.has(path), true, `${path}: undeclared page has no navigation footer`);
+      continue;
+    }
     if (!declared.has(path)) assert.deepEqual(footer(readFileSync(resolve(ROOT, path), "utf8")), [], `${path}: undeclared navigation footer`);
   }
 });
