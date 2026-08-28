@@ -128,7 +128,7 @@ This signed example is from `seal demo`:
   "verdict": "ALLOW",
   "reason": "every gating kernel allows",
   "replay": { "args_sha256": "...", "config_sha256": "..." },
-  "signature": { "algorithm": "ed25519", "key_id": "...", "value": "..." }
+  "signature": { "algorithm": "ed25519", "value": "..." }
 }
 ```
 
