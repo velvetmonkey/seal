@@ -47,7 +47,7 @@ test("README carries the eleven front-door sections in order", () => {
 
 test("docs/README contains only its heading and three-route table", () => {
   const routes = readFileSync(resolve(ROOT, "docs/README.md"), "utf8");
-  assert.doesNotThrow(() => checkDocsRouteTable(routes));
+  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md
   assert.throws(() => checkDocsRouteTable(`${DOCS_ROUTE_TABLE}\nStray paragraph.\n`), /must contain only/);
 });
 
