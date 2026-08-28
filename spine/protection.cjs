@@ -294,7 +294,7 @@ function readState(statePath) {
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
   if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state && state.schema)}, not ${STATE_SCHEMA}`);
+    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${STATE_SCHEMA}`);
   }
   if (state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
@@ -511,7 +511,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
       }
       if (phase === "initialize" && frame.id === 1) {
         if (frame.error || !frame.result || typeof frame.result !== "object") {
-          fail("protected_server_initialize_failed", `configured server refused or malformed initialize: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          fail("protected_server_initialize_failed", `configured server refused or malformed initialize: ${JSON.stringify(frame.error || frame.result || "no response details")}${detail()}`);
           return;
         }
         phase = "tools/list";
@@ -522,7 +522,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
       }
       if (phase === "tools/list" && frame.id === listId) {
         if (frame.error || !frame.result || !Array.isArray(frame.result.tools)) {
-          fail("protected_server_tools_list_failed", `configured server refused or malformed tools/list: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          fail("protected_server_tools_list_failed", `configured server refused or malformed tools/list: ${JSON.stringify(frame.error || frame.result || "no response details")}${detail()}`);
           return;
         }
         for (const tool of frame.result.tools) {

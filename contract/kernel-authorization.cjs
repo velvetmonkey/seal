@@ -255,7 +255,7 @@ function createKernelAuthorizationAdapter({
         throw new KernelAuthorizationError("kernel_output_refused", `kernel worker returned unreadable output: ${error.message}`);
       }
       if (answer.verdict !== "ALLOW" && answer.verdict !== "BLOCK") {
-        throw new KernelAuthorizationError("kernel_output_refused", `kernel returned unexpected verdict ${JSON.stringify(answer.verdict)}`);
+        throw new KernelAuthorizationError("kernel_output_refused", `kernel returned unexpected verdict ${JSON.stringify(answer.verdict ?? "absent")}`);
       }
       const responseDeserializationFinished = process.hrtime.bigint();
       const childTiming = workerTiming(child.stderr || "");
