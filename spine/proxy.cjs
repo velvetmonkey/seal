@@ -134,8 +134,10 @@ function createProxy(options) {
     onClientLine(JSON.stringify({ jsonrpc: "2.0", id, result }));
   }
 
-  function refusalResult(refusal, detail) {
-    return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}` }], isError: true };
+  function refusalResult(refusal, detail, timing) {
+    const phase = timing?.kernel_timing_active_phase;
+    const phaseDetail = phase === undefined ? "" : ` (kernel deadline while running ${phase})`;
+    return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}${phaseDetail}` }], isError: true };
   }
 
   function blockForward(frame, refusal, detail) {
@@ -175,7 +177,7 @@ function createProxy(options) {
       const decision = contract.begin({ tool, args });
       if (decision.kind === "refuse") {
         emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
-        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
         return;
       }
       emitReceipt("INPUT_REQUIRED", frame, {
@@ -197,7 +199,7 @@ function createProxy(options) {
     if (correlation === undefined) {
       if (decision.kind === "refuse") {
         emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
-        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
         return;
       }
       const detail = "no receipt correlation matches this continuation; retry refused before forwarding";
@@ -211,7 +213,7 @@ function createProxy(options) {
       const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
       receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      respond(frame.id, refusalResult(decision.refusal, decision.detail));
+      respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
       if (decision.timing) {
         const error = new Error(decision.detail);
         error.code = decision.refusal;
