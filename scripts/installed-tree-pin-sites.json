@@ -1,5 +1,5 @@
 [
-  { "file": "docs/guide/README.md", "line": 57, "column": 33, "kind": "store", "role": "published-asset", "movedFrom": "README.md", "factHome": "docs/start/install.md" },
+  { "file": "docs/guide/README.md", "line": 57, "column": 33, "kind": "store", "role": "published-asset" },
   { "file": "docs/guide/README.md", "line": 59, "column": 1, "kind": "tree", "role": "published-asset" },
   { "file": "docs/start/install.md", "line": 44, "column": 33, "kind": "store", "role": "published-asset" },
   { "file": "docs/start/install.md", "line": 46, "column": 1, "kind": "tree", "role": "published-asset" },

@@ -67,6 +67,9 @@ Undo:
 
 Exit code: `0`.
 
+When other tools are not approval-gated, `protect` reports their total,
+naming at most 20 and counting the rest.
+
 The same server cannot be extended by running `protect` again; the second
 command was refused:
 
