@@ -162,19 +162,25 @@ test("public proved-class claims fail and explicit denials pass", (t) => {
     "The decision rule is proved.",
     "The authorization rule is proven in Lean.",
     "The kernel is machine-checked.",
+    "The seal-host kernel is proven, and so is this product's shipped authorization path.",
+    "The policy-language model is machine-checked, and this product's shipped authorization path is proven.",
+    "BudgetCore is proven, and Seal's shipped authorization rule is proved end to end.",
+    "The V1 model is machine-checked, but this product's shipped decision path is proven.",
+    "The seal-host policy is proved; Seal's shipped approval binding is machine-checked.",
   ]) {
     const red = runGuard(claim);
     assert.notEqual(red.status, 0, claim);
     assert.match(red.stderr, /unscoped proved-class claim/);
-    console.log(`RED proved-class claim: ${claim}`);
+    console.log(`RED proved-class claim: ${claim}\nexit=${red.status}\nstdout=${red.stdout.trimEnd()}\nstderr=${red.stderr.trimEnd()}`);
   }
-  for (const denial of [
+  for (const allowed of [
     "This Node CLI's authorization binding is TESTED, not PROVEN.",
     "The TCB is trusted, not proven.",
+    "The policy-language apparatus uses one typed seam, and the seam's enumeration is machine-checked.",
   ]) {
-    const green = runGuard(denial);
+    const green = runGuard(allowed);
     assert.equal(green.status, 0, green.stdout + green.stderr);
-    console.log(`PASS proved-class denial: ${denial}`);
+    console.log(`PASS proved-class control: ${allowed}\nexit=${green.status}\nstdout=${green.stdout.trimEnd()}\nstderr=${green.stderr.trimEnd()}`);
   }
 });
 

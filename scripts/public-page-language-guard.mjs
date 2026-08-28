@@ -21,7 +21,9 @@ const BANNED = [
 const BARE_INDEPENDENCE = /(?<![\p{L}\p{N}_])(?:checker|verifier)\s+is\s+independent(?!\s+of\b)/giu;
 const PROVED_CLASS = /(?<![\p{L}\p{N}_])(?:proved|proven|machine[- ]checked)(?![\p{L}\p{N}_])/giu;
 const EXPLICIT_FAMILY_SUBJECT = /\b(?:seal-host|policy[- ]language|budgetcore|v1)\b/iu;
+const FAMILY_ANAPHORA = /^\s*the seam's enumeration\s+is\b/iu;
 const EXPLICIT_NEGATION = /\b(?:not|no|never|without)\s*$/iu;
+const CLAUSE_BOUNDARY = /(?:,\s*(?:and|but)\s+|;\s*|\s+and so is\s+|,\s*)/giu;
 
 function fail(message) {
   process.stderr.write(`FAIL public-page language guard: ${message}\n`);
@@ -79,6 +81,51 @@ function sentenceAt(text, position) {
   return text.slice(start, endMatch ? position + endMatch.index + 1 : text.length);
 }
 
+function clauseAt(text, position) {
+  const sentence = sentenceAt(text, position);
+  const sentenceStart = Math.max(text.lastIndexOf("\n", position), text.lastIndexOf(".", position), text.lastIndexOf("!", position), text.lastIndexOf("?", position)) + 1;
+  const relativePosition = position - sentenceStart;
+  let start = 0;
+  let end = sentence.length;
+  for (const boundary of sentence.matchAll(CLAUSE_BOUNDARY)) {
+    if (boundary.index < relativePosition) {
+      start = boundary.index + boundary[0].length;
+      continue;
+    }
+    end = boundary.index;
+    break;
+  }
+  return sentence.slice(start, end);
+}
+
+function previousClauseAt(text, position) {
+  const sentence = sentenceAt(text, position);
+  const sentenceStart = Math.max(text.lastIndexOf("\n", position), text.lastIndexOf(".", position), text.lastIndexOf("!", position), text.lastIndexOf("?", position)) + 1;
+  const relativePosition = position - sentenceStart;
+  let start = 0;
+  let previous = "";
+  for (const boundary of sentence.matchAll(CLAUSE_BOUNDARY)) {
+    if (boundary.index >= relativePosition) break;
+    previous = sentence.slice(start, boundary.index);
+    start = boundary.index + boundary[0].length;
+  }
+  return previous;
+}
+
+function hasExplicitFamilySubject(text, position) {
+  const clause = clauseAt(text, position);
+  const explicit = EXPLICIT_FAMILY_SUBJECT.test(clause);
+  const anaphoric = FAMILY_ANAPHORA.test(clause) && EXPLICIT_FAMILY_SUBJECT.test(previousClauseAt(text, position));
+  if (!explicit && !anaphoric) return false;
+  const sentence = sentenceAt(text, position);
+  const sentenceStart = Math.max(text.lastIndexOf("\n", position), text.lastIndexOf(".", position), text.lastIndexOf("!", position), text.lastIndexOf("?", position)) + 1;
+  const after = sentence.slice(position - sentenceStart);
+  for (const shared of after.matchAll(/(?:,\s*)?and so is\s+([^,;.!?]+)/giu)) {
+    if (!EXPLICIT_FAMILY_SUBJECT.test(shared[1])) return false;
+  }
+  return true;
+}
+
 let scope;
 try {
   scope = JSON.parse(readFileSync(SCOPE, "utf8"));
@@ -119,8 +166,7 @@ for (const relative of scope.pages) {
   }
   for (const match of prose.matchAll(PROVED_CLASS)) {
     const before = prose.slice(Math.max(0, match.index - 24), match.index);
-    const sentence = sentenceAt(prose, match.index);
-    if (EXPLICIT_NEGATION.test(before) || EXPLICIT_FAMILY_SUBJECT.test(sentence)) continue;
+    if (EXPLICIT_NEGATION.test(before) || hasExplicitFamilySubject(prose, match.index)) continue;
     const line = prose.slice(0, match.index).split("\n").length;
     fail(`${relative}:${line} contains an unscoped proved-class claim: ${match[0]}`);
   }
