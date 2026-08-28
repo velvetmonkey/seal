@@ -4,11 +4,11 @@
     "base": "50af7f9bf92a5b0a86b51401965f1cb5eea8ec0d",
     "author": "darwintiming4",
     "date": "2026-08-28",
-    "scope": "Instrument lane record: the installed-tree fresh-build pin will be recomputed with node scripts/sync-installed-tree-pin.cjs after direct kernel timing-boundary changes. This is an agent record, not a human ruling; no human has ruled.",
+    "scope": "Instrument lane record: the installed-tree fresh-build pin was recomputed with node scripts/sync-installed-tree-pin.cjs after direct kernel timing-boundary changes. This is an agent record, not a human ruling; no human has ruled.",
     "files": [
       {
         "path": "docs/start/install.md",
-        "blob": "e8c32a9a514fd82464ee0e935f8733817c0a305f"
+        "blob": "00df97a1a63fd7d6dd3b64a09565018e06bf7fd1"
       }
     ]
   }
