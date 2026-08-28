@@ -32,8 +32,8 @@ this repository contains Lean source.
 **Bet.** A policy language whose denotation is a finite union of boxes over a
 typed, finite attribute space, so that every analysis the sign-off ceremony
 needs — permissiveness comparison, claim entailment, witness generation,
-boundary sampling — reduces to a walk over a finite grid that a few hundred
-lines of Lean can be proved to construct correctly. The analyzer then sits
+boundary sampling — reduces to a walk over a finite grid whose construction
+correctness can be established by a few hundred lines of Lean. The analyzer then sits
 *inside* the same proof boundary as the decision kernel, sharing its types.
 
 A "box" is a product of per-attribute constraints, where every attribute domain
@@ -60,7 +60,7 @@ artifact. Two escape routes exist and both fail the sizing test:
 
 1. **Trust the solver.** Reasonable for AWS. Incoherent here: this project's
    entire identity (`docs/archive/NORTH-STAR-V3.md` §1, §5) is that the decision function is
-   machine-checked and every claim carries its scope line. "The policy the
+   machine-checked [policy-language] and every claim carries its scope line. "The policy the
    human signed was compared against its predecessor by machinery outside the
    proof boundary" is exactly the asterisk the project exists to not have —
    attached to the one artifact whose meaning the human is attesting.
@@ -350,7 +350,7 @@ An `approve` verdict binds the human's approval to the SHA-256 digest of the
 **canonical request record bytes** — uniform, not rule-supplied. This is a
 deliberate simplification relative to the frozen V1 semantics, where guard
 targets are rule-supplied templates and two matching guards can disagree, which
-is why V1 needed (and has, proven) the ambiguity-fail-closed theorem
+is why V1's ambiguity-fail-closed theorem is proven [v1]
 `Host.PolicyOverlap.conflicting_guards_ambiguous`. In boxpol two approving
 rules always bind the same digest, so the ambiguous case is unrepresentable
 rather than handled.
@@ -368,10 +368,10 @@ state-advances-only-on-execution.
 - `per hour`: a windowed counter that resets on the fixed clock-hour boundary.
   **No verified windowed automaton exists in the repositories today** —
   `BudgetCore` is total-cap-forever. `per hour` therefore parses but a policy
-  using it cannot claim kernel-proved budget semantics until the windowed
+  using it cannot claim proof-backed kernel budget semantics until the windowed
   automaton and its proofs land (§9 row 7). The bundle generator enforces
   this: a `per hour` budget makes claim C6 print `[PENDING: windowed-budget
-  proofs]` instead of `[PROVED]`. Grammar admits it now so canonical form is
+  proofs]` instead of `[LEAN-PROOF]`. Grammar admits it now so canonical form is
   stable; semantics is gated on proof, not on prose.
 
 ### 3.3 Integration with the existing kernel
@@ -399,7 +399,7 @@ interface: pure `ingest`/`decide`, composition over kernels is a pure fold):
 - **Defaults.** A default is a rule the signer cannot see at the site of the
   rules they can. Closed-world deny is not a configurable default; it is the
   fixed meaning of "no rule matched", printed in the policy header comment and
-  proved as the no-match case of the evaluator.
+  covered by the evaluator's no-match theorem.
 - **Ordering / priority / first-match.** Any order-sensitive semantics makes
   the meaning of a rule depend on where it sits, which makes every diff review
   a whole-file review and every analyzer a sequence analyzer. Meet-combination
@@ -507,11 +507,11 @@ endpoint.
    outside-rep) pairs. Also self-validating — every emitted question is graded
    by running the kernel.
 
-### 4.3 What is proved in Lean, and what is not
+### 4.3 What has a Lean proof, and what does not
 
 **Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
-Proved (these are the analyzer's soundness; without them it is decoration):
+Lean-backed properties (these are the analyzer's soundness; without them it is decoration):
 
 - P1: partition correctness per attribute — pieces are pairwise disjoint and
   cover the domain; the product grid inherits both.
@@ -530,7 +530,7 @@ Proved (these are the analyzer's soundness; without them it is decoration):
   theorems carry the string/number layers, the boxpol layer adds the
   fixed-key-order object shapes via the `WireCodec` idiom).
 
-Explicitly **not** proved, because self-validating or out of scope:
+Explicitly **not established by a Lean proof**, because self-validating or out of scope:
 
 - witness/boundary/teach-back generators (Rust or unverified Lean; every
   output replays through the kernel with a receipt);
@@ -538,7 +538,7 @@ Explicitly **not** proved, because self-validating or out of scope:
   canonical bytes);
 - the bundle renderer (§5.3 makes renderer lies unable to reach enforcement);
 - SHA-256 and Ed25519: same posture as today — `SealCore/Sha256.lean` is pure
-  Lean but is a reference implementation, not proved against FIPS (its spec
+  Lean but is a reference implementation, not established against FIPS (its spec
   *is* the code; differential-tested per North Star sequencing item 3), and
   Ed25519 is the vendored-TweetNaCl trusted assumption A3
   (`SealV2/Crypto.lean`, opaque FFI, deliberately not an axiom). This
@@ -592,6 +592,8 @@ the format: a bundle over budget does not render as signable.
 
 ### 5.1 Worked example — the Postgres SELECT scenario (V3.3's sink)
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Scenario: the analyst agent may SELECT from three production tables during
 Chicago business hours; every query is human-approved; it can never write;
 approval traffic is capped. Previous policy: deny-all.
@@ -616,29 +618,29 @@ approval traffic is capped. Previous policy: deny-all.
    Chicago business hours. Every query goes through a human. It can
    never write. Cap the approval traffic.
 
- CLAIMS — each machine-checked against core by verified entailment.
+ POLICY-LANGUAGE MODEL CLAIMS — each machine-checked [policy-language] against core by verified entailment.
  Claims speak the MODEL's language (lens output), not ground truth;
  model-vs-world gaps live in UNKNOWN, below, on purpose.
 
   C1  No request classified other-than-select is ever allowed or
-      approved.                                    [PROVED: entailment #e101]
+      approved.                                    [LEAN-PROOF: entailment #e101]
   C2  Every non-denied request touches only tables within
-      {orders, customers, refunds} per sql-lens.   [PROVED: entailment #e102]
+      {orders, customers, refunds} per sql-lens.   [LEAN-PROOF: entailment #e102]
   C3  Nothing is auto-allowed: no rule carries verdict=allow, so every
       non-denied request requires human approval of its request digest.
-                                                   [PROVED: syntactic + #e103]
+                                                   [LEAN-PROOF: syntactic + #e103]
   C4  Outside Mon–Fri 09:00–17:59 America/Chicago (clock-lens),
-      everything is denied.                        [PROVED: entailment #e104]
+      everything is denied.                        [LEAN-PROOF: entailment #e104]
   C5  db=staging: everything denied — no rule matches.
-                                                   [PROVED: entailment #e105]
+                                                   [LEAN-PROOF: entailment #e105]
   C6  At most 30 approved executions per SESSION (monotone counter,
-      BudgetCore.run_never_over_budget).           [PROVED: budget #e106]
+      BudgetCore.run_never_over_budget).           [LEAN-PROOF: budget #e106]
       ⚠ GAP: intent said "cap the approval traffic" with no number and
       no window; the drafter chose 30/session. Confirm or amend.
   C7  Shield check: deleting rule read-three-tables restores exact
       deny-all. Deleting never-write changes NO verdict today, but
       removes the guarantee that future grants cannot enable writes.
-                                                   [PROVED: comparison #e107]
+                                                   [LEAN-PROOF: comparison #e107]
 
  WITNESSES — produced by driving the KERNEL. Each carries a receipt.
   W1  APPROVE  SELECT count(*) FROM orders            Tue 14:12 CT   r-0181
@@ -810,7 +812,7 @@ Stated as a permanent property of the language, not a backlog:
 requirement that is not a box moves into a lens that outputs a new finite
 attribute, and the policy stays boxes. Tenant matching: sql-lens learns to
 emit `tenant_filter : enum {self, other, none}`; the policy says
-`tenant_filter = self`; still a box, still proved. The unverified complexity
+`tenant_filter = self`; still a box, still covered by the box theorem. The unverified complexity
 accretes in the lens, where the bundle already labels it UNVERIFIED, the
 differential corpus already aims at it, and the UNKNOWN section already knows
 how to confess it. Equivalently, and preferably where the tool permits: change
@@ -835,7 +837,7 @@ anyway.
 The UNKNOWN entries in §5.1 are honest physics: the **world exceeding the
 model** (lens gaps, clock gaps, state-persistence gaps). An UNKNOWN entry
 whose cause is a **policy construct** — an atom the analyzer could not decide,
-a claim that degraded from PROVED to prose because the language grew — means
+a claim that degraded from LEAN-PROOF to prose because the language grew — means
 the boundary between verified logic and confessed gap has broken. **The first
 such entry is an incident, not a line item.** The distinction is mechanical:
 every UNKNOWN carries a `cause:` field, `lens | world | state | construct`,
@@ -844,7 +846,7 @@ and `construct` pages someone.
 Why an incident: the failure mode this system is most likely to die of
 (named independently by all four readers) is expressiveness creep
 reintroducing rubber-stamping wearing formal clothes — claims quietly migrate
-from machine-checked to prose, the page keeps its layout and its checkmarks,
+from policy-language model machine-checked [policy-language] to prose, the page keeps its layout and its checkmarks,
 signers habituate, and two years later humans are rubber-stamping
 machine-authored policy *with Lean proof digests attached*, which is strictly
 worse than never building the apparatus, because the apparatus now projects
@@ -854,7 +856,7 @@ system that lied.
 
 CI proxies, live from day one (both taken from the Kimi reading):
 
-- the renderer may not emit the word PROVED unless the claim line carries a
+- the renderer may not emit the marker LEAN-PROOF unless the claim line carries a
   kernel certificate id that the load-gate re-verifies;
 - any commit touching the atom grammar or the canonical decoder must touch a
   Lean theorem in the same merge, enforced by path-based CI rule;
@@ -894,7 +896,7 @@ checkers verified** (everything displayed carries a certificate; you verify
 | 4 | Grid: partitions, Lemma B, Lemma A | Lean | ~300 + ~400 proof | **Verified** — the substrate |
 | 5 | Comparison + entailment + soundness (P4, P5); size-bound refusal | Lean | ~250 + ~400 proof | **Verified** — the sign-off primitive and the whole point of the route. Schedule risk lives here. Fallback if proofs drag: certificate style — unverified generator emits the cell trace, a small verified checker validates it; proofs shrink by half (Kimi) |
 | 6 | Load-gate: re-run entailment over (core, claims) at policy load; refuse on failure | Lean + host glue | ~150 | **Verified** checker, trusted-but-tested glue; composes with `SignedPolicy` verify-first gate |
-| 7 | Windowed budget automaton (`per hour`) + proofs | Lean, extends `BudgetCore` | ~100 + ~150 proof | **Verified**, else `per hour` claims stay PENDING forever; `per session` needs nothing — `BudgetCore` is done and proven |
+| 7 | Windowed budget automaton (`per hour`) + proofs | Lean, extends `BudgetCore` | ~100 + ~150 proof | **Verified**, else `per hour` claims stay PENDING forever; `per session` needs nothing — `BudgetCore` is done and proven [budgetcore] in the policy-language model |
 | 8 | Pretty-syntax parser + printer | Rust | ~800 | Untrusted (authoring only; signature binds canonical form) |
 | 9 | Witness + boundary generators | Rust | ~500 | Untrusted — every output replays through the kernel with a receipt |
 | 10 | Teach-back generator + grader + transcript binding | Rust | ~800 | Generator untrusted; grader trusted-but-trivial (compares kernel receipts); balance rule is code, not judgment |
@@ -940,7 +942,7 @@ side of it.
 3. **Budget window overstated.** The original wrote `budget 30 per hour`
    with "fixed window, kernel-counted." `BudgetCore` is verified but is a
    monotone *total* cap; no windowed automaton exists. §3.2 splits
-   `per session` (proved today) from `per hour` (grammar-admitted,
+   `per session` (covered by a theorem today) from `per hour` (grammar-admitted,
    claims-gated on new proofs, row 7).
 4. **The meet semantics is less novel than presented.** `Host/PolicyOverlap.lean`
    already proves deny-wins quantified over rule lists, ambiguity-fail-closed,
@@ -1088,7 +1090,7 @@ upstream of the decision logic and cannot condition it: a lens produces the
 attribute record (it changes what the *inputs* mean), and the analyzer's
 theorems quantify over all attribute records unconditionally — there is no
 annotation, directive, or stub that alters a verdict. The gap-closure is
-squeezed into one typed seam, and the seam's enumeration is machine-checked:
+the policy-language apparatus is squeezed into one typed seam, and the seam's enumeration is machine-checked [policy-language]:
 every attribute is `provides`-covered by exactly one lens or by the
 descriptor, and an uncovered attribute is a schema error (§2.1). That
 coverage rule is clause (ii) of §12.3 enforced at the parser.
@@ -1099,7 +1101,7 @@ out of the analyzed artifact entirely (constructor mode being the limit
 case, where the gap is deleted rather than relocated). The accurate
 restatement of the position, replacing the slogan: **the gap-closing
 apparatus may never condition the analysis; it may only produce inputs, its
-enumeration is machine-checked, and its behavior is counted, not trusted.**
+policy-language enumeration is machine-checked [policy-language], and its behavior is counted, not trusted.**
 
 ### 12.3 Q3 — one statement, three instances with unequal grip, and a fourth thing that must not wear the same clothes
 
@@ -1107,7 +1109,7 @@ The single formal statement exists. Stated so it can fail:
 
 > **Total accounting.** A claim artifact is admissible iff it is a triple
 > (D, C, R) where D is a denominator fixed *outside* the tool; C ⊆ D is where
-> the guarantee is machine-checked; R = D \ C is the residual; and
+> the policy-language guarantee is machine-checked [policy-language]; R = D \ C is the residual; and
 > (i) R is produced, or checked, by machinery at least as trusted as what
 >     checks C — computed, never authored;
 > (ii) C ∪ R = D holds by construction, not by the author's diligence;
@@ -1228,7 +1230,7 @@ because it names a location, and was not counted.**
 4. **§3.2** attributes "state-advances-only-on-execution" to the budget kernel.
    In `Kernels/Budget.lean` that is a DOCSTRING (:56), not a theorem; `decide` is
    pure and returns a proposed state, so the property is host-glue behaviour
-   outside anything proved. The proved parts (`step_monotone`,
+   outside the established properties. The theorem-backed parts (`step_monotone`,
    `run_never_over_budget`, `over_budget_denied`) all check.
 
 **Two structural weaknesses, to settle before row 12 or row 5 starts.**

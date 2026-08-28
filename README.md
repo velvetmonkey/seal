@@ -124,10 +124,14 @@ Seal`; the project `.mcp.json` remains byte-for-byte unchanged.
 ## Guarantees and non-guarantees
 
 Seal is a formally anchored authorization gate for selected MCP `tools/call`
-effects. The authorization rule is proved in Lean, compiled reproducibly to the
-WASM the product uses, and enforced by a tested Node runtime with durable
-one-use state, configuration-drift refusal, concurrent-proxy fencing and signed
-receipts.
+effects.
+
+Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED.
+Release incorporation: The theorem artifact does not yet ship and run in the released build graph.
+Semantic correspondence: The theorem concerns `SealV2.decide`. The shipped authorization path is `sealHostStep -> stepImpl -> Host.dispatch`. Their correspondence is tested, not proved. The `interpreted Lean vs shipped WASM` job runs the correspondence test.
+The proof-bearing source compiles reproducibly to the WASM the product uses,
+and a tested Node runtime enforces it with durable one-use state,
+configuration-drift refusal, concurrent-proxy fencing and signed receipts.
 
 The proof-bearing source rebuilds the exact kernel bytes the downloadable product requires, and the product has no JavaScript authorization fallback.
 Follow that source binding through [Reproducible kernel](docs/reproduce.md).
@@ -135,7 +139,11 @@ Follow that source binding through [Reproducible kernel](docs/reproduce.md).
 The separately implemented verifier replays the recorded inputs through the
 WASM kernel and reports its checks separately.
 
-The decision rule is proved. The product seam and state machine are tested. The client and machine remain trusted.
+| Surface | Current shipped assurance status |
+| --- | --- |
+| Authorization rule | TESTED |
+| Product state/forwarding | TESTED |
+| Client and machine | TRUSTED |
 
 Seal is not an agent framework, a sandbox, an IAM platform, a policy language,
 a general AI safety product, or a replacement for human judgement. It is an

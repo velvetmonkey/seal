@@ -91,6 +91,7 @@ test("public pages use the banked language discipline", (t) => {
     env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: join(dir, "scope.json") },
   });
   assert.equal(qualifiedIndependent.status, 0, qualifiedIndependent.stdout + qualifiedIndependent.stderr);
+
 });
 
 const SOURCED_BLOCKS = [
@@ -133,8 +134,7 @@ test("the first architecture diagram is the shipped Node path", () => {
 
 test("README claim: Seal holds one exact call and permits at most one execution", () => {
   const claim = "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.";
-  const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-"));
-  let output;
+  const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-")); let output;
   assert.doesNotThrow(() => {
     output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
@@ -143,6 +143,50 @@ test("README claim: Seal holds one exact call and permits at most one execution"
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
   assert.match(output, /BLOCKED.*already_consumed/s, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
+});
+
+test("public proved-class claims fail and explicit denials pass", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "seal-public-proved-class-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const scope = join(dir, "scope.json");
+  writeFileSync(scope, JSON.stringify({ pages: ["page.md"] }));
+  const runGuard = (text) => {
+    writeFileSync(join(dir, "page.md"), `${text}\n`);
+    return spawnSync(process.execPath, [LANGUAGE_GUARD], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: scope },
+    });
+  };
+  for (const claim of [
+    "The decision rule is proved.",
+    "The authorization rule is proven in Lean.",
+    "The kernel is machine-checked.",
+    "The seal-host kernel is proven, and so is this product's shipped authorization path.",
+    "The policy-language model is machine-checked, and this product's shipped authorization path is proven.",
+    "BudgetCore is proven, and Seal's shipped authorization rule is proved end to end.",
+    "The V1 model is machine-checked, but this product's shipped decision path is proven.",
+    "The seal-host policy is proved; Seal's shipped approval binding is machine-checked.",
+    "The proven seal-host kernel makes this product's shipped authorization path proven.",
+    "The seal-host kernel is proven: this product's shipped authorization path is proved.",
+    "The seal-host kernel is proven — this product's shipped authorization path is machine-checked.",
+    "The seal-host kernel, which is proven [seal-host], supports\nthis product's shipped authorization path, which is proved.",
+  ]) {
+    const red = runGuard(claim);
+    assert.notEqual(red.status, 0, claim);
+    assert.match(red.stderr, /unscoped proved-class claim/);
+    console.log(`RED proved-class claim: ${claim}\nexit=${red.status}\nstdout=${red.stdout.trimEnd()}\nstderr=${red.stderr.trimEnd()}`);
+  }
+  for (const allowed of [
+    "This Node CLI's authorization binding is TESTED, not PROVEN.",
+    "The TCB is trusted, not proven.",
+    "The seal-host kernel is proven [seal-host].",
+    "The policy-language model is machine-checked [policy-language].",
+  ]) {
+    const green = runGuard(allowed);
+    assert.equal(green.status, 0, green.stdout + green.stderr);
+    console.log(`PASS proved-class control: ${allowed}\nexit=${green.status}\nstdout=${green.stdout.trimEnd()}\nstderr=${green.stderr.trimEnd()}`);
+  }
 });
 
 test("launch truth gate compares the complete self-repository path", () => {
@@ -210,4 +254,20 @@ test("README installer check executes the command without restoring the installe
   const red = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
   assert.equal(red.status, 1, red.stdout + red.stderr);
   assert.match(red.stderr, /must not carry an installed-tree transcript/);
+});
+
+test("scope tokens are not placed inside slash compounds", () => {
+  const languageScope = JSON.parse(readFileSync(resolve(ROOT, "scripts", "public-page-language-scope.json"), "utf8"));
+  const scopeTokenCompound = /\/\[(?:seal-host|policy-language|budgetcore|v1)\]|\[(?:seal-host|policy-language|budgetcore|v1)\]\//u;
+  const findMangles = (relative, text) => text.split("\n")
+    .flatMap((line, index) => (scopeTokenCompound.test(line) ? [`${relative}:${index + 1}:${line}`] : []));
+  const deliberate = findMangles("page.md", "The family claims proven [seal-host]/tested/assumed status.");
+  assert.deepEqual(deliberate, ["page.md:1:The family claims proven [seal-host]/tested/assumed status."]);
+  console.log(`RED scope-token compound control:\n${deliberate.join("\n")}`);
+
+  const population = languageScope.pages.flatMap((relative) => (
+    findMangles(relative, readFileSync(resolve(ROOT, relative), "utf8"))
+  ));
+  assert.deepEqual(population, []);
+  console.log(`PASS scope-token compound control: ${languageScope.pages.length} fixed pages`);
 });

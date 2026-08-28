@@ -19,6 +19,9 @@ const BANNED = [
   "independent verifier",
 ];
 const BARE_INDEPENDENCE = /(?<![\p{L}\p{N}_])(?:checker|verifier)\s+is\s+independent(?!\s+of\b)/giu;
+const PROVED_CLASS = /(?<![\p{L}\p{N}_])(?:proved|proven|machine[- ]checked)(?![\p{L}\p{N}_])/giu;
+const FAMILY_SCOPE_TOKEN = /^\s+\[(?:seal-host|policy-language|budgetcore|v1)\]/iu;
+const EXPLICIT_NEGATION = /\b(?:not|no|never|without)\s*$/iu;
 
 function fail(message) {
   process.stderr.write(`FAIL public-page language guard: ${message}\n`);
@@ -59,7 +62,15 @@ function proseOnly(text, extension) {
       .replace(/(`+)(?:[^`]|`(?!\1))*\1/gu, " ")
       .replace(/“[^”\n]*”|"[^"\n]*"/gu, " ");
   }
-  return lines.join("\n");
+  prose = lines.join("\n");
+  // Ruled residuals: letter substitutions U+0440, U+FF50, U+1D429, and U+1D68F stay visible.
+  // Ruled residuals: combining marks U+0301 and U+034F stay visible.
+  // Ruled residuals: decorative dashes U+2043 and U+2796 stay visible.
+  // ASSUMED: U+00AD is stripped, so the guard and the rendered reader see machinechecked.
+  return prose.replace(/\p{Cf}/gu, "").replace(/\p{Pd}/gu, "-")
+    .replace(/[\t\p{Zs}]/gu, " ")
+    // U+2212 is a dash a reader sees, and Pd does not contain it.
+    .replace(/−/gu, "-");
 }
 
 function phrasePattern(phrase) {
@@ -106,6 +117,13 @@ for (const relative of scope.pages) {
   for (const match of prose.matchAll(BARE_INDEPENDENCE)) {
     const line = prose.slice(0, match.index).split("\n").length;
     fail(`${relative}:${line} contains a bare independent description of the checker or verifier; name the axis with "is independent of"`);
+  }
+  for (const match of prose.matchAll(PROVED_CLASS)) {
+    const before = prose.slice(Math.max(0, match.index - 24), match.index);
+    const after = prose.slice(match.index + match[0].length);
+    if (EXPLICIT_NEGATION.test(before) || FAMILY_SCOPE_TOKEN.test(after)) continue;
+    const line = prose.slice(0, match.index).split("\n").length;
+    fail(`${relative}:${line} contains an unscoped proved-class claim: ${match[0]}`);
   }
 }
 

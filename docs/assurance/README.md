@@ -56,7 +56,7 @@ the Node CLI this repository ships.
    walk: install, demo, check, protect, unprotect, from the installed
    artifact, on a PATH that cannot see Docker, Lean or Python.
 3. [test/demo-witness.test.cjs](../../test/demo-witness.test.cjs) — the scope
-   witness proved from files on disk (the child's count file, the receipts
+   witness established from files on disk (the child's count file, the receipts
    directory, the outside write), not from stdout.
 4. [assurance/claude-code-evidence.md](claude-code-evidence.md) — the client matrix, why
    the Claude Code row is still untested, and the human-assisted acceptance
@@ -149,8 +149,7 @@ disposition is an open ruling.
 
 - [AUTHORIZATION-MESH.md](../archive/AUTHORIZATION-MESH.md) — fleet coordination
   theorems; no fleet exists in this repository.
-- [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md) — the family's proven/tested/assumed
-  claims ladder.
+- [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md) — the seal-host family's claims ladder.
 - [WHAT-SEAL-IS.md](../archive/WHAT-SEAL-IS.md) — the object-capability account, built
   around a signed approval token this CLI does not use.
 - [WHY-DIFFERENT.md](../archive/WHY-DIFFERENT.md) — the proof-vs-heuristic comparison,
