@@ -51,7 +51,9 @@ test("canonical receipt operations prose matches shipped verifier behavior", asy
   includesClaim(markdown, "The verifier currently returns `verify: false` for every receipt.", "canonical page must state the shipped VERIFY result");
 
   for (const [option, expected] of [["authorityRoot", "authority roots cannot be checked by the v2 verifier"], ["occurrenceWitness", "occurrence witnesses cannot be checked by the v2 verifier"]]) {
-    await assert.rejects(verify(receipt, { [option]: false }), new RegExp(expected));
+    for (const value of ["", null, 0, false]) {
+      await assert.rejects(verify(receipt, { [option]: value }), new RegExp(expected));
+    }
     assert.match(markdown, new RegExp(expected.replaceAll(" ", "\\s+")), `canonical page must state the ${option} refusal`);
   }
 

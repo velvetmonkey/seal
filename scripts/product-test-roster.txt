@@ -17,6 +17,7 @@ test/dist3d.test.cjs
 test/dist-pin.test.cjs
 test/docs-fenced-languages.test.mjs
 test/receipt-operations-doc.test.mjs
+test/receipt-operations-claim-ledger.test.mjs
 test/docs-index.test.cjs
 test/docs-scope.test.mjs
 test/executable-population.test.mjs
