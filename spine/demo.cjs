@@ -21,8 +21,31 @@ const { TOOL } = require("./demo-server.cjs");
 
 const DEMO_LINE = process.env.SEAL_DEMO_LINE || "seal demo wrote this line";
 
+function printKernelTiming(error) {
+  if (!error || typeof error !== "object" || !("kernel_timing_active_phase" in error)) return;
+  const activePhase = error.kernel_timing_active_phase;
+  process.stderr.write(`seal: kernel timing active phase: ${activePhase}\n`);
+  if (activePhase === "child_died_before_first_instruction") {
+    process.stderr.write("seal: kernel worker died before its first instruction.\n");
+  }
+  if (error.kernel_timing_ms && typeof error.kernel_timing_ms === "object") {
+    process.stderr.write("seal: kernel timing completed phases:\n");
+    for (const [phase, milliseconds] of Object.entries(error.kernel_timing_ms)) {
+      process.stderr.write(`seal:   ${phase}: ${milliseconds} ms\n`);
+    }
+  }
+  if (error.kernel_timing_unmeasured && typeof error.kernel_timing_unmeasured === "object") {
+    process.stderr.write("seal: kernel timing unmeasured spans:\n");
+    for (const [span, declaration] of Object.entries(error.kernel_timing_unmeasured)) {
+      process.stderr.write(`seal:   ${span}: ${declaration}\n`);
+    }
+  }
+}
+
 function fail(message) {
-  process.stderr.write(`seal: ${message}\n`);
+  const text = message instanceof Error ? message.message : message;
+  process.stderr.write(`seal: ${text}\n`);
+  printKernelTiming(message);
   process.exit(1);
 }
 

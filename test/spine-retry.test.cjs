@@ -55,6 +55,59 @@ function attach(child) {
   return state;
 }
 
+function blockedKernelPreload(phase) {
+  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const controls = {
+    child_bootstrap_to_module_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request.endsWith("runner.cjs")) ${sleep}
+  return load.apply(this, arguments);
+};`,
+    wasm_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const runnerLoad = value.load;
+    value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
+  }
+  return value;
+};`,
+    decision_execution: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = value.decide;
+    value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
+  }
+  return value;
+};`,
+  };
+  return controls[phase];
+}
+
+async function runDemoToKernelRefusal(phase, t) {
+  const controlDir = tmpdir("seal-cli-kernel-phase-");
+  const control = path.join(controlDir, "block.cjs");
+  fs.writeFileSync(control, blockedKernelPreload(phase));
+  t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
+  const dir = tmpdir("seal-cli-kernel-demo-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
+    env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const run = attach(child);
+  t.after(run.kill);
+  const code = await run.exit;
+  return { code, ...run };
+}
+
 // --- demo acceptance --------------------------------------------------------
 
 test("seal demo: input_required, approve once, replay refused, then direct write; counts from the child's file", async (t) => {
@@ -112,6 +165,31 @@ test("seal demo: declining sends a decline retry; child stays at 0", async (t) =
   assert.equal(readCount(countFile), "0");
   assert.match(run.out, /DECLINED/);
   assert.match(run.out, /nothing was approved/);
+});
+
+test("seal demo prints the active kernel phase for blocked workers", async (t) => {
+  const phases = ["child_bootstrap_to_module_load", "wasm_load", "decision_execution"];
+  for (const phase of phases) {
+    const run = await runDemoToKernelRefusal(phase, t);
+    assert.equal(run.code, 1, `${phase}: ${run.out}\n${run.err}`);
+    assert.match(run.err, new RegExp(`^seal: kernel timing active phase: ${phase}$`, "m"), run.err);
+    assert.match(run.err, /^seal: kernel timing completed phases:$/m, run.err);
+    assert.match(run.err, /^seal: kernel timing unmeasured spans:$/m, run.err);
+  }
+});
+
+test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
+  const dir = tmpdir("seal-cli-block-demo-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  const code = await run.exit;
+  assert.equal(code, 0, `${run.out}\n${run.err}`);
+  assert.deepEqual(Buffer.from(run.err), Buffer.from(""));
+  assert.match(run.out, /BLOCKED   the shared proxy refused the replay/);
 });
 
 // --- protected path ---------------------------------------------------------
