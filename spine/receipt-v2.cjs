@@ -69,7 +69,6 @@ function sealReceipt(signer, record, action) {
     ...body,
     signature: {
       algorithm: "ed25519",
-      key_id: signer.publicKeyHex,
       value: crypto.sign(null, Buffer.from(canonical(body), "utf8"), signer.privateKey).toString("hex"),
     },
   };

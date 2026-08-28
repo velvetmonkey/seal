@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
 import { canonical, format, read, sha256, verify } from "../checker/seal-receipt-v2.mjs";
+import { validateReceipt } from "../runtime/kernel/receipt-format.js";
 import { CFG_STANDARD, guardTarget } from "../runtime/kernel/seal-config.js";
 
 const cfg = { epoch: 1, safety: { approval: { control_file: "X", ttl_seconds: 120 }, tools: [{ name: "db.execute", mode: "guarded", match: { type: "contains_any_ci", arg: "sql", needles: ["drop"] }, target: [{ full_arguments: true }] }] }, temporal: { policies: [] } };
@@ -16,15 +17,29 @@ function envelope(verdict = "BLOCK") {
   const r = { seal_receipt: "v2", tool: "db.execute", arguments: { database: "prod", sql: "drop table users" }, now: 1000, kernel_config: cfg, granted_capabilities: [], kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" }, verdict, reason: "safety kernel denied", replay: { args_sha256: "", config_sha256: "" } };
   r.replay.args_sha256 = sha256(canonical(r.arguments));
   r.replay.config_sha256 = sha256(canonical(r.kernel_config));
-  r.signature = { algorithm: "ed25519", key_id: "phase-a-test", value: sign(null, Buffer.from(canonical(r)), keys.privateKey).toString("hex") };
+  r.signature = { algorithm: "ed25519", value: sign(null, Buffer.from(canonical(r)), keys.privateKey).toString("hex") };
   return r;
 }
 const text = (r) => JSON.stringify(r);
 function resign(r) {
   const unsigned = { ...r }; delete unsigned.signature;
-  return { ...unsigned, signature: { algorithm: "ed25519", key_id: "phase-a-test", value: sign(null, Buffer.from(canonical(unsigned)), keys.privateKey).toString("hex") } };
+  return { ...unsigned, signature: { algorithm: "ed25519", value: sign(null, Buffer.from(canonical(unsigned)), keys.privateKey).toString("hex") } };
 }
 const expectRed = async (label, input, code) => { await assert.rejects(() => verify(input, { publicKeyHex: pub }), (e) => e.code === code, label); };
+
+function approvalIdentityReceipt(approvalIdentity) {
+  return {
+    seal_receipt: "v2", tool: "db.execute", arguments: {}, now: 0,
+    canonical_request_sha256: "0".repeat(64), bypass: false, verdict: "ALLOW",
+    reason: "approval control", kernel_identity: { wasm_sha256: "0".repeat(64), self_verified: false },
+    kernel_config: {}, certs: [], emitted_bytes: "", granted_capabilities: [], deny_kernel: null,
+    args_hash: sha256(canonical({})), authorization: "approval",
+    approval: {
+      approval_identity: approvalIdentity, nonce: "control", issued_at: 0, expiry: 1,
+      policy_hash: sha256(canonical({})),
+    },
+  };
+}
 
 test("v2 positive signed receipt and all five rows", async () => {
   const out = await verify(text(envelope()), { publicKeyHex: pub });
@@ -59,6 +74,28 @@ test("authority row varies with what the verifier actually checked", async () =>
   assert.match(format(withCheckedCallerKey), /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
   assert.equal(withoutKey.verify, false);
   assert.equal(withCheckedCallerKey.verify, false);
+});
+
+test("removed signature key_id and approval identity controls refuse as specified", async () => {
+  const good = envelope();
+  const withRemovedMember = { ...good, signature: { ...good.signature, key_id: "phase-a-test" } };
+  await assert.rejects(
+    () => verify(text(withRemovedMember), { publicKeyHex: pub }),
+    (error) => error.code === "unexpected_member" && error.message === "signature.key_id: unexpected member",
+  );
+  console.log("CONTROL signature.key_id present: REFUSE unexpected_member: signature.key_id: unexpected member");
+  const verified = await verify(text(good), { publicKeyHex: pub });
+  assert.equal(verified.signature, true);
+  console.log("CONTROL signature.key_id absent: GREEN signature valid");
+
+  const missingEd25519KeyId = validateReceipt(approvalIdentityReceipt({ channel: "ed25519" }));
+  assert.equal(missingEd25519KeyId.ok, false);
+  assert.ok(missingEd25519KeyId.errors.includes("approval.approval_identity.key_id: required on the ed25519 channel"));
+  console.log("CONTROL approval ed25519 key_id absent: REFUSE approval.approval_identity.key_id: required on the ed25519 channel");
+  const interactiveWithKeyId = validateReceipt(approvalIdentityReceipt({ channel: "interactive", key_id: "control" }));
+  assert.equal(interactiveWithKeyId.ok, false);
+  assert.ok(interactiveWithKeyId.errors.includes("approval.approval_identity.key_id: only the ed25519 channel carries a key_id"));
+  console.log("CONTROL approval interactive key_id present: REFUSE approval.approval_identity.key_id: only the ed25519 channel carries a key_id");
 });
 
 test("negative controls each go RED and the repaired envelope goes GREEN", async () => {

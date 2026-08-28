@@ -6,6 +6,7 @@ import { TextDecoder } from "node:util";
 import { pathToFileURL } from "node:url";
 
 const ORDER = ["seal_receipt", "tool", "action", "arguments", "now", "kernel_config", "granted_capabilities", "kernel_inputs", "verdict", "reason", "replay", "signature"];
+const SIGNATURE_KEYS_SORTED = ["algorithm", "value"];
 const HEX64 = /^[0-9a-f]{64}$/;
 const SPKI = Buffer.from("302a300506032b6570032100", "hex");
 const fail = (message, code = "invalid_receipt") => { const e = new Error(message); e.code = code; throw e; };
@@ -84,6 +85,11 @@ export async function replay(r) {
 
 function checkSignature(r, keyHex) {
   if (!r.signature) return false;
+  const signatureKeys = Object.keys(r.signature).sort();
+  const unexpected = signatureKeys.find((key) => !SIGNATURE_KEYS_SORTED.includes(key));
+  if (unexpected !== undefined) fail(`signature.${unexpected}: unexpected member`, "unexpected_member");
+  if (JSON.stringify(signatureKeys) !== JSON.stringify(SIGNATURE_KEYS_SORTED))
+    fail("signature: exactly the members algorithm,value required", "signature_mismatch");
   if (r.signature.algorithm !== "ed25519" || typeof r.signature.value !== "string" || !/^[0-9a-f]{128}$/.test(r.signature.value)) fail("signature is malformed", "signature_mismatch");
   if (!/^[0-9a-f]{64}$/.test(keyHex || "")) return false;
   const unsigned = { ...r }; delete unsigned.signature;
