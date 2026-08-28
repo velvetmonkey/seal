@@ -16,13 +16,13 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const EXPECTED_DEMO_CLOSING_LINE = "authorization rule tested; product state and forwarding tested; client and machine trusted.";
-const EXPECTED_README_LINE = "The decision rule is proved. The product seam and state machine are tested. The client and machine remain trusted.";
+const EXPECTED_README_LINE = "The authorization rule has a Lean proof; the current shipped assurance status is TESTED.";
 
 function assertExactSurfaces(output, readme) {
   const closingLine = output.trimEnd().split("\n").at(-1);
   assert.equal(closingLine, EXPECTED_DEMO_CLOSING_LINE, "seal demo closing line changed");
-  const readmeLine = readme.match(/^The decision rule [^\n]+$/mu)?.[0];
-  assert.equal(readmeLine, EXPECTED_README_LINE, "README must carry the banked proved/tested/trusted sentence");
+  const readmeLine = readme.match(/^The authorization rule [^\n]+$/mu)?.[0];
+  assert.equal(readmeLine, EXPECTED_README_LINE, "README must carry the strict shipped-assurance sentence");
 }
 
 function runDemo() {
@@ -50,7 +50,7 @@ test("the two exact surfaces go red when physically tampered", () => {
   assert.throws(() => assertExactSurfaces(tamperedOutput, readme), /seal demo closing line changed/);
   console.log("RED demo closing line tamper: seal demo closing line changed");
 
-  const tamperedReadme = readme.replace(EXPECTED_README_LINE, "The decision rule is tested. The product seam and state machine are tested. The client and machine remain trusted.");
-  assert.throws(() => assertExactSurfaces(output, tamperedReadme), /README must carry the banked proved\/tested\/trusted sentence/);
-  console.log("RED README assurance line tamper: banked proved/tested/trusted sentence changed");
+  const tamperedReadme = readme.replace(EXPECTED_README_LINE, "The authorization rule is TESTED.");
+  assert.throws(() => assertExactSurfaces(output, tamperedReadme), /README must carry the strict shipped-assurance sentence/);
+  console.log("RED README assurance line tamper: strict shipped-assurance sentence changed");
 });

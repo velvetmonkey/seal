@@ -32,8 +32,8 @@ this repository contains Lean source.
 **Bet.** A policy language whose denotation is a finite union of boxes over a
 typed, finite attribute space, so that every analysis the sign-off ceremony
 needs — permissiveness comparison, claim entailment, witness generation,
-boundary sampling — reduces to a walk over a finite grid that a few hundred
-lines of Lean can be proved to construct correctly. The analyzer then sits
+boundary sampling — reduces to a walk over a finite grid whose construction
+correctness can be established by a few hundred lines of Lean. The analyzer then sits
 *inside* the same proof boundary as the decision kernel, sharing its types.
 
 A "box" is a product of per-attribute constraints, where every attribute domain
@@ -368,10 +368,10 @@ state-advances-only-on-execution.
 - `per hour`: a windowed counter that resets on the fixed clock-hour boundary.
   **No verified windowed automaton exists in the repositories today** —
   `BudgetCore` is total-cap-forever. `per hour` therefore parses but a policy
-  using it cannot claim kernel-proved budget semantics until the windowed
+  using it cannot claim proof-backed kernel budget semantics until the windowed
   automaton and its proofs land (§9 row 7). The bundle generator enforces
   this: a `per hour` budget makes claim C6 print `[PENDING: windowed-budget
-  proofs]` instead of `[PROVED]`. Grammar admits it now so canonical form is
+  proofs]` instead of `[LEAN-PROOF]`. Grammar admits it now so canonical form is
   stable; semantics is gated on proof, not on prose.
 
 ### 3.3 Integration with the existing kernel
@@ -399,7 +399,7 @@ interface: pure `ingest`/`decide`, composition over kernels is a pure fold):
 - **Defaults.** A default is a rule the signer cannot see at the site of the
   rules they can. Closed-world deny is not a configurable default; it is the
   fixed meaning of "no rule matched", printed in the policy header comment and
-  proved as the no-match case of the evaluator.
+  covered by the evaluator's no-match theorem.
 - **Ordering / priority / first-match.** Any order-sensitive semantics makes
   the meaning of a rule depend on where it sits, which makes every diff review
   a whole-file review and every analyzer a sequence analyzer. Meet-combination
@@ -507,11 +507,11 @@ endpoint.
    outside-rep) pairs. Also self-validating — every emitted question is graded
    by running the kernel.
 
-### 4.3 What is proved in Lean, and what is not
+### 4.3 What has a Lean proof, and what does not
 
 **Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
-Proved (these are the analyzer's soundness; without them it is decoration):
+Lean-backed properties (these are the analyzer's soundness; without them it is decoration):
 
 - P1: partition correctness per attribute — pieces are pairwise disjoint and
   cover the domain; the product grid inherits both.
@@ -530,7 +530,7 @@ Proved (these are the analyzer's soundness; without them it is decoration):
   theorems carry the string/number layers, the boxpol layer adds the
   fixed-key-order object shapes via the `WireCodec` idiom).
 
-Explicitly **not** proved, because self-validating or out of scope:
+Explicitly **not established by a Lean proof**, because self-validating or out of scope:
 
 - witness/boundary/teach-back generators (Rust or unverified Lean; every
   output replays through the kernel with a receipt);
@@ -538,7 +538,7 @@ Explicitly **not** proved, because self-validating or out of scope:
   canonical bytes);
 - the bundle renderer (§5.3 makes renderer lies unable to reach enforcement);
 - SHA-256 and Ed25519: same posture as today — `SealCore/Sha256.lean` is pure
-  Lean but is a reference implementation, not proved against FIPS (its spec
+  Lean but is a reference implementation, not established against FIPS (its spec
   *is* the code; differential-tested per North Star sequencing item 3), and
   Ed25519 is the vendored-TweetNaCl trusted assumption A3
   (`SealV2/Crypto.lean`, opaque FFI, deliberately not an axiom). This
@@ -592,6 +592,8 @@ the format: a bundle over budget does not render as signable.
 
 ### 5.1 Worked example — the Postgres SELECT scenario (V3.3's sink)
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 Scenario: the analyst agent may SELECT from three production tables during
 Chicago business hours; every query is human-approved; it can never write;
 approval traffic is capped. Previous policy: deny-all.
@@ -621,24 +623,24 @@ approval traffic is capped. Previous policy: deny-all.
  model-vs-world gaps live in UNKNOWN, below, on purpose.
 
   C1  No request classified other-than-select is ever allowed or
-      approved.                                    [PROVED: entailment #e101]
+      approved.                                    [LEAN-PROOF: entailment #e101]
   C2  Every non-denied request touches only tables within
-      {orders, customers, refunds} per sql-lens.   [PROVED: entailment #e102]
+      {orders, customers, refunds} per sql-lens.   [LEAN-PROOF: entailment #e102]
   C3  Nothing is auto-allowed: no rule carries verdict=allow, so every
       non-denied request requires human approval of its request digest.
-                                                   [PROVED: syntactic + #e103]
+                                                   [LEAN-PROOF: syntactic + #e103]
   C4  Outside Mon–Fri 09:00–17:59 America/Chicago (clock-lens),
-      everything is denied.                        [PROVED: entailment #e104]
+      everything is denied.                        [LEAN-PROOF: entailment #e104]
   C5  db=staging: everything denied — no rule matches.
-                                                   [PROVED: entailment #e105]
+                                                   [LEAN-PROOF: entailment #e105]
   C6  At most 30 approved executions per SESSION (monotone counter,
-      BudgetCore.run_never_over_budget).           [PROVED: budget #e106]
+      BudgetCore.run_never_over_budget).           [LEAN-PROOF: budget #e106]
       ⚠ GAP: intent said "cap the approval traffic" with no number and
       no window; the drafter chose 30/session. Confirm or amend.
   C7  Shield check: deleting rule read-three-tables restores exact
       deny-all. Deleting never-write changes NO verdict today, but
       removes the guarantee that future grants cannot enable writes.
-                                                   [PROVED: comparison #e107]
+                                                   [LEAN-PROOF: comparison #e107]
 
  WITNESSES — produced by driving the KERNEL. Each carries a receipt.
   W1  APPROVE  SELECT count(*) FROM orders            Tue 14:12 CT   r-0181
@@ -810,7 +812,7 @@ Stated as a permanent property of the language, not a backlog:
 requirement that is not a box moves into a lens that outputs a new finite
 attribute, and the policy stays boxes. Tenant matching: sql-lens learns to
 emit `tenant_filter : enum {self, other, none}`; the policy says
-`tenant_filter = self`; still a box, still proved. The unverified complexity
+`tenant_filter = self`; still a box, still covered by the box theorem. The unverified complexity
 accretes in the lens, where the bundle already labels it UNVERIFIED, the
 differential corpus already aims at it, and the UNKNOWN section already knows
 how to confess it. Equivalently, and preferably where the tool permits: change
@@ -835,7 +837,7 @@ anyway.
 The UNKNOWN entries in §5.1 are honest physics: the **world exceeding the
 model** (lens gaps, clock gaps, state-persistence gaps). An UNKNOWN entry
 whose cause is a **policy construct** — an atom the analyzer could not decide,
-a claim that degraded from PROVED to prose because the language grew — means
+a claim that degraded from LEAN-PROOF to prose because the language grew — means
 the boundary between verified logic and confessed gap has broken. **The first
 such entry is an incident, not a line item.** The distinction is mechanical:
 every UNKNOWN carries a `cause:` field, `lens | world | state | construct`,
@@ -854,7 +856,7 @@ system that lied.
 
 CI proxies, live from day one (both taken from the Kimi reading):
 
-- the renderer may not emit the word PROVED unless the claim line carries a
+- the renderer may not emit the marker LEAN-PROOF unless the claim line carries a
   kernel certificate id that the load-gate re-verifies;
 - any commit touching the atom grammar or the canonical decoder must touch a
   Lean theorem in the same merge, enforced by path-based CI rule;
@@ -940,7 +942,7 @@ side of it.
 3. **Budget window overstated.** The original wrote `budget 30 per hour`
    with "fixed window, kernel-counted." `BudgetCore` is verified but is a
    monotone *total* cap; no windowed automaton exists. §3.2 splits
-   `per session` (proved today) from `per hour` (grammar-admitted,
+   `per session` (covered by a theorem today) from `per hour` (grammar-admitted,
    claims-gated on new proofs, row 7).
 4. **The meet semantics is less novel than presented.** `Host/PolicyOverlap.lean`
    already proves deny-wins quantified over rule lists, ambiguity-fail-closed,
@@ -1228,7 +1230,7 @@ because it names a location, and was not counted.**
 4. **§3.2** attributes "state-advances-only-on-execution" to the budget kernel.
    In `Kernels/Budget.lean` that is a DOCSTRING (:56), not a theorem; `decide` is
    pure and returns a proposed state, so the property is host-glue behaviour
-   outside anything proved. The proved parts (`step_monotone`,
+   outside the established properties. The theorem-backed parts (`step_monotone`,
    `run_never_over_budget`, `over_budget_denied`) all check.
 
 **Two structural weaknesses, to settle before row 12 or row 5 starts.**
