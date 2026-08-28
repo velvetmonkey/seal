@@ -1,15 +1,29 @@
 {
   "version": 1,
-  "ruling": {
-    "base": "9f50b3ab2f863e197cd437fd9a9564a4e5f49fbd",
-    "author": "badges",
-    "date": "2026-08-28",
-    "scope": "Ben approved renaming the ci.yml workflow from \"Docs & claims consistency\" to \"Product, identity & docs checks\", because that workflow runs seven jobs and only one of them is docs-claims. The rename changes the workflow name only. Branch protection keys on job names, so no required check moves. No other protected change is authorised.",
-    "files": [
-      {
-        "path": ".github/workflows/ci.yml",
-        "blob": "86df352293e322db809ba88560ab2d5de4605662"
-      }
-    ]
-  }
+  "rulings": [
+    {
+      "base": "9f50b3ab2f863e197cd437fd9a9564a4e5f49fbd",
+      "author": "badges",
+      "date": "2026-08-28",
+      "scope": "Ben approved renaming the ci.yml workflow from \"Docs & claims consistency\" to \"Product, identity & docs checks\", because that workflow runs seven jobs and only one of them is docs-claims. The rename changes the workflow name only. Branch protection keys on job names, so no required check moves. No other protected change is authorised.",
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "blob": "86df352293e322db809ba88560ab2d5de4605662"
+        }
+      ]
+    },
+    {
+      "base": "9a2fd21400e06414649125912a5b09060f720c50",
+      "author": "rulinglist",
+      "date": "2026-08-28",
+      "scope": "The ruling list and its merge-base superset control are authorised for this change. No other protected change is authorised.",
+      "files": [
+        {
+          "path": "scripts/check-protected-paths.cjs",
+          "blob": "7c75773ffdd8a50f217220e2b5b76f514cb697f7"
+        }
+      ]
+    }
+  ]
 }

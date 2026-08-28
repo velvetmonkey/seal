@@ -72,10 +72,39 @@ function writeRuling(root, base, files) {
   mkdirSync(join(root, "docs"), { recursive: true });
   writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), JSON.stringify({
     version: 1,
-    ruling: { base, files },
+    rulings: [{
+      base,
+      author: "test",
+      date: "2026-08-28",
+      scope: "test ruling",
+      files,
+    }],
   }, null, 2) + "\n");
   git(root, ["add", "docs/PROTECTED-PATH-RULINGS.json"]);
   git(root, ["commit", "-qm", "record ruling"]);
+}
+
+function writeRulings(root, rulings) {
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), JSON.stringify({
+    version: 1,
+    rulings,
+  }, null, 2) + "\n");
+  git(root, ["add", "docs/PROTECTED-PATH-RULINGS.json"]);
+  git(root, ["commit", "-qm", "update rulings"]);
+}
+
+function testRecord(base, author = "test") {
+  return {
+    base,
+    author,
+    date: "2026-08-28",
+    scope: "test ruling",
+    files: [{
+      path: "test/fixtures/approved.json",
+      blob: "0000000000000000000000000000000000000000",
+    }],
+  };
 }
 
 function approvedTopic(root) {
@@ -235,6 +264,93 @@ test("a range-and-blob ruling refuses a different protected blob", (t) => {
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
+});
+
+test("a head that drops a base ruling is refused and names the record", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, []);
+  writeFileSync(join(root, "README.md"), "ordinary follow-up\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "drop ruling"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_DROPPED/);
+  assert.match(result.stderr, new RegExp(`${initial}.*base-author`));
+});
+
+test("a head that appends a ruling and keeps the old rulings is accepted", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author"), testRecord(base, "new-author")]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("a head with two rulings for one base is refused as ambiguous", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author"), testRecord(base, "first"), testRecord(base, "second")]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "changed.json"), "changed\n");
+  git(root, ["add", "test/fixtures/changed.json"]);
+  git(root, ["commit", "-qm", "ambiguous ruling"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_AMBIGUOUS/);
+  assert.match(result.stderr, new RegExp(base));
+});
+
+test("a head with the old single-object ruling shape is refused", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial)]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), JSON.stringify({
+    version: 1,
+    ruling: testRecord(initial),
+  }, null, 2) + "\n");
+  git(root, ["add", "docs/PROTECTED-PATH-RULINGS.json"]);
+  git(root, ["commit", "-qm", "restore legacy shape"]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_LEGACY_SHAPE/);
+});
+
+test("deleting the superset check makes the dropped-ruling test accept the tamper", (t) => {
+  const root = fixture();
+  const scriptRoot = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-rulinglist-tamper-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => rmSync(scriptRoot, { recursive: true, force: true }));
+  const initial = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, [testRecord(initial, "base-author")]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, []);
+  writeFileSync(join(root, "README.md"), "ordinary follow-up\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "drop ruling"]);
+  const source = readFileSync(SCRIPT, "utf8");
+  const changed = source.replace(
+    "if (!rulingListIsIntact(resolvedMergeBase, options.head)) {",
+    "if (false) {",
+  );
+  assert.notEqual(changed, source, "superset control tamper did not change the checker");
+  const tamperedScript = join(scriptRoot, "check-protected-paths.cjs");
+  writeFileSync(tamperedScript, changed);
+  const result = runWithScript(tamperedScript, root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
 });
 
 test("a range-and-blob ruling survives an unprotected commit after the ruling", (t) => {
