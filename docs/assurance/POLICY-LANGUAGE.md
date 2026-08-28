@@ -60,7 +60,7 @@ artifact. Two escape routes exist and both fail the sizing test:
 
 1. **Trust the solver.** Reasonable for AWS. Incoherent here: this project's
    entire identity (`docs/archive/NORTH-STAR-V3.md` §1, §5) is that the decision function is
-   policy-language model is machine-checked [policy-language] and every claim carries its scope line. "The policy the
+   machine-checked [policy-language] and every claim carries its scope line. "The policy the
    human signed was compared against its predecessor by machinery outside the
    proof boundary" is exactly the asterisk the project exists to not have —
    attached to the one artifact whose meaning the human is attesting.
