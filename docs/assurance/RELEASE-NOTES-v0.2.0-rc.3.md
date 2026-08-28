@@ -1,4 +1,4 @@
-# Seal v0.2.0 release notes
+# Seal v0.2.0-rc.3 release notes
 
 ## What Seal is
 
@@ -18,7 +18,7 @@ macOS source portability is CI-exercised for install, demo and receipt checking.
 
 Both paths write signed receipt files. The demo's key is generated fresh for that run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. The checker accepts a receipt only against the public key you supply and only when the recorded decision, tool, arguments and signature match the sealed commitments. See `README.md`, `docs/assurance/distribution.md`, and the [checker at the release commit](https://github.com/velvetmonkey/seal/blob/8dc16042cc1e865651185778df38dd114ff9ba3d/checker/seal-receipt-check.mjs).
 
-The v0.2.0 install payload does not include the checker. Download the sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0/seal-receipt-check.mjs), verify it against that release's `SHA256SUMS` asset, then run the verified download. At check time it imports no Seal module: it independently implements the same receipt canonicalisation rule while omitting the sealer's input-refusal branches. The release's [`check-receipt-canonicalization.mjs`](https://github.com/velvetmonkey/seal/blob/8dc16042cc1e865651185778df38dd114ff9ba3d/scripts/check-receipt-canonicalization.mjs) shows the compared statements and deliberate omissions. See `scripts/build-dist.cjs`, `.github/workflows/release.yml`, and `test/receipt-checker.test.cjs`.
+The v0.2.0-rc.3 install payload does not include the checker. Download the sibling [`seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs), verify it against that release's `SHA256SUMS` asset, then run the verified download. At check time it imports no Seal module: it independently implements the same receipt canonicalisation rule while omitting the sealer's input-refusal branches. The release's [`check-receipt-canonicalization.mjs`](https://github.com/velvetmonkey/seal/blob/8dc16042cc1e865651185778df38dd114ff9ba3d/scripts/check-receipt-canonicalization.mjs) shows the compared statements and deliberate omissions. See `scripts/build-dist.cjs`, `.github/workflows/release.yml`, and `test/receipt-checker.test.cjs`.
 
 These notes make no stranger-verification claim. See `test/no-verification-claim.test.cjs`. They also do not use the Lean or family-assurance material as evidence for this Node artifact. See `docs/assurance/architecture.md`.
 
@@ -28,7 +28,7 @@ These notes make no stranger-verification claim. See `test/no-verification-claim
 
 - Protect accepts a named set of guarded tools and persists their order while retaining compatibility with earlier single-tool state. See `docs/reference/multi-tool-semantics.md` and `test/protect3b.test.cjs`.
 
-- The current product restores honest version identity: the immutable v0.2.0-rc.2 notes remain tied to that tag, while these notes describe v0.2.0.
+- The current product restores honest version identity: the immutable v0.2.0-rc.2 notes remain tied to that tag, while these notes describe v0.2.0-rc.3.
 
 - Installation and Protect/status output now give next-step or undo guidance, and protected multi-tool scope is displayed as `server.{tool, tool}`. The platform help now distinguishes macOS install/demo/checker support from the Linux x86-64 Protect path. See `printGuidance` in `bin/seal` and `unsupportedPlatformText` in `spine/platform.cjs`.
 

@@ -9,7 +9,6 @@ const crypto = require("node:crypto");
 
 const ROOT = path.join(__dirname, "..");
 const version = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const releaseNotes = `RELEASE-NOTES-v${version}.md`;
 
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version)) throw new Error(`VERSION is not exact SemVer: ${version}`);
 
@@ -37,43 +36,13 @@ const packageTempPath = `${packagePath}.${process.pid}.tmp`;
 fs.writeFileSync(packageTempPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 fs.renameSync(packageTempPath, packagePath);
 
-const notesCandidates = fs.readdirSync(path.join(ROOT, "docs", "assurance"))
-  .filter((file) => /^RELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md$/.test(file))
-  .sort();
-if (notesCandidates.length === 0) throw new Error("expected at least one versioned release-notes file");
-let currentNotes = notesCandidates.includes(releaseNotes) ? releaseNotes : notesCandidates.at(-1);
-const priorNotesVersion = currentNotes.match(/^RELEASE-NOTES-v(.+)\.md$/)[1];
-const priorReleaseNotesPattern = new RegExp(`RELEASE-NOTES-v${priorNotesVersion.replaceAll(".", "\\.")}\\.md`, "g");
-if (currentNotes !== releaseNotes) {
-  fs.renameSync(path.join(ROOT, "docs", "assurance", currentNotes), path.join(ROOT, "docs", "assurance", releaseNotes));
-  currentNotes = releaseNotes;
-}
-for (const file of fs.readdirSync(path.join(ROOT, "docs", "assurance")).filter((file) => file.endsWith(".md"))) {
-  replaceIfPresent(path.join("docs", "assurance", file), priorReleaseNotesPattern, releaseNotes);
-}
-// Reader-facing routes outside assurance cite the release-note filename too.
-// README's route is owned by generate-release-docs.mjs and must continue to
-// name the published release while VERSION advances to the next candidate.
-for (const file of [
-  "docs/archive/CLAIMS-MATRIX.md",
-  "docs/archive/TRUTH-BOX.md",
-  "docs/archive/LIMITATIONS.md",
-  "docs/archive/AUTHORIZATION-MESH.md",
-  "docs/archive/WHY-DIFFERENT.md",
-  "docs/archive/WHAT-SEAL-IS.md",
-]) {
-  replaceIfPresent(file, priorReleaseNotesPattern, releaseNotes);
-}
-replaceIfPresent("docs/assurance/index.html", priorReleaseNotesPattern, releaseNotes);
-replaceIfPresent("docs/assurance/README.md", /what v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? contains/g, `what v${version} contains`);
-replaceIfPresent("docs/assurance/README.md", /how v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? got its shape/g, `how v${version} got its shape`);
-
-replaceIfPresent("docs/start/evaluator-walk.md", /published GitHub release `v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`/g, `published GitHub release \`v${version}\``);
-
-for (const file of ["docs/assurance/distribution.md", path.join("docs/assurance", releaseNotes), "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+// RELEASE-NOTES-* files are immutable records of releases that happened.
+// Candidate version materialization must never rename them, rewrite their
+// bytes, or retarget citations to them. Published-release navigation is owned
+// by generate-release-docs.mjs after publication, not by VERSION.
+for (const file of ["docs/assurance/distribution.md", "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
-replaceIfPresent(path.join("docs", "assurance", releaseNotes), new RegExp(`\\bv${priorNotesVersion.replaceAll(".", "\\.")}\\b`, "g"), `v${version}`);
 
 // These are release claims addressed to readers, but do not carry the "Seal"
 // prefix. Keep their version identity in step with VERSION as well.
@@ -139,17 +108,3 @@ function renameArtifact(match) {
 // Download instructions derive the artifact name from the checksum asset from
 // the same release, so these guides intentionally have no versioned filename.
 replaceIfPresent("docs/assurance/distribution.md", ARTIFACT_NAME, renameArtifact);
-replaceIfPresent("docs/guide/README.md", ARTIFACT_NAME, renameArtifact);
-replaceIfPresent("docs/guide/README.md", /installed seal \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)? linux-x64/g, `installed seal ${version} linux-x64`);
-
-// Receipt checking is supplied as a sibling release asset, not by cloning a
-// source checkout. Keep every live reader route to that asset on VERSION.
-const RECEIPT_CHECKER_RELEASE_ASSET = /\/velvetmonkey\/seal\/releases\/download\/v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\/seal-receipt-check\.mjs/g;
-for (const file of [
-  "docs/assurance/README.md",
-  path.join("docs", "assurance", releaseNotes),
-  "docs/assurance/distribution.md",
-  "docs/guide/knowing-it-worked.md",
-]) {
-  replaceIfPresent(file, RECEIPT_CHECKER_RELEASE_ASSET, `/velvetmonkey/seal/releases/download/v${version}/seal-receipt-check.mjs`);
-}

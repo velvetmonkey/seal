@@ -7,9 +7,7 @@ const path = require("node:path");
 
 const ROOT = path.join(__dirname, "..");
 const README = process.env.README_ARTIFACT_CLAIM_README || path.join(ROOT, "README.md");
-const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const RELEASED_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-const expected = `seal-v${VERSION}-linux-x64`;
 
 let readme;
 try {
@@ -21,10 +19,13 @@ try {
 
 const artifactLines = readme.split("\n").filter((line) => /seal-v[^\s`]+-linux-x64/.test(line));
 const failures = [];
+const publishedVersion = readme.match(/^SEAL_VERSION=v([^\s]+)$/m)?.[1];
+if (!publishedVersion || !RELEASED_VERSION.test(publishedVersion)) failures.push("README must declare one exact published SEAL_VERSION");
+const expected = `seal-v${publishedVersion}-linux-x64`;
 for (const line of artifactLines) {
   if (/\/home\/monkey(?:\/|$)/.test(line)) failures.push(`builder-local absolute artifact path: ${line.trim()}`);
-  if (RELEASED_VERSION.test(VERSION) && /seal-v[^\s`]*-dev\.g[0-9a-f]+-linux-x64/.test(line)) {
-    failures.push(`development artifact named while VERSION is a release: ${line.trim()}`);
+  if (/seal-v[^\s`]*-dev\.g[0-9a-f]+-linux-x64/.test(line)) {
+    failures.push(`development artifact named in published-release copy: ${line.trim()}`);
   }
 }
 

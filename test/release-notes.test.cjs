@@ -6,10 +6,14 @@ const path = require("node:path");
 const test = require("node:test");
 
 const ROOT = path.join(__dirname, "..");
-const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md";
+
 const NOTES = path.join(ROOT, NOTES_RELATIVE); // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md
-assert.equal(NOTES_RELATIVE, `docs/assurance/RELEASE-NOTES-v${VERSION}.md`);
+
+test("rc.3 release-note identity is immutable across candidate version bumps", () => {
+  assert.equal(path.basename(NOTES), "RELEASE-NOTES-v0.2.0-rc.3.md");
+  assert.match(fs.readFileSync(NOTES, "utf8"), /^# Seal v0\.2\.0-rc\.3 release notes$/m);
+});
 
 test("release notes state the platform and protected-receipt signing boundary", () => {
   const notes = fs.readFileSync(NOTES, "utf8");

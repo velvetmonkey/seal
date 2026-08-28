@@ -84,7 +84,7 @@ function staleVersionMatches(root, version) {
       const humanMaintained = fs.readFileSync(file, "utf8").replace(
         /<!-- generated from published release; do not edit -->[\s\S]*?<!-- end generated release docs -->/g,
         "",
-      );
+      ).replace(/\bRELEASE-NOTES-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.md\b/g, "");
       return oldLiteral.test(humanMaintained);
     })
     .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
@@ -113,12 +113,12 @@ function assertStaleMatches(version, files, expected, message) {
   assert.deepEqual(staleVersionMatches(root, version), expected, message);
 }
 
-// Match an old version only when it ends cleanly, starts an alphabetic
-// prerelease/build suffix, or is immediately followed by a filename
-// extension. Requiring the extension to start with a letter keeps
-// `v0.2.0.1` unmatched.
+// Compare one exact version identity. A prerelease or build suffix belongs to
+// the SemVer identity, so a final version must not match its prefix. A
+// filename extension is not part of the identity; requiring it to start with
+// a letter keeps `v0.2.0.1` unmatched.
 function staleVersionLiteral(version) {
-  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${FILENAME_EXTENSION})\\b|[A-Za-z]|$|[^0-9A-Za-z.])`);
+  return new RegExp(`(?<![0-9.])${version.replaceAll(".", "\\.")}(?=(?:\\.${FILENAME_EXTENSION})\\b|$|[^0-9A-Za-z.+-])`);
 }
 
 test("every emitted release identity derives from VERSION", () => {
@@ -166,7 +166,7 @@ test("every emitted release identity derives from VERSION", () => {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${publishedVersion.replaceAll(".", "\\.")} linux-x64`));
   }
-  for (const file of ["docs/assurance/distribution.md", `docs/assurance/RELEASE-NOTES-v${VERSION}.md`, "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+  for (const file of ["docs/assurance/distribution.md", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`Seal v${VERSION}`));
   }
   const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");
@@ -188,8 +188,28 @@ test("sync leaves no old product version in human-maintained reader-facing prose
         && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
     },
   });
-  const publishedDocs = ["README.md", "docs/start/install.md"];
+  const publishedDocs = [
+    "README.md",
+    "docs/start/install.md",
+    "docs/start/evaluator-walk.md",
+    "docs/guide/README.md",
+    "docs/assurance/README.md",
+    "docs/assurance/architecture.md",
+    "docs/archive/AUTHORIZATION-MESH.md",
+    "docs/archive/CLAIMS-MATRIX.md",
+    "docs/archive/LIMITATIONS.md",
+    "docs/archive/TRUTH-BOX.md",
+    "docs/archive/WHAT-SEAL-IS.md",
+    "docs/archive/WHY-DIFFERENT.md",
+  ];
   const publishedBeforeCut = new Map(publishedDocs.map((file) => [file, fs.readFileSync(path.join(scratch, file), "utf8")]));
+  const notesDirectory = path.join(scratch, "docs", "assurance");
+  const historicalNotes = fs.readdirSync(notesDirectory).filter((file) => /^RELEASE-NOTES-.*\.md$/.test(file)).sort();
+  const historicalBytes = new Map(historicalNotes.map((file) => [file, fs.readFileSync(path.join(notesDirectory, file))]));
+  const publishedRouteBeforeCut = new Map([
+    ["docs/assurance/distribution.md", fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(/\/releases\/download\/v[^/]+\/seal-receipt-check\.mjs/)?.[0]],
+    ["docs/assurance/index.html", fs.readFileSync(path.join(scratch, "docs/assurance/index.html"), "utf8").match(/RELEASE-NOTES-v[^\"]+\.md/)?.[0]],
+  ]);
   const bumpedVersion = VERSION === "9.9.9" ? "9.9.10" : "9.9.9";
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
@@ -198,20 +218,46 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     assert.equal(fs.readFileSync(path.join(scratch, file), "utf8"), publishedBeforeCut.get(file), `${file} must continue to describe the latest published release during a cut`);
   }
   assert.deepEqual(
+    fs.readdirSync(notesDirectory).filter((file) => /^RELEASE-NOTES-.*\.md$/.test(file)).sort(),
+    historicalNotes,
+    "sync must not add, remove, or rename historical release notes",
+  );
+  for (const [file, bytes] of historicalBytes) {
+    assert.deepEqual(fs.readFileSync(path.join(notesDirectory, file)), bytes, `${file} must remain byte-identical across a candidate version bump`);
+  }
+  assert.equal(
+    fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(/\/releases\/download\/v[^/]+\/seal-receipt-check\.mjs/)?.[0],
+    publishedRouteBeforeCut.get("docs/assurance/distribution.md"),
+    "candidate sync must not rewrite the published checker route",
+  );
+  assert.equal(
+    fs.readFileSync(path.join(scratch, "docs/assurance/index.html"), "utf8").match(/RELEASE-NOTES-v[^\"]+\.md/)?.[0],
+    publishedRouteBeforeCut.get("docs/assurance/index.html"),
+    "candidate sync must not rewrite release-note navigation",
+  );
+  assert.deepEqual(
     staleVersionMatches(scratch, oldVersion),
     [],
     `reader-facing search surface retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`,
   );
 });
 
-test("stale-version scope catches a stale release-note filename in a live document", () => {
+test("stale-version scope preserves a historical release-note filename in a live document", () => {
   assertStaleMatches(
     "0.2.0",
     {
       "docs/guide/live.md": "See docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
     },
-    ["docs/guide/live.md"],
-    "live docs must be checked for stale release-note filenames",
+    [],
+    "release-note paths identify immutable history rather than candidate version state",
+  );
+});
+
+test("stale-version matcher does not equate a final version with a prerelease identity", () => {
+  assert.equal(
+    staleVersionLiteral("0.2.0").test("RELEASE-NOTES-v0.2.0-rc.2.md"),
+    false,
+    "0.2.0 and 0.2.0-rc.2 are distinct SemVer identities",
   );
 });
 
@@ -230,7 +276,7 @@ test("stale-version scope catches a stale .txt filename in a live document", () 
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/start/live.txt-check.md": "This live page still points at RELEASE-NOTES-v0.2.0-rc.2.txt.\n",
+      "docs/start/live.txt-check.md": "This live page still points at PRODUCT-v0.2.0.txt and must be updated.\n",
     },
     ["docs/start/live.txt-check.md"],
     "live docs must still catch stale unknown-extension filenames",
@@ -252,7 +298,7 @@ test("stale-version scope checks a new active document in docs/reference by defa
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/reference/new-active-doc.md": "New reference page, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+      "docs/reference/new-active-doc.md": "New reference page still describes product v0.2.0 and must be updated.\n",
     },
     ["docs/reference/new-active-doc.md"],
     "new live docs in docs/reference must be checked without updating any scope list",
@@ -270,8 +316,8 @@ test("stale-version matcher does not flag sentence-ending prose in a live docume
   );
 });
 
-test("stale-version matcher catches alphabetic prerelease and suffix references", () => {
-  const losses = [
+test("stale-version matcher does not accept alphabetic suffix prefixes as version identity", () => {
+  const distinctIdentities = [
     "v0.2.0rc",
     "v0.2.0beta",
     "pre0.2.0post",
@@ -282,9 +328,9 @@ test("stale-version matcher catches alphabetic prerelease and suffix references"
     "version0.2.0next",
   ];
   assert.deepEqual(
-    losses.filter((text) => staleVersionLiteral("0.2.0").test(text)),
-    losses,
-    "alphabetic suffixes must remain stale-version matches",
+    distinctIdentities.filter((text) => staleVersionLiteral("0.2.0").test(text)),
+    [],
+    "an alphabetic suffix is not the exact final-version identity",
   );
 });
 
@@ -292,7 +338,7 @@ test("stale-version scope checks every root Markdown file", () => {
   assertStaleMatches(
     "0.2.0",
     {
-      "CONTRIBUTING.md": "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
+      "CONTRIBUTING.md": "This contribution guide still describes product v0.2.0 and must be updated.\n",
     },
     ["CONTRIBUTING.md"],
     "root Markdown files, not only README.md, must be checked",
@@ -303,7 +349,7 @@ test("stale-version scope checks uppercase Markdown extensions", () => {
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/start/NOTES.MD": "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n",
+      "docs/start/NOTES.MD": "This live page still describes product v0.2.0 and must be updated.\n",
     },
     ["docs/start/NOTES.MD"],
     "uppercase Markdown extensions must be checked",
@@ -326,7 +372,7 @@ test("stale-version scope checks the Markdown extension set", () => {
   ];
   const expected = extensionFiles.sort();
   const root = makeScopedScratch();
-  for (const file of extensionFiles) writeScopedDoc(root, file, "See RELEASE-NOTES-v0.2.0-rc.2.md for the old release.\n");
+  for (const file of extensionFiles) writeScopedDoc(root, file, "This live document still says product version v0.2.0 and must be updated.\n");
   let actual;
   assert.deepEqual(
     actual = staleVersionMatches(root, "0.2.0"),
@@ -343,9 +389,10 @@ test("stale-version exclusions remain unflagged together", () => {
       "docs/archive/history.md": "Archive note: RELEASE-NOTES-v0.2.0-rc.2.md stayed here on purpose.\n",
       "docs/guide/four-part.md": "Version history: v0.2.0.1 was a different line.\n",
       "docs/guide/prose.md": "We shipped 0.2.0.\n",
+      "docs/guide/history-link.md": "See RELEASE-NOTES-v0.2.0-rc.2.md for the historical release.\n",
     },
     [],
-    "archive references, four-part versions, and sentence-ending prose must stay unflagged",
+    "archive references, historical note paths, four-part versions, and sentence-ending prose must stay unflagged",
   );
 });
 
@@ -353,7 +400,7 @@ test("stale-version scope checks a new active docs/field-notes directory by defa
   assertStaleMatches(
     "0.2.0",
     {
-      "docs/field-notes/new-active-doc.md": "Field note, stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n",
+      "docs/field-notes/new-active-doc.md": "This field note still describes product v0.2.0 and must be updated.\n",
     },
     ["docs/field-notes/new-active-doc.md"],
     "new live docs directories must be checked without updating any scope list",
@@ -362,7 +409,7 @@ test("stale-version scope checks a new active docs/field-notes directory by defa
 
 test("stale-version scope keeps archive-substring directories live and does not follow archive symlinks", () => {
   const root = makeScopedScratch();
-  writeScopedDoc(root, "docs/my-archive/live.md", "Stale link: RELEASE-NOTES-v0.2.0-rc.2.md.\n");
+  writeScopedDoc(root, "docs/my-archive/live.md", "This live page still describes product v0.2.0 and must be updated.\n");
   writeScopedDoc(root, "docs/archive/history.md", "Historical link: RELEASE-NOTES-v0.2.0-rc.2.md.\n");
   fs.symlinkSync(path.join(root, "docs", "archive"), path.join(root, "docs", "assurance", "from-archive"));
   assert.deepEqual(

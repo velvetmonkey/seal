@@ -17,8 +17,9 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const README = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
-const ARTIFACT = `seal-v${VERSION}-linux-x64`;
+const PUBLISHED_VERSION = README.match(/^SEAL_VERSION=v([^\s]+)$/m)?.[1];
+assert.ok(PUBLISHED_VERSION, "README must declare the published release identity");
+const ARTIFACT = `seal-v${PUBLISHED_VERSION}-linux-x64`;
 const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
 const BANNED = ["PASS" + " VERIFIED"];
 const INDEPENDENCE = "independent";
@@ -169,7 +170,7 @@ test("seal help claims neither an outside verification nor a passing verdict", (
   for (const needle of BANNED) assert.ok(!help.includes(needle), `seal help printed a banned claim: ${needle}`);
 });
 
-test("README artifact claim rejects builder paths and development names for a released VERSION", () => {
+test("README artifact claim rejects builder paths and development names in published-release copy", () => {
   const green = checkArtifactClaim(README);
   assert.equal(green.status, 0, green.stderr);
 
@@ -177,7 +178,7 @@ test("README artifact claim rejects builder paths and development names for a re
   assert.equal(absolute.status, 1);
   assert.match(absolute.stderr, /builder-local absolute artifact path/);
 
-  const development = checkArtifactClaim(README.replace(ARTIFACT, `seal-v${VERSION}-dev.gdeadbee-linux-x64`));
+  const development = checkArtifactClaim(README.replace(ARTIFACT, `seal-v${PUBLISHED_VERSION}-dev.gdeadbee-linux-x64`));
   assert.equal(development.status, 1);
-  assert.match(development.stderr, /development artifact named while VERSION is a release/);
+  assert.match(development.stderr, /development artifact named in published-release copy/);
 });

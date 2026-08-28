@@ -83,9 +83,9 @@ test("the release manifest binds all three platform artifacts and native-helper 
     const manifestPath = path.join(directory, "release-manifest.json");
     fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     const docsRoot = path.join(directory, "docs-root");
-    fs.mkdirSync(path.join(docsRoot, "docs", "start"), { recursive: true });
+    fs.mkdirSync(docsRoot, { recursive: true });
     fs.copyFileSync(path.join(ROOT, "README.md"), path.join(docsRoot, "README.md"));
-    fs.copyFileSync(path.join(ROOT, "docs", "start", "install.md"), path.join(docsRoot, "docs", "start", "install.md"));
+    fs.cpSync(path.join(ROOT, "docs"), path.join(docsRoot, "docs"), { recursive: true });
     const generated = spawnSync(process.execPath, [
       path.join(ROOT, "scripts", "generate-release-docs.mjs"),
       "--manifest", manifestPath,

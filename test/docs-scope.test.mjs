@@ -4,14 +4,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
+const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match(/^SEAL_VERSION=v([^\s]+)$/m)?.[1]; assert.ok(PUBLISHED_VERSION, "README must declare the published release identity");
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
 ];
-function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`) {
+function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${PUBLISHED_VERSION}.md`) {
   const releaseNotes = name.startsWith("archive/")
-    ? `../assurance/RELEASE-NOTES-v${VERSION}.md`
-    : `RELEASE-NOTES-v${VERSION}.md`;
+    ? `../assurance/RELEASE-NOTES-v${PUBLISHED_VERSION}.md`
+    : `RELEASE-NOTES-v${PUBLISHED_VERSION}.md`;
   return [
     scope,
     ...COMMON_SCOPE_LINES,

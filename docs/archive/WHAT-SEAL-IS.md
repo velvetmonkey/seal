@@ -1,6 +1,6 @@
 > Scope: This document argues a Seal family product position accepted on 2026-07-25; it does not describe the Node CLI shipped by this repository.
 > The state machine is TESTED.
-> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v0.2.0.md](../assurance/RELEASE-NOTES-v0.2.0.md) and the [README](../../README.md).
+> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md](../assurance/RELEASE-NOTES-v0.2.0-rc.3.md) and the [README](../../README.md).
 
 # What seal is: an object-capability broker
 
