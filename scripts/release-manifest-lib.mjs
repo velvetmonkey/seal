@@ -62,7 +62,7 @@ function parseChecksumsCount(bytes, expected) {
 }
 
 export function parseChecksums(bytes) {
-  return parseChecksumsCount(bytes, 4);
+  return parseChecksumsCount(bytes, 3);
 }
 
 function payloadFacts(artifactBytes) {
@@ -143,8 +143,8 @@ export function manifestFromObserved({
   if (!TAG.test(tag)) refuse("invalid", `tag is invalid: ${tag}`);
   if (!COMMIT.test(commitSha)) refuse("invalid", `commitSha is invalid: ${commitSha}`);
   if (checksumsName !== "SHA256SUMS") refuse("invalid", `checksum asset must be SHA256SUMS, got ${checksumsName}`);
-  if (!Array.isArray(artifacts) || artifacts.length !== 3) {
-    refuse("artifact_mismatch", `release must supply exactly three platform artifacts, found ${artifacts?.length ?? 0}`);
+  if (!Array.isArray(artifacts) || artifacts.length !== 2) {
+    refuse("artifact_mismatch", `release must supply exactly two platform artifacts, found ${artifacts?.length ?? 0}`);
   }
   if (!["seal-receipt-check.mjs", "seal-receipt-v2.mjs"].includes(checkerName)) refuse("checker_mismatch", `unexpected checker name ${checkerName}`);
   const sums = parseChecksums(checksumsBytes);
@@ -153,7 +153,7 @@ export function manifestFromObserved({
     if (`v${payload.version}` !== tag) refuse("artifact_mismatch", `payload version ${payload.version} disagrees with tag ${tag}`);
     const expectedName = `seal-${tag}-${payload.platform}`;
     if (name !== expectedName) refuse("artifact_mismatch", `artifact name ${name} disagrees with payload identity ${expectedName}`);
-    const darwin = payload.platform === "darwin-arm64" || payload.platform === "darwin-x64";
+    const darwin = payload.platform === "darwin-arm64";
     if (darwin && !payload.hasNativeHelper) refuse("artifact_mismatch", `${name} has no native process-start witness helper`);
     if (!darwin && payload.hasNativeHelper) refuse("artifact_mismatch", `${name} unexpectedly carries a macOS process-start witness helper`);
     return {
@@ -167,8 +167,8 @@ export function manifestFromObserved({
     };
   }).sort((left, right) => left.platform.localeCompare(right.platform));
   const platforms = artifactFacts.map((artifact) => artifact.platform);
-  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "darwin-x64", "linux-x64"])) {
-    refuse("artifact_mismatch", `artifact platforms must be darwin-arm64, darwin-x64, linux-x64; got ${platforms.join(", ")}`);
+  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "linux-x64"])) {
+    refuse("artifact_mismatch", `artifact platforms must be darwin-arm64, linux-x64; got ${platforms.join(", ")}`);
   }
   const minimumNodeMajors = new Set(artifactFacts.map((artifact) => artifact.minimumNodeMajor));
   if (minimumNodeMajors.size !== 1) refuse("artifact_mismatch", "artifacts disagree on minimum Node major");
@@ -208,9 +208,9 @@ export function validateManifestShape(manifest) {
   if (!TAG.test(manifest.tag)) refuse("invalid", `tag is invalid: ${manifest.tag}`);
   if (!COMMIT.test(manifest.commitSha)) refuse("invalid", `commitSha is invalid: ${manifest.commitSha}`);
   positiveInteger(manifest.minimumNodeMajor, "minimumNodeMajor");
-  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 3) refuse("invalid", "artifacts must contain exactly three entries");
+  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 2) refuse("invalid", "artifacts must contain exactly two entries");
   for (const [index, artifact] of manifest.artifacts.entries()) {
-    const darwin = artifact?.platform === "darwin-arm64" || artifact?.platform === "darwin-x64";
+    const darwin = artifact?.platform === "darwin-arm64";
     exactKeys(artifact, darwin
       ? ["platform", "name", "sha256", "bytes", "installedTreeSha256", "nativeHelperProvenance"]
       : ["platform", "name", "sha256", "bytes", "installedTreeSha256"], `artifacts[${index}]`);
@@ -224,7 +224,7 @@ export function validateManifestShape(manifest) {
     }
   }
   const platforms = manifest.artifacts.map((artifact) => artifact.platform);
-  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "darwin-x64", "linux-x64"])) {
+  if (JSON.stringify(platforms) !== JSON.stringify(["darwin-arm64", "linux-x64"])) {
     refuse("invalid", `artifact platforms are invalid: ${platforms.join(", ")}`);
   }
   if (!["seal-receipt-check.mjs", "seal-receipt-v2.mjs"].includes(manifest.checker.name)) refuse("invalid", `checker.name is invalid: ${manifest.checker.name}`);

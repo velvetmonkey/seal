@@ -1,7 +1,7 @@
 <!-- generated from published release; do not edit -->
 # Install Seal v0.2.0-rc.3
 The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) publishes `seal-v0.2.0-rc.3-linux-x64`, `seal-receipt-check.mjs`, and `SHA256SUMS`; its tag resolves to commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d). macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. The published release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported. Node 20+ is required.
+Seal v0.2.0 publishes Linux x86-64 and macOS ARM64 artifacts. Both published platforms support install, demo, receipt checking and Protect. macOS x86-64, Windows and Linux ARM are not published for this version. Node 20+ is required.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -65,7 +65,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 62eec4f2c53717bb323f7e950dac0cee0251f2a24fda9a2f9afe788ad5694a34
+tree: 9dfea9f2104b72b7eb234885862c85fb0b3506762dc509f5f7d8d78c6c08873d
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
@@ -87,12 +87,11 @@ payload manifest, rather than this checkout, selects its file set.
 
 ## Build and install this checkout on macOS
 
-The macOS CI lane runs this source-build ritual on a real `macos-latest` host.
-It selects the artifact label from Node's running architecture and uses the
-SHA-256 utility shipped by macOS when GNU `sha256sum` is absent:
+The macOS CI lane runs this source-build ritual on a real macOS ARM64 host.
+It uses the SHA-256 utility shipped by macOS when GNU `sha256sum` is absent:
 
 ```bash
-platform="darwin-$(node -p 'process.arch')"
+platform="darwin-arm64"
 node scripts/build-dist.cjs --platform "$platform" --out dist
 read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS
 if [ "$expected_name" != "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
@@ -104,4 +103,4 @@ chmod +x "dist/$expected_name"
 ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+macOS ARM64 source portability is CI-exercised for install, demo, receipt checking and Protect. macOS x86-64 is not published for this version.

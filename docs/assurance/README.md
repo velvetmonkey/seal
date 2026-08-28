@@ -25,7 +25,7 @@ the Node CLI this repository ships.
    [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md). Generated
    current-release routes stay tied to published facts and are updated by the
    post-publication documentation workflow.
-5. [assurance/distribution.md](distribution.md) — what the one installable artifact is,
+5. [assurance/distribution.md](distribution.md) — what the two published platform artifacts are,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
 6. [assurance/version-identity.md](version-identity.md) — why a build off a release tag
@@ -39,8 +39,9 @@ the Node CLI this repository ships.
 1. [“What Seal covers, and what it does not”](../../README.md) — the boundary
    list at the end of the README is the current, tested statement. Gate, not
    sandbox; one server's named tool set; and receipt-key custody limits.
-   macOS source portability is CI-exercised for install, demo and receipt checking.
-   Protect is not supported on macOS yet.
+   This release publishes Linux x86-64 and macOS ARM64 artifacts.
+   Both published platforms support install, demo, receipt checking and Protect.
+   macOS x86-64, Windows and Linux ARM are not published for this version.
 2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
    the same boundary with citations.
 

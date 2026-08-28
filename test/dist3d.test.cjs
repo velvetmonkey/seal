@@ -347,10 +347,18 @@ test("darwin-arm64 is admitted on the product path", () => {
   assert.equal(result.stdout.trim(), VERSION);
 });
 
-test("help states Linux and macOS product parity", () => {
+test("darwin-x64 refuses as unpublished on the product path", () => {
+  const result = runNode([path.join(ROOT, "bin", "seal"), "protect", "db", "write"], {
+    env: { SEAL_SPINE_PLATFORM: "darwin", SEAL_SPINE_ARCH: "x64" },
+  });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.stderr, /^REFUSE unpublished_platform: darwin-x64 is not published for this version$/m);
+});
+
+test("help states the published v0.2.0 platforms", () => {
   const result = runNode([path.join(ROOT, "bin", "seal")]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.stdout, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(result.stdout, /publishes Linux x86-64 and macOS ARM64 artifacts for v0\.2\.0\./);
   assert.doesNotMatch(result.stdout, /Protect is not supported on macOS yet\./);
 });
 

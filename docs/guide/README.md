@@ -27,7 +27,7 @@ as product output.
 
 ## Before you start
 
-- macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path. Windows, Linux ARM and other platforms are unsupported.
+- This release publishes Linux x86-64 and macOS ARM64 artifacts. Both published platforms support install, demo, receipt checking and Protect. macOS x86-64, Windows and Linux ARM are not published for this version.
 - Node 20 or newer.
 - Claude Code installed (`claude --version` prints a version). `seal protect`
   needs it; `seal demo` and `seal status` do not.

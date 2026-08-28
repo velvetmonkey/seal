@@ -10,7 +10,7 @@ const path = require("node:path");
 const MAGIC = "SEALPAY1\n";
 const DATA = "--DATA--\n";
 const PLATFORM = "linux-x64";
-const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
+const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-arm64"]);
 
 function sha256Hex(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");

@@ -32,13 +32,13 @@ function treeDigest(files) {
   return sha256Hex(Buffer.from(lines, "utf8"));
 }
 
-const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
+const PUBLISHED_PLATFORMS = new Set(["linux-x64", "darwin-arm64"]);
 
 function hostPlatform() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
   const id = `${platform}-${arch}`;
-  return { ok: SUPPORTED_PLATFORMS.has(id), platform, arch, id };
+  return { ok: PUBLISHED_PLATFORMS.has(id), unpublished: id === "darwin-x64", platform, arch, id };
 }
 
 function unpackPayload(payload) {
@@ -185,12 +185,15 @@ function main() {
       "UNSUPPORTED PLATFORM",
       "",
       "Seal v0.2.0.",
-      "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+      "Seal publishes Linux x86-64 and macOS ARM64 artifacts for v0.2.0.",
+      ...(plat.unpublished ? ["macOS x86-64 is not published for this version."] : []),
       "",
       "No files were changed.",
       "",
     ].join("\n"));
-    process.stderr.write(`REFUSE unsupported_platform: this is ${plat.platform}-${plat.arch}\n`);
+    process.stderr.write(plat.unpublished
+      ? `REFUSE unpublished_platform: ${plat.id} is not published for this version\n`
+      : `REFUSE unsupported_platform: this is ${plat.platform}-${plat.arch}\n`);
     process.exit(1);
   }
 
@@ -236,7 +239,7 @@ function main() {
   const artifactPlatform = typeof manifest.platform === "string" && manifest.platform.length > 0
     ? manifest.platform
     : "<absent>";
-  if (!SUPPORTED_PLATFORMS.has(manifest.platform)) {
+  if (!PUBLISHED_PLATFORMS.has(manifest.platform)) {
     refuse("unsupported_platform", `artifact platform is ${artifactPlatform}, not a supported platform`);
   }
   if (manifest.platform !== plat.id) {

@@ -25,10 +25,6 @@ jobs:
             runner: macos-15
             wrong_arch: x86_64
             wrong_platform: darwin-x64
-          - platform: darwin-x64
-            runner: macos-15-intel
-            wrong_arch: arm64
-            wrong_platform: darwin-arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +125,7 @@ jobs:
         run: |
           version="$(tr -d '\n' < VERSION)"
           test "$GITHUB_REF_NAME" = "v$version"
-          for platform in linux-x64 darwin-arm64 darwin-x64; do
+          for platform in linux-x64 darwin-arm64; do
             test -f "$RUNNER_TEMP/dist/seal-v${version}-${platform}"
           done
       - name: Assemble the complete checksum ledger
@@ -139,11 +135,11 @@ jobs:
           checker="$RUNNER_TEMP/dist/seal-receipt-v2.mjs"
           cp checker/seal-receipt-v2.mjs "$checker"
           : > "$RUNNER_TEMP/dist/SHA256SUMS"
-          for target in "$RUNNER_TEMP"/dist/seal-v${version}-linux-x64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-arm64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-x64 "$checker"; do
+          for target in "$RUNNER_TEMP"/dist/seal-v${version}-linux-x64 "$RUNNER_TEMP"/dist/seal-v${version}-darwin-arm64 "$checker"; do
             printf '%s  %s  %s\n' "$(sha256sum "$target" | awk '{ print $1 }')" "$(wc -c < "$target" | tr -d ' ')" "$(basename "$target")" >> "$RUNNER_TEMP/dist/SHA256SUMS"
           done
-          test "$(awk '{ print $1 }' "$RUNNER_TEMP/dist/SHA256SUMS" | sort -u | wc -l)" -eq 4
-          for platform in linux-x64 darwin-arm64 darwin-x64; do
+          test "$(awk '{ print $1 }' "$RUNNER_TEMP/dist/SHA256SUMS" | sort -u | wc -l)" -eq 3
+          for platform in linux-x64 darwin-arm64; do
             grep -F "seal-v${version}-${platform}" "$RUNNER_TEMP/dist/SHA256SUMS"
           done
       - name: Claude Code evidence must name this exact artifact
@@ -182,16 +178,15 @@ jobs:
             --commit "$GITHUB_SHA" \
             --artifact "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
             --artifact "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
-            --artifact "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
             --checker "$checker" \
             --checksums "$RUNNER_TEMP/dist/SHA256SUMS" \
             --out "$RUNNER_TEMP/dist/release-manifest.json"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '%s\n' \
             "Seal v${version}." \
-            "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64." \
+            "Seal publishes Linux x86-64 and macOS ARM64 artifacts for v${version}." \
             "The native macOS process-start witness helper is release-produced, not independently reproduced." \
-            "Windows, Linux ARM and other platforms are unsupported." \
+            "macOS x86-64, Windows, Linux ARM and other platforms are not published for this version." \
             '' \
             "For Linux x86-64, the installable artifact is \`${artifact_name}\`." \
             'Its command is generated from the built artifact and `SHA256SUMS`:' \
@@ -211,7 +206,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
             "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
-            "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
             "$checker" \
             "$RUNNER_TEMP/dist/SHA256SUMS" \
             "$RUNNER_TEMP/dist/release-manifest.json" \
@@ -223,7 +217,6 @@ jobs:
           path: |
             ${{ runner.temp }}/dist/seal-v*-linux-x64
             ${{ runner.temp }}/dist/seal-v*-darwin-arm64
-            ${{ runner.temp }}/dist/seal-v*-darwin-x64
             ${{ runner.temp }}/dist/seal-receipt-v2.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
             ${{ runner.temp }}/dist/release-manifest.json
@@ -253,8 +246,6 @@ jobs:
             runner: ubuntu-24.04
           - platform: darwin-arm64
             runner: macos-15
-          - platform: darwin-x64
-            runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -301,7 +292,6 @@ jobs:
           subject-path: |
             ${{ runner.temp }}/dist/seal-v*-linux-x64
             ${{ runner.temp }}/dist/seal-v*-darwin-arm64
-            ${{ runner.temp }}/dist/seal-v*-darwin-x64
             ${{ runner.temp }}/dist/seal-receipt-v2.mjs
             ${{ runner.temp }}/dist/SHA256SUMS
             ${{ runner.temp }}/dist/release-manifest.json

@@ -1,15 +1,14 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
-Windows, Linux ARM and other platforms are not supported.
-It ships **one** installable artifact, for **Linux x86-64**.
+Seal v0.2.0 publishes Linux x86-64 and macOS ARM64 artifacts.
+Both published platforms support install, demo, receipt checking and Protect.
+macOS x86-64, Windows and Linux ARM are not published for this version.
 
 ## The artifact
 
-`scripts/build-dist.cjs` writes `dist/seal-v<identity>-linux-x64`, where the
-identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
-otherwise `<version>-dev.g<commit>` — see
+`scripts/build-dist.cjs` writes `dist/seal-v<identity>-<platform>` for
+`linux-x64` and `darwin-arm64`, where the identity is the bare `<version>` only
+when HEAD is exactly tag `v<version>` and otherwise `<version>-dev.g<commit>` — see
 [VERSION-IDENTITY.md](version-identity.md). That file
 is the installer and the payload. The published pin lives in the `SHA256SUMS`
 release asset alongside the artifact (digest and byte length). The repository

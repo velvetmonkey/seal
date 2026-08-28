@@ -4,7 +4,6 @@
 // Readiness and runtime witnessing live in protection.cjs.
 const INSTALL_IMPLEMENTATIONS = Object.freeze({
   "linux-x64": "node-linux-x64",
-  "darwin-x64": "node-darwin-native-x64",
   "darwin-arm64": "node-darwin-native-arm64",
 });
 
@@ -13,7 +12,6 @@ const INSTALL_IMPLEMENTATIONS = Object.freeze({
 // contain the native helper and its unchanged Mach-O architecture gate.
 const PROTECT_IMPLEMENTATIONS = Object.freeze({
   "linux-x64": "linux-procfs-process-start-witness",
-  "darwin-x64": "macos-sysctl3-process-and-boot-witness",
   "darwin-arm64": "macos-sysctl3-process-and-boot-witness",
 });
 
@@ -38,6 +36,7 @@ function platformSupport(env = process.env) {
     protectSupported,
     installImplementation,
     protectImplementation,
+    unpublished: `${platform}-${arch}` === "darwin-x64",
     platform,
     arch,
   };
@@ -48,7 +47,7 @@ function unsupportedPlatformText() {
     "UNSUPPORTED PLATFORM",
     "",
     "Seal v0.2.0.",
-    "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+    "Seal publishes Linux x86-64 and macOS ARM64 artifacts for v0.2.0.",
     "",
     "No files were changed.",
     "",
@@ -56,19 +55,23 @@ function unsupportedPlatformText() {
 }
 
 function requireSupportedPlatform() {
-  const { installSupported, platform, arch } = platformSupport();
+  const { installSupported, unpublished, platform, arch } = platformSupport();
   if (!installSupported) {
     process.stderr.write(unsupportedPlatformText());
-    process.stderr.write(`REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
+    process.stderr.write(unpublished
+      ? `REFUSE unpublished_platform: ${platform}-${arch} is not published for this version\n`
+      : `REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
     process.exit(1);
   }
 }
 
 function requireProtectSupportedPlatform() {
-  const { protectSupported, platform, arch } = platformSupport();
+  const { protectSupported, unpublished, platform, arch } = platformSupport();
   if (protectSupported) return;
   process.stderr.write(unsupportedPlatformText());
-  process.stderr.write(`REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
+  process.stderr.write(unpublished
+    ? `REFUSE unpublished_platform: ${platform}-${arch} is not published for this version\n`
+    : `REFUSE unsupported_platform: this is ${platform}-${arch}\n`);
   process.exit(1);
 }
 

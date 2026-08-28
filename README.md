@@ -12,10 +12,11 @@ Seal is a local approval boundary for AI-agent tool calls.
 
 ## Supported path
 
-Use Node 20+ on Linux x86-64; Protect also needs Claude Code's `claude`
-command. Protect is not supported on macOS yet, and Windows and Linux ARM are
-unsupported. The [full install guide](docs/start/install.md) covers the
-published assets, provenance checks, source builds, and platform limits.
+Use Node 20+ on Linux x86-64 or macOS ARM64. Protect also needs Claude
+Code's `claude` command. This release publishes Linux x86-64 and macOS ARM64 artifacts.
+macOS x86-64, Windows and Linux ARM are not published for this version. The
+[full install guide](docs/start/install.md) covers the published assets,
+provenance checks, source builds, and platform limits.
 
 ## Try Seal in two minutes
 

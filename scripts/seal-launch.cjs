@@ -25,13 +25,13 @@ function treeDigest(files) {
   return sha256Hex(Buffer.from(lines, "utf8"));
 }
 
-const SUPPORTED_PLATFORMS = new Set(["linux-x64", "darwin-x64", "darwin-arm64"]);
+const PUBLISHED_PLATFORMS = new Set(["linux-x64", "darwin-arm64"]);
 
 function hostPlatform() {
   const platform = process.env.SEAL_SPINE_PLATFORM || process.platform;
   const arch = process.env.SEAL_SPINE_ARCH || process.arch;
   const id = `${platform}-${arch}`;
-  return { ok: SUPPORTED_PLATFORMS.has(id), id };
+  return { ok: PUBLISHED_PLATFORMS.has(id), unpublished: id === "darwin-x64", id };
 }
 
 const host = hostPlatform();
@@ -40,12 +40,15 @@ if (!host.ok) {
     "UNSUPPORTED PLATFORM",
     "",
     "Seal v0.2.0.",
-    "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+    "Seal publishes Linux x86-64 and macOS ARM64 artifacts for v0.2.0.",
+    ...(host.unpublished ? ["macOS x86-64 is not published for this version."] : []),
     "",
     "No files were changed.",
     "",
   ].join("\n"));
-  process.stderr.write(`REFUSE unsupported_platform: refusing to run unsupported host ${host.id}\n`);
+  process.stderr.write(host.unpublished
+    ? `REFUSE unpublished_platform: ${host.id} is not published for this version\n`
+    : `REFUSE unsupported_platform: refusing to run unsupported host ${host.id}\n`);
   process.exit(1);
 }
 
@@ -61,7 +64,7 @@ try {
   if (error && error.code === "ENOENT") refuse("install_record_missing", `no install record at ${recordPath}`);
   refuse("install_record_unreadable", `cannot read install record ${recordPath}: ${error.message}`);
 }
-if (!SUPPORTED_PLATFORMS.has(record.platform) || record.platform !== host.id) {
+if (!PUBLISHED_PLATFORMS.has(record.platform) || record.platform !== host.id) {
   refuse("unsupported_platform", `install record platform is ${record.platform || "<absent>"}, running host is ${host.id}`);
 }
 

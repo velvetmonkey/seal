@@ -14,7 +14,7 @@ Receipts use one `seal.receipt/v2` envelope across the demo, protected path, and
 
 Seal is a gate, not a sandbox. It controls calls that pass through the protected MCP server path. Bash, direct file writes, network access, subprocesses, other MCP servers, and another route to the same effect remain outside that path. On the Claude Code path, Seal trusts Claude Code to present the request to a human and return the choice faithfully. See `README.md` and `test/demo-witness.test.cjs`.
 
-Seal v0.2.0 supports install, demo, receipt checking, and Protect on Linux x86-64 and macOS x64/arm64. Windows, Linux ARM, and other platforms are unsupported. The native macOS process-start witness helper is release-produced, not independently reproduced. See `.github/workflows/macos.yml`, `.github/workflows/release.yml`, and `test/release-matrix.test.mjs`.
+Seal v0.2.0 publishes Linux x86-64 and macOS ARM64 artifacts. Both published platforms support install, demo, receipt checking, and Protect. macOS x86-64, Windows, Linux ARM, and other platforms are not published for this version. The native macOS process-start witness helper is release-produced, not independently reproduced. See `.github/workflows/macos.yml`, `.github/workflows/release.yml`, and `test/release-matrix.test.mjs`.
 
 Both paths write signed receipt files. The demo generates a fresh key for its run; the protected path creates or reuses a machine-local Ed25519 key under the Seal data directory. A signature shows that the supplied key signed the canonical receipt value; it does not establish that the key is authoritative or that the recorded event occurred. See `docs/reference/receipt-operations.md` and `test/receipt-v2-verifier.test.mjs`.
 
@@ -26,7 +26,7 @@ The sibling `seal-receipt-v2.mjs` verifier reports document structure, signature
 
 - Verification no longer turns caller-supplied trust assertions into a positive verdict. Unchecked authority roots and occurrence witnesses refuse, while the report keeps signature, replay, authority, and occurrence as separate rows. See `docs/reference/receipt-operations.md` and `test/receipt-v2-verifier.test.mjs`.
 
-- macOS x64 and arm64 are supported for install, demo, receipt checking, and Protect. Release-built native process-start helpers are exercised on matching macOS runners, and the published support text names their provenance limit. See `.github/workflows/macos.yml`, `.github/workflows/release.yml`, and `test/darwin-readiness.test.cjs`.
+- macOS ARM64 is supported for install, demo, receipt checking, and Protect. macOS x86-64 is not published for this version. The release-built native process-start helper is exercised on a matching macOS runner, and the published support text names its provenance limit. See `.github/workflows/macos.yml`, `.github/workflows/release.yml`, and `test/darwin-readiness.test.cjs`.
 
 - The release workflow creates a draft, downloads the draft artifacts a reader would receive, checks their declared bytes and kernel on matching Linux and macOS runners, and publishes only after every draft-verification matrix leg succeeds. See the `release`, `verify-draft`, and `publish` jobs in `.github/workflows/release.yml`.
 

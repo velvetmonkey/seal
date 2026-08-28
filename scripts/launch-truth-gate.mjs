@@ -149,7 +149,7 @@ const frontDoorClaims = [
 for (const claim of frontDoorClaims) {
   if (readme.split(claim).length - 1 !== 1) fail(`README must carry the canonical front-door sentence exactly once: ${claim}`);
 }
-if (!readme.includes("Protect is not supported on macOS yet")) fail('README must state the macOS Protect boundary');
+if (!readme.includes("This release publishes Linux x86-64 and macOS ARM64 artifacts.")) fail('README must state the published platform boundary');
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording

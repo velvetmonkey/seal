@@ -12,7 +12,7 @@ const { unpackPayload } = require("../spine/integrity.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const DEFAULT_TAG = "v0.2.0-rc.3";
-const PLATFORMS = new Set(["linux-x64", "darwin-arm64", "darwin-x64"]);
+const PLATFORMS = new Set(["linux-x64", "darwin-arm64"]);
 const NATIVE_HELPER_LIMIT = "the native macOS helper is release-produced, not independently reproduced, and is not covered by this result";
 
 function fail(message) {
@@ -121,7 +121,7 @@ function main() {
   if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(tag)) fail(`release tag is invalid: ${tag}`);
   const platform = arg("--platform") || process.env.RELEASE_PLATFORM || "linux-x64";
   const assetName = `seal-${tag}-${platform}`;
-  if (!PLATFORMS.has(platform)) fail(`unsupported platform ${platform}; expected linux-x64, darwin-arm64, or darwin-x64`);
+  if (!PLATFORMS.has(platform)) fail(`unsupported platform ${platform}; expected linux-x64 or darwin-arm64`);
   const rebuilt = requiredArg("--rebuilt-wasm");
   if (!fs.existsSync(rebuilt) || !fs.lstatSync(rebuilt).isFile()) fail(`fresh rebuilt kernel is unavailable: ${rebuilt}`);
   const work = fs.mkdtempSync(path.join(arg("--work-dir") || os.tmpdir(), "seal-published-kernel-"));

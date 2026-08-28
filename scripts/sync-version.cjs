@@ -49,7 +49,7 @@ fs.renameSync(packageTempPath, packagePath);
 // Candidate version materialization must never rename them, rewrite their
 // bytes, or retarget citations to them. Published-release navigation is owned
 // by generate-release-docs.mjs after publication, not by VERSION.
-for (const file of ["docs/assurance/distribution.md", "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["docs/assurance/distribution.md", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 
@@ -62,7 +62,7 @@ for (const file of [path.join("docs", "guide", "when-something-looks-wrong.md")]
 // REVIEWED_GUIDE_GENERATED_VERSION_SLOT: the release version in this guide is
 // generated from VERSION. Canonicalize only this anchored, exact-version slot
 // before hashing; every other byte remains covered by the reviewed-guide pin.
-const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\. macOS source portability is CI-exercised for install, demo and receipt checking\.$)`;
+const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\. Seal publishes Linux x86-64 and macOS ARM64 artifacts for this version\.$)`;
 const generatedVersionSlot = new RegExp(generatedVersionSlotSource, "gm");
 const guidePath = path.join(ROOT, "docs", "guide", "when-something-looks-wrong.md");
 const guideText = fs.readFileSync(guidePath, "utf8");

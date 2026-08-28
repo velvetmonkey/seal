@@ -346,9 +346,9 @@ status.
 
 Seal found a live PID for a stored lease or project lock but could not read a
 process-start witness for that PID. It refuses instead of guessing whether
-the owner is current or stale. On Linux x86-64, Seal can read `/proc/<pid>/stat`;
-on macOS x64/arm64 that witness is unavailable, so Seal refuses rather than
-guessing. Stop the recorded owner and retry.
+the owner is current or stale. On Linux x86-64, Seal can read `/proc/<pid>/stat`.
+On macOS ARM64, Seal uses the release-produced native helper. On macOS x86-64,
+Seal is not published for this version. Stop the recorded owner and retry.
 
 ### `drifted`
 
@@ -451,9 +451,16 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+v0.2.0. Seal publishes Linux x86-64 and macOS ARM64 artifacts for this version.
+Both published platforms support install, demo, receipt checking and Protect.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
+
+### `unpublished_platform`
+
+Printed by the installer, installed launcher, and product platform gate for
+Seal v0.2.0 when the host is macOS x86-64. Seal publishes Linux x86-64 and
+macOS ARM64 artifacts for this version, so an Intel Mac refuses by name before
+download or install work can continue.
 
 ### `node_missing`
 

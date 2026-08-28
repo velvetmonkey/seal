@@ -203,7 +203,6 @@ function localManifest(manifestPath, assetsDir, commitSha) {
 
 function platformSentence(platform) {
   if (platform === "linux-x64") return "Linux x86-64";
-  if (platform === "darwin-x64") return "macOS x86-64";
   if (platform === "darwin-arm64") return "macOS ARM64";
   refuse("platform", `no documentation wording exists for ${platform}`);
 }
@@ -339,10 +338,10 @@ function installRegions({ manifest, manifestPublished }) {
       SENTINEL,
       `# Install Seal ${manifest.tag}`,
       manifest.artifacts
-        ? `${releaseSentence(manifest, manifestPublished)} Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.`
+        ? `${releaseSentence(manifest, manifestPublished)} Seal publishes Linux x86-64 and macOS ARM64 artifacts for ${manifest.tag}.`
         : `${releaseSentence(manifest, manifestPublished)} macOS source portability is CI-exercised for install, demo and receipt checking.`,
       manifest.artifacts
-        ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`
+        ? `Both published platforms support install, demo, receipt checking and Protect. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS x86-64, Windows and Linux ARM are not published for this version. Node ${manifest.minimumNodeMajor}+ is required.`
         : `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
       "The installer refuses before changing anything on an unsupported or mismatched platform.",
       "",

@@ -28,7 +28,6 @@ test("the release manifest binds all platforms and publication rewrites every re
     for (const [platform, cpuType] of [
       ["linux-x64", null],
       ["darwin-arm64", 0x0100000c],
-      ["darwin-x64", 0x01000007],
     ]) {
       const out = path.join(directory, platform);
       const args = [path.join(ROOT, "scripts", "build-dist.cjs"), "--platform", platform, "--out", out];
@@ -71,11 +70,10 @@ test("the release manifest binds all platforms and publication rewrites every re
     });
     validateManifestShape(manifest);
     assert.equal(manifest.schema, "seal.release/v2");
-    assert.deepEqual(manifest.artifacts.map((artifact) => artifact.platform), ["darwin-arm64", "darwin-x64", "linux-x64"]);
+    assert.deepEqual(manifest.artifacts.map((artifact) => artifact.platform), ["darwin-arm64", "linux-x64"]);
     assert.equal(manifest.artifacts[0].nativeHelperProvenance, HELPER_PROVENANCE);
-    assert.equal(manifest.artifacts[1].nativeHelperProvenance, HELPER_PROVENANCE);
-    assert.equal("nativeHelperProvenance" in manifest.artifacts[2], false);
-    assert.equal(new Set(manifest.artifacts.map((artifact) => artifact.sha256)).size, 3);
+    assert.equal("nativeHelperProvenance" in manifest.artifacts[1], false);
+    assert.equal(new Set(manifest.artifacts.map((artifact) => artifact.sha256)).size, 2);
 
     for (const artifact of artifacts) fs.writeFileSync(path.join(directory, artifact.name), artifact.bytes);
     fs.writeFileSync(path.join(directory, checkerName), checkerBytes);

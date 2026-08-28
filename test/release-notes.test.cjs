@@ -23,7 +23,9 @@ test("the current VERSION has a release note with the same identity", () => {
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, /supports install, demo, receipt checking, and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(notes, /publishes Linux x86-64 and macOS ARM64 artifacts\./);
+  assert.match(notes, /Both published platforms support install, demo, receipt checking, and Protect\./);
+  assert.match(notes, /macOS x86-64, Windows, Linux ARM, and other platforms are not published for this version\./);
   assert.match(notes, /one `seal\.receipt\/v2` envelope/);
   assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
   assert.match(notes, /Positive VERIFY is unreachable in this release/);
@@ -45,7 +47,7 @@ test("replacement rc.3 citations retain their specific evidence", () => {
   assert.match(approvalContract, /expired approval; child receives nothing/);
 
   const distribution = fs.readFileSync(path.join(ROOT, "docs", "assurance", "distribution.md"), "utf8");
-  assert.match(distribution, /Linux x86-64 is the supported Protect path\./);
+  assert.match(distribution, /Both published platforms support install, demo, receipt checking and Protect\./);
 
   const noVerification = fs.readFileSync(path.join(ROOT, "test", "no-verification-claim.test.cjs"), "utf8");
   assert.match(noVerification, /arm's-length verification/);
@@ -61,7 +63,7 @@ test("v0.2.0-rc.2 release notes retain the immutable tag's Linux-only platform c
   assert.doesNotMatch(notes, /v0\.2\.0-rc\.2 supports Linux x86-64 and macOS/);
 });
 
-test("current product and release surfaces state macOS Protect parity", () => {
+test("current product and release surfaces state published platform parity", () => {
   const claimSites = [
     ".github/workflows/release.yml",
     "bin/seal",
@@ -71,7 +73,10 @@ test("current product and release surfaces state macOS Protect parity", () => {
   ];
   for (const file of claimSites) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
+    const expected = file === ".github/workflows/release.yml"
+      ? /publishes Linux x86-64 and macOS ARM64 artifacts for v\$\{version\}\./
+      : /publishes Linux x86-64 and macOS ARM64 artifacts for v0\.2\.0\./;
+    assert.match(text, expected, `${file}: product parity`);
     assert.doesNotMatch(text, /Protect is not supported on macOS yet\./, `${file}: retired exclusion`);
   }
 });

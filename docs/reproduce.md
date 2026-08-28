@@ -42,7 +42,7 @@ digests, selected `platform`, artifact-kernel `scope`, native-helper coverage, `
 `result` is `artifact-kernel-match`, `artifact-kernel-mismatch`, or `refused`. It does not collapse those outcomes into a
 boolean or badge.
 
-The native macOS helper is release-produced, not independently reproduced, and is not covered by this result. A `--platform darwin-arm64` or `--platform darwin-x64` question names that selected artifact and refuses before download; the tool never substitutes a Linux answer.
+The native macOS helper is release-produced, not independently reproduced, and is not covered by this result. A `--platform darwin-arm64` question names that selected artifact and refuses before download; the tool never substitutes a Linux answer. A `--platform darwin-x64` question refuses because macOS x86-64 is not published for this version.
 
 ## Authority declaration
 
