@@ -211,6 +211,38 @@ test("a hung kernel worker reaches its product deadline and refuses closed", () 
   assert.ok(elapsed < 7000, `worker did not return promptly: ${elapsed} ms`);
 });
 
+test("an injected delayed decision reaches the unchanged product deadline and refuses closed", (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-delay-")), "delay-kernel-decision.cjs");
+  fs.writeFileSync(control, `
+const Module = require("node:module");
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const loaded = originalLoad.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = loaded.decide;
+    loaded.decide = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 5100));
+      return decide(...args);
+    };
+  }
+  return loaded;
+};
+`);
+  const originalNodeOptions = process.env.NODE_OPTIONS;
+  process.env.NODE_OPTIONS = `${originalNodeOptions ? `${originalNodeOptions} ` : ""}--require=${control}`;
+  t.after(() => {
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    fs.rmSync(path.dirname(control), { recursive: true, force: true });
+  });
+  assert.throws(
+    () => createKernelAuthorizationAdapter().authorize({
+      epoch: 1, issuedTool: TOOL, issuedArgs: ARGS, retryTool: TOOL, retryArgs: ARGS, accepted: true, now: 1000,
+    }),
+    (error) => error.code === "kernel_execution_refused" && /exceeded its 5000 ms deadline/.test(error.message),
+  );
+});
+
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {
   const contract = createApprovalContract({ kernelAdapter: {
     authorize() { return { verdict: "BLOCK", raw: "injected disagreement" }; },
