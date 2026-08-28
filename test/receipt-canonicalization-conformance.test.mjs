@@ -20,6 +20,11 @@ const CORPUS = [
     expected: '{"zebra":1,"alpha":2,"middle":3}',
   },
   {
+    name: "integer-index keys precede other string keys after parsing",
+    value: JSON.parse('{"2":"two","1":"one","x":"other"}'),
+    expected: '{"1":"one","2":"two","x":"other"}',
+  },
+  {
     name: "ordering is retained at every object depth",
     value: {
       outer_z: { inner_z: true, inner_a: false },
@@ -39,7 +44,7 @@ const CORPUS = [
   },
 ];
 
-test("producer and checker canonicalisers conform to the v2 insertion-order specification", () => {
+test("producer and checker canonicalisers conform to the v2 own-property enumeration specification", () => {
   for (const { name, value, expected } of CORPUS) {
     const producerBytes = producerCanonical(value);
     const checkerBytes = checkerCanonical(value);

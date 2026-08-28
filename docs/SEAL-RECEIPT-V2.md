@@ -1,8 +1,7 @@
-# `seal.receipt/v2` (Phase A)
+# `seal.receipt/v2`
 
-This is the normative Phase A contract. It is written before the Phase B
-producer. Seal implements the Phase A contract independently and does not import
-a producer canonicaliser.
+This is the normative receipt contract. The verifier implements this contract
+independently and does not import the producer canonicaliser.
 
 ## Envelope
 
@@ -14,10 +13,11 @@ answer cannot substitute for the kernel decision. REPLAY obtains only the
 decision from a decision-only kernel runner; it does not load the producer's
 receipt assembler.
 
-The envelope carries a HOST route: `passthrough`, `forward`, `block`, or
-`error`. The kernel decision type is `Allow`/`Block`; the host maps one to the
-other. Nothing in the `seal` checkout reads either Lean tree, so this
-correspondence is maintained by hand across a repository boundary.
+The host route uses `passthrough`, `forward`, `block`, or `error`. The receipt
+`verdict` uses `ALLOW`, `BLOCK`, or `ERROR`. The kernel decision type is
+`Allow`/`Block`; the host maps one to the other. The `seal` checkout includes
+the `Authorization seam differential` workflow. The workflow tests the
+correspondence between interpreted Lean and shipped WASM.
 
 ```json
 {
@@ -69,10 +69,11 @@ rule, not a permission to receive ill-formed Unicode. A byte input with
 ill-formed UTF-8 is refused before JSON parsing. Whitespace outside strings
 is accepted on READ but is not canonical bytes.
 
-Insertion order is deliberate: the kernel's Object-B inputs are replayed by
-`JSON.stringify`, which preserves stored order. Sorting would make the receipt
-arguments commitment and kernel `args_hash` different claims. The rule is a
-specification, not a shared implementation; vectors are the boundary.
+Object members are canonicalised in ECMAScript own-property enumeration order
+after parsing: integer-index keys in ascending numeric order, followed by other
+string keys in insertion order. Sorting would make the receipt arguments
+commitment and kernel `args_hash` different claims. The rule is a specification,
+not a shared implementation; vectors are the boundary.
 
 ## Verbs and trust result
 

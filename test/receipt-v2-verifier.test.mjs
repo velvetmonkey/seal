@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Conformance vectors are executable negative controls: each goes RED, then
-// the same envelope repaired goes GREEN. Evidence for docs/SEAL-RECEIPT-V2.md:
-// the vectors exercise the v2 verifier. // CLAIM-COVERAGE: docs/SEAL-RECEIPT-V2.md
+// the same envelope repaired goes GREEN. The vectors exercise the v2 verifier.
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
