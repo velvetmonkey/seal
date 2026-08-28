@@ -34,35 +34,71 @@ function measuredPhase(clock, started, finished) {
   };
 }
 
-function workerTiming(stderr) {
-  const prefix = "SEAL_KERNEL_TIMING ";
-  const lines = stderr.split(/\r?\n/);
-  const line = lines.find((candidate) => candidate.startsWith(prefix));
-  if (!line) {
-    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned no timing timestamps");
-  }
-  let timing;
-  try {
-    timing = JSON.parse(line.slice(prefix.length));
-  } catch {
-    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned unreadable timing timestamps");
-  }
-  const names = [
+const CHILD_PHASE_NAMES = [
     "child_bootstrap_to_module_load",
     "child_request_read",
     "child_request_parse",
     "wasm_load",
     "decision_execution",
     "child_response_construction_and_serialization",
-  ];
-  if (timing.clock !== "child_process_hrtime_ns" || !timing.phases || !names.every((name) => {
-    const phase = timing.phases[name];
-    return phase && /^\d+$/.test(phase.started_ns || "") && /^\d+$/.test(phase.finished_ns || "")
-      && BigInt(phase.finished_ns) >= BigInt(phase.started_ns);
-  })) {
-    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid timing timestamps");
+];
+
+function workerTiming(stderr, { requireAll } = { requireAll: true }) {
+  const prefix = "SEAL_KERNEL_TIMING_PHASE ";
+  const phases = {};
+  for (const line of stderr.split(/\r?\n/)) {
+    if (!line.startsWith(prefix)) continue;
+    let record;
+    try {
+      record = JSON.parse(line.slice(prefix.length));
+    } catch {
+      if (requireAll) throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned unreadable timing timestamps");
+      continue;
+    }
+    const { name, clock, timestamps } = record;
+    if (clock !== "child_process_hrtime_ns" || !CHILD_PHASE_NAMES.includes(name)
+      || !timestamps || !/^\d+$/.test(timestamps.started_ns || "")
+      || !/^\d+$/.test(timestamps.finished_ns || "")
+      || BigInt(timestamps.finished_ns) < BigInt(timestamps.started_ns)) {
+      if (requireAll) throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned invalid timing timestamps");
+      continue;
+    }
+    phases[name] = timestamps;
   }
-  return { timing, names };
+  if (requireAll && !CHILD_PHASE_NAMES.every((name) => phases[name])) {
+    throw new KernelAuthorizationError("kernel_output_refused", "kernel worker returned no timing timestamps");
+  }
+  return phases;
+}
+
+function timingPublication({ requestSerializationStarted, requestSerializationFinished, parentSpawnInvoked, childPhases }) {
+  const parentPhases = {
+    parent_request_serialization: measuredPhase(
+      "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
+    ),
+  };
+  const publishedChildPhases = Object.fromEntries(Object.entries(childPhases).map(([name, timestamps]) => [name, {
+    timestamps,
+    milliseconds: Number(BigInt(timestamps.finished_ns) - BigInt(timestamps.started_ns)) / 1e6,
+  }]));
+  return {
+    kernel_timing_timestamps: {
+      parent_process_hrtime_ns: {
+        parent_request_serialization: parentPhases.parent_request_serialization.timestamps,
+        parent_spawn_invoked_ns: parentSpawnInvoked.toString(),
+      },
+      child_process_hrtime_ns: Object.fromEntries(Object.entries(publishedChildPhases).map(([name, phase]) => [name, phase.timestamps])),
+    },
+    kernel_timing_ms: Object.fromEntries([
+      ...Object.entries(parentPhases),
+      ...Object.entries(publishedChildPhases),
+    ].map(([name, phase]) => [name, phase.milliseconds])),
+    kernel_timing_unmeasured: {
+      parent_spawn_to_first_child_instruction: "UNMEASURED: parent_process_hrtime_ns and child_process_hrtime_ns have no shared epoch; no cross-clock subtraction is reported.",
+      request_pipe_delivery: "UNMEASURED: parent request serialization and child request-read timestamps are on separate process clocks.",
+      response_pipe_return: "UNMEASURED: child response serialization and parent response-deserialization timestamps are on separate process clocks.",
+    },
+  };
 }
 
 function expectedWasmSha(manifestPath) {
@@ -117,10 +153,17 @@ function createKernelAuthorizationAdapter({
         maxBuffer: 8 * 1024 * 1024,
       });
       if (child.error?.code === "ETIMEDOUT") {
-        throw new KernelAuthorizationError(
+        const timeout = new KernelAuthorizationError(
           "kernel_execution_refused",
           `kernel worker exceeded its ${workerTimeoutMs} ms deadline`,
         );
+        Object.assign(timeout, timingPublication({
+          requestSerializationStarted,
+          requestSerializationFinished,
+          parentSpawnInvoked,
+          childPhases: workerTiming(child.stderr || "", { requireAll: false }),
+        }));
+        throw timeout;
       }
       if (child.error) {
         throw new KernelAuthorizationError("kernel_execution_refused", `kernel worker could not start: ${child.error.message}`);
@@ -140,7 +183,7 @@ function createKernelAuthorizationAdapter({
         throw new KernelAuthorizationError("kernel_output_refused", `kernel returned unexpected verdict ${JSON.stringify(answer.verdict)}`);
       }
       const responseDeserializationFinished = process.hrtime.bigint();
-      const { timing: childTiming, names: childPhaseNames } = workerTiming(child.stderr || "");
+      const childTiming = workerTiming(child.stderr || "");
       const parentPhases = {
         parent_request_serialization: measuredPhase(
           "parent_process_hrtime_ns", requestSerializationStarted, requestSerializationFinished,
@@ -149,8 +192,8 @@ function createKernelAuthorizationAdapter({
           "parent_process_hrtime_ns", responseDeserializationStarted, responseDeserializationFinished,
         ),
       };
-      const childPhases = Object.fromEntries(childPhaseNames.map((name) => {
-        const phase = childTiming.phases[name];
+      const childPhases = Object.fromEntries(CHILD_PHASE_NAMES.map((name) => {
+        const phase = childTiming[name];
         return [name, {
           timestamps: phase,
           milliseconds: Number(BigInt(phase.finished_ns) - BigInt(phase.started_ns)) / 1e6,
