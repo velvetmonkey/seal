@@ -113,6 +113,7 @@ Module._load = function(request, parent, isMain) {
 async function runDemoToKernelRefusal(phase, t) {
   const controlDir = tmpdir("seal-cli-kernel-phase-");
   const control = path.join(controlDir, "block.cjs");
+  const blockState = path.join(controlDir, "worker-count");
   fs.writeFileSync(control, blockedKernelPreload(phase));
   t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
   const dir = tmpdir("seal-cli-kernel-demo-");
@@ -121,13 +122,14 @@ async function runDemoToKernelRefusal(phase, t) {
     env: {
       ...process.env,
       NODE_OPTIONS: `--require=${control}`,
-      SEAL_TEST_KERNEL_BLOCK_STATE: path.join(controlDir, "worker-count"),
+      SEAL_TEST_KERNEL_BLOCK_STATE: blockState,
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const run = attach(child);
   t.after(run.kill);
   await run.waitFor(/Approve\? \[y\/N\]/);
+  fs.writeFileSync(blockState, "retry");
   child.stdin.write("y\n");
   await run.waitForErr(new RegExp(`^seal: kernel timing active phase: ${phase}$`, "m"));
   run.kill();
