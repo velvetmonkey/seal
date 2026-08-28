@@ -16,17 +16,17 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const EXPECTED_DEMO_CLOSING_LINE = "authorization rule tested; product state and forwarding tested; client and machine trusted.";
-const EXPECTED_README_LINE = "The current shipped assurance status of the authorization rule is TESTED.";
+const EXPECTED_README_LINE = "The authorization rule has a Lean proof of its decision model; the shipped rule is TESTED.";
 
 function assertExactSurfaces(output, readme) {
   const closingLine = output.trimEnd().split("\n").at(-1);
   assert.equal(closingLine, EXPECTED_DEMO_CLOSING_LINE, "seal demo closing line changed");
-  const readmeLine = readme.match(/^The current shipped assurance status of the authorization rule is TESTED\.$/mu)?.[0];
+  const readmeLine = readme.match(/^The authorization rule has a Lean proof of its decision model; the shipped rule is TESTED\.$/mu)?.[0];
   assert.equal(readmeLine, EXPECTED_README_LINE, "README must carry the strict shipped-assurance sentence");
 }
 
 function runDemo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-provedlie-control-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-authorization-status-control-"));
   try {
     const output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       cwd: ROOT, input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
