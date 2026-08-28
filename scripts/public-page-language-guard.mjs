@@ -120,8 +120,7 @@ for (const relative of scope.pages) {
   for (const match of prose.matchAll(PROVED_CLASS)) {
     const before = prose.slice(Math.max(0, match.index - 24), match.index);
     const sentence = sentenceAt(prose, match.index);
-    const context = prose.slice(Math.max(0, match.index - 160), match.index + 160);
-    if (EXPLICIT_NEGATION.test(before) || EXPLICIT_FAMILY_SUBJECT.test(sentence) || EXPLICIT_FAMILY_SUBJECT.test(context)) continue;
+    if (EXPLICIT_NEGATION.test(before) || EXPLICIT_FAMILY_SUBJECT.test(sentence)) continue;
     const line = prose.slice(0, match.index).split("\n").length;
     fail(`${relative}:${line} contains an unscoped proved-class claim: ${match[0]}`);
   }
