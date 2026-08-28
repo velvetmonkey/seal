@@ -1,6 +1,6 @@
 # Receipt operations
 
-This is the canonical reference for the four operations of the shipped v2
+Seal is the canonical reference for the four operations of the shipped v2
 receipt verifier, `checker/seal-receipt-v2.mjs`. It describes TESTED behaviour
 of that checker, not a claim that a receipt makes an outside event true.
 
