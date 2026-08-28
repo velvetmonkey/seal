@@ -465,7 +465,7 @@ download or install work can continue.
 ### `node_missing`
 
 The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
-newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.
+newer on Linux x86-64 and macOS ARM64. macOS x86-64 is not published for this version.
 
 ### `version_mismatch`
 
