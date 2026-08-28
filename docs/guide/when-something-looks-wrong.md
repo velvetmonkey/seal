@@ -459,8 +459,7 @@ Windows, Linux ARM and other unsupported installations refuse without changing f
 
 Printed by the installer, installed launcher, and product platform gate for
 Seal v0.2.0 when the host is macOS x86-64. Seal publishes Linux x86-64 and
-macOS ARM64 artifacts for this version, so an Intel Mac refuses by name before
-download or install work can continue.
+macOS ARM64 artifacts for this version, so an Intel Mac refuses by name before install work can continue.
 
 ### `node_missing`
 
