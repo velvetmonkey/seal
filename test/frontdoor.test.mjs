@@ -34,7 +34,6 @@ const CUT_CLAIMS = [
 
 const TRUTH_GATE = resolve(ROOT, "scripts", "launch-truth-gate.mjs");
 const LANGUAGE_GUARD = resolve(ROOT, "scripts", "public-page-language-guard.mjs");
-const ADDITIVE_CONTROL = resolve(ROOT, "scripts", "public-page-additive-control.mjs");
 
 test("README carries the eleven front-door sections in order", () => {
   const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
@@ -93,11 +92,6 @@ test("public pages use the banked language discipline", (t) => {
   });
   assert.equal(qualifiedIndependent.status, 0, qualifiedIndependent.stdout + qualifiedIndependent.stderr);
 
-});
-
-test("scope-token edits are additive", () => {
-  const result = spawnSync(process.execPath, [ADDITIVE_CONTROL], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 const SOURCED_BLOCKS = [

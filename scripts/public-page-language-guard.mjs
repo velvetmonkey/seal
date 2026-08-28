@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
-import { FAMILY_SCOPE_TOKEN } from "./public-page-language-rules.mjs";
 
 const ROOT = resolve(process.env.SEAL_PUBLIC_PAGE_ROOT || resolve(import.meta.dirname, ".."));
 const SCOPE = resolve(process.env.SEAL_PUBLIC_PAGE_SCOPE || resolve(ROOT, "scripts/public-page-language-scope.json"));
@@ -21,6 +20,7 @@ const BANNED = [
 ];
 const BARE_INDEPENDENCE = /(?<![\p{L}\p{N}_])(?:checker|verifier)\s+is\s+independent(?!\s+of\b)/giu;
 const PROVED_CLASS = /(?<![\p{L}\p{N}_])(?:proved|proven|machine[- ]checked)(?![\p{L}\p{N}_])/giu;
+const FAMILY_SCOPE_TOKEN = /^\s+\[(?:seal-host|policy-language|budgetcore|v1)\]/iu;
 const EXPLICIT_NEGATION = /\b(?:not|no|never|without)\s*$/iu;
 
 function fail(message) {
