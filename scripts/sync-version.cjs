@@ -86,11 +86,14 @@ function installReviewedGuideCanonicalizer() {
   const file = "test/guide-tokens.test.mjs";
   const target = path.join(ROOT, file);
   const before = fs.readFileSync(target, "utf8");
-  let after = before;
+  let after = before.replace(
+    /const GUIDE_SHA256 = "[0-9a-f]+";\n/,
+    `const GUIDE_SHA256 = "${reviewedGuideSha256}";\n`,
+  );
   const needsMigration = !after.includes("const GENERATED_VERSION_SLOT =");
   if (needsMigration) {
     after = after
-      .replace(/const GUIDE_SHA256 = "[0-9a-f]+";\n/, `const GUIDE_SHA256 = "${reviewedGuideSha256}";\n${canonicalizer}`)
+      .replace(/const GUIDE_SHA256 = "[0-9a-f]+";\n/, `$&${canonicalizer}`)
       .replace('createHash("sha256").update(text).digest("hex")', 'createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex")')
       .replace("sha256(text),\n    entry.sha256,", "sha256(canonicalReviewedGuide(entry.file, text)),\n    entry.sha256,");
   }

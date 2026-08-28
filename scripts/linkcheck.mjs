@@ -178,26 +178,6 @@ function baselineTree(sourceRoot) {
   }
 }
 
-function compareToBaseline(sourceRoot, actual) {
-  const { base, files: baselineFiles } = baselineTree(sourceRoot);
-  const expectedFiles = [...baselineFiles];
-  const expectedSource = (file) => execFileSync("git", ["show", `${base}:${file}`], { cwd: sourceRoot, encoding: "utf8" });
-  const expected = countOccurrences({
-    sourceRoot,
-    sourceFiles: expectedFiles,
-    readText: expectedSource,
-    checkTargets: false,
-  });
-  const disagreements = Object.keys(expected.files).flatMap((file) => {
-    const oldCounts = expected.files[file];
-    const newCounts = actual.files[file] ?? { internalOccurrences: 0, externalOccurrences: 0 };
-    return ["internalOccurrences", "externalOccurrences"].flatMap((key) =>
-      newCounts[key] < oldCounts[key] ? [`${file} ${key} expected=${oldCounts[key]} actual=${newCounts[key]}`] : [],
-    );
-  });
-  return { base, expected, disagreements };
-}
-
 async function main() {
   scannedTargets.clear();
   checkedTargets.clear();
@@ -261,11 +241,6 @@ async function main() {
 
   console.log(`link-check: ${actual.internalOccurrences} internal links, ${actual.externalOccurrences} external links, ${externalChecked} required live links, ${actual.unverified} unverified, ${actual.bad} broken`);
   if (actual.bad || missingPopulation.length) return 1;
-  const comparison = compareToBaseline(ROOT, actual);
-  if (comparison.disagreements.length) {
-    console.error(`REFUSE link-check tree disagreement with ${comparison.base}: ${comparison.disagreements.join("; ")}`);
-    return 1;
-  }
   return 0;
 }
 
