@@ -209,9 +209,6 @@ async function run(argv, sealBinPath) {
     return stopAnd(count === "0" ? 0 : 1);
   }
 
-  if (process.env.SEAL_TEST_KERNEL_BLOCK_STATE) {
-    fs.writeFileSync(process.env.SEAL_TEST_KERNEL_BLOCK_STATE, "retry");
-  }
   const flowed = await send("tools/call", retryParams(requestState, "accept", { approve: true }));
   if (flowed.result?.isError) fail(`the approved retry was refused: "${flowed.result.content[0].text}"`);
   console.log(`child replied through the shared proxy: "${flowed.result.content[0].text}"`);
