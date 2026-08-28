@@ -1,14 +1,18 @@
 {
   "version": 1,
   "ruling": {
-    "base": "50af7f9bf92a5b0a86b51401965f1cb5eea8ec0d",
-    "author": "darwintiming4",
+    "base": "55b9689e5c6d9905e6030196b304f0c8b64677f4",
+    "author": "frontdoor3",
     "date": "2026-08-28",
-    "scope": "Instrument lane record: the installed-tree fresh-build pin was recomputed with node scripts/sync-installed-tree-pin.cjs after direct kernel timing-boundary changes. This is an agent record, not a human ruling; no human has ruled.",
+    "scope": "The two README.md installed-tree pin sites are removed because the hashes moved to docs/start/install.md, and no other protected change is authorised.",
     "files": [
       {
-        "path": "docs/start/install.md",
-        "blob": "00df97a1a63fd7d6dd3b64a09565018e06bf7fd1"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "0ae3fd63ceebf2a818c6b396e558be25d541dac5"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "bbf95f4756560dc668ed6de25140d5f66e99cd8f"
       }
     ]
   }
