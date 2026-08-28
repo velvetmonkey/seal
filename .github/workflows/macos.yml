@@ -150,6 +150,7 @@ jobs:
   darwin-x64-kernel-timing-instrument:
     name: darwin-x64 kernel authorization timing instrument (temporary until 2026-09-11)
     runs-on: macos-15-intel
+    # Seal runs this temporary timing instrument on the Intel macOS runner.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -178,7 +179,7 @@ jobs:
             console.log(JSON.stringify({ sample, kernel_timing_ms: answer.kernel_timing_ms }));
           }
           NODE
-      - name: Negative control: delayed decision still refuses closed
+      - name: "Negative control: delayed decision still refuses closed"
         shell: bash
         run: |
           set -euo pipefail
