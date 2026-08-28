@@ -63,7 +63,14 @@ function proseOnly(text, extension) {
       .replace(/“[^”\n]*”|"[^"\n]*"/gu, " ");
   }
   prose = lines.join("\n");
-  return prose.replace(/\p{Cf}/gu, "").replace(/\p{Pd}/gu, "-");
+  // Ruled residuals: letter substitutions U+0440, U+FF50, U+1D429, and U+1D68F stay visible.
+  // Ruled residuals: combining marks U+0301 and U+034F stay visible.
+  // Ruled residuals: decorative dashes U+2043 and U+2796 stay visible.
+  // ASSUMED: U+00AD is stripped, so the guard and the rendered reader see machinechecked.
+  return prose.replace(/\p{Cf}/gu, "").replace(/\p{Pd}/gu, "-")
+    .replace(/[\t\p{Zs}]/gu, " ")
+    // U+2212 is a dash a reader sees, and Pd does not contain it.
+    .replace(/−/gu, "-");
 }
 
 function phrasePattern(phrase) {
