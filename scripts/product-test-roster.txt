@@ -38,6 +38,7 @@ test/installed-tree-pin-generator.test.cjs
 test/installed-tree-pin-manifest-review.test.cjs
 test/installed-tree-pin.test.cjs
 test/payload-require-graph.test.cjs
+test/payload-test-hook.test.cjs
 test/kernel-bridge.test.cjs
 test/kernel-timing-message.test.cjs
 test/lean-proof-source.test.mjs
