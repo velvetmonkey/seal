@@ -126,7 +126,7 @@ Seal`; the project `.mcp.json` remains byte-for-byte unchanged.
 Seal is a formally anchored authorization gate for selected MCP `tools/call`
 effects.
 
-The authorization rule has a Lean proof; the current shipped assurance status is TESTED.
+The current shipped assurance status of the authorization rule is TESTED.
 The proof-bearing source compiles reproducibly to the WASM the product uses,
 and a tested Node runtime enforces it with durable one-use state,
 configuration-drift refusal, concurrent-proxy fencing and signed receipts.
