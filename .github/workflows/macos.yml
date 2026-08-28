@@ -147,6 +147,74 @@ jobs:
             ${{ runner.temp }}/macos-dist/SHA256SUMS
           if-no-files-found: warn
 
+  darwin-x64-kernel-timing-instrument:
+    name: darwin-x64 kernel authorization timing instrument (temporary until 2026-09-11)
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Measure repeated kernel decisions on Intel macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const { createKernelAuthorizationAdapter } = require("./contract/kernel-authorization.cjs");
+          const adapter = createKernelAuthorizationAdapter();
+          const input = {
+            epoch: 1,
+            issuedTool: "demo.mutate",
+            issuedArgs: { line: "darwin timing instrument" },
+            retryTool: "demo.mutate",
+            retryArgs: { line: "darwin timing instrument" },
+            accepted: true,
+            now: 1000,
+          };
+          for (let sample = 1; sample <= 40; sample += 1) {
+            const answer = adapter.authorize(input);
+            console.log(JSON.stringify({ sample, kernel_timing_ms: answer.kernel_timing_ms }));
+          }
+          NODE
+      - name: Negative control: delayed decision still refuses closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          control="$RUNNER_TEMP/delay-kernel-decision.cjs"
+          cat > "$control" <<'NODE'
+          const Module = require("node:module");
+          const originalLoad = Module._load;
+          Module._load = function(request, parent, isMain) {
+            const loaded = originalLoad.apply(this, arguments);
+            if (request.endsWith("runner.cjs")) {
+              const decide = loaded.decide;
+              loaded.decide = async (...args) => {
+                await new Promise((resolve) => setTimeout(resolve, 5100));
+                return decide(...args);
+              };
+            }
+            return loaded;
+          };
+          NODE
+          node - <<'NODE'
+          const assert = require("node:assert/strict");
+          const { createKernelAuthorizationAdapter, KernelAuthorizationError } = require("./contract/kernel-authorization.cjs");
+          process.env.NODE_OPTIONS = `--require=${process.env.RUNNER_TEMP}/delay-kernel-decision.cjs`;
+          try {
+            createKernelAuthorizationAdapter().authorize({
+              epoch: 1, issuedTool: "demo.mutate", issuedArgs: { line: "negative control" },
+              retryTool: "demo.mutate", retryArgs: { line: "negative control" }, accepted: true, now: 1000,
+            });
+            assert.fail("expected kernel deadline refusal");
+          } catch (error) {
+            assert.ok(error instanceof KernelAuthorizationError);
+            assert.equal(error.code, "kernel_execution_refused");
+            console.log(`negative-control-refusal ${error.code}: ${error.message}`);
+          }
+          NODE
+
   linux-build-evidence:
     name: linux-x64 build evidence
     runs-on: ubuntu-24.04
