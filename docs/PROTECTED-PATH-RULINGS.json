@@ -1,18 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "55b9689e5c6d9905e6030196b304f0c8b64677f4",
-    "author": "frontdoor3",
+    "base": "9f50b3ab2f863e197cd437fd9a9564a4e5f49fbd",
+    "author": "badges",
     "date": "2026-08-28",
-    "scope": "The two README.md installed-tree pin sites are removed because the hashes moved to docs/start/install.md, and no other protected change is authorised.",
+    "scope": "Ben approved renaming the ci.yml workflow from \"Docs & claims consistency\" to \"Product, identity & docs checks\", because that workflow runs seven jobs and only one of them is docs-claims. The rename changes the workflow name only. Branch protection keys on job names, so no required check moves. No other protected change is authorised.",
     "files": [
       {
-        "path": "scripts/installed-tree-pin-sites.json",
-        "blob": "0ae3fd63ceebf2a818c6b396e558be25d541dac5"
-      },
-      {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "bbf95f4756560dc668ed6de25140d5f66e99cd8f"
+        "path": ".github/workflows/ci.yml",
+        "blob": "86df352293e322db809ba88560ab2d5de4605662"
       }
     ]
   }
