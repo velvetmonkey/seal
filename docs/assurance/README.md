@@ -56,7 +56,7 @@ the Node CLI this repository ships.
    walk: install, demo, check, protect, unprotect, from the installed
    artifact, on a PATH that cannot see Docker, Lean or Python.
 3. [test/demo-witness.test.cjs](../../test/demo-witness.test.cjs) — the scope
-   witness proved from files on disk (the child's count file, the receipts
+   witness established from files on disk (the child's count file, the receipts
    directory, the outside write), not from stdout.
 4. [assurance/claude-code-evidence.md](claude-code-evidence.md) — the client matrix, why
    the Claude Code row is still untested, and the human-assisted acceptance

@@ -12,7 +12,7 @@ test("boundary list names the implemented limits", () => {
   assert.ok(limits, "README must contain guarantees and non-guarantees");
 
   for (const phrase of [
-    "The decision rule is proved. The product seam and state machine are tested. The client and machine remain trusted.",
+    "The authorization rule has a Lean proof; the current shipped assurance status is TESTED.",
     "the product has no JavaScript authorization fallback.",
     "Seal is not an agent framework, a sandbox, an IAM platform, a policy language,",
     "Bash, direct writes, network access,\nsubprocesses, other servers, and other routes to the same effect stay outside.",
