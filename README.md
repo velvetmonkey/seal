@@ -2,7 +2,7 @@
 
 # Seal
 
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Product, identity & docs checks](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![macOS build evidence](https://github.com/velvetmonkey/seal/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/macos.yml) [![Authorization seam differential](https://github.com/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml) [![Live family claims drift](https://github.com/velvetmonkey/seal/actions/workflows/family-claims-live.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/family-claims-live.yml)
 
 AI agents can call dangerous tools.
 

@@ -94,6 +94,12 @@ function repositoryLinkVerdict(link) {
     const nonRepositoryPaths = new Set([
       '/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg',
       '/velvetmonkey/seal/actions/workflows/ci.yml',
+      '/velvetmonkey/seal/actions/workflows/macos.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/macos.yml',
+      '/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml',
+      '/velvetmonkey/seal/actions/workflows/family-claims-live.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/family-claims-live.yml',
       '/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS',
       '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64', '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs',
     ]);
