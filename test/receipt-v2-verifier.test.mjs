@@ -29,12 +29,36 @@ const expectRed = async (label, input, code) => { await assert.rejects(() => ver
 test("v2 positive signed receipt and all five rows", async () => {
   const out = await verify(text(envelope()), { publicKeyHex: pub });
   assert.equal(out.verify, false, "signature without occurrence is not VERIFY");
+  assert.equal(out.authority, "UNPINNED / CALLER-SUPPLIED");
+  assert.equal(out.occurrence, "NOT ESTABLISHED");
   assert.match(format(out), /Document structure       VALID/);
   assert.match(format(out), /Signature and bindings   VALID/);
   assert.match(format(out), /Kernel decision          REPRODUCED/);
   assert.match(format(out), /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
   assert.match(format(out), /Event occurrence         NOT ESTABLISHED/);
   assert.match(format(out), /VERIFY    UNVERIFIED/);
+});
+
+test("unchecked trust inputs are refused rather than counted as evidence", async () => {
+  await assert.rejects(
+    () => verify(text(envelope()), { publicKeyHex: pub, authorityRoot: "the wombat certified this" }),
+    (e) => e.code === "invalid_receipt" && /authority roots cannot be checked/.test(e.message),
+  );
+  await assert.rejects(
+    () => verify(text(envelope()), { publicKeyHex: pub, occurrenceWitness: "a pineapple saw it happen" }),
+    (e) => e.code === "invalid_receipt" && /occurrence witnesses cannot be checked/.test(e.message),
+  );
+});
+
+test("authority row varies with what the verifier actually checked", async () => {
+  const withoutKey = await verify(text(envelope()));
+  const withCheckedCallerKey = await verify(text(envelope()), { publicKeyHex: pub });
+  assert.equal(withoutKey.authority, "NOT ESTABLISHED");
+  assert.equal(withCheckedCallerKey.authority, "UNPINNED / CALLER-SUPPLIED");
+  assert.match(format(withoutKey), /Authority key            NOT ESTABLISHED/);
+  assert.match(format(withCheckedCallerKey), /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
+  assert.equal(withoutKey.verify, false);
+  assert.equal(withCheckedCallerKey.verify, false);
 });
 
 test("negative controls each go RED and the repaired envelope goes GREEN", async () => {
