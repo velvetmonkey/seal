@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Shared human presentation for kernel deadline timing.
+const KERNEL_SECURITY_PHASE_NAMES = Object.freeze([
+  "child_bootstrap_to_module_load",
+  "child_request_read",
+  "child_request_parse",
+  "wasm_load",
+  "decision_execution",
+  "child_response_construction_and_serialization",
+]);
+
 function printKernelTiming(error, writeLine = (line) => console.error(line)) {
   if (!error || typeof error !== "object" || !("kernel_timing_active_phase" in error)) return;
   const activePhase = error.kernel_timing_active_phase;
@@ -10,7 +19,7 @@ function printKernelTiming(error, writeLine = (line) => console.error(line)) {
       ? Object.keys(error.kernel_timing_ms).some((name) => name.startsWith("child_"))
       : false;
     const allSecurityPhases = error.kernel_timing_ms && typeof error.kernel_timing_ms === "object"
-      && ["child_bootstrap_to_module_load", "child_request_read", "child_request_parse", "wasm_load", "decision_execution", "child_response_construction_and_serialization"].every((name) => name in error.kernel_timing_ms);
+      && KERNEL_SECURITY_PHASE_NAMES.every((name) => name in error.kernel_timing_ms);
     if (allSecurityPhases) {
       writeLine(`seal: kernel_worker_exit_not_observed within its ${error.kernel_timing_deadline_ms} ms deadline.`);
       writeLine("seal: measured security-relevant phases complete.");
@@ -43,4 +52,4 @@ function printKernelTiming(error, writeLine = (line) => console.error(line)) {
   }
 }
 
-module.exports = { printKernelTiming };
+module.exports = { KERNEL_SECURITY_PHASE_NAMES, printKernelTiming };
