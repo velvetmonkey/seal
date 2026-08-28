@@ -13,6 +13,14 @@ function phase(started, finished) {
   return { started_ns: started.toString(), finished_ns: finished.toString() };
 }
 
+function emitPhase(name, started, finished) {
+  process.stderr.write(`SEAL_KERNEL_TIMING_PHASE ${JSON.stringify({
+    clock: "child_process_hrtime_ns",
+    name,
+    timestamps: phase(started, finished),
+  })}\n`);
+}
+
 async function main() {
   const childFirstInstruction = timestamp();
   const kernelRoot = path.resolve(process.argv[2]);
@@ -20,6 +28,7 @@ async function main() {
   const runner = require(path.join(kernelRoot, "runner.cjs"));
   const cfg = await import(pathToFileURL(path.join(kernelRoot, "seal-config.js")).href);
   const moduleLoadFinished = timestamp();
+  emitPhase("child_bootstrap_to_module_load", childFirstInstruction, moduleLoadFinished);
   const requestReadStarted = timestamp();
   const requestText = await new Promise((resolve, reject) => {
     let text = "";
@@ -29,12 +38,15 @@ async function main() {
     process.stdin.on("error", reject);
   });
   const requestReadFinished = timestamp();
+  emitPhase("child_request_read", requestReadStarted, requestReadFinished);
   const requestParseStarted = timestamp();
   const request = JSON.parse(requestText);
   const requestParseFinished = timestamp();
+  emitPhase("child_request_parse", requestParseStarted, requestParseFinished);
   const wasmLoadStarted = timestamp();
   await runner.load();
   const wasmLoadFinished = timestamp();
+  emitPhase("wasm_load", wasmLoadStarted, wasmLoadFinished);
 
   // The guarded entry follows the retry tool so even an altered tool is
   // mediated. Only the issue-time target is granted, so alteration denies.
@@ -63,6 +75,7 @@ async function main() {
     now: request.now,
   });
   const decisionFinished = timestamp();
+  emitPhase("decision_execution", decisionStarted, decisionFinished);
   const responseStarted = timestamp();
   const response = {
     verdict: result.verdict,
@@ -82,21 +95,8 @@ async function main() {
   };
   const serializedResponse = JSON.stringify(response);
   const responseFinished = timestamp();
+  emitPhase("child_response_construction_and_serialization", responseStarted, responseFinished);
   process.stdout.write(serializedResponse);
-  // Timing metadata is deliberately emitted after serializing the response so
-  // its response phase has two real child-clock endpoints. The parent owns the
-  // public timing output and reads this private protocol line from stderr.
-  process.stderr.write(`SEAL_KERNEL_TIMING ${JSON.stringify({
-    clock: "child_process_hrtime_ns",
-    phases: {
-      child_bootstrap_to_module_load: phase(childFirstInstruction, moduleLoadFinished),
-      child_request_read: phase(requestReadStarted, requestReadFinished),
-      child_request_parse: phase(requestParseStarted, requestParseFinished),
-      wasm_load: phase(wasmLoadStarted, wasmLoadFinished),
-      decision_execution: phase(decisionStarted, decisionFinished),
-      child_response_construction_and_serialization: phase(responseStarted, responseFinished),
-    },
-  })}\n`);
 }
 
 main().catch((error) => {
