@@ -23,6 +23,7 @@ const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
+const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
 
@@ -136,11 +137,20 @@ function createProxy(options) {
 
   function refusalResult(refusal, detail, timing) {
     const phase = timing?.kernel_timing_active_phase;
+    const completed = timing?.kernel_timing_ms && typeof timing.kernel_timing_ms === "object"
+      ? Object.keys(timing.kernel_timing_ms).some((name) => name.startsWith("child_"))
+      : false;
+    const allSecurityPhases = timing?.kernel_timing_ms && typeof timing.kernel_timing_ms === "object"
+      && KERNEL_SECURITY_PHASE_NAMES.every((name) => name in timing.kernel_timing_ms);
     const phaseDetail = typeof phase === "string" && phase.length > 0
       ? ` (kernel deadline while running ${phase})`
       : timing === undefined
         ? ""
-        : " (kernel worker exit was not observed after all measured phases completed)";
+        : allSecurityPhases
+          ? " (kernel worker exit was not observed after all measured phases completed)"
+          : completed
+            ? ` (kernel worker did not answer within its ${timing.kernel_timing_deadline_ms} ms deadline)`
+            : ` (kernel worker did not publish a child timing phase within its ${timing.kernel_timing_deadline_ms} ms deadline)`;
     return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}${phaseDetail}` }], isError: true };
   }
 

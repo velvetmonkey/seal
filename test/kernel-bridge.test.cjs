@@ -88,6 +88,26 @@ function proxyHarness(t, env = {}) {
   return { child, dir, data, receipts, send, response };
 }
 
+function redirectedKernelWorker(t, workerSource) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-worker-"));
+  const worker = path.join(dir, "worker.cjs");
+  const preload = path.join(dir, "redirect-worker.cjs");
+  fs.writeFileSync(worker, workerSource);
+  fs.writeFileSync(preload, `
+const childProcess = require("node:child_process");
+const spawnSync = childProcess.spawnSync;
+childProcess.spawnSync = function(command, args, options) {
+  const input = typeof options?.input === "string" ? JSON.parse(options.input) : {};
+  if (input.accepted && Array.isArray(args) && args[0]?.endsWith("kernel-authorization-worker.cjs")) {
+    return spawnSync.call(this, command, [${JSON.stringify(worker)}, ...args.slice(1)], options);
+  }
+  return spawnSync.apply(this, arguments);
+};
+`);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return preload;
+}
+
 test("real MCP retry uses the proved authorization kernel and forwards only its ALLOW", async (t) => {
   const run = proxyHarness(t);
   run.send(1, { name: TOOL, arguments: ARGS });
@@ -135,6 +155,60 @@ process.stdout.write = function(chunk, ...rest) {
   assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 5000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
   assert.doesNotMatch(refused.result.content[0].text, /null|undefined/);
   run.child.stdin.end();
+});
+
+test("real MCP hanging worker with no child phases does not claim measured phases completed", async (t) => {
+  const preload = redirectedKernelWorker(t, `
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+`);
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
+  assert.match(refused.result.content[0].text, /kernel worker did not publish a child timing phase/);
+  run.child.stdin.end();
+});
+
+test("real MCP timeout with partial child phases does not claim measured phases completed", async (t) => {
+  const preload = redirectedKernelWorker(t, `
+for (const name of [
+  "child_bootstrap_to_module_load",
+  "child_request_read",
+  "child_request_parse",
+  "wasm_load",
+  "decision_execution",
+]) {
+  process.stderr.write("SEAL_KERNEL_TIMING_PHASE " + JSON.stringify({
+    name,
+    clock: "child_process_hrtime_ns",
+    timestamps: { started_ns: "1", finished_ns: "2" },
+  }) + "\\n");
+}
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+`);
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
+  assert.match(refused.result.content[0].text, /kernel worker did not answer/);
+  run.child.stdin.end();
+});
+
+test("the MCP proxy contains no separate literal child phase-name array", () => {
+  const source = fs.readFileSync(path.join(ROOT, "spine", "proxy.cjs"), "utf8");
+  assert.doesNotMatch(source, /\[\s*["']child_[a-z_]+["'][\s\S]*?\]/);
 });
 
 test("real MCP timeout while a child phase runs still names that phase", async (t) => {
