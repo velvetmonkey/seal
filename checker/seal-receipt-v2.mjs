@@ -86,8 +86,10 @@ export async function replay(r) {
 function checkSignature(r, keyHex) {
   if (!r.signature) return false;
   const signatureKeys = Object.keys(r.signature).sort();
-  const unexpected = signatureKeys.find((key) => !SIGNATURE_KEYS_SORTED.includes(key));
-  if (unexpected !== undefined) fail(`signature.${unexpected}: unexpected member`, "unexpected_member");
+  const unexpectedKeys = signatureKeys.filter((key) => !SIGNATURE_KEYS_SORTED.includes(key));
+  if (unexpectedKeys.length === 1) fail(`signature.${unexpectedKeys[0]}: unexpected member`, "unexpected_member");
+  if (unexpectedKeys.length > 1)
+    fail(`signature: exactly the members algorithm,value required; unexpected members: ${unexpectedKeys.join(",")}`, "unexpected_member");
   if (JSON.stringify(signatureKeys) !== JSON.stringify(SIGNATURE_KEYS_SORTED))
     fail("signature: exactly the members algorithm,value required", "signature_mismatch");
   if (r.signature.algorithm !== "ed25519" || typeof r.signature.value !== "string" || !/^[0-9a-f]{128}$/.test(r.signature.value)) fail("signature is malformed", "signature_mismatch");

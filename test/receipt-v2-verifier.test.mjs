@@ -88,6 +88,13 @@ test("removed signature key_id and approval identity controls refuse as specifie
   assert.equal(verified.signature, true);
   console.log("CONTROL signature.key_id absent: GREEN signature valid");
 
+  const withTwoRemovedMembers = { ...good, signature: { ...good.signature, key_id: "phase-a-test", legacy: true } };
+  await assert.rejects(
+    () => verify(text(withTwoRemovedMembers), { publicKeyHex: pub }),
+    (error) => error.code === "unexpected_member" && error.message === "signature: exactly the members algorithm,value required; unexpected members: key_id,legacy",
+  );
+  console.log("CONTROL signature.key_id and legacy present: REFUSE unexpected_member: signature: exactly the members algorithm,value required; unexpected members: key_id,legacy");
+
   const missingEd25519KeyId = validateReceipt(approvalIdentityReceipt({ channel: "ed25519" }));
   assert.equal(missingEd25519KeyId.ok, false);
   assert.ok(missingEd25519KeyId.errors.includes("approval.approval_identity.key_id: required on the ed25519 channel"));
