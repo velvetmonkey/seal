@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Live landing-page truth guard. Unlike a link check, this reads the bytes
 // actually served by seal-check and compares both its identity and literal
-// <button> controls with the README's marked live-page claims.
+// <button> controls with the evaluator walk's marked live-page claims.
 //
-// Scope: this guard proves only that its required README sentence exists, two
+// Scope: this guard proves only that its required public-page sentence exists, two
 // named old phrasings are absent, the fetched HTML has no literal <button> tag,
 // and that complete HTML equals this frozen pin. It does not inspect or execute
 // app.js or wasm/seal.js. A green result cannot show that the page executes
@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const URL = process.env.LIVE_CLAIM_GUARD_URL ?? "https://velvetmonkey.github.io/seal-check/";
-const README = process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, "README.md");
+const PAGE_RELATIVE = process.env.LIVE_CLAIM_GUARD_PAGE_RELATIVE ?? "docs/start/evaluator-walk.md";
+const PAGE = process.env.LIVE_CLAIM_GUARD_PAGE ?? process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, PAGE_RELATIVE);
 const CLAIM_SITES = resolve(ROOT, "scripts/live-page-claim-sites.json");
 const PIN = Object.freeze({
   commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "e152a053637845600e1eceaee70cea873801c609",
@@ -39,7 +40,7 @@ const CACHE_PATH = resolve(CACHE_DIR, `${encodeURIComponent(PIN.commit)}.index.h
 let bad = false;
 function fail(message) { console.error(`FAIL  ${message}`); bad = true; }
 
-function claimRegions(readme) {
+function claimRegions(page) {
   let sites;
   try { sites = JSON.parse(readFileSync(CLAIM_SITES, "utf8")); }
   catch (error) { fail(`live-page claim site manifest is unreadable: ${CLAIM_SITES}: ${error.message}`); return []; }
@@ -49,43 +50,44 @@ function claimRegions(readme) {
   }
   const endpoint = "https://velvetmonkey.github.io/seal-check/";
   const lineStarts = [0];
-  for (let at = readme.indexOf("\n"); at !== -1; at = readme.indexOf("\n", at + 1)) lineStarts.push(at + 1); // CLAIM-COVERAGE: README.md
+  for (let at = page.indexOf("\n"); at !== -1; at = page.indexOf("\n", at + 1)) lineStarts.push(at + 1);
   const declared = new Set();
   const regions = [];
   for (const site of sites) {
     const key = `${site.file}:${site.line}:${site.column}`;
-    if (site.file !== "README.md" || !Number.isSafeInteger(site.line) || !Number.isSafeInteger(site.column) || site.line < 1 || site.column < 1) {
+    if (site.file !== PAGE_RELATIVE || !Number.isSafeInteger(site.line) || !Number.isSafeInteger(site.column) || site.line < 1 || site.column < 1) {
       fail(`live-page claim site manifest has invalid site ${key}`);
       continue;
     }
     if (declared.has(key)) { fail(`live-page claim site manifest has duplicate site ${key}`); continue; }
     declared.add(key);
     const begin = lineStarts[site.line - 1] + site.column - 1;
-    if (!Number.isSafeInteger(begin) || !readme.startsWith(endpoint, begin)) {
-      fail(`README is missing declared live-page claim site ${key}`);
+    if (!Number.isSafeInteger(begin) || !page.startsWith(endpoint, begin)) {
+      fail(`public page is missing declared live-page claim site ${key}`);
       continue;
     }
     const lineBegin = lineStarts[site.line - 1];
-    const lineEnd = readme.indexOf("\n", begin);
-    regions.push({ begin: lineBegin, end: lineEnd === -1 ? readme.length : lineEnd, text: readme.slice(lineBegin, lineEnd === -1 ? readme.length : lineEnd) });
+    const paragraphEnd = page.indexOf("\n\n", begin);
+    const end = paragraphEnd === -1 ? page.length : paragraphEnd;
+    regions.push({ begin: lineBegin, end, text: page.slice(lineBegin, end) });
   }
-  for (let at = readme.indexOf(endpoint); at !== -1; at = readme.indexOf(endpoint, at + endpoint.length)) {
-    const line = readme.slice(0, at).split("\n").length;
-    const lineStart = readme.lastIndexOf("\n", at - 1) + 1;
-    const key = `README.md:${line}:${at - lineStart + 1}`;
-    if (!declared.has(key)) fail(`README live-page behaviour sentence at byte ${at} is outside the checked site manifest`);
+  for (let at = page.indexOf(endpoint); at !== -1; at = page.indexOf(endpoint, at + endpoint.length)) {
+    const line = page.slice(0, at).split("\n").length;
+    const lineStart = page.lastIndexOf("\n", at - 1) + 1;
+    const key = `${PAGE_RELATIVE}:${line}:${at - lineStart + 1}`;
+    if (!declared.has(key)) fail(`public-page live-page behaviour sentence at byte ${at} is outside the checked site manifest`);
   }
-  if (regions.length === 0) fail("README has no checked live-page claim site");
+  if (regions.length === 0) fail("public page has no checked live-page claim site");
   return regions;
 }
 
-let readme;
-try { readme = readFileSync(README, "utf8"); }
-catch (error) { console.error(`ERROR  cannot read README claim population ${README}: ${error.message}`); process.exit(2); }
-const regions = claimRegions(readme);
+let page;
+try { page = readFileSync(PAGE, "utf8"); }
+catch (error) { console.error(`ERROR  cannot read public-page claim population ${PAGE}: ${error.message}`); process.exit(2); }
+const regions = claimRegions(page);
 const claims = regions.map((region) => region.text).join("\n");
 if (!claims.includes("The landing page has **zero `<button>` controls**.")) {
-  fail("README checked population must state: The landing page has **zero `<button>` controls**.");
+  fail("checked public-page population must state: The landing page has **zero `<button>` controls**.");
 }
 if (/runs? a supplied MCP tool-call|to run a supplied MCP tool-call/i.test(claims)) {
   fail("README claims the landing page runs a supplied MCP tool-call, but the checked landing-page control model forbids that claim");
@@ -124,7 +126,7 @@ function changedRegion(expected, actual) {
   return `first changed region near byte ${start}:\n- pinned ${excerpt(expected, expectedEnd)}\n+ served ${excerpt(actual, actualEnd)}`;
 }
 
-if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; README claims zero`);
+if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; checked public page claims zero`);
 else console.log("INFO  landing-page control count: zero <button> controls");
 
 let pinnedSource;

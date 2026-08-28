@@ -2,7 +2,7 @@
   "files": {
     "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:8"] },
     "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs:9"] },
-    "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:180"] },
+    "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:164"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs:36"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs:16"] },
     "docs/reference/receipt-operations-v1/README.md": { "coveredBy": ["test/receipt-operations-doc.test.mjs:32"] },
@@ -10,7 +10,8 @@
     "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs:102"] },
     "docs/SEAL-RECEIPT-V2.md": { "coveredBy": ["test/receipt-v2-verifier.test.mjs:4", "test/receipt-verdict-agreement.test.mjs:33"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
-    "README.md": { "coveredBy": ["scripts/live-page-claim-guard.mjs:52"] },
+    "README.md": { "coveredBy": ["test/frontdoor.test.mjs:142"] },
+    "docs/README.md": { "coveredBy": ["test/frontdoor.test.mjs:50"] },
     ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },
     ".github/workflows/published-kernel.yml": { "coveredBy": ["test/workflow-host-paths.test.cjs:38"] },
     ".github/workflows/release.yml": { "allowlistReason": "The candidate is the release-job assertion that its Linux artifact name exists; CI executes this workflow only on release publication, outside a repository-local fixture." },
@@ -35,6 +36,7 @@
     "spine/demo.cjs": { "allowlistReason": "The candidate is a demo refusal diagnostic about a caller-selected receipt directory; it is exercised only with a filesystem fixture." },
     "spine/platform.cjs": { "allowlistReason": "This module is the canonical platform-message data source; its release/platform assertion is checked at the README and launcher surfaces." },
     "test/frontdoor.test.mjs": { "allowlistReason": "The candidate strings are expected front-door assertions consumed by this test; they are test fixtures, not an additional published claim surface." },
+    "test-support/front-door-invariants.mjs": { "allowlistReason": "The candidate strings are exact README and route-table fixtures consumed by the front-door invariant tests; they are test data, not an additional published claim surface." },
     "test/fixtures/readme-demo-output.txt": { "allowlistReason": "This is captured demo output supplied to the README transcript guard; it is test evidence, not an additional published claim surface." },
     "docs/assurance/architecture.md": { "coveredBy": ["test/docs-scope.test.mjs:34"] },
     "docs/archive/ARTIFACT-INHERITANCE.md": { "allowlistReason": "This declared successor design intentionally records unbuilt and inferred mappings; its cross-repository implementation status cannot be established by a local executable check." },
@@ -62,7 +64,7 @@
     "docs/archive/TRUTH-BOX.md": { "coveredBy": ["test/claims-drift.test.mjs:15"] },
     "docs/assurance/version-identity.md": { "allowlistReason": "This version-history narrative includes external release and compatibility statements that cannot be established solely from the current checkout." },
     "docs/archive/WHAT-SEAL-IS.md": { "coveredBy": ["test/docs-scope.test.mjs:35"] },
-    "docs/archive/WHY-DIFFERENT.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:174"] },
+    "docs/archive/WHY-DIFFERENT.md": { "coveredBy": ["scripts/launch-truth-gate.mjs:158"] },
     "docs/guide/README.md": { "allowlistReason": "This guide-index sentence chooses which named guide a reader should open for a situation; the repository can validate those links but cannot execute or prove the reader-specific recommendation." },
     "docs/guide/choosing-what-to-protect.md": { "allowlistReason": "This operator decision guide gives situational advice that depends on the user's tools and threat model, not a fixed local test fixture." },
     "docs/guide/github-actions-provenance.md": { "allowlistReason": "This guide explains GitHub Actions provenance and depends on GitHub-hosted workflow and attestation state outside the repository." },
@@ -71,6 +73,6 @@
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs:136"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs:128"] },
     "test/guide-tokens.test.mjs": { "allowlistReason": "The apparent assertions are reviewed guide claim literals and tamper fixtures consumed by this test; they are test evidence, not another published claim surface." },
-    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:16", "scripts/launch-truth-gate.mjs:170"] }
+    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs:16", "scripts/launch-truth-gate.mjs:154"] }
   }
 }

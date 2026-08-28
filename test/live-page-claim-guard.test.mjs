@@ -10,7 +10,7 @@ import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "scripts/live-page-claim-guard.mjs");
-const originalReadme = readFileSync(join(ROOT, "README.md"), "utf8");
+const originalReadme = readFileSync(join(ROOT, "docs/start/evaluator-walk.md"), "utf8");
 const PIN_COMMIT = "fixturecommit";
 
 async function withPage(body, fn) {
@@ -27,10 +27,10 @@ function run(url, readme = originalReadme, pinBody = "<html></html>", provenance
   mkdirSync(runnerTemp, { recursive: true });
   const env = { ...process.env };
   if (productionPin) {
-    for (const name of ["LIVE_CLAIM_GUARD_URL", "LIVE_CLAIM_GUARD_README", "LIVE_CLAIM_GUARD_COMMIT", "LIVE_CLAIM_GUARD_BYTES", "LIVE_CLAIM_GUARD_SHA256", "LIVE_CLAIM_GUARD_PROVENANCE_URL"]) delete env[name];
+    for (const name of ["LIVE_CLAIM_GUARD_URL", "LIVE_CLAIM_GUARD_PAGE", "LIVE_CLAIM_GUARD_PAGE_RELATIVE", "LIVE_CLAIM_GUARD_README", "LIVE_CLAIM_GUARD_COMMIT", "LIVE_CLAIM_GUARD_BYTES", "LIVE_CLAIM_GUARD_SHA256", "LIVE_CLAIM_GUARD_PROVENANCE_URL"]) delete env[name];
   } else {
     Object.assign(env, {
-      LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_README: path,
+      LIVE_CLAIM_GUARD_URL: url, LIVE_CLAIM_GUARD_PAGE: path,
       LIVE_CLAIM_GUARD_COMMIT: commit,
       LIVE_CLAIM_GUARD_BYTES: String(Buffer.byteLength(pinBody)),
       LIVE_CLAIM_GUARD_SHA256: createHash("sha256").update(pinBody).digest("hex"),
@@ -66,7 +66,7 @@ test("does not print a success verdict after README claim-population failure", a
   await withPage("<html></html>", async (url) => {
     const result = await run(url, "", "<html></html>");
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /README has no checked live-page claim site/);
+    assert.match(result.stderr, /public page has no checked live-page claim site/);
     assert.doesNotMatch(result.stdout, /\bPASS\b/);
   });
 });
@@ -76,7 +76,7 @@ test("fails and names a fetched button disagreement", async () => {
   await withPage(body, async (url) => {
     const result = await run(url, originalReadme, body);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /landing page has 1 <button> controls; README claims zero/);
+    assert.match(result.stderr, /landing page has 1 <button> controls; checked public page claims zero/);
   });
 });
 
@@ -170,7 +170,7 @@ test("fails closed on poisoned cache bytes under the right commit key", async ()
   }
 });
 
-test("fails when a README behaviour sentence is outside the checked population", async () => {
+test("fails when a public-page behaviour sentence is outside the checked population", async () => {
   await withPage("<html></html>", async (url) => {
     const result = await run(url, `${originalReadme}\n[unmarked](${"https://velvetmonkey.github.io/seal-check/"}) describes the page.\n`);
     assert.equal(result.status, 1);

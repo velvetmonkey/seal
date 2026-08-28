@@ -16,12 +16,13 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const EXPECTED_DEMO_CLOSING_LINE = "authorization rule tested; product state and forwarding tested; client and machine trusted.";
+const EXPECTED_README_LINE = "The decision rule is proved. The product seam and state machine are tested. The client and machine remain trusted.";
 
 function assertExactSurfaces(output, readme) {
   const closingLine = output.trimEnd().split("\n").at(-1);
   assert.equal(closingLine, EXPECTED_DEMO_CLOSING_LINE, "seal demo closing line changed");
-  const readmeLine = readme.match(/^authorization rule [^\n]+$/mu)?.[0];
-  assert.equal(readmeLine, closingLine, "README assurance line must equal the demo closing line");
+  const readmeLine = readme.match(/^The decision rule [^\n]+$/mu)?.[0];
+  assert.equal(readmeLine, EXPECTED_README_LINE, "README must carry the banked proved/tested/trusted sentence");
 }
 
 function runDemo() {
@@ -49,7 +50,7 @@ test("the two exact surfaces go red when physically tampered", () => {
   assert.throws(() => assertExactSurfaces(tamperedOutput, readme), /seal demo closing line changed/);
   console.log("RED demo closing line tamper: seal demo closing line changed");
 
-  const tamperedReadme = readme.replace(EXPECTED_DEMO_CLOSING_LINE, "authorization rule proved; product state and forwarding tested; client and machine trusted.");
-  assert.throws(() => assertExactSurfaces(output, tamperedReadme), /README assurance line must equal the demo closing line/);
-  console.log("RED README assurance line tamper: README assurance line must equal the demo closing line");
+  const tamperedReadme = readme.replace(EXPECTED_README_LINE, "The decision rule is tested. The product seam and state machine are tested. The client and machine remain trusted.");
+  assert.throws(() => assertExactSurfaces(output, tamperedReadme), /README must carry the banked proved\/tested\/trusted sentence/);
+  console.log("RED README assurance line tamper: banked proved/tested/trusted sentence changed");
 });

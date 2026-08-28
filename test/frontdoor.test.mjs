@@ -5,6 +5,12 @@ import { readFileSync, readdirSync, mkdtempSync, writeFileSync, mkdirSync, rmSyn
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import {
+  checkDocsRouteTable,
+  checkReadmeFrontDoor,
+  DOCS_ROUTE_TABLE,
+  README_SECTIONS,
+} from "../test-support/front-door-invariants.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SEAL = resolve(ROOT, "bin", "seal");
@@ -27,6 +33,65 @@ const CUT_CLAIMS = [
 ];
 
 const TRUTH_GATE = resolve(ROOT, "scripts", "launch-truth-gate.mjs");
+const LANGUAGE_GUARD = resolve(ROOT, "scripts", "public-page-language-guard.mjs");
+
+test("README carries the eleven front-door sections in order", () => {
+  const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
+  assert.doesNotThrow(() => checkReadmeFrontDoor(readme));
+  assert.throws(() => checkReadmeFrontDoor(readme.replace(README_SECTIONS[5], "")), /required section absent or out of order/);
+  const reordered = readme.replace(README_SECTIONS[5], "TEMP_SECTION")
+    .replace(README_SECTIONS[6], README_SECTIONS[5])
+    .replace("TEMP_SECTION", README_SECTIONS[6]);
+  assert.throws(() => checkReadmeFrontDoor(reordered), /required section absent or out of order/);
+});
+
+test("docs/README contains only its heading and three-route table", () => {
+  const routes = readFileSync(resolve(ROOT, "docs/README.md"), "utf8");
+  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md
+  assert.throws(() => checkDocsRouteTable(`${DOCS_ROUTE_TABLE}\nStray paragraph.\n`), /must contain only/);
+});
+
+test("public pages use the banked language discipline", (t) => {
+  const green = spawnSync(process.execPath, [LANGUAGE_GUARD], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(green.status, 0, green.stdout + green.stderr);
+
+  const dir = mkdtempSync(join(tmpdir(), "seal-public-language-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, "page.md"), "This product is production-ready.\n");
+  writeFileSync(join(dir, "scope.json"), JSON.stringify({ pages: ["page.md"] }));
+  const red = spawnSync(process.execPath, [LANGUAGE_GUARD], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: join(dir, "scope.json") },
+  });
+  assert.notEqual(red.status, 0);
+  assert.match(red.stderr, /page\.md:1 contains banned phrase: production-ready/);
+
+  writeFileSync(join(dir, "page.md"), 'Quoted: "production-ready". Blocked substring: unproduction-readyish.\n');
+  const quoted = spawnSync(process.execPath, [LANGUAGE_GUARD], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: join(dir, "scope.json") },
+  });
+  assert.equal(quoted.status, 0, quoted.stdout + quoted.stderr);
+
+  writeFileSync(join(dir, "page.md"), `The checker is ${"indepen" + "dent"}.\n`);
+  const bareIndependent = spawnSync(process.execPath, [LANGUAGE_GUARD], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: join(dir, "scope.json") },
+  });
+  assert.notEqual(bareIndependent.status, 0);
+  assert.match(bareIndependent.stderr, /bare indepen(?:dent) description/);
+
+  writeFileSync(join(dir, "page.md"), `The checker is ${"indepen" + "dent"} of its producer implementation.\n`);
+  const qualifiedIndependent = spawnSync(process.execPath, [LANGUAGE_GUARD], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, SEAL_PUBLIC_PAGE_ROOT: dir, SEAL_PUBLIC_PAGE_SCOPE: join(dir, "scope.json") },
+  });
+  assert.equal(qualifiedIndependent.status, 0, qualifiedIndependent.stdout + qualifiedIndependent.stderr);
+});
 
 const SOURCED_BLOCKS = [
   "Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
@@ -45,8 +110,8 @@ function withoutHtmlCode(text) {
 
 test("the repository landing page uses only frisked product prose", () => {
   for (const block of SOURCED_BLOCKS) assert.ok(INDEX.includes(block), `index.html is missing sourced block: ${block}`);
-  assert.match(NORMALIZED_SOURCES, /One exact call\. One approval\. One use\./);
-  assert.match(NORMALIZED_SOURCES, /Seal controls calls that pass through the protected MCP server path\./);
+  assert.match(NORMALIZED_SOURCES, /Seal is a local approval boundary for AI-agent tool calls\./);
+  assert.match(NORMALIZED_SOURCES, /Claude can ask\. Seal decides whether that exact call may cross the boundary\./);
   for (const claim of CUT_CLAIMS) {
     assert.equal(INDEX.includes(claim), false, `index.html contains cut claim: ${claim}`);
     assert.equal(NORMALIZED_SOURCES.includes(claim), false, `README/docs contain cut claim: ${claim}`);
@@ -66,8 +131,8 @@ test("the first architecture diagram is the shipped Node path", () => {
   }
 });
 
-test("README claim: Seal intercepts one call, asks approval, and refuses its replay", () => {
-  const claim = "Seal is a proxy that intercepts one MCP tool call, asks you to approve it, and refuses to replay it without a new approval.";
+test("README claim: Seal holds one exact call and permits at most one execution", () => {
+  const claim = "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.";
   const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-"));
   let output;
   assert.doesNotThrow(() => {
@@ -122,4 +187,27 @@ test("launch truth gate compares the complete self-repository path", () => {
     "https://github.com/velvetmonkey/seal.git%2Fextra",
   ]) assert.notEqual(run(link).status, 0, link);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("README installer check executes the command without restoring the installed-tree transcript", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "seal-frontdoor-installer-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const readmePath = join(dir, "README.md");
+  const artifact = join(dir, "fixture-installer");
+  const tree = "a".repeat(64);
+  writeFileSync(readmePath, readFileSync(resolve(ROOT, "README.md"), "utf8"));
+  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal 0.2.0-rc.3 linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
+  const env = {
+    ...process.env,
+    SEAL_INSTALL_TRANSCRIPT_README: readmePath,
+    SEAL_INSTALL_TRANSCRIPT_ARTIFACT: artifact,
+  };
+  const green = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(green.status, 0, green.stdout + green.stderr);
+  assert.match(green.stdout, /installed-tree transcript stays off the front page/);
+
+  writeFileSync(readmePath, `${readFileSync(readmePath, "utf8")}\n<!-- Seal installed-tree pin role: published-asset -->\n`);
+  const red = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(red.status, 1, red.stdout + red.stderr);
+  assert.match(red.stderr, /must not carry an installed-tree transcript/);
 });

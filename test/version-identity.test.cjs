@@ -165,7 +165,7 @@ test("every emitted release identity derives from VERSION", () => {
   assert.ok(publishedVersion, "README must name the published release version");
   assert.doesNotThrow(() => fs.statSync(path.join(ROOT, ".git")));
   assert.equal(run("git", ["cat-file", "-e", `v${publishedVersion}^{commit}`], { cwd: ROOT }).code, 0, `published v${publishedVersion} tag must resolve`);
-  for (const file of ["README.md", "docs/guide/README.md"]) {
+  for (const file of ["docs/start/install.md", "docs/guide/README.md"]) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${publishedVersion.replaceAll(".", "\\.")} linux-x64`));
   }
@@ -266,6 +266,33 @@ test("sync refuses when the current VERSION release note is absent", () => {
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.notEqual(sync.code, 0, "sync must go red when the current release note is absent");
   assert.match(sync.stderr, new RegExp(`current release notes are absent: docs/assurance/RELEASE-NOTES-v${VERSION.replaceAll(".", "\\.")}\\.md`));
+});
+
+test("sync recomputes the reviewed-guide digest when its input moves", () => {
+  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-guide-digest-"));
+  fs.cpSync(ROOT, scratch, {
+    recursive: true,
+    filter(source) {
+      const relative = path.relative(ROOT, source);
+      const temporary = path.relative(ROOT, path.resolve(os.tmpdir()));
+      return ![".family", ".git", "dist", "kernel", temporary].includes(relative)
+        && !relative.startsWith(`${temporary}${path.sep}`)
+        && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
+    },
+  });
+  const guide = path.join(scratch, "docs", "guide", "when-something-looks-wrong.md");
+  fs.appendFileSync(guide, "\nDerived digest recomputation fixture.\n");
+  const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
+  assert.equal(sync.code, 0, sync.stderr);
+  const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
+  const generatedSlot = new RegExp(
+    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)`,
+    "gm",
+  );
+  const expected = crypto.createHash("sha256")
+    .update(fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>"))
+    .digest("hex");
+  assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
 });
 
 test("stale-version scope preserves a historical release-note filename in a live document", () => {

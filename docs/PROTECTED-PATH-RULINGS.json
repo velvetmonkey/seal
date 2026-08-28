@@ -1,14 +1,18 @@
 {
   "version": 1,
   "ruling": {
-    "base": "c97706b3a5fc10136f3455dd41b2a94f9fdb0ea9",
-    "author": "Ben",
+    "base": "55b9689e5c6d9905e6030196b304f0c8b64677f4",
+    "author": "frontdoor3",
     "date": "2026-08-28",
-    "scope": "Lean launcher path work order: no file under .github may contain /home/monkey, and a CI check must fail when one does. This covers only adding that check to the product-suite job in ci.yml; no pin, fixture, receipt implementation, or VERSION change is authorized.",
+    "scope": "The two README.md installed-tree pin sites are removed because the hashes moved to docs/start/install.md, and no other protected change is authorised.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "6627903c25acdb7fefe850fff29e891eada62fd5"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "0ae3fd63ceebf2a818c6b396e558be25d541dac5"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "bbf95f4756560dc668ed6de25140d5f66e99cd8f"
       }
     ]
   }

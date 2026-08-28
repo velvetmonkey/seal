@@ -135,31 +135,15 @@ for (const link of rawCheckedRepositoryLinks(readme)) {
 // --- README: the developer route, roadmap step 6 ---
 
 const umbrellaName = workflowName('umbrella workflow', umbrellaWorkflow);
-const badges = [...readme.matchAll(/\[!\[([^\]]+)\]\(([^)]+badge\.svg\?branch=main)\)\]\(([^)]+)\)/g)]
-  .map((match) => ({ label: match[1], image: match[2], target: match[3] }));
-if (badges.length !== 1) fail(`README must contain exactly one native main-branch workflow badge; found ${badges.length}`);
-const badge = badges[0];
-if (badge.label !== umbrellaName
-  || badge.image !== 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main'
-  || badge.target !== 'https://github.com/velvetmonkey/seal/actions/workflows/ci.yml') {
-  fail(`README badge does not truthfully map workflow ${JSON.stringify(umbrellaName)} to this repository's ci.yml`);
+const frontDoorClaims = [
+  'Seal is a local approval boundary for AI-agent tool calls.',
+  'Claude can ask. Seal decides whether that exact call may cross the boundary.',
+  'The decision rule is proved. The product seam and state machine are tested. The client and machine remain trusted.',
+];
+for (const claim of frontDoorClaims) {
+  if (readme.split(claim).length - 1 !== 1) fail(`README must carry the canonical front-door sentence exactly once: ${claim}`);
 }
-if (/shields\.io[^\n]*actions\/workflow\/status/i.test(readme)) fail('README uses a workflow-status proxy instead of the native GitHub badge endpoint');
-
-// The canonical approval-origin sentence, verbatim (roadmap section 6),
-// placed once on the front page.
-const approvalOrigin = 'Seal asks you to approve one exact call. It will not run that call twice, and it might not run it at all. On the Claude Code path, Seal trusts Claude Code to present the request to a human and faithfully return the human\'s choice; Seal cannot distinguish a human click from a client-generated acceptance.'; // CLAIM-COVERAGE: README.md
-const originCount = readme.split(approvalOrigin).length - 1;
-if (originCount !== 1) fail(`README must carry the canonical approval-origin sentence verbatim exactly once; found ${originCount}`);
-
-// The platform sentence, verbatim (roadmap section 7), stated plainly.
-const platformSentence = '**macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.**';
-const platformCount = readme.split(platformSentence).length - 1;
-if (platformCount !== 1 || /supports Linux x86-64 and macOS x64\/arm64|source builds support Linux x86-64 and macOS/i.test(readme)) fail(platformCount !== 1 ? `README must state the macOS portability and Protect boundary verbatim exactly once; found ${platformCount}` : 'README claims macOS support without excluding Protect');
-
-// The signed-receipt claim was the fifth false user-visible string in this build; the demo signs per-run while the protected path uses a durable signer.
-if (!readme.includes('protected path creates or reuses a machine-local signing key')) fail('README must disclose the protected path\'s durable machine-local receipt key');
-if (!readme.includes("demo's key is generated fresh for that run")) fail('README must distinguish the demo\'s temporary receipt key from the protected path\'s durable key');
+if (!readme.includes("Protect is not supported on macOS yet")) fail('README must state the macOS Protect boundary');
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording
@@ -182,7 +166,7 @@ requireMatch(evaluator, /The module axiom gate is derived evidence: run `lake ex
 if (/expected 51 production modules and 25 kernel-baseline assignments/.test(evaluator)) fail('time-dependent module and assignment counts were copied back into the evaluator prose');
 requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}28bb3ae7/, 'current fleet disposition must remain explicitly dated');
 
-console.log(`LAUNCH TRUTH OK: ${umbrellaName}; one badge, the approval-origin and platform sentences, and the standing corrections all hold`);
+console.log(`LAUNCH TRUTH OK: ${umbrellaName}; the canonical front door, platform boundary, and standing corrections all hold`);
 
 function withoutHtmlCommentClosers(source) {
   // A paired HTML comment closer is carrier syntax, not destination text.

@@ -119,6 +119,16 @@ test("legacy docs state release-listing facts and check compares claims with tha
     };
     const generated = await run([], env);
     assert.equal(generated.code, 0, generated.stderr);
+    const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
+    assert.match(readme, /The current source is the unreleased `v0\.2\.0` candidate\. The install commands below fetch the\s*> published `v0\.2\.0-rc\.3`, which carries the previous receipt format and Linux-only Protect support\./);
+    const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
+    assert.equal(equalVersion.code, 0, equalVersion.stderr);
+    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the unreleased/);
+    console.log("TAMPER equal-version: divergence block absent");
+    const restoredVersion = await run([], env);
+    assert.equal(restoredVersion.code, 0, restoredVersion.stderr);
+    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the unreleased `v0\.2\.0` candidate/);
+    console.log("RESTORE divergent versions: divergence block present");
     const install = fs.readFileSync(path.join(docs, "docs", "start", "install.md"), "utf8");
     assert.ok(
       install.includes(`publishes \`${assets.artifactName}\`, \`seal-receipt-check.mjs\`, and \`SHA256SUMS\`; its tag resolves to commit`),

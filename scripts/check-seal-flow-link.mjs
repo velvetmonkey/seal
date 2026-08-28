@@ -34,5 +34,5 @@ function readReadme(path) {
 
 const readme = readReadme(README);
 if (readme.includes("assets/seal-flow.svg")) fail("diagram_still_referenced", "README still references assets/seal-flow.svg");
-if (!/INPUT REQUIRED[\s\S]*?BLOCKED/.test(readme)) fail("terminal_capture_absent", "README has no held-to-blocked terminal capture");
-console.log("PASS  README uses the terminal approval capture and does not reference the SVG");
+if (!/before approval: 0 calls\nafter approval:  1 call\nafter replay:    1 call - refused\noutside Seal:    effect succeeded, 0 Seal decisions/.test(readme)) fail("terminal_capture_absent", "README has no four-line approval proof");
+console.log("PASS  README uses the four-line approval proof and does not reference the SVG");

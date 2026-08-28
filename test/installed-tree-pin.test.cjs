@@ -244,18 +244,11 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
     },
   });
 
-  const files = ["README.md", "docs/guide/README.md"];
+  const files = ["docs/guide/README.md"];
   const before = new Map();
   for (const relative of files) {
     const target = path.join(copy, relative);
     let text = fs.readFileSync(target, "utf8");
-    if (relative === "README.md") {
-      text = text.replace(
-        /(<!-- Seal installed-tree pin role: fresh-build -->[\s\S]*?\/store\/)[0-9a-f]{64}/,
-        `$1${"f".repeat(64)}`,
-      );
-      fs.writeFileSync(target, text);
-    }
     before.set(relative, markedBlockBytes(text, "published-asset"));
   }
 
@@ -264,13 +257,11 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
     encoding: "utf8",
   });
   assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-  assert.match(repin.stderr, /REFUSE published_asset_pin: README\.md:\d+ role published-asset/);
   assert.match(repin.stderr, /REFUSE published_asset_pin: docs\/guide\/README\.md:\d+ role published-asset/);
   for (const relative of files) {
     const after = markedBlockBytes(fs.readFileSync(path.join(copy, relative), "utf8"), "published-asset");
     assert.deepEqual(after, before.get(relative), `${relative} published-asset blocks changed`);
   }
-  assert.doesNotMatch(fs.readFileSync(path.join(copy, "README.md"), "utf8"), new RegExp("f{64}"));
 });
 
 test("repin refuses two role markers before one fence and names both markers", (t) => {
@@ -282,13 +273,13 @@ test("repin refuses two role markers before one fence and names both markers", (
       return copyableSource(source);
     },
   });
-  const readme = path.join(copy, "README.md");
+  const readme = path.join(copy, "docs", "guide", "README.md");
   const original = fs.readFileSync(readme, "utf8");
   const stale = "f".repeat(64);
   const attacked = original
     .replace(
-      "<!-- Seal installed-tree pin role: published-asset -->\n```output",
-      "<!-- Seal installed-tree pin role: published-asset -->\n<!-- Seal installed-tree pin role: fresh-build -->\n```output",
+      "**Seal installed-tree pin role:** `published-asset`\n```output",
+      "**Seal installed-tree pin role:** `published-asset`\n<!-- Seal installed-tree pin role: fresh-build -->\n```output",
     )
     .replace(/(store: \/home\/you\/\.local\/lib\/seal\/store\/)[0-9a-f]{64}/, `$1${stale}`);
   fs.writeFileSync(readme, attacked);
@@ -297,7 +288,7 @@ test("repin refuses two role markers before one fence and names both markers", (
     encoding: "utf8",
   });
   assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: README\.md:47 and README\.md:48 precede fenced block at README\.md:49/);
+  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: docs\/guide\/README\.md:54 and docs\/guide\/README\.md:55 precede fenced block at docs\/guide\/README\.md:56/);
   assert.match(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 

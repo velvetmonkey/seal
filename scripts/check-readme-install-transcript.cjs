@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Execute the documented release installer and compare its stdout to README.md.
+// Execute the documented release installer without putting its installed-tree
+// transcript back on the reader's front page.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const https = require("node:https");
@@ -40,18 +41,15 @@ function readReadme() {
   }
 }
 
-function documentedTranscript(readme) {
-  const anchor = "<!-- Seal installed-tree pin role: published-asset -->";
-  const install = readme.indexOf(anchor);
-  const start = install === -1 || !readme.startsWith("\n```output\n", install + anchor.length)
-    ? -1
-    : install + anchor.length + 1;
-  const end = start === -1 ? -1 : readme.indexOf("\n```", start + 10);
-  if (install === -1 || start === -1 || end === -1) fail(`README install transcript absent: ${README}`);
-  const body = readme.slice(start + "```output\n".length, end);
-  if (!body) fail(`README install transcript empty: ${README}`);
-  const line = readme.slice(0, start).split("\n").length + 1;
-  return { body: `${body}\n`, line };
+function documentedInstall(readme) {
+  const command = './"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local';
+  const at = readme.indexOf(command);
+  if (at === -1) fail(`README release installer command absent: ${README}`);
+  if (readme.indexOf(command, at + command.length) !== -1) fail(`README release installer command duplicated: ${README}`);
+  if (/Seal installed-tree pin role|^store: .*\/store\/[0-9a-f]{64}$|^tree: [0-9a-f]{64}$/m.test(readme)) {
+    fail(`README must not carry an installed-tree transcript: ${README}`);
+  }
+  return { line: readme.slice(0, at).split("\n").length };
 }
 
 function documentedTag(readme) {
@@ -82,23 +80,6 @@ function fetchBytes(url, redirects = 0) {
   });
 }
 
-function normalizeTranscript(text) {
-  return text
-    .replace(/^store: .*?\/\.local\/lib\/seal\/store\//m, "store: $HOME/.local/lib/seal/store/")
-    .replace(/^command: .*?\/\.local\/bin\/seal$/m, "command: $HOME/.local/bin/seal")
-    .replace(/^  export PATH=.*?\/\.local\/bin:\$PATH$/m, "  export PATH=$HOME/.local/bin:$PATH");
-}
-
-function firstDifference(expected, actual) {
-  const expectedLines = expected.split("\n");
-  const actualLines = actual.split("\n");
-  const count = Math.max(expectedLines.length, actualLines.length);
-  for (let i = 0; i < count; i += 1) {
-    if (expectedLines[i] !== actualLines[i]) return { expected: expectedLines[i] ?? "", actual: actualLines[i] ?? "" };
-  }
-  return { expected: "", actual: "" };
-}
-
 async function releaseAsset(tag) {
   if (ARTIFACT_OVERRIDE) {
     const bytes = fs.readFileSync(ARTIFACT_OVERRIDE);
@@ -116,7 +97,7 @@ async function releaseAsset(tag) {
 
 async function main() {
   const readme = readReadme();
-  const transcript = documentedTranscript(readme);
+  const install = documentedInstall(readme);
   const tag = documentedTag(readme);
   let asset;
   try {
@@ -139,13 +120,10 @@ async function main() {
     });
     if (result.status !== 0) fail(`installer exited ${result.status}: ${(result.stderr || "").trim()}`);
     if (result.stderr) fail(`installer wrote unexpected stderr on success: ${JSON.stringify(result.stderr)}`);
-    const expected = normalizeTranscript(transcript.body);
-    const actual = normalizeTranscript(result.stdout);
-    if (actual !== expected) {
-      const difference = firstDifference(expected, actual);
-      fail(`transcript mismatch: ${README}:${transcript.line}\n- ${difference.expected}\n+ ${difference.actual}`);
-    }
-    console.log(`PASS  README install transcript matches installer stdout: ${README}:${transcript.line}`);
+    const version = tag.slice(1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const success = new RegExp(`^installed seal ${version} linux-x64\\nstore: (.+/store/([0-9a-f]{64}))\\ncommand: .+/bin/seal\\ntree: \\2\\nNext:\\n  export PATH=.+/bin:\\$PATH\\n  seal demo\\n$`);
+    if (!success.test(result.stdout)) fail(`installer success output has an unrecognised shape: ${JSON.stringify(result.stdout)}`);
+    console.log(`PASS  README installer command succeeds; installed-tree transcript stays off the front page: ${README}:${install.line}`);
   } finally {
     try { fs.chmodSync(sandbox, 0o700); } catch { /* cleanup still attempts descendants */ }
     try {

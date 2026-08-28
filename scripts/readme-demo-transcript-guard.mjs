@@ -49,10 +49,16 @@ try {
   fail(`UNREADABLE_README: ${README}: ${error.message}`);
 }
 
-const captureStart = readme.indexOf("This is real output from");
-const capture = captureStart === -1 ? null : readme.slice(captureStart).match(/```text\n([\s\S]*?)\n```/);
-if (!capture) fail("CAPTURE_FENCE_ABSENT: README has no terminal capture after its real-output label");
-const fences = [capture[1]];
+const sectionStart = readme.indexOf("## What you should see");
+const capture = sectionStart === -1 ? null : readme.slice(sectionStart).match(/```text\n([\s\S]*?)\n```/);
+if (!capture) fail("PROOF_FENCE_ABSENT: README has no four-line visual proof");
+const expectedProof = [
+  "before approval: 0 calls",
+  "after approval:  1 call",
+  "after replay:    1 call - refused",
+  "outside Seal:    effect succeeded, 0 Seal decisions",
+].join("\n");
+if (capture[1] !== expectedProof) fail("PROOF_MISMATCH: README four-line visual proof changed");
 
 function stable(text) {
   return text
@@ -64,16 +70,13 @@ function stable(text) {
 }
 
 const actual = stable(`${transcript}\n${checkerTranscript}`);
-let checked = 0;
-for (const fence of fences) {
-  for (const rawLine of stable(fence).split("\n")) {
-    const line = rawLine.trimEnd();
-    if (!line.trim()) continue;
-    if (line.startsWith("Approve? [y/N]")) continue;
-    if (line.trim().startsWith("<!--") || line.trim().endsWith("-->")) continue;
-    checked += 1;
-    if (!actual.includes(line)) fail(`MISSING_DEMO_OUTPUT: ${rawLine}`);
-  }
+for (const [label, pattern] of [
+  ["before approval: 0 calls", /child calls observed: 0/],
+  ["after approval: 1 call", /child calls observed: 1/],
+  ["after replay: 1 call - refused", /BLOCKED[\s\S]*already_consumed[\s\S]*child calls observed: still 1/],
+  ["outside Seal: effect succeeded, 0 Seal decisions", /OUTSIDE THE SEAL PATH[\s\S]*File changed: yes[\s\S]*New Seal decisions: 0/],
+]) {
+  if (!pattern.test(actual)) fail(`MISSING_DEMO_EVIDENCE: ${label}`);
 }
 
-console.log(`PASS  README terminal capture matches transcript (${checked} stable lines)`);
+console.log("PASS  README four-line proof agrees with the demo transcript");

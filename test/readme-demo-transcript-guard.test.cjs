@@ -45,13 +45,13 @@ test("a changed README line is detected against the transcript", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    'INPUT REQUIRED',
-    'INPUT NEEDED',
+    'after replay:    1 call - refused',
+    'after replay:    2 calls - refused',
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, changedReadme);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
+  assert.match(result.stderr, /PROOF_MISMATCH/);
 });
 
 test("a changed product transcript is detected against the README", (t) => {
@@ -63,18 +63,18 @@ test("a changed product transcript is detected against the README", (t) => {
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /MISSING_DEMO_OUTPUT/);
+  assert.match(result.stderr, /MISSING_DEMO_EVIDENCE/);
 });
 
 test("a deleted terminal capture is detected", (t) => {
   const space = fixture();
   const changedReadme = join(space.root, "README.md");
   writeFileSync(changedReadme, readFileSync(README, "utf8").replace(
-    "```text\nchild calls observed:",
-    "INPUT REQUIRED",
+    "```text\nbefore approval: 0 calls",
+    "before approval removed",
   ));
   t.after(() => rmSync(space.root, { recursive: true, force: true }));
   const result = run(space.transcriptPath, changedReadme, space.checkerPath);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /CAPTURE_FENCE_ABSENT/);
+  assert.match(result.stderr, /PROOF_FENCE_ABSENT/);
 });

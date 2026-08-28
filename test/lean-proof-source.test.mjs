@@ -116,10 +116,14 @@ function hasUnsourcedClaims(text) {
 
 function unsourcedClaims(file) {
   const text = readFileSync(resolve(ROOT, file), "utf8");
-  return hasUnsourcedClaims(text);
+  if (!hasUnsourcedClaims(text)) return false;
+  if (file === "README.md" && /\[Reproducible kernel\]\(docs\/reproduce\.md\)/u.test(text)) {
+    return hasUnsourcedClaims(readFileSync(resolve(ROOT, "docs/reproduce.md"), "utf8"));
+  }
+  return true;
 }
 
-test("every tracked Lean proof-property document binds its claim to seal-host", () => {
+test("every tracked Lean proof-property document binds its claim to seal-host directly or through the reproducible-kernel route", () => {
   const unsourced = documentationFiles().filter(unsourcedClaims);
   assert.deepEqual(
     unsourced,

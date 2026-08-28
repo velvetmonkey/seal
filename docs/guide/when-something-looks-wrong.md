@@ -58,7 +58,8 @@ referenced that cancelled request. Make a fresh call.
 More than 2 minutes passed between the prompt appearing and the approval
 arriving, so the window closed. Exercised for real: after a 125-second wait
 the retry was refused with `expired — the approval window closed before the
-retry arrived`. Call again and answer within the window.
+retry arrived`. Approval expiry follows the local wall clock. Call again and
+answer within the window.
 
 ### `restart_invalidated`
 

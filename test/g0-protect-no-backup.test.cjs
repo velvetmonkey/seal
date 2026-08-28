@@ -67,7 +67,7 @@ if (process.argv[2] === "--probe") {
 
 test("protect leaves Claude backups absent", () => {
   probe(ROOT);
-  assert.match(fs.readFileSync(path.join(ROOT, "README.md"), "utf8"), /Claude Code\nwrites `~\/\.claude\.json` and a backup under `~\/\.claude\/backups\/`\. Seal invokes\nClaude Code but writes neither file\./);
+  assert.match(fs.readFileSync(path.join(ROOT, "docs", "guide", "choosing-what-to-protect.md"), "utf8"), /Claude Code writes `~\/\.claude\.json` and a backup under `~\/\.claude\/backups\/`\.\nSeal invokes Claude Code but writes neither file\./);
 
   const mutant = copyTree();
   const file = path.join(mutant, "spine", "protection.cjs");
