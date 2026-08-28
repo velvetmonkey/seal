@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { format, verify } from "../checker/seal-receipt-v2.mjs";
 
 const page = new URL("../docs/reference/receipt-operations.md", import.meta.url);
-const vector = new URL("../docs/reference/receipt-operations-v1/receipt-block.json", import.meta.url);
+const vector = new URL("../docs/reference/receipt-operations-v1/receipt-block.json", import.meta.url); // vector README: docs/reference/receipt-operations-v1/README.md // CLAIM-COVERAGE: docs/reference/receipt-operations-v1/README.md
 
 test("receipt operations reference matches the shipped verifier format", async () => {
   const markdown = readFileSync(page, "utf8");
