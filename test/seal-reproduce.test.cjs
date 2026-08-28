@@ -218,7 +218,7 @@ test("same-process rebuild resolves the executable declared by the pinned instal
   assert.equal(leanLauncher({ ...environment, [LEAN_LAUNCHER_ENV]: "/override/lake" }, installer), "/override/lake");
 });
 
-test("pinned Lean launcher CI check exercises the same-process handoff", () => {
+test("pinned Lean toolchain CI check exercises every post-installer child environment", () => {
   const { checkPinnedLeanLauncher } = require("../scripts/check-pinned-lean-launcher.cjs");
   const realRepositoryRoot = path.resolve(__dirname, "..");
   assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);

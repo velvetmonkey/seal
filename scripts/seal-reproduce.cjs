@@ -218,6 +218,17 @@ function leanLauncherMissingMessage(launcher) {
   return `Lean launcher ${JSON.stringify(launcher)} was not found. Install elan from https://lean-lang.org/install/ and ensure its lake executable is on PATH, or set ${LEAN_LAUNCHER_ENV} to an executable name or path.`;
 }
 
+function environmentForLeanLauncher(environment, launcher) {
+  const launcherDirectory = path.dirname(launcher);
+  if (launcherDirectory === ".") return environment;
+  return {
+    ...environment,
+    PATH: environment.PATH
+      ? `${launcherDirectory}${path.delimiter}${environment.PATH}`
+      : launcherDirectory,
+  };
+}
+
 function download(url, destination) {
   child("curl", ["-fsSL", "--retry", "3", "--retry-delay", "1", "-o", destination, url], {
     label: `download ${url}`,
@@ -304,11 +315,16 @@ function buildPinnedKernel(tag, work, operations = {}) {
   runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   const launcher = leanLauncher(environment, installer);
   const missingMessage = leanLauncherMissingMessage(launcher);
+  const postInstallerEnvironment = environmentForLeanLauncher(environment, launcher);
+  const postInstallerChild = (command, args, options = {}) => runChild(command, args, {
+    ...options,
+    env: postInstallerEnvironment,
+  });
   if (!exists(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    runChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
+    postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
   }
-  runChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
-  runChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
+  postInstallerChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
+  postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
     ["./build_base.sh", []],
@@ -316,7 +332,7 @@ function buildPinnedKernel(tag, work, operations = {}) {
     ["./build_closure.sh", []],
     ["./build_wasm.sh", ["strict"]],
   ]) {
-    runChild(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
+    postInstallerChild(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
   }
   const rebuilt = path.join(source, "wasm-spike", "build-core", "seal.wasm");
   if (!exists(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
