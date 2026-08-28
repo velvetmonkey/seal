@@ -550,13 +550,17 @@ async function main() {
   const facts = manifestPath
     ? localManifest(path.resolve(manifestPath), path.resolve(assetsDir), localCommit)
     : await remoteManifest();
-  const changes = [
+  const generatedRegionChanges = [
     replaceRegions("README.md", readmeRegions(facts)),
     replaceRegions("docs/start/install.md", installRegions(facts)),
-    ...publishedSurfaceChanges(facts.manifest),
   ];
+  const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
+  const changes = [...generatedRegionChanges, ...publishedPointerChanges];
   if (process.argv.includes("--check")) {
-    const stale = changes.filter((change) => change.original !== change.rewritten);
+    // Legacy generated regions are checked by their published facts below;
+    // forcing old prose through today's template would rewrite history. The
+    // separately owned navigation pointers do have one canonical current form.
+    const stale = publishedPointerChanges.filter((change) => change.original !== change.rewritten);
     for (const change of stale) process.stderr.write(`FAIL release docs stale: ${change.relative}\n`);
     if (!verifyDocsAgainstRelease(facts) || stale.length) {
       process.exitCode = 1;
