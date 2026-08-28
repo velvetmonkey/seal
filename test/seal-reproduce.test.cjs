@@ -220,7 +220,8 @@ test("same-process rebuild resolves the executable declared by the pinned instal
 
 test("pinned Lean launcher CI check exercises the same-process handoff", () => {
   const { checkPinnedLeanLauncher } = require("../scripts/check-pinned-lean-launcher.cjs");
-  assert.deepEqual(checkPinnedLeanLauncher(), []);
+  const realRepositoryRoot = path.resolve(__dirname, "..");
+  assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);
 });
 
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {

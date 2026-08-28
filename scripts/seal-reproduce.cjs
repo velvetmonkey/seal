@@ -289,22 +289,26 @@ function clonePinnedSource(pin, destination) {
   if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
 }
 
-function buildPinnedKernel(tag, work) {
+function buildPinnedKernel(tag, work, operations = {}) {
+  const runChild = operations.child || child;
+  const cloneSource = operations.clonePinnedSource || clonePinnedSource;
+  const exists = operations.existsSync || fs.existsSync;
+  const environment = operations.environment || process.env;
   const pin = SOURCE_PINS[tag];
   if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
   const source = path.join(work, "pinned-source");
-  clonePinnedSource(pin, source);
+  cloneSource(pin, source);
 
-  child("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
+  runChild("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
   const installer = path.join(source, "scripts", "install_pinned_elan.py");
-  child("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
-  const launcher = leanLauncher(process.env, installer);
+  runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
+  const launcher = leanLauncher(environment, installer);
   const missingMessage = leanLauncherMissingMessage(launcher);
-  if (!fs.existsSync(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    child(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
+  if (!exists(path.join(source, ".lake", "packages", "mcp-seal"))) {
+    runChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
   }
-  child("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
-  child(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
+  runChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
+  runChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
     ["./build_base.sh", []],
@@ -312,10 +316,10 @@ function buildPinnedKernel(tag, work) {
     ["./build_closure.sh", []],
     ["./build_wasm.sh", ["strict"]],
   ]) {
-    child(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
+    runChild(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
   }
   const rebuilt = path.join(source, "wasm-spike", "build-core", "seal.wasm");
-  if (!fs.existsSync(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
+  if (!exists(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
   return rebuilt;
 }
 
@@ -411,6 +415,7 @@ module.exports = {
   SCHEMA,
   SOURCE_PINS,
   TAG_PATTERN,
+  buildPinnedKernel,
   download,
   execute,
   executeBuildPinned,

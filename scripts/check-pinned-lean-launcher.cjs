@@ -4,52 +4,82 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { LEAN_LAUNCHER_ENV, leanLauncher } = require("./seal-reproduce.cjs");
+const ROOT = path.resolve(__dirname, "..");
+const TAG = "v0.2.0";
 
-function checkPinnedLeanLauncher(resolve = leanLauncher) {
+function exerciseOwner(owner, fixture, override) {
+  const flavor = override ? "override" : "installed";
+  const work = path.join(fixture, `${flavor}-work`);
+  const home = path.join(fixture, `${flavor}-home`);
+  const emptyPath = path.join(fixture, `${flavor}-empty-path`);
+  const githubPath = path.join(fixture, `${flavor}-github-path`);
+  const installedDirectory = path.join(home, ".guard-elan", "installer-bin");
+  const installedLauncher = path.join(installedDirectory, "lake");
+  const selectedLauncher = override || installedLauncher;
+  const decoy = `${path.join(fixture, "github-path-decoy")}\n`;
+  const launcherCommands = [];
+  fs.mkdirSync(work, { recursive: true });
+  fs.mkdirSync(emptyPath);
+  fs.writeFileSync(githubPath, decoy);
+
+  const environment = { HOME: home, PATH: emptyPath, GITHUB_PATH: githubPath };
+  if (override) environment[owner.LEAN_LAUNCHER_ENV] = override;
+  const rebuilt = owner.buildPinnedKernel(TAG, work, {
+    environment,
+    clonePinnedSource(_pin, destination) {
+      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
+    },
+    child(command, args) {
+      if (command === "python3") {
+        fs.writeFileSync(args[0], 'bin_directory = Path.home() / ".guard-elan" / "installer-bin"\n');
+        fs.mkdirSync(installedDirectory, { recursive: true });
+        fs.writeFileSync(installedLauncher, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      }
+      if (args[0] === "update" || args[0] === "build") launcherCommands.push(command);
+      if (command === "./build_wasm.sh") {
+        const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+        fs.mkdirSync(path.dirname(output), { recursive: true });
+        fs.writeFileSync(output, "not a real kernel build\n");
+      }
+    },
+  });
+
+  const findings = [];
+  if (launcherCommands.length !== 2 || launcherCommands.some((command) => command !== selectedLauncher)) {
+    findings.push(`real buildPinnedKernel owner selected ${JSON.stringify(launcherCommands)}, expected ${JSON.stringify(selectedLauncher)} for update and build`);
+  }
+  if (fs.readFileSync(githubPath, "utf8") !== decoy) {
+    findings.push("real buildPinnedKernel owner read or changed the GITHUB_PATH handoff file");
+  }
+  if (rebuilt !== path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm")) {
+    findings.push("real buildPinnedKernel owner did not finish the command-stubbed recipe");
+  }
+  return findings;
+}
+
+function checkPinnedLeanLauncher(root = ROOT) {
+  const ownerFile = path.join(fs.realpathSync(root), "scripts", "seal-reproduce.cjs");
+  const owner = require(ownerFile);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "seal-launcher-check-"));
   try {
-    const home = path.join(fixture, "home");
-    const emptyPath = path.join(fixture, "empty-path");
-    const installer = path.join(fixture, "install_pinned_elan.py");
-    const githubPath = path.join(fixture, "github-path");
-    const installedDirectory = path.join(home, ".guard-elan", "installer-bin");
-    const installedLauncher = path.join(installedDirectory, "lake");
-    const decoy = `${path.join(fixture, "github-path-decoy")}\n`;
-    fs.mkdirSync(installedDirectory, { recursive: true });
-    fs.mkdirSync(emptyPath);
-    fs.writeFileSync(installer, 'bin_directory = Path.home() / ".guard-elan" / "installer-bin"\n');
-    fs.writeFileSync(installedLauncher, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-    fs.writeFileSync(githubPath, decoy);
-
-    const environment = { HOME: home, PATH: emptyPath, GITHUB_PATH: githubPath };
-    const resolved = resolve(environment, installer);
-    if (resolved !== installedLauncher) {
-      return [`PATH has no lake and same-process resolution returned ${JSON.stringify(resolved)}, not installer executable ${JSON.stringify(installedLauncher)}`];
-    }
-    if (fs.readFileSync(githubPath, "utf8") !== decoy) {
-      return ["launcher resolution read or changed the GITHUB_PATH handoff file"];
-    }
-    const override = path.join(fixture, "operator-lake");
-    const overridden = resolve({ ...environment, [LEAN_LAUNCHER_ENV]: override }, installer);
-    if (overridden !== override) {
-      return [`${LEAN_LAUNCHER_ENV} did not override the installed launcher`];
-    }
-    return [];
+    return [
+      ...exerciseOwner(owner, fixture),
+      ...exerciseOwner(owner, fixture, path.join(fixture, "operator-lake")),
+    ];
   } finally {
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }
 
 function main() {
-  const findings = checkPinnedLeanLauncher();
+  const findings = checkPinnedLeanLauncher(ROOT);
   if (findings.length > 0) {
-    process.stderr.write("REFUSE pinned_lean_launcher: rebuild launcher depends on a later-step PATH update:\n");
+    process.stderr.write("REFUSE pinned_lean_launcher: shipped rebuild owner depends on a later-step PATH update:\n");
     process.stderr.write(`${findings.join("\n")}\n`);
     process.exitCode = 1;
     return;
   }
-  process.stdout.write("PASS pinned_lean_launcher: same-process installer launcher resolves without GITHUB_PATH\n");
+  process.stdout.write("PASS pinned_lean_launcher: shipped rebuild owner resolves installer launcher without GITHUB_PATH\n");
 }
 
 if (require.main === module) main();
