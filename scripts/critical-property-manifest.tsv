@@ -1,26 +1,25 @@
 # Critical product properties and their executable proofs.
-# Format: property<TAB>test file<TAB>exact node:test case name
+# Format: id<TAB>property<TAB>test file<TAB>exact node:test case name
 # Honest limit: The floor does not stop cs8frisk probe 2, where a history rewrite makes the reduced manifest its first version, or cs8frisk probe 3, where editing the runner disables the floor, because repository-local history and checker code are mutable; closing either gap requires an external reviewer boundary rather than more local code.
-a checksum naming a different artifact is refused by name	test/artifact-identity.test.cjs	a checksum file naming a different artifact is refused
-an untagged build cannot wear the bare release identity	test/artifact-identity.test.cjs	an untagged build wearing the bare release name is refused by name
-altered receipt fields produce distinct named refusals	test/receipt-checker.test.cjs	three distinct mutation sites each produce a distinct refusal
-repairing altered receipt commitments cannot bypass the signature	test/receipt-checker.test.cjs	the signature is the unforgeable backstop: repairing commitments still refuses
-the standalone checker runs without the Seal binary	test/receipt-checker.test.cjs	the checker runs with the seal binary absent (copied to a clean dir)
-the checker takes its verifying key out of band	test/receipt-checker.test.cjs	the verifier takes its key out of band and never reaches positive VERIFY
-an absent receipt path fails closed	test/seal-verify.test.cjs	verify distinguishes an uninspectable path from unreadable receipt contents
-empty malformed and non-receipt inputs fail closed	test/seal-verify.test.cjs	verify refuses empty, malformed, and non-receipt JSON paths
-an absent approval store fails closed	test/spine-retry.test.cjs	absent approval store: a refusal, not an empty store
-a corrupt approval store cannot start a child	test/spine-retry.test.cjs	corrupt approval store: exit non-zero, named, never approves, no tick
-altered retry arguments cannot reach the child	test/approval-contract.test.cjs	refusal 1: altered arguments on the retry; child receives nothing
-a consumed approval cannot run the child twice	test/approval-contract.test.cjs	refusal 3: replayed approval already consumed; child stays at exactly 1
-physical kernel corruption has no JavaScript fallback	test/kernel-bridge.test.cjs	physical wasm corruption refuses by name with no JavaScript fallback
-a hung authorization kernel fails closed at its deadline	test/kernel-bridge.test.cjs	a hung kernel worker reaches its product deadline and refuses closed
-every shipped local require target is shipped	test/payload-require-graph.test.cjs	the shipped payload require graph is closed
-the shipped payload contains no test environment hook	test/payload-test-hook.test.cjs	the shipped payload refuses test environment hooks
-receipt producer and checker use own-property enumeration	test/receipt-canonicalization-conformance.test.mjs	producer and checker canonicalisers conform to the v2 own-property enumeration specification
-linkcheck assertion removal is refused by name	test/linkcheck-assertions.test.mjs	linkcheck assertion inventory refuses a removed assertion by name
-a misspelled protected tool is refused before state is written	test/tool-validation.test.cjs	protect refuses a misspelled tool and names every observed tool
-a vanished protected tool makes activation visibly broken	test/tool-validation.test.cjs	activation becomes visibly BROKEN when the protected tool vanished
-a replaced local override is preserved and unprotect refuses	test/protect3b.test.cjs	unprotect refuses a developer-replaced local override and preserves it byte-identically
-ambiguous receipt private-key states fail closed by name	test/receiptkey.test.cjs	receipt key absence generates, while ambiguous private-key states refuse by name
-every inline gh call has repository context	test/workflow-gh-repo-context.test.cjs	each inline gh call has earlier checkout or explicit repository context
+artifact-checksum	a checksum naming a different artifact is refused by name	test/artifact-identity.test.cjs	a checksum file naming a different artifact is refused
+artifact-release	an untagged build cannot wear the bare release identity	test/artifact-identity.test.cjs	an untagged build wearing the bare release name is refused by name
+receipt-fields	altered receipt fields produce distinct named refusals	test/receipt-checker.test.cjs	three distinct mutation sites each produce a distinct refusal
+receipt-signature	repairing altered receipt commitments cannot bypass the signature	test/receipt-checker.test.cjs	the signature is the unforgeable backstop: repairing commitments still refuses
+checker-standalone	the standalone checker runs without the Seal binary	test/receipt-checker.test.cjs	the checker runs with the seal binary absent (copied to a clean dir)
+checker-key	the checker takes its verifying key out of band	test/receipt-checker.test.cjs	the verifier takes its key out of band and never reaches positive VERIFY
+verify-path	an absent receipt path fails closed	test/seal-verify.test.cjs	verify distinguishes an uninspectable path from unreadable receipt contents
+verify-input	empty malformed and non-receipt inputs fail closed	test/seal-verify.test.cjs	verify refuses empty, malformed, and non-receipt JSON paths
+approval-absent	an absent approval store fails closed	test/spine-retry.test.cjs	absent approval store: a refusal, not an empty store
+approval-corrupt	a corrupt approval store cannot start a child	test/spine-retry.test.cjs	corrupt approval store: exit non-zero, named, never approves, no tick
+retry-arguments	altered retry arguments cannot reach the child	test/approval-contract.test.cjs	refusal 1: altered arguments on the retry; child receives nothing
+approval-replay	a consumed approval cannot run the child twice	test/approval-contract.test.cjs	refusal 3: replayed approval already consumed; child stays at exactly 1
+kernel-corruption	physical kernel corruption has no JavaScript fallback	test/kernel-bridge.test.cjs	physical wasm corruption refuses by name with no JavaScript fallback
+kernel-deadline	a hung authorization kernel fails closed at its deadline	test/kernel-bridge.test.cjs	a hung kernel worker reaches its product deadline and refuses closed
+payload-require-graph	every shipped local require target is shipped	test/payload-require-graph.test.cjs	the shipped payload require graph is closed
+payload-no-test-hook	the shipped payload contains no test environment hook	test/payload-test-hook.test.cjs	the shipped payload refuses test environment hooks
+receipt-enumeration	receipt producer and checker use own-property enumeration	test/receipt-canonicalization-conformance.test.mjs	producer and checker canonicalisers conform to the v2 own-property enumeration specification
+linkcheck-assertion	linkcheck assertion removal is refused by name	test/linkcheck-assertions.test.mjs	linkcheck assertion inventory refuses a removed assertion by name
+tool-misspelled	a misspelled protected tool is refused before state is written	test/tool-validation.test.cjs	protect refuses a misspelled tool and names every observed tool
+tool-vanished	a vanished protected tool makes activation visibly broken	test/tool-validation.test.cjs	activation becomes visibly BROKEN when the protected tool vanished
+override-replaced	a replaced local override is preserved and unprotect refuses	test/protect3b.test.cjs	unprotect refuses a developer-replaced local override and preserves it byte-identically
+receipt-key	ambiguous receipt private-key states fail closed by name	test/receiptkey.test.cjs	receipt key absence generates, while ambiguous private-key states refuse by name

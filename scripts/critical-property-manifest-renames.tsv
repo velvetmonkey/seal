@@ -1,3 +1,0 @@
-# Recorded critical-property renames.
-# Format: old property<TAB>new property
-receipt producer and checker retain specified insertion order	receipt producer and checker use own-property enumeration
