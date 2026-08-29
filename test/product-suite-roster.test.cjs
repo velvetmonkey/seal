@@ -19,12 +19,12 @@ function fixture() {
   const roster = join(root, "roster.txt");
   writeFileSync(roster, "one.test.cjs\ntwo.test.cjs\nthree.test.cjs\n");
   const manifest = join(root, "critical-property-manifest.tsv");
-  const properties = readFileSync(CRITICAL_MANIFEST, "utf8")
+  const manifestEntries = readFileSync(CRITICAL_MANIFEST, "utf8")
     .split("\n")
     .filter((line) => line && !line.startsWith("#"))
-    .map((line) => line.split("\t")[0]);
-  writeFileSync(manifest, properties.map((property) => `${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
-  return { root, tests, roster, manifest, properties };
+    .map((line) => line.split("\t").slice(0, 2));
+  writeFileSync(manifest, manifestEntries.map(([id, property]) => `${id}\t${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
+  return { root, tests, roster, manifest, properties: manifestEntries.map(([, property]) => property) };
 }
 
 function run(driver, tests, roster, manifest, extraEnv = {}) {

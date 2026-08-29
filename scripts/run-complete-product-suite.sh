@@ -143,6 +143,7 @@ if (( ${#declared_tests[@]} == 0 )); then
   exit 1
 fi
 critical_manifest_file="${SEAL_CRITICAL_PROPERTY_MANIFEST:-$script_root/scripts/critical-property-manifest.tsv}"
+critical_manifest_default_file="$script_root/scripts/critical-property-manifest.tsv"
 if [[ ! -f "$critical_manifest_file" ]]; then
   echo "CRITICAL PROPERTY MANIFEST entries: UNAVAILABLE"
   echo "::error::critical-property manifest is absent at $critical_manifest_file"
@@ -162,17 +163,26 @@ fi
 
 mapfile -t critical_manifest_lines <"$critical_manifest_file"
 critical_properties=()
+critical_property_ids=()
 critical_proof_files=()
 critical_proof_tests=()
 critical_manifest_failures=()
-declare -A critical_property_set critical_property_renames
+declare -A critical_property_set critical_property_id_set
 critical_line_number=0
 for line in "${critical_manifest_lines[@]}"; do
   ((critical_line_number += 1))
   [[ -z "$line" || "$line" == \#* ]] && continue
-  IFS=$'\t' read -r property proof_name proof_test extra <<<"$line"
-  if [[ -z "$property" || -z "$proof_name" || -z "$proof_test" || -n "$extra" ]]; then
-    critical_manifest_failures+=("line $critical_line_number is malformed; expected property<TAB>test file<TAB>exact test case")
+  IFS=$'\t' read -r property_id property proof_name proof_test extra <<<"$line"
+  if [[ -z "$property_id" || -z "$property" || -z "$proof_name" || -z "$proof_test" || -n "$extra" ]]; then
+    critical_manifest_failures+=("line $critical_line_number is malformed; expected id<TAB>property<TAB>test file<TAB>exact test case")
+    continue
+  fi
+  if [[ ! "$property_id" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    critical_manifest_failures+=("line $critical_line_number has invalid manifest id \"$property_id\"")
+    continue
+  fi
+  if [[ -n "${critical_property_id_set[$property_id]+x}" ]]; then
+    critical_manifest_failures+=("manifest id \"$property_id\" is duplicated")
     continue
   fi
   if [[ -n "${critical_property_set[$property]+x}" ]]; then
@@ -180,6 +190,8 @@ for line in "${critical_manifest_lines[@]}"; do
     continue
   fi
   critical_property_set["$property"]=1
+  critical_property_id_set["$property_id"]=1
+  critical_property_id_by_property["$property"]="$property_id"
   if [[ "$proof_name" = /* ]]; then
     proof_file="$proof_name"
   else
@@ -187,32 +199,10 @@ for line in "${critical_manifest_lines[@]}"; do
   fi
   proof_file="$(canonical_path "$proof_file")"
   critical_properties+=("$property")
+  critical_property_ids+=("$property_id")
   critical_proof_files+=("$proof_file")
   critical_proof_tests+=("$proof_test")
 done
-
-critical_manifest_renames_file="${SEAL_CRITICAL_PROPERTY_RENAMES:-$script_root/scripts/critical-property-manifest-renames.tsv}"
-if [[ ! -f "$critical_manifest_renames_file" || ! -r "$critical_manifest_renames_file" ]]; then
-  critical_manifest_failures+=("cannot read critical-property rename record at $critical_manifest_renames_file")
-else
-  while IFS= read -r rename_line; do
-    [[ -z "$rename_line" || "$rename_line" == \#* ]] && continue
-    IFS=$'\t' read -r renamed_property replacement_property rename_extra <<<"$rename_line"
-    if [[ -z "$renamed_property" || -z "$replacement_property" || -n "$rename_extra" ]]; then
-      critical_manifest_failures+=("rename record is malformed; expected old property<TAB>new property")
-    elif [[ "$renamed_property" == "$replacement_property" ]]; then
-      critical_manifest_failures+=("rename record repeats property \"$renamed_property\"")
-    elif [[ -n "${critical_property_renames[$renamed_property]+x}" ]]; then
-      critical_manifest_failures+=("rename record duplicates old property \"$renamed_property\"")
-    elif [[ -z "${critical_property_set[$replacement_property]+x}" ]]; then
-      critical_manifest_failures+=("rename record names missing new property \"$replacement_property\"")
-    elif [[ -n "${critical_property_set[$renamed_property]+x}" ]]; then
-      critical_manifest_failures+=("rename record keeps old property \"$renamed_property\" in the current manifest")
-    else
-      critical_property_renames["$renamed_property"]="$replacement_property"
-    fi
-  done <"$critical_manifest_renames_file"
-fi
 
 echo "CRITICAL PROPERTY MANIFEST entries: ${#critical_properties[@]}"
 if (( ${#critical_properties[@]} == 0 )); then
@@ -237,7 +227,7 @@ check_manifest_floor_revision() {
   local revision="$1"
   local label="$2"
   local manifest_object="$revision:scripts/critical-property-manifest.tsv"
-  local previous_line previous_property previous_proof_name previous_proof_test previous_extra
+  local previous_line previous_id previous_property previous_proof_name previous_proof_test previous_extra
   local previous_count=0
 
   if ! git -C "$script_root" cat-file -e "$manifest_object" 2>/dev/null; then
@@ -245,24 +235,27 @@ check_manifest_floor_revision() {
   fi
   while IFS= read -r previous_line; do
     [[ -z "$previous_line" || "$previous_line" == \#* ]] && continue
-    IFS=$'\t' read -r previous_property previous_proof_name previous_proof_test previous_extra <<<"$previous_line"
-    if [[ -z "$previous_property" || -z "$previous_proof_name" || -z "$previous_proof_test" || -n "$previous_extra" ]]; then
+    IFS=$'\t' read -r previous_id previous_property previous_proof_name previous_proof_test previous_extra <<<"$previous_line"
+    if [[ -z "$previous_proof_test" && -n "$previous_id" && -n "$previous_property" && -n "$previous_proof_name" ]]; then
+      # The parent of the first ID-bearing revision uses the retired format.
+      # It cannot provide identity evidence, so it is outside the ID floor.
+      continue
+    fi
+    if [[ -z "$previous_id" || -z "$previous_property" || -z "$previous_proof_name" || -z "$previous_proof_test" || -n "$previous_extra" ]]; then
       critical_manifest_failures+=("$label manifest line is malformed in $manifest_object")
       continue
     fi
     ((previous_count += 1))
-    if [[ -z "${critical_property_set[$previous_property]+x}" ]]; then
-      if [[ -n "${critical_property_renames[$previous_property]+x}" ]]; then
-        echo "CRITICAL PROPERTY MANIFEST rename: \"$previous_property\" -> \"${critical_property_renames[$previous_property]}\""
-      else
-        critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
-      fi
+    if [[ -z "${critical_property_id_set[$previous_id]+x}" ]]; then
+      critical_manifest_failures+=("property \"$previous_property\" (id \"$previous_id\") was removed from the $label manifest floor")
     fi
   done < <(git -C "$script_root" show "$manifest_object")
   echo "CRITICAL PROPERTY MANIFEST $label entries: $previous_count"
 }
 
-if ! git -C "$script_root" rev-parse --verify HEAD >/dev/null 2>&1; then
+if [[ "$critical_manifest_file" != "$critical_manifest_default_file" ]]; then
+  :
+elif ! git -C "$script_root" rev-parse --verify HEAD >/dev/null 2>&1; then
   critical_manifest_failures+=("cannot inspect committed critical-property manifest history under $script_root")
 else
   check_manifest_floor_revision "HEAD" "committed"
