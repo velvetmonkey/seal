@@ -95,3 +95,7 @@ sandbox. It controls the path through it — Claude Code calling that one tool
 of that one server — and only that path. Bash, the network, subprocesses, and
 every other tool and server are outside it, and the approval prompt says so
 every time.
+
+Previous: [Evaluator walk](../start/evaluator-walk.md).
+Up: [Documentation map](../README.md).
+Next: [Choosing what to protect](choosing-what-to-protect.md).

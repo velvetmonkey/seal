@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "0ea8e9ae022086429e7674c1cf41a5b4540029ec11b200dc393869339ca63a57";
+const GUIDE_SHA256 = "00baafa655319b9afa0ffa620341f4b1debbbcef30875e80fd879c5b93f0eb9b";
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
@@ -134,7 +134,7 @@ const REVIEWED_GUIDES = [
   },
   {
     file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
-    sha256: "79a7db34a60918f210d98e8f20cd96df1d4913177b883b16cadd1e802b2fadca",
+    sha256: "52117b3e379becc1a84d8c2dc1901cd03d81dd0ac266c607d529d6c23521cafc",
     claims: [
       "Producer output and the kernel replay path now share the one `seal.receipt/v2` envelope.",
       "`seal status` reads its `action`, kernel `verdict`, and exact kernel `now`; `seal verify` validates and replays that same file.",

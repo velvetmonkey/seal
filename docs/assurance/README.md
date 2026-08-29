@@ -32,7 +32,9 @@ the Node CLI this repository ships.
    names itself `-dev.g<commit>`, which check refuses which lie, and what the
    pinned digest can and cannot say about an untagged build.
 7. [assurance/architecture.md](architecture.md) — the shipped Node product path first,
-   followed by the wider family assurance lineage.
+  followed by the wider family assurance lineage.
+
+- [start/README.md](../start/README.md) — the start section map.
 
 ## I want to know what it does not do
 
@@ -98,6 +100,7 @@ the Node CLI this repository ships.
   approval prompts, refusals, demo evidence, and receipt checks.
 - [guide/when-something-looks-wrong.md](../guide/when-something-looks-wrong.md) —
   what each refusal token means, what caused it, and what to do next.
+- [reference/README.md](../reference/README.md) — the reference section map.
 - [reference/multi-tool-semantics.md](../reference/multi-tool-semantics.md) — the
   shipped named-set behavior, its code and command evidence, and the measured
   multi-tool state-coverage gap.
@@ -164,3 +167,7 @@ disposition is an open ruling.
 The evaluator-facing family truth surface is
 [docs/assurance/evaluator-start.md](../assurance/evaluator-start.md), at the repository root; it audits
 the family's artifacts and proofs, not this CLI.
+
+Previous: [Receipt operations vector set v1](../reference/receipt-operations-v1/README.md).
+Up: [Documentation map](../README.md).
+Next: [Evaluator truth surface](evaluator-start.md).
