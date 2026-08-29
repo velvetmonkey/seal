@@ -24,6 +24,18 @@
           "blob": "064698fe23ac5f8c3534d1b668d6972edd426a26"
         }
       ]
+    },
+    {
+      "base": "55183cf2e5e0b2d7531009fe78fa62cffc398d74",
+      "author": "rulinglist4",
+      "date": "2026-08-29",
+      "scope": "The protected-path checker change for ruling-list round four is authorised. The ambiguity control is retired. Invalid merge-base ruling documents now fail closed. No other protected change is authorised.",
+      "files": [
+        {
+          "path": "scripts/check-protected-paths.cjs",
+          "blob": "dc104de242afa5fc4615289500d8bfaf61ecb94c"
+        }
+      ]
     }
   ]
 }

@@ -117,21 +117,6 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function ambiguousPaths(rulings) {
-  const blobsByPath = new Map();
-  for (const ruling of rulings) {
-    for (const file of ruling?.files || []) {
-      if (!file || typeof file.path !== "string" || typeof file.blob !== "string") continue;
-      if (!blobsByPath.has(file.path)) blobsByPath.set(file.path, new Set());
-      blobsByPath.get(file.path).add(file.blob);
-    }
-  }
-  return [...blobsByPath.entries()]
-    .filter(([, blobs]) => blobs.size > 1)
-    .map(([path]) => path)
-    .sort();
-}
-
 function rulingListIsIntact(mergeBase, head) {
   const headDocument = readRulings(head, true);
   const baseDocument = readRulings(mergeBase, true);
@@ -146,17 +131,9 @@ function rulingListIsIntact(mergeBase, head) {
     process.stderr.write("PROTECTED_PATH_RULING_LEGACY_SHAPE: HEAD ruling document must use the rulings list shape.\n");
     return false;
   }
-  const ambiguous = ambiguousPaths(headDocument.rulings);
-  if (ambiguous.length) {
-    process.stderr.write(`PROTECTED_PATH_RULING_AMBIGUOUS: path(s) have different authorised blobs: ${ambiguous.join(", ")}.\n`);
-    return false;
-  }
   if (baseDocument.invalid) {
-    const dropped = [];
-    for (const ruling of dropped) {
-      process.stderr.write(`PROTECTED_PATH_RULING_DROPPED: base=${ruling?.base || ""} author=${ruling?.author || ""}.\n`);
-    }
-    return dropped.length === 0;
+    process.stderr.write("PROTECTED_PATH_RULING_BASE_UNREADABLE: merge-base ruling document is present but cannot be parsed; the checker cannot see prior records and cannot prove that HEAD kept them.\n");
+    return false;
   }
   const headRecords = new Set(headDocument.rulings.map(canonicalJson));
   const dropped = baseDocument.rulings.filter((ruling) => !headRecords.has(canonicalJson(ruling)));

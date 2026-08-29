@@ -352,24 +352,153 @@ test("a head that appends a ruling and keeps the old rulings is accepted", (t) =
   assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
 });
 
-test("a head with two blobs for one path is refused as ambiguous", (t) => {
+test("a protected file can be approved twice across the life of the repository", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = ".github/workflows/ci.yml";
   const initial = git(root, ["rev-parse", "HEAD"]);
-  writeRulings(root, [testRecord(initial, "base-author")]);
+  git(root, ["switch", "-qc", "topic"]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, path), "name: first\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "first protected edit"]);
+  const firstBlob = git(root, ["rev-parse", `HEAD:${path}`]);
+  writeRulings(root, [{
+    base: initial,
+    author: "first",
+    date: "2026-08-28",
+    scope: "test first ruling",
+    files: [{ path, blob: firstBlob }],
+  }]);
   const base = git(root, ["rev-parse", "HEAD"]);
-  const first = testRecord(base, "first");
-  const second = testRecord(base, "second");
-  second.files[0].blob = "1".repeat(40);
-  writeRulings(root, [testRecord(initial, "base-author"), first, second]);
-  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
-  writeFileSync(join(root, "test", "fixtures", "changed.json"), "changed\n");
-  git(root, ["add", "test/fixtures/changed.json"]);
-  git(root, ["commit", "-qm", "ambiguous ruling"]);
+  writeFileSync(join(root, path), "name: second\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "second protected edit"]);
+  const secondBlob = git(root, ["rev-parse", `HEAD:${path}`]);
+  writeRulings(root, [
+    {
+      base: initial,
+      author: "first",
+      date: "2026-08-28",
+      scope: "test first ruling",
+      files: [{ path, blob: firstBlob }],
+    },
+    {
+      base,
+      author: "second",
+      date: "2026-08-28",
+      scope: "test second ruling",
+      files: [{ path, blob: secondBlob }],
+    },
+  ]);
+  const secondResult = run(root, base, "HEAD");
+  assert.equal(secondResult.status, 0, secondResult.stdout + secondResult.stderr);
+  assert.match(secondResult.stdout, /recorded human ruling/);
+
+  writeFileSync(join(root, path), "name: first\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "return to first protected edit"]);
+  const returnResult = run(root, base, "HEAD");
+  assert.equal(returnResult.status, 0, returnResult.stdout + returnResult.stderr);
+  assert.match(returnResult.stdout, /recorded human ruling/);
+});
+
+test("two rulings for one path select the record whose blob is at HEAD", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = ".github/workflows/ci.yml";
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, path), "name: first\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "first protected edit"]);
+  const firstBlob = git(root, ["rev-parse", `HEAD:${path}`]);
+  writeFileSync(join(root, path), "name: second\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "second protected edit"]);
+  const secondBlob = git(root, ["rev-parse", `HEAD:${path}`]);
+  writeRulings(root, [
+    {
+      base: "1".repeat(40),
+      author: "first",
+      date: "2026-08-28",
+      scope: "test first ruling",
+      files: [{ path, blob: firstBlob }],
+    },
+    {
+      base: "2".repeat(40),
+      author: "second",
+      date: "2026-08-28",
+      scope: "test second ruling",
+      files: [{ path, blob: secondBlob }],
+    },
+  ]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, new RegExp(`base provenance ${"2".repeat(40)}`));
+});
+
+test("two rulings for one path refuse when HEAD matches neither blob", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = ".github/workflows/ci.yml";
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, path), "name: unapproved\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "unapproved protected edit"]);
+  writeRulings(root, [
+    {
+      base: "1".repeat(40),
+      author: "first",
+      date: "2026-08-28",
+      scope: "test first ruling",
+      files: [{ path, blob: "a".repeat(40) }],
+    },
+    {
+      base: "2".repeat(40),
+      author: "second",
+      date: "2026-08-28",
+      scope: "test second ruling",
+      files: [{ path, blob: "b".repeat(40) }],
+    },
+  ]);
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /PROTECTED_PATH_RULING_AMBIGUOUS/);
-  assert.match(result.stderr, /test\/fixtures\/approved\.json/);
+  assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+  assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
+});
+
+test("two rulings for one path and one blob authorise without ambiguity", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = ".github/workflows/ci.yml";
+  const base = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, path), "name: approved\n");
+  git(root, ["add", path]);
+  git(root, ["commit", "-qm", "approved protected edit"]);
+  const blob = git(root, ["rev-parse", `HEAD:${path}`]);
+  writeRulings(root, [
+    {
+      base: "1".repeat(40),
+      author: "first",
+      date: "2026-08-28",
+      scope: "test first ruling",
+      files: [{ path, blob }],
+    },
+    {
+      base: "2".repeat(40),
+      author: "second",
+      date: "2026-08-28",
+      scope: "test second ruling",
+      files: [{ path, blob }],
+    },
+  ]);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /recorded human ruling/);
+  assert.equal(result.stderr, "");
 });
 
 test("a head with the old single-object ruling shape is accepted as one list entry", (t) => {
@@ -389,6 +518,30 @@ test("a head with the old single-object ruling shape is accepted as one list ent
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /PROTECTED_PATH_RULING_DROPPED/);
   assert.match(result.stderr, new RegExp(`${second}.*second`));
+});
+
+test("an invalid merge-base ruling document is refused by name", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "PROTECTED-PATH-RULINGS.json"), "{\n");
+  git(root, ["add", "docs/PROTECTED-PATH-RULINGS.json"]);
+  git(root, ["commit", "-qm", "invalid base ruling document"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, []);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /PROTECTED_PATH_RULING_BASE_UNREADABLE/);
+});
+
+test("a missing merge-base ruling document is accepted as the first migration", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeRulings(root, []);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
 });
 
 test("deleting the superset check makes the dropped-ruling test accept the tamper", (t) => {
