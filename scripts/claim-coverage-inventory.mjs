@@ -127,6 +127,10 @@ function guardCoverage(repo, root) {
       const claimPath = path.join(root, claimFile);
       const claimSource = fs.readFileSync(claimPath, "utf8");
       for (const reference of entry.coveredBy) {
+        const hash = reference.indexOf("#");
+        if (hash !== -1 && hash !== reference.lastIndexOf("#")) {
+          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} marker must not contain a second #`);
+        }
         const marker = /^(.*)#([A-Za-z][A-Za-z0-9_-]*)$/.exec(reference);
         const line = /^(.*):(\d+)$/.exec(reference);
         const parsed = marker ? { path: marker[1], marker: marker[2] } : line ? { path: line[1], line: Number(line[2]) } : null;

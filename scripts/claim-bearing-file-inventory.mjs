@@ -96,6 +96,8 @@ function readText(path) {
 }
 function parseReference(reference) {
   if (typeof reference !== "string") return null;
+  const hash = reference.indexOf("#");
+  if (hash !== -1 && hash !== reference.lastIndexOf("#")) return { invalid: "marker must not contain a second #" };
   const marker = /^(.*)#([A-Za-z][A-Za-z0-9_-]*)$/.exec(reference);
   if (marker && marker[1]) return { path: marker[1], marker: marker[2] };
   const line = /^(.*):(\d+)$/.exec(reference);
@@ -117,6 +119,7 @@ function markerCount(proof, binding) {
 }
 function referenceProvesFile(reference, claimFile, tracked) {
   const parsed = parseReference(reference);
+  if (parsed?.invalid) return parsed.invalid;
   if (!parsed) return "must be path:line or path#marker";
   if (!tracked.has(parsed.path)) return `references untracked proof file ${parsed.path}`;
   let proof;
@@ -178,6 +181,8 @@ function checkMandatoryBindings() {
         continue;
       }
       if (!fileText.includes(normalizedProse(binding.sentence))) fail(`${file}: bound claim sentence is absent from the document: ${binding.sentence}`);
+      const problem = referenceProvesFile(binding.proof, file, tracked);
+      if (problem) fail(`${file}: binding for sentence ${JSON.stringify(binding.sentence)} ${JSON.stringify(binding.proof)} ${problem}`);
     }
     for (const sentence of mandatoryClaimUnits(file)) {
       const proof = bySentence.get(sentence);

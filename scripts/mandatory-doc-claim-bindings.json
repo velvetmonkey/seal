@@ -4,7 +4,7 @@
     "README.md": [
       {
         "sentence": "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.",
-        "proof": "test/frontdoor.test.mjs#readme-claim"
+        "proof": "test/frontdoor.test.mjs#readme"
       }
     ],
     "docs/guide/knowing-it-worked.md": [
