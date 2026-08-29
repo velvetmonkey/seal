@@ -56,7 +56,12 @@ const HISTORIC_AUTHOR_EMAILS = new Set([
 ]);
 
 function git(root, args) {
-  return spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
+  const env = { ...process.env };
+  delete env.GIT_AUTHOR_NAME;
+  delete env.GIT_AUTHOR_EMAIL;
+  delete env.GIT_COMMITTER_NAME;
+  delete env.GIT_COMMITTER_EMAIL;
+  return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", env });
 }
 
 function requireGit(root, args) {
@@ -74,8 +79,11 @@ function acceptedAuthorEmail(email) {
   return email === CANONICAL_EMAIL || LANE_EMAIL.test(email);
 }
 
-function violations(root, base, head) {
-  const commits = requireGit(root, ["rev-list", "--reverse", `${base}..${head}`]).split("\n").filter(Boolean);
+function addedCommits(root, base, head) {
+  return requireGit(root, ["rev-list", "--reverse", `${base}..${head}`]).split("\n").filter(Boolean);
+}
+
+function violations(root, base, head, commits = addedCommits(root, base, head)) {
   return commits.flatMap((sha) => {
     const email = requireGit(root, ["show", "-s", "--format=%ae", sha]);
     if (acceptedAuthorEmail(email) || historicalCommit(root, sha, email)) return [];
@@ -84,7 +92,12 @@ function violations(root, base, head) {
 }
 
 function check(root, base, head) {
-  const rejected = violations(root, base, head);
+  const commits = addedCommits(root, base, head);
+  if (commits.length === 0) {
+    process.stderr.write(`COMMIT_AUTHOR_IDENTITY_REJECTED: range ${base}..${head} contains zero added commits.\n`);
+    return false;
+  }
+  const rejected = violations(root, base, head, commits);
   if (rejected.length) {
     for (const { sha, email } of rejected) {
       process.stderr.write(`COMMIT_AUTHOR_IDENTITY_REJECTED: commit ${sha} has author email ${email}; required ${CANONICAL_EMAIL} or <lane>@lanes.seal.invalid\n`);
@@ -146,12 +159,66 @@ test("a near-miss lane suffix is rejected", (t) => {
   assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "evil@notlanes.seal.invalid.example.com" }]);
 });
 
+test("a lane-domain lookalike is rejected", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = requireGit(root, ["rev-parse", "HEAD"]);
+  const sha = commit(root, "lane lookalike", "evil", "x@evil-lanes.seal.invalid");
+  assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "x@evil-lanes.seal.invalid" }]);
+});
+
+test("an unlisted GitHub noreply author is rejected", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = requireGit(root, ["rev-parse", "HEAD"]);
+  const sha = commit(root, "unlisted noreply", "someone", "someone@users.noreply.github.com");
+  assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "someone@users.noreply.github.com" }]);
+});
+
 test("the named historic identities cannot be reused by a new commit", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const base = requireGit(root, ["rev-parse", "HEAD"]);
   const sha = commit(root, "historic identity reuse", "clienterrors", "clienterrors@users.noreply.github.com");
   assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "clienterrors@users.noreply.github.com" }]);
+});
+
+test("the fixture constructs author and committer identity", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const savedIdentity = {
+    GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME,
+    GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL,
+    GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME,
+    GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL,
+  };
+  Object.assign(process.env, {
+    GIT_AUTHOR_NAME: "ambient lane author",
+    GIT_AUTHOR_EMAIL: "ambient@lanes.seal.invalid",
+    GIT_COMMITTER_NAME: "ambient lane committer",
+    GIT_COMMITTER_EMAIL: "ambient@lanes.seal.invalid",
+  });
+  t.after(() => {
+    for (const [name, value] of Object.entries(savedIdentity)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const sha = commit(root, "explicit identity", "fixture author", "fixture-author@example.invalid");
+  assert.equal(requireGit(root, ["show", "-s", "--format=%an%n%ae%n%cn%n%ce", sha]), [
+    "fixture author",
+    "fixture-author@example.invalid",
+    "fixture author",
+    "fixture-author@example.invalid",
+  ].join("\n"));
+});
+
+test("a rewind range with zero added commits is rejected", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const head = requireGit(root, ["rev-parse", "HEAD"]);
+  const base = commit(root, "later", "velvetmonkey", CANONICAL_EMAIL);
+  assert.equal(check(root, base, head), false);
 });
 
 function rangeArgs(argv) {
