@@ -403,7 +403,7 @@ test("an explicit client without execute permission refuses with a token", () =>
   assert.throws(
     () => harness.clientIdentity(pathEnv(workspace), client),
     (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" &&
-      error.message === `client executable ${JSON.stringify(client)} could not be executed: EACCES`,
+      error.message === `client executable ${JSON.stringify(client)} could not be executed: error code "EACCES"`,
   );
 });
 
