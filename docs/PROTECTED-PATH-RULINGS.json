@@ -1,7 +1,7 @@
 {
   "version": 1,
   "ruling": {
-    "base": "509c2dd81bd935ee70bd34fecb30fdc4b9367b1a",
+    "base": "dfb482aadd2499728ab34b27b5a746cf76b25fc8",
     "author": "specrebase5",
     "date": "2026-08-29",
     "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change and this branch's manifest edit, and nothing else.",
