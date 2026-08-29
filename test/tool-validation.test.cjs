@@ -75,7 +75,8 @@ test("an observed tool protects end to end and reports every other tool as not a
   const ctx = setup("ok", "db.drop_table,db.read");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
-  assert.match(protectedRun.out, /Protection: PENDING RESTART db\.db\.drop_table/);
+  assert.match(protectedRun.out, /Sealed MCP route db: PENDING RESTART/);
+  assert.match(protectedRun.out, /^  db\.drop_table$/m);
   assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.read/);
   const statePath = statePathFor(ctx.project, ctx.env);
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], { cwd: ctx.project, env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
@@ -94,7 +95,9 @@ test("a named tool list gives both tools separate asks", async (t) => {
   const ctx = setup("ok", "db.drop_table,db.read,db.health");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table", "db.read"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
-  assert.match(protectedRun.out, /Protection: PENDING RESTART db\.\{db\.drop_table, db\.read\}/);
+  assert.match(protectedRun.out, /Sealed MCP route db: PENDING RESTART/);
+  assert.match(protectedRun.out, /^  db\.drop_table$/m);
+  assert.match(protectedRun.out, /^  db\.read$/m);
   assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.health/);
 
   const session = proxySession(ctx);
@@ -224,7 +227,8 @@ test("--timeout-ms permits a legitimate slow initialize and is persisted for act
   const ctx = setup("slow-initialize", "5100");
   const result = run(ctx, ["protect", "--timeout-ms", "6000", "db", "db.drop_table"]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /Protection: PENDING RESTART db\.db\.drop_table/);
+  assert.match(result.out, /Sealed MCP route db: PENDING RESTART/);
+  assert.match(result.out, /^  db\.drop_table$/m);
   assert.equal(readState(statePathFor(ctx.project, ctx.env)).discoveryTimeoutMs, 6000);
 });
 

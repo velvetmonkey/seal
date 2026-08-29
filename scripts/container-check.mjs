@@ -139,8 +139,9 @@ if (requireProtectWalk) {
     const shown = protect && expected.get(protect.line);
     if (!setup) fail(`README protect section at line ${protectHeading + 1} has no .mcp.json server setup command`);
     if (!protect) fail(`README protect section at line ${protectHeading + 1} has no seal protect command`);
-    if (!shown || !/^Protection:\s+PENDING RESTART\b/m.test(shown.body)) {
-      fail("README protect command must be followed by output showing Protection: PENDING RESTART");
+    if (!shown || !/^Sealed MCP route\s+\S+:\s+PENDING RESTART\b/m.test(shown.body) ||
+        !/^Gated through this route:$/m.test(shown.body) || !/^Not controlled:$/m.test(shown.body)) {
+      fail("README protect command must be followed by output showing Sealed MCP route PENDING RESTART with its boundary");
     }
     if (!status) fail(`README protect section at line ${protectHeading + 1} has no seal status follow-up command`);
     if (setup && protect && shown && status) {
