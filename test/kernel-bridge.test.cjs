@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn, execFile, execFileSync } = require("node:child_process");
+const { promisify } = require("node:util");
 const test = require("node:test");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
@@ -19,6 +20,7 @@ const HANGING_WORKER = path.join(ROOT, "test-support", "hanging-kernel-worker.cj
 const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
+const execFileAsync = promisify(execFile);
 
 test("the production kernel has one runtime location and the retired fixture path is absent", () => {
   assert.equal(DEFAULT_KERNEL_ROOT, path.join(ROOT, "runtime", "kernel"));
@@ -53,7 +55,7 @@ function acceptedRetry(contract, state, overrides = {}) {
   });
 }
 
-function proxyHarness(t) {
+function proxyHarness(t, env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-real-path-"));
   const store = path.join(dir, "approvals.journal");
   const receipts = path.join(dir, "receipts");
@@ -62,7 +64,7 @@ function proxyHarness(t) {
   const child = spawn(process.execPath, [
     SEAL, "__proxy", "--guard", TOOL, "--store", store, "--receipts", receipts,
     "--", process.execPath, SEAL, "__demo-server", data,
-  ], { stdio: ["pipe", "pipe", "pipe"] });
+  ], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { try { child.kill("SIGKILL"); } catch {} });
   let out = "", err = "";
   child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
@@ -84,6 +86,26 @@ function proxyHarness(t) {
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params }) + "\n");
   }
   return { child, dir, data, receipts, send, response };
+}
+
+function redirectedKernelWorker(t, workerSource) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-worker-"));
+  const worker = path.join(dir, "worker.cjs");
+  const preload = path.join(dir, "redirect-worker.cjs");
+  fs.writeFileSync(worker, workerSource);
+  fs.writeFileSync(preload, `
+const childProcess = require("node:child_process");
+const spawnSync = childProcess.spawnSync;
+childProcess.spawnSync = function(command, args, options) {
+  const input = typeof options?.input === "string" ? JSON.parse(options.input) : {};
+  if (input.accepted && Array.isArray(args) && args[0]?.endsWith("kernel-authorization-worker.cjs")) {
+    return spawnSync.call(this, command, [${JSON.stringify(worker)}, ...args.slice(1)], options);
+  }
+  return spawnSync.apply(this, arguments);
+};
+`);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return preload;
 }
 
 test("real MCP retry uses the proved authorization kernel and forwards only its ALLOW", async (t) => {
@@ -109,6 +131,117 @@ test("real MCP retry uses the proved authorization kernel and forwards only its 
   run.child.stdin.end();
 });
 
+test("real MCP timeout after all child phases reports that worker exit was not observed", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-timeout-")), "delay-response.cjs");
+  fs.writeFileSync(control, `
+const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...rest) {
+  if (process.argv[1]?.endsWith("kernel-authorization-worker.cjs") && typeof chunk === "string" && chunk.includes('"verdict":"ALLOW"')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+  }
+  return write(chunk, ...rest);
+};
+`);
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 5000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
+  assert.doesNotMatch(refused.result.content[0].text, /null|undefined/);
+  run.child.stdin.end();
+});
+
+test("real MCP hanging worker with no child phases does not claim measured phases completed", async (t) => {
+  const preload = redirectedKernelWorker(t, `
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+`);
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
+  assert.match(refused.result.content[0].text, /kernel worker did not publish a child timing phase/);
+  run.child.stdin.end();
+});
+
+test("real MCP timeout with partial child phases does not claim measured phases completed", async (t) => {
+  const preload = redirectedKernelWorker(t, `
+for (const name of [
+  "child_bootstrap_to_module_load",
+  "child_request_read",
+  "child_request_parse",
+  "wasm_load",
+  "decision_execution",
+]) {
+  process.stderr.write("SEAL_KERNEL_TIMING_PHASE " + JSON.stringify({
+    name,
+    clock: "child_process_hrtime_ns",
+    timestamps: { started_ns: "1", finished_ns: "2" },
+  }) + "\\n");
+}
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+`);
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
+  assert.match(refused.result.content[0].text, /kernel worker did not answer/);
+  run.child.stdin.end();
+});
+
+test("the MCP proxy contains no separate literal child phase-name array", () => {
+  const source = fs.readFileSync(path.join(ROOT, "spine", "proxy.cjs"), "utf8");
+  assert.doesNotMatch(source, /\[\s*["']child_[a-z_]+["'][\s\S]*?\]/);
+});
+
+test("real MCP timeout while a child phase runs still names that phase", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-phase-")), "delay-decision.cjs");
+  fs.writeFileSync(control, `
+const Module = require("node:module");
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = originalLoad.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = value.decide;
+    value.decide = async function(...args) {
+      if (args[1]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+      return decide.apply(this, args);
+    };
+  }
+  return value;
+};
+`);
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
+  run.send(1, { name: TOOL, arguments: ARGS });
+  const opened = await run.response(1);
+  run.send(2, {
+    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
+  });
+  const refused = await run.response(2);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  t.diagnostic(refused.result.content[0].text);
+  assert.match(refused.result.content[0].text, /kernel deadline while running decision_execution/);
+  run.child.stdin.end();
+});
+
 test("authorization rows are presented to the real kernel and alterations are denied", () => {
   const real = createKernelAuthorizationAdapter();
   for (const vector of [
@@ -125,6 +258,48 @@ test("authorization rows are presented to the real kernel and alterations are de
     assert.equal(observed.verdict, "BLOCK");
     assert.match(observed.raw, /\"route\":\"block\"/);
   }
+});
+
+test("kernel timing publishes only same-clock timestamp pairs and names cross-process gaps", () => {
+  const answer = createKernelAuthorizationAdapter().authorize({
+    epoch: 1,
+    issuedTool: TOOL,
+    issuedArgs: ARGS,
+    retryTool: TOOL,
+    retryArgs: ARGS,
+    accepted: true,
+    now: 1000,
+  });
+  const expected = [
+    "parent_request_serialization",
+    "parent_response_deserialization",
+    "parent_kernel_worker_wait",
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+    "module_load_to_request_read",
+    "request_read_to_request_parse",
+    "request_parse_to_wasm_load",
+    "wasm_load_to_decision_execution",
+    "decision_execution_to_response_construction",
+  ];
+  assert.deepEqual(Object.keys(answer.kernel_timing_ms).sort(), expected.sort());
+  assert.equal("worker_creation" in answer.kernel_timing_ms, false);
+  for (const [clock, phases] of Object.entries(answer.kernel_timing_timestamps)) {
+    for (const [name, timestamps] of Object.entries(phases)) {
+      if (name === "parent_spawn_invoked_ns") continue;
+      assert.match(timestamps.started_ns, /^\d+$/, `${clock}/${name} start`);
+      assert.match(timestamps.finished_ns, /^\d+$/, `${clock}/${name} finish`);
+      assert.ok(BigInt(timestamps.finished_ns) >= BigInt(timestamps.started_ns), `${clock}/${name} order`);
+    }
+  }
+  assert.match(answer.kernel_timing_unmeasured.parent_spawn_to_first_child_instruction, /^UNMEASURED:/);
+  assert.match(answer.kernel_timing_unmeasured.request_pipe_delivery, /^UNMEASURED:/);
+  assert.match(answer.kernel_timing_unmeasured.response_pipe_return, /^UNMEASURED:/);
+  assert.equal(answer.kernel_timing_active_phase, null);
 });
 
 test("Node state rows refuse without consulting the authorization kernel", () => {
@@ -174,6 +349,208 @@ test("a hung kernel worker reaches its product deadline and refuses closed", () 
   assert.match(refused.detail, /kernel worker exceeded its 5000 ms deadline/);
   assert.ok(elapsed >= 5000, `worker returned before its deadline: ${elapsed} ms`);
   assert.ok(elapsed < 7000, `worker did not return promptly: ${elapsed} ms`);
+});
+
+test("an injected delayed decision carries completed phases through the shipped retry refusal", (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-delay-")), "delay-kernel-decision.cjs");
+  fs.writeFileSync(control, `
+const Module = require("node:module");
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const loaded = originalLoad.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = loaded.decide;
+    loaded.decide = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 5100));
+      return decide(...args);
+    };
+  }
+  return loaded;
+};
+`);
+  const originalNodeOptions = process.env.NODE_OPTIONS;
+  process.env.NODE_OPTIONS = `${originalNodeOptions ? `${originalNodeOptions} ` : ""}--require=${control}`;
+  t.after(() => {
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    fs.rmSync(path.dirname(control), { recursive: true, force: true });
+  });
+  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const refused = acceptedRetry(contract, fresh(contract));
+  assert.equal(refused.kind, "refuse");
+  assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
+  assert.match(refused.detail, /exceeded its 5000 ms deadline/);
+  assert.ok(refused.timing, "the returned refusal carries timing");
+  const published = Object.keys(refused.timing.kernel_timing_timestamps.child_process_hrtime_ns).sort();
+  assert.deepEqual(published, [
+    "child_bootstrap_to_module_load",
+    "child_request_parse",
+    "child_request_read",
+    "module_load_to_request_read",
+    "request_parse_to_wasm_load",
+    "request_read_to_request_parse",
+    "wasm_load",
+    "wasm_load_to_decision_execution",
+  ]);
+  assert.deepEqual(Object.keys(refused.timing.kernel_timing_ms).sort(), [
+    "child_bootstrap_to_module_load",
+    "child_request_parse",
+    "child_request_read",
+    "module_load_to_request_read",
+    "parent_kernel_worker_wait",
+    "parent_request_serialization",
+    "request_parse_to_wasm_load",
+    "request_read_to_request_parse",
+    "wasm_load",
+    "wasm_load_to_decision_execution",
+  ]);
+  assert.equal(refused.timing.kernel_timing_active_phase, "decision_execution");
+  assert.equal("decision_execution" in refused.timing.kernel_timing_ms, false);
+  assert.equal("child_response_construction_and_serialization" in refused.timing.kernel_timing_ms, false);
+  t.diagnostic(`timeout refusal received by caller: ${JSON.stringify(refused)}`);
+});
+
+test("a response write that does not flush reports completed security work and lifecycle state", (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-response-write-")), "block.cjs");
+  fs.writeFileSync(control, `
+const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...rest) {
+  if (typeof chunk === "string" && chunk.includes('"receipt_record"')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+  }
+  return write(chunk, ...rest);
+};
+`);
+  const originalNodeOptions = process.env.NODE_OPTIONS;
+  process.env.NODE_OPTIONS = `${originalNodeOptions ? `${originalNodeOptions} ` : ""}--require=${control}`;
+  t.after(() => {
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    fs.rmSync(path.dirname(control), { recursive: true, force: true });
+  });
+  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const refused = acceptedRetry(contract, fresh(contract));
+  assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
+  assert.equal(refused.timing.kernel_timing_active_phase, null);
+  assert.deepEqual(Object.keys(refused.timing.kernel_timing_lifecycle).sort(), ["response_generated", "response_write_started"]);
+  for (const phase of [
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ]) assert.equal(typeof refused.timing.kernel_timing_ms[phase], "number", phase);
+});
+
+function blockingPreload(phase) {
+  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const controls = {
+    child_bootstrap_to_module_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request.endsWith("runner.cjs")) ${sleep}
+  return load.apply(this, arguments);
+};`,
+    child_request_read: `
+const stdinOn = process.stdin.on;
+process.stdin.on = function(event, listener) {
+  if (event === "data") return stdinOn.call(this, event, (...args) => { ${sleep} return listener(...args); });
+  return stdinOn.call(this, event, listener);
+};`,
+    child_request_parse: `
+const parse = JSON.parse;
+JSON.parse = function(text, ...rest) {
+  if (typeof text === "string" && text.startsWith('{"epoch":')) ${sleep}
+  return parse.call(this, text, ...rest);
+};`,
+    wasm_load: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const runnerLoad = value.load;
+    value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
+  }
+  return value;
+};`,
+    decision_execution: `
+const Module = require("node:module");
+const load = Module._load;
+Module._load = function(request, parent, isMain) {
+  const value = load.apply(this, arguments);
+  if (request.endsWith("runner.cjs")) {
+    const decide = value.decide;
+    value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
+  }
+  return value;
+};`,
+    child_response_construction_and_serialization: `
+const stringify = JSON.stringify;
+JSON.stringify = function(value, ...rest) {
+  if (value && value.verdict && value.receipt_record) ${sleep}
+  return stringify.call(this, value, ...rest);
+};`,
+  };
+  return controls[phase];
+}
+
+test("each blocked worker phase names itself in the timeout refusal", async (t) => {
+  const phases = [
+    "child_bootstrap_to_module_load",
+    "child_request_read",
+    "child_request_parse",
+    "wasm_load",
+    "decision_execution",
+    "child_response_construction_and_serialization",
+  ];
+  const controls = [];
+  t.after(() => controls.forEach((control) => fs.rmSync(path.dirname(control), { recursive: true, force: true })));
+  const results = await Promise.all(phases.map(async (phase) => {
+    const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-phase-")), "block.cjs");
+    controls.push(control);
+    fs.writeFileSync(control, blockingPreload(phase));
+    const program = `
+const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
+const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
+const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
+process.stdout.write(JSON.stringify(result));`;
+    const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
+      env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+      timeout: 10000,
+    });
+    return [phase, JSON.parse(stdout)];
+  }));
+  for (const [phase, refused] of results) {
+    assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED, `${phase}: ${JSON.stringify(refused)}`);
+    assert.equal(refused.timing.kernel_timing_active_phase, phase, phase);
+  }
+});
+
+test("an active wasm load publishes the gap from request parse to its start", async (t) => {
+  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-active-gap-")), "block.cjs");
+  t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
+  fs.writeFileSync(control, blockingPreload("wasm_load"));
+  const program = `
+const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
+const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
+const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
+process.stdout.write(JSON.stringify(result));`;
+  const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
+    env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
+    timeout: 10000,
+  });
+  const refused = JSON.parse(stdout);
+  assert.equal(refused.timing.kernel_timing_active_phase, "wasm_load");
+  assert.equal(typeof refused.timing.kernel_timing_ms.request_parse_to_wasm_load, "number");
+  assert.ok(refused.timing.kernel_timing_ms.request_parse_to_wasm_load >= 0);
+  assert.match(refused.timing.kernel_timing_timestamps.child_process_hrtime_ns.request_parse_to_wasm_load.finished_ns, /^\d+$/);
 });
 
 test("Node/kernel authorization disagreement refuses and names the refusing side", () => {
