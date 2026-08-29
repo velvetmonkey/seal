@@ -4,7 +4,10 @@
     "base": "25ffcd2554f82903d3245156918767cb124e0650",
     "author": "specrebase5",
     "date": "2026-08-29",
-    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change, this branch's manifest edit, and the deletion of the manifest identity column, the rename record parser, and nothing else.",
+    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change, this branch's manifest edit, and the deletion of the manifest identity column, the rename record parser, and nothing else. This ruling retires the property \"receipt producer and checker retain specified insertion order\".",
+    "retires": [
+      "receipt producer and checker retain specified insertion order"
+    ],
     "files": [
       {
         "path": "scripts/check-protected-paths.cjs",
