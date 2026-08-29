@@ -3,14 +3,10 @@
 // The approval contract for the RETRY protocol (roadmap step 1, state layer
 // re-specified by the spine2 addendum).
 //
-// `requestState` is an OPAQUE RANDOM HANDLE — `seal-rs1.<256-bit hex>` —
-// and nothing else crosses the wire: no tool, no arguments, no expiry, no
-// nonce, no phase. The client is made INCAPABLE of altering anything that
-// matters, rather than merely detectable when it tries. A consequence,
-// accepted by design: an altered handle and a never-issued handle are the
-// same lookup miss (`unknown_state`); there is nothing meaningful in the
-// handle to tamper with. The server stores only the HASH of the handle,
-// never the raw value, and no state blob is signed or encrypted.
+// `requestState` is an OPAQUE RANDOM HANDLE — `seal-rs1.<256-bit hex>`.
+// The proxy keeps the raw handle inside the connection while this contract
+// stores only its hash. The elicitation response carries no handle, tool,
+// arguments, expiry, nonce, or phase for the client to alter.
 //
 // Two lifetimes, deliberately different:
 //   - a CONSUMED approval survives a restart (journaled, fsynced), so
@@ -21,10 +17,10 @@
 //
 // THE HONEST LIMIT, stated where a reader will find it: this contract stops
 // the CLIENT altering the continuation. It does NOT prove a human clicked
-// Accept. A client holding the correct handle can still fabricate an
-// acceptance. Form elicitation puts Claude Code inside our trusted
-// approval-origin boundary — an assumption we declare, not a property we
-// enforce. The allow evidence repeats this.
+// Accept. A client can fabricate an accepting elicitation response. Form
+// elicitation puts Claude Code inside our trusted approval-origin boundary —
+// an assumption we declare, not a property we enforce. The allow evidence
+// repeats this.
 const crypto = require("node:crypto");
 const { canonicalString, sha256Hex } = require("./canonical.cjs");
 const { renderApprovalMessage } = require("./renderer.cjs");
@@ -145,8 +141,9 @@ function createApprovalContract({
       return refuse(REFUSALS.UNRENDERABLE, `effect has no canonical form: ${error.message}`);
     }
 
-    // The raw handle exists in exactly two places: this return value and
-    // the client. The server keeps only its hash.
+    // The raw handle leaves this contract only in the return value. The
+    // proxy retains it until the matching elicitation response arrives.
+    // This contract keeps only its hash.
     const handle = `seal-rs1.${crypto.randomBytes(32).toString("hex")}`;
     const createdAt = now();
     const record = {
@@ -167,25 +164,19 @@ function createApprovalContract({
 
     return {
       kind: "input_required",
+      elicitationParams: {
+        message: rendered.message,
+        // Title-free on purpose: schema field titles consume message lines
+        // inside the measured envelope.
+        requestedSchema: {
+          type: "object",
+          properties: { approve: { type: "boolean" } },
+          required: ["approve"],
+        },
+      },
       result: {
         resultType: "input_required",
         content: [{ type: "text", text: rendered.message }],
-        inputRequests: {
-          [INPUT_REQUEST_KEY]: {
-            method: "elicitation/create",
-            params: {
-              mode: "form",
-              message: rendered.message,
-              // Title-free on purpose: schema field titles consume message
-              // lines inside the measured envelope.
-              requestedSchema: {
-                type: "object",
-                properties: { approve: { type: "boolean" } },
-                required: ["approve"],
-              },
-            },
-          },
-        },
         requestState: handle,
       },
     };
@@ -339,7 +330,7 @@ function createApprovalContract({
         // from altering the continuation; a human click is not proven.
         human_present: "unknown",
         human_present_detail:
-          "a client holding the correct handle can fabricate an acceptance; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property",
+          "a client can fabricate an accepting elicitation response; form elicitation places the client inside the trusted approval-origin boundary — a declared assumption, not an enforced property",
       },
     };
   }

@@ -73,7 +73,7 @@ function freshPending(contract) {
   assert.equal(opened.result.resultType, "input_required");
   assert.deepEqual(opened.result.content, [{
     type: "text",
-    text: opened.result.inputRequests.approval.params.message,
+    text: opened.elicitationParams.message,
   }]);
   return opened.result.requestState;
 }
@@ -194,7 +194,7 @@ test("allow evidence states the limit: human presence is unknown", async (t) => 
   const decision = await attempt(contract, child, { tool: TOOL, args: ARGS, requestState: state, inputResponses: ACCEPT });
   assert.equal(decision.kind, "allow");
   assert.equal(decision.evidence.human_present, "unknown");
-  assert.match(decision.evidence.human_present_detail, /can fabricate an acceptance/);
+  assert.match(decision.evidence.human_present_detail, /can fabricate an accepting elicitation response/);
   assert.match(decision.evidence.human_present_detail, /declared assumption, not an enforced property/);
 });
 

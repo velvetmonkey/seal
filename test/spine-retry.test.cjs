@@ -223,8 +223,8 @@ test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
 });
 
 // --- protected path ---------------------------------------------------------
-// The test is the MCP client on `seal __proxy` stdio, speaking the retry
-// protocol: tools/call → input_required → fresh tools/call with the answer.
+// The test is the MCP client on `seal __proxy` stdio. It keeps tools/call
+// pending while it answers the proxy's server-to-client elicitation/create.
 
 function spawnProxy(dir, dataFile, extra = {}) {
   const storePath = extra.storePath || path.join(dir, "approvals.journal");
@@ -243,61 +243,34 @@ function spawnProxy(dir, dataFile, extra = {}) {
     buffered = run.out;
     for (const line of chunk.split("\n")) if (line.trim()) responses.push(JSON.parse(line));
   });
-  const responseFor = (id, ms = 15000) => new Promise((resolve, reject) => {
+  const waitForFrame = (predicate, ms = 15000) => new Promise((resolve, reject) => {
     const started = Date.now();
     const poll = setInterval(() => {
-      const hit = responses.find((r) => r.id === id);
+      const hit = responses.find(predicate);
       if (hit) { clearInterval(poll); resolve(hit); }
-      else if (Date.now() - started > ms) { clearInterval(poll); reject(new Error(`no response for id ${id}\nstdout:\n${run.out}\nstderr:\n${run.err}`)); }
+      else if (Date.now() - started > ms) { clearInterval(poll); reject(new Error(`no matching frame\nstdout:\n${run.out}\nstderr:\n${run.err}`)); }
     }, 25);
   });
-  return { proxy, run, responseFor, storePath };
+  const responseFor = (id, ms) => waitForFrame((frame) => frame.id === id && !frame.method, ms);
+  const requestFor = (method, ms) => waitForFrame((frame) => frame.method === method, ms);
+  return { proxy, run, requestFor, responseFor, responses, storePath };
 }
 
 function callParams(line, extraParams = {}) {
   return { jsonrpc: "2.0", method: "tools/call", params: { name: "demo.mutate", arguments: { line }, ...extraParams } };
 }
-const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 
-test("receipt correlations refuse loudly at capacity without orphaning live approvals", async (t) => {
-  const dir = tmpdir("seal-receipt-correlation-capacity-");
-  const storePath = path.join(dir, "approvals.journal");
-  const receiptsDir = path.join(dir, "receipts");
-  const dataFile = path.join(dir, "data.txt");
-  createJournal(storePath);
-  const responses = [];
-  const decisions = [];
-  const proxy = createProxy({
-    guardTool: "demo.mutate",
-    storePath,
-    receiptsDir,
-    receiptCorrelationCapacity: 2,
-    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
-    onClientLine(line) { responses.push(JSON.parse(line)); },
-    onDecision(decision) { decisions.push(decision); },
-  });
-  t.after(() => proxy.stop());
+function initialize(proxy, capabilities = { elicitation: {} }, id = 90) {
+  proxy.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id, method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities },
+  }) + "\n");
+}
 
-  proxy.write(JSON.stringify({ ...callParams("first pending"), id: 1 }));
-  proxy.write(JSON.stringify({ ...callParams("second pending"), id: 2 }));
-  proxy.write(JSON.stringify({ ...callParams("over capacity"), id: 3 }));
-  assert.equal(responses.find((response) => response.id === 1).result.resultType, "input_required");
-  assert.equal(responses.find((response) => response.id === 2).result.resultType, "input_required");
-  assert.match(responses.find((response) => response.id === 3).result.content[0].text, /receipt_correlation_capacity_exceeded/);
-  assert.equal(decisions.at(-1).refusal, "receipt_correlation_capacity_exceeded");
-
-  const firstState = responses.find((response) => response.id === 1).result.requestState;
-  proxy.write(JSON.stringify({ ...callParams("first pending", { requestState: firstState, inputResponses: ACCEPT }), id: 4 }));
-  assert.equal(decisions.at(-1).decision, "ALLOW", "the live approval retained its receipt correlation at capacity");
-  const receiptFiles = fs.readdirSync(receiptsDir);
-  const allowReceipt = JSON.parse(fs.readFileSync(path.join(receiptsDir, receiptFiles.find((name) => name.endsWith("-ALLOW.json"))), "utf8"));
-  assert.equal(allowReceipt.action, "ALLOW");
-  assert.equal(allowReceipt.verdict, "ALLOW");
-
-  proxy.write(JSON.stringify({ ...callParams("slot reopened"), id: 5 }));
-  assert.equal(responses.find((response) => response.id === 5).result.resultType, "input_required");
-  await proxy.stop();
-});
+function answer(proxy, request, action, content) {
+  const result = content === undefined ? { action } : { action, content };
+  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) + "\n");
+}
 
 function receiptFor(dir, decision) {
   const receipts = path.join(dir, "receipts");
@@ -306,175 +279,140 @@ function receiptFor(dir, decision) {
   return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
 }
 
-test("INPUT_REQUIRED receipt carries no retry credential or correlation", async (t) => {
+test("a client without elicitation gets a named refusal and no held call", async (t) => {
   const dir = tmpdir("seal-receipt-correlation-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
   t.after(run.kill);
-
+  initialize(proxy, {});
+  await responseFor(90);
   proxy.stdin.write(JSON.stringify({ ...callParams("receipt correlation"), id: 1 }) + "\n");
-  const opened = await responseFor(1);
-  assert.equal(opened.result.resultType, "input_required");
-  const receipt = receiptFor(dir, "INPUT_REQUIRED");
-  assert.ok(!Object.hasOwn(receipt, "requestState"), "a receipt must never carry the retry credential");
-  assert.ok(!Object.hasOwn(receipt, "approvalRequest"), "the v2 envelope has no private correlation channel");
-  assert.equal(receipt.action, "INPUT_REQUIRED");
-
+  const refused = await responseFor(1);
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /client_elicitation_unsupported/);
+  assert.match(refused.result.content[0].text, /cannot present an approval/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
 
-test("approved retry and INPUT_REQUIRED receipts share the exact call", async (t) => {
+test("real elicitation accept flows once and duplicate or unmatched responses do not flow", async (t) => {
   const dir = tmpdir("seal-receipt-approved-retry-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
-  const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
   t.after(run.kill);
-
+  initialize(proxy);
+  await responseFor(90);
   proxy.stdin.write(JSON.stringify({ ...callParams("approved correlation"), id: 1 }) + "\n");
-  const opened = await responseFor(1);
-  proxy.stdin.write(JSON.stringify({ ...callParams("approved correlation", { requestState: opened.result.requestState, inputResponses: ACCEPT }), id: 2 }) + "\n");
-  const flowed = await responseFor(2);
+  const request = await requestFor("elicitation/create");
+  assert.match(request.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
+  assert.deepEqual(request.params.requestedSchema, {
+    type: "object", properties: { approve: { type: "boolean" } }, required: ["approve"],
+  });
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: `seal-elicitation/v1.${"00".repeat(32)}`, result: { action: "accept", content: { approve: true } } }) + "\n");
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  answer(proxy, request, "accept", { approve: true });
+  const flowed = await responseFor(1);
   assert.ok(!flowed.result.isError, JSON.stringify(flowed));
   assert.equal(readCount(`${dataFile}.count`), "1");
+  answer(proxy, request, "accept", { approve: true });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(readCount(`${dataFile}.count`), "1");
   assert.deepEqual(receiptFor(dir, "ALLOW").arguments, receiptFor(dir, "INPUT_REQUIRED").arguments);
-
+  const receipt = receiptFor(dir, "INPUT_REQUIRED");
+  assert.ok(!Object.hasOwn(receipt, "requestState"));
+  assert.ok(!Object.hasOwn(receipt, "approvalRequest"));
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
 
-test("retry using only an INPUT_REQUIRED receipt is refused as state_malformed", async (t) => {
+for (const action of ["decline", "cancel"]) test(`real elicitation ${action} refuses and does not flow`, async (t) => {
+  const dir = tmpdir(`seal-elicit-${action}-`);
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+  initialize(proxy);
+  await responseFor(90);
+  proxy.stdin.write(JSON.stringify({ ...callParams(`${action} line`), id: 1 }) + "\n");
+  const request = await requestFor("elicitation/create");
+  answer(proxy, request, action);
+  const refused = await responseFor(1);
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, new RegExp(action === "decline" ? "declined" : "cancelled"));
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
+
+test("the retired client-supplied continuation shape is refused", async (t) => {
   const dir = tmpdir("seal-receipt-only-retry-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
   t.after(run.kill);
-
-  // Establish the child-owned count file before asserting that refusal left it
-  // at zero. Without this round trip, Node 20 can observe the refusal before
-  // the spawned demo server has created its startup count file.
-  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: {} }) + "\n");
+  initialize(proxy);
   await responseFor(90);
-  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry"), id: 1 }) + "\n");
-  await responseFor(1);
-  const receipt = receiptFor(dir, "INPUT_REQUIRED");
-  proxy.stdin.write(JSON.stringify({ ...callParams("receipt-only retry", { requestState: receipt.action, inputResponses: ACCEPT }), id: 2 }) + "\n");
+  proxy.stdin.write(JSON.stringify({ ...callParams("retired retry", {
+    requestState: `seal-rs1.${"ab".repeat(32)}`,
+    inputResponses: { approval: { action: "accept", content: { approve: true } } },
+  }), id: 2 }) + "\n");
   const refused = await responseFor(2);
   assert.equal(refused.result.isError, true);
-  assert.match(refused.result.content[0].text, /state_malformed/);
+  assert.match(refused.result.content[0].text, /response_malformed/);
+  assert.match(refused.result.content[0].text, /answer the elicitation\/create request/);
   assert.equal(readCount(`${dataFile}.count`), "0");
-
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
 
-test("seal __proxy: input_required, approved retry flows once, replay refused; counts from the child's file", async (t) => {
-  const dir = tmpdir("seal-spine2-proxy-");
+test("two guarded calls receive distinct elicitation ids", async (t) => {
+  const dir = tmpdir("seal-elicit-distinct-");
   const dataFile = path.join(dir, "data.txt");
-  const countFile = `${dataFile}.count`;
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
-  const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
+  const { proxy, run, responses, responseFor } = spawnProxy(dir, dataFile);
   t.after(run.kill);
-
-  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
-  const init = await responseFor(1);
-  assert.equal(init.result.serverInfo.name, "seal __demo-server");
-
-  proxy.stdin.write(JSON.stringify({ ...callParams("protected line"), id: 2 }) + "\n");
-  const opened = await responseFor(2);
-  assert.equal(opened.result.resultType, "input_required");
-  const state = opened.result.requestState;
-  assert.match(state, /^seal-rs1\.[0-9a-f]{64}$/);
-  assert.equal(readCount(countFile), "0");
-
-  proxy.stdin.write(JSON.stringify({ ...callParams("protected line", { requestState: state, inputResponses: ACCEPT }), id: 3 }) + "\n");
-  const flowed = await responseFor(3);
-  assert.ok(!flowed.result.isError, JSON.stringify(flowed));
-  assert.match(flowed.result.content[0].text, /appended/);
-  assert.equal(readCount(countFile), "1");
-
-  proxy.stdin.write(JSON.stringify({ ...callParams("protected line", { requestState: state, inputResponses: ACCEPT }), id: 4 }) + "\n");
-  const replayed = await responseFor(4);
-  assert.equal(replayed.result.isError, true);
-  assert.match(replayed.result.content[0].text, /already_consumed/);
-  assert.equal(readCount(countFile), "1", "the one-use approval must not admit a second call");
-
+  initialize(proxy);
+  await responseFor(90);
+  proxy.stdin.write(JSON.stringify({ ...callParams("first"), id: 1 }) + "\n");
+  proxy.stdin.write(JSON.stringify({ ...callParams("second"), id: 2 }) + "\n");
+  const started = Date.now();
+  while (responses.filter((frame) => frame.method === "elicitation/create").length < 2) {
+    if (Date.now() - started > 5000) assert.fail(JSON.stringify(responses));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const ids = responses.filter((frame) => frame.method === "elicitation/create").map((frame) => frame.id);
+  assert.equal(new Set(ids).size, 2);
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
 
-// --- durability: one-use survives a process restart -------------------------
-
-test("restart survival: an approval consumed before restart is refused after restart", async (t) => {
-  const dir = tmpdir("seal-spine2-restart-");
+test("an unanswered capable client times out to cancelled", async (t) => {
+  const dir = tmpdir("seal-elicit-timeout-");
   const storePath = path.join(dir, "approvals.journal");
-  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", storePath]);
-
-  // Session A: mint and consume.
-  const dataA = path.join(dir, "a", "data.txt");
-  const a = spawnProxy(dir, dataA, { storePath, receiptsDir: path.join(dir, "receipts") });
-  t.after(a.run.kill);
-  a.proxy.stdin.write(JSON.stringify({ ...callParams("restart line"), id: 1 }) + "\n");
-  const opened = await a.responseFor(1);
-  const state = opened.result.requestState;
-  a.proxy.stdin.write(JSON.stringify({ ...callParams("restart line", { requestState: state, inputResponses: ACCEPT }), id: 2 }) + "\n");
-  const flowed = await a.responseFor(2);
-  assert.ok(!flowed.result.isError);
-  assert.equal(readCount(`${dataA}.count`), "1");
-  a.proxy.stdin.end();
-  assert.equal(await a.run.exit, 0, a.run.err);
-
-  // Session B: a NEW process on the SAME journal, a fresh child.
-  const dataB = path.join(dir, "b", "data.txt");
-  const b = spawnProxy(dir, dataB, { storePath, receiptsDir: path.join(dir, "receipts") });
-  t.after(b.run.kill);
-  // Round-trip through the child first so its count file exists before we read it.
-  b.proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: {} }) + "\n");
-  await b.responseFor(90);
-  b.proxy.stdin.write(JSON.stringify({ ...callParams("restart line", { requestState: state, inputResponses: ACCEPT }), id: 1 }) + "\n");
-  const replayed = await b.responseFor(1);
-  assert.equal(replayed.result.isError, true);
-  assert.match(replayed.result.content[0].text, /already_consumed/,
-    "a one-use rule that forgets on restart is not one use");
-  assert.equal(readCount(`${dataB}.count`), "0", "the restarted proxy's child must receive nothing");
-  b.proxy.stdin.end();
-  assert.equal(await b.run.exit, 0, b.run.err);
-});
-
-test("restart invalidation: a PENDING continuation does not survive a restart", async (t) => {
-  const dir = tmpdir("seal-spine2-pending-");
-  const storePath = path.join(dir, "approvals.journal");
-  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", storePath]);
-
-  // Session A: open a continuation, answer nothing, exit.
-  const dataA = path.join(dir, "a", "data.txt");
-  const a = spawnProxy(dir, dataA, { storePath, receiptsDir: path.join(dir, "receipts") });
-  t.after(a.run.kill);
-  a.proxy.stdin.write(JSON.stringify({ ...callParams("pending line"), id: 1 }) + "\n");
-  const opened = await a.responseFor(1);
-  const state = opened.result.requestState;
-  assert.equal(opened.result.resultType, "input_required");
-  a.proxy.stdin.end();
-  assert.equal(await a.run.exit, 0, a.run.err);
-
-  // Session B: the old pending handle must be invalid; a fresh call is forced.
-  const dataB = path.join(dir, "b", "data.txt");
-  const b = spawnProxy(dir, dataB, { storePath, receiptsDir: path.join(dir, "receipts") });
-  t.after(b.run.kill);
-  b.proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: {} }) + "\n");
-  await b.responseFor(90);
-  b.proxy.stdin.write(JSON.stringify({ ...callParams("pending line", { requestState: state, inputResponses: ACCEPT }), id: 1 }) + "\n");
-  const stale = await b.responseFor(1);
-  assert.equal(stale.result.isError, true);
-  assert.match(stale.result.content[0].text, /restart_invalidated/);
-  assert.equal(readCount(`${dataB}.count`), "0", "an invalidated continuation may not touch the child");
-  // A fresh call still works in session B.
-  b.proxy.stdin.write(JSON.stringify({ ...callParams("pending line"), id: 2 }) + "\n");
-  const fresh = await b.responseFor(2);
-  assert.equal(fresh.result.resultType, "input_required");
-  b.proxy.stdin.end();
-  assert.equal(await b.run.exit, 0, b.run.err);
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate", storePath, receiptsDir: path.join(dir, "receipts"),
+    elicitationTimeoutMs: 25,
+    childArgv: [process.execPath, SEAL, "__demo-server", path.join(dir, "data.txt")],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  proxy.write(JSON.stringify({ ...callParams("timeout"), id: 1 }));
+  const started = Date.now();
+  while (!frames.find((frame) => frame.id === 1 && frame.result)) {
+    if (Date.now() - started > 5000) assert.fail(JSON.stringify(frames));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const refused = frames.find((frame) => frame.id === 1 && frame.result);
+  assert.match(refused.result.content[0].text, /cancelled/);
+  assert.match(refused.result.content[0].text, /did not answer elicitation\/create within 25 ms/);
+  await proxy.stop();
 });
 
 // --- silence must fail ------------------------------------------------------

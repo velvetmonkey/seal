@@ -82,10 +82,32 @@ function proxyHarness(t, env = {}) {
     }
     throw new Error(`no response ${id}\nstdout:\n${out}\nstderr:\n${err}`);
   }
+  async function request(method) {
+    const started = Date.now();
+    while (Date.now() - started < 15000) {
+      for (const line of out.split("\n")) {
+        if (!line.trim()) continue;
+        const frame = JSON.parse(line);
+        if (frame.method === method) return frame;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error(`no request ${method}\nstdout:\n${out}\nstderr:\n${err}`);
+  }
+  child.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id: 0, method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+  }) + "\n");
   function send(id, params) {
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params }) + "\n");
   }
-  return { child, dir, data, receipts, send, response };
+  function accept(elicitation) {
+    child.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: elicitation.id,
+      result: { action: "accept", content: { approve: true } },
+    }) + "\n");
+  }
+  return { child, dir, data, receipts, send, response, request, accept };
 }
 
 function redirectedKernelWorker(t, workerSource) {
@@ -111,11 +133,8 @@ childProcess.spawnSync = function(command, args, options) {
 test("real MCP retry uses the proved authorization kernel and forwards only its ALLOW", async (t) => {
   const run = proxyHarness(t);
   run.send(1, { name: TOOL, arguments: ARGS });
-  const opened = await run.response(1);
-  run.send(2, {
-    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
-  });
-  const allowed = await run.response(2);
+  run.accept(await run.request("elicitation/create"));
+  const allowed = await run.response(1);
   assert.equal(allowed.result.isError, undefined, JSON.stringify(allowed));
   assert.equal(fs.readFileSync(`${run.data}.count`, "utf8").trim(), "1");
   const allowReceiptName = fs.readdirSync(run.receipts).find((name) => name.endsWith("-ALLOW.json"));
@@ -145,11 +164,8 @@ process.stdout.write = function(chunk, ...rest) {
   t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
   run.send(1, { name: TOOL, arguments: ARGS });
-  const opened = await run.response(1);
-  run.send(2, {
-    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
-  });
-  const refused = await run.response(2);
+  run.accept(await run.request("elicitation/create"));
+  const refused = await run.response(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
   t.diagnostic(refused.result.content[0].text);
   assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 5000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
@@ -163,11 +179,8 @@ Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
 `);
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
   run.send(1, { name: TOOL, arguments: ARGS });
-  const opened = await run.response(1);
-  run.send(2, {
-    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
-  });
-  const refused = await run.response(2);
+  run.accept(await run.request("elicitation/create"));
+  const refused = await run.response(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
   t.diagnostic(refused.result.content[0].text);
   assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
@@ -194,11 +207,8 @@ Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
 `);
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
   run.send(1, { name: TOOL, arguments: ARGS });
-  const opened = await run.response(1);
-  run.send(2, {
-    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
-  });
-  const refused = await run.response(2);
+  run.accept(await run.request("elicitation/create"));
+  const refused = await run.response(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
   t.diagnostic(refused.result.content[0].text);
   assert.doesNotMatch(refused.result.content[0].text, /after all measured phases completed/);
@@ -231,11 +241,8 @@ Module._load = function(request, parent, isMain) {
   t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${control}` });
   run.send(1, { name: TOOL, arguments: ARGS });
-  const opened = await run.response(1);
-  run.send(2, {
-    name: TOOL, arguments: ARGS, requestState: opened.result.requestState, inputResponses: ACCEPT,
-  });
-  const refused = await run.response(2);
+  run.accept(await run.request("elicitation/create"));
+  const refused = await run.response(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
   t.diagnostic(refused.result.content[0].text);
   assert.match(refused.result.content[0].text, /kernel deadline while running decision_execution/);

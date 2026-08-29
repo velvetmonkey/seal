@@ -71,6 +71,28 @@ function attach(child) {
         }, 10);
       });
     },
+    waitForRequest(method) {
+      return new Promise((resolve, reject) => {
+        const started = Date.now();
+        const timer = setInterval(() => {
+          for (const line of out.split("\n")) {
+            if (!line.trim()) continue;
+            try {
+              const message = JSON.parse(line);
+              if (message.method === method) {
+                clearInterval(timer);
+                resolve(message);
+                return;
+              }
+            } catch {}
+          }
+          if (Date.now() - started > 5000) {
+            clearInterval(timer);
+            reject(new Error(`timed out waiting for request ${method}\n${out}\n${err}`));
+          }
+        }, 10);
+      });
+    },
     exit: new Promise((resolve) => child.once("close", (code) => resolve(code))),
   };
 }
@@ -113,16 +135,19 @@ async function runBrokenProtected(productRoot, dir) {
     "--receipts", receipts, "--", process.execPath, seal, "__demo-server", dataFile,
   ], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(proxy);
+  proxy.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id: 90, method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+  }) + "\n");
+  await run.waitForResponse(90);
   proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: {
     name: "demo.mutate", arguments: { line: "negative control" },
   } }) + "\n");
-  const opened = await run.waitForResponse(1);
-  assert.equal(opened.result?.resultType, "input_required", run.output());
-  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: {
-    name: "demo.mutate", arguments: { line: "negative control" },
-    requestState: opened.result.requestState,
-    inputResponses: { approval: { action: "accept", content: { approve: true } } },
-  } }) + "\n");
+  const elicitation = await run.waitForRequest("elicitation/create");
+  proxy.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id: elicitation.id,
+    result: { action: "accept", content: { approve: true } },
+  }) + "\n");
   await waitForMarker(run, "STEP2_NEGATIVE_CONTROL: shared approval transition removed");
   proxy.kill("SIGKILL");
   const code = await run.exit;

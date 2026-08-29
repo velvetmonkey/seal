@@ -330,21 +330,19 @@ test("proxy activation promotes pending, and live project drift refuses before c
     const nextLine = () => new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
 
     await waitForState(statePath, "ACTIVE");
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: 90, method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+    }) + "\n");
+    await nextLine();
     proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "held" } } }) + "\n");
-    const opened = await nextLine();
-    assert.equal(opened.result.resultType, "input_required");
+    const elicitation = await nextLine();
+    assert.equal(elicitation.method, "elicitation/create");
 
     writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", dataFile, "--drifted"] });
     proxy.stdin.write(JSON.stringify({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "demo.mutate",
-        arguments: { line: "held" },
-        requestState: opened.result.requestState,
-        inputResponses: { approval: { action: "accept", content: { approve: true } } },
-      },
+      jsonrpc: "2.0", id: elicitation.id,
+      result: { action: "accept", content: { approve: true } },
     }) + "\n");
     const refused = await nextLine();
     assert.match(refused.result.content[0].text, /project_server_drifted/);
