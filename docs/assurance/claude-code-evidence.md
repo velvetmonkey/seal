@@ -66,6 +66,10 @@ elicitation, or declines to fall back.
 - One frozen Seal artifact, identified by SHA-256, byte length **and** the
   installed-tree digest the installer records.
 - One exact Claude Code version, plus the SHA-256 of the client executable.
+  The harness uses the explicit `--client` path when the human gives one.
+  Otherwise it resolves every executable `claude` entry on `PATH`.
+  It continues only when those entries resolve to one real path.
+  It refuses ambiguous client paths and lists each path and SHA-256.
 - Linux x86-64.
 - A clean temporary `HOME`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME` and project.
 - `seal doctor` reporting no elicitation auto-response hook; with one
