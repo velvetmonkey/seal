@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Roster completeness label: INJECTED, not enforced.
 # It catches a declared test file that did not run, whether by accident, by a
-# crash, by a misconfiguration, or by a rename that was never followed through.
+# crash or by a misconfiguration.
 # It does not catch an actor who can write to the executed-file record. That
 # record is written by the process being measured, so a consistent forgery is
 # believed. That is accepted in CI because no such actor exists there; the
@@ -163,26 +163,17 @@ fi
 
 mapfile -t critical_manifest_lines <"$critical_manifest_file"
 critical_properties=()
-critical_property_ids=()
 critical_proof_files=()
 critical_proof_tests=()
 critical_manifest_failures=()
-declare -A critical_property_set critical_property_id_set
+declare -A critical_property_set
 critical_line_number=0
 for line in "${critical_manifest_lines[@]}"; do
   ((critical_line_number += 1))
   [[ -z "$line" || "$line" == \#* ]] && continue
-  IFS=$'\t' read -r property_id property proof_name proof_test extra <<<"$line"
-  if [[ -z "$property_id" || -z "$property" || -z "$proof_name" || -z "$proof_test" || -n "$extra" ]]; then
-    critical_manifest_failures+=("line $critical_line_number is malformed; expected id<TAB>property<TAB>test file<TAB>exact test case")
-    continue
-  fi
-  if [[ ! "$property_id" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-    critical_manifest_failures+=("line $critical_line_number has invalid manifest id \"$property_id\"")
-    continue
-  fi
-  if [[ -n "${critical_property_id_set[$property_id]+x}" ]]; then
-    critical_manifest_failures+=("manifest id \"$property_id\" is duplicated")
+  IFS=$'\t' read -r property proof_name proof_test extra <<<"$line"
+  if [[ -z "$property" || -z "$proof_name" || -z "$proof_test" || -n "$extra" ]]; then
+    critical_manifest_failures+=("line $critical_line_number is malformed; expected property<TAB>test file<TAB>exact test case")
     continue
   fi
   if [[ -n "${critical_property_set[$property]+x}" ]]; then
@@ -190,7 +181,6 @@ for line in "${critical_manifest_lines[@]}"; do
     continue
   fi
   critical_property_set["$property"]=1
-  critical_property_id_set["$property_id"]=1
   if [[ "$proof_name" = /* ]]; then
     proof_file="$proof_name"
   else
@@ -198,7 +188,6 @@ for line in "${critical_manifest_lines[@]}"; do
   fi
   proof_file="$(canonical_path "$proof_file")"
   critical_properties+=("$property")
-  critical_property_ids+=("$property_id")
   critical_proof_files+=("$proof_file")
   critical_proof_tests+=("$proof_test")
 done
@@ -226,7 +215,7 @@ check_manifest_floor_revision() {
   local revision="$1"
   local label="$2"
   local manifest_object="$revision:scripts/critical-property-manifest.tsv"
-  local previous_line previous_id previous_property previous_proof_name previous_proof_test previous_extra
+  local previous_line previous_property previous_proof_name previous_proof_test previous_extra
   local previous_count=0
 
   if ! git -C "$script_root" cat-file -e "$manifest_object" 2>/dev/null; then
@@ -234,19 +223,22 @@ check_manifest_floor_revision() {
   fi
   while IFS= read -r previous_line; do
     [[ -z "$previous_line" || "$previous_line" == \#* ]] && continue
-    IFS=$'\t' read -r previous_id previous_property previous_proof_name previous_proof_test previous_extra <<<"$previous_line"
-    if [[ -z "$previous_proof_test" && -n "$previous_id" && -n "$previous_property" && -n "$previous_proof_name" ]]; then
-      # The parent of the first ID-bearing revision uses the retired format.
-      # It cannot provide identity evidence, so it is outside the ID floor.
-      continue
+    IFS=$'\t' read -r previous_property previous_proof_name previous_proof_test previous_extra <<<"$previous_line"
+    if [[ -n "$previous_extra" ]]; then
+      # The immediately previous revision used the retired identity column.
+      # Read its property field so the plain removal floor remains continuous.
+      previous_property="$previous_proof_name"
+      previous_proof_name="$previous_proof_test"
+      previous_proof_test="$previous_extra"
+      previous_extra=""
     fi
-    if [[ -z "$previous_id" || -z "$previous_property" || -z "$previous_proof_name" || -z "$previous_proof_test" || -n "$previous_extra" ]]; then
+    if [[ -z "$previous_property" || -z "$previous_proof_name" || -z "$previous_proof_test" || -n "$previous_extra" ]]; then
       critical_manifest_failures+=("$label manifest line is malformed in $manifest_object")
       continue
     fi
     ((previous_count += 1))
-    if [[ -z "${critical_property_id_set[$previous_id]+x}" ]]; then
-      critical_manifest_failures+=("property \"$previous_property\" (id \"$previous_id\") was removed from the $label manifest floor")
+    if [[ -z "${critical_property_set[$previous_property]+x}" ]]; then
+      critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
     fi
   done < <(git -C "$script_root" show "$manifest_object")
   echo "CRITICAL PROPERTY MANIFEST $label entries: $previous_count"
