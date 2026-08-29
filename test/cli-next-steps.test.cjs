@@ -150,7 +150,9 @@ test("Undo states unprotect clears every guarded tool on the server", () => {
   });
 
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: PENDING RESTART db\.\{demo\.mutate, demo\.read\}$/m);
+  assert.match(result.out, /^Sealed MCP route db: PENDING RESTART /m);
+  assert.match(result.out, /^  demo\.mutate$/m);
+  assert.match(result.out, /^  demo\.read$/m);
   assert.match(
     result.out,
     /^  To clear protection for every guarded tool on server db, including guarded tools: demo\.mutate, demo\.read, stop Claude Code, then run `seal unprotect db`\.$/m,

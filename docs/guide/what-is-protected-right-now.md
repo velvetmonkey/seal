@@ -15,14 +15,25 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
-Protection: PENDING RESTART db.{demo.mutate, demo.erase} (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+
+Gated through this route:
+  demo.mutate
+  demo.erase
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  configured MCP servers not routed through this Seal wrapper: cache
+  other uncontrolled routes can also exist
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
-  3. Look for `Protection: ACTIVE`.
+  3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  Stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
+Receipts: 0 stored in /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 
@@ -45,7 +56,17 @@ Three parts, always in this order:
 ### `- outside Seal`
 
 ```output
-Protection: - outside Seal
+Sealed MCP route: - outside Seal
+
+Gated through this route:
+  none
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 ```
 
 No gate in this project, so no calls are intercepted. This is also what you
@@ -55,7 +76,17 @@ still remain on disk.
 ### `PENDING RESTART`
 
 ```output
-Protection: PENDING RESTART notes.delete_all_notes (…/state.json)
+Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  delete_all_notes
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 ```
 
 The gate is installed but no running Claude Code session has picked it up
@@ -63,7 +94,17 @@ yet. Calls made before the restart are **not** gated. Restart Claude Code in
 this project. You will see `STALE`, with a detail line, after a session ends:
 
 ```output
-Protection: STALE notes.delete_all_notes (…/state.json)
+Sealed MCP route notes: STALE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  delete_all_notes
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 Protection lease: pid 4127 generation 6
 Protection detail: previous wrapper lease is not live (generation 6); restart Claude Code to replace it
 ```
@@ -74,7 +115,17 @@ and the next session will raise the gate again on start.
 ### `ACTIVE`
 
 ```output
-Protection: ACTIVE notes.delete_all_notes (…/state.json)
+Sealed MCP route notes: ACTIVE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  delete_all_notes
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 Protection lease: pid 4127 generation 6
 ```
 
@@ -91,7 +142,17 @@ project status and does not persist a conflict mode.
 ### `DRIFTED`
 
 ```output
-Protection: DRIFTED notes.delete_all_notes (…/state.json)
+Sealed MCP route notes: DRIFTED (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  delete_all_notes
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 Protection detail: project .mcp.json server changed since protect; forwarding refused
 ```
 
@@ -117,14 +178,35 @@ matching entry.
 `BROKEN` means the recorded state itself cannot be trusted. Two real forms:
 
 ```output
-Protection: BROKEN (stored protection state is unreadable: Unexpected token 'g', "garbage{
+Sealed MCP route: BROKEN
+
+Gated through this route:
+  unknown: stored protection state has no protected tool list
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
+Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{
 ```
 
 The state file is damaged (here it was deliberately corrupted). Seal refuses
 to guess what it used to say.
 
 ```output
-Protection: BROKEN notes.delete_all_notes (…/state.json)
+Sealed MCP route notes: BROKEN (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  delete_all_notes
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 Protection detail: simulated: cannot write local config
 ```
 
@@ -142,7 +224,18 @@ finish. The working recovery, exercised for real, is in
 A related message you can see here:
 
 ```output
-Protection: BROKEN (stored protection state is from another binary version)
+Sealed MCP route: BROKEN
+
+Gated through this route:
+  unknown: stored protection state has no protected tool list
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
+Protection detail: stored protection state is from another binary version
 ```
 
 The state was written by a different Seal version than the one answering.
@@ -205,7 +298,7 @@ and exact kernel `now`; `seal verify` validates and replays that same file.
 
 ## `seal doctor`
 
-`seal status` tells you what is protected; `seal doctor` tells you what the
+`seal status` tells you which MCP route is sealed; `seal doctor` tells you what the
 approval itself rests on:
 
 ```bash

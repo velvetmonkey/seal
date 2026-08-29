@@ -313,6 +313,49 @@ function protectedToolNames(state) {
   return [...new Set(state.guardTools)];
 }
 
+function configuredOtherServerNames(state, projectRoot) {
+  try {
+    const config = readProjectConfig(projectRoot || state?.projectRoot);
+    return Object.keys(config.parsed.mcpServers || {})
+      .filter((name) => name !== state?.serverName)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function notControlledEntries(state, projectRoot) {
+  const entries = [
+    "Bash and subprocesses outside this MCP route",
+    "direct resource access outside this MCP route",
+    "other clients",
+  ];
+  const otherServers = configuredOtherServerNames(state, projectRoot);
+  if (otherServers.length > 0) {
+    entries.push(`configured MCP servers not routed through this Seal wrapper: ${otherServers.join(", ")}`);
+  } else {
+    entries.push("other MCP servers not routed through this Seal wrapper");
+  }
+  entries.push("other uncontrolled routes can also exist");
+  return entries;
+}
+
+function protectionBoundary(state, projectRoot, statePath) {
+  const printedState = state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
+  const route = state?.serverName ? `Sealed MCP route ${state.serverName}: ${printedState}` : `Sealed MCP route: ${printedState}`;
+  let gated;
+  try {
+    gated = state?.state === STATES.UNPROTECTED ? ["none"] : protectedToolNames(state);
+  } catch (error) {
+    gated = [`unknown: ${error.message}`];
+  }
+  const lines = [statePath ? `${route} (${statePath})` : route, "", "Gated through this route:"];
+  for (const name of gated) lines.push(`  ${name}`);
+  lines.push("", "Not controlled:");
+  for (const name of notControlledEntries(state, projectRoot)) lines.push(`  ${name}`);
+  return lines;
+}
+
 function writeState(statePath, state, { beforeCommit } = {}) {
   fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
   const temporary = `${statePath}.tmp-${process.pid}`;
@@ -1141,6 +1184,7 @@ module.exports = {
   parseMacosProcessWitness,
   processStartWitness,
   protectReadiness,
+  protectionBoundary,
   protectedToolNames,
   protect,
   protectionView,

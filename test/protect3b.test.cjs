@@ -522,7 +522,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
 
   const status = run(project, home, ["status"]);
   assert.equal(status.code, 0);
-  assert.match(status.out, /^Protection: - outside Seal$/m);
+  assert.match(status.out, /^Sealed MCP route: - outside Seal$/m);
   assert.doesNotMatch(status.out, /unprotected/i);
 
   const doctor = run(project, home, ["doctor"]);
@@ -551,7 +551,7 @@ test("protect refuses both auto-response hooks before creating protection state"
     const result = run(project, home, ["protect", "db", "demo.mutate"], env);
     assert.notEqual(result.code, 0, result.out);
     assert.match(result.out, /^seal: REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed$/m);
-    assert.doesNotMatch(result.out, /^Protection: (?:PENDING RESTART|ACTIVE) /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|ACTIVE) /m);
     assert.equal(fs.existsSync(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") })), false);
     assert.equal(fs.existsSync(fakeLocalOverridePath(root)), false);
   }
@@ -573,9 +573,10 @@ test("status renders a dead activation lease as STALE, not active", () => {
 
   const status = run(project, home, ["status"], env);
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
+  assert.match(status.out, /^Sealed MCP route db: STALE /m);
+  assert.match(status.out, /^  demo\.mutate$/m);
   assert.match(status.out, /previous wrapper lease is not live/);
-  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
 });
 
 test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
@@ -617,6 +618,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
 
   const status = run(project, home, ["status"], { PATH: env.PATH });
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
-  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
+  assert.match(status.out, /^Sealed MCP route db: STALE /m);
+  assert.match(status.out, /^  demo\.mutate$/m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
 });
