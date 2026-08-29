@@ -166,8 +166,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release already exists: $GITHUB_REF_NAME" >&2
+          release_view_stderr="$RUNNER_TEMP/release-view.stderr"
+          if ! release_is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>"$release_view_stderr")"; then
+            release_view_error="$(cat "$release_view_stderr")"
+            if [[ "$release_view_error" = "release not found" ]]; then
+              release_is_draft=""
+            else
+              echo "REFUSE cannot determine release state: $GITHUB_REF_NAME" >&2
+              exit 1
+            fi
+          fi
+          if [[ "$release_is_draft" = false ]]; then
+            echo "REFUSE release already published: $GITHUB_REF_NAME" >&2
             exit 1
           fi
           version="$(tr -d '\n' < VERSION)"
@@ -208,15 +218,43 @@ jobs:
           if [[ "$version" == *rc* ]]; then
             prerelease+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
-            "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
-            "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
-            "$checker" \
-            "$RUNNER_TEMP/dist/SHA256SUMS" \
-            "$RUNNER_TEMP/dist/release-manifest.json" \
-            "${prerelease[@]}" \
-            --draft --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+          if [[ "$release_is_draft" = true ]]; then
+            # A retry must preserve existing bytes.  Accept an existing asset
+            # only when GitHub reports its SHA-256 digest matches this build.
+            release_assets="$RUNNER_TEMP/release-assets.json"
+            gh release view "$GITHUB_REF_NAME" --json assets --jq .assets > "$release_assets"
+            upload_missing=()
+            for candidate in \
+              "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
+              "$checker" \
+              "$RUNNER_TEMP/dist/SHA256SUMS" \
+              "$RUNNER_TEMP/dist/release-manifest.json"; do
+              candidate_name="$(basename "$candidate")"
+              candidate_digest="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
+              existing_digest="$(jq -r --arg name "$candidate_name" '.[] | select(.name == $name) | .digest' "$release_assets")"
+              if [[ -z "$existing_digest" ]]; then
+                upload_missing+=("$candidate")
+              elif [[ "$existing_digest" != "$candidate_digest" ]]; then
+                echo "REFUSE draft asset digest differs: $candidate_name" >&2
+                exit 1
+              fi
+            done
+            if ((${#upload_missing[@]})); then
+              gh release upload "$GITHUB_REF_NAME" "${upload_missing[@]}"
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
+              "$checker" \
+              "$RUNNER_TEMP/dist/SHA256SUMS" \
+              "$RUNNER_TEMP/dist/release-manifest.json" \
+              "${prerelease[@]}" \
+              --draft --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: release-final-assets
@@ -282,6 +320,7 @@ jobs:
   publish:
     name: Publish only the verified draft
     needs: verify-draft
+    environment: release-publish
     runs-on: ubuntu-24.04
     steps:
       - name: Publish the verified draft
