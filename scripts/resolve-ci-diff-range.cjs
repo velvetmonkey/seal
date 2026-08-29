@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 // Resolve the target-branch candidate range from a GitHub Actions event. Both
-// push and pull-request events use the merge base of the target branch and head;
-// unanswerable event data is a finding, never permission to inspect a smaller range.
+// Pull-request events use the merge base of the target branch and head.
+// Push events use the event before commit and after commit.
+// Unanswerable event data is a finding, never permission to inspect a smaller range.
 const { readFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
@@ -82,8 +83,8 @@ if (!options) {
       if (base) process.stdout.write(`${base} ${head}\n`);
     }
   } else if (event && options.eventName === "push") {
+    const base = requireCommit(event.before, "push before");
     const head = requireCommit(event.after, "push after");
-    const base = targetBranchBase(event);
     if (base && head) process.stdout.write(`${base} ${head}\n`);
   } else if (event) {
     fail(`unsupported event ${options.eventName}`);

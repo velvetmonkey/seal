@@ -102,6 +102,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Refuse non-canonical commit authors
+        shell: bash
+        run: |
+          set -euo pipefail
+          range="$(node scripts/resolve-ci-diff-range.cjs \
+            --event-name "$GITHUB_EVENT_NAME" --event-path "$GITHUB_EVENT_PATH")"
+          IFS=' ' read -r base head extra <<< "$range"
+          # - a direct push that bypasses required checks
+          # - a force-push that bypasses required checks
+          # - a merge commit created after the tested head, outside the tested range
+          if [[ -z "$base" || -z "$head" || -n "$extra" || "$base" == "$head" ]]; then
+            echo "::error::CI_DIFF_RANGE_UNREADABLE: resolver did not return exactly one base and one head."
+            exit 1
+          fi
+          SEAL_COMMIT_AUTHOR_BASE="$base" SEAL_COMMIT_AUTHOR_HEAD="$head" \
+            node --test test/commit-author-identity.cjs
       - name: Refuse development-box paths in workflows
         run: node scripts/check-workflow-host-paths.cjs
       # This is the enforced collision brake. It runs in the required check
