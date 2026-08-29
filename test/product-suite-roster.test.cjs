@@ -22,9 +22,9 @@ function fixture() {
   const manifestEntries = readFileSync(CRITICAL_MANIFEST, "utf8")
     .split("\n")
     .filter((line) => line && !line.startsWith("#"))
-    .map((line) => line.split("\t").slice(0, 1));
-  writeFileSync(manifest, manifestEntries.map(([property]) => `${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
-  return { root, tests, roster, manifest, properties: manifestEntries.map(([property]) => property) };
+    .map((line) => line.split("\t")[0]);
+  writeFileSync(manifest, manifestEntries.map((property) => `${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
+  return { root, tests, roster, manifest, properties: manifestEntries };
 }
 
 function run(driver, tests, roster, manifest, extraEnv = {}) {
