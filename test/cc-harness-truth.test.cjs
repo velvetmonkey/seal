@@ -40,7 +40,7 @@ function initWithPathClient(workspace, clientBytes) {
     "--bytes", String(artifactBytes.length),
     "--run-dir", path.join(workspace, "run"),
     "--stub-bin", stubBin,
-  ], { encoding: "utf8", env: { ...process.env, PATH: `${stubBin}${path.delimiter}${process.env.PATH || ""}` } });
+  ], { encoding: "utf8", env: { ...process.env, PATH: `${stubBin}${path.delimiter}/usr/bin${path.delimiter}/bin` } });
 }
 
 function syntheticSetup(workspace) {
@@ -50,6 +50,24 @@ function syntheticSetup(workspace) {
   fs.copyFileSync(SYNTHETIC_CLIENT, client);
   fs.chmodSync(client, 0o755);
   return { stubBin, client };
+}
+
+function buildClaude(workspace, name, version) {
+  const source = path.join(workspace, `${name}.c`);
+  const executable = path.join(workspace, name);
+  fs.writeFileSync(source, [
+    "#include <stdio.h>",
+    "#include <string.h>",
+    `int main(int argc, char **argv) { if (argc == 2 && strcmp(argv[1], \"--version\") == 0) puts(\"${version}\"); return 0; }`,
+    "",
+  ].join("\n"));
+  const built = spawnSync("cc", [source, "-o", executable], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stderr || built.stdout);
+  return executable;
+}
+
+function pathEnv(...directories) {
+  return { ...process.env, PATH: directories.join(path.delimiter) };
 }
 
 function initSyntheticRun(workspace) {
@@ -280,6 +298,102 @@ test("init refuses a shell-script client because the resolved client is not ELF"
 test("the client format check accepts the Node Linux x86-64 ELF", () => {
   const harness = require(HARNESS);
   assert.equal(harness.clientExecutableFormat(process.execPath), "elf64-x86-64");
+});
+
+test("two distinct claude executables on PATH refuse with both resolved paths and digests", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-ambiguous-"));
+  const first = buildClaude(workspace, "claude-one", "1.2.3");
+  const second = buildClaude(workspace, "claude-two", "4.5.6");
+  const firstBin = path.join(workspace, "first-bin");
+  const secondBin = path.join(workspace, "second-bin");
+  fs.mkdirSync(firstBin);
+  fs.mkdirSync(secondBin);
+  fs.symlinkSync(first, path.join(firstBin, "claude"));
+  fs.symlinkSync(second, path.join(secondBin, "claude"));
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(firstBin, secondBin)),
+    (error) => error instanceof harness.HarnessError && error.code === "client_ambiguous" &&
+      error.message.includes(first) && error.message.includes(second) &&
+      error.message.includes(createHash("sha256").update(fs.readFileSync(first)).digest("hex")) &&
+      error.message.includes(createHash("sha256").update(fs.readFileSync(second)).digest("hex")) &&
+      error.message.includes("Pass --client PATH"),
+  );
+});
+
+test("one claude executable auto-resolves and records its full candidate list", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-auto-"));
+  const client = buildClaude(workspace, "claude", "1.2.3");
+  const harness = require(HARNESS);
+  const identity = harness.clientIdentity(pathEnv(workspace));
+  assert.equal(identity.selection_method, "auto");
+  assert.deepEqual(identity.candidates, [{ executable: client, ...harness.digestOf(client) }]);
+});
+
+test("two PATH entries that resolve to one claude executable do not refuse", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-symlink-"));
+  const client = buildClaude(workspace, "client", "1.2.3");
+  const firstBin = path.join(workspace, "first-bin");
+  const secondBin = path.join(workspace, "second-bin");
+  fs.mkdirSync(firstBin);
+  fs.mkdirSync(secondBin);
+  fs.symlinkSync(client, path.join(firstBin, "claude"));
+  fs.symlinkSync(client, path.join(secondBin, "claude"));
+  const identity = require(HARNESS).clientIdentity(pathEnv(firstBin, secondBin));
+  assert.equal(identity.selection_method, "auto");
+  assert.equal(identity.candidates.length, 1);
+  assert.equal(identity.executable, client);
+});
+
+test("an explicit client ignores a different claude executable on PATH", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-explicit-"));
+  const explicit = buildClaude(workspace, "explicit", "1.2.3");
+  const other = buildClaude(workspace, "other", "4.5.6");
+  const bin = path.join(workspace, "bin");
+  fs.mkdirSync(bin);
+  fs.symlinkSync(other, path.join(bin, "claude"));
+  const identity = require(HARNESS).clientIdentity(pathEnv(bin), explicit);
+  assert.equal(identity.selection_method, "explicit");
+  assert.equal(identity.executable, explicit);
+  assert.equal(identity.sha256, createHash("sha256").update(fs.readFileSync(explicit)).digest("hex"));
+  assert.equal(identity.candidates, undefined);
+});
+
+test("an explicit non-ELF client retains the client_not_linux_x64 refusal", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-explicit-non-elf-"));
+  const client = path.join(workspace, "client");
+  fs.writeFileSync(client, "#!/bin/sh\nprintf 'not claude'\n", { mode: 0o755 });
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_not_linux_x64",
+  );
+});
+
+test("an empty client read refuses as client_unreadable", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-empty-"));
+  const client = path.join(workspace, "client");
+  fs.writeFileSync(client, "", { mode: 0o755 });
+  const harness = require(HARNESS);
+  assert.deepEqual(harness.digestOf(client), {
+    present: true,
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    bytes: 0,
+  });
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" && /<empty>/.test(error.message),
+  );
+});
+
+test("no claude executable retains the client_absent refusal bytes", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-absent-"));
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace)),
+    (error) => error instanceof harness.HarnessError && error.code === "client_absent" &&
+      error.message === "no `claude` command is on PATH; the acceptance run needs the real client",
+  );
 });
 
 test("waitForEnter retries EAGAIN and returns only after ENTER", () => {
