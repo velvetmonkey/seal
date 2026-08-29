@@ -219,15 +219,31 @@ jobs:
             prerelease+=(--prerelease)
           fi
           if [[ "$release_is_draft" = true ]]; then
-            # Do not use the overwrite option. A failed upload preserves an
-            # existing asset instead of replacing its bytes with retry bytes.
-            gh release upload "$GITHUB_REF_NAME" \
+            # A retry must preserve existing bytes.  Accept an existing asset
+            # only when GitHub reports its SHA-256 digest matches this build.
+            release_assets="$RUNNER_TEMP/release-assets.json"
+            gh release view "$GITHUB_REF_NAME" --json assets --jq .assets > "$release_assets"
+            upload_missing=()
+            for candidate in \
               "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
               "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
               "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
               "$checker" \
               "$RUNNER_TEMP/dist/SHA256SUMS" \
-              "$RUNNER_TEMP/dist/release-manifest.json"
+              "$RUNNER_TEMP/dist/release-manifest.json"; do
+              candidate_name="$(basename "$candidate")"
+              candidate_digest="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
+              existing_digest="$(jq -r --arg name "$candidate_name" '.[] | select(.name == $name) | .digest' "$release_assets")"
+              if [[ -z "$existing_digest" ]]; then
+                upload_missing+=("$candidate")
+              elif [[ "$existing_digest" != "$candidate_digest" ]]; then
+                echo "REFUSE draft asset digest differs: $candidate_name" >&2
+                exit 1
+              fi
+            done
+            if ((${#upload_missing[@]})); then
+              gh release upload "$GITHUB_REF_NAME" "${upload_missing[@]}"
+            fi
           else
             gh release create "$GITHUB_REF_NAME" \
               "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \

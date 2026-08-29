@@ -22,6 +22,11 @@ test("release recovers a draft and refuses a published release", () => {
   assert.match(create, /gh release upload "\$GITHUB_REF_NAME"/);
   assert.doesNotMatch(create, /--clobber/);
   assert.match(create, /gh release create "\$GITHUB_REF_NAME"/);
+  assert.match(create, /gh release view "\$GITHUB_REF_NAME" --json assets --jq \.assets/);
+  assert.match(create, /candidate_digest="sha256:\$\(sha256sum "\$candidate"/);
+  assert.match(create, /upload_missing\+=\("\$candidate"\)/);
+  assert.match(create, /REFUSE draft asset digest differs: \$candidate_name/);
+  assert.match(create, /gh release upload "\$GITHUB_REF_NAME" "\$\{upload_missing\[@\]\}"/);
 });
 
 function getEnvironment(repo, environment) {
