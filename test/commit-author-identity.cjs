@@ -57,10 +57,14 @@ const HISTORIC_AUTHOR_EMAILS = new Set([
 
 function git(root, args) {
   const env = { ...process.env };
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_SYSTEM = "/dev/null";
+  env.HOME = root;
   delete env.GIT_AUTHOR_NAME;
   delete env.GIT_AUTHOR_EMAIL;
   delete env.GIT_COMMITTER_NAME;
   delete env.GIT_COMMITTER_EMAIL;
+  delete env.GIT_DIR;
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", env });
 }
 
