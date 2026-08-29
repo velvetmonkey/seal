@@ -216,6 +216,7 @@ check_manifest_floor_revision() {
   local manifest_object="$revision:scripts/critical-property-manifest.tsv"
   local previous_line previous_property previous_proof_name previous_proof_test previous_extra
   local previous_count=0
+  local -a missing_properties=()
 
   if ! git -C "$script_root" cat-file -e "$manifest_object" 2>/dev/null; then
     return
@@ -229,9 +230,14 @@ check_manifest_floor_revision() {
     fi
     ((previous_count += 1))
     if [[ -z "${critical_property_set[$previous_property]+x}" ]]; then
-      critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
+      missing_properties+=("$previous_property")
     fi
   done < <(git -C "$script_root" show "$manifest_object")
+  if (( previous_count > ${#critical_properties[@]} )); then
+    for previous_property in "${missing_properties[@]}"; do
+      critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
+    done
+  fi
   echo "CRITICAL PROPERTY MANIFEST $label entries: $previous_count"
 }
 
