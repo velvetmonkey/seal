@@ -19,6 +19,14 @@ The host route uses `passthrough`, `forward`, `block`, or `error`. The receipt
 the `Authorization seam differential` workflow. The workflow tests the
 correspondence between interpreted Lean and shipped WASM.
 
+The `seal.receipt/v2` checker cannot verify receipts made by v0.2.0-rc.3 or earlier.
+It refuses an authentic v0.2.0-rc.3 receipt with `REFUSE read_failed: expected string`.
+Keep the v0.2.0-rc.3 `seal-receipt-check.mjs` release asset and the original trusted public key to check old receipts.
+Verify that checker asset against the v0.2.0-rc.3 `SHA256SUMS` release asset before use.
+Seal has no converter from `seal.spine/v1` receipts to `seal.receipt/v2` receipts.
+The v0.2.0-rc.3 checker cannot verify `seal.receipt/v2` receipts.
+It refuses an authentic `seal.receipt/v2` receipt with `REFUSE unknown_format: unknown receipt format: undefined`.
+
 ```json
 {
   "seal_receipt": "v2",
