@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "9f50b3ab2f863e197cd437fd9a9564a4e5f49fbd",
-    "author": "badges",
-    "date": "2026-08-28",
-    "scope": "Ben approved renaming the ci.yml workflow from \"Docs & claims consistency\" to \"Product, identity & docs checks\", because that workflow runs seven jobs and only one of them is docs-claims. The rename changes the workflow name only. Branch protection keys on job names, so no required check moves. No other protected change is authorised.",
+    "base": "84f5083e244d312d972e65022f8e061e5a616820",
+    "author": "democheck3",
+    "date": "2026-08-29",
+    "scope": "Ben ruled that this round may refresh the captured demo transcript because the demo no longer advertises the false browser checker route and the route control now executes the named checker. No release, tag, workflow, or separate seal-check product changes are authorised.",
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "86df352293e322db809ba88560ab2d5de4605662"
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "ceb217f4db25c2ae67528f6e6d68d36899497747"
       }
     ]
   }
