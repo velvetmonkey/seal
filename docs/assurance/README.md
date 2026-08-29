@@ -168,5 +168,6 @@ The evaluator-facing family truth surface is
 [docs/assurance/evaluator-start.md](../assurance/evaluator-start.md), at the repository root; it audits
 the family's artifacts and proofs, not this CLI.
 
+Previous: [Receipt operations vector set v1](../reference/receipt-operations-v1/README.md).
 Up: [Documentation map](../README.md).
 Next: [Evaluator truth surface](evaluator-start.md).
