@@ -30,20 +30,15 @@ function isText(bytes) {
 
 function isScannedProductOrDoc(file) {
   if (file.startsWith("docs/archive/")) return false;
-  if (file === "README.md") return true;
-  if (file.startsWith("docs/")) return true;
-  if (file.startsWith("bin/")) return true;
-  if (file.startsWith("spine/")) return true;
-  if (file.startsWith("contract/")) return true;
-  if (file.startsWith("harness/")) return true;
-  if (file.startsWith("scripts/")) return true;
-  if (file.startsWith("assets/")) return true;
-  return false;
+  // Tests may contain deliberate tamper strings that this product control must not reject.
+  if (file.startsWith("test/") || file.startsWith("test-support/")) return false;
+  return true;
 }
 
-function paragraphFrom(lines, start) {
+function boundaryBlockFrom(lines, start) {
   const out = [];
-  for (let i = start; i < lines.length && out.length < 18; i += 1) {
+  for (let i = start; i < lines.length; i += 1) {
+    if (i > start && sealedRouteState.test(lines[i])) break;
     out.push(lines[i]);
   }
   return out.join("\n");
@@ -61,8 +56,8 @@ function checkText(file, text) {
       failures.push(`${file}:${i + 1}: emits old unbounded Protection state`);
     }
     if (sealedRouteState.test(line)) {
-      const paragraph = paragraphFrom(lines, i);
-      if (!paragraph.includes("Gated through this route:") || !paragraph.includes("Not controlled:")) {
+      const boundaryBlock = boundaryBlockFrom(lines, i);
+      if (!boundaryBlock.includes("Gated through this route:") || !boundaryBlock.includes("Not controlled:")) {
         failures.push(`${file}:${i + 1}: sealed route state lacks boundary statement`);
       }
     }
