@@ -65,7 +65,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 976e6e853bd38d78100e8a8f21be5d9e7eea7741fd7210d539f55a59b22079b9
+tree: 3cb70ecfdcdb704a0fee48bfa20606e41e39b41bba22373116b3cc98ebe25e1f
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
