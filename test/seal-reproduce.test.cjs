@@ -69,7 +69,7 @@ test("honest comparison names and scopes the selected artifact kernel", () => {
     covered_by_result: false,
   });
   assert.equal(outcome.report.authority, "same-authority");
-  assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md#limit
   assert.equal(outcome.report.published_kernel_sha256, digest(PUBLISHED_KERNEL));
   assert.equal(outcome.report.rebuilt_kernel_sha256, digest(PUBLISHED_KERNEL));
   assert.equal(h.builds, 1);
@@ -83,7 +83,7 @@ test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
     encoding: "utf8",
   });
   const parsed = JSON.parse(run.stdout);
-  assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md#schema
   assert.equal(run.stdout.trim().split(/\r?\n/)[0], "{");
   assert.match(run.stderr, /^REFUSE seal-reproduce/m);
   assert.equal(run.status, 1);
@@ -99,13 +99,13 @@ test("documented report result and field contract is executable", () => {
     },
   }).deps);
   const refused = execute([TAG], harness({ checksum: `${"0".repeat(64)}  24  ${ASSET}\n` }).deps);
-  assert.deepEqual([matched.report.result, mismatch.report.result, refused.report.result], ["artifact-kernel-match", "artifact-kernel-mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md
-  assert.deepEqual([matched.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]); // CLAIM-COVERAGE: docs/reproduce.md
-  assert.deepEqual(Object.keys(matched.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual([matched.report.result, mismatch.report.result, refused.report.result], ["artifact-kernel-match", "artifact-kernel-mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md#result
+  assert.deepEqual([matched.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]); // CLAIM-COVERAGE: docs/reproduce.md#exit-codes
+  assert.deepEqual(Object.keys(matched.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md#asset-keys
   assert.deepEqual(
     ["published_kernel_sha256", "rebuilt_kernel_sha256", "scope", "native_macos_helper", "result", "authority", "limit"].map((key) => Object.hasOwn(matched.report, key)),
     [true, true, true, true, true, true, true],
-  ); // CLAIM-COVERAGE: docs/reproduce.md
+  ); // CLAIM-COVERAGE: docs/reproduce.md#report-fields
 });
 
 test("one flipped byte in the extracted kernel produces mismatch and nonzero exit", () => {
@@ -154,14 +154,14 @@ test("outside-authority declaration requires a nonempty authority name", () => {
   assert.equal(outcome.report.result, "refused");
   assert.equal(outcome.report.authority, "same-authority");
   assert.match(outcome.error, /requires --authority-name/);
-  assert.equal(downloads, 0); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(downloads, 0); // CLAIM-COVERAGE: docs/reproduce.md#download-refusal
 });
 
 test("caller declaration is the only path to outside authority", () => {
   const h = harness();
   const outcome = execute([TAG, "--authority", OUTSIDE_AUTHORITY, "--authority-name", "Outside Lab"], h.deps);
   assert.equal(outcome.exitCode, 0);
-  assert.equal(outcome.report.authority, OUTSIDE_AUTHORITY); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(outcome.report.authority, OUTSIDE_AUTHORITY); // CLAIM-COVERAGE: docs/reproduce.md#authority
 });
 
 test("invalid tags refuse before download using the published checker pattern", () => {

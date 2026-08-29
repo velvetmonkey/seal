@@ -94,7 +94,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")))
     .find((receipt) => receipt.action === "ALLOW");
   const dataLines = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8").trimEnd().split("\n");
-  assert.equal(dataLines[0], allowedReceipt.arguments.line, sameCallClaim); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
+  assert.equal(dataLines[0], allowedReceipt.arguments.line, sameCallClaim); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md#same-call
   assert.equal(dataLines[1], "seal demo wrote this line directly");
   assert.equal(dataLines.length, 2, "the same resource must contain exactly the protected and direct writes");
 

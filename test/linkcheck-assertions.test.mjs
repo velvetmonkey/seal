@@ -33,6 +33,6 @@ test("linkcheck assertion inventory refuses a removed assertion by name", () => 
   const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
   assert.equal(actualCount, 18, `linkcheck assertion inventory changed: expected 18 assertions, found ${actualCount}`);
   const control = readFileSync(CONTROL_DOCUMENT, "utf8");
-  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md
+  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md#linkcheck-population
   assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
 });

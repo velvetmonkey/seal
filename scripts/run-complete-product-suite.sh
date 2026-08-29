@@ -210,7 +210,7 @@ for index in "${!critical_properties[@]}"; do
   fi
 done
 
-# CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json
+# CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json#protected-paths
 manifest_property_is_retired() {
   local property="$1"
   node - "$script_root/docs/PROTECTED-PATH-RULINGS.json" "$property" <<'NODE'
@@ -356,7 +356,7 @@ if ! output_file_mode="$(stat -c '%a' -- "$output_file" 2>/dev/null)"; then
 fi
 if (( (8#$output_file_mode & 0444) == 0 )) || [[ ! -r "$output_file" ]]; then
   report_unreadable_record "$output_file" "record mode $output_file_mode is unreadable"
-# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv#critical-manifest
 fi
 if ! record_fingerprint="$(sha256sum -- "$output_file" 2>/dev/null)"; then
   report_unreadable_record "$output_file" "record could not be fingerprinted after writing"
@@ -453,7 +453,7 @@ declare -A executed_case_count passed_test_case_set
 case_count_output_failures=()
 
 
-# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv
+# CLAIM-COVERAGE: scripts/critical-property-manifest.tsv#critical-manifest-roster
 while IFS=$'\t' read -r file count extra; do
   if [[ -z "$file" || ! "$count" =~ ^[0-9]+$ || -n "$extra" ]]; then
     case_count_output_failures+=("malformed test-case count from reporter: $file $count $extra")

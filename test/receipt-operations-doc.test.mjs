@@ -29,7 +29,7 @@ test("receipt vector README records the shipped kernel decision", async () => {
   includesClaim(
     markdown,
     `recorded\nkernel decision is \`${receipt.verdict}\`.`,
-    "vector README must state the decision recorded by its vector", // CLAIM-COVERAGE: docs/reference/receipt-operations-v1/README.md
+    "vector README must state the decision recorded by its vector", // CLAIM-COVERAGE: docs/reference/receipt-operations-v1/README.md#receipt-vector
   );
   assert.equal(result.receipt.verdict, receipt.verdict);
   assert.equal(receipt.verdict, "BLOCK");
@@ -47,7 +47,7 @@ test("canonical receipt operations prose matches shipped verifier behavior", asy
   assert.equal(result.read, true);
   assert.equal(result.validate, true);
   assert.equal(result.replay, true);
-  assert.equal(result.verify, false); // CLAIM-COVERAGE: docs/reference/receipt-operations.md
+  assert.equal(result.verify, false); // CLAIM-COVERAGE: docs/reference/receipt-operations.md#receipt-operations-verify
   includesClaim(markdown, "The verifier currently returns `verify: false` for every receipt.", "canonical page must state the shipped VERIFY result");
 
   for (const [option, expected] of [["authorityRoot", "authority roots cannot be checked by the v2 verifier"], ["occurrenceWitness", "occurrence witnesses cannot be checked by the v2 verifier"]]) {
@@ -59,5 +59,5 @@ test("canonical receipt operations prose matches shipped verifier behavior", asy
 
   assert.equal(result.authority, "NOT ESTABLISHED");
   assert.equal(result.occurrence, "NOT ESTABLISHED");
-  includesClaim(markdown, "`REPLAY` does not establish authority, and no row establishes occurrence.", "canonical page must state the trust ceiling"); // CLAIM-COVERAGE: docs/reference/receipt-operations.md
+  includesClaim(markdown, "`REPLAY` does not establish authority, and no row establishes occurrence.", "canonical page must state the trust ceiling"); // CLAIM-COVERAGE: docs/reference/receipt-operations.md#receipt-operations
 });

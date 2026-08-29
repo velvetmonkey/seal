@@ -127,16 +127,29 @@ function guardCoverage(repo, root) {
       const claimPath = path.join(root, claimFile);
       const claimSource = fs.readFileSync(claimPath, "utf8");
       for (const reference of entry.coveredBy) {
-        const parsed = /^(.*):(\d+)$/.exec(reference);
-        if (!parsed || !parsed[1] || Number(parsed[2]) < 1) {
-          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} must be path:line`);
+        const marker = /^(.*)#([A-Za-z][A-Za-z0-9_-]*)$/.exec(reference);
+        const line = /^(.*):(\d+)$/.exec(reference);
+        const parsed = marker ? { path: marker[1], marker: marker[2] } : line ? { path: line[1], line: Number(line[2]) } : null;
+        if (!parsed || !parsed.path || (parsed.line !== undefined && parsed.line < 1)) {
+          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} must be path:line or path#marker`);
         }
-        const proofPath = path.join(root, parsed[1]);
+        const proofPath = path.join(root, parsed.path);
         const label = `${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)}`;
         const proofSource = readCoveringFile(proofPath, label);
-        const line = proofSource.split(/\r?\n/)[Number(parsed[2]) - 1];
-        if (line === undefined || !line.includes(`CLAIM-COVERAGE: ${claimFile}`)) {
-          throw new Error(`${declarationPath}: ${claimFile} coveredBy ${JSON.stringify(reference)} lacks its CLAIM-COVERAGE binding`);
+        const markerRefs = [...proofSource.matchAll(/CLAIM-COVERAGE:\s+([^\s;]+#[A-Za-z][A-Za-z0-9_-]*)/g)].map((match) => match[1]);
+        const duplicate = markerRefs.find((marker, index) => markerRefs.indexOf(marker) !== index);
+        if (duplicate) throw new Error(`${label} marker ${duplicate} is not unique in ${parsed.path}`);
+        if (parsed.marker) {
+          const binding = `CLAIM-COVERAGE: ${claimFile}#${parsed.marker}`;
+          const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const occurrences = [...proofSource.matchAll(new RegExp(`${escaped}(?=;|\\r?$)`, "gm"))].length;
+          if (occurrences === 0) throw new Error(`${label} marker ${parsed.marker} in ${parsed.path} does not bind CLAIM-COVERAGE: ${claimFile}`);
+          if (occurrences > 1) throw new Error(`${label} marker ${parsed.marker} is not unique in ${parsed.path}`);
+        } else {
+          const citedLine = proofSource.split(/\r?\n/)[parsed.line - 1];
+          if (citedLine === undefined || !citedLine.includes(`CLAIM-COVERAGE: ${claimFile}`)) {
+            throw new Error(`${label} lacks its CLAIM-COVERAGE binding`);
+          }
         }
         if (!hasCoverageRelationship(proofSource, claimFile, claimSource)) {
           throw new Error(`${label} does not establish a relationship: covering source neither references the covered path nor shares a specific claim literal`);

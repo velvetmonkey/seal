@@ -4,51 +4,51 @@
     "README.md": [
       {
         "sentence": "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.",
-        "proof": "test/frontdoor.test.mjs:125"
+        "proof": "test/frontdoor.test.mjs#readme-claim"
       }
     ],
     "docs/guide/knowing-it-worked.md": [
       {
         "sentence": "Seal makes the approved call and the executed call the same call: same tool,",
-        "proof": "test/demo-witness.test.cjs:97"
+        "proof": "test/demo-witness.test.cjs#same-call"
       }
     ],
     "docs/reproduce.md": [
       {
         "sentence": "Standard output is one `seal.artifact-kernel-correspondence/v1` JSON object.",
-        "proof": "test/seal-reproduce.test.cjs:86"
+        "proof": "test/seal-reproduce.test.cjs#schema"
       },
       {
         "sentence": "An `artifact-kernel-match` returns exit status 0; `artifact-kernel-mismatch` and `refused` return nonzero.",
-        "proof": "test/seal-reproduce.test.cjs:103"
+        "proof": "test/seal-reproduce.test.cjs#exit-codes"
       },
       {
         "sentence": "The asset object reports `name`, `declared_sha256`, `declared_bytes`, `observed_sha256`, and `observed_bytes`.",
-        "proof": "test/seal-reproduce.test.cjs:104"
+        "proof": "test/seal-reproduce.test.cjs#asset-keys"
       },
       {
         "sentence": "The top level also reports the published and rebuilt kernel digests, selected `platform`, artifact-kernel `scope`, native-helper coverage, `result`, `authority`, and the claim limit.",
-        "proof": "test/seal-reproduce.test.cjs:108"
+        "proof": "test/seal-reproduce.test.cjs#report-fields"
       },
       {
         "sentence": "`result` is `artifact-kernel-match`, `artifact-kernel-mismatch`, or `refused`.",
-        "proof": "test/seal-reproduce.test.cjs:102"
+        "proof": "test/seal-reproduce.test.cjs#result"
       },
       {
         "sentence": "It reports `independent` only when both options are present;",
-        "proof": "test/seal-reproduce.test.cjs:164"
+        "proof": "test/seal-reproduce.test.cjs#authority"
       },
       {
         "sentence": "requesting `independent` without a nonempty name refuses before any download.",
-        "proof": "test/seal-reproduce.test.cjs:157"
+        "proof": "test/seal-reproduce.test.cjs#download-refusal"
       },
       {
         "sentence": "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.",
-        "proof": "test/seal-reproduce.test.cjs:72"
+        "proof": "test/seal-reproduce.test.cjs#limit"
       },
       {
         "sentence": "The comparison says nothing about whether the policy rule is desirable.",
-        "proof": "test/seal-reproduce.test.cjs:72"
+        "proof": "test/seal-reproduce.test.cjs#limit"
       }
     ]
   }
