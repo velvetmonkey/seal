@@ -222,6 +222,17 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines.length, 6);
 });
 
+test("the approval schema description derives from the actual argument lines", () => {
+  const args = { zeta: 7, alpha: "value with space" };
+  const rendered = renderApprovalMessage(TOOL, args);
+  const opened = createApprovalContract().begin({ tool: TOOL, args });
+  assert.deepEqual(rendered.argLines, ["  alpha: \"value with space\"", "  zeta: 7"]);
+  assert.equal(
+    opened.elicitationParams.requestedSchema.properties.approve.description,
+    "Arguments: alpha: \"value with space\"; zeta: 7. Scope: at most one run.",
+  );
+});
+
 test("a CHANGED first line replaces, never adds", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS, { firstLine: "CHANGED: line fixture → other" });
   assertInsideEnvelope(rendered);
