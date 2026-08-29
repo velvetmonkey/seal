@@ -74,6 +74,7 @@ after parsing: integer-index keys in ascending numeric order, followed by other
 string keys in insertion order. Sorting would make the receipt arguments
 commitment and kernel `args_hash` different claims. The rule is a specification,
 not a shared implementation; vectors are the boundary.
+Seal uses this rule for the receipt arguments commitment.
 
 ## Verbs and trust result
 
