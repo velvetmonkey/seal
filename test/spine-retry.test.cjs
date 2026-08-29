@@ -309,7 +309,9 @@ test("real elicitation accept flows once and duplicate or unmatched responses do
   const request = await requestFor("elicitation/create");
   assert.match(request.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
   assert.deepEqual(request.params.requestedSchema, {
-    type: "object", properties: { approve: { type: "boolean" } }, required: ["approve"],
+    type: "object",
+    properties: { approve: { type: "boolean", title: "Approve one run: demo.mutate", description: "Arguments: line: \"approved correlation\". Scope: at most one run." } },
+    required: ["approve"],
   });
   assert.equal(readCount(`${dataFile}.count`), "0");
   proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: `seal-elicitation/v1.${"00".repeat(32)}`, result: { action: "accept", content: { approve: true } } }) + "\n");

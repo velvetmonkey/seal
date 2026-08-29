@@ -524,20 +524,23 @@ function observeNegotiation(state, begin, end) {
   };
 }
 
-// The dialog Seal asks the client to render is computed from the PINNED
-// artifact's own renderer, not from this checkout, and then looked for in the
-// terminal recording. A line the recording does not carry is reported absent
-// rather than assumed present.
-function expectedDialogLines(state, note) {
-  const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
-  const { renderApprovalMessage } = require(rendererPath);
-  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
-  if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
-  return rendered.lines;
+// The approval surface is computed from the PINNED artifact's own schema.
+// The client can fold a long message. It must show these strings by the
+// approval control without expansion. A missing string is reported absent.
+function expectedApprovalSurface(state, note) {
+  const contractPath = path.join(state.paths.store, "contract", "contract.cjs");
+  const { createApprovalContract } = require(contractPath);
+  const request = createApprovalContract({ terminalWidth: MIN_COLUMNS, ttlMs: 120000 })
+    .begin({ tool: GUARDED_TOOL, args: { note } });
+  const approve = request.elicitationParams?.requestedSchema?.properties?.approve;
+  if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
+    refuse("approval_surface_unreadable", "the pinned artifact schema has no readable approve title and description");
+  }
+  return [approve.title, approve.description];
 }
 
 function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {
-  const lines = expectedDialogLines(state, note);
+  const lines = expectedApprovalSurface(state, note);
   let text = "";
   let readError = null;
   try { text = castScreenText(castPath); } catch (error) { readError = error.code || error.message; }
@@ -557,8 +560,8 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
       recording_digest: recordingDigest,
       recording_read_error: readError,
       recorder_correspondence: correspondence,
-      expected_dialog_lines: found,
-      dialog_rendered_by: "contract/renderer.cjs, read out of the installed pinned artifact",
+      expected_approval_surface: found,
+      approval_surface_source: "contract/contract.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
       // Enough of the screen to see WHY a line was not matched, when one was not.
       screen_excerpt: found.every((entry) => entry.found)

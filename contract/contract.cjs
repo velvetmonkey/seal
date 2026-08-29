@@ -166,11 +166,15 @@ function createApprovalContract({
       kind: "input_required",
       elicitationParams: {
         message: rendered.message,
-        // Title-free on purpose: schema field titles consume message lines
-        // inside the measured envelope.
         requestedSchema: {
           type: "object",
-          properties: { approve: { type: "boolean" } },
+          properties: {
+            approve: {
+              type: "boolean",
+              title: `Approve one run: ${tool}`,
+              description: `Arguments: ${rendered.lines.slice(3, -2).map((line) => line.trim()).join("; ")}. Scope: at most one run.`,
+            },
+          },
           required: ["approve"],
         },
       },
