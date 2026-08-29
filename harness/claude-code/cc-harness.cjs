@@ -43,6 +43,8 @@ const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE — NOT A REAL CLAUDE CODE RUN";
 const MIN_COLUMNS = 80;
 const CURRENT_STEP_FILE = "CURRENT-STEP.txt";
+const ENTER_RETRY_WAIT_MS = 25;
+const ENTER_RETRY_SIGNAL = new Int32Array(new SharedArrayBuffer(4));
 
 // The three note values the human is instructed to use. They are fixed so the
 // expected effect digest can be computed before the run, and so the declined
@@ -391,7 +393,13 @@ function waitForEnter(state) {
   for (;;) {
     let count;
     try { count = fs.readSync(0, byte, 0, 1, null); }
-    catch (error) { refuse("operator_enter_unreadable", `the harness could not read ENTER: ${error.message}`); }
+    catch (error) {
+      if (error.code === "EAGAIN" || error.code === "EWOULDBLOCK") {
+        Atomics.wait(ENTER_RETRY_SIGNAL, 0, 0, ENTER_RETRY_WAIT_MS);
+        continue;
+      }
+      refuse("operator_enter_unreadable", `the harness could not read ENTER: ${error.message}`);
+    }
     if (count === 0) refuse("operator_enter_absent", "stdin closed before the human pressed ENTER; the client was not launched");
     if (byte[0] === 0x0a || byte[0] === 0x0d) return;
   }
@@ -843,12 +851,35 @@ function gitRevision(root) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+function clientExecutableFormat(executable) {
+  const header = Buffer.alloc(20);
+  let descriptor;
+  let count = 0;
+  try {
+    descriptor = fs.openSync(executable, "r");
+    count = fs.readSync(descriptor, header, 0, header.length, 0);
+  } catch (error) {
+    refuse("client_not_linux_x64", `client executable ${JSON.stringify(executable)} has observed header bytes <unreadable: ${error.code || error.message}>; expected ELF magic 7F 45 4C 46, EI_CLASS 02, and little-endian e_machine 3E 00`);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+  const observed = Array.from(header.subarray(0, count), (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ") || "<empty>";
+  const isElf = count >= 20 && header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+  const is64Bit = header[4] === 0x02;
+  const isX64 = header.readUInt16LE(18) === 0x3e;
+  if (!isElf || !is64Bit || !isX64) {
+    refuse("client_not_linux_x64", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected ELF magic 7F 45 4C 46, EI_CLASS 02, and little-endian e_machine 3E 00`);
+  }
+  return "elf64-x86-64";
+}
+
 function clientIdentity(env) {
   const which = spawnSync("sh", ["-c", "command -v claude"], { encoding: "utf8", env });
   if (which.status !== 0 || !which.stdout.trim()) {
     refuse("client_absent", "no `claude` command is on PATH; the acceptance run needs the real client");
   }
   const executable = fs.realpathSync(which.stdout.trim());
+  const executableFormat = clientExecutableFormat(executable);
   const version = spawnSync(executable, ["--version"], { encoding: "utf8", env });
   if (version.status !== 0) refuse("client_version_unavailable", `\`claude --version\` exited ${version.status}`);
   const output = version.stdout.trim();
@@ -860,6 +891,7 @@ function clientIdentity(env) {
     version_output: output,
     command: executable,
     executable,
+    executable_format: executableFormat,
     ...digestOf(executable),
   };
 }
@@ -1324,6 +1356,7 @@ function finish(state, options) {
       version_output: state.claude.version_output,
       executable: state.claude.executable,
       executable_sha256: state.claude.sha256,
+      executable_format: state.claude.executable_format,
     },
     environment: {
       platform: "linux-x64",
@@ -1440,6 +1473,8 @@ if (require.main === module) {
 module.exports = {
   CASES,
   castFromScript,
+  clientExecutableFormat,
+  clientIdentity,
   GUARDED_TOOL,
   HarnessError,
   NOTES,
@@ -1455,4 +1490,5 @@ module.exports = {
   saveState,
   show,
   takeSnapshot,
+  waitForEnter,
 };

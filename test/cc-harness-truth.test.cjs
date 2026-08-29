@@ -26,6 +26,23 @@ function artifactFixture() {
   return sharedArtifact;
 }
 
+function initWithPathClient(workspace, clientBytes) {
+  const stubBin = path.join(workspace, "stub-bin");
+  fs.mkdirSync(stubBin);
+  const client = path.join(stubBin, "claude");
+  fs.writeFileSync(client, clientBytes, { mode: 0o755 });
+  const artifact = path.join(workspace, "artifact");
+  const artifactBytes = Buffer.from("#!/bin/sh\nexit 0\n", "utf8");
+  fs.writeFileSync(artifact, artifactBytes, { mode: 0o755 });
+  return spawnSync(process.execPath, [HARNESS, "init",
+    "--artifact", artifact,
+    "--sha256", createHash("sha256").update(artifactBytes).digest("hex"),
+    "--bytes", String(artifactBytes.length),
+    "--run-dir", path.join(workspace, "run"),
+    "--stub-bin", stubBin,
+  ], { encoding: "utf8", env: { ...process.env, PATH: `${stubBin}${path.delimiter}${process.env.PATH || ""}` } });
+}
+
 function syntheticSetup(workspace) {
   const stubBin = path.join(workspace, "stub-bin");
   fs.mkdirSync(stubBin);
@@ -238,6 +255,71 @@ test("a self-consistent recorder-bundle rewrite passes only with the bookkeeping
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   assert.match(manifest.limitations.join("\n"), /Binding is bookkeeping, not a control/);
   assert.match(fs.readFileSync(path.join(ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8"), /Binding is bookkeeping, not a control/);
+});
+
+test("init refuses a PE client by its resolved-path header bytes", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-pe-client-"));
+  const clientBytes = Buffer.alloc(20);
+  clientBytes[0] = 0x4d;
+  clientBytes[1] = 0x5a;
+  const result = initWithPathClient(workspace, clientBytes);
+  const output = `${result.stdout}${result.stderr}`;
+  const client = path.join(workspace, "stub-bin", "claude");
+  assert.equal(result.status, 1, output);
+  assert.match(output, new RegExp(`^REFUSE client_not_linux_x64: client executable ${JSON.stringify(client).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} has observed header bytes 4D 5A(?: 00){18};`, "m"), output);
+});
+
+test("init refuses a shell-script client because the resolved client is not ELF", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-script-client-"));
+  const result = initWithPathClient(workspace, Buffer.from("#!/bin/sh\nprintf '9.9.9\\n'\n", "utf8"));
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 1, output);
+  assert.match(output, /^REFUSE client_not_linux_x64: .* has observed header bytes 23 21 2F 62 69 6E 2F 73 68 0A/m, output);
+});
+
+test("the client format check accepts the Node Linux x86-64 ELF", () => {
+  const harness = require(HARNESS);
+  assert.equal(harness.clientExecutableFormat(process.execPath), "elf64-x86-64");
+});
+
+test("waitForEnter retries EAGAIN and returns only after ENTER", () => {
+  const script = [
+    `const fs = require("node:fs");`,
+    `const harness = require(${JSON.stringify(HARNESS)});`,
+    `Object.defineProperty(process.stdin, "isTTY", { value: true });`,
+    `let reads = 0;`,
+    `fs.readSync = (_fd, byte) => { reads += 1; if (reads < 3) { const error = new Error("try again"); error.code = reads === 1 ? "EAGAIN" : "EWOULDBLOCK"; throw error; } byte[0] = 0x0a; return 1; };`,
+    `harness.waitForEnter({ synthetic: false });`,
+    `process.stdout.write("READS=" + reads + "\\n");`,
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["-e", script], { encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /READS=3/);
+});
+
+test("waitForEnter refuses closed stdin without retrying forever", () => {
+  const script = [
+    `const fs = require("node:fs");`,
+    `const harness = require(${JSON.stringify(HARNESS)});`,
+    `Object.defineProperty(process.stdin, "isTTY", { value: true });`,
+    `fs.readSync = () => 0;`,
+    `try { harness.waitForEnter({ synthetic: false }); } catch (error) { process.stderr.write(error.code + ": " + error.message + "\\n"); process.exit(error.code === "operator_enter_absent" ? 0 : 2); }`,
+    `process.exit(3);`,
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["-e", script], { encoding: "utf8", timeout: 1000 });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /^operator_enter_absent: stdin closed before the human pressed ENTER; the client was not launched$/m);
+});
+
+test("waitForEnter keeps the non-TTY refusal", () => {
+  const script = [
+    `const harness = require(${JSON.stringify(HARNESS)});`,
+    `try { harness.waitForEnter({ synthetic: false }); } catch (error) { process.stderr.write(error.code + ": " + error.message + "\\n"); process.exit(error.code === "operator_input_not_tty" ? 0 : 2); }`,
+    `process.exit(3);`,
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["-e", script], { encoding: "utf8", input: "" });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /^operator_input_not_tty: the acceptance client cannot launch because ENTER must come from a human at a terminal$/m);
 });
 
 test("init names a missing executable bit", () => {
