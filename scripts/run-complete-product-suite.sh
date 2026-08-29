@@ -256,6 +256,9 @@ check_manifest_floor_revision() {
 if ! git -C "$script_root" rev-parse --verify HEAD >/dev/null 2>&1; then
   critical_manifest_failures+=("cannot inspect committed critical-property manifest history under $script_root")
 else
+  if merge_base_revision="$(git -C "$script_root" merge-base HEAD origin/main 2>/dev/null)"; then
+    check_manifest_floor_revision "$merge_base_revision" "merge-base"
+  fi
   check_manifest_floor_revision "HEAD" "committed"
   if git -C "$script_root" rev-parse --verify HEAD^ >/dev/null 2>&1; then
     check_manifest_floor_revision "HEAD^" "parent"
