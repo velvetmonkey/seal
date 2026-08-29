@@ -15,10 +15,11 @@ const PROTECTED_EXACT_PATHS = new Set([
   INVOKING_WORKFLOW,
   "scripts/check-protected-paths.cjs",
   "scripts/resolve-ci-diff-range.cjs",
+  "scripts/critical-property-manifest.tsv",
 ]);
 const PROTECTED_COMPONENTS = new Set(["fixture", "fixtures", "corpus", "pin", "pins"]);
 // INJECTED integrity lock: keep a second, deliberately literal copy of the
-// ten-entry contract so an accidental one-sided edit fails by name. It does not
+// eleven-entry contract so an accidental one-sided edit fails by name. It does not
 // stop a single commit that edits both the operative list and this lock.
 // The checker script is itself an exact protected path.
 const LOCKED_EXACT_PATHS = new Set([
@@ -27,6 +28,7 @@ const LOCKED_EXACT_PATHS = new Set([
   ".github/workflows/ci.yml",
   "scripts/check-protected-paths.cjs",
   "scripts/resolve-ci-diff-range.cjs",
+  "scripts/critical-property-manifest.tsv",
 ]);
 const LOCKED_COMPONENTS = new Set(["fixture", "fixtures", "corpus", "pin", "pins"]);
 
@@ -93,6 +95,7 @@ function git(args) {
   return spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" });
 }
 
+// CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json
 function exactRuling(mergeBase, head, changedPaths) {
   const record = git(["show", `${head}:${RULING_DOCUMENT}`]);
   if (record.status !== 0) return null;
