@@ -48,10 +48,7 @@ function projectServer(name) {
   catch { return null; }
 }
 
-// The negotiated MCP 2025-06-18 CallToolResult schema requires `content`.
-// Seal returns text blocks for each of its tools/call result families, so
-// validate that base shape before the stand-in reads extension fields such as
-// `resultType` and `inputRequests`.
+// Validate the negotiated base result shape before reading extension fields.
 function validateCallToolResult(result) {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new Error("MCP tools/call result failed CallToolResult schema validation: result must be an object");
