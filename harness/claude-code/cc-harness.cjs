@@ -1025,16 +1025,29 @@ function init(argv) {
   if (state.synthetic && !options["client-command"]) {
     refuse("synthetic_without_stand_in_client", "--synthetic-client needs the --client-command stand-in it stands in for");
   }
-  state.claude = options["client-command"]
-    ? {
+  if (options["client-command"]) {
+    const typed = options["client-command"];
+    let executable;
+    try {
+      executable = fs.realpathSync(typed);
+    } catch (error) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(typed)} cannot be resolved: ${error.code || "<unknown>"}`);
+    }
+    const digest = digestOf(executable);
+    if (!digest.present) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(executable)} cannot supply readable bytes for its sha256: ${digest.reason || "<unknown>"}`);
+    }
+    state.claude = {
       name: "claude-code-stand-in",
       version: "0.0.0-synthetic-stand-in",
       version_output: SYNTHETIC_BANNER,
-      command: path.resolve(options["client-command"]),
-      executable: fs.realpathSync(options["client-command"]),
-      ...digestOf(options["client-command"]),
-    }
-    : clientIdentity(env, options.client || null);
+      command: path.resolve(typed),
+      executable,
+      ...digest,
+    };
+  } else {
+    state.claude = clientIdentity(env, options.client || null);
+  }
 
   // Install the pinned artifact into the clean prefix and read its identity
   // back out of the install record the installer wrote.

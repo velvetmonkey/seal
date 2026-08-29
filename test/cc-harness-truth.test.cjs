@@ -43,6 +43,23 @@ function initWithPathClient(workspace, clientBytes) {
   ], { encoding: "utf8", env: { ...process.env, PATH: `${stubBin}${path.delimiter}/usr/bin${path.delimiter}/bin` } });
 }
 
+function initWithStandInClient(workspace, client) {
+  const artifact = artifactFixture();
+  const stubBin = path.join(workspace, "stub-bin");
+  fs.mkdirSync(stubBin);
+  fs.copyFileSync(SYNTHETIC_CLIENT, path.join(stubBin, "claude"));
+  fs.chmodSync(path.join(stubBin, "claude"), 0o755);
+  return spawnSync(process.execPath, [HARNESS, "init",
+    "--artifact", artifact.path,
+    "--sha256", artifact.sha256,
+    "--bytes", artifact.bytes,
+    "--run-dir", path.join(workspace, "run"),
+    "--stub-bin", stubBin,
+    "--synthetic-client",
+    "--client-command", client,
+  ], { encoding: "utf8" });
+}
+
 function syntheticSetup(workspace) {
   const stubBin = path.join(workspace, "stub-bin");
   fs.mkdirSync(stubBin);
@@ -383,6 +400,37 @@ test("a relative explicit client refusal quotes the path supplied to --client", 
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 1, output);
   assert.match(output, /^REFUSE client_unreadable: client executable "\.\/no-such-client" cannot be resolved: ENOENT$/m, output);
+});
+
+test("a missing stand-in client path refuses instead of throwing", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-missing-"));
+  const client = path.join(workspace, "client-that-does-not-exist");
+  const result = initWithStandInClient(workspace, client);
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 1, output);
+  assert.match(output, new RegExp(`^REFUSE client_unreadable: client executable ${JSON.stringify(client).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} cannot be resolved: ENOENT$`, "m"), output);
+});
+
+test("a stand-in client directory refuses as client_unreadable", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-directory-"));
+  const result = initWithStandInClient(workspace, workspace);
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 1, output);
+  assert.match(output, new RegExp(`^REFUSE client_unreadable: client executable ${JSON.stringify(workspace).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} cannot supply readable bytes for its sha256: EISDIR$`, "m"), output);
+});
+
+test("a stand-in client without execute permission remains valid", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-no-execute-"));
+  const client = path.join(workspace, "client");
+  fs.copyFileSync(SYNTHETIC_CLIENT, client);
+  fs.chmodSync(client, 0o644);
+  const result = initWithStandInClient(workspace, client);
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 0, output);
+  const state = JSON.parse(fs.readFileSync(path.join(workspace, "run", "harness-state.json"), "utf8"));
+  assert.equal(state.claude.name, "claude-code-stand-in");
+  assert.equal(state.claude.version, "0.0.0-synthetic-stand-in");
+  assert.equal(state.claude.version_output, require(HARNESS).SYNTHETIC_BANNER);
 });
 
 test("an explicit client directory refuses as client_unreadable", () => {
