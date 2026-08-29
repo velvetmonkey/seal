@@ -615,3 +615,6 @@ A receipt-embedded key is never trusted as authority.
 
 Replaying the exact recorded inputs through the WASM kernel produced a
 different verdict. The receipt does not establish the decision it records.
+
+Up: [Guide](README.md).
+Next: [What is protected right now](what-is-protected-right-now.md).

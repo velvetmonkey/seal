@@ -239,4 +239,6 @@ before trusting any approval prompt in that session. If you do not see it,
 Seal has not established whether Claude Code itself can answer elicitation
 requests automatically.
 
+Previous: [When something looks wrong](when-something-looks-wrong.md).
+Up: [Guide](README.md).
 Next: [Knowing it worked](knowing-it-worked.md).
