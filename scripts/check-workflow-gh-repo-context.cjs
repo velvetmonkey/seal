@@ -172,13 +172,13 @@ function parseWorkflow(file, root) {
     const nameField = directField(lines, job.start + 1, job.end, job.indent, "name");
     const jobName = nameField ? nameField.value.replace(/^['"]|['"]$/gu, "") : job.id;
     const jobEnv = directField(lines, job.start + 1, job.end, job.indent, "env");
-    const jobHasRepo = jobEnv ? fieldHasEnv(lines, jobEnv, job.end, job.indent, "GH_REPO") : false;
+    const jobHasRepo = jobEnv ? fieldHasEnv(lines, jobEnv, job.end, jobEnv.indent, "GH_REPO") : false;
     let earlierCheckout = false;
     for (const step of stepRanges(lines, job)) {
       const uses = stepField(lines, step, "uses");
       const isCheckout = Boolean(uses && /^['"]?actions\/checkout@/u.test(uses.value));
       const stepEnv = stepField(lines, step, "env");
-      const stepHasRepo = stepEnv ? fieldHasEnv(lines, stepEnv, step.end, step.indent, "GH_REPO") : false;
+      const stepHasRepo = stepEnv ? fieldHasEnv(lines, stepEnv, step.end, stepEnv.indent, "GH_REPO") : false;
       const run = stepField(lines, step, "run");
       if (run) {
         for (const command of shellCommands(scalarLines(lines, run, step.end))) {

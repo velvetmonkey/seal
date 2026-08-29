@@ -61,20 +61,82 @@ test("a checkout after a gh call does not supply earlier repository context", (t
   assert.equal(findings[0].command, "gh run list");
 });
 
-test("job env step env command repo and earlier checkout each supply context", (t) => {
+test("a job env map without GH_REPO is not repository context", (t) => {
+  const root = fixture(`jobs:
+  token-only:
+    env:
+      GH_TOKEN: x
+    steps:
+      - run: gh issue list
+      - env:
+          GH_REPO: owner/repo
+        run: echo later step
+`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings.map((call) => call.command), ["gh issue list"]);
+});
+
+test("a step env map without GH_REPO is not repository context", (t) => {
+  const root = fixture(`jobs:
+  token-only:
+    steps:
+      - env:
+          GH_TOKEN: x
+        run: |
+          cat <<'EOF'
+          GH_REPO: this run text is not an env entry
+          EOF
+          gh issue list
+`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings.map((call) => call.command), ["gh issue list"]);
+});
+
+test("GH_REPO in job env supplies repository context", (t) => {
   const root = fixture(`jobs:
   job-env:
     env:
       GH_REPO: owner/repo
     steps:
       - run: gh issue list
+`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings, []);
+});
+
+test("GH_REPO in step env supplies repository context", (t) => {
+  const root = fixture(`jobs:
   step-env:
     steps:
       - env: { GH_REPO: owner/repo }
         run: gh issue list
+`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings, []);
+});
+
+test("--repo on the command line supplies repository context", (t) => {
+  const root = fixture(`jobs:
   command-repo:
     steps:
       - run: gh issue list --repo owner/repo
+`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings, []);
+});
+
+test("an earlier checkout supplies repository context", (t) => {
+  const root = fixture(`jobs:
   checked-out:
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +144,7 @@ test("job env step env command repo and earlier checkout each supply context", (
 `);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const audit = auditWorkflowGhRepoContext(root);
-  assert.equal(audit.calls.length, 4);
+  assert.equal(audit.calls.length, 1);
   assert.deepEqual(audit.findings, []);
 });
 
