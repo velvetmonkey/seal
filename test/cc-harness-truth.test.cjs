@@ -359,6 +359,39 @@ test("an explicit client ignores a different claude executable on PATH", () => {
   assert.equal(identity.candidates, undefined);
 });
 
+test("an explicit client path that does not exist refuses instead of throwing", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-missing-"));
+  const client = path.join(workspace, "client-that-does-not-exist");
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" &&
+      error.message.includes(JSON.stringify(client)) && error.message.includes("ENOENT"),
+  );
+});
+
+test("an explicit client directory refuses as client_unreadable", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-directory-"));
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), workspace),
+    (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" &&
+      error.message.includes(JSON.stringify(workspace)) && error.message.includes("EISDIR"),
+  );
+});
+
+test("an explicit client without execute permission refuses with a token", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-no-execute-"));
+  const client = buildClaude(workspace, "client", "1.2.3");
+  fs.chmodSync(client, 0o644);
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_version_unavailable" &&
+      error.message === "`claude --version` exited null",
+  );
+});
+
 test("an explicit non-ELF client retains the client_not_linux_x64 refusal", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-explicit-non-elf-"));
   const client = path.join(workspace, "client");
@@ -383,6 +416,18 @@ test("an empty client read refuses as client_unreadable", () => {
   assert.throws(
     () => harness.clientIdentity(pathEnv(workspace), client),
     (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" && /<empty>/.test(error.message),
+  );
+});
+
+test("a short client read refuses as client_unreadable", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-short-"));
+  const client = path.join(workspace, "client");
+  fs.writeFileSync(client, Buffer.from([0x7f, 0x45, 0x4c]), { mode: 0o755 });
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" &&
+      /observed header bytes 7F 45 4C; expected 20 readable header bytes/.test(error.message),
   );
 });
 

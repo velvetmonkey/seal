@@ -901,7 +901,11 @@ function clientIdentity(env, explicitClient) {
   let selectionMethod;
   let candidates;
   if (explicitClient) {
-    executable = fs.realpathSync(explicitClient);
+    try {
+      executable = fs.realpathSync(explicitClient);
+    } catch (error) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(explicitClient)} cannot be resolved: ${error.code || "<unknown>"}`);
+    }
     selectionMethod = "explicit";
   } else {
     candidates = clientCandidates(env);
