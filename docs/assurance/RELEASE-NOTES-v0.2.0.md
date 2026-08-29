@@ -28,7 +28,7 @@ The sibling `seal-receipt-v2.mjs` verifier reports document structure, signature
 
 - macOS x64 and arm64 are supported for install, demo, receipt checking, and Protect. Release-built native process-start helpers are exercised on matching macOS runners, and the published support text names their provenance limit. See `.github/workflows/macos.yml`, `.github/workflows/release.yml`, and `test/darwin-readiness.test.cjs`.
 
-- The release workflow creates a draft, downloads the draft artifacts a reader would receive, checks their declared bytes and kernel on matching Linux and macOS runners, and publishes only after every draft-verification matrix leg succeeds. See the `release`, `verify-draft`, and `publish` jobs in `.github/workflows/release.yml`.
+- Cut the exact release tag to start the release workflow. The workflow builds artifacts, creates a draft, rebuilds the kernel, and verifies the draft on Linux x64, macOS arm64, and macOS x64. The `release-publish` environment requires a reviewer before the `publish` job starts. Repository administrators cannot bypass that rule. Only then does the `publish` job make the release public. See the `release`, `verify-draft`, and `publish` jobs in `.github/workflows/release.yml`.
 
 - `node scripts/seal-reproduce.cjs "v$(cat VERSION)" --platform linux-x64` can rebuild from the release's pinned source outside the maintainer's machine. It provisions the pinned toolchains, accepts an explicit executable launcher when a builder must serialize Lean work, and reports a named refusal when that launcher is unavailable. See `docs/reproduce.md` and `test/seal-reproduce.test.cjs`.
 

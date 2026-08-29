@@ -166,8 +166,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release already exists: $GITHUB_REF_NAME" >&2
+          release_view_stderr="$RUNNER_TEMP/release-view.stderr"
+          if ! release_is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>"$release_view_stderr")"; then
+            release_view_error="$(cat "$release_view_stderr")"
+            if [[ "$release_view_error" = "release not found" ]]; then
+              release_is_draft=""
+            else
+              echo "REFUSE cannot determine release state: $GITHUB_REF_NAME" >&2
+              exit 1
+            fi
+          fi
+          if [[ "$release_is_draft" = false ]]; then
+            echo "REFUSE release already published: $GITHUB_REF_NAME" >&2
             exit 1
           fi
           version="$(tr -d '\n' < VERSION)"
@@ -208,15 +218,27 @@ jobs:
           if [[ "$version" == *rc* ]]; then
             prerelease+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
-            "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
-            "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
-            "$checker" \
-            "$RUNNER_TEMP/dist/SHA256SUMS" \
-            "$RUNNER_TEMP/dist/release-manifest.json" \
-            "${prerelease[@]}" \
-            --draft --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+          if [[ "$release_is_draft" = true ]]; then
+            # Do not use the overwrite option. A failed upload preserves an
+            # existing asset instead of replacing its bytes with retry bytes.
+            gh release upload "$GITHUB_REF_NAME" \
+              "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
+              "$checker" \
+              "$RUNNER_TEMP/dist/SHA256SUMS" \
+              "$RUNNER_TEMP/dist/release-manifest.json"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "$RUNNER_TEMP/dist/seal-v${version}-linux-x64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-arm64" \
+              "$RUNNER_TEMP/dist/seal-v${version}-darwin-x64" \
+              "$checker" \
+              "$RUNNER_TEMP/dist/SHA256SUMS" \
+              "$RUNNER_TEMP/dist/release-manifest.json" \
+              "${prerelease[@]}" \
+              --draft --verify-tag --title "seal $GITHUB_REF_NAME" --notes-file "$notes"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: release-final-assets
@@ -282,6 +304,7 @@ jobs:
   publish:
     name: Publish only the verified draft
     needs: verify-draft
+    environment: release-publish
     runs-on: ubuntu-24.04
     steps:
       - name: Publish the verified draft

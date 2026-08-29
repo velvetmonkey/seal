@@ -70,6 +70,7 @@ test/receipt-v2-verifier.test.mjs
 test/receipt-verdict-agreement.test.mjs
 test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
+test/release-publish-gate.test.cjs
 test/release-matrix.test.mjs
 test/reinstall.test.cjs
 test/release-notes.test.cjs
