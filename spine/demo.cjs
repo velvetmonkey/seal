@@ -52,6 +52,10 @@ function isWithin(candidate, root) {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
 }
 
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
 function realReceiptStoreRoots() {
   const roots = [path.join(os.homedir(), ".local", "share", "seal")];
   if (process.env.XDG_DATA_HOME) roots.push(path.join(process.env.XDG_DATA_HOME, "seal"));
@@ -176,6 +180,10 @@ async function run(argv, sealBinPath) {
   }
   console.log(`child     seal __demo-server (this same binary) mutating ${dataFile}`);
   console.log(`${demoCreatedDirectory ? "temporary demo directory" : "demo directory"}: ${dir} (remains after the demo for the printed checker command)`);
+  if (demoCreatedDirectory) {
+    const quoted = shellQuote(dir);
+    console.log(`Recover this run directory with: chmod -R u+w -- ${quoted} && rm -rf -- ${quoted}`);
+  }
 
   const before = readCount(countFile);
   if (before !== "0") fail(`expected a fresh child at 0 observed calls, count file reads ${before}`);
