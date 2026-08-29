@@ -8,6 +8,7 @@
     "docs/reference/receipt-operations-v1/README.md": { "coveredBy": ["test/receipt-operations-doc.test.mjs:32"] },
     "docs/reference/receipt-operations.md": { "coveredBy": ["test/receipt-operations-doc.test.mjs:62"] },
     "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs:102"] },
+    "docs/SEAL-RECEIPT-V2.md": { "coveredBy": ["test/receipt-v2-doc-contract.test.mjs:15"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
     "README.md": { "coveredBy": ["test/frontdoor.test.mjs:142"] },
     "docs/README.md": { "coveredBy": ["test/frontdoor.test.mjs:50"] },
