@@ -52,13 +52,13 @@ function syntheticSetup(workspace) {
   return { stubBin, client };
 }
 
-function buildClaude(workspace, name, version) {
+function buildClaude(workspace, name, version, versionExit = 0) {
   const source = path.join(workspace, `${name}.c`);
   const executable = path.join(workspace, name);
   fs.writeFileSync(source, [
     "#include <stdio.h>",
     "#include <string.h>",
-    `int main(int argc, char **argv) { if (argc == 2 && strcmp(argv[1], \"--version\") == 0) puts(\"${version}\"); return 0; }`,
+    `int main(int argc, char **argv) { if (argc == 2 && strcmp(argv[1], \"--version\") == 0) { puts(\"${version}\"); return ${versionExit}; } return 0; }`,
     "",
   ].join("\n"));
   const built = spawnSync("cc", [source, "-o", executable], { encoding: "utf8" });
@@ -370,6 +370,21 @@ test("an explicit client path that does not exist refuses instead of throwing", 
   );
 });
 
+test("a relative explicit client refusal quotes the path supplied to --client", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-relative-"));
+  const artifact = artifactFixture();
+  const result = spawnSync(process.execPath, [HARNESS, "init",
+    "--artifact", artifact.path,
+    "--sha256", artifact.sha256,
+    "--bytes", artifact.bytes,
+    "--run-dir", path.join(workspace, "run"),
+    "--client", "./no-such-client",
+  ], { cwd: workspace, encoding: "utf8" });
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 1, output);
+  assert.match(output, /^REFUSE client_unreadable: client executable "\.\/no-such-client" cannot be resolved: ENOENT$/m, output);
+});
+
 test("an explicit client directory refuses as client_unreadable", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-directory-"));
   const harness = require(HARNESS);
@@ -387,8 +402,19 @@ test("an explicit client without execute permission refuses with a token", () =>
   const harness = require(HARNESS);
   assert.throws(
     () => harness.clientIdentity(pathEnv(workspace), client),
+    (error) => error instanceof harness.HarnessError && error.code === "client_unreadable" &&
+      error.message === `client executable ${JSON.stringify(client)} could not be executed: error code "EACCES"`,
+  );
+});
+
+test("an explicit client that runs and exits non-zero reports its real version exit status", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-version-exit-"));
+  const client = buildClaude(workspace, "client", "1.2.3", 23);
+  const harness = require(HARNESS);
+  assert.throws(
+    () => harness.clientIdentity(pathEnv(workspace), client),
     (error) => error instanceof harness.HarnessError && error.code === "client_version_unavailable" &&
-      error.message === "`claude --version` exited null",
+      error.message === "`claude --version` exited 23",
   );
 });
 
