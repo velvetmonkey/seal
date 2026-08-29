@@ -13,7 +13,7 @@ const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
 const DECLARED_TOOLS = ["db.drop_table", "db.read", "db.health"];
 const {
   protectedToolNames,
-  protectionView, // CLAIM-COVERAGE: docs/reference/multi-tool-semantics.md
+  protectionView, // CLAIM-COVERAGE: docs/reference/multi-tool-semantics.md#multi-tool-semantics
   readState,
   statePathFor,
 } = require("../spine/protection.cjs");

@@ -12,7 +12,7 @@ const { canonical: producerCanonical } = producer;
 const page = fs.readFileSync(new URL("../docs/SEAL-RECEIPT-V2.md", import.meta.url), "utf8");
 const workflow = fs.readFileSync(new URL("../.github/workflows/authorization-seam-differential.yml", import.meta.url), "utf8");
 
-test("receipt v2 page matches executable canonicalisation and workflow controls", () => { // CLAIM-COVERAGE: docs/SEAL-RECEIPT-V2.md
+test("receipt v2 page matches executable canonicalisation and workflow controls", () => { // CLAIM-COVERAGE: docs/SEAL-RECEIPT-V2.md#receipt-v2
   assert.match(page, /Object members are canonicalised in ECMAScript own-property enumeration order\s+after parsing: integer-index keys in ascending numeric order, followed by other\s+string keys in insertion order\./u);
   assert.match(page, /Seal uses this rule for the receipt arguments commitment\./u);
 

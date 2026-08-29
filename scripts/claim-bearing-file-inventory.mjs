@@ -96,23 +96,45 @@ function readText(path) {
 }
 function parseReference(reference) {
   if (typeof reference !== "string") return null;
-  const match = /^(.*):(\d+)$/.exec(reference);
-  if (!match || !match[1] || Number(match[2]) < 1) return null;
-  return { path: match[1], line: Number(match[2]) };
+  const marker = /^(.*)#([A-Za-z][A-Za-z0-9_-]*)$/.exec(reference);
+  if (marker && marker[1]) return { path: marker[1], marker: marker[2] };
+  const line = /^(.*):(\d+)$/.exec(reference);
+  if (!line || !line[1] || Number(line[2]) < 1) return null;
+  return { path: line[1], line: Number(line[2]) };
+}
+function coverageMarkers(proof, proofPath) {
+  const markers = [];
+  for (const match of proof.matchAll(/CLAIM-COVERAGE:\s+([^\s;]+#[A-Za-z][A-Za-z0-9_-]*)/g)) {
+    markers.push(match[1]);
+  }
+  const duplicates = markers.filter((marker, index) => markers.indexOf(marker) !== index);
+  if (duplicates.length) return `marker ${duplicates[0]} is not unique in ${proofPath}`;
+  return null;
+}
+function markerCount(proof, binding) {
+  const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...proof.matchAll(new RegExp(`${escaped}(?=;|\\r?$)`, "gm"))].length;
 }
 function referenceProvesFile(reference, claimFile, tracked) {
   const parsed = parseReference(reference);
-  if (!parsed) return "must be path:line";
+  if (!parsed) return "must be path:line or path#marker";
   if (!tracked.has(parsed.path)) return `references untracked proof file ${parsed.path}`;
   let proof;
   try { proof = readText(parsed.path); }
   catch (error) { return `cannot read proof file ${parsed.path}: ${error.message}`; }
   if (proof === null) return `proof file ${parsed.path} is binary`;
+  const markerProblem = coverageMarkers(proof, parsed.path);
+  if (markerProblem) return markerProblem;
+  if (parsed.marker) {
+    const binding = `CLAIM-COVERAGE: ${claimFile}#${parsed.marker}`;
+    const occurrences = markerCount(proof, binding);
+    if (occurrences === 0) return `marker ${parsed.marker} in ${parsed.path} does not bind CLAIM-COVERAGE: ${claimFile}`;
+    if (occurrences > 1) return `marker ${parsed.marker} is not unique in ${parsed.path}`;
+    return null;
+  }
   const line = proof.split(/\r?\n/)[parsed.line - 1];
   if (line === undefined) return `references missing line ${parsed.line} in ${parsed.path}`;
-  // A citation is evidence only when the cited executable assertion explicitly
-  // binds itself to the claimed file.  Shape-only path:line references are not
-  // coverage; this marker is checked at the cited line, not merely elsewhere.
+  // Legacy path:line citations remain valid during the marker migration.
   if (!line.includes(`CLAIM-COVERAGE: ${claimFile}`)) {
     return `line ${parsed.line} in ${parsed.path} does not bind CLAIM-COVERAGE: ${claimFile}`;
   }

@@ -47,7 +47,7 @@ test("README carries the eleven front-door sections in order", () => {
 
 test("docs/README contains only its heading, three-route table, and Start link", () => {
   const routes = readFileSync(resolve(ROOT, "docs/README.md"), "utf8");
-  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md
+  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md#docs-readme
   assert.throws(() => checkDocsRouteTable(`${DOCS_ROUTE_TABLE}\nStray paragraph.\n`), /must contain only/);
 });
 
@@ -139,7 +139,7 @@ test("README claim: Seal holds one exact call and permits at most one execution"
     output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
     });
-  }, claim); // CLAIM-COVERAGE: README.md
+  }, claim); // CLAIM-COVERAGE: README.md#readme
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
   assert.match(output, /BLOCKED.*already_consumed/s, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
