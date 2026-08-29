@@ -29,9 +29,12 @@ function isText(bytes) {
 }
 
 function isScannedProductOrDoc(file) {
+  // Archived documents are historical records, not current product output.
   if (file.startsWith("docs/archive/")) return false;
-  // Tests may contain deliberate tamper strings that this product control must not reject.
-  if (file.startsWith("test/") || file.startsWith("test-support/")) return false;
+  // Tamper tests must be able to hold the old phrase on purpose.
+  if (file.startsWith("test/")) return false;
+  // Tamper tests must be able to hold the old phrase on purpose.
+  if (file.startsWith("test-support/")) return false;
   return true;
 }
 
