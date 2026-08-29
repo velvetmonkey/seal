@@ -338,13 +338,16 @@ test("a head that appends a ruling and keeps the old rulings is accepted", (t) =
   assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
 });
 
-test("a head with two rulings for one base is refused as ambiguous", (t) => {
+test("a head with two blobs for one path is refused as ambiguous", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const initial = git(root, ["rev-parse", "HEAD"]);
   writeRulings(root, [testRecord(initial, "base-author")]);
   const base = git(root, ["rev-parse", "HEAD"]);
-  writeRulings(root, [testRecord(initial, "base-author"), testRecord(base, "first"), testRecord(base, "second")]);
+  const first = testRecord(base, "first");
+  const second = testRecord(base, "second");
+  second.files[0].blob = "1".repeat(40);
+  writeRulings(root, [testRecord(initial, "base-author"), first, second]);
   mkdirSync(join(root, "test", "fixtures"), { recursive: true });
   writeFileSync(join(root, "test", "fixtures", "changed.json"), "changed\n");
   git(root, ["add", "test/fixtures/changed.json"]);
@@ -352,7 +355,7 @@ test("a head with two rulings for one base is refused as ambiguous", (t) => {
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /PROTECTED_PATH_RULING_AMBIGUOUS/);
-  assert.match(result.stderr, new RegExp(base));
+  assert.match(result.stderr, /test\/fixtures\/approved\.json/);
 });
 
 test("a head with the old single-object ruling shape is accepted as one list entry", (t) => {
@@ -409,6 +412,23 @@ test("a range-and-blob ruling survives an unprotected commit after the ruling", 
   mergeTopic(root, base);
   const result = run(root, base, "HEAD");
   assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("a range-and-blob ruling survives a rebase onto newer main when its file is unchanged", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  const topic = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "main", base]);
+  writeFileSync(join(root, "README.md"), "newer main only\n");
+  git(root, ["add", "README.md"]);
+  git(root, ["commit", "-qm", "newer unrelated main change"]);
+  const newerMain = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "topic"]);
+  git(root, ["rebase", newerMain]);
+  const result = run(root, "main", "HEAD");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /recorded human ruling/);
 });
 
 test("widening a ruling allowlist fails closed", (t) => {

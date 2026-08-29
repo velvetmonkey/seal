@@ -117,12 +117,19 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function duplicateBases(rulings) {
-  const counts = new Map();
+function ambiguousPaths(rulings) {
+  const blobsByPath = new Map();
   for (const ruling of rulings) {
-    if (ruling && typeof ruling.base === "string") counts.set(ruling.base, (counts.get(ruling.base) || 0) + 1);
+    for (const file of ruling?.files || []) {
+      if (!file || typeof file.path !== "string" || typeof file.blob !== "string") continue;
+      if (!blobsByPath.has(file.path)) blobsByPath.set(file.path, new Set());
+      blobsByPath.get(file.path).add(file.blob);
+    }
   }
-  return [...counts.entries()].filter(([, count]) => count > 1).map(([base]) => base).sort();
+  return [...blobsByPath.entries()]
+    .filter(([, blobs]) => blobs.size > 1)
+    .map(([path]) => path)
+    .sort();
 }
 
 function rulingListIsIntact(mergeBase, head) {
@@ -135,17 +142,17 @@ function rulingListIsIntact(mergeBase, head) {
     }
     return baseDocument.rulings.length === 0;
   }
-  if (headDocument.invalid) {
+  if (headDocument.invalid || headDocument.legacy && !headDocument.rulings) {
     process.stderr.write("PROTECTED_PATH_RULING_LEGACY_SHAPE: HEAD ruling document must use the rulings list shape.\n");
     return false;
   }
-  const ambiguous = duplicateBases(headDocument.rulings);
+  const ambiguous = ambiguousPaths(headDocument.rulings);
   if (ambiguous.length) {
-    process.stderr.write(`PROTECTED_PATH_RULING_AMBIGUOUS: duplicate base token(s): ${ambiguous.join(", ")}.\n`);
+    process.stderr.write(`PROTECTED_PATH_RULING_AMBIGUOUS: path(s) have different authorised blobs: ${ambiguous.join(", ")}.\n`);
     return false;
   }
-  if (baseDocument.invalid || !headDocument) {
-    const dropped = baseDocument.invalid ? [] : baseDocument.rulings;
+  if (baseDocument.invalid) {
+    const dropped = [];
     for (const ruling of dropped) {
       process.stderr.write(`PROTECTED_PATH_RULING_DROPPED: base=${ruling?.base || ""} author=${ruling?.author || ""}.\n`);
     }
@@ -161,22 +168,28 @@ function rulingListIsIntact(mergeBase, head) {
 }
 
 function exactRuling(mergeBase, head, changedPaths) {
-  const document = readRulings(head, false);
-  if (!document || document.legacy || document.invalid) return null;
-  const detail = document.rulings.find((ruling) => ruling?.base === mergeBase);
-  if (!detail || detail.base !== mergeBase || !Array.isArray(detail.files) || detail.files.length === 0) return null;
-  const recorded = detail.files.map((file) => file?.path).sort();
-  if (new Set(recorded).size !== recorded.length
-    || detail.files.some((file) => !file || typeof file.path !== "string"
-      || typeof file.blob !== "string" || !/^[0-9a-f]{40}$/.test(file.blob)
-      || !protectedArtifact(file.path))) return null;
+  const document = readRulings(head, true);
+  if (!document || document.invalid || document.legacy && !document.rulings) return null;
   const actual = [...changedPaths].sort();
-  if (actual.length !== recorded.length || actual.some((value, index) => value !== recorded[index])) return null;
-  for (const file of detail.files) {
-    const actualBlob = git(["rev-parse", "--verify", `${head}:${file.path}`]);
-    if (actualBlob.status !== 0 || actualBlob.stdout.trim() !== file.blob) return null;
+  for (const detail of document.rulings) {
+    if (!detail || !Array.isArray(detail.files) || detail.files.length === 0) continue;
+    const recorded = detail.files.map((file) => file?.path).sort();
+    if (new Set(recorded).size !== recorded.length
+      || detail.files.some((file) => !file || typeof file.path !== "string"
+        || typeof file.blob !== "string" || !/^[0-9a-f]{40}$/.test(file.blob)
+        || !protectedArtifact(file.path))) continue;
+    if (actual.length !== recorded.length || actual.some((value, index) => value !== recorded[index])) continue;
+    let matches = true;
+    for (const file of detail.files) {
+      const actualBlob = git(["rev-parse", "--verify", `${head}:${file.path}`]);
+      if (actualBlob.status !== 0 || actualBlob.stdout.trim() !== file.blob) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return detail;
   }
-  return detail;
+  return null;
 }
 
 const options = parseArgs(process.argv.slice(2));
@@ -212,7 +225,7 @@ if (!protectedListIsIntact()) {
         if (paths.length) {
           const ruling = exactRuling(resolvedMergeBase, options.head, paths);
           if (ruling) {
-            process.stdout.write(`PROTECTED PATH REVIEW OK: recorded human ruling for ${ruling.base}: ${ruling.files.map((file) => file.path).join(", ")}.\n`);
+            process.stdout.write(`PROTECTED PATH REVIEW OK: recorded human ruling (base provenance ${ruling.base}) for ${ruling.files.map((file) => file.path).join(", ")}.\n`);
           } else {
             for (const protectedPath of paths) {
               process.stderr.write(`::error file=${protectedPath}::HUMAN RULING REQUIRED: protected artifact changed: ${protectedPath}\n`);
