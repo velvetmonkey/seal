@@ -18,11 +18,14 @@ const { generateSigner } = require("./receipt-v2.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { TOOL } = require("./demo-server.cjs");
+const { printKernelTiming } = require("./presentation.cjs");
 
 const DEMO_LINE = process.env.SEAL_DEMO_LINE || "seal demo wrote this line";
 
 function fail(message) {
-  process.stderr.write(`seal: ${message}\n`);
+  const text = message instanceof Error ? message.message : message;
+  process.stderr.write(`seal: ${text}\n`);
+  printKernelTiming(message, (line) => process.stderr.write(`${line}\n`));
   process.exit(1);
 }
 
