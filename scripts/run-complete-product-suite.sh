@@ -143,7 +143,6 @@ if (( ${#declared_tests[@]} == 0 )); then
   exit 1
 fi
 critical_manifest_file="${SEAL_CRITICAL_PROPERTY_MANIFEST:-$script_root/scripts/critical-property-manifest.tsv}"
-critical_manifest_default_file="$script_root/scripts/critical-property-manifest.tsv"
 if [[ ! -f "$critical_manifest_file" ]]; then
   echo "CRITICAL PROPERTY MANIFEST entries: UNAVAILABLE"
   echo "::error::critical-property manifest is absent at $critical_manifest_file"
@@ -210,6 +209,40 @@ for index in "${!critical_properties[@]}"; do
     critical_manifest_failures+=("property \"$property\" lost its proof: test file is empty: $proof_file")
   fi
 done
+
+check_manifest_floor_revision() {
+  local revision="$1"
+  local label="$2"
+  local manifest_object="$revision:scripts/critical-property-manifest.tsv"
+  local previous_line previous_property previous_proof_name previous_proof_test previous_extra
+  local previous_count=0
+
+  if ! git -C "$script_root" cat-file -e "$manifest_object" 2>/dev/null; then
+    return
+  fi
+  while IFS= read -r previous_line; do
+    [[ -z "$previous_line" || "$previous_line" == \#* ]] && continue
+    IFS=$'\t' read -r previous_property previous_proof_name previous_proof_test previous_extra <<<"$previous_line"
+    if [[ -z "$previous_property" || -z "$previous_proof_name" || -z "$previous_proof_test" || -n "$previous_extra" ]]; then
+      critical_manifest_failures+=("$label manifest line is malformed in $manifest_object")
+      continue
+    fi
+    ((previous_count += 1))
+    if [[ -z "${critical_property_set[$previous_property]+x}" ]]; then
+      critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
+    fi
+  done < <(git -C "$script_root" show "$manifest_object")
+  echo "CRITICAL PROPERTY MANIFEST $label entries: $previous_count"
+}
+
+if ! git -C "$script_root" rev-parse --verify HEAD >/dev/null 2>&1; then
+  critical_manifest_failures+=("cannot inspect committed critical-property manifest history under $script_root")
+else
+  check_manifest_floor_revision "HEAD" "committed"
+  if git -C "$script_root" rev-parse --verify HEAD^ >/dev/null 2>&1; then
+    check_manifest_floor_revision "HEAD^" "parent"
+  fi
+fi
 
 if (( ${#roster_failures[@]} > 0 || ${#declaration_failures[@]} > 0 || ${#critical_manifest_failures[@]} > 0 )); then
   if (( ${#roster_failures[@]} > 0 || ${#declaration_failures[@]} > 0 )); then

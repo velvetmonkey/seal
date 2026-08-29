@@ -24,7 +24,7 @@
     "scripts/check-cc-evidence.mjs": { "allowlistReason": "This checker reports synthetic Claude Code fixture observations and Seal-proxy diagnostics; those executable test messages are not independent published product claims." },
     "scripts/claim-bearing-files.json": { "allowlistReason": "This manifest contains coverage metadata, including the reviewed-guide bindings now housed in test/guide-tokens.test.mjs and receipt coverage in test/receipt-checker.test.cjs; apparent sentences are data values, not independently published Seal assertions." },
     "scripts/claim-coverage-allowlist.json": { "allowlistReason": "This data file is the exact uncovered-file ledger for the separately executed family inventory; its path entries and maintenance rationale are coverage metadata, not reader-facing Seal assertions." },
-    "scripts/critical-property-manifest.tsv": { "coveredBy": ["scripts/run-complete-product-suite.sh:304"] },
+    "scripts/critical-property-manifest.tsv": { "coveredBy": ["scripts/run-complete-product-suite.sh:337"] },
     "scripts/readme-source-inventory.mjs": { "allowlistReason": "scripts/readme-source-inventory.mjs is an internal ledger implementation that reports source-unit bookkeeping; its diagnostics are not reader-facing product claims." },
     "scripts/receipt-operations-claims.mjs": { "allowlistReason": "This is the receipt-operations claim ledger consumed by its dedicated test; its sentence values are coverage metadata, not an additional reader-facing claim surface." },
     "scripts/claims-drift-family-hashes.json": { "allowlistReason": "This JSON is a revision-hash data table for sibling repositories; the apparent candidate is an identifier/value, not a sentence addressed to users." },
