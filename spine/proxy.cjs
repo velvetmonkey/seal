@@ -23,6 +23,7 @@ const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
+const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
 
@@ -134,8 +135,23 @@ function createProxy(options) {
     onClientLine(JSON.stringify({ jsonrpc: "2.0", id, result }));
   }
 
-  function refusalResult(refusal, detail) {
-    return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}` }], isError: true };
+  function refusalResult(refusal, detail, timing) {
+    const phase = timing?.kernel_timing_active_phase;
+    const completed = timing?.kernel_timing_ms && typeof timing.kernel_timing_ms === "object"
+      ? Object.keys(timing.kernel_timing_ms).some((name) => name.startsWith("child_"))
+      : false;
+    const allSecurityPhases = timing?.kernel_timing_ms && typeof timing.kernel_timing_ms === "object"
+      && KERNEL_SECURITY_PHASE_NAMES.every((name) => name in timing.kernel_timing_ms);
+    const phaseDetail = typeof phase === "string" && phase.length > 0
+      ? ` (kernel deadline while running ${phase})`
+      : timing === undefined
+        ? ""
+        : allSecurityPhases
+          ? " (kernel worker exit was not observed after all measured phases completed)"
+          : completed
+            ? ` (kernel worker did not answer within its ${timing.kernel_timing_deadline_ms} ms deadline)`
+            : ` (kernel worker did not publish a child timing phase within its ${timing.kernel_timing_deadline_ms} ms deadline)`;
+    return { content: [{ type: "text", text: `approval refused: ${refusal} — ${detail}${phaseDetail}` }], isError: true };
   }
 
   function blockForward(frame, refusal, detail) {
@@ -175,7 +191,7 @@ function createProxy(options) {
       const decision = contract.begin({ tool, args });
       if (decision.kind === "refuse") {
         emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
-        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
         return;
       }
       emitReceipt("INPUT_REQUIRED", frame, {
@@ -197,7 +213,7 @@ function createProxy(options) {
     if (correlation === undefined) {
       if (decision.kind === "refuse") {
         emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
-        respond(frame.id, refusalResult(decision.refusal, decision.detail));
+        respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
         return;
       }
       const detail = "no receipt correlation matches this continuation; retry refused before forwarding";
@@ -211,7 +227,13 @@ function createProxy(options) {
       const receiptExtra = { refusal: decision.refusal, detail: decision.detail };
       receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      respond(frame.id, refusalResult(decision.refusal, decision.detail));
+      respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
+      if (decision.timing) {
+        const error = new Error(decision.detail);
+        error.code = decision.refusal;
+        Object.assign(error, decision.timing);
+        throw error;
+      }
       return;
     }
     // The contract has already journaled the one-use consumption (fsynced)

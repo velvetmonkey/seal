@@ -29,6 +29,7 @@ const PAYLOAD_PATHS = [
   "spine/protection.cjs",
   "spine/proxy.cjs",
   "spine/proxy-cli.cjs",
+  "spine/presentation.cjs",
   "spine/receipts.cjs",
   "spine/receipt-v2.cjs",
   "spine/store.cjs",
@@ -141,4 +142,6 @@ function main() {
   }
 }
 
-main();
+module.exports = { PAYLOAD_PATHS };
+
+if (require.main === module) main();
