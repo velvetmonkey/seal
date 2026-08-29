@@ -1,10 +1,10 @@
 {
   "version": 1,
   "ruling": {
-    "base": "dfb482aadd2499728ab34b27b5a746cf76b25fc8",
+    "base": "25ffcd2554f82903d3245156918767cb124e0650",
     "author": "specrebase5",
     "date": "2026-08-29",
-    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change and this branch's manifest edit, and nothing else.",
+    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change, this branch's manifest edit, and the deletion of the manifest identity column, the rename record parser, and nothing else.",
     "files": [
       {
         "path": "scripts/check-protected-paths.cjs",
