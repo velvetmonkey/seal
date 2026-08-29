@@ -10,6 +10,8 @@ Current shipped assurance status: authorization rule — TESTED; product state/f
 
 Receipts use one `seal.receipt/v2` envelope across the demo, protected path, and sibling release verifier. The format fixes member order, canonical JSON, duplicate-member refusal, kernel inputs, verdict mapping, replay commitments, and Ed25519 signature preimage. See `docs/SEAL-RECEIPT-V2.md`, `spine/receipt-v2.cjs`, and `test/receipt-canonicalization-conformance.test.mjs`.
 
+The v0.2.0 checker cannot verify receipts made by v0.2.0-rc.3 or earlier. It refuses an authentic v0.2.0-rc.3 receipt with `REFUSE read_failed: expected string`. Keep the v0.2.0-rc.3 `seal-receipt-check.mjs` release asset and the original trusted public key to check old receipts. Verify that checker asset against the v0.2.0-rc.3 `SHA256SUMS` release asset before use. Seal has no converter from `seal.spine/v1` receipts to `seal.receipt/v2` receipts. The v0.2.0-rc.3 checker cannot verify receipts made by v0.2.0. It refuses an authentic v0.2.0 receipt with `REFUSE unknown_format: unknown receipt format: undefined`.
+
 ## What Seal does not cover
 
 Seal is a gate, not a sandbox. It controls calls that pass through the protected MCP server path. Bash, direct file writes, network access, subprocesses, other MCP servers, and another route to the same effect remain outside that path. On the Claude Code path, Seal trusts Claude Code to present the request to a human and return the choice faithfully. See `README.md` and `test/demo-witness.test.cjs`.
