@@ -269,7 +269,6 @@ async function run(argv, sealBinPath) {
   console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened.");
   console.log(`  From the checkout root: node checker/seal-receipt-v2.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})"`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
-  console.log("  Online: https://velvetmonkey.github.io/seal-check/ re-checks a decision receipt you paste in your browser and reports its receipt checks; no backend, accounts, or telemetry. It does not establish that this setup routes calls through Seal, and it is not the checker command above.");
   console.log("");
   console.log("ENFORCED");
   console.log("The approved demo.mutate call ran once; its replay was refused.");
