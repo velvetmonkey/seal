@@ -79,7 +79,7 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
       reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; the envelope shows ${MESSAGE_LINE_CAP} and hides the rest without any indicator`,
     };
   }
-  return { ok: true, message: lines.join("\n"), lines };
+  return { ok: true, message: lines.join("\n"), lines, argLines };
 }
 
 module.exports = { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };
