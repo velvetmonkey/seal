@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ruling": {
-    "base": "84f5083e244d312d972e65022f8e061e5a616820",
-    "author": "democheck3",
+    "base": "509c2dd81bd935ee70bd34fecb30fdc4b9367b1a",
+    "author": "diffrange",
     "date": "2026-08-29",
-    "scope": "Ben ruled that this round may refresh the captured demo transcript because the demo no longer advertises the false browser checker route and the route control now executes the named checker. No release, tag, workflow, or separate seal-check product changes are authorised.",
+    "scope": "Ben ruled on 2026-08-29 that this round may change scripts/resolve-ci-diff-range.cjs so that a pull-request diff range starts at the merge base of the target branch and the head, instead of the stale pull_request.base.sha that widened every range after a branch update. Seal still names every protected artifact the branch changes: a cold frisk on grok-4.6 confirmed that a protected change followed by a merge of main, a protected change followed by a rebase, and an add-then-delete of a protected file are each named by the checker under the narrower range. No other protected path, no release, no tag, and no workflow change is authorised by this ruling.",
     "files": [
       {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "ceb217f4db25c2ae67528f6e6d68d36899497747"
+        "path": "scripts/resolve-ci-diff-range.cjs",
+        "blob": "5b030a3c560bbd721dd14fe41108be00d88a073a"
       }
     ]
   }
