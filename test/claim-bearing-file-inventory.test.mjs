@@ -7,9 +7,14 @@ import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = resolve(ROOT, "scripts/claim-bearing-file-inventory.mjs");
-const ARTIFACT_ROOT = process.env.SEAL_MARKERPIN_ARTIFACT_ROOT
-  ?? process.env.RUNNER_TEMP
-  ?? tmpdir();
+const ARTIFACT_ROOT = process.env.RUNNER_TEMP ?? tmpdir();
+const HERMETIC_GIT_ENV = {
+  ...process.env,
+  GIT_AUTHOR_EMAIL: "seal-test@example.invalid",
+  GIT_COMMITTER_EMAIL: "seal-test@example.invalid",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
 
 test("README is classified as claim-bearing, including the hosted seal-check behaviour claims", () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
@@ -21,8 +26,8 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
     writeFileSync(join(worktree, "scripts", "claim-bearing-files.json"), '{"files":{}}\n');
     writeFileSync(join(worktree, "novel.md"), "Seal calibrates every satellite relay before dawn.\n");
-    spawnSync("git", ["init", "-q"], { cwd: worktree });
-    spawnSync("git", ["add", "."], { cwd: worktree });
+    spawnSync("git", ["init", "-q"], { cwd: worktree, env: HERMETIC_GIT_ENV });
+    spawnSync("git", ["add", "."], { cwd: worktree, env: HERMETIC_GIT_ENV });
     const result = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], { cwd: worktree, encoding: "utf8" });
     assert.equal(result.status, 1, result.stderr);
     assert.match(result.stderr, /novel\.md: new claim-bearing file is neither covered nor allowlisted/);
@@ -38,8 +43,8 @@ test("a bare contextual component reference remains outside the subject-keyed ru
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
     writeFileSync(join(worktree, "scripts", "claim-bearing-files.json"), '{"files":{}}\n');
     writeFileSync(join(worktree, "context.md"), "The kernel calibrates the receipt clock before evaluation.\n");
-    spawnSync("git", ["init", "-q"], { cwd: worktree });
-    spawnSync("git", ["add", "."], { cwd: worktree });
+    spawnSync("git", ["init", "-q"], { cwd: worktree, env: HERMETIC_GIT_ENV });
+    spawnSync("git", ["add", "."], { cwd: worktree, env: HERMETIC_GIT_ENV });
     const result = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], { cwd: worktree, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /^context\.md\t/m);
@@ -62,17 +67,15 @@ test("a coveredBy marker must exist in the cited proof file", () => {
     }) + "\n");
     writeFileSync(join(worktree, "fixture.md"), "Seal works reliably.\n");
     writeFileSync(join(worktree, "test", "proof.mjs"), "// This proof has no matching coverage marker.\n");
-    assert.equal(spawnSync("git", ["init", "-q"], { cwd: worktree }).status, 0);
-    assert.equal(spawnSync("git", ["add", "."], { cwd: worktree }).status, 0);
+    assert.equal(spawnSync("git", ["init", "-q"], { cwd: worktree, env: HERMETIC_GIT_ENV }).status, 0);
+    assert.equal(spawnSync("git", ["add", "."], { cwd: worktree, env: HERMETIC_GIT_ENV }).status, 0);
 
     const result = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], {
       cwd: worktree,
       encoding: "utf8",
     });
     assert.notEqual(result.status, 0, result.stderr);
-    assert.match(result.stderr, /fixture\.md/);
-    assert.match(result.stderr, /test\/proof\.mjs/);
-    assert.match(result.stderr, /missing-marker/);
+    assert.match(result.stderr, /marker missing-marker in test\/proof\.mjs does not bind CLAIM-COVERAGE: fixture\.md/);
   } finally {
     rmSync(worktree, { recursive: true, force: true });
   }
