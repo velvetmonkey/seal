@@ -8,6 +8,8 @@ AI agents can call dangerous tools.
 
 Seal is a local approval boundary for AI-agent tool calls.
 
+The [documentation map](docs/README.md) helps you choose a route through Seal.
+
 *Claude can ask. Seal decides whether that exact call may cross the boundary.*
 
 ## Supported path

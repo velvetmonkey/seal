@@ -156,4 +156,6 @@ Unprotect asks Claude Code to remove only Seal's local override. It does not
 delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
 remain until you or Claude Code remove them.
 
-Next: [What is protected right now](what-is-protected-right-now.md).
+Previous: [Guide](README.md).
+Up: [Guide](README.md).
+Next: [Knowing it worked](knowing-it-worked.md).

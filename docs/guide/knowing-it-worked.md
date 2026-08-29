@@ -193,4 +193,6 @@ and read its scope witness; it ends with the honest summary this guide keeps
 returning to: Seal is a gate, not a sandbox — it controls the path through
 it, and only that path.
 
-Next: [When something looks wrong](when-something-looks-wrong.md).
+Previous: [Choosing what to protect](choosing-what-to-protect.md).
+Up: [Guide](README.md).
+Next: [GitHub Actions provenance](github-actions-provenance.md).
