@@ -211,6 +211,7 @@ for index in "${!critical_properties[@]}"; do
 done
 
 # CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json#protected-paths
+# CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json#protected-paths-checker
 manifest_property_is_retired() {
   local property="$1"
   node - "$script_root/docs/PROTECTED-PATH-RULINGS.json" "$property" <<'NODE'

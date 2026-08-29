@@ -95,7 +95,7 @@ function git(args) {
   return spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" });
 }
 
-// CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json#protected-paths
+// CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json
 function exactRuling(mergeBase, head, changedPaths) {
   const record = git(["show", `${head}:${RULING_DOCUMENT}`]);
   if (record.status !== 0) return null;
