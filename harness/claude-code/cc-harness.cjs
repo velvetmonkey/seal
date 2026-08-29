@@ -925,6 +925,12 @@ function clientIdentity(env, explicitClient) {
     refuse("client_unreadable", `client executable ${JSON.stringify(executable)} cannot supply readable bytes for its sha256: ${digest.reason || "<empty>"}`);
   }
   const version = spawnSync(executable, ["--version"], { encoding: "utf8", env });
+  if (version.error) {
+    const cause = version.error.code
+      ? `error code ${JSON.stringify(version.error.code)}`
+      : `error ${JSON.stringify(version.error.message || "<unknown>")}`;
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} could not be executed: ${cause}`);
+  }
   if (version.status !== 0) refuse("client_version_unavailable", `\`claude --version\` exited ${version.status}`);
   const output = version.stdout.trim();
   const match = /^(\d+\.\d+\.\d+[^\s(]*)/.exec(output);
@@ -1028,7 +1034,7 @@ function init(argv) {
       executable: fs.realpathSync(options["client-command"]),
       ...digestOf(options["client-command"]),
     }
-    : clientIdentity(env, options.client ? path.resolve(options.client) : null);
+    : clientIdentity(env, options.client || null);
 
   // Install the pinned artifact into the clean prefix and read its identity
   // back out of the install record the installer wrote.
