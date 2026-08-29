@@ -48,6 +48,28 @@ function projectServer(name) {
   catch { return null; }
 }
 
+// The negotiated MCP 2025-06-18 CallToolResult schema requires `content`.
+// Seal returns text blocks for each of its tools/call result families, so
+// validate that base shape before the stand-in reads extension fields such as
+// `resultType` and `inputRequests`.
+function validateCallToolResult(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: result must be an object");
+  }
+  if (!Object.hasOwn(result, "content")) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: content is required");
+  }
+  if (!Array.isArray(result.content)) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: content must be an array");
+  }
+  for (const [index, block] of result.content.entries()) {
+    if (!block || typeof block !== "object" || Array.isArray(block)
+        || block.type !== "text" || typeof block.text !== "string") {
+      throw new Error(`MCP tools/call result failed CallToolResult schema validation: content[${index}] must be a text content block`);
+    }
+  }
+}
+
 // ------------------------------------------------------ the registry role
 
 function registry(args) {
@@ -109,8 +131,16 @@ function connect(entry) {
   lines.on("line", (line) => {
     let frame;
     try { frame = JSON.parse(line); } catch { return; }
-    const resolve = pending.get(frame.id);
-    if (resolve) { pending.delete(frame.id); resolve(frame); }
+    const request = pending.get(frame.id);
+    if (request) {
+      pending.delete(frame.id);
+      try {
+        if (request.method === "tools/call" && frame.result) validateCallToolResult(frame.result);
+        request.resolve(frame);
+      } catch (error) {
+        request.reject(error);
+      }
+    }
   });
   let nextId = 0;
   return {
@@ -119,7 +149,7 @@ function connect(entry) {
       nextId += 1;
       const id = nextId;
       const waited = new Promise((resolve, reject) => {
-        pending.set(id, resolve);
+        pending.set(id, { method, resolve, reject });
         child.once("exit", (code) => reject(new Error(`the protected server exited ${code} before answering ${method}`)));
         setTimeout(() => reject(new Error(`no answer to ${method} within 20s`)), 20000).unref();
       });
@@ -187,6 +217,7 @@ async function session() {
     process.stdout.write(`result: ${JSON.stringify(answered.result)}\n`);
   } catch (error) {
     process.stdout.write(`session error: ${error.message}\n`);
+    throw error;
   } finally {
     link.close();
     await new Promise((resolve) => setTimeout(resolve, 200));

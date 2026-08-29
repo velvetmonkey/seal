@@ -71,6 +71,10 @@ function freshPending(contract) {
   const opened = contract.begin({ tool: TOOL, args: ARGS });
   assert.equal(opened.kind, "input_required");
   assert.equal(opened.result.resultType, "input_required");
+  assert.deepEqual(opened.result.content, [{
+    type: "text",
+    text: opened.result.inputRequests.approval.params.message,
+  }]);
   return opened.result.requestState;
 }
 
