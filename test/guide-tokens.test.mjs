@@ -125,7 +125,7 @@ test("every refusal token the guide documents exists in the source", () => {
 // alone does not retain their explanatory prose or protect the second guide.
 const REVIEWED_GUIDES = [
   {
-    file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md
+    file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md#looks-wrong
     sha256: GUIDE_SHA256,
     claims: [
       "Receipt refusals use the same tokens whether you invoke the installed `seal verify` command or the standalone v2 checker.",
@@ -133,7 +133,7 @@ const REVIEWED_GUIDES = [
     ],
   },
   {
-    file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md
+    file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md#protected-now
     sha256: "86bf040fc6539dae6c6419a29169a767c29e5e6e5dc2f9118963bb702d0a0bd6",
     claims: [
       "Producer output and the kernel replay path now share the one `seal.receipt/v2` envelope.",

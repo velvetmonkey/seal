@@ -30,9 +30,9 @@ const FAMILY_PRODUCT_FILES = [
 ];
 
 test("each scoped document carries its exact scope signpost", () => {
-  // CLAIM-COVERAGE: docs/archive/AUTHORIZATION-MESH.md; CLAIM-COVERAGE: docs/archive/CLAIMS-MATRIX.md
-  // CLAIM-COVERAGE: docs/assurance/architecture.md
-  // CLAIM-COVERAGE: docs/archive/WHAT-SEAL-IS.md
+  // CLAIM-COVERAGE: docs/archive/AUTHORIZATION-MESH.md#authorization-mesh; CLAIM-COVERAGE: docs/archive/CLAIMS-MATRIX.md#claims-matrix
+  // CLAIM-COVERAGE: docs/assurance/architecture.md#architecture
+  // CLAIM-COVERAGE: docs/archive/WHAT-SEAL-IS.md#what-seal-is
   const expectedBlocks = new Map([
     ...FAMILY_PRODUCT_FILES.map((name) => [name, scopeBlock(FAMILY_PRODUCT_SCOPE, name)]),
     ["assurance/architecture.md", scopeBlock(PRODUCT_THEN_FAMILY_SCOPE, "assurance/architecture.md", "release evidence")],

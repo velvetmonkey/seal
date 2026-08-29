@@ -35,7 +35,7 @@ test("both kernel workflows delegate the rebuild recipe to seal-reproduce", () =
   const expected = /run: node scripts\/seal-reproduce\.cjs build-pinned-kernel "\$(?:GITHUB_REF_NAME|RELEASE_TAG)" --output "\$RUNNER_TEMP\/rebuilt-seal\.wasm"/u;
   for (const relative of [".github/workflows/release.yml", ".github/workflows/published-kernel.yml"]) {
     const workflow = fs.readFileSync(path.join(ROOT, relative), "utf8");
-    assert.match(workflow, expected); // CLAIM-COVERAGE: .github/workflows/published-kernel.yml
+    assert.match(workflow, expected); // CLAIM-COVERAGE: .github/workflows/published-kernel.yml#published-kernel
     assert.doesNotMatch(workflow, /provision_toolchain|install_pinned_elan|build_runtime_wasm/u);
   }
 });

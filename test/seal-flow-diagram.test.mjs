@@ -5,8 +5,8 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
-// CLAIM-COVERAGE: assets/seal-flow.svg
-// CLAIM-COVERAGE: scripts/seal-flow-layout.svg
+// CLAIM-COVERAGE: assets/seal-flow.svg#seal-flow
+// CLAIM-COVERAGE: scripts/seal-flow-layout.svg#seal-flow-layout
 const SVG_PATH = resolve(ROOT, "assets/seal-flow.svg");
 const svg = readFileSync(SVG_PATH, "utf8");
 const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
