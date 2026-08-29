@@ -169,6 +169,7 @@ function createApprovalContract({
       kind: "input_required",
       result: {
         resultType: "input_required",
+        content: [{ type: "text", text: rendered.message }],
         inputRequests: {
           [INPUT_REQUEST_KEY]: {
             method: "elicitation/create",
