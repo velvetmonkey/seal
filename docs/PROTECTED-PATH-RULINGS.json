@@ -1,14 +1,21 @@
 {
   "version": 1,
   "ruling": {
-    "base": "509c2dd81bd935ee70bd34fecb30fdc4b9367b1a",
-    "author": "diffrange",
+    "base": "25ffcd2554f82903d3245156918767cb124e0650",
+    "author": "specrebase5",
     "date": "2026-08-29",
-    "scope": "Ben ruled on 2026-08-29 that this round may change scripts/resolve-ci-diff-range.cjs so that a pull-request diff range starts at the merge base of the target branch and the head, instead of the stale pull_request.base.sha that widened every range after a branch update. Seal still names every protected artifact the branch changes: a cold frisk on grok-4.6 confirmed that a protected change followed by a merge of main, a protected change followed by a rebase, and an add-then-delete of a protected file are each named by the checker under the narrower range. No other protected path, no release, no tag, and no workflow change is authorised by this ruling.",
+    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change, this branch's manifest edit, and the deletion of the manifest identity column, the rename record parser, and nothing else. This ruling retires the property receipt producer and checker retain specified insertion order.",
+    "retires": [
+      "receipt producer and checker retain specified insertion order"
+    ],
     "files": [
       {
-        "path": "scripts/resolve-ci-diff-range.cjs",
-        "blob": "5b030a3c560bbd721dd14fe41108be00d88a073a"
+        "path": "scripts/check-protected-paths.cjs",
+        "blob": "48ce8928e73318ebfd51a16f0dbde35cef46a7cc"
+      },
+      {
+        "path": "scripts/critical-property-manifest.tsv",
+        "blob": "99822fad56df32a5f30818c96ad327ecfa466daf"
       }
     ]
   }

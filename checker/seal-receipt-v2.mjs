@@ -12,7 +12,7 @@ const SPKI = Buffer.from("302a300506032b6570032100", "hex");
 const fail = (message, code = "invalid_receipt") => { const e = new Error(message); e.code = code; throw e; };
 
 // This is an independent implementation of the written specification:
-// insertion order, never producer sorting.
+// ECMAScript own-property enumeration order, never producer sorting.
 export function canonical(value) {
   if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "number") {

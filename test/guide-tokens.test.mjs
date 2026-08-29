@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "00baafa655319b9afa0ffa620341f4b1debbbcef30875e80fd879c5b93f0eb9b";
+const GUIDE_SHA256 = "dd785473baa5573b4dbc604fc2d485f67c7850d17a10b2bcf30415f875610949";
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;

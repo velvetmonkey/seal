@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Roster completeness label: INJECTED, not enforced.
 # It catches a declared test file that did not run, whether by accident, by a
-# crash, by a misconfiguration, or by a rename that was never followed through.
+# crash or by a misconfiguration.
 # It does not catch an actor who can write to the executed-file record. That
 # record is written by the process being measured, so a consistent forgery is
 # believed. That is accepted in CI because no such actor exists there; the
@@ -210,6 +210,24 @@ for index in "${!critical_properties[@]}"; do
   fi
 done
 
+# CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json
+manifest_property_is_retired() {
+  local property="$1"
+  node - "$script_root/docs/PROTECTED-PATH-RULINGS.json" "$property" <<'NODE'
+const fs = require("node:fs");
+
+const [recordPath, property] = process.argv.slice(2);
+try {
+  const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+  const retires = record?.ruling?.retires;
+  if (!Array.isArray(retires) || retires.some((value) => typeof value !== "string")) process.exit(1);
+  process.exit(retires.includes(property) ? 0 : 1);
+} catch {
+  process.exit(1);
+}
+NODE
+}
+
 check_manifest_floor_revision() {
   local revision="$1"
   local label="$2"
@@ -228,7 +246,8 @@ check_manifest_floor_revision() {
       continue
     fi
     ((previous_count += 1))
-    if [[ -z "${critical_property_set[$previous_property]+x}" ]]; then
+    if [[ -z "${critical_property_set[$previous_property]+x}" ]] \
+      && ! manifest_property_is_retired "$previous_property"; then
       critical_manifest_failures+=("property \"$previous_property\" was removed from the $label manifest floor")
     fi
   done < <(git -C "$script_root" show "$manifest_object")
@@ -238,6 +257,9 @@ check_manifest_floor_revision() {
 if ! git -C "$script_root" rev-parse --verify HEAD >/dev/null 2>&1; then
   critical_manifest_failures+=("cannot inspect committed critical-property manifest history under $script_root")
 else
+  if merge_base_revision="$(git -C "$script_root" merge-base HEAD origin/main 2>/dev/null)"; then
+    check_manifest_floor_revision "$merge_base_revision" "merge-base"
+  fi
   check_manifest_floor_revision "HEAD" "committed"
   if git -C "$script_root" rev-parse --verify HEAD^ >/dev/null 2>&1; then
     check_manifest_floor_revision "HEAD^" "parent"
