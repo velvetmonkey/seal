@@ -9,6 +9,7 @@ const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
 const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolNames, ProtectionError } = require("./protection.cjs");
 const { requireProtectSupportedPlatform } = require("./platform.cjs");
+const { printKernelTiming } = require("./presentation.cjs");
 
 function parseArgs(argv) {
   const options = { initStore: false };
@@ -122,6 +123,7 @@ async function run(argv) {
       proxy.write(line);
     } catch (error) {
       process.stderr.write(`seal __proxy: ${error.message}\n`);
+      printKernelTiming(error, (message) => process.stderr.write(`${message}\n`));
       process.exitCode = 1;
       input.close();
       proxy.stop().finally(() => process.exit(1));
