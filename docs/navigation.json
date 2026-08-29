@@ -1,0 +1,101 @@
+{
+  "root": { "path": "docs/README.md", "label": "Documentation map" },
+  "sections": [
+    {
+      "name": "start",
+      "pages": [
+        { "path": "docs/start/README.md", "label": "Start" },
+        { "path": "docs/start/install.md", "label": "Install" },
+        { "path": "docs/start/evaluator-walk.md", "label": "Evaluator walk" }
+      ]
+    },
+    {
+      "name": "guide",
+      "pages": [
+        { "path": "docs/guide/README.md", "label": "Guide" },
+        { "path": "docs/guide/choosing-what-to-protect.md", "label": "Choosing what to protect" },
+        { "path": "docs/guide/knowing-it-worked.md", "label": "Knowing it worked" },
+        { "path": "docs/guide/github-actions-provenance.md", "label": "GitHub Actions provenance" }
+      ]
+    },
+    {
+      "name": "reference",
+      "pages": [
+        { "path": "docs/reference/README.md", "label": "Reference" },
+        { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
+        { "path": "docs/reference/multi-tool-semantics.md", "label": "Multi-tool semantics" },
+        { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt operations vector set v1" }
+      ]
+    },
+    {
+      "name": "assurance",
+      "pages": [
+        { "path": "docs/assurance/README.md", "label": "Assurance" },
+        { "path": "docs/assurance/evaluator-start.md", "label": "Evaluator truth surface" },
+        { "path": "docs/assurance/architecture.md", "label": "Architecture" },
+        { "path": "docs/assurance/distribution.md", "label": "Distribution" },
+        { "path": "docs/assurance/version-identity.md", "label": "Version identity" },
+        { "path": "docs/assurance/claude-code-evidence.md", "label": "Claude Code evidence" }
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "path": "docs/guide/when-something-looks-wrong.md",
+      "reason": "digest-pinned guide page",
+      "footer": [
+        { "role": "Up", "label": "Guide", "target": "README.md" },
+        { "role": "Next", "label": "What is protected right now", "target": "what-is-protected-right-now.md" }
+      ]
+    },
+    {
+      "path": "docs/guide/what-is-protected-right-now.md",
+      "reason": "digest-pinned guide page",
+      "footer": [
+        { "role": "Previous", "label": "When something looks wrong", "target": "when-something-looks-wrong.md" },
+        { "role": "Up", "label": "Guide", "target": "README.md" },
+        { "role": "Next", "label": "Knowing it worked", "target": "knowing-it-worked.md" }
+      ]
+    },
+    {
+      "path": "docs/SEAL-RECEIPT-V2.md",
+      "reason": "standalone receipt format specification",
+      "footer": []
+    },
+    {
+      "path": "docs/reproduce.md",
+      "reason": "standalone reproduction procedure",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/POLICY-LANGUAGE.md",
+      "reason": "standalone policy language analysis",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md",
+      "reason": "superseded release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/installed-tree-pin-control.md",
+      "reason": "standalone control description",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/linkcheck-population-control.md",
+      "reason": "standalone control description",
+      "footer": []
+    }
+  ]
+}

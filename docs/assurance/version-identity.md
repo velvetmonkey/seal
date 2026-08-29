@@ -95,3 +95,7 @@ and exits 0. That is deliberate — the earlier reading refused every branch in
 the repository for carrying a version it had merely inherited — but it means
 the state this transition would end is a state the gate accepts. Until the
 transition is wired, nothing mechanical retires a published version from `main`.
+
+Previous: [Distribution](distribution.md).
+Up: [Assurance](README.md).
+Next: [Claude Code evidence](claude-code-evidence.md).

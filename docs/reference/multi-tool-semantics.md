@@ -190,3 +190,7 @@ with the omitted tool named when its state exposed only two guarded members.
 The protection state machine has no machine-checked model in the `seal-host` Lean kernel.
 The coverage verdict is based on the shipped CLI and product spine test paths;
 no external Claude Code acceptance claim is made here.
+
+Previous: [Receipt operations](receipt-operations.md).
+Up: [Reference](README.md).
+Next: [Receipt operations vector set v1](receipt-operations-v1/README.md).
