@@ -1,21 +1,19 @@
 {
   "version": 1,
   "ruling": {
-    "base": "25ffcd2554f82903d3245156918767cb124e0650",
-    "author": "specrebase5",
+    "base": "042b6a3a7bdd632f7d76de629e16b70e5bbe36fc",
+    "author": "velvetmonkey",
     "date": "2026-08-29",
-    "scope": "Seal now refuses every change to the critical-property manifest without a recorded human ruling. Ben ruled on 2026-08-29. This ruling authorises the protection change, this branch's manifest edit, and the deletion of the manifest identity column, the rename record parser, and nothing else. This ruling retires the property receipt producer and checker retain specified insertion order.",
-    "retires": [
-      "receipt producer and checker retain specified insertion order"
-    ],
+    "scope": "Ben ruled on 2026-08-29. This ruling authorises the CI workflow change that refuses non-canonical commit authors, and nothing else. Seal refuses a new commit whose author email is neither the operator address nor a lane address at the reserved .invalid domain.",
+    "retires": [],
     "files": [
       {
-        "path": "scripts/check-protected-paths.cjs",
-        "blob": "48ce8928e73318ebfd51a16f0dbde35cef46a7cc"
+        "path": ".github/workflows/ci.yml",
+        "blob": "1d89b0834c49c2f3251a300dc21e00e9351e6d9d"
       },
       {
-        "path": "scripts/critical-property-manifest.tsv",
-        "blob": "99822fad56df32a5f30818c96ad327ecfa466daf"
+        "path": "scripts/resolve-ci-diff-range.cjs",
+        "blob": "9598bb7ec1ee065db2f5a42bacf9144f5ece174e"
       }
     ]
   }
