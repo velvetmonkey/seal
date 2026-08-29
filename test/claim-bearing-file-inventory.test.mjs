@@ -7,7 +7,9 @@ import test from "node:test";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = resolve(ROOT, "scripts/claim-bearing-file-inventory.mjs");
-const ARTIFACT_ROOT = "/home/monkey/scratch/markerpin";
+const ARTIFACT_ROOT = process.env.SEAL_MARKERPIN_ARTIFACT_ROOT
+  ?? process.env.RUNNER_TEMP
+  ?? tmpdir();
 
 test("README is classified as claim-bearing, including the hosted seal-check behaviour claims", () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
