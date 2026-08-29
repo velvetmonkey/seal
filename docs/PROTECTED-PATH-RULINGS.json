@@ -4,7 +4,7 @@
     "base": "509c2dd81bd935ee70bd34fecb30fdc4b9367b1a",
     "author": "diffrange",
     "date": "2026-08-29",
-    "scope": "Ben ruled on 2026-08-29 that this round may change scripts/resolve-ci-diff-range.cjs so a pull-request diff range starts at the merge base of the target branch and the head, instead of the stale pull_request.base.sha. A cold frisk on grok-4.6 confirmed that a protected change followed by a merge of main, a protected change followed by a rebase, and an add-then-delete of a protected file are each still named by the checker under the narrower range. No other protected path, no release, no tag, and no workflow change is authorised.",
+    "scope": "Ben ruled on 2026-08-29 that this round may change scripts/resolve-ci-diff-range.cjs so that a pull-request diff range starts at the merge base of the target branch and the head, instead of the stale pull_request.base.sha that widened every range after a branch update. Seal still names every protected artifact the branch changes: a cold frisk on grok-4.6 confirmed that a protected change followed by a merge of main, a protected change followed by a rebase, and an add-then-delete of a protected file are each named by the checker under the narrower range. No other protected path, no release, no tag, and no workflow change is authorised by this ruling.",
     "files": [
       {
         "path": "scripts/resolve-ci-diff-range.cjs",
