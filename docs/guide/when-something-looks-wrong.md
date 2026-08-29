@@ -592,8 +592,9 @@ ill-formed UTF-8, and duplicate names at any depth refuse here.
 ### `member_order` and `number_not_canonical`
 
 The envelope does not use the fixed v2 top-level order, or a number is not a
-finite safe integer. Object members inside values retain insertion order;
-they are never sorted.
+finite safe integer. Object members inside values use ECMAScript own-property
+enumeration order after parsing: integer-index keys come first in ascending
+numeric order, followed by other string keys in insertion order.
 
 ### `commitment_mismatch`
 
