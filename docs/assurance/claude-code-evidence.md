@@ -122,8 +122,8 @@ How each one is established from files rather than from the operator's memory:
 - **unprotect** — the override entry is gone from `~/.claude.json` and from
   `claude mcp get`, and `.mcp.json` matches the digest **and** byte length
   recorded before `seal protect` ran. `seal unprotect notes` must also exit
-  zero and report `Protection: - outside Seal`; a pre-existing absent override
-  is not evidence that this act occurred.
+  zero and report that the sealed MCP route is outside Seal. A pre-existing
+  absent override is not evidence that this act occurred.
 
 ## Running the acceptance walk
 

@@ -176,7 +176,7 @@ test("UNPROTECTED guards none of a former three-tool declaration and clears its 
 
   const unprotected = run(ctx, ["unprotect", "db"]);
   assert.equal(unprotected.code, 0, unprotected.out);
-  assert.match(unprotected.out, /^Protection: - outside Seal$/m);
+  assert.match(unprotected.out, /^Sealed MCP route db: - outside Seal /m);
   const stored = readState(statePath);
   assert.equal(stored.state, "UNPROTECTED");
   assert.equal(stored.lease, null);

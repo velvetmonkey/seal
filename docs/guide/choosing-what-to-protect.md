@@ -53,16 +53,27 @@ $ seal protect db demo.mutate demo.erase
 ```
 
 ```output
-Project .mcp.json hash before protect: d46bf1f116eb99abcbb7d664032e5691bc4d217034dd96757a38a44c7ace10d8
-Protection: PENDING RESTART db.{demo.mutate, demo.erase}
+Project .mcp.json hash before protect: 3b4703e3d8c33826df5926e5409547e0aff4b54fb58c634277f45ced003cb8e9
+Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+
+Gated through this route:
+  demo.mutate
+  demo.erase
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  configured MCP servers not routed through this Seal wrapper: cache
+  other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json
+State: /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
-  3. Look for `Protection: ACTIVE`.
+  3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  Stop Claude Code, then run `seal unprotect db`.
+  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
 ```
 
 Exit code: `0`.
@@ -142,7 +153,17 @@ $ seal unprotect notes
 ```output
 Project .mcp.json hash before unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
 Project .mcp.json hash after unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
-Protection: - outside Seal
+Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  none
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 ```
 
 The local override is removed; when the before and after hashes match, they
