@@ -191,7 +191,6 @@ for line in "${critical_manifest_lines[@]}"; do
   fi
   critical_property_set["$property"]=1
   critical_property_id_set["$property_id"]=1
-  critical_property_id_by_property["$property"]="$property_id"
   if [[ "$proof_name" = /* ]]; then
     proof_file="$proof_name"
   else
