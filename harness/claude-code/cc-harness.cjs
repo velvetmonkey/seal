@@ -20,7 +20,7 @@
 // checkable by `scripts/check-cc-evidence.mjs`.
 //
 // Usage:
-//   cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR
+//   cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR [--client PATH]
 //   cc-harness plan
 //   cc-harness show                 show the current step without running it
 //   cc-harness next                 attempt the current step
@@ -859,11 +859,14 @@ function clientExecutableFormat(executable) {
     descriptor = fs.openSync(executable, "r");
     count = fs.readSync(descriptor, header, 0, header.length, 0);
   } catch (error) {
-    refuse("client_not_linux_x64", `client executable ${JSON.stringify(executable)} has observed header bytes <unreadable: ${error.code || error.message}>; expected ELF magic 7F 45 4C 46, EI_CLASS 02, and little-endian e_machine 3E 00`);
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes <unreadable: ${error.code || error.message}>; expected 20 readable header bytes`);
   } finally {
     if (descriptor !== undefined) fs.closeSync(descriptor);
   }
   const observed = Array.from(header.subarray(0, count), (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ") || "<empty>";
+  if (count < header.length) {
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected 20 readable header bytes`);
+  }
   const isElf = count >= 20 && header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
   const is64Bit = header[4] === 0x02;
   const isX64 = header.readUInt16LE(18) === 0x3e;
@@ -873,13 +876,54 @@ function clientExecutableFormat(executable) {
   return "elf64-x86-64";
 }
 
-function clientIdentity(env) {
-  const which = spawnSync("sh", ["-c", "command -v claude"], { encoding: "utf8", env });
-  if (which.status !== 0 || !which.stdout.trim()) {
-    refuse("client_absent", "no `claude` command is on PATH; the acceptance run needs the real client");
+function clientCandidates(env) {
+  const candidates = new Map();
+  for (const directory of String(env.PATH || "").split(path.delimiter)) {
+    const command = path.resolve(directory || ".", "claude");
+    try {
+      fs.accessSync(command, fs.constants.X_OK);
+      const executable = fs.realpathSync(command);
+      if (!candidates.has(executable)) candidates.set(executable, { executable, ...digestOf(executable) });
+    } catch {
+      // A PATH entry without an executable claude is not a client candidate.
+    }
   }
-  const executable = fs.realpathSync(which.stdout.trim());
+  return [...candidates.values()].sort((left, right) => left.executable.localeCompare(right.executable));
+}
+
+function candidateDescription(candidate) {
+  const digest = candidate.present ? candidate.sha256 : `<unreadable: ${candidate.reason}>`;
+  return `  ${candidate.executable} sha256 ${digest}`;
+}
+
+function clientIdentity(env, explicitClient) {
+  let executable;
+  let selectionMethod;
+  let candidates;
+  if (explicitClient) {
+    try {
+      executable = fs.realpathSync(explicitClient);
+    } catch (error) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(explicitClient)} cannot be resolved: ${error.code || "<unknown>"}`);
+    }
+    selectionMethod = "explicit";
+  } else {
+    candidates = clientCandidates(env);
+    if (candidates.length === 0) {
+      // Keep these bytes stable. Operators and tests depend on this refusal.
+      refuse("client_absent", "no `claude` command is on PATH; the acceptance run needs the real client");
+    }
+    if (candidates.length > 1) {
+      refuse("client_ambiguous", `more than one executable \`claude\` command is on PATH:\n${candidates.map(candidateDescription).join("\n")}\nPass --client PATH to select one client.`);
+    }
+    executable = candidates[0].executable;
+    selectionMethod = "auto";
+  }
   const executableFormat = clientExecutableFormat(executable);
+  const digest = digestOf(executable);
+  if (!digest.present || digest.bytes === 0) {
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} cannot supply readable bytes for its sha256: ${digest.reason || "<empty>"}`);
+  }
   const version = spawnSync(executable, ["--version"], { encoding: "utf8", env });
   if (version.status !== 0) refuse("client_version_unavailable", `\`claude --version\` exited ${version.status}`);
   const output = version.stdout.trim();
@@ -892,13 +936,16 @@ function clientIdentity(env) {
     command: executable,
     executable,
     executable_format: executableFormat,
-    ...digestOf(executable),
+    selection_method: selectionMethod,
+    ...(candidates ? { candidates } : {}),
+    ...digest,
   };
 }
 
 function init(argv) {
   requireLinuxX64();
-  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client-command", "synthetic-client", "stub-bin"]);
+  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client", "client-command", "synthetic-client", "stub-bin"]);
+  if (options.client === true) refuse("usage", "cc-harness init needs a path after --client");
   for (const required of ["artifact", "sha256", "bytes", "run-dir"]) {
     if (!options[required]) refuse("usage", `cc-harness init needs --${required}`);
   }
@@ -981,7 +1028,7 @@ function init(argv) {
       executable: fs.realpathSync(options["client-command"]),
       ...digestOf(options["client-command"]),
     }
-    : clientIdentity(env);
+    : clientIdentity(env, options.client ? path.resolve(options.client) : null);
 
   // Install the pinned artifact into the clean prefix and read its identity
   // back out of the install record the installer wrote.
@@ -1356,6 +1403,8 @@ function finish(state, options) {
       version_output: state.claude.version_output,
       executable: state.claude.executable,
       executable_sha256: state.claude.sha256,
+      selection_method: state.claude.selection_method,
+      ...(state.claude.candidates ? { candidates: state.claude.candidates } : {}),
       executable_format: state.claude.executable_format,
     },
     environment: {
@@ -1424,7 +1473,7 @@ function main(argv) {
   const command = argv[0];
   if (!command || command === "--help" || command === "-h") {
     say("cc-harness — the Claude Code acceptance harness\n");
-    say("  cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR");
+    say("  cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR [--client PATH]");
     say("  cc-harness plan   --run-dir DIR");
     say("  cc-harness show   --run-dir DIR");
     say("  cc-harness next   --run-dir DIR");
@@ -1474,7 +1523,9 @@ module.exports = {
   CASES,
   castFromScript,
   clientExecutableFormat,
+  clientCandidates,
   clientIdentity,
+  digestOf,
   GUARDED_TOOL,
   HarnessError,
   NOTES,
