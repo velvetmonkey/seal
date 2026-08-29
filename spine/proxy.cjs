@@ -203,14 +203,22 @@ function createProxy(options) {
     const approvalRequest = { correlation };
     if (isTerminalDecision(decision)) discardReceiptCorrelation(requestState);
     if (decision.kind === "refuse") {
+      // The elapsed timeout callback represents an unanswered elicitation.
+      // The approval TTL can expire before this callback runs. The durable
+      // contract state remains expired in that case, but the client must see
+      // the deterministic reason for this callback: cancellation.
+      const timeoutCancellation = detailOverride !== undefined
+        && inputResponses?.approval?.action === "cancel"
+        && decision.refusal === "expired";
+      const refusal = timeoutCancellation ? "cancelled" : decision.refusal;
       const detail = detailOverride || decision.detail;
-      const receiptExtra = { refusal: decision.refusal, detail };
+      const receiptExtra = { refusal, detail };
       receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      respond(frame.id, refusalResult(decision.refusal, detail, decision.timing));
+      respond(frame.id, refusalResult(refusal, detail, decision.timing));
       if (decision.timing) {
         const error = new Error(detail);
-        error.code = decision.refusal;
+        error.code = refusal;
         Object.assign(error, decision.timing);
         throw error;
       }

@@ -390,6 +390,55 @@ test("two guarded calls receive distinct elicitation ids", async (t) => {
   assert.equal(await run.exit, 0, run.err);
 });
 
+test("receipt correlations refuse loudly at capacity without orphaning live approvals", async (t) => {
+  const dir = tmpdir("seal-elicit-correlation-capacity-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    receiptCorrelationCapacity: 1,
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const waitFor = async (predicate) => {
+    const deadline = Date.now() + 5000;
+    while (!frames.find(predicate)) {
+      if (Date.now() >= deadline) assert.fail(JSON.stringify(frames));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return frames.find(predicate);
+  };
+
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  proxy.write(JSON.stringify({ ...callParams("live approval"), id: 1 }));
+  const elicitation = await waitFor((frame) => frame.method === "elicitation/create");
+  assert.equal(readCount(`${dataFile}.count`), "0", "the live approval must not flow before its answer");
+
+  proxy.write(JSON.stringify({ ...callParams("over capacity"), id: 2 }));
+  const refused = await waitFor((frame) => frame.id === 2 && frame.result);
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /receipt_correlation_capacity_exceeded/);
+  assert.match(refused.result.content[0].text, /receipt correlation capacity 1 is full/);
+
+  proxy.write(JSON.stringify({
+    jsonrpc: "2.0",
+    id: elicitation.id,
+    result: { action: "accept", content: { approve: true } },
+  }));
+  const allowed = await waitFor((frame) => frame.id === 1 && frame.result);
+  assert.equal(allowed.result.isError, undefined, JSON.stringify(allowed));
+  assert.equal(readCount(`${dataFile}.count`), "1", "the live approval must remain answerable after the loud refusal");
+
+  proxy.write(JSON.stringify({ ...callParams("capacity reopened"), id: 3 }));
+  const reopened = await waitFor((frame) => frame.method === "elicitation/create" && frame.id !== elicitation.id);
+  assert.match(reopened.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
+});
+
 test("an unanswered capable client times out to cancelled", async (t) => {
   const dir = tmpdir("seal-elicit-timeout-");
   const storePath = path.join(dir, "approvals.journal");
@@ -397,7 +446,7 @@ test("an unanswered capable client times out to cancelled", async (t) => {
   const frames = [];
   const proxy = createProxy({
     guardTool: "demo.mutate", storePath, receiptsDir: path.join(dir, "receipts"),
-    elicitationTimeoutMs: 25,
+    ttlMs: 25,
     childArgv: [process.execPath, SEAL, "__demo-server", path.join(dir, "data.txt")],
     onClientLine(line) { frames.push(JSON.parse(line)); },
   });
@@ -410,7 +459,7 @@ test("an unanswered capable client times out to cancelled", async (t) => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   const refused = frames.find((frame) => frame.id === 1 && frame.result);
-  assert.match(refused.result.content[0].text, /cancelled/);
+  assert.match(refused.result.content[0].text, /approval refused: cancelled/);
   assert.match(refused.result.content[0].text, /did not answer elicitation\/create within 25 ms/);
   await proxy.stop();
 });
