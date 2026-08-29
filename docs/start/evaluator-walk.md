@@ -62,10 +62,8 @@ the thing that can sign is the same machine that made the decision. A
 production-grade check would verify against a key you obtained from a
 source you already trust, not a file written next to the receipt.
 
-The in-browser page at https://velvetmonkey.github.io/seal-check/ re-checks
-a decision receipt you paste and reports its receipt checks. It has no
-backend, accounts, or telemetry. It does not establish that your setup
-routes calls through Seal, and it is not the checker command above.
+The separate browser product at https://velvetmonkey.github.io/seal-check/ does
+not check this demo's v2 receipt. Use the checkout-root command above.
 The landing page has **zero `<button>` controls**.
 
 See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and

@@ -72,8 +72,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
   assert.match(run.out, /From the checkout root: node checker\/seal-receipt-v2\.mjs/, "demo must name the v2 checker path inside the source checkout");
   assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
-  assert.match(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must name the online browser instrument beside the checker command");
-  assert.match(run.out, /does not establish that this setup routes calls through Seal/, "demo must state the online page's setup limit");
+  assert.doesNotMatch(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must not advertise the incompatible browser checker");
 
   // FILE evidence 1: the proxy emitted nothing for it — the receipts
   // directory holds exactly the three gate decisions and no more.
@@ -119,6 +118,14 @@ test("demo checker route control rejects an absent path and a receipt-version mi
   const green = spawnSync(process.execPath, [control, outputFile, ROOT], { encoding: "utf8" });
   assert.equal(green.status, 0, green.stdout + green.stderr);
   assert.match(green.stdout, /PASS demo checker route: checker\/seal-receipt-v2\.mjs accepts emitted v2/);
+
+  const throwingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-route-throwing-checker-"));
+  fs.mkdirSync(path.join(throwingRoot, "checker"));
+  fs.copyFileSync(path.join(ROOT, "checker", "seal-receipt-v2.mjs"), path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"));
+  fs.writeFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), 'throw new Error("physical tamper");\n' + fs.readFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), "utf8"));
+  const throwing = spawnSync(process.execPath, [control, outputFile, throwingRoot], { encoding: "utf8" });
+  assert.notEqual(throwing.status, 0, throwing.stdout + throwing.stderr);
+  assert.match(throwing.stderr, /FAIL demo checker route: named checker failed with exit 1:/);
 
   const tampered = demo.out.replace("checker/seal-receipt-v2.mjs", "checker/does-not-exist.mjs");
   fs.writeFileSync(outputFile, tampered);
