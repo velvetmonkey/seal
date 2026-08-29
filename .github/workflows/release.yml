@@ -287,6 +287,7 @@ jobs:
       - name: Publish the verified draft
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
