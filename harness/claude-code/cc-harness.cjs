@@ -663,7 +663,7 @@ function observeUnprotect(state, begin, end) {
   const original = state.project.mcp_json_before_protect;
   const window = state.steps.unprotect || {};
   return {
-    observed: window.code === 0 && /Protection: - outside Seal/m.test(window.output || "") &&
+    observed: window.code === 0 && /Sealed MCP route(?::| [^:]+:) - outside Seal/m.test(window.output || "") &&
       end.local_override.entry === null &&
       end.mcp_json.sha256 === original.sha256 && end.mcp_json.bytes === original.bytes &&
       !/^ {2}Scope: Local config /m.test(end.claude_mcp_get.stdout),

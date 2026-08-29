@@ -46,11 +46,21 @@ function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
 
 function protectedStatusPrefix(statePath) {
   return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
-    `Protection: PENDING RESTART db.write (${statePath})\n` +
+    `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
+    "\n" +
+    "Gated through this route:\n" +
+    "  write\n" +
+    "\n" +
+    "Not controlled:\n" +
+    "  Bash and subprocesses outside this MCP route\n" +
+    "  direct resource access outside this MCP route\n" +
+    "  other clients\n" +
+    "  other MCP servers not routed through this Seal wrapper\n" +
+    "  other uncontrolled routes can also exist\n" +
     "Next:\n" +
     "  1. Restart Claude Code in this project.\n" +
     "  2. Run `seal status`.\n" +
-    "  3. Look for `Protection: ACTIVE`.\n" +
+    "  3. Confirm the sealed MCP route is ACTIVE.\n" +
     "Undo:\n" +
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
@@ -76,13 +86,15 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: liveLease });
   let result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: ACTIVE db\.write /m);
+  assert.match(result.out, /^Sealed MCP route db: ACTIVE /m);
+  assert.match(result.out, /^  write$/m);
+  assert.match(result.out, /^Not controlled:$/m);
   assert.match(result.out, /^Protection lease: pid \d+ generation 3$/m);
 
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: { pid: 999999, startWitness: "dead", generation: 4 } });
   result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: STALE db\.write /m);
+  assert.match(result.out, /^Sealed MCP route db: STALE /m);
 
 });
 
@@ -110,7 +122,7 @@ test("status refuses an unsupported host before a null-witness lease liveness co
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
   assert.match(result.out, /^REFUSE unsupported_platform: this is plan9-mips$/m);
-  assert.doesNotMatch(result.out, /^Protection: (?:ACTIVE|STALE) /m);
+  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:ACTIVE|STALE) /m);
   assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
 

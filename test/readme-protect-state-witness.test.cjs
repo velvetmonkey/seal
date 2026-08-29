@@ -82,7 +82,8 @@ rl.on("line", (line) => {
   assert.ok(path.isAbsolute(statePath), `State path is not local and absolute: ${statePath}`);
   assert.equal(fs.statSync(statePath).isFile(), true, `State path is not a file: ${statePath}`);
   const status = execFileSync(SEAL, ["status"], { cwd: project, env, encoding: "utf8" });
-  assert.match(status, /Protection: PENDING RESTART db\.demo\.mutate/);
+  assert.match(status, /Sealed MCP route db: PENDING RESTART/);
+  assert.match(status, /^  demo\.mutate$/m);
 
   const activated = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
     cwd: path.join(root, "parent"),

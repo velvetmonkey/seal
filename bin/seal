@@ -58,14 +58,13 @@ function status() {
     const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
-      console.log("Protection: - outside Seal");
+      for (const line of protection.protectionBoundary({ state: "UNPROTECTED" }, root)) console.log(line);
       console.log("Receipts: unavailable outside a protected project");
       console.log("Most recent: no project receipt directory is recorded");
       return;
     } else {
       const guarded = protection.protectedToolNames(view);
-      const scope = guarded.length === 1 ? `${view.serverName}.${guarded[0]}` : `${view.serverName}.{${guarded.join(", ")}}`;
-      console.log(`Protection: ${view.state} ${scope} (${filePath})`);
+      for (const line of protection.protectionBoundary(view, root, filePath)) console.log(line);
       if (view.lease?.pid && view.lease?.generation !== undefined) {
         console.log(`Protection lease: pid ${view.lease.pid} generation ${view.lease.generation}`);
       }
@@ -91,7 +90,8 @@ function status() {
       process.exitCode = 1;
       return;
     }
-    console.log(`Protection: BROKEN (${error.message})`);
+    for (const line of protection.protectionBoundary({ state: "BROKEN", brokenReason: error.message }, process.cwd())) console.log(line);
+    console.log(`Protection detail: ${error.message}`);
   }
 
   let entries;
@@ -195,7 +195,7 @@ function protectGuidance(serverName, guardTools = []) {
     next: [
       "1. Restart Claude Code in this project.",
       "2. Run `seal status`.",
-      "3. Look for `Protection: ACTIVE`.",
+      "3. Confirm the sealed MCP route is ACTIVE.",
     ],
     undo: [`To clear protection for every guarded tool on server ${shellWord(serverName)}${guarded}, stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
   };
@@ -357,8 +357,7 @@ async function protectCommand(args) {
   const guardTools = [...new Set(requestedTools)];
   const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
-  const protectedScope = guardTools.length === 1 ? `${serverName}.${guardTools[0]}` : `${serverName}.{${guardTools.join(", ")}}`;
-  console.log(`Protection: PENDING RESTART ${protectedScope}`);
+  for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(guardTools);
   const outside = result.toolNames.filter((name) => !guarded.has(name));
   const shownOutside = outside.slice(0, 20);
@@ -374,7 +373,7 @@ function unprotectCommand(args) {
   const result = protection.unprotect({ serverName, projectRoot: process.cwd(), env: process.env });
   console.log(`Project .mcp.json hash before unprotect: ${result.beforeHash}`);
   console.log(`Project .mcp.json hash after unprotect: ${result.afterHash}`);
-  console.log("Protection: - outside Seal");
+  for (const line of protection.protectionBoundary({ ...(result.previousState || {}), state: "UNPROTECTED" }, process.cwd(), result.statePath)) console.log(line);
   const guardTools = protection.protectedToolNames(result.previousState || {});
   const undo = guardTools.length > 0
     ? [`Run \`seal protect ${shellWord(serverName)} ${guardTools.map(shellWord).join(" ")}\`.`]
@@ -382,7 +381,7 @@ function unprotectCommand(args) {
   printGuidance({
     next: [
       "1. Run `seal status`.",
-      "2. Look for `Protection: - outside Seal`.",
+      "2. Confirm the sealed MCP route is outside Seal.",
     ],
     undo,
   });
