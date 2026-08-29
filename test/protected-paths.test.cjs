@@ -266,6 +266,20 @@ test("a range-and-blob ruling refuses a different protected blob", (t) => {
   assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
 });
 
+test("a range-and-blob ruling refuses a different protected file", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = approvedTopic(root);
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  writeFileSync(join(root, "scripts", "installed-tree-pin-sites.json"), "[]\n");
+  git(root, ["add", "scripts/installed-tree-pin-sites.json"]);
+  git(root, ["commit", "-qm", "different protected edit"]);
+  mergeTopic(root, base);
+  const result = run(root, base, "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /scripts\/installed-tree-pin-sites\.json/);
+});
+
 test("a head that drops a base ruling is refused and names the record", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
