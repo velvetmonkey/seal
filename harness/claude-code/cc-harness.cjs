@@ -926,7 +926,10 @@ function clientIdentity(env, explicitClient) {
   }
   const version = spawnSync(executable, ["--version"], { encoding: "utf8", env });
   if (version.error) {
-    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} could not be executed: ${version.error.code || version.error.message || "<unknown>"}`);
+    const cause = version.error.code
+      ? `error code ${JSON.stringify(version.error.code)}`
+      : `error ${JSON.stringify(version.error.message || "<unknown>")}`;
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} could not be executed: ${cause}`);
   }
   if (version.status !== 0) refuse("client_version_unavailable", `\`claude --version\` exited ${version.status}`);
   const output = version.stdout.trim();
