@@ -53,8 +53,8 @@ than silently ignored.
 
 ## Canonicalisation
 
-Canonical JSON is compact JSON. Arrays retain element order. Objects retain
-the member order in the received object; keys are never sorted. Member names
+Canonical JSON is compact JSON. Arrays retain element order. Objects use
+ECMAScript own-property enumeration order after parsing. Member names
 use JSON escaping, followed by `:`, and values use this same rule. Duplicate
 members at every object at every depth are malformed. Duplicate comparison is
 after JSON unescaping of the member name, so `"a"` and `"\\u0061"` collide.
