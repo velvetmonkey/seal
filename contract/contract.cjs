@@ -109,8 +109,8 @@ function createApprovalContract({
 
   loadStore();
 
-  function refuse(refusal, detail) {
-    return { kind: "refuse", refusal, detail };
+  function refuse(refusal, detail, timing) {
+    return { kind: "refuse", refusal, detail, ...(timing === undefined ? {} : { timing }) };
   }
 
   function receiptFor({ tool, args, accepted = false }) {
@@ -279,7 +279,15 @@ function createApprovalContract({
       });
     } catch (error) {
       if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
-        return refuse(error.code, `${error.message}; Node authorization did not override the kernel refusal`);
+        const timing = error.kernel_timing_timestamps === undefined ? undefined : {
+          kernel_timing_timestamps: error.kernel_timing_timestamps,
+          kernel_timing_ms: error.kernel_timing_ms,
+          kernel_timing_active_phase: error.kernel_timing_active_phase,
+          kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
+          kernel_timing_lifecycle: error.kernel_timing_lifecycle,
+          kernel_timing_unmeasured: error.kernel_timing_unmeasured,
+        };
+        return refuse(error.code, `${error.message}; Node authorization did not override the kernel refusal`, timing);
       }
       return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, `${error.message}; Node authorization did not override the kernel refusal`);
     }
