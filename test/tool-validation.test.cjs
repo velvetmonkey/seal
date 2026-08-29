@@ -47,12 +47,46 @@ function proxySession(ctx) {
     stdio: ["pipe", "pipe", "pipe"],
   });
   const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
+  const queued = [];
+  const waiters = [];
+  const elicitationIds = [];
+  lines.on("line", (line) => {
+    const frame = JSON.parse(line);
+    const waiter = waiters.shift();
+    if (waiter) waiter(frame);
+    else queued.push(frame);
+  });
+  const nextFrame = () => queued.length > 0
+    ? Promise.resolve(queued.shift())
+    : new Promise((resolve) => waiters.push(resolve));
+  let initialized = false;
+  async function ensureInitialized() {
+    if (initialized) return;
+    initialized = true;
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: "tool-validation-init", method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+    }) + "\n");
+    while ((await nextFrame()).id !== "tool-validation-init") {}
+  }
   return {
     proxy,
-    request(frame) {
-      const response = new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
+    elicitationIds,
+    async request(frame, action = "accept") {
+      await ensureInitialized();
       proxy.stdin.write(JSON.stringify(frame) + "\n");
-      return response;
+      while (true) {
+        const response = await nextFrame();
+        if (response.method === "elicitation/create") {
+          elicitationIds.push(response.id);
+          const result = action === "accept"
+            ? { action, content: { approve: true } }
+            : { action };
+          proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: response.id, result }) + "\n");
+        } else if (response.id === frame.id) {
+          return response;
+        }
+      }
     },
     async close() {
       proxy.stdin.end();
@@ -78,16 +112,13 @@ test("an observed tool protects end to end and reports every other tool as not a
   assert.match(protectedRun.out, /Sealed MCP route db: PENDING RESTART/);
   assert.match(protectedRun.out, /^  db\.drop_table$/m);
   assert.match(protectedRun.out, /Protection scope: 1 other tool NOT APPROVAL-GATED \(they pass through Seal\): db\.read/);
-  const statePath = statePathFor(ctx.project, ctx.env);
-  const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], { cwd: ctx.project, env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
-  const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
+  const session = proxySession(ctx);
   try {
-    proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "db.drop_table", arguments: {} } }) + "\n");
-    const response = await new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
-    assert.equal(response.result.resultType, "input_required");
+    const response = await session.request({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "db.drop_table", arguments: {} } }, "decline");
+    assert.match(response.result.content[0].text, /declined/);
+    assert.equal(session.elicitationIds.length, 1);
   } finally {
-    proxy.stdin.end();
-    await new Promise((resolve) => proxy.once("close", resolve));
+    await session.close();
   }
 });
 
@@ -103,29 +134,17 @@ test("a named tool list gives both tools separate asks", async (t) => {
   const session = proxySession(ctx);
   try {
     const toolA = { jsonrpc: "2.0", id: 21, method: "tools/call", params: { name: "db.drop_table", arguments: { table: "one" } } };
-    const askA = await session.request(toolA);
-    assert.equal(askA.result.resultType, "input_required");
-
-    const allowedA = await session.request({
-      ...toolA,
-      id: 22,
-      params: {
-        ...toolA.params,
-        requestState: askA.result.requestState,
-        inputResponses: { approval: { action: "accept", content: { approve: true } } },
-      },
-    });
+    const allowedA = await session.request(toolA);
     assert.match(allowedA.result.content[0].text, /CALLED db\.drop_table/);
 
-    const askB = await session.request({
+    const refusedB = await session.request({
       jsonrpc: "2.0", id: 23, method: "tools/call", params: { name: "db.read", arguments: { table: "one" } },
-    });
-    assert.equal(askB.result.resultType, "input_required", "approving tool A must not approve tool B");
-    assert.notEqual(askB.result.requestState, askA.result.requestState, "each tool must receive its own ask");
-    t.diagnostic(`tool A first response: ${askA.result.resultType}`);
+    }, "decline");
+    assert.match(refusedB.result.content[0].text, /declined/);
+    assert.equal(new Set(session.elicitationIds).size, 2, "each tool must receive its own elicitation request id");
     t.diagnostic(`tool A approved response: ${allowedA.result.content[0].text}`);
-    t.diagnostic(`tool B after tool A approval: ${askB.result.resultType}`);
-    t.diagnostic(`asks have distinct requestState: ${askB.result.requestState !== askA.result.requestState}`);
+    t.diagnostic(`tool B after tool A approval: ${refusedB.result.content[0].text}`);
+    t.diagnostic(`asks have distinct ids: ${new Set(session.elicitationIds).size === 2}`);
   } finally {
     await session.close();
   }
@@ -186,11 +205,11 @@ test("pre-change scalar guardTool state still activates and gates", async (t) =>
   t.diagnostic(`pre-change disk keys: guardTool=${JSON.parse(fs.readFileSync(filePath, "utf8")).guardTool}, guardTools=${JSON.parse(fs.readFileSync(filePath, "utf8")).guardTools}`);
   const session = proxySession(ctx);
   try {
-    const ask = await session.request({
+    const refused = await session.request({
       jsonrpc: "2.0", id: 31, method: "tools/call", params: { name: "db.drop_table", arguments: {} },
-    });
-    assert.equal(ask.result.resultType, "input_required");
-    t.diagnostic(`old scalar state call response: ${ask.result.resultType}`);
+    }, "cancel");
+    assert.match(refused.result.content[0].text, /cancelled/);
+    t.diagnostic(`old scalar state call response: ${refused.result.content[0].text}`);
   } finally {
     await session.close();
   }

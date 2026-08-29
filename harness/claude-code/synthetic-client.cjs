@@ -117,7 +117,7 @@ function registry(args) {
 
 // -------------------------------------------------------- the client role
 
-function connect(entry) {
+function connect(entry, onServerRequest) {
   const child = spawn(entry.command, entry.args || [], {
     cwd: project,
     stdio: ["pipe", "pipe", "inherit"],
@@ -128,6 +128,12 @@ function connect(entry) {
   lines.on("line", (line) => {
     let frame;
     try { frame = JSON.parse(line); } catch { return; }
+    if (frame.method && Object.hasOwn(frame, "id")) {
+      onServerRequest(frame, (result) => {
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: frame.id, result })}\n`);
+      });
+      return;
+    }
     const request = pending.get(frame.id);
     if (request) {
       pending.delete(frame.id);
@@ -180,37 +186,32 @@ async function session() {
     return;
   }
 
-  const link = connect(entry);
+  let elicitationMessage = "";
+  const link = connect(entry, (frame, respond) => {
+    if (frame.method !== "elicitation/create") {
+      respond({ action: "cancel" });
+      return;
+    }
+    elicitationMessage = frame.params?.message || "";
+    const action = scenario === "accept" ? "accept" : "decline";
+    process.stdout.write("\n");
+    for (const line of elicitationMessage.split("\n")) process.stdout.write(`  ${line}\n`);
+    process.stdout.write("\n");
+    process.stdout.write(`the stand-in answers: ${action}\n`);
+    respond(action === "accept" ? { action: "accept", content: { approve: true } } : { action: "decline" });
+  });
   try {
     await link.request("initialize", {
       protocolVersion: "2025-06-18",
-      capabilities: {},
+      capabilities: { elicitation: {} },
       clientInfo: { name: "seal-cc-synthetic-stand-in", version: "0.0.0-synthetic-stand-in" },
     });
     const listed = await link.request("tools/list", {});
     process.stdout.write(`tools: ${(listed.result?.tools || []).map((tool) => tool.name).join(", ")}\n`);
     if (scenario === "activation") return;
 
-    const first = await link.request("tools/call", { name: GUARDED_TOOL, arguments: { note } });
-    if (first.result?.resultType !== "input_required") {
-      process.stdout.write(`the protected call did not ask for approval: ${JSON.stringify(first.result)}\n`);
-      return;
-    }
-    // Print the approval message where the terminal recording will carry it,
-    // the way the real client renders it on screen.
-    const message = first.result.inputRequests?.approval?.params?.message || "";
-    process.stdout.write("\n");
-    for (const line of message.split("\n")) process.stdout.write(`  ${line}\n`);
-    process.stdout.write("\n");
-
-    const action = scenario === "accept" ? "accept" : "decline";
-    process.stdout.write(`the stand-in answers: ${action}\n`);
-    const answered = await link.request("tools/call", {
-      name: GUARDED_TOOL,
-      arguments: { note },
-      requestState: first.result.requestState,
-      inputResponses: { approval: action === "accept" ? { action: "accept", content: { approve: true } } : { action: "decline" } },
-    });
+    const answered = await link.request("tools/call", { name: GUARDED_TOOL, arguments: { note } });
+    if (!elicitationMessage) throw new Error("the protected call did not issue elicitation/create");
     process.stdout.write(`result: ${JSON.stringify(answered.result)}\n`);
   } catch (error) {
     process.stdout.write(`session error: ${error.message}\n`);

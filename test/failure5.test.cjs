@@ -136,9 +136,17 @@ async function withProxy(ctx, fn) {
       else if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error(`no response ${id}: ${buf}`)); }
     }, 15);
   });
+  const waitMethod = (method, ms = 8000) => new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const hit = responses.find((r) => r.method === method);
+      if (hit) { clearInterval(iv); resolve(hit); }
+      else if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error(`no request ${method}: ${buf}`)); }
+    }, 15);
+  });
   const send = (obj) => proxy.stdin.write(JSON.stringify(obj) + "\n");
   try {
-    return await fn({ proxy, send, wait, responses, statePath });
+    return await fn({ proxy, send, wait, waitMethod, responses, statePath });
   } finally {
     try { proxy.stdin.end(); } catch {}
     await new Promise((resolve) => proxy.once("close", resolve));
@@ -162,23 +170,15 @@ test("1 branch drift: named refusal, no forward, .mcp.json untouched by the refu
 test("2 manual edit of .mcp.json: same detector, named project_server_drifted on a live call", async () => {
   const ctx = setup("f5-edit-");
   assert.equal(runSeal(ctx, ["protect", "db", "demo.mutate"]).code, 0);
-  await withProxy(ctx, async ({ send, wait }) => {
-    send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  await withProxy(ctx, async ({ send, wait, waitMethod }) => {
+    send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { capabilities: { elicitation: {} } } });
     await wait(1);
     send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "held" } } });
-    const opened = await wait(2);
-    assert.equal(opened.result.resultType, "input_required");
+    const elicitation = await waitMethod("elicitation/create");
     writeProject(ctx.project, { command: process.execPath, args: [SEAL, "__demo-server", ctx.dataFile, "--hand-edit"] });
     const before = snapshot(ctx);
-    send({
-      jsonrpc: "2.0", id: 3, method: "tools/call",
-      params: {
-        name: "demo.mutate", arguments: { line: "held" },
-        requestState: opened.result.requestState,
-        inputResponses: { approval: { action: "accept", content: { approve: true } } },
-      },
-    });
-    const refused = await wait(3);
+    send({ jsonrpc: "2.0", id: elicitation.id, result: { action: "accept", content: { approve: true } } });
+    const refused = await wait(2);
     assert.match(refused.result.content[0].text, /project_server_drifted/);
     assert.equal(countOf(ctx.dataFile), "0");
     assert.equal(sha256(fs.readFileSync(ctx.mcpPath)), before.mcp);

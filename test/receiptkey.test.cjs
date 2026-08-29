@@ -69,6 +69,27 @@ function waitForJson(stream, id, timeoutMs = 8000) {
   });
 }
 
+function waitForMethod(stream, method, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    let buffered = "";
+    const timeout = setTimeout(() => reject(new Error(`timed out waiting for request ${method}: ${buffered}`)), timeoutMs);
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      buffered += chunk;
+      const lines = buffered.split("\n");
+      buffered = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const frame = JSON.parse(line);
+        if (frame.method === method) {
+          clearTimeout(timeout);
+          resolve(frame);
+        }
+      }
+    });
+  });
+}
+
 test("protected-path receipts carry the durable signer through proxy-cli's enumerated rebuild", async () => {
   const ctx = fixture();
   const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", ctx.statePath], {
@@ -80,14 +101,20 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   proxy.stderr.setEncoding("utf8");
   proxy.stderr.on("data", (chunk) => { stderr += chunk; });
   try {
-    const response = waitForJson(proxy.stdout, 1);
+    const initialized = waitForJson(proxy.stdout, 0);
+    proxy.stdin.write(`${JSON.stringify({
+      jsonrpc: "2.0", id: 0, method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+    })}\n`);
+    await initialized;
+    const response = waitForMethod(proxy.stdout, "elicitation/create");
     proxy.stdin.write(`${JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/call",
       params: { name: "demo.mutate", arguments: { line: "receipt-key-control" } },
     })}\n`);
-    assert.equal((await response).result.resultType, "input_required");
+    assert.match((await response).id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
   } finally {
     proxy.stdin.end();
     await new Promise((resolve) => proxy.once("close", resolve));

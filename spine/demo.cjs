@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // `seal demo` — wired ON TOP of the shared retry-model spine. The demo is
 // the proxy protecting this binary's own hidden MCP server; the demo process
-// plays the CLIENT role of the retry protocol: it receives input_required,
-// displays the contract's message, collects the answer, and sends the fresh
-// retry call. That display-and-answer duty is the whole renderer role here —
+// plays the CLIENT role of the protocol: it receives elicitation/create,
+// displays the contract's message, collects the answer, and sends the
+// matching response. That display-and-answer duty is the renderer role here —
 // the effect, the scope, the approval record and the execute/refuse decision
 // all live in the proxy and its contract.
 // Every count printed is read back from the child's count file, never
@@ -118,6 +118,8 @@ async function run(argv, sealBinPath) {
   const receiptsDir = path.join(dir, "receipts");
 
   const pendingById = new Map();
+  const elicitationRequests = [];
+  const elicitationWaiters = [];
   const receiptPaths = [];
 
   const signer = generateSigner();
@@ -135,6 +137,12 @@ async function run(argv, sealBinPath) {
       childArgv: [process.execPath, sealBinPath, "__demo-server", dataFile],
       onClientLine: (line) => {
         const frame = JSON.parse(line);
+        if (frame.method === "elicitation/create") {
+          const waiter = elicitationWaiters.shift();
+          if (waiter) waiter(frame);
+          else elicitationRequests.push(frame);
+          return;
+        }
         const resolve = pendingById.get(frame.id);
         if (resolve) { pendingById.delete(frame.id); resolve(frame); }
       },
@@ -159,11 +167,15 @@ async function run(argv, sealBinPath) {
     }
     return promise;
   }
+  function nextElicitation() {
+    if (elicitationRequests.length > 0) return Promise.resolve(elicitationRequests.shift());
+    return new Promise((resolve) => elicitationWaiters.push(resolve));
+  }
+  function answerElicitation(id, action, content) {
+    const result = content === undefined ? { action } : { action, content };
+    proxy.write(JSON.stringify({ jsonrpc: "2.0", id, result }));
+  }
   const baseParams = () => ({ name: TOOL, arguments: { line: DEMO_LINE } });
-  const retryParams = (requestState, action, content) => ({
-    ...baseParams(), requestState,
-    inputResponses: { approval: content === undefined ? { action } : { action, content } },
-  });
 
   async function stopAnd(exitCode) {
     await proxy.stop();
@@ -173,7 +185,7 @@ async function run(argv, sealBinPath) {
   console.log("seal demo — one shared proxy, one hidden child, one real file");
   await waitForFile(countFile);
 
-  await send("initialize", { protocolVersion: "2026-07-28" });
+  await send("initialize", { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } });
   const listed = await send("tools/list", {});
   for (const tool of listed.result?.tools || []) {
     if (tool.name === TOOL) console.log(`tool      ${tool.name}  guarded`);
@@ -189,13 +201,10 @@ async function run(argv, sealBinPath) {
   if (before !== "0") fail(`expected a fresh child at 0 observed calls, count file reads ${before}`);
   console.log(`child calls observed: ${before} (read from ${countFile})`);
 
-  const opened = await send("tools/call", baseParams());
-  if (opened.result?.resultType !== "input_required") {
-    fail(`expected input_required from the shared proxy, got: ${JSON.stringify(opened).slice(0, 200)}`);
-  }
-  const requestState = opened.result.requestState;
-  const message = opened.result.inputRequests?.approval?.params?.message;
-  if (typeof message !== "string") fail("input_required carried no approval message to display");
+  const guardedCall = send("tools/call", baseParams());
+  const elicitation = await nextElicitation();
+  const message = elicitation.params?.message;
+  if (typeof message !== "string") fail("elicitation/create carried no approval message to display");
   console.log("INPUT REQUIRED  the proxy holds this call's approval; the contract's message:");
   console.log(message.split("\n").map((line) => `    ${line}`).join("\n"));
   const shown = readCount(countFile);
@@ -209,7 +218,8 @@ async function run(argv, sealBinPath) {
     process.exit(1);
   }
   if (answer.value !== "y") {
-    const declined = await send("tools/call", retryParams(requestState, "decline"));
+    answerElicitation(elicitation.id, "decline");
+    const declined = await guardedCall;
     const text = declined.result?.content?.[0]?.text || "";
     const count = readCount(countFile);
     console.log(`DECLINED  the proxy refused the retry: "${text}"`);
@@ -217,19 +227,20 @@ async function run(argv, sealBinPath) {
     return stopAnd(count === "0" ? 0 : 1);
   }
 
-  const flowed = await send("tools/call", retryParams(requestState, "accept", { approve: true }));
+  answerElicitation(elicitation.id, "accept", { approve: true });
+  const flowed = await guardedCall;
   if (flowed.result?.isError) fail(`the approved retry was refused: "${flowed.result.content[0].text}"`);
   console.log(`child replied through the shared proxy: "${flowed.result.content[0].text}"`);
   const after = readCount(countFile);
   if (after !== "1") fail(`the child's own count file reads ${after}, not 1; refusing to describe this as a single call`);
   console.log(`child calls observed: ${after} (read from ${countFile})`);
 
-  console.log("replaying the identical retry with the same requestState…");
-  const replayed = await send("tools/call", retryParams(requestState, "accept", { approve: true }));
-  if (replayed.result?.isError !== true) fail("the replayed retry flowed; one-use was NOT enforced — this is a defect");
+  console.log("replaying the identical elicitation response with the same id…");
+  answerElicitation(elicitation.id, "accept", { approve: true });
+  await new Promise((resolve) => setTimeout(resolve, 50));
   const finalCount = readCount(countFile);
   if (finalCount !== "1") fail(`after the replay the child's count file reads ${finalCount}, not 1`);
-  console.log(`BLOCKED   the shared proxy refused the replay: "${replayed.result.content[0].text}"`);
+  console.log('BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed"');
   console.log(`one-use held: the replay did not run the call again; child calls observed: still ${finalCount} (read from ${countFile})`);
 
   for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
