@@ -75,6 +75,10 @@ test("a coveredBy marker must exist in the cited proof file", () => {
       encoding: "utf8",
     });
     assert.notEqual(result.status, 0, result.stderr);
+    // This asserts the exact FAIL line is emitted, anchored to a whole line.
+    // It does not assert no other output. This line and a contradicting line would pass.
+    // The anchors exist because an unanchored match accepted a reversing prefix.
+    // The remaining gap needs a deliberate product edit. That editor can delete this test.
     assert.match(result.stderr, /^FAIL  fixture\.md: coveredBy "test\/proof\.mjs#missing-marker" marker missing-marker in test\/proof\.mjs does not bind CLAIM-COVERAGE: fixture\.md$/m);
   } finally {
     rmSync(worktree, { recursive: true, force: true });
