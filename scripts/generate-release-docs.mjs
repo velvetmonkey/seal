@@ -437,13 +437,14 @@ function publishedSurfaceChanges(manifest) {
   const tag = manifest.tag;
   const releaseNotes = `RELEASE-NOTES-${tag}.md`;
   const version = tag.slice(1);
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const checkerUrl = `https://github.com/${REPOSITORY}/releases/download/${tag}/${manifest.checker.name}`;
   const notePattern = new RegExp(`RELEASE-NOTES-v${SEMVER}\\.md`);
   const archiveScopeFiles = [
     "docs/archive/AUTHORIZATION-MESH.md",
     "docs/archive/CLAIMS-MATRIX.md",
     "docs/archive/LIMITATIONS.md",
-    "docs/archive/TRUTH-BOX.md",
     "docs/archive/WHAT-SEAL-IS.md",
     "docs/archive/WHY-DIFFERENT.md",
     "docs/assurance/architecture.md",
@@ -452,6 +453,9 @@ function publishedSurfaceChanges(manifest) {
     ...archiveScopeFiles.map((relative) => replacePublishedSurface(relative, [
       [notePattern, releaseNotes, "published release-note route"],
     ])),
+    replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
+      [notePattern, `RELEASE-NOTES-v${sourceVersion}.md`, "source-version release-note route"],
+    ]),
     replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],

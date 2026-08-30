@@ -10,6 +10,8 @@ import { spawnSync } from "node:child_process";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = resolve(ROOT, "scripts/claims-drift.mjs"); // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#limitations; CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box; CLAIM-COVERAGE: docs/assurance/index.html#index-drift
 const README = resolve(ROOT, "README.md");
+const TRUTH_BOX = resolve(ROOT, "docs/archive/TRUTH-BOX.md");
+const INDEX = resolve(ROOT, "docs/assurance/index.html");
 const COVERED_CLAIM_FILES = [
   "docs/archive/LIMITATIONS.md", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#limitations-list
   "docs/archive/TRUTH-BOX.md", // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box-list
@@ -65,5 +67,38 @@ test("an empty claims-drift block population is a refusal", () => {
     assert.match(run.stderr, /claims-drift block population is empty/);
   } finally {
     writeFileSync(GUARD, guard);
+  }
+});
+
+test("the truth-box guard reads the mirrored fact instead of its assertion sentence", () => {
+  const truthBox = readFileSync(TRUTH_BOX, "utf8");
+  const index = readFileSync(INDEX, "utf8");
+  const withoutAssertion = truthBox.replace(
+    "non-claim. index.html mirrors these three lines verbatim between the same",
+    "non-claim.",
+  );
+  const driftedFact = index.replace(
+    "Runtime profile: `compatible`",
+    "Runtime profile: `drifted`",
+  );
+  assert.notEqual(withoutAssertion, truthBox, "test must remove the assertion sentence");
+  assert.notEqual(driftedFact, index, "test must change the mirrored fact");
+
+  writeFileSync(TRUTH_BOX, withoutAssertion);
+  try {
+    const sentenceMissing = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(sentenceMissing.status, 0, `${sentenceMissing.stdout}${sentenceMissing.stderr}`);
+  } finally {
+    writeFileSync(TRUTH_BOX, truthBox);
+  }
+
+  writeFileSync(INDEX, driftedFact);
+  try {
+    const factWrong = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
+    const output = `${factWrong.stdout}${factWrong.stderr}`;
+    assert.equal(factWrong.status, 1, output);
+    assert.match(output, /docs\/assurance\/index\.html diverges from docs\/archive\/TRUTH-BOX\.md/);
+  } finally {
+    writeFileSync(INDEX, index);
   }
 });
