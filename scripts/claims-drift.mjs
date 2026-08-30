@@ -19,12 +19,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BLOCKS = [
   { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#claims-block; CLAIM-COVERAGE: docs/assurance/index.html#claims-block
     canonical: "docs/archive/LIMITATIONS.md", mirrors: ["docs/assurance/index.html"] },
+  { begin: "<!-- truthbox:begin -->", end: "<!-- truthbox:end -->", // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box; CLAIM-COVERAGE: docs/assurance/index.html#truth-box
+    canonical: "docs/archive/TRUTH-BOX.md", mirrors: ["docs/assurance/index.html"] },
 ];
 
 const CLAIM_MANIFEST = [
   ["docs/archive/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
   ["docs/archive/README.md", "This archive has eighteen files registered with claim-bearing-file-inventory; removing its WHAT-IS document makes that check fail, removing AUTHORIZATION-RECORD.md makes claim-coverage-inventory fail, and removing this README makes claims-drift fail."],
-  ["docs/archive/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#claims-drift
   ["docs/assurance/linkcheck-population-control.md", "separate-source\ncross-check"],
 ];
 
