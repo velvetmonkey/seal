@@ -660,6 +660,8 @@ function observeDecline(state, begin, end) {
 
 function observeMissingLauncher(state, begin, end) {
   const records = newRecords(begin, end);
+  const childCalls = records.filter((record) => record.kind === "child-call");
+  const lifecycleRecords = records.filter((record) => record.kind !== "child-call");
   const window = state.steps.missing_launcher || {};
   const castPath = path.join(state.paths.logs, "missing_launcher.cast");
   const correspondence = recordingCorrespondence(state, "missing_launcher", castPath);
@@ -668,12 +670,16 @@ function observeMissingLauncher(state, begin, end) {
   // that the human saw a failure report. A real client emits model prose that
   // differs on every run. The old required strings came only from our stand-in.
   return {
-    observed: records.length === 0 && begin.mcp_json.sha256 === end.mcp_json.sha256 &&
+    observed: childCalls.length === 0 && begin.mcp_json.sha256 === end.mcp_json.sha256 &&
       window.launcher_absent_during_window === true && window.installed_tree_restored === true &&
       correspondence.observed,
     facts: {
-      protected_server_records_added: records.length,
+      protected_server_records_added: childCalls.length,
+      child_call_records_added: childCalls.length,
+      lifecycle_records_added: lifecycleRecords.length,
+      records_added_total: records.length,
       records_added: records.map((record) => ({ kind: record.kind, argv: record.argv ?? null })),
+      offending_child_call_records: childCalls,
       launcher_path: window.launcher_path ?? null,
       launcher_absent_during_window: window.launcher_absent_during_window ?? null,
       seal_version_while_absent: window.seal_version_while_absent ?? null,
@@ -1216,12 +1222,22 @@ function certifyStep(state, step) {
         else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
       } else if (caseId === "missing_launcher") {
         if (!outcome.facts.recorder_correspondence?.observed) failures.push(`${caseId}: missing_launcher.cast does not correspond to recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-        else failures.push(`${caseId}: required positive evidence is absent`);
+        else if (outcome.facts.child_call_records_added !== 0) failures.push(`${caseId}: child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_added}); offending child-call records: ${JSON.stringify(outcome.facts.offending_child_call_records)}`);
+        else if (outcome.facts.mcp_json_sha256_before !== outcome.facts.mcp_json_sha256_after) failures.push(`${caseId}: mcp_json_sha256_before must equal mcp_json_sha256_after (observed ${outcome.facts.mcp_json_sha256_before} and ${outcome.facts.mcp_json_sha256_after})`);
+        else if (outcome.facts.launcher_absent_during_window !== true) failures.push(`${caseId}: launcher_absent_during_window must equal true (observed ${outcome.facts.launcher_absent_during_window})`);
+        else if (outcome.facts.installed_tree_restored !== true) failures.push(`${caseId}: installed_tree_restored must equal true (observed ${outcome.facts.installed_tree_restored})`);
+        else failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
       } else if (caseId === "unprotect") {
         if (outcome.facts.unprotect_exit !== 0) failures.push(`${caseId}: seal unprotect notes did not succeed (exit ${outcome.facts.unprotect_exit ?? "absent"})`);
         else failures.push(`${caseId}: the local override removal and byte-identical project configuration evidence is absent`);
+      } else if (caseId === "negotiation") {
+        failures.push(`${caseId}: retry_round_trips must be greater than 0 (observed ${outcome.facts.retry_round_trips})`);
+      } else if (caseId === "before_approval") {
+        failures.push(`${caseId}: child_call_records_at_end_of_window must equal 0 and child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_at_end_of_window} and ${outcome.facts.child_call_records_added})`);
+      } else if (caseId === "accept") {
+        failures.push(`${caseId}: child_call_records_added must equal 1, child_call_records_total must equal 1, and observed_effect_sha256 must equal expected_effect_sha256 (observed ${outcome.facts.child_call_records_added}, ${outcome.facts.child_call_records_total}, ${outcome.facts.observed_effect_sha256}, and ${outcome.facts.expected_effect_sha256})`);
       } else {
-        failures.push(`${caseId}: required positive evidence is absent`);
+        failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
       }
     }
   }

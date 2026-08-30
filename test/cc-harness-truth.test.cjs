@@ -240,6 +240,76 @@ test("missing_launcher certifies recorder facts without stand-in screen text", (
   assert.equal(harness.loadState(runDir).step_index, 4);
 });
 
+test("missing_launcher ignores harness probe lifecycle records but names a fallback child call", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-missing-launcher-lifecycle-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  runSyntheticStep(harness, runDir, "accept", harness.NOTES.accept);
+  const noOp = path.join(workspace, "no-op-client");
+  fs.writeFileSync(noOp, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const state = harness.loadState(runDir);
+  state.claude.command = noOp;
+  harness.saveState(state);
+  harness.next(harness.loadState(runDir));
+
+  const endPath = path.join(runDir, "snapshots", "missing_launcher.end.json");
+  const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+  const probeRecords = [
+    { kind: "start", argv: ["claude", "mcp", "get", "notes"] },
+    { kind: "frame", frame: "initialize" },
+    { kind: "frame", frame: "tools/list" },
+    { kind: "frame", frame: "tools/call" },
+    { kind: "exit", code: 0 },
+  ];
+  end.child_log.records.push(...probeRecords);
+  end.child_log.lines += probeRecords.length;
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+
+  let outcome = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "missing_launcher");
+  assert.equal(outcome.result, "OBSERVED", JSON.stringify(outcome.facts));
+  assert.equal(outcome.facts.child_call_records_added, 0);
+  assert.equal(outcome.facts.lifecycle_records_added, 5);
+  assert.equal(outcome.facts.records_added_total, 5);
+  assert.deepEqual(outcome.facts.offending_child_call_records, []);
+
+  const mcpJsonSha256 = end.mcp_json.sha256;
+  end.mcp_json.sha256 = "mcp-json-changed";
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+  outcome = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "missing_launcher");
+  assert.equal(outcome.result, "NOT OBSERVED", JSON.stringify(outcome.facts));
+  end.mcp_json.sha256 = mcpJsonSha256;
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+
+  const launcherPresent = harness.loadState(runDir);
+  launcherPresent.steps.missing_launcher.launcher_absent_during_window = false;
+  harness.saveState(launcherPresent);
+  outcome = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "missing_launcher");
+  assert.equal(outcome.result, "NOT OBSERVED", JSON.stringify(outcome.facts));
+  launcherPresent.steps.missing_launcher.launcher_absent_during_window = true;
+  harness.saveState(launcherPresent);
+
+  const fallback = { kind: "child-call", tool: "append_note", arguments: { note: "fallback leaked" }, argv: ["append_note", "fallback leaked"] };
+  end.child_log.records.push(fallback);
+  end.child_log.lines += 1;
+  end.child_log.guarded_calls += 1;
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+  outcome = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "missing_launcher");
+  assert.equal(outcome.result, "NOT OBSERVED", JSON.stringify(outcome.facts));
+  assert.deepEqual(outcome.facts.offending_child_call_records, [fallback]);
+
+  const retry = harness.loadState(runDir);
+  retry.step_index = 3;
+  retry.steps.missing_launcher.attempted = true;
+  harness.saveState(retry);
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /missing_launcher: child_call_records_added must equal 0 \(observed 1\); offending child-call records:.*fallback leaked/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 3);
+});
+
 test("unprotect refuses when its successful removal command is absent", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-unprotect-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
