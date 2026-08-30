@@ -2,8 +2,9 @@
 // Regression: a fatal manifest read must not mask later claim drift.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -21,6 +22,35 @@ const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->"
   ? README
   : resolve(ROOT, "docs/assurance/index.html");
 const UNREADABLE = resolve(ROOT, "docs/.claims-drift-unreadable");
+
+const FIXTURE_FILES = [
+  "docs/archive/LIMITATIONS.md",
+  "docs/archive/README.md",
+  "docs/archive/TRUTH-BOX.md",
+  "docs/assurance/index.html",
+  "docs/assurance/linkcheck-population-control.md",
+  "scripts/claim-bearing-files.json",
+  "scripts/linkcheck.mjs",
+  "test/linkcheck.test.mjs",
+];
+
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), "seal-claims-drift-"));
+  for (const file of FIXTURE_FILES) {
+    const target = resolve(root, file);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(resolve(ROOT, file), target);
+  }
+  return root;
+}
+
+function runFixture(root) {
+  return spawnSync(process.execPath, [GUARD], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, SEAL_CLAIMS_DRIFT_ROOT: root },
+  });
+}
 
 test("fatal manifest read first still reports later drift", () => {
   const guard = readFileSync(GUARD, "utf8");
@@ -101,4 +131,64 @@ test("the truth-box guard reads the mirrored fact instead of its assertion sente
   } finally {
     writeFileSync(INDEX, index);
   }
+});
+
+test("the archive count guard reads registrations in both directions", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const manifestPath = resolve(root, "scripts/claim-bearing-files.json");
+  const source = readFileSync(manifestPath, "utf8");
+  const manifest = JSON.parse(source);
+  const archiveFiles = Object.keys(manifest.files).filter((file) => file.startsWith("docs/archive/"));
+  assert.equal(archiveFiles.length, 19, "test baseline must contain nineteen registered archive files");
+
+  const added = structuredClone(manifest);
+  added.files["docs/archive/EXTRA.md"] = { allowlistReason: "count guard mutation" };
+  writeFileSync(manifestPath, `${JSON.stringify(added, null, 2)}\n`);
+  const addedRun = runFixture(root);
+  assert.equal(addedRun.status, 1, `${addedRun.stdout}${addedRun.stderr}`);
+  assert.match(addedRun.stderr, /registers 20 archive files; expected 19/u);
+
+  const removed = structuredClone(manifest);
+  delete removed.files[archiveFiles[0]];
+  writeFileSync(manifestPath, `${JSON.stringify(removed, null, 2)}\n`);
+  const removedRun = runFixture(root);
+  assert.equal(removedRun.status, 1, `${removedRun.stdout}${removedRun.stderr}`);
+  assert.match(removedRun.stderr, /registers 18 archive files; expected 19/u);
+});
+
+test("converted guards do not depend on their assertion sentences", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const archiveReadmePath = resolve(root, "docs/archive/README.md");
+  const linkcheckControlPath = resolve(root, "docs/assurance/linkcheck-population-control.md");
+  const archiveReadme = readFileSync(archiveReadmePath, "utf8");
+  const linkcheckControl = readFileSync(linkcheckControlPath, "utf8");
+  const withoutArchiveAssertion = archiveReadme.replace(
+    "Seal registers nineteen archive files with claim-bearing-file-inventory.\n",
+    "",
+  );
+  const withoutLinkcheckAssertion = linkcheckControl.replace(
+    "This is a **separate-source\ncross-check**, not a separately implemented population oracle.",
+    "This is not a separately implemented population oracle.",
+  );
+  assert.notEqual(withoutArchiveAssertion, archiveReadme, "test must remove the archive assertion");
+  assert.notEqual(withoutLinkcheckAssertion, linkcheckControl, "test must remove the linkcheck assertion");
+
+  writeFileSync(archiveReadmePath, withoutArchiveAssertion);
+  writeFileSync(linkcheckControlPath, withoutLinkcheckAssertion);
+  const run = runFixture(root);
+  assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+});
+
+test("the linkcheck separate-source guard rejects a product-logic import", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const linkcheckTestPath = resolve(root, "test/linkcheck.test.mjs");
+  const source = readFileSync(linkcheckTestPath, "utf8");
+  const imported = `${source}\nimport { markdownDestinations } from "../scripts/linkcheck.mjs";\n`;
+  writeFileSync(linkcheckTestPath, imported);
+  const run = runFixture(root);
+  assert.equal(run.status, 1, `${run.stdout}${run.stderr}`);
+  assert.match(run.stderr, /must execute scripts\/linkcheck\.mjs and reconstruct expected targets without importing or requiring product logic/u);
 });

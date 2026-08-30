@@ -10,6 +10,7 @@
     "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs#result"] },
     "docs/SEAL-RECEIPT-V2.md": { "coveredBy": ["test/receipt-v2-doc-contract.test.mjs#receipt-v2"] },
     "docs/archive/findings.md": { "allowlistReason": "A dated cross-repository audit record cites repositories and evidence not present here; no local deterministic check can establish those historical external facts." },
+    "docs/archive/README.md": { "coveredBy": ["scripts/claims-drift.mjs#archive-count"] },
     "README.md": { "coveredBy": ["test/frontdoor.test.mjs#readme"] },
     "docs/README.md": { "coveredBy": ["test/frontdoor.test.mjs#docs-readme"] },
     ".github/workflows/macos.yml": { "allowlistReason": "This workflow is the external macOS execution evidence itself; its claims require a GitHub-hosted macOS runner and cannot be established by a repository-local deterministic check." },
