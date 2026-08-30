@@ -217,9 +217,17 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines[1], "Tool: demo.mutate");
   assert.equal(rendered.lines[2], "Arguments:");
   assert.equal(rendered.lines[3], `  line: ${canonicalString(ARGS.line)}`);
-  assert.match(rendered.lines[4], /^Scope: this parsed call \(key order and 1\/1\.0 match\); at most one run; 2 min\.$/);
+  assert.match(rendered.lines[4], /^Scope: this parsed call \(key order, 1\/1\.0 match\); at most one run; 2 min\.$/);
   assert.equal(rendered.lines[5], "Outside Seal: Bash, network, subprocesses, other tools and servers.");
   assert.equal(rendered.lines.length, 6);
+});
+
+test("every fixed approval message line fits the measured default width", () => {
+  const rendered = renderApprovalMessage(TOOL, ARGS);
+  assert.ok(rendered.ok, rendered.reason);
+  for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[4], rendered.lines[5]]) {
+    assert.ok(displayWidth(line) <= 74, `fixed line exceeds 74 columns: ${line}`);
+  }
 });
 
 test("the approval schema description derives from the actual argument lines", () => {

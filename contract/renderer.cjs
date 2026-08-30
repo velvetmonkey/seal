@@ -23,7 +23,7 @@ const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
 const WIDTH_MARGIN = 6;
-const SCOPE_RULE = "this parsed call (key order and 1/1.0 match); at most one run";
+const SCOPE_RULE = "this parsed call (key order, 1/1.0 match); at most one run";
 const OUTSIDE_LINE = "Outside Seal: Bash, network, subprocesses, other tools and servers.";
 const BARE_VALUE = /^[A-Za-z0-9_.\/:@-]+$/;
 
