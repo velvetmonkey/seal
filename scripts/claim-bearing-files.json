@@ -56,7 +56,7 @@
     "docs/archive/OPEN-FINDINGS.md": { "allowlistReason": "This is an open-issues ledger; its entries explicitly await external investigation and therefore have no settled repository-local oracle." },
     "docs/archive/PUBLIC-FLIP-CHECKLIST.md": { "allowlistReason": "This release-readiness checklist depends on human publication decisions and external service state, neither available to a repository-local check." },
     "docs/assurance/README.md": { "allowlistReason": "The only Seal-language in this index is the stated scope of links to named manuals; link destinations are checked by scripts/linkcheck.mjs, while suitability of that navigation is an editorial decision rather than a product-behavior claim." },
-    "docs/PROTECTED-PATH-RULINGS.json": { "coveredBy": ["scripts/run-complete-product-suite.sh#protected-paths-checker", "scripts/run-complete-product-suite.sh#protected-paths"] },
+    "docs/PROTECTED-PATH-RULINGS.json": { "governanceRecord": "Protected-path rulings are permanently claim-bearing governance records.", "coveredBy": ["scripts/run-complete-product-suite.sh#protected-paths-checker", "scripts/run-complete-product-suite.sh#protected-paths"] },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.md": { "allowlistReason": "Release notes are a dated historical record; their shipped-release assertions require release provenance outside a source-tree behavior test." },
     "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-rc3"] },
     "docs/assurance/RELEASE-NOTES-v0.2.0.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-final"] },

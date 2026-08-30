@@ -215,6 +215,12 @@ for (const path of tracked) {
   if (text === null) { fail(`${path}: text kind is unclassified (contains NUL bytes; add a bounded binary exclusion with a reason if appropriate)`); continue; }
   if (carriesClaim(text, path)) inventory.push(path);
 }
+// governanceRecord only ever adds its tracked file to the claim surface.
+// It cannot exclude a file or bypass any coverage validation below.
+for (const [path, entry] of Object.entries(manifest.files)) {
+  if (typeof entry?.governanceRecord === "string" && entry.governanceRecord.trim() !== ""
+    && tracked.has(path) && !inventory.includes(path)) inventory.push(path);
+}
 for (const [path, entry] of Object.entries(manifest.files)) {
   if (!inventory.includes(path)) fail(`${path}: manifest entry is not a current claim-bearing file`);
   if (!entry || typeof entry !== "object") { fail(`${path}: manifest entry must be an object`); continue; }
@@ -224,6 +230,8 @@ for (const [path, entry] of Object.entries(manifest.files)) {
     if (problem) fail(`${path}: coveredBy ${JSON.stringify(reference)} ${problem}`);
   }
   const reason = entry.allowlistReason;
+  const governanceRecord = typeof entry.governanceRecord === "string" && entry.governanceRecord.trim() !== "";
+  if (governanceRecord && !covered) fail(`${path}: governanceRecord requires coveredBy`);
   if (!covered && (typeof reason !== "string" || reason.trim() === "")) {
     fail(`${path}: no covering check and allowlistReason is empty`);
   }
