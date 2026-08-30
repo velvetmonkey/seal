@@ -486,7 +486,7 @@ function proxyEvidenceForStart(record, protectStatePath, expectedDigest) {
   let hasDigest = false;
   let hasWrongPositionDigest = false;
   for (const step of candidates) {
-    // ASSUMED BOUNDARY — This step proves NO FALLBACK OCCURRED UNDER A
+    // ASSUMED BOUNDARY — This step tests NO FALLBACK OCCURRED UNDER A
     // CARELESS CLIENT. It does NOT prove NO FALLBACK OCCURRED under a HOSTILE
     // PARENT. The ancestry record is self-reported from /proc. Nothing
     // authenticates it. Tightening this match further cannot close this limit
