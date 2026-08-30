@@ -274,6 +274,102 @@ test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
   assert.equal(provisionAttempts, 2);
 });
 
+test("pinned toolchain provisioning refuses when the failed provisioner removed its stage", (t) => {
+  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-absent-source-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  const source = path.join(work, "pinned-source");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        fs.rmSync(source, { recursive: true, force: true });
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /pinned source stage is absent/);
+  assert.equal(cloneAttempts, 1);
+  assert.equal(provisionAttempts, 1);
+});
+
+test("pinned toolchain provisioning refuses when the source name changes before delete", (t) => {
+  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-changed-source-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  const source = path.join(work, "pinned-source");
+  const accepted = path.join(work, "accepted-source");
+  const replacementCanary = path.join(source, "replacement-canary");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  let swapped = false;
+  const originalRealpathSync = fs.realpathSync;
+  fs.realpathSync = function swapAfterResolvedChecks(target, options) {
+    if (!swapped && target === path.resolve(__dirname, "..")) {
+      fs.renameSync(source, accepted);
+      fs.mkdirSync(source);
+      fs.writeFileSync(replacementCanary, "must survive\n");
+      swapped = true;
+    }
+    return originalRealpathSync.call(this, target, options);
+  };
+  try {
+    assert.throws(() => buildPinnedKernel(TAG, work, {
+      clonePinnedSource(_pin, destination) {
+        cloneAttempts += 1;
+        fs.mkdirSync(destination, { recursive: true });
+      },
+      child(command, args) {
+        if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+          provisionAttempts += 1;
+          throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        }
+      },
+    }), /pinned source stage changed before delete/);
+  } finally {
+    fs.realpathSync = originalRealpathSync;
+  }
+  assert.equal(cloneAttempts, 1);
+  assert.equal(provisionAttempts, 1);
+  assert.equal(fs.readFileSync(replacementCanary, "utf8"), "must survive\n");
+  assert.equal(fs.existsSync(accepted), true);
+});
+
+test("pinned toolchain provisioning retries through a symbolic work path", (t) => {
+  const root = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-work-symlink-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const physicalWork = path.join(root, "physical-work");
+  const work = path.join(root, "work-link");
+  const source = path.join(work, "pinned-source");
+  fs.mkdirSync(physicalWork);
+  fs.symlinkSync(physicalWork, work, "dir");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  const rebuilt = buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        if (provisionAttempts === 1) throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+      if (command === "./build_wasm.sh") {
+        const output = path.join(source, "wasm-spike", "build-core", "seal.wasm");
+        fs.mkdirSync(path.dirname(output), { recursive: true });
+        fs.writeFileSync(output, PUBLISHED_KERNEL);
+      }
+    },
+  });
+  assert.equal(cloneAttempts, 2);
+  assert.equal(provisionAttempts, 2);
+  assert.equal(rebuilt, path.join(source, "wasm-spike", "build-core", "seal.wasm"));
+});
+
 test("pinned toolchain provisioning refuses a source symlink outside the resolved work directory", (t) => {
   const root = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
