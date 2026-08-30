@@ -17,6 +17,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { createHash } = require("node:crypto");
+const harness = require("../harness/claude-code/cc-harness.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
@@ -26,6 +27,90 @@ const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "assurance", "claude-code-eviden
 const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
 
 let sharedPack = null;
+
+const INSTALLED_SEAL_DIGEST = { present: true, sha256: "a".repeat(64) };
+
+test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
+  const directStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    // This is the process chain from a direct .mcp.json launch. It has no
+    // Seal proxy entry. The later initialize and tools/list frames do not
+    // change the start record or make the launch mediated.
+    ancestry: [{ pid: 1, argv: ["/usr/bin/bash", "client"] }],
+  };
+  const hiddenByRoundTwo = [directStart].filter((record) => record.kind === "child-call");
+  assert.equal(hiddenByRoundTwo.length, 0, "the round-2 child-call-only filter hides this start");
+  assert.deepEqual(harness.nonProxyStarts([directStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [directStart]);
+});
+
+test("missing launcher refuses a start whose ancestry is absent", () => {
+  const unreadableStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+  };
+  assert.deepEqual(harness.nonProxyStarts([unreadableStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [unreadableStart]);
+});
+
+test("missing launcher accepts a harness probe start below the Seal proxy", () => {
+  const probeStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [
+      {
+        pid: 42,
+        argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"],
+        script: { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
+        argv_files: [{ path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 }],
+      },
+    ],
+  };
+  assert.deepEqual(harness.nonProxyStarts([probeStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), []);
+});
+
+test("missing launcher refuses a parent that only mentions the installed Seal script", () => {
+  const mentionOnlyStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{
+      pid: 42,
+      argv: [process.execPath, "other-parent.cjs", "__proxy", "--protect-state", "/state/protect.json", "bin/seal"],
+      script: { path: "other-parent.cjs", sha256: "b".repeat(64) },
+      argv_files: [
+        { path: "other-parent.cjs", sha256: "b".repeat(64) },
+        { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
+      ],
+    }],
+  };
+  assert.deepEqual(harness.nonProxyStarts([mentionOnlyStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [mentionOnlyStart]);
+  assert.equal(harness.proxyEvidenceForStart(mentionOnlyStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest at the wrong position");
+});
+
+test("missing launcher refuses a lookalike parent that carries proxy words", () => {
+  const lookalikeStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{
+      pid: 42,
+      argv: [process.execPath, "lookalike-chain.cjs", "__proxy", "--protect-state", "/state/protect.json"],
+      script: { path: "lookalike-chain.cjs", sha256: "b".repeat(64) },
+      argv_files: [{ path: "lookalike-chain.cjs", sha256: "b".repeat(64) }],
+    }],
+  };
+  // The previous matcher accepted this record from its argv substrings.
+  assert.deepEqual(harness.nonProxyStarts([lookalikeStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [lookalikeStart]);
+  assert.equal(harness.proxyEvidenceForStart(lookalikeStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest mismatch");
+});
+
+test("missing launcher refuses a proxy-shaped ancestor whose digest is absent", () => {
+  const unreadableProxyStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{ pid: 42, argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"], argv_files: [] }],
+  };
+  assert.deepEqual(harness.nonProxyStarts([unreadableProxyStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [unreadableProxyStart]);
+  assert.equal(harness.proxyEvidenceForStart(unreadableProxyStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest absent");
+});
 
 // One synthetic run serves every test in this file: it installs the built
 // artifact, protects a fixture server, drives the whole eight-case walk with
