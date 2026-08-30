@@ -310,6 +310,11 @@ function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
     if (!pathWithin(source, work) || path.dirname(source) !== work || source === ROOT) {
       refuse(`pinned source stage is not disposable: ${source}`);
     }
+    const resolvedSource = fs.realpathSync(source);
+    const resolvedWork = fs.realpathSync(work);
+    if (!pathWithin(resolvedSource, resolvedWork) || path.dirname(resolvedSource) !== resolvedWork || resolvedSource === fs.realpathSync(ROOT)) {
+      refuse(`pinned source stage is not disposable: ${source}`);
+    }
     makeTreeRemovable(source);
     fs.rmSync(source, { recursive: true, force: true });
     process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
