@@ -18,13 +18,28 @@ const GUIDE_SHA256 = "dd785473baa5573b4dbc604fc2d485f67c7850d17a10b2bcf30415f875
 
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
-const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)", "gm");
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)", "gm");
+const GENERATED_PLATFORM_SLOTS = [
+  [
+    "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
+    "macOS source portability is CI-exercised for install, demo and receipt checking.\nProtect is not supported on macOS yet. Linux x86-64 is the supported Protect path.\nWindows, Linux ARM and other unsupported installations refuse without changing files."
+  ],
+  [
+    "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+    "newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet."
+  ]
+];
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;
   const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];
   assert.equal(matches.length, 1, `${file}: expected exactly one generated release-version slot containing ${EXPECTED_RELEASE_VERSION}`);
-  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
+  let canonical = text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
+  for (const [current, reviewed] of GENERATED_PLATFORM_SLOTS) {
+    assert.equal(canonical.split(current).length - 1, 1, `${file}: expected exactly one generated platform-support slot`);
+    canonical = canonical.replace(current, reviewed);
+  }
+  return canonical;
 }
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal

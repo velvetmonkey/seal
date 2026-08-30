@@ -23,7 +23,13 @@ test("the current VERSION has a release note with the same identity", () => {
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, /supports install, demo, receipt checking, and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  const helperProvenance = "native macOS process-start witness helper is release-produced, not independ" + "ently reproduced.";
+  assert.ok(notes.includes(helperProvenance));
+  assert.match(notes, /macOS Protect execution is not exercised in CI\./);
+  for (const citation of ["spine/platform.cjs", "test/darwin-readiness.test.cjs", "test/release-matrix.test.mjs"]) {
+    assert.match(notes, new RegExp(citation.replaceAll(".", "\\.")), `release notes cite ${citation}`);
+  }
   assert.match(notes, /one `seal\.receipt\/v2` envelope/);
   assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
   assert.match(notes, /Positive VERIFY is unreachable in this release/);
@@ -45,7 +51,7 @@ test("replacement rc.3 citations retain their specific evidence", () => {
   assert.match(approvalContract, /expired approval; child receives nothing/);
 
   const distribution = fs.readFileSync(path.join(ROOT, "docs", "assurance", "distribution.md"), "utf8");
-  assert.match(distribution, /Linux x86-64 is the supported Protect path\./);
+  assert.match(distribution, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
 
   const noVerification = fs.readFileSync(path.join(ROOT, "test", "no-verification-claim.test.cjs"), "utf8");
   assert.match(noVerification, /arm's-length verification/);
@@ -64,16 +70,28 @@ test("v0.2.0-rc.2 release notes retain the immutable tag's Linux-only platform c
 test("current product and release surfaces state macOS Protect parity", () => {
   const claimSites = [
     ".github/workflows/release.yml",
+    "README.md",
     "bin/seal",
+    "docs/assurance/README.md",
+    "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+    "docs/assurance/distribution.md",
+    "docs/assurance/index.html",
+    "docs/guide/README.md",
+    "docs/guide/when-something-looks-wrong.md",
     "scripts/install.cjs",
     "scripts/seal-launch.cjs",
     "spine/platform.cjs",
   ];
   for (const file of claimSites) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
+    assert.match(text.replace(/\s+/g, " "), /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
     assert.doesNotMatch(text, /Protect is not supported on macOS yet\./, `${file}: retired exclusion`);
   }
+});
+
+test("the macOS workflow does not claim Protect execution", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "macos.yml"), "utf8");
+  assert.equal(workflow.match(/(?:^|[\\s"'])seal\s+protect(?:[\\s"']|$)/g)?.length ?? 0, 0);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {

@@ -286,11 +286,22 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   assert.equal(sync.code, 0, sync.stderr);
   const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
   const generatedSlot = new RegExp(
-    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)`,
+    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)`,
     "gm",
   );
+  let canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
+  for (const [current, reviewed] of [
+    [
+      "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
+      "macOS source portability is CI-exercised for install, demo and receipt checking.\nProtect is not supported on macOS yet. Linux x86-64 is the supported Protect path.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
+    ],
+    [
+      "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+      "newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.",
+    ],
+  ]) canonical = canonical.replace(current, reviewed);
   const expected = crypto.createHash("sha256")
-    .update(fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>"))
+    .update(canonical)
     .digest("hex");
   assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
 });

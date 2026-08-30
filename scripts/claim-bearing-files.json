@@ -34,6 +34,7 @@
     "scripts/linkcheck.mjs": { "allowlistReason": "The candidate is a configured URL fixture for link checking, not an assertion sentence made to a Seal user." },
     "scripts/live-page-claim-guard.mjs": { "allowlistReason": "This guard's comments and diagnostics describe the evidence it gathers about the hosted page; they are implementation policy, not a separate published Seal claim surface." },
     "scripts/seal-launch.cjs": { "allowlistReason": "The candidate is the installed-launcher platform diagnostic; its exact installed-store behavior requires a built distribution and is covered by distribution tests." },
+    "scripts/sync-version.cjs": { "allowlistReason": "The candidate strings are canonical forms for generated guide fact slots; the script does not publish them as an additional product claim." },
     "spine/platform.cjs": { "allowlistReason": "This module is the canonical platform-message data source; its release/platform assertion is checked at the README and launcher surfaces." },
     "test/frontdoor.test.mjs": { "allowlistReason": "The candidate strings are expected front-door assertions consumed by this test; they are test fixtures, not an additional published claim surface." },
     "test-support/front-door-invariants.mjs": { "allowlistReason": "The candidate strings are exact README and route-table fixtures consumed by the front-door invariant tests; they are test data, not an additional published claim surface." },
@@ -74,6 +75,7 @@
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs#protected-now"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs#looks-wrong"] },
     "test/guide-tokens.test.mjs": { "allowlistReason": "The apparent assertions are reviewed guide claim literals and tamper fixtures consumed by this test; they are test evidence, not another published claim surface." },
+    "test/version-identity.test.cjs": { "allowlistReason": "The candidate strings reconstruct generated guide fact slots in a digest-recomputation fixture; they are test data, not another published claim surface." },
     "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs#index-drift", "scripts/launch-truth-gate.mjs#landing-page"] }
   }
 }

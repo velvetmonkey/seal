@@ -2,6 +2,26 @@
 // Truth gate for the launch surfaces.
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { protectPlatformSupported } = require('../spine/platform.cjs');
+const ROOT = path.resolve(import.meta.dirname, '..');
+const MACOS_PROTECT_SUPPORT = 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.';
+const RETIRED_MACOS_PROTECT_DENIAL = 'Protect is not supported on macOS yet';
+const CURRENT_MACOS_PROTECT_SURFACES = [
+  '.github/workflows/release.yml',
+  'README.md',
+  'bin/seal',
+  'docs/assurance/README.md',
+  'docs/assurance/RELEASE-NOTES-v0.2.0.md',
+  'docs/assurance/distribution.md',
+  'docs/assurance/index.html',
+  'docs/guide/README.md',
+  'docs/guide/when-something-looks-wrong.md',
+  'scripts/install.cjs',
+  'scripts/seal-launch.cjs',
+  'spine/platform.cjs',
+];
 const EXPECTED = {
   readme: 'README.md',
   umbrellaWorkflow: '.github/workflows/ci.yml',
@@ -149,7 +169,24 @@ const frontDoorClaims = [
 for (const claim of frontDoorClaims) {
   if (readme.split(claim).length - 1 !== 1) fail(`README must carry the canonical front-door sentence exactly once: ${claim}`);
 }
-if (!readme.includes("Protect is not supported on macOS yet")) fail('README must state the macOS Protect boundary');
+const darwinX64ProtectSupported = protectPlatformSupported('darwin', 'x64');
+const darwinArm64ProtectSupported = protectPlatformSupported('darwin', 'arm64');
+if (darwinX64ProtectSupported !== darwinArm64ProtectSupported) {
+  fail(`platform table gives different Protect support for darwin-x64 (${darwinX64ProtectSupported}) and darwin-arm64 (${darwinArm64ProtectSupported})`);
+}
+for (const relative of CURRENT_MACOS_PROTECT_SURFACES) {
+  const source = relative === 'README.md' ? readme : readRequired(relative, path.join(ROOT, relative));
+  const normalizedSource = source.replace(/\s+/gu, ' ');
+  if (darwinX64ProtectSupported && !normalizedSource.includes(MACOS_PROTECT_SUPPORT)) {
+    fail(`${relative} must state the macOS Protect support carried by spine/platform.cjs`);
+  }
+  if (!darwinX64ProtectSupported && normalizedSource.includes(MACOS_PROTECT_SUPPORT)) {
+    fail(`${relative} states macOS Protect support that spine/platform.cjs does not carry`);
+  }
+  if (normalizedSource.includes(RETIRED_MACOS_PROTECT_DENIAL)) {
+    fail(`${relative} retains the retired macOS Protect denial`);
+  }
+}
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording

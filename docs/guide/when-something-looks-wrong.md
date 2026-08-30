@@ -451,14 +451,13 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+v0.2.0. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
 
 ### `node_missing`
 
 The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
-newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.
+newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 
 ### `version_mismatch`
 
