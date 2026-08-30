@@ -225,7 +225,7 @@ test("activation refuses when the local notes override was not selected or conne
   assert.equal(harness.loadState(runDir).step_index, 0);
 });
 
-test("missing_launcher refuses when the recorded session supplies no no-fallback evidence", () => {
+test("missing_launcher certifies recorder facts without stand-in screen text", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
@@ -236,12 +236,8 @@ test("missing_launcher refuses when the recorded session supplies no no-fallback
   const state = harness.loadState(runDir);
   state.claude.command = noOp;
   harness.saveState(state);
-  assert.throws(
-    () => harness.next(harness.loadState(runDir)),
-    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
-      /CANNOT CERTIFY missing_launcher; missing_launcher: the recorded session never says the local override command was missing/.test(error.message),
-  );
-  assert.equal(harness.loadState(runDir).step_index, 3);
+  harness.next(harness.loadState(runDir));
+  assert.equal(harness.loadState(runDir).step_index, 4);
 });
 
 test("unprotect refuses when its successful removal command is absent", () => {
