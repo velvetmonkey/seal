@@ -57,20 +57,18 @@ const HISTORIC_AUTHOR_EMAILS = new Set([
 
 function git(root, args) {
   const env = { ...process.env };
-  env.GIT_CONFIG_GLOBAL = "/dev/null";
-  env.GIT_CONFIG_SYSTEM = "/dev/null";
-  env.GIT_TEMPLATE_DIR = "/dev/null";
-  env.GIT_CONFIG_COUNT = "0";
-  for (const name of Object.keys(env)) {
-    if (/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete env[name];
-  }
-  env.HOME = root;
   delete env.GIT_AUTHOR_NAME;
   delete env.GIT_AUTHOR_EMAIL;
   delete env.GIT_COMMITTER_NAME;
   delete env.GIT_COMMITTER_EMAIL;
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_SYSTEM = "/dev/null";
+  env.GIT_TEMPLATE_DIR = "/dev/null";
+  env.GIT_CONFIG_COUNT = "0";
+  delete env.GIT_CONFIG_PARAMETERS;
+  // NAMED NON-CLAIM: This fixture assumes a trusted git on PATH.
+  // This test does not test that assumption.
+  // Resolving git in this helper would give false comfort because other tests inherit PATH.
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", env });
 }
 
@@ -224,31 +222,39 @@ test("the fixture constructs author and committer identity", (t) => {
   ].join("\n"));
 });
 
-test("the fixture pins ambient hook and work-tree inputs", (t) => {
+test("the fixture pins ambient Git hook configuration inputs", (t) => {
   const names = Object.keys(process.env).filter((name) =>
-    name === "GIT_TEMPLATE_DIR" || name === "GIT_WORK_TREE" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name));
+    name === "GIT_CONFIG_GLOBAL" || name === "GIT_CONFIG_SYSTEM" || name === "GIT_CONFIG_PARAMETERS" ||
+    name === "GIT_TEMPLATE_DIR" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name));
   const saved = new Map(names.map((name) => [name, process.env[name]]));
   const root = fixture((fixtureRoot) => {
     const hook = "#!/bin/sh\nset -eu\ntree=$(git rev-parse HEAD^{tree})\nparent=$(git rev-parse HEAD^)\nGIT_AUTHOR_NAME=allowed GIT_AUTHOR_EMAIL=allowed@lanes.seal.invalid GIT_COMMITTER_NAME=allowed GIT_COMMITTER_EMAIL=allowed@lanes.seal.invalid new=$(git commit-tree \"$tree\" -p \"$parent\" -m tampered)\ngit update-ref HEAD \"$new\" HEAD\n";
     const hookDir = join(fixtureRoot, "hostile-hooks");
     const templateHooks = join(fixtureRoot, "hostile-template", "hooks");
+    const globalConfig = join(fixtureRoot, "hostile-global-config");
+    const systemConfig = join(fixtureRoot, "hostile-system-config");
     mkdirSync(hookDir, { recursive: true });
     mkdirSync(templateHooks, { recursive: true });
     writeFileSync(join(hookDir, "post-commit"), hook);
     writeFileSync(join(templateHooks, "post-commit"), hook);
+    writeFileSync(globalConfig, `[core]\n\thooksPath = ${hookDir}\n`);
+    writeFileSync(systemConfig, `[core]\n\thooksPath = ${hookDir}\n`);
     chmodSync(join(hookDir, "post-commit"), 0o700);
     chmodSync(join(templateHooks, "post-commit"), 0o700);
     Object.assign(process.env, {
+      GIT_CONFIG_GLOBAL: globalConfig,
+      GIT_CONFIG_SYSTEM: systemConfig,
+      GIT_CONFIG_PARAMETERS: `'core.hooksPath=${hookDir}'`,
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: "core.hooksPath",
       GIT_CONFIG_VALUE_0: hookDir,
       GIT_TEMPLATE_DIR: join(fixtureRoot, "hostile-template"),
-      GIT_WORK_TREE: join(fixtureRoot, "wrong-work-tree"),
     });
   });
   t.after(() => {
     for (const name of Object.keys(process.env)) {
-      if (name === "GIT_TEMPLATE_DIR" || name === "GIT_WORK_TREE" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete process.env[name];
+      if (name === "GIT_CONFIG_GLOBAL" || name === "GIT_CONFIG_SYSTEM" || name === "GIT_CONFIG_PARAMETERS" ||
+        name === "GIT_TEMPLATE_DIR" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete process.env[name];
     }
     for (const [name, value] of saved) process.env[name] = value;
   });
