@@ -3,7 +3,7 @@
 // policy and its fixtures together prevents a separately maintained check
 // from drifting away from the proof that exercises it.
 const assert = require("node:assert/strict");
-const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -59,12 +59,18 @@ function git(root, args) {
   const env = { ...process.env };
   env.GIT_CONFIG_GLOBAL = "/dev/null";
   env.GIT_CONFIG_SYSTEM = "/dev/null";
+  env.GIT_TEMPLATE_DIR = "/dev/null";
+  env.GIT_CONFIG_COUNT = "0";
+  for (const name of Object.keys(env)) {
+    if (/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete env[name];
+  }
   env.HOME = root;
   delete env.GIT_AUTHOR_NAME;
   delete env.GIT_AUTHOR_EMAIL;
   delete env.GIT_COMMITTER_NAME;
   delete env.GIT_COMMITTER_EMAIL;
   delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", env });
 }
 
@@ -112,8 +118,9 @@ function check(root, base, head) {
   return true;
 }
 
-function fixture() {
+function fixture(beforeInit) {
   const root = mkdtempSync(join(tmpdir(), "seal-commit-author-"));
+  if (beforeInit) beforeInit(root);
   requireGit(root, ["init", "-q"]);
   requireGit(root, ["config", "user.name", "velvetmonkey"]);
   requireGit(root, ["config", "user.email", CANONICAL_EMAIL]);
@@ -215,6 +222,40 @@ test("the fixture constructs author and committer identity", (t) => {
     "fixture author",
     "fixture-author@example.invalid",
   ].join("\n"));
+});
+
+test("the fixture pins ambient hook and work-tree inputs", (t) => {
+  const names = Object.keys(process.env).filter((name) =>
+    name === "GIT_TEMPLATE_DIR" || name === "GIT_WORK_TREE" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name));
+  const saved = new Map(names.map((name) => [name, process.env[name]]));
+  const root = fixture((fixtureRoot) => {
+    const hook = "#!/bin/sh\nset -eu\ntree=$(git rev-parse HEAD^{tree})\nparent=$(git rev-parse HEAD^)\nGIT_AUTHOR_NAME=allowed GIT_AUTHOR_EMAIL=allowed@lanes.seal.invalid GIT_COMMITTER_NAME=allowed GIT_COMMITTER_EMAIL=allowed@lanes.seal.invalid new=$(git commit-tree \"$tree\" -p \"$parent\" -m tampered)\ngit update-ref HEAD \"$new\" HEAD\n";
+    const hookDir = join(fixtureRoot, "hostile-hooks");
+    const templateHooks = join(fixtureRoot, "hostile-template", "hooks");
+    mkdirSync(hookDir, { recursive: true });
+    mkdirSync(templateHooks, { recursive: true });
+    writeFileSync(join(hookDir, "post-commit"), hook);
+    writeFileSync(join(templateHooks, "post-commit"), hook);
+    chmodSync(join(hookDir, "post-commit"), 0o700);
+    chmodSync(join(templateHooks, "post-commit"), 0o700);
+    Object.assign(process.env, {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath",
+      GIT_CONFIG_VALUE_0: hookDir,
+      GIT_TEMPLATE_DIR: join(fixtureRoot, "hostile-template"),
+      GIT_WORK_TREE: join(fixtureRoot, "wrong-work-tree"),
+    });
+  });
+  t.after(() => {
+    for (const name of Object.keys(process.env)) {
+      if (name === "GIT_TEMPLATE_DIR" || name === "GIT_WORK_TREE" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete process.env[name];
+    }
+    for (const [name, value] of saved) process.env[name] = value;
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = requireGit(root, ["rev-parse", "HEAD"]);
+  const sha = commit(root, "ambient inputs", "ccclient", "ccclient@users.noreply.github.com");
+  assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "ccclient@users.noreply.github.com" }]);
 });
 
 test("a rewind range with zero added commits is rejected", (t) => {
