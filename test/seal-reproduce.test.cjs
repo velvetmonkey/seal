@@ -7,7 +7,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, buildPinnedKernel, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
 const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
@@ -222,6 +222,74 @@ test("pinned Lean toolchain CI check exercises every post-installer child enviro
   const { checkPinnedLeanLauncher } = require("../scripts/check-pinned-lean-launcher.cjs");
   const realRepositoryRoot = path.resolve(__dirname, "..");
   assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);
+});
+
+test("pinned toolchain provisioning retries once and still requires a completed rebuild", (t) => {
+  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  let cloneAttempts = 0;
+  const stalePack = path.join(work, "pinned-source", "stale-pack");
+  const rebuilt = buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      assert.equal(fs.existsSync(stalePack), false, `clone ${cloneAttempts} must start without the first-attempt stage`);
+      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        if (provisionAttempts === 1) {
+          fs.writeFileSync(stalePack, "left by first attempt\n");
+          throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        }
+      }
+      if (command === "./build_wasm.sh") {
+        const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+        fs.mkdirSync(path.dirname(output), { recursive: true });
+        fs.writeFileSync(output, PUBLISHED_KERNEL);
+      }
+    },
+  });
+  assert.equal(cloneAttempts, 2);
+  assert.equal(provisionAttempts, 2);
+  assert.equal(rebuilt, path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm"));
+});
+
+test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
+  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-refusal-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /provision pinned wasm toolchains failed \(exit 68\)/);
+  assert.equal(provisionAttempts, 2);
+});
+
+test("pinned toolchain provisioning does not retry another failure status", (t) => {
+  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 1)");
+      }
+    },
+  }), /provision pinned wasm toolchains failed \(exit 1\)/);
+  assert.equal(provisionAttempts, 1);
 });
 
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
