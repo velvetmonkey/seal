@@ -230,6 +230,16 @@ test("every fixed approval message line fits the measured default width", () => 
   }
 });
 
+// The current Scope line has one column of headroom in the 74-column envelope.
+test("the rendered Scope line fits the measured 74-column envelope", () => {
+  const rendered = renderApprovalMessage(TOOL, ARGS);
+  assert.ok(rendered.ok, rendered.reason);
+  const scopeLine = rendered.lines.find((line) => line.startsWith("Scope: "));
+  assert.ok(scopeLine, "rendered approval message must include a Scope line");
+  assert.ok(displayWidth(scopeLine) <= 80 - WIDTH_MARGIN,
+    `Scope line exceeds the default envelope of ${80 - WIDTH_MARGIN} columns: ${scopeLine}`);
+});
+
 test("the approval schema description derives from the actual argument lines", () => {
   const args = { zeta: 7, alpha: "value with space" };
   const rendered = renderApprovalMessage(TOOL, args);
