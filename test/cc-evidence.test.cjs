@@ -166,6 +166,11 @@ function rehash(copy, name) {
     const entry = manifest.files.find((file) => file.path === name);
     entry.sha256 = require("node:crypto").createHash("sha256").update(bytes).digest("hex");
     entry.bytes = bytes.length;
+    const recording = manifest.environment?.recordings?.find((item) => item.file === name);
+    if (recording?.public_derived_cast_digest) {
+      recording.public_derived_cast_digest.sha256 = entry.sha256;
+      recording.public_derived_cast_digest.bytes = entry.bytes;
+    }
   });
 }
 
@@ -233,6 +238,21 @@ test("the checker ACCEPTS a correct pack", () => {
   assert.match(result.out, /1 pack\(s\), 1 accepted, 0 refused/);
 });
 
+test("the manifest alone records each cast transformation", () => {
+  const manifest = pack().manifest;
+  assert.ok(manifest.environment.recordings.length > 0);
+  for (const recording of manifest.environment.recordings) {
+    assert.ok(recording.raw_recording_digest, `${recording.file} does not disclose the raw-to-public transformation`);
+    assert.match(recording.raw_recording_digest.sha256, /^[0-9a-f]{64}$/, `${recording.file} has no raw recording digest`);
+    assert.equal(typeof recording.raw_recording_digest.bytes, "number");
+    assert.equal(recording.sanitiser_identity, "seal.cc-harness/osc8-stream-strip/v1");
+    assert.match(recording.sanitiser_result.result, /^(?:osc8_removed|unchanged)$/);
+    assert.equal(typeof recording.sanitiser_result.osc8_sequences_removed, "number");
+    assert.match(recording.public_derived_cast_digest.sha256, /^[0-9a-f]{64}$/, `${recording.file} has no public derived cast digest`);
+    assert.equal(recording.public_derived_cast_digest.sha256, manifest.files.find((entry) => entry.path === recording.file).sha256);
+  }
+});
+
 test("the checker refuses a manifest whose file hash does not match", () => {
   const copy = copyOfPack();
   fs.appendFileSync(path.join(copy.dir, "child.jsonl"), `${JSON.stringify({ kind: "child-call", tool: "append_note" })}\n`);
@@ -280,50 +300,115 @@ function fixtureCast(payload) {
   return `${JSON.stringify({ version: 2, width: 80, height: 24 })}\n${JSON.stringify([0, "o", payload])}\n`;
 }
 
+function writeCastThroughPackPath(source, target) {
+  if (typeof harness.copyCastForPack === "function") return harness.copyCastForPack(source, target);
+  // origin/main uses this operation in finish(). Keep the control behavioural
+  // when this test file runs against that old pack-write path.
+  fs.copyFileSync(source, target);
+  return null;
+}
+
+function writerPaths(name) {
+  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak2/", `${name}-`));
+  return { source: path.join(dir, "source.cast"), target: path.join(dir, "packed.cast") };
+}
+
 test("the pack writer removes OSC 8 hyperlinks with an ESC-backslash terminator", () => {
-  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-esc-"));
-  const source = path.join(dir, "source.cast");
-  const target = path.join(dir, "packed.cast");
+  const { source, target } = writerPaths("writer-esc");
   fs.writeFileSync(source, fixtureCast(`left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\VISIBLE\u001b]8;;\u001b\\right`));
-  harness.copyCastForPack(source, target);
+  writeCastThroughPackPath(source, target);
   const event = JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1]);
   assert.equal(event[2], "leftVISIBLEright");
-  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "ESC-backslash OSC 8 reached the packed cast");
 });
 
 test("the pack writer removes OSC 8 hyperlinks with a BEL terminator", () => {
-  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-bel-"));
-  const source = path.join(dir, "source.cast");
-  const target = path.join(dir, "packed.cast");
+  const { source, target } = writerPaths("writer-bel");
   fs.writeFileSync(source, fixtureCast(`left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE\u001b]8;;\u0007right`));
-  harness.copyCastForPack(source, target);
+  writeCastThroughPackPath(source, target);
   const event = JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1]);
   assert.equal(event[2], "leftVISIBLEright");
-  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "BEL OSC 8 reached the packed cast");
 });
 
 test("the pack writer preserves a cast without OSC 8 byte-identically", () => {
-  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-clean-"));
-  const source = path.join(dir, "source.cast");
-  const target = path.join(dir, "packed.cast");
+  const { source, target } = writerPaths("writer-clean");
   const raw = fixtureCast("visible https://example.invalid/session_EXAMPLE");
   fs.writeFileSync(source, raw);
-  harness.copyCastForPack(source, target);
+  writeCastThroughPackPath(source, target);
   const sourceBytes = fs.readFileSync(source);
   const targetBytes = fs.readFileSync(target);
   assert.deepEqual(targetBytes, sourceBytes);
   assert.equal(digest(targetBytes), digest(sourceBytes));
 });
 
-test("the pack writer refuses a malformed unterminated OSC 8 hyperlink", () => {
-  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-malformed-"));
-  const source = path.join(dir, "source.cast");
-  const target = path.join(dir, "packed.cast");
+test("the pack writer preserves non-OSC-8 escape classes byte-identically", () => {
+  const { source, target } = writerPaths("writer-other-escapes");
+  const raw = fixtureCast("plain\u001b[31mRED\u001b[0m\u001b]0;title\u0007\u001b[2Jkeep");
+  fs.writeFileSync(source, raw);
+  writeCastThroughPackPath(source, target);
+  assert.equal(digest(fs.readFileSync(target)), digest(fs.readFileSync(source)));
+});
+
+test("the pack writer removes a confirmed OSC 8 hyperlink that ends with the stream", () => {
+  const { source, target } = writerPaths("writer-unterminated");
   fs.writeFileSync(source, fixtureCast("left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE"));
-  assert.throws(() => harness.copyCastForPack(source, target), (error) => {
-    assert.equal(error.code, "cast_osc8_malformed");
-    return true;
-  });
+  writeCastThroughPackPath(source, target);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "unterminated OSC 8 reached the packed cast");
+  assert.equal(JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1])[2], "left");
+});
+
+test("the pack writer removes an OSC 8 sequence split across output records without moving records", () => {
+  const { source, target } = writerPaths("writer-split");
+  const raw = [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "o", "left\u001b]8"]),
+    JSON.stringify([0.1, "o", ";id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]),
+    "",
+  ].join("\n");
+  fs.writeFileSync(source, raw);
+  writeCastThroughPackPath(source, target);
+  const packed = fs.readFileSync(target, "utf8");
+  assert.doesNotMatch(packed, /session_EXAMPLE/, "split OSC 8 reached the packed cast");
+  const records = packed.trim().split("\n").slice(1).map((line) => JSON.parse(line));
+  assert.deepEqual(records, [[0, "o", "left"], [0.1, "o", "VISIBLE"]]);
+});
+
+test("the pack writer removes C1 OSC 8 with a C1 terminator", () => {
+  const { source, target } = writerPaths("writer-c1");
+  fs.writeFileSync(source, fixtureCast("left\u009d8;id=fixture;https://claude.ai/code/session_EXAMPLE\u009cVISIBLE"));
+  writeCastThroughPackPath(source, target);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "C1 OSC 8 reached the packed cast");
+  assert.equal(JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1])[2], "leftVISIBLE");
+});
+
+test("the pack writer accepts a 7-bit OSC 8 introducer with a C1 terminator", () => {
+  const { source, target } = writerPaths("writer-mixed");
+  fs.writeFileSync(source, fixtureCast("left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u009cVISIBLE"));
+  writeCastThroughPackPath(source, target);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "mixed OSC 8 reached the packed cast");
+  assert.equal(JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1])[2], "leftVISIBLE");
+});
+
+test("the pack writer removes OSC 8 from input events", () => {
+  const { source, target } = writerPaths("writer-input");
+  const raw = `${JSON.stringify({ version: 2, width: 80, height: 24 })}\n${JSON.stringify([0, "i", "\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\typed"])}\n`;
+  fs.writeFileSync(source, raw);
+  writeCastThroughPackPath(source, target);
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "input-event OSC 8 reached the packed cast");
+  assert.equal(JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1])[2], "typed");
+});
+
+test("the pack writer refuses a non-JSON cast line", () => {
+  const { source, target } = writerPaths("writer-non-json");
+  fs.writeFileSync(source, `${fixtureCast("visible")}not-json \u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007EXTRA\n`);
+  let refusal = null;
+  try { writeCastThroughPackPath(source, target); } catch (error) { refusal = error; }
+  if (refusal) {
+    assert.equal(refusal.code, "cast_line_malformed");
+  } else {
+    assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/, "non-JSON OSC 8 line reached the packed cast");
+  }
 });
 
 test("the checker refuses a pack carrying an OSC 8 hyperlink by file and count", () => {
@@ -336,9 +421,53 @@ test("the checker refuses a pack carrying an OSC 8 hyperlink by file and count",
   fs.writeFileSync(castPath, cast.join("\n"));
   rehash(copy, "terminal.cast");
   const result = check([copy.dir, "--allow-synthetic"]);
-  assert.equal(result.code, 1, result.out);
+  assert.equal(result.code, 1, `ESC-backslash OSC 8 with session_EXAMPLE reached an accepted pack:\n${result.out}`);
   assert.match(result.out, /^REFUSE terminal_osc8_present: terminal\.cast carries 2 OSC 8 hyperlink sequence\(s\)$/m, result.out);
   assert.doesNotMatch(result.out, /session_EXAMPLE/);
+});
+
+function checkCastControl(name, lines) {
+  const copy = copyOfPack();
+  fs.writeFileSync(path.join(copy.dir, "terminal.cast"), `${lines.join("\n")}\n`);
+  rehash(copy, "terminal.cast");
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, `${name} with session_EXAMPLE reached an accepted pack:\n${result.out}`);
+  return result.out;
+}
+
+test("the checker refuses OSC 8 split across output records", () => {
+  const out = checkCastControl("split OSC 8", [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "o", `${harness.SYNTHETIC_BANNER}\nleft\u001b]8`]),
+    JSON.stringify([0.1, "o", ";id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]),
+  ]);
+  assert.match(out, /^REFUSE terminal_osc8_present: terminal\.cast carries 1 OSC 8 hyperlink sequence\(s\)$/m);
+});
+
+test("the checker refuses C1 OSC 8", () => {
+  const out = checkCastControl("C1 OSC 8", [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "o", `${harness.SYNTHETIC_BANNER}\nleft\u009d8;id=fixture;https://claude.ai/code/session_EXAMPLE\u009cVISIBLE`]),
+  ]);
+  assert.match(out, /^REFUSE terminal_osc8_present: terminal\.cast carries 1 OSC 8 hyperlink sequence\(s\)$/m);
+});
+
+test("the checker refuses OSC 8 in an input event", () => {
+  const out = checkCastControl("input-event OSC 8", [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "o", `${harness.SYNTHETIC_BANNER}\nvisible`]),
+    JSON.stringify([0.1, "i", "\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\typed"]),
+  ]);
+  assert.match(out, /^REFUSE terminal_osc8_present: terminal\.cast carries 1 OSC 8 hyperlink sequence\(s\)$/m);
+});
+
+test("the checker refuses a non-JSON cast line", () => {
+  const out = checkCastControl("non-JSON OSC 8 line", [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "o", `${harness.SYNTHETIC_BANNER}\nvisible`]),
+    "not-json \u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007EXTRA",
+  ]);
+  assert.match(out, /^REFUSE terminal_cast_malformed: terminal\.cast line 3 is not valid JSON$/m);
 });
 
 test("the checker refuses evidence added beside the manifest", () => {

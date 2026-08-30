@@ -45,6 +45,7 @@ const MIN_COLUMNS = 80;
 const CURRENT_STEP_FILE = "CURRENT-STEP.txt";
 const ENTER_RETRY_WAIT_MS = 25;
 const ENTER_RETRY_SIGNAL = new Int32Array(new SharedArrayBuffer(4));
+const CAST_SANITISER = "seal.cc-harness/osc8-stream-strip/v1";
 
 // The three note values the human is instructed to use. They are fixed so the
 // expected effect digest can be computed before the run, and so the declined
@@ -343,46 +344,87 @@ function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner 
   return `${lines.join("\n")}\n`;
 }
 
-function stripOsc8(text) {
-  let output = "";
-  for (let index = 0; index < text.length;) {
-    const start = text.indexOf("\u001B]8;", index);
-    if (start < 0) {
-      output += text.slice(index);
-      break;
-    }
-    output += text.slice(index, start);
-    const parameterEnd = text.indexOf(";", start + 4);
-    if (parameterEnd < 0) refuse("cast_osc8_malformed", "an OSC 8 hyperlink has no URI separator");
-    let end = parameterEnd + 1;
-    while (end < text.length && text[end] !== "\u0007" && !(text[end] === "\u001B" && text[end + 1] === "\\")) end += 1;
-    if (end >= text.length) refuse("cast_osc8_malformed", "an OSC 8 hyperlink has no string terminator");
-    index = text[end] === "\u0007" ? end + 1 : end + 2;
+function stripOsc8Chunks(chunks) {
+  const stream = chunks.join("");
+  const owners = [];
+  for (let chunk = 0; chunk < chunks.length; chunk += 1) {
+    for (let index = 0; index < chunks[chunk].length; index += 1) owners.push(chunk);
   }
-  return output;
+  const output = chunks.map(() => "");
+  let removed = 0;
+  let unterminated = 0;
+  for (let index = 0; index < stream.length;) {
+    const introducerLength = stream.startsWith("\u001B]8;", index) ? 4
+      : stream.startsWith("\u009D8;", index) ? 3
+        : 0;
+    if (introducerLength === 0) {
+      output[owners[index]] += stream[index];
+      index += 1;
+      continue;
+    }
+    removed += 1;
+    index += introducerLength;
+    let terminated = false;
+    while (index < stream.length) {
+      if (stream[index] === "\u0007" || stream[index] === "\u009C") {
+        index += 1;
+        terminated = true;
+        break;
+      }
+      if (stream[index] === "\u001B" && stream[index + 1] === "\\") {
+        index += 2;
+        terminated = true;
+        break;
+      }
+      index += 1;
+    }
+    // A confirmed OSC 8 control can end at EOF in a real recording. Remove
+    // its remaining bytes. Do not make a harmless recorder cut unpackable.
+    if (!terminated) unterminated += 1;
+  }
+  return { chunks: output, removed, unterminated };
 }
 
 function stripOsc8FromCast(raw) {
-  let changed = false;
-  const lines = raw.split("\n").map((line) => {
-    if (line.trim() === "") return line;
-    let event;
-    try { event = JSON.parse(line); } catch { return line; }
-    if (!Array.isArray(event) || event[1] !== "o" || typeof event[2] !== "string") return line;
-    const payload = stripOsc8(event[2]);
-    if (payload === event[2]) return line;
-    changed = true;
-    event[2] = payload;
-    return JSON.stringify(event);
+  const lines = raw.split("\n").map((rawLine, index) => {
+    if (rawLine.trim() === "") return { raw: rawLine, event: null, changed: false };
+    try { return { raw: rawLine, event: JSON.parse(rawLine), changed: false }; } catch {
+      // A non-JSON line has no cast stream semantics. Refuse it so arbitrary
+      // bytes cannot pass unchanged into the public derived cast.
+      refuse("cast_line_malformed", `cast line ${index + 1} is not valid JSON`);
+    }
   });
-  return changed ? lines.join("\n") : raw;
+  let removed = 0;
+  let unterminated = 0;
+  for (const kind of ["o", "i"]) {
+    const selected = lines.filter(({ event }) => Array.isArray(event) && event[1] === kind && typeof event[2] === "string");
+    const stripped = stripOsc8Chunks(selected.map(({ event }) => event[2]));
+    removed += stripped.removed;
+    unterminated += stripped.unterminated;
+    for (let index = 0; index < selected.length; index += 1) {
+      if (selected[index].event[2] !== stripped.chunks[index]) selected[index].changed = true;
+      selected[index].event[2] = stripped.chunks[index];
+    }
+  }
+  const changed = lines.some((line) => line.changed);
+  const cleaned = changed
+    ? lines.map(({ raw: rawLine, event, changed: lineChanged }) => lineChanged ? JSON.stringify(event) : rawLine).join("\n")
+    : raw;
+  return { cleaned, changed, removed, unterminated };
 }
 
 function copyCastForPack(source, target) {
   const raw = fs.readFileSync(source, "utf8");
-  const cleaned = stripOsc8FromCast(raw);
+  const { cleaned, changed, removed, unterminated } = stripOsc8FromCast(raw);
   fs.writeFileSync(target, cleaned);
-  return { changed: cleaned !== raw, bytes: Buffer.byteLength(cleaned) };
+  return {
+    changed,
+    bytes: Buffer.byteLength(cleaned),
+    removed,
+    unterminated,
+    raw_recording_digest: { sha256: sha256(Buffer.from(raw)), bytes: Buffer.byteLength(raw) },
+    public_derived_cast_digest: { sha256: sha256(Buffer.from(cleaned)), bytes: Buffer.byteLength(cleaned) },
+  };
 }
 
 function recordingCorrespondence(state, caseId, castPath) {
@@ -841,7 +883,7 @@ const STEPS = [
         "STEP 1 of 6 — activation.",
         "",
         "Claude Code starts in the pinned temporary HOME, so it may ask you to",
-        "sign in. Sign in BEFORE anything else: the session is recorded verbatim",
+        "sign in. Sign in BEFORE anything else: the raw run-directory cast is recorded verbatim",
         "and a login code typed later would be recorded with it.",
         "",
         "In the session:",
@@ -1543,8 +1585,19 @@ function finish(state, options) {
     // pack's `terminal.cast`; the other sessions sit beside it under their
     // case names.
     const target = step.record.caseId === "accept" ? "terminal.cast" : `terminal-${step.record.caseId.replace(/_/g, "-")}.cast`;
-    copyCastForPack(source, path.join(packDir, target));
-    castFiles.push({ file: target, case: step.record.caseId });
+    const sanitised = copyCastForPack(source, path.join(packDir, target));
+    castFiles.push({
+      file: target,
+      case: step.record.caseId,
+      raw_recording_digest: sanitised.raw_recording_digest,
+      sanitiser_identity: CAST_SANITISER,
+      sanitiser_result: {
+        result: sanitised.changed ? "osc8_removed" : "unchanged",
+        osc8_sequences_removed: sanitised.removed,
+        unterminated_osc8_sequences_removed: sanitised.unterminated,
+      },
+      public_derived_cast_digest: sanitised.public_derived_cast_digest,
+    });
   }
 
   const files = [];
@@ -1619,7 +1672,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("The harness removed OSC 8 hyperlink controls from each packed cast. A verbatim terminal capture can still contain anything the operator typed or the client printed; inspect terminal.cast before publication.");
+  say("The harness removed OSC 8 hyperlink controls from each packed cast. The derived cast can still contain other text that the operator typed or the client printed; inspect terminal.cast before publication.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }
@@ -1696,6 +1749,7 @@ if (require.main === module) {
 
 module.exports = {
   CASES,
+  CAST_SANITISER,
   castFromScript,
   copyCastForPack,
   clientExecutableFormat,

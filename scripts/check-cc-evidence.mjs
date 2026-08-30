@@ -39,28 +39,38 @@ const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
 const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code call not observed";
 const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
 const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
+const CAST_SANITISER = "seal.cc-harness/osc8-stream-strip/v1";
 
 function osc8Findings(text) {
   let count = 0;
-  let malformed = 0;
+  let unterminated = 0;
   for (let index = 0; index < text.length;) {
-    const start = text.indexOf("\u001B]8;", index);
-    if (start < 0) break;
+    const introducerLength = text.startsWith("\u001B]8;", index) ? 4
+      : text.startsWith("\u009D8;", index) ? 3
+        : 0;
+    if (introducerLength === 0) {
+      index += 1;
+      continue;
+    }
     count += 1;
-    const parameterEnd = text.indexOf(";", start + 4);
-    if (parameterEnd < 0) {
-      malformed += 1;
-      break;
+    index += introducerLength;
+    let terminated = false;
+    while (index < text.length) {
+      if (text[index] === "\u0007" || text[index] === "\u009C") {
+        index += 1;
+        terminated = true;
+        break;
+      }
+      if (text[index] === "\u001B" && text[index + 1] === "\\") {
+        index += 2;
+        terminated = true;
+        break;
+      }
+      index += 1;
     }
-    let end = parameterEnd + 1;
-    while (end < text.length && text[end] !== "\u0007" && !(text[end] === "\u001B" && text[end + 1] === "\\")) end += 1;
-    if (end >= text.length) {
-      malformed += 1;
-      break;
-    }
-    index = text[end] === "\u0007" ? end + 1 : end + 2;
+    if (!terminated) unterminated += 1;
   }
-  return { count, malformed };
+  return { count, unterminated };
 }
 
 const REQUIRED_CASES = [
@@ -269,20 +279,40 @@ function checkCasts(packDir, manifest, report) {
       report.refuse("terminal_recording_empty", `${name} is empty`);
       continue;
     }
-    let osc8 = { count: 0, malformed: 0 };
-    for (const line of bytes.toString("utf8").split("\n")) {
+    const streams = { o: [], i: [] };
+    for (const [index, line] of bytes.toString("utf8").split("\n").entries()) {
       if (line.trim() === "") continue;
       try {
         const event = JSON.parse(line);
-        if (Array.isArray(event) && event[1] === "o" && typeof event[2] === "string") {
-          const finding = osc8Findings(event[2]);
-          osc8.count += finding.count;
-          osc8.malformed += finding.malformed;
-        }
-      } catch { /* the manifest and file digest checks report malformed casts */ }
+        if (Array.isArray(event) && (event[1] === "o" || event[1] === "i") && typeof event[2] === "string") streams[event[1]].push(event[2]);
+      } catch {
+        report.refuse("terminal_cast_malformed", `${name} line ${index + 1} is not valid JSON`);
+      }
     }
+    const findings = [osc8Findings(streams.o.join("")), osc8Findings(streams.i.join(""))];
+    const osc8 = {
+      count: findings.reduce((sum, finding) => sum + finding.count, 0),
+      unterminated: findings.reduce((sum, finding) => sum + finding.unterminated, 0),
+    };
     if (osc8.count > 0) report.refuse("terminal_osc8_present", `${name} carries ${osc8.count} OSC 8 hyperlink sequence(s)`);
-    if (osc8.malformed > 0) report.refuse("terminal_osc8_malformed", `${name} carries ${osc8.malformed} unterminated OSC 8 hyperlink sequence(s)`);
+    if (osc8.unterminated > 0) report.refuse("terminal_osc8_malformed", `${name} carries ${osc8.unterminated} unterminated OSC 8 hyperlink sequence(s)`);
+    const rawDigest = recording.raw_recording_digest;
+    if (!rawDigest || !/^[0-9a-f]{64}$/.test(rawDigest.sha256 || "") || !Number.isSafeInteger(rawDigest.bytes)) {
+      report.refuse("terminal_transform_provenance_incomplete", `${name} has no valid raw recording digest`);
+    }
+    if (recording.sanitiser_identity !== CAST_SANITISER) {
+      report.refuse("terminal_transform_provenance_incomplete", `${name} does not name sanitiser ${CAST_SANITISER}`);
+    }
+    const result = recording.sanitiser_result;
+    if (!result || !["osc8_removed", "unchanged"].includes(result.result)
+      || !Number.isSafeInteger(result.osc8_sequences_removed)
+      || !Number.isSafeInteger(result.unterminated_osc8_sequences_removed)) {
+      report.refuse("terminal_transform_provenance_incomplete", `${name} has no valid sanitiser result`);
+    }
+    const publicDigest = recording.public_derived_cast_digest;
+    if (!publicDigest || publicDigest.sha256 !== sha256(bytes) || publicDigest.bytes !== bytes.length) {
+      report.refuse("terminal_public_digest_mismatch", `${name} does not match its public derived cast digest`);
+    }
     if (bytes.includes(Buffer.from(SYNTHETIC_BANNER, "utf8"))) {
       synthetic = true;
       report.ok(`${name} carries the synthetic fixture banner`);

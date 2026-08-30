@@ -149,8 +149,9 @@ Two cautions for the operator:
 
 1. Claude Code starts in a fresh `HOME` and may ask you to sign in. Do that in
    the first recorded session **before** anything else, or sign in beforehand:
-   the recording is a verbatim capture of your terminal, and anything you type
-   into it is in the pack. Read `terminal.cast` before publishing it.
+   the packed recording is a derived view with OSC 8 hyperlink controls removed.
+   Other text that you type can remain in the pack. Read `terminal.cast` before
+   publishing it.
 2. The installed store is read-only by design. `chmod -R u+w` the run directory
    before deleting it.
 
@@ -174,7 +175,9 @@ Two cautions for the operator:
 
 `manifest.json` names the artifact, the client, the environment, the fixture
 revision, the eight expected cases with their required observations, what was
-observed, and the SHA-256 and byte length of every other file in the pack.
+observed, and the SHA-256 and byte length of every other file in the pack. Each
+recording entry also names the raw recording digest, the OSC 8 sanitiser, its
+result, and the digest of the public derived cast.
 
 ## The checker
 
