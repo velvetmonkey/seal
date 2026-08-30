@@ -8,7 +8,7 @@
 //   Tool: <tool>
 //   Arguments:
 //     <key>: <value>
-//   Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
+//   Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 //   Outside Seal: Bash, network, subprocesses, other tools and servers.
 //
 // When something changed, the caller REPLACES the first line (e.g.

@@ -8,7 +8,7 @@ INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
     Tool: demo.mutate
     Arguments:
       line: "seal demo wrote this line"
-    Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
+    Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
     Outside Seal: Bash, network, subprocesses, other tools and servers.
 child calls observed: still 0 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count) — approval shown, nothing executed
 Approve? [y/N] y
