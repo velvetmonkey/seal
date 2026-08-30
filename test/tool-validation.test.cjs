@@ -11,7 +11,7 @@ const test = require("node:test");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
 const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
-const { readState, statePathFor } = require("../spine/protection.cjs");
+const { protectedToolNames, readState, statePathFor } = require("../spine/protection.cjs");
 
 function setup(mode = "ok", source) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-tool-validation-"));
@@ -109,8 +109,26 @@ test("protect refuses a tool name with leading or trailing whitespace", () => {
   const ctx = setup("ok", "db.drop_table, db.drop_table");
   const result = run(ctx, ["protect", "db", " db.drop_table"]);
   assert.notEqual(result.code, 0);
-  assert.match(result.out, /usage: seal protect SERVER TOOL \[TOOL\.\.\.\]/);
+  assert.match(result.out, /protected tool name has surrounding whitespace: " db\.drop_table"/);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+});
+
+test("stored protection state refuses a tool name with surrounding whitespace", () => {
+  const ctx = setup("ok", "db.drop_table");
+  const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const filePath = statePathFor(ctx.project, ctx.env);
+  const state = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  state.guardTools = [" db.drop_table"];
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2) + "\n");
+  assert.throws(
+    () => protectedToolNames(readState(filePath)),
+    (error) => {
+      assert.equal(error.code, "state_broken");
+      assert.equal(error.message, 'stored protection state contains protected tool name with surrounding whitespace: " db.drop_table"');
+      return true;
+    },
+  );
 });
 
 test("an observed tool protects end to end and reports every other tool as not approval-gated", async () => {

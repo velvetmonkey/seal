@@ -307,8 +307,15 @@ function readState(statePath) {
 
 function protectedToolNames(state) {
   if (!Array.isArray(state?.guardTools) || state.guardTools.length === 0 ||
-      state.guardTools.some((name) => typeof name !== "string" || name.length === 0 || name.trim() !== name)) {
+      state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
+  }
+  const paddedName = state.guardTools.find((name) => name.trim() !== name);
+  if (paddedName !== undefined) {
+    throw new ProtectionError(
+      "state_broken",
+      `stored protection state contains protected tool name with surrounding whitespace: ${JSON.stringify(paddedName)}`,
+    );
   }
   return [...new Set(state.guardTools)];
 }
@@ -919,8 +926,12 @@ async function protect({
   timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
 }) {
   const requestedTools = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))];
-  if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0 || name.trim() !== name)) {
+  if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
+  }
+  const paddedName = requestedTools.find((name) => name.trim() !== name);
+  if (paddedName !== undefined) {
+    throw new ProtectionError("usage", `protected tool name has surrounding whitespace: ${JSON.stringify(paddedName)}`);
   }
   requireHumanApprovalOrigin(env);
   requireProtectReadiness(env);
