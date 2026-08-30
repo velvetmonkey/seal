@@ -287,24 +287,146 @@ function loadSnapshot(state, caseId, edge) {
 
 // -------------------------------------------------------- terminal recorder
 
-const ANSI = /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][\s\S]*?(?:\u0007|\u001B\\)|\u001B[()][A-Za-z0-9]|\u001B[=>]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
-
-function stripTerminalControl(text) {
-  return text.replace(ANSI, " ").replace(/\r/g, "\n");
-}
-
-// The screen text of a cast: the payload of every output event, in order, with
-// the terminal's own control sequences removed. This is what a human read.
-function castScreenText(castPath) {
+function castEvents(castPath) {
   const raw = fs.readFileSync(castPath, "utf8");
-  let text = "";
-  for (const [index, line] of raw.split("\n").entries()) {
-    if (index === 0 || line.trim() === "") continue; // line 0 is the cast header
+  const lines = raw.split("\n").filter((line) => line.trim() !== "");
+  const header = JSON.parse(lines.shift());
+  const output = [];
+  const boundaries = [];
+  let length = 0;
+  for (const line of lines) {
     let event;
     try { event = JSON.parse(line); } catch { continue; }
-    if (Array.isArray(event) && event[1] === "o") text += String(event[2]);
+    if (Array.isArray(event) && event[1] === "o") {
+      const text = String(event[2]);
+      output.push(text);
+      length += text.length;
+      boundaries.push(length);
+    }
   }
-  return stripTerminalControl(text);
+  return { header, text: output.join(""), boundaries };
+}
+
+function terminalScreen(header, text, boundaries = []) {
+  const width = Number(header.width);
+  const height = Number(header.height);
+  if (!Number.isInteger(width) || width < 1 || !Number.isInteger(height) || height < 1) {
+    throw new Error("cast header must declare positive integer width and height");
+  }
+  const blankRow = () => Array(width).fill(" ");
+  const grid = Array.from({ length: height }, blankRow);
+  let row = 0;
+  let column = 0;
+  let savedRow = 0;
+  let savedColumn = 0;
+  const snapshots = [];
+  const boundarySet = new Set(boundaries);
+  const snapshot = () => snapshots.push(grid.map((line) => line.join("")).join("\n"));
+
+  const clampRow = (value) => Math.max(0, Math.min(height - 1, value));
+  const clampColumn = (value) => Math.max(0, Math.min(width - 1, value));
+  const scroll = () => {
+    if (row < height) return;
+    grid.shift();
+    grid.push(blankRow());
+    row = height - 1;
+  };
+  const move = (nextRow, nextColumn) => {
+    row = clampRow(nextRow);
+    column = clampColumn(nextColumn);
+  };
+  const parameter = (params, index, fallback = 1) => {
+    const value = params[index];
+    return value === undefined || value === "" || value === "0" ? fallback : Number(value);
+  };
+  const eraseLine = (mode) => {
+    if (mode === 2) { grid[row].fill(" "); return; }
+    const start = mode === 1 ? 0 : column;
+    const end = mode === 1 ? column : width - 1;
+    for (let at = start; at <= end; at += 1) grid[row][at] = " ";
+  };
+  const eraseDisplay = (mode) => {
+    if (mode === 2 || mode === 3) {
+      for (const line of grid) line.fill(" ");
+      return;
+    }
+    if (mode === 1) {
+      for (let at = 0; at < row; at += 1) grid[at].fill(" ");
+      for (let at = 0; at <= column; at += 1) grid[row][at] = " ";
+      return;
+    }
+    for (let at = column; at < width; at += 1) grid[row][at] = " ";
+    for (let line = row + 1; line < height; line += 1) grid[line].fill(" ");
+  };
+  const csi = (sequence) => {
+    const final = sequence.at(-1);
+    let body = sequence.slice(0, -1).replace(/^[?>!<=>]/, "");
+    const params = body.split(";");
+    const first = () => parameter(params, 0);
+    switch (final) {
+      case "A": move(row - first(), column); break;
+      case "B": move(row + first(), column); break;
+      case "C": move(row, column + first()); break;
+      case "D": move(row, column - first()); break;
+      case "E": move(row + first(), 0); break;
+      case "F": move(row - first(), 0); break;
+      case "G": move(row, parameter(params, 0) - 1); break;
+      case "d": move(parameter(params, 0) - 1, column); break;
+      case "H":
+      case "f": move(parameter(params, 0) - 1, parameter(params, 1) - 1); break;
+      case "J": eraseDisplay(params[0] === undefined || params[0] === "" ? 0 : Number(params[0])); break;
+      case "K": eraseLine(params[0] === undefined || params[0] === "" ? 0 : Number(params[0])); break;
+      case "s": savedRow = row; savedColumn = column; break;
+      case "u": move(savedRow, savedColumn); break;
+      default: break;
+    }
+  };
+
+  for (let index = 0; index < text.length;) {
+    if (boundarySet.has(index)) { snapshot(); boundarySet.delete(index); }
+    const code = text.charCodeAt(index);
+    if (code === 0x1b) {
+      if (text[index + 1] === "[") {
+        let end = index + 2;
+        while (end < text.length && !(/[\x40-\x7e]/.test(text[end]))) end += 1;
+        if (end < text.length) {
+          csi(text.slice(index + 2, end + 1));
+          snapshot();
+        }
+        index = end < text.length ? end + 1 : text.length;
+        continue;
+      }
+      if (text[index + 1] === "]") {
+        let end = index + 2;
+        while (end < text.length && text[end] !== "\u0007" && !(text[end] === "\u001b" && text[end + 1] === "\\")) end += 1;
+        index = text[end] === "\u001b" ? end + 2 : end + 1;
+        continue;
+      }
+      index += 2;
+      continue;
+    }
+    if (text[index] === "\r") { column = 0; index += 1; continue; }
+    if (text[index] === "\n") { row += 1; scroll(); index += 1; continue; }
+    if (text[index] === "\b") { column = Math.max(0, column - 1); index += 1; continue; }
+    if (text[index] === "\t") { column = Math.min(width - 1, (Math.floor(column / 8) + 1) * 8); index += 1; continue; }
+    if (code < 0x20 || code === 0x7f) { index += 1; continue; }
+    const character = String.fromCodePoint(text.codePointAt(index));
+    grid[row][column] = character;
+    column += 1;
+    if (column >= width) { column = 0; row += 1; scroll(); }
+    index += character.length;
+  }
+  if (boundarySet.has(text.length)) snapshot();
+  if (snapshots.length === 0) snapshot();
+  return snapshots.join("\n");
+}
+
+// The screen text of a cast. This replays output events on a Unicode grid
+// with the cast header's dimensions, so cursor-positioned differential redraws
+// produce the same rows that a terminal displays.
+function castScreenText(castPath) {
+  const { header, text, boundaries } = castEvents(castPath);
+  return terminalScreen(header, text, boundaries);
 }
 
 // util-linux `script` is the recorder because it is present on a stock Linux
@@ -1556,6 +1678,7 @@ if (require.main === module) {
 module.exports = {
   CASES,
   castFromScript,
+  castScreenText,
   clientExecutableFormat,
   clientCandidates,
   clientIdentity,
@@ -1571,6 +1694,7 @@ module.exports = {
   loadState,
   next,
   observeAll,
+  observeApprovalShown,
   runEnv,
   saveState,
   show,
