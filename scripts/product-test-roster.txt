@@ -1,4 +1,5 @@
 test/approval-contract.test.cjs
+test/archive-claim-consequences.test.mjs
 test/artifact-identity.test.cjs
 test/cc-evidence.test.cjs
 test/cc-fixture.test.cjs

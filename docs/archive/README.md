@@ -2,6 +2,8 @@
 
 This directory preserves documentation moved out of the main navigation.
 Seal registers nineteen archive files with claim-bearing-file-inventory.
+Removing WHAT-SEAL-IS.md makes claim-bearing-file-inventory fail.
+Removing AUTHORIZATION-RECORD.md makes claim-coverage-inventory fail.
 
 ## Claim coverage scope
 
