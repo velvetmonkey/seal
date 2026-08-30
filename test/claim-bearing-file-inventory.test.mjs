@@ -75,7 +75,7 @@ test("a coveredBy marker must exist in the cited proof file", () => {
       encoding: "utf8",
     });
     assert.notEqual(result.status, 0, result.stderr);
-    assert.match(result.stderr, /marker missing-marker in test\/proof\.mjs does not bind CLAIM-COVERAGE: fixture\.md/);
+    assert.match(result.stderr, /^FAIL  fixture\.md: coveredBy "test\/proof\.mjs#missing-marker" marker missing-marker in test\/proof\.mjs does not bind CLAIM-COVERAGE: fixture\.md$/m);
   } finally {
     rmSync(worktree, { recursive: true, force: true });
   }
