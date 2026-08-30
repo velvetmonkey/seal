@@ -300,14 +300,20 @@ function clonePinnedSource(pin, destination) {
   if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
 }
 
-function provisionPinnedToolchains(runChild, source) {
+function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
   const command = ["wasm-spike/provision_toolchain.sh"];
   const options = { cwd: source, label: "provision pinned wasm toolchains" };
   try {
     runChild("bash", command, options);
   } catch (error) {
     if (!/failed \(exit 68\)$/u.test(error?.message || "")) throw error;
+    if (!pathWithin(source, work) || path.dirname(source) !== work || source === ROOT) {
+      refuse(`pinned source stage is not disposable: ${source}`);
+    }
+    makeTreeRemovable(source);
+    fs.rmSync(source, { recursive: true, force: true });
     process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
+    cloneSource(pin, source);
     runChild("bash", command, options);
   }
 }
@@ -322,7 +328,7 @@ function buildPinnedKernel(tag, work, operations = {}) {
   const source = path.join(work, "pinned-source");
   cloneSource(pin, source);
 
-  provisionPinnedToolchains(runChild, source);
+  provisionPinnedToolchains(runChild, cloneSource, pin, work, source);
   const installer = path.join(source, "scripts", "install_pinned_elan.py");
   runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   const launcher = leanLauncher(environment, installer);

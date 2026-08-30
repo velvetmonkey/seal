@@ -228,14 +228,21 @@ test("pinned toolchain provisioning retries once and still requires a completed 
   const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   let provisionAttempts = 0;
+  let cloneAttempts = 0;
+  const stalePack = path.join(work, "pinned-source", "stale-pack");
   const rebuilt = buildPinnedKernel(TAG, work, {
     clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      assert.equal(fs.existsSync(stalePack), false, `clone ${cloneAttempts} must start without the first-attempt stage`);
       fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
     },
     child(command, args) {
       if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
         provisionAttempts += 1;
-        if (provisionAttempts === 1) throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        if (provisionAttempts === 1) {
+          fs.writeFileSync(stalePack, "left by first attempt\n");
+          throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        }
       }
       if (command === "./build_wasm.sh") {
         const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
@@ -244,6 +251,7 @@ test("pinned toolchain provisioning retries once and still requires a completed 
       }
     },
   });
+  assert.equal(cloneAttempts, 2);
   assert.equal(provisionAttempts, 2);
   assert.equal(rebuilt, path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm"));
 });
