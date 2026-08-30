@@ -261,6 +261,7 @@ test("missing_launcher ignores harness probe lifecycle records but names a fallb
     { kind: "start", argv: ["claude", "mcp", "get", "notes"], ancestry: [
       {
         argv: [process.execPath, installedSeal, "__proxy", "--protect-state", state.paths.protectState],
+        script: { path: installedSeal, sha256: installedSealDigest },
         argv_files: [{ path: installedSeal, sha256: installedSealDigest }],
       },
     ] },

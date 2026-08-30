@@ -110,7 +110,11 @@ function processIdentity(pid) {
     const identity = fileIdentity(word);
     if (identity && !argvFiles.some((entry) => entry.path === identity.path)) argvFiles.push(identity);
   }
-  return { pid, argv, executable, argv_files: argvFiles };
+  // For a Node invocation, argv[1] is the script that Node executed. Keep its
+  // identity separate from the other readable argv words. Those words can be
+  // inputs, not the program that ran.
+  const script = Array.isArray(argv) && typeof argv[1] === "string" ? fileIdentity(argv[1]) : null;
+  return { pid, argv, executable, script, argv_files: argvFiles };
 }
 
 // The launcher chain, nearest parent first. Recorded as data, never judged

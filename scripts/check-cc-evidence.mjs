@@ -47,7 +47,7 @@ const REQUIRED_CASES = [
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
-  { id: "missing_launcher", required: "While the launcher is absent, no protected-server record is added, .mcp.json is unchanged, and the installed tree is restored" },
+  { id: "missing_launcher", required: "While the launcher is absent, each protected-server start records the installed Seal proxy script digest, no child-call record is added, .mcp.json is unchanged, and the installed tree is restored" },
   { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical" },
 ];
 

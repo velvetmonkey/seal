@@ -62,7 +62,7 @@ const CASES = Object.freeze([
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
-  { id: "missing_launcher", required: "While the launcher is absent, no protected-server record is added, .mcp.json is unchanged, and the installed tree is restored" },
+  { id: "missing_launcher", required: "While the launcher is absent, each protected-server start records the installed Seal proxy script digest, no child-call record is added, .mcp.json is unchanged, and the installed tree is restored" },
   { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical" },
 ]);
 
@@ -484,14 +484,30 @@ function proxyEvidenceForStart(record, protectStatePath, expectedDigest) {
     return { mediated: false, reason: "digest absent" };
   }
   let hasDigest = false;
+  let hasWrongPositionDigest = false;
   for (const step of candidates) {
-    const identities = Array.isArray(step.argv_files) ? step.argv_files : [];
-    for (const identity of identities) {
-      if (typeof identity?.sha256 !== "string" || identity.sha256.length === 0) continue;
+    // ASSUMED BOUNDARY — This step proves NO FALLBACK OCCURRED UNDER A
+    // CARELESS CLIENT. It does NOT prove NO FALLBACK OCCURRED under a HOSTILE
+    // PARENT. The ancestry record is self-reported from /proc. Nothing
+    // authenticates it. Tightening this match further cannot close this limit
+    // because this class of evidence is self-reported. This is an assumed
+    // boundary, not a proven property.
+    //
+    // Node executes its script at argv[1]. Bind the installed Seal digest to
+    // that position. A matching digest in every other argv word is only an
+    // argument mention and cannot establish mediation.
+    const script = step?.script;
+    if (typeof script?.sha256 === "string" && script.sha256.length > 0) {
       hasDigest = true;
-      if (identity.sha256 === expectedDigest.sha256) return { mediated: true, reason: null };
+      if (script.sha256 === expectedDigest.sha256) return { mediated: true, reason: null };
+    }
+    for (const identity of Array.isArray(step.argv_files) ? step.argv_files : []) {
+      if (typeof identity?.sha256 === "string" && identity.sha256 === expectedDigest.sha256) {
+        hasWrongPositionDigest = true;
+      }
     }
   }
+  if (hasWrongPositionDigest) return { mediated: false, reason: "digest at the wrong position" };
   return { mediated: false, reason: hasDigest ? "digest mismatch" : "digest absent" };
 }
 
@@ -1268,7 +1284,8 @@ function certifyStep(state, step) {
         else if (outcome.facts.child_call_records_added !== 0) failures.push(`${caseId}: child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_added}); offending child-call records: ${JSON.stringify(outcome.facts.offending_child_call_records)}`);
         else if (outcome.facts.non_proxy_start_records_added !== 0) {
           for (const start of outcome.facts.offending_non_proxy_start_records) {
-            if (start.proxy_rejection === "digest mismatch") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest mismatch`);
+            if (start.proxy_rejection === "digest at the wrong position") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest at the wrong position`);
+            else if (start.proxy_rejection === "digest mismatch") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest mismatch`);
             else if (start.proxy_rejection === "digest absent") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor digest is absent or unreadable`);
             else failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because it has no proxy ancestor at all`);
           }

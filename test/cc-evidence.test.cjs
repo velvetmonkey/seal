@@ -60,11 +60,30 @@ test("missing launcher accepts a harness probe start below the Seal proxy", () =
       {
         pid: 42,
         argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"],
+        script: { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
         argv_files: [{ path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 }],
       },
     ],
   };
   assert.deepEqual(harness.nonProxyStarts([probeStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), []);
+});
+
+test("missing launcher refuses a parent that only mentions the installed Seal script", () => {
+  const mentionOnlyStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{
+      pid: 42,
+      argv: [process.execPath, "other-parent.cjs", "__proxy", "--protect-state", "/state/protect.json", "bin/seal"],
+      script: { path: "other-parent.cjs", sha256: "b".repeat(64) },
+      argv_files: [
+        { path: "other-parent.cjs", sha256: "b".repeat(64) },
+        { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
+      ],
+    }],
+  };
+  assert.deepEqual(harness.nonProxyStarts([mentionOnlyStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [mentionOnlyStart]);
+  assert.equal(harness.proxyEvidenceForStart(mentionOnlyStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest at the wrong position");
 });
 
 test("missing launcher refuses a lookalike parent that carries proxy words", () => {
@@ -74,6 +93,7 @@ test("missing launcher refuses a lookalike parent that carries proxy words", () 
     ancestry: [{
       pid: 42,
       argv: [process.execPath, "lookalike-chain.cjs", "__proxy", "--protect-state", "/state/protect.json"],
+      script: { path: "lookalike-chain.cjs", sha256: "b".repeat(64) },
       argv_files: [{ path: "lookalike-chain.cjs", sha256: "b".repeat(64) }],
     }],
   };
