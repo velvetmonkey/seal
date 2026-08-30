@@ -233,6 +233,36 @@ test("the approval schema description derives from the actual argument lines", (
   );
 });
 
+test("the approval schema description ignores non-argument message lines", () => {
+  const rendererPath = require.resolve("../contract/renderer.cjs");
+  const contractPath = require.resolve("../contract/contract.cjs");
+  const originalRenderer = require(rendererPath);
+  const shiftedRenderer = {
+    ...originalRenderer,
+    renderApprovalMessage(...args) {
+      const rendered = originalRenderer.renderApprovalMessage(...args);
+      if (!rendered.ok) return rendered;
+      const lines = ["Review context", ...rendered.lines];
+      return { ...rendered, message: lines.join("\n"), lines };
+    },
+  };
+  let createShiftedApprovalContract;
+  try {
+    require.cache[rendererPath].exports = shiftedRenderer;
+    delete require.cache[contractPath];
+    ({ createApprovalContract: createShiftedApprovalContract } = require(contractPath));
+  } finally {
+    require.cache[rendererPath].exports = originalRenderer;
+    delete require.cache[contractPath];
+  }
+
+  const args = { line: "shifted shape" };
+  const rendered = shiftedRenderer.renderApprovalMessage(TOOL, args);
+  const opened = createShiftedApprovalContract().begin({ tool: TOOL, args });
+  const description = `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. Scope: at most one run.`;
+  assert.equal(opened.elicitationParams.requestedSchema.properties.approve.description, description);
+});
+
 test("a CHANGED first line replaces, never adds", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS, { firstLine: "CHANGED: line fixture → other" });
   assertInsideEnvelope(rendered);
