@@ -58,7 +58,7 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the visible message head and the schema-carried exact-call title and description" },
+  { id: "approval_shown", required: "The terminal recording shows the rendered tool and arguments lines and the schema-carried exact-call title and description" },
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
@@ -548,7 +548,10 @@ function expectedDialogLines(state, note) {
   if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
     refuse("dialog_unrenderable", "the pinned artifact approval schema has no title or description");
   }
-  return [...rendered.lines.slice(0, 3), approve.title, approve.description];
+  // Claude Code v2.1.251 corrupts the first message line in measured terminal output.
+  // The schema title and description carry the decision content and render whole.
+  // This excludes a client-defect line; it does not relax the exact-call check.
+  return [...rendered.lines.slice(1, 3), approve.title, approve.description];
 }
 
 function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {

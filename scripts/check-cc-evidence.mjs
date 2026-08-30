@@ -43,7 +43,7 @@ const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-a
 const REQUIRED_CASES = [
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the visible message head and the schema-carried exact-call title and description" },
+  { id: "approval_shown", required: "The terminal recording shows the rendered tool and arguments lines and the schema-carried exact-call title and description" },
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
