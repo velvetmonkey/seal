@@ -274,6 +274,32 @@ test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
   assert.equal(provisionAttempts, 2);
 });
 
+test("pinned toolchain provisioning refuses a source symlink outside the resolved work directory", (t) => {
+  const root = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const work = path.join(root, "work");
+  const outside = path.join(root, "outside");
+  const source = path.join(work, "pinned-source");
+  fs.mkdirSync(work);
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "canary"), "must survive\n");
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.symlinkSync(outside, destination, "dir");
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /pinned source stage is not disposable/);
+  assert.equal(provisionAttempts, 1);
+  assert.equal(fs.lstatSync(source).isSymbolicLink(), true);
+  assert.equal(fs.readFileSync(path.join(outside, "canary"), "utf8"), "must survive\n");
+});
+
 test("pinned toolchain provisioning does not retry another failure status", (t) => {
   const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
