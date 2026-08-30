@@ -48,6 +48,7 @@ test/lease-generation.test.cjs
 test/limits-list.test.cjs
 test/linkcheck.test.mjs
 test/linkcheck-assertions.test.mjs
+test/linkcheck-helpers.test.mjs
 test/live-page-claim-guard.test.mjs
 test/macos-helper.test.cjs
 test/no-verification-claim.test.cjs

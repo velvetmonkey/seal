@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 
 const LINKCHECK_TEST = path.resolve(import.meta.dirname, "linkcheck.test.mjs");
+const LINKCHECK_HELPERS_TEST = path.resolve(import.meta.dirname, "linkcheck-helpers.test.mjs");
 const CONTROL_DOCUMENT = path.resolve(import.meta.dirname, "../docs/assurance/linkcheck-population-control.md");
 
 const REQUIRED_ASSERTIONS = [
@@ -26,7 +27,7 @@ const REQUIRED_ASSERTIONS = [
 ];
 
 test("linkcheck assertion inventory refuses a removed assertion by name", () => {
-  const source = readFileSync(LINKCHECK_TEST, "utf8");
+  const source = `${readFileSync(LINKCHECK_TEST, "utf8")}\n${readFileSync(LINKCHECK_HELPERS_TEST, "utf8")}`;
   for (const [name, fragment] of REQUIRED_ASSERTIONS) {
     assert.ok(source.includes(fragment), `linkcheck assertion missing: ${name}`);
   }
