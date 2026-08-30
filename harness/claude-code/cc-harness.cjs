@@ -58,7 +58,7 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the complete exact-call dialog" },
+  { id: "approval_shown", required: "The terminal recording shows the visible message head and the schema-carried exact-call title and description" },
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
@@ -525,15 +525,30 @@ function observeNegotiation(state, begin, end) {
 }
 
 // The dialog Seal asks the client to render is computed from the PINNED
-// artifact's own renderer, not from this checkout, and then looked for in the
-// terminal recording. A line the recording does not carry is reported absent
-// rather than assumed present.
+// artifact's own renderer and contract, not from this checkout, and then
+// looked for in the terminal recording. Claude Code shows the first three
+// message lines before its fold and shows the schema-carried title and
+// description after the fold. A line the recording does not carry is reported
+// absent rather than assumed present.
 function expectedDialogLines(state, note) {
   const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
   const { renderApprovalMessage } = require(rendererPath);
   const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
   if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
-  return rendered.lines;
+  const contractPath = path.join(state.paths.store, "contract", "contract.cjs");
+  const { createApprovalContract } = require(contractPath);
+  const contract = createApprovalContract({
+    terminalWidth: MIN_COLUMNS,
+    ttlMs: 120000,
+    kernelAdapter: { authorize() { throw new Error("dialog rendering does not authorize"); } },
+  });
+  const begun = contract.begin({ tool: GUARDED_TOOL, args: { note } });
+  if (begun.kind !== "input_required") refuse("dialog_unrenderable", `the pinned artifact refuses to create this approval: ${begun.refusal || begun.kind}`);
+  const approve = begun.elicitationParams?.requestedSchema?.properties?.approve;
+  if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
+    refuse("dialog_unrenderable", "the pinned artifact approval schema has no title or description");
+  }
+  return [...rendered.lines.slice(0, 3), approve.title, approve.description];
 }
 
 function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {
@@ -558,7 +573,7 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
       recording_read_error: readError,
       recorder_correspondence: correspondence,
       expected_dialog_lines: found,
-      dialog_rendered_by: "contract/renderer.cjs, read out of the installed pinned artifact",
+      dialog_rendered_by: "contract/renderer.cjs and contract/contract.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
       // Enough of the screen to see WHY a line was not matched, when one was not.
       screen_excerpt: found.every((entry) => entry.found)

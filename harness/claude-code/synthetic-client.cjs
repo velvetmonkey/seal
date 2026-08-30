@@ -193,9 +193,18 @@ async function session() {
       return;
     }
     elicitationMessage = frame.params?.message || "";
+    const approve = frame.params?.requestedSchema?.properties?.approve;
+    if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
+      throw new Error("elicitation/create has no approval title or description");
+    }
     const action = scenario === "accept" ? "accept" : "decline";
+    const messageLines = elicitationMessage.split("\n");
     process.stdout.write("\n");
-    for (const line of elicitationMessage.split("\n")) process.stdout.write(`  ${line}\n`);
+    for (const line of messageLines.slice(0, 3)) process.stdout.write(`  ${line}\n`);
+    if (messageLines.length > 3) process.stdout.write(`  … (+${messageLines.length - 3} more lines)\n`);
+    process.stdout.write(`\n  ${approve.title}\n`);
+    process.stdout.write(`    ${approve.description}\n`);
+    process.stdout.write("\n  Accept    Decline\n");
     process.stdout.write("\n");
     process.stdout.write(`the stand-in answers: ${action}\n`);
     respond(action === "accept" ? { action: "accept", content: { approve: true } } : { action: "decline" });
