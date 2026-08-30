@@ -40,6 +40,29 @@ const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code c
 const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
 const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
 
+function osc8Findings(text) {
+  let count = 0;
+  let malformed = 0;
+  for (let index = 0; index < text.length;) {
+    const start = text.indexOf("\u001B]8;", index);
+    if (start < 0) break;
+    count += 1;
+    const parameterEnd = text.indexOf(";", start + 4);
+    if (parameterEnd < 0) {
+      malformed += 1;
+      break;
+    }
+    let end = parameterEnd + 1;
+    while (end < text.length && text[end] !== "\u0007" && !(text[end] === "\u001B" && text[end + 1] === "\\")) end += 1;
+    if (end >= text.length) {
+      malformed += 1;
+      break;
+    }
+    index = text[end] === "\u0007" ? end + 1 : end + 2;
+  }
+  return { count, malformed };
+}
+
 const REQUIRED_CASES = [
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
@@ -246,6 +269,20 @@ function checkCasts(packDir, manifest, report) {
       report.refuse("terminal_recording_empty", `${name} is empty`);
       continue;
     }
+    let osc8 = { count: 0, malformed: 0 };
+    for (const line of bytes.toString("utf8").split("\n")) {
+      if (line.trim() === "") continue;
+      try {
+        const event = JSON.parse(line);
+        if (Array.isArray(event) && event[1] === "o" && typeof event[2] === "string") {
+          const finding = osc8Findings(event[2]);
+          osc8.count += finding.count;
+          osc8.malformed += finding.malformed;
+        }
+      } catch { /* the manifest and file digest checks report malformed casts */ }
+    }
+    if (osc8.count > 0) report.refuse("terminal_osc8_present", `${name} carries ${osc8.count} OSC 8 hyperlink sequence(s)`);
+    if (osc8.malformed > 0) report.refuse("terminal_osc8_malformed", `${name} carries ${osc8.malformed} unterminated OSC 8 hyperlink sequence(s)`);
     if (bytes.includes(Buffer.from(SYNTHETIC_BANNER, "utf8"))) {
       synthetic = true;
       report.ok(`${name} carries the synthetic fixture banner`);

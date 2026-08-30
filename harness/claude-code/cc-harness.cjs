@@ -343,6 +343,48 @@ function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner 
   return `${lines.join("\n")}\n`;
 }
 
+function stripOsc8(text) {
+  let output = "";
+  for (let index = 0; index < text.length;) {
+    const start = text.indexOf("\u001B]8;", index);
+    if (start < 0) {
+      output += text.slice(index);
+      break;
+    }
+    output += text.slice(index, start);
+    const parameterEnd = text.indexOf(";", start + 4);
+    if (parameterEnd < 0) refuse("cast_osc8_malformed", "an OSC 8 hyperlink has no URI separator");
+    let end = parameterEnd + 1;
+    while (end < text.length && text[end] !== "\u0007" && !(text[end] === "\u001B" && text[end + 1] === "\\")) end += 1;
+    if (end >= text.length) refuse("cast_osc8_malformed", "an OSC 8 hyperlink has no string terminator");
+    index = text[end] === "\u0007" ? end + 1 : end + 2;
+  }
+  return output;
+}
+
+function stripOsc8FromCast(raw) {
+  let changed = false;
+  const lines = raw.split("\n").map((line) => {
+    if (line.trim() === "") return line;
+    let event;
+    try { event = JSON.parse(line); } catch { return line; }
+    if (!Array.isArray(event) || event[1] !== "o" || typeof event[2] !== "string") return line;
+    const payload = stripOsc8(event[2]);
+    if (payload === event[2]) return line;
+    changed = true;
+    event[2] = payload;
+    return JSON.stringify(event);
+  });
+  return changed ? lines.join("\n") : raw;
+}
+
+function copyCastForPack(source, target) {
+  const raw = fs.readFileSync(source, "utf8");
+  const cleaned = stripOsc8FromCast(raw);
+  fs.writeFileSync(target, cleaned);
+  return { changed: cleaned !== raw, bytes: Buffer.byteLength(cleaned) };
+}
+
 function recordingCorrespondence(state, caseId, castPath) {
   const recorded = state.recordings?.[caseId];
   if (!recorded) return { observed: false, reason: "recorder-written provenance is absent" };
@@ -1501,7 +1543,7 @@ function finish(state, options) {
     // pack's `terminal.cast`; the other sessions sit beside it under their
     // case names.
     const target = step.record.caseId === "accept" ? "terminal.cast" : `terminal-${step.record.caseId.replace(/_/g, "-")}.cast`;
-    fs.copyFileSync(source, path.join(packDir, target));
+    copyCastForPack(source, path.join(packDir, target));
     castFiles.push({ file: target, case: step.record.caseId });
   }
 
@@ -1577,7 +1619,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("Read terminal.cast before you publish this pack: it is a verbatim capture of your terminal.");
+  say("The harness removed OSC 8 hyperlink controls from each packed cast. A verbatim terminal capture can still contain anything the operator typed or the client printed; inspect terminal.cast before publication.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }
@@ -1655,6 +1697,7 @@ if (require.main === module) {
 module.exports = {
   CASES,
   castFromScript,
+  copyCastForPack,
   clientExecutableFormat,
   clientCandidates,
   clientIdentity,

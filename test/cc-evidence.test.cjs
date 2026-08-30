@@ -276,6 +276,71 @@ test("the checker refuses an empty terminal recording by name", () => {
   assert.match(result.out, /^REFUSE terminal_recording_empty: terminal\.cast is empty$/m, result.out);
 });
 
+function fixtureCast(payload) {
+  return `${JSON.stringify({ version: 2, width: 80, height: 24 })}\n${JSON.stringify([0, "o", payload])}\n`;
+}
+
+test("the pack writer removes OSC 8 hyperlinks with an ESC-backslash terminator", () => {
+  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-esc-"));
+  const source = path.join(dir, "source.cast");
+  const target = path.join(dir, "packed.cast");
+  fs.writeFileSync(source, fixtureCast(`left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\VISIBLE\u001b]8;;\u001b\\right`));
+  harness.copyCastForPack(source, target);
+  const event = JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1]);
+  assert.equal(event[2], "leftVISIBLEright");
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/);
+});
+
+test("the pack writer removes OSC 8 hyperlinks with a BEL terminator", () => {
+  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-bel-"));
+  const source = path.join(dir, "source.cast");
+  const target = path.join(dir, "packed.cast");
+  fs.writeFileSync(source, fixtureCast(`left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE\u001b]8;;\u0007right`));
+  harness.copyCastForPack(source, target);
+  const event = JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1]);
+  assert.equal(event[2], "leftVISIBLEright");
+  assert.doesNotMatch(fs.readFileSync(target, "utf8"), /session_EXAMPLE/);
+});
+
+test("the pack writer preserves a cast without OSC 8 byte-identically", () => {
+  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-clean-"));
+  const source = path.join(dir, "source.cast");
+  const target = path.join(dir, "packed.cast");
+  const raw = fixtureCast("visible https://example.invalid/session_EXAMPLE");
+  fs.writeFileSync(source, raw);
+  harness.copyCastForPack(source, target);
+  const sourceBytes = fs.readFileSync(source);
+  const targetBytes = fs.readFileSync(target);
+  assert.deepEqual(targetBytes, sourceBytes);
+  assert.equal(digest(targetBytes), digest(sourceBytes));
+});
+
+test("the pack writer refuses a malformed unterminated OSC 8 hyperlink", () => {
+  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak/", "writer-malformed-"));
+  const source = path.join(dir, "source.cast");
+  const target = path.join(dir, "packed.cast");
+  fs.writeFileSync(source, fixtureCast("left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE"));
+  assert.throws(() => harness.copyCastForPack(source, target), (error) => {
+    assert.equal(error.code, "cast_osc8_malformed");
+    return true;
+  });
+});
+
+test("the checker refuses a pack carrying an OSC 8 hyperlink by file and count", () => {
+  const copy = copyOfPack();
+  const castPath = path.join(copy.dir, "terminal.cast");
+  const cast = fs.readFileSync(castPath, "utf8").split("\n");
+  const event = JSON.parse(cast[1]);
+  event[2] = `\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\${event[2]}\u001b]8;;\u001b\\`;
+  cast[1] = JSON.stringify(event);
+  fs.writeFileSync(castPath, cast.join("\n"));
+  rehash(copy, "terminal.cast");
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE terminal_osc8_present: terminal\.cast carries 2 OSC 8 hyperlink sequence\(s\)$/m, result.out);
+  assert.doesNotMatch(result.out, /session_EXAMPLE/);
+});
+
 test("the checker refuses evidence added beside the manifest", () => {
   const copy = copyOfPack();
   fs.writeFileSync(path.join(copy.dir, "extra-evidence.txt"), "added after the run\n");
