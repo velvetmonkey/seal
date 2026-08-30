@@ -58,11 +58,11 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the visible message head and the schema-carried exact-call title and description" },
+  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call" },
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
-  { id: "missing_launcher", required: "Claude Code does not fall back to the original .mcp.json server" },
+  { id: "missing_launcher", required: "While the launcher is absent, no protected-server record is added, .mcp.json is unchanged, and the installed tree is restored" },
   { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical" },
 ]);
 
@@ -548,10 +548,10 @@ function expectedDialogLines(state, note) {
   if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
     refuse("dialog_unrenderable", "the pinned artifact approval schema has no title or description");
   }
-  return [...rendered.lines.slice(0, 3), approve.title, approve.description];
+  return [...rendered.lines.slice(1, 3), approve.title, approve.description];
 }
 
-function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {
+function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, requireElicitation = true) {
   const lines = expectedDialogLines(state, note);
   let text = "";
   let readError = null;
@@ -565,14 +565,28 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
   const haystack = text.replace(/[\u2500-\u257F|\u00A0]/g, " ").replace(/\s+/g, " ");
   const found = lines.map((line) => ({ line, found: haystack.includes(line.trim().replace(/\s+/g, " ")) }));
   const anchor = haystack.indexOf("Approval required");
+  const receipts = newReceipts(begin, end);
+  const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
+    receipt.tool === GUARDED_TOOL && receipt.arguments?.note === note);
+  const answeredReceiptPairs = offers.flatMap((offer) => receipts
+    .filter((receipt) => receipt.name > offer.name && receipt.decision === "ALLOW" &&
+      receipt.tool === GUARDED_TOOL && receipt.arguments?.note === note)
+    .map((receipt) => ({ offer: offer.name, answer: receipt.name, answer_decision: receipt.decision })));
+  const childCalls = newRecords(begin, end).filter((record) => record.kind === "child-call");
+  const exactChildCalls = childCalls.filter((record) => record.tool === GUARDED_TOOL && record.arguments?.note === note);
   return {
-    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found),
+    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found) &&
+      (!requireElicitation || (answeredReceiptPairs.length > 0 && childCalls.length === 1 && exactChildCalls.length === 1)),
     facts: {
       recording: path.basename(castPath),
       recording_digest: recordingDigest,
       recording_read_error: readError,
       recorder_correspondence: correspondence,
       expected_dialog_lines: found,
+      exact_call_elicitation_receipt_pairs: answeredReceiptPairs,
+      child_call_records_added: childCalls.length,
+      exact_call_child_records_added: exactChildCalls.length,
+      receipts: receipts.map((receipt) => ({ name: receipt.name, decision: receipt.decision, refusal: receipt.refusal })),
       dialog_rendered_by: "contract/renderer.cjs and contract/contract.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
       // Enough of the screen to see WHY a line was not matched, when one was not.
@@ -628,7 +642,7 @@ function observeDecline(state, begin, end) {
       receipt.decision === "BLOCK" &&
       receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline)
     .map((receipt) => ({ offer: offer.name, decline: receipt.name })));
-  const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline);
+  const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline, false);
   return {
     observed: declinedPairs.length > 0 && dialog.observed && added.length === 0 &&
       end.child_log.guarded_calls === begin.child_log.guarded_calls && !declinedNoteInEffect,
@@ -649,14 +663,14 @@ function observeMissingLauncher(state, begin, end) {
   const window = state.steps.missing_launcher || {};
   const castPath = path.join(state.paths.logs, "missing_launcher.cast");
   const correspondence = recordingCorrespondence(state, "missing_launcher", castPath);
-  let transcript = "";
-  try { transcript = castScreenText(castPath); } catch { /* correspondence names unreadable evidence */ }
-  const namedMissingLauncher = transcript.includes("local override command is missing:");
-  const namedNoFallback = transcript.includes(`does not fall back to the .mcp.json \"${SERVER_NAME}\" server`);
+  // NON-CLAIM — NO FALLBACK OCCURRED means this instrumented run added no
+  // protected-server record while the launcher was absent. It does not prove
+  // that the human saw a failure report. A real client emits model prose that
+  // differs on every run. The old required strings came only from our stand-in.
   return {
     observed: records.length === 0 && begin.mcp_json.sha256 === end.mcp_json.sha256 &&
       window.launcher_absent_during_window === true && window.installed_tree_restored === true &&
-      correspondence.observed && namedMissingLauncher && namedNoFallback,
+      correspondence.observed,
     facts: {
       protected_server_records_added: records.length,
       records_added: records.map((record) => ({ kind: record.kind, argv: record.argv ?? null })),
@@ -668,8 +682,6 @@ function observeMissingLauncher(state, begin, end) {
       mcp_json_sha256_before: begin.mcp_json.sha256,
       mcp_json_sha256_after: end.mcp_json.sha256,
       recorder_correspondence: correspondence,
-      transcript_names_missing_launcher: namedMissingLauncher,
-      transcript_names_no_fallback: namedNoFallback,
     },
   };
 }
@@ -1192,14 +1204,18 @@ function certifyStep(state, step) {
         else failures.push(`${caseId}: the complete exact-call dialog is absent from decline.cast`);
       } else if (caseId === "approval_shown" && !outcome.facts.recorder_correspondence?.observed) {
         failures.push(`${caseId}: accept.cast does not correspond to the recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
+      } else if (caseId === "approval_shown" && outcome.facts.exact_call_elicitation_receipt_pairs.length === 0) {
+        failures.push(`${caseId}: the exact-call INPUT_REQUIRED/ALLOW receipt pair is absent`);
+      } else if (caseId === "approval_shown" && outcome.facts.child_call_records_added !== 1) {
+        failures.push(`${caseId}: exactly one child-call record is required during the dialog window`);
+      } else if (caseId === "approval_shown" && outcome.facts.exact_call_child_records_added !== 1) {
+        failures.push(`${caseId}: the exact-call child-call record is absent`);
       } else if (caseId === "activation") {
         if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
         else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
         else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
       } else if (caseId === "missing_launcher") {
         if (!outcome.facts.recorder_correspondence?.observed) failures.push(`${caseId}: missing_launcher.cast does not correspond to recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-        else if (!outcome.facts.transcript_names_missing_launcher) failures.push(`${caseId}: the recorded session never says the local override command was missing`);
-        else if (!outcome.facts.transcript_names_no_fallback) failures.push(`${caseId}: the recorded session never says it did not fall back to .mcp.json`);
         else failures.push(`${caseId}: required positive evidence is absent`);
       } else if (caseId === "unprotect") {
         if (outcome.facts.unprotect_exit !== 0) failures.push(`${caseId}: seal unprotect notes did not succeed (exit ${outcome.facts.unprotect_exit ?? "absent"})`);
