@@ -319,6 +319,7 @@ function terminalScreen(header, text, boundaries = []) {
   let column = 0;
   let savedRow = 0;
   let savedColumn = 0;
+  let wrapPending = false;
   const snapshots = [];
   const boundarySet = new Set(boundaries);
   const snapshot = () => snapshots.push(grid.map((line) => line.join("")).join("\n"));
@@ -334,6 +335,7 @@ function terminalScreen(header, text, boundaries = []) {
   const move = (nextRow, nextColumn) => {
     row = clampRow(nextRow);
     column = clampColumn(nextColumn);
+    wrapPending = false;
   };
   const parameter = (params, index, fallback = 1) => {
     const value = params[index];
@@ -405,15 +407,16 @@ function terminalScreen(header, text, boundaries = []) {
       index += 2;
       continue;
     }
-    if (text[index] === "\r") { column = 0; index += 1; continue; }
-    if (text[index] === "\n") { row += 1; scroll(); index += 1; continue; }
-    if (text[index] === "\b") { column = Math.max(0, column - 1); index += 1; continue; }
-    if (text[index] === "\t") { column = Math.min(width - 1, (Math.floor(column / 8) + 1) * 8); index += 1; continue; }
+    if (text[index] === "\r") { column = 0; wrapPending = false; index += 1; continue; }
+    if (text[index] === "\n") { row += 1; scroll(); wrapPending = false; index += 1; continue; }
+    if (text[index] === "\b") { column = Math.max(0, column - 1); wrapPending = false; index += 1; continue; }
+    if (text[index] === "\t") { column = Math.min(width - 1, (Math.floor(column / 8) + 1) * 8); wrapPending = false; index += 1; continue; }
     if (code < 0x20 || code === 0x7f) { index += 1; continue; }
+    if (wrapPending) { column = 0; row += 1; scroll(); wrapPending = false; }
     const character = String.fromCodePoint(text.codePointAt(index));
     grid[row][column] = character;
-    column += 1;
-    if (column >= width) { column = 0; row += 1; scroll(); }
+    if (column === width - 1) wrapPending = true;
+    else column += 1;
     index += character.length;
   }
   if (boundarySet.has(text.length)) snapshot();
