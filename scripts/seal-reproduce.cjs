@@ -335,7 +335,6 @@ function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
         resolvedSource === realpathOrRefuse(ROOT, `source checkout is absent: ${ROOT}`)) {
       refuse(`pinned source stage is not disposable: ${source}`);
     }
-    makeTreeRemovable(source);
     // Re-lstat the named path immediately before rmSync. A matching path
     // string is not identity: rename plus mkdir can reuse the same name for
     // a different directory. Device and inode identify the directory object.
@@ -343,6 +342,7 @@ function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
     if (currentSource.dev !== acceptedSource.dev || currentSource.ino !== acceptedSource.ino) {
       refuse(`pinned source stage changed before delete: ${source}`);
     }
+    makeTreeRemovable(source);
     fs.rmSync(source, { recursive: true, force: true });
     process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
     cloneSource(pin, source);
