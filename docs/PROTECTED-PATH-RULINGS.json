@@ -1,19 +1,15 @@
 {
   "version": 1,
   "ruling": {
-    "base": "042b6a3a7bdd632f7d76de629e16b70e5bbe36fc",
+    "base": "6bec1a39c10c1cc84e68c5aa866795b9d3be27af",
     "author": "velvetmonkey",
-    "date": "2026-08-29",
-    "scope": "Ben ruled on 2026-08-29. This ruling authorises the CI workflow change that refuses non-canonical commit authors, and nothing else. Seal refuses a new commit whose author email is neither the operator address nor a lane address at the reserved .invalid domain.",
+    "date": "2026-08-30",
+    "scope": "Ben ruled on 2026-08-30. The fixture Scope line was false after the sentence was shortened, and this ruling authorises updating it to what the product now prints, and nothing else.",
     "retires": [],
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "1d89b0834c49c2f3251a300dc21e00e9351e6d9d"
-      },
-      {
-        "path": "scripts/resolve-ci-diff-range.cjs",
-        "blob": "9598bb7ec1ee065db2f5a42bacf9144f5ece174e"
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "be528188bb8458b31a864e955559414e9ab29507"
       }
     ]
   }
