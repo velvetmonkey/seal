@@ -105,6 +105,14 @@ test("protect refuses a misspelled tool and names every observed tool", () => {
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
 });
 
+test("protect refuses a tool name with leading or trailing whitespace", () => {
+  const ctx = setup("ok", "db.drop_table, db.drop_table");
+  const result = run(ctx, ["protect", "db", " db.drop_table"]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.out, /usage: seal protect SERVER TOOL \[TOOL\.\.\.\]/);
+  assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
+});
+
 test("an observed tool protects end to end and reports every other tool as not approval-gated", async () => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const protectedRun = run(ctx, ["protect", "db", "db.drop_table"]);
