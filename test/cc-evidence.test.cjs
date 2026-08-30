@@ -17,6 +17,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { createHash } = require("node:crypto");
+const harness = require("../harness/claude-code/cc-harness.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
@@ -26,6 +27,39 @@ const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "assurance", "claude-code-eviden
 const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
 
 let sharedPack = null;
+
+test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
+  const directStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    // This is the process chain from a direct .mcp.json launch. It has no
+    // Seal proxy entry. The later initialize and tools/list frames do not
+    // change the start record or make the launch mediated.
+    ancestry: [{ pid: 1, argv: ["/usr/bin/bash", "client"] }],
+  };
+  const hiddenByRoundTwo = [directStart].filter((record) => record.kind === "child-call");
+  assert.equal(hiddenByRoundTwo.length, 0, "the round-2 child-call-only filter hides this start");
+  assert.deepEqual(harness.nonProxyStarts([directStart], "/state/protect.json"), [directStart]);
+});
+
+test("missing launcher refuses a start whose ancestry is absent", () => {
+  const unreadableStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+  };
+  assert.deepEqual(harness.nonProxyStarts([unreadableStart], "/state/protect.json"), [unreadableStart]);
+});
+
+test("missing launcher accepts a harness probe start below the Seal proxy", () => {
+  const probeStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [
+      { pid: 42, argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"] },
+    ],
+  };
+  assert.deepEqual(harness.nonProxyStarts([probeStart], "/state/protect.json"), []);
+});
 
 // One synthetic run serves every test in this file: it installs the built
 // artifact, protects a fixture server, drives the whole eight-case walk with

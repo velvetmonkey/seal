@@ -256,7 +256,9 @@ test("missing_launcher ignores harness probe lifecycle records but names a fallb
   const endPath = path.join(runDir, "snapshots", "missing_launcher.end.json");
   const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
   const probeRecords = [
-    { kind: "start", argv: ["claude", "mcp", "get", "notes"] },
+    { kind: "start", argv: ["claude", "mcp", "get", "notes"], ancestry: [
+      { argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", state.paths.protectState] },
+    ] },
     { kind: "frame", frame: "initialize" },
     { kind: "frame", frame: "tools/list" },
     { kind: "frame", frame: "tools/call" },
