@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const test = require("node:test");
 const path = require("node:path");
 const { RENDERER_IDENTITY, renderCast, rendererIdentity } = require("../harness/claude-code/terminal-renderer.cjs");
 
 function fixture(events, width = 20, height = 3) {
-  const scratch = path.join(process.env.TMPDIR || "/home/monkey/scratch/castrender5", "castrender");
+  const scratch = path.join(
+    process.env.RUNNER_TEMP || process.env.TMPDIR || os.tmpdir(),
+    "castrender",
+  );
   fs.mkdirSync(scratch, { recursive: true });
   const directory = fs.mkdtempSync(path.join(scratch, "renderer-test-"));
   const cast = `${directory}/fixture.cast`;
