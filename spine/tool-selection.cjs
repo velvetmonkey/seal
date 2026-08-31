@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Small, shell-owned tool-call selection. This module does not authorize a
 // call. It only decides whether the existing approval contract must see it.
+// The kernel does not evaluate or prove the predicate.
+// String values match exactly: "delete" does not match "delete ".
 
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
@@ -121,7 +123,10 @@ function evaluateSelection(selection, args, rawFrame) {
   }
   const sameType = predicate.value === null ? actual === null : typeof actual === typeof predicate.value;
   if (!sameType || (actual !== null && typeof actual === "object")) return { gate: true, label, detail: `predicate does not apply because argument ${predicate.argument} has a different JSON type` };
-  return Object.is(actual, predicate.value) ? { gate: true, label, detail: "predicate matched" } : { gate: false };
+  // JSON numbers have no signed-zero distinction. IEEE-754 -0 and +0 are one scalar.
+  const sameScalar = Object.is(actual, predicate.value)
+    || (typeof actual === "number" && typeof predicate.value === "number" && actual === predicate.value);
+  return sameScalar ? { gate: true, label, detail: "predicate matched" } : { gate: false };
 }
 
 module.exports = { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection, parsePredicate, parseToolSelection };

@@ -90,6 +90,30 @@ test("a bare tool name gates every call as before", async (t) => {
   t.diagnostic(prompt.params.message.split("\n").at(-1));
 });
 
+test("JSON number zero and signed zero are one scalar", () => {
+  const zero = normalizeToolSelection({ name: "db.mutate", predicate: "count=0" });
+  const negative = normalizeToolSelection({ name: "db.mutate", predicate: "count=-0" });
+  const rawNegative = '{"jsonrpc":"2.0","params":{"arguments":{"count":-0}}}';
+  const rawPositive = '{"jsonrpc":"2.0","params":{"arguments":{"count":0}}}';
+  const argsNegative = JSON.parse('{"count":-0}');
+  const argsPositive = JSON.parse('{"count":0}');
+  assert.equal(evaluateSelection(zero, argsNegative, rawNegative).detail, "predicate matched");
+  assert.equal(evaluateSelection(zero, argsPositive, rawPositive).detail, "predicate matched");
+  assert.equal(evaluateSelection(negative, argsPositive, rawPositive).detail, "predicate matched");
+  assert.equal(evaluateSelection(negative, argsNegative, rawNegative).detail, "predicate matched");
+});
+
+test("JSON signed zero matches JSON number zero", async (t) => {
+  const run = session({ name: "db.mutate", predicate: "count=0" });
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write('{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"db.mutate","arguments":{"count":-0}}}');
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  assert.match(prompt.params.message, /Selection predicate: db\.mutate\?count=0 \(predicate matched\)/);
+  assert.equal(run.frames.some((frame) => frame.id === 12), false);
+  t.diagnostic(prompt.params.message.split("\n").at(-1));
+});
+
 test("argument-shape evasion attempts all gate", (t) => {
   const selection = normalizeToolSelection({ name: "db.mutate", predicate: 'operation="delete"' });
   let deep = { operation: "delete" };
