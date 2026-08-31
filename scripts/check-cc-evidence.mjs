@@ -31,14 +31,15 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MANIFEST_SCHEMA = "seal.claude-code-evidence/v1";
+const MANIFEST_SCHEMA = "seal.claude-code-evidence/v2";
 const PLATFORM_DIRECTORY = "linux-x64";
 const EVIDENCE_ROOT_NAME = "claude-code";
 const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
 const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code call not observed";
 const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
-const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
+const REQUIRED_FILES = ["rendered-transcript.txt", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
+const SESSION_IDENTIFIER = Buffer.from("claude.ai/code/session_", "utf8");
 
 const REQUIRED_CASES = [
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
@@ -246,6 +247,14 @@ function checkCasts(packDir, manifest, report) {
       report.refuse("terminal_recording_empty", `${name} is empty`);
       continue;
     }
+    if (bytes.includes(SESSION_IDENTIFIER)) {
+      report.refuse("rendered_transcript_identifier_present", `${name} carries a Claude Code session identifier pattern`);
+    }
+    const controls = [...bytes].filter((value) => (value >= 0 && value <= 0x1f) || (value >= 0x7f && value <= 0x9f));
+    const nonNewlineControls = controls.filter((value) => value !== 0x0a);
+    if (nonNewlineControls.length > 0) {
+      report.refuse("rendered_transcript_control_present", `${name} carries ${nonNewlineControls.length} C0/C1 control byte(s) other than newline`);
+    }
     if (bytes.includes(Buffer.from(SYNTHETIC_BANNER, "utf8"))) {
       synthetic = true;
       report.ok(`${name} carries the synthetic fixture banner`);
@@ -254,6 +263,32 @@ function checkCasts(packDir, manifest, report) {
     }
   }
   return synthetic;
+}
+
+function checkRenderingProvenance(packDir, manifest, report) {
+  const rendering = manifest.rendering;
+  if (!rendering || typeof rendering !== "object") {
+    report.refuse("rendering_provenance_absent", "the manifest carries no rendering provenance");
+    return;
+  }
+  for (const field of ["raw_recording_digest", "renderer_identity", "renderer_result", "public_derived_transcript_digest"]) {
+    if (rendering[field] === undefined) report.refuse("rendering_provenance_absent", `the manifest carries no ${field}`);
+  }
+  if (rendering.renderer_identity !== "seal-terminal-renderer/js-screen-v1") report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}`);
+  if (rendering.renderer_result !== "final-visible-frame-only") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
+  const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
+  for (const entry of entries) {
+    const transcriptName = manifest.environment?.recordings?.find((recording) => recording.case === entry.case)?.file;
+    const transcript = typeof transcriptName === "string" ? join(packDir, transcriptName) : null;
+    if (!entry.raw_recording_digest?.sha256 || !entry.public_derived_transcript_digest?.sha256) {
+      report.refuse("rendering_provenance_incomplete", `rendering provenance for ${entry.case} does not name both source and derived digests`);
+    }
+    if (transcript && existsSync(transcript) && statSync(transcript).isFile()) {
+      const got = readFileSync(transcript);
+      if (sha256(got) !== entry.public_derived_transcript_digest.sha256) report.refuse("rendering_digest_mismatch", `${entry.case} transcript digest does not match rendering provenance`);
+    }
+  }
+  if (entries.length === 0) report.refuse("rendering_provenance_absent", "the manifest carries no per-recording rendering provenance");
 }
 
 function checkArtifact(manifest, report, { artifactSha256, artifactBytes }) {
@@ -542,6 +577,7 @@ function checkPack(packDir, options) {
   const observed = checkCases(manifest, report);
   const childRecords = checkChildLog(packDir, manifest, report);
   const castSynthetic = checkCasts(packDir, manifest, report);
+  checkRenderingProvenance(packDir, manifest, report);
   const processSynthetic = checkProcessProvenance(childRecords, manifest, report, options);
   checkSynthetic(packDir, manifest, report, options, { processSynthetic, castSynthetic });
   checkFixtureRevision(manifest, report, options);

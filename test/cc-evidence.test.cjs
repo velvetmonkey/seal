@@ -259,25 +259,25 @@ test("the checker refuses a manifest naming the wrong artifact", () => {
 
 test("the checker refuses a manifest referencing a file that is absent", () => {
   const copy = copyOfPack();
-  fs.rmSync(path.join(copy.dir, "terminal.cast"));
+  fs.rmSync(path.join(copy.dir, "rendered-transcript.txt"));
   const result = check([copy.dir, "--allow-synthetic"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /^REFUSE evidence_file_absent: manifest names terminal\.cast, which is not present in the pack$/m, result.out);
+  assert.match(result.out, /^REFUSE evidence_file_absent: manifest names rendered-transcript\.txt, which is not present in the pack$/m, result.out);
 });
 
 test("the checker refuses an empty terminal recording by name", () => {
   const copy = copyOfPack();
-  const castPath = path.join(copy.dir, "terminal.cast");
+  const castPath = path.join(copy.dir, "rendered-transcript.txt");
   fs.writeFileSync(castPath, "");
   copy.rewriteManifest((manifest) => {
-    const entry = manifest.files.find((file) => file.path === "terminal.cast");
+    const entry = manifest.files.find((file) => file.path === "rendered-transcript.txt");
     entry.sha256 = digest(Buffer.alloc(0));
     entry.bytes = 0;
   });
   const result = check([copy.dir, "--allow-synthetic"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /^REFUSE evidence_file_empty: terminal\.cast is empty$/m, result.out);
-  assert.match(result.out, /^REFUSE terminal_recording_empty: terminal\.cast is empty$/m, result.out);
+  assert.match(result.out, /^REFUSE evidence_file_empty: rendered-transcript\.txt is empty$/m, result.out);
+  assert.match(result.out, /^REFUSE terminal_recording_empty: rendered-transcript\.txt is empty$/m, result.out);
 });
 
 test("the checker refuses evidence added beside the manifest", () => {
@@ -369,7 +369,7 @@ test("PATH 3 refuses an impostor named claude against the operator's trusted exe
   ]);
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^REFUSE client_executable_identity_mismatch: /m, result.out);
-  assert.match(result.out, /^OK\s+terminal\.cast carries the synthetic fixture banner$/m, result.out);
+  assert.match(result.out, /^OK\s+rendered-transcript\.txt carries the synthetic fixture banner$/m, result.out);
 });
 
 test("a release pack without an operator-supplied client digest is refused by name", () => {

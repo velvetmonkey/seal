@@ -149,8 +149,9 @@ Two cautions for the operator:
 
 1. Claude Code starts in a fresh `HOME` and may ask you to sign in. Do that in
    the first recorded session **before** anything else, or sign in beforehand:
-   the recording is a verbatim capture of your terminal, and anything you type
-   into it is in the pack. Read `terminal.cast` before publishing it.
+   the raw recording is a verbatim capture of your terminal, and anything you type
+   into it is in the run directory. The pack carries a rendered transcript. Read
+   `rendered-transcript.txt` before publishing it.
 2. The installed store is read-only by design. `chmod -R u+w` the run directory
    before deleting it.
 
@@ -162,19 +163,29 @@ Two cautions for the operator:
     linux-x64/
       <seal-artifact-sha256>/
         manifest.json
-        terminal.cast
+        rendered-transcript.txt
         proxy.jsonl
         child.jsonl
         before-after.json
         approvals.journal
         receipts/
         snapshots.json
-        terminal-<case>.cast
+        rendered-transcript-<case>.txt
 ```
+
+The evidence contract is `seal.claude-code-evidence/v2`. The identifier lives
+in `manifest.json.manifest`. The harness writes it in
+`harness/claude-code/cc-harness.cjs`, and the checker reads it in
+`scripts/check-cc-evidence.mjs`. Version 1 packs are refused because they
+publish raw `.cast` files instead of the required rendered transcript.
 
 `manifest.json` names the artifact, the client, the environment, the fixture
 revision, the eight expected cases with their required observations, what was
-observed, and the SHA-256 and byte length of every other file in the pack.
+observed, the renderer provenance, and the SHA-256 and byte length of every
+other file in the pack. The rendered transcript is derived from the raw cast.
+It removes terminal control sequences, not content. Visible text can still
+contain secrets or other sensitive content. This pack is not safe to publish
+without inspection.
 
 ## The checker
 
@@ -194,8 +205,10 @@ not the label the observations produce. It also strictly parses the fixture's
 numbered digest chain, compares the complete log to the independent final
 boundary digest, length, and record count in `snapshots.json`, and derives the
 client executable identity from process ancestry the fixture read from `/proc`
-while the client and Seal proxy were alive. It also reads every recorded cast;
-a synthetic fixture banner in a cast is synthetic evidence, not ignored data.
+while the client and Seal proxy were alive. It also reads every rendered
+transcript; a synthetic fixture banner in a transcript is synthetic evidence,
+not ignored data. It refuses a transcript that contains a session identifier
+or a C0/C1 control byte other than LF.
 
 For a release claim, the operator must additionally supply the SHA-256 of the
 actual Claude Code executable they independently verified (not a hash copied

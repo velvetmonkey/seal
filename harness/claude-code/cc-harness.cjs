@@ -35,7 +35,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const HARNESS_SCHEMA = "seal.cc-harness/v1";
-const MANIFEST_SCHEMA = "seal.claude-code-evidence/v1";
+const MANIFEST_SCHEMA = "seal.claude-code-evidence/v2";
 const SERVER_NAME = "notes";
 const GUARDED_TOOL = "append_note";
 const OPEN_TOOL = "read_notes";
@@ -287,24 +287,13 @@ function loadSnapshot(state, caseId, edge) {
 
 // -------------------------------------------------------- terminal recorder
 
-const ANSI = /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][\s\S]*?(?:\u0007|\u001B\\)|\u001B[()][A-Za-z0-9]|\u001B[=>]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
-function stripTerminalControl(text) {
-  return text.replace(ANSI, " ").replace(/\r/g, "\n");
-}
-
-// The screen text of a cast: the payload of every output event, in order, with
-// the terminal's own control sequences removed. This is what a human read.
+// The screen text of a cast comes from the same terminal renderer that writes
+// the public transcript. It is a final visible frame, not a sanitised byte
+// stream.
 function castScreenText(castPath) {
-  const raw = fs.readFileSync(castPath, "utf8");
-  let text = "";
-  for (const [index, line] of raw.split("\n").entries()) {
-    if (index === 0 || line.trim() === "") continue; // line 0 is the cast header
-    let event;
-    try { event = JSON.parse(line); } catch { continue; }
-    if (Array.isArray(event) && event[1] === "o") text += String(event[2]);
-  }
-  return stripTerminalControl(text);
+  return parseCast(castPath);
 }
 
 // util-linux `script` is the recorder because it is present on a stock Linux
@@ -799,7 +788,7 @@ const STEPS = [
         "STEP 1 of 6 — activation.",
         "",
         "Claude Code starts in the pinned temporary HOME, so it may ask you to",
-        "sign in. Sign in BEFORE anything else: the session is recorded verbatim",
+        "sign in. Sign in BEFORE anything else: the raw terminal recording is verbatim and stays in the run directory",
         "and a login code typed later would be recorded with it.",
         "",
         "In the session:",
@@ -1492,17 +1481,26 @@ function finish(state, options) {
   const receiptNames = (() => { try { return fs.readdirSync(state.paths.receiptsDir).filter((name) => name.endsWith(".json")).sort(); } catch { return []; } })();
   for (const name of receiptNames) fs.copyFileSync(path.join(state.paths.receiptsDir, name), path.join(packDir, "receipts", name));
 
-  const castFiles = [];
+  const transcriptFiles = [];
+  const provenance = [];
   for (const step of STEPS) {
     if (!step.record) continue;
     const source = path.join(state.paths.logs, `${step.record.caseId}.cast`);
     if (!fs.existsSync(source)) continue;
-    // The accept session carries the dialog that was approved, so it is the
-    // pack's `terminal.cast`; the other sessions sit beside it under their
-    // case names.
-    const target = step.record.caseId === "accept" ? "terminal.cast" : `terminal-${step.record.caseId.replace(/_/g, "-")}.cast`;
-    fs.copyFileSync(source, path.join(packDir, target));
-    castFiles.push({ file: target, case: step.record.caseId });
+    // The raw cast stays in the run directory. The pack carries only the
+    // rendered final visible frame derived from that cast.
+    const target = step.record.caseId === "accept" ? "rendered-transcript.txt" : `rendered-transcript-${step.record.caseId.replace(/_/g, "-")}.txt`;
+    fs.writeFileSync(path.join(packDir, target), renderCast(source));
+    const rawDigest = digestOf(source);
+    const publicDigest = digestOf(path.join(packDir, target));
+    transcriptFiles.push({ file: target, case: step.record.caseId });
+    provenance.push({
+      case: step.record.caseId,
+      raw_recording_digest: rawDigest,
+      renderer_identity: RENDERER_IDENTITY,
+      renderer_result: RENDERER_RESULT,
+      public_derived_transcript_digest: publicDigest,
+    });
   }
 
   const files = [];
@@ -1547,8 +1545,8 @@ function finish(state, options) {
       home: state.paths.home,
       xdg_data_home: state.paths.data,
       project: state.paths.project,
-      recorder: "util-linux script → asciinema cast v2",
-      recordings: castFiles,
+      recorder: "util-linux script → asciinema cast v2; raw casts remain unpublished in the run directory",
+      recordings: transcriptFiles,
     },
     fixture: {
       path: "harness/claude-code/fixture-server.cjs",
@@ -1560,6 +1558,13 @@ function finish(state, options) {
       notes: NOTES,
     },
     harness: state.harness,
+    rendering: {
+      raw_recording_digest: provenance.map((entry) => ({ case: entry.case, ...entry.raw_recording_digest })),
+      renderer_identity: RENDERER_IDENTITY,
+      renderer_result: RENDERER_RESULT,
+      public_derived_transcript_digest: provenance.map((entry) => ({ case: entry.case, ...entry.public_derived_transcript_digest })),
+      recordings: provenance,
+    },
     limitations: [
       "The harness cannot establish that a human rather than the client originated the decline.",
       "Binding is bookkeeping, not a control: a determined author with local file access can rewrite recorder sources, timing, cast, and harness state consistently. This detects mistakes, not forgery.",
@@ -1577,7 +1582,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("Read terminal.cast before you publish this pack: it is a verbatim capture of your terminal.");
+  say("Read rendered-transcript.txt before you publish this pack: it is a lossy final-frame transcript derived from the raw terminal recording, and it still contains visible content.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }
