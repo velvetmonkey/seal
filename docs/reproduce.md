@@ -9,12 +9,17 @@ source recipe verifies and installs elan v4.2.3, selects the repository's
 Emscripten 6.0.0 and patched Lean WASM source trees; those toolchain versions are not left to the
 reader to choose.
 
+The tag named by this command was withdrawn and has no downloadable assets.
+Do not run this comparison for that tag.
+Run it only against a tag that has a published GitHub release with its required assets.
+
 ```bash
 tag="v$(cat VERSION)"
 node scripts/seal-reproduce.cjs "$tag" --platform linux-x64
 ```
 
-The command checks only `seal-<tag>-linux-x64`. It downloads that artifact and `SHA256SUMS`, refuses before installation
+For a published release with those assets, the command checks only `seal-<tag>-linux-x64`.
+It downloads that artifact and `SHA256SUMS`, refuses before installation
 when the declared byte count or SHA-256 does not match the downloaded asset, installs into a new
 temporary prefix, and hashes the installed `runtime/kernel/wasm/seal.wasm`. Separately, it checks
 out the release's pinned `seal-host` source commit, provisions the pinned toolchains, builds the
@@ -46,7 +51,7 @@ The native macOS helper is release-produced, not independently reproduced, and i
 
 ## Authority declaration
 
-The default is `same-authority`:
+For a published release with the required assets, the default is `same-authority`:
 
 ```bash
 tag="v$(cat VERSION)"
