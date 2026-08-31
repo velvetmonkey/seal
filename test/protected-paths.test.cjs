@@ -3,6 +3,7 @@ const { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync 
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-protected-paths.cjs");
@@ -19,7 +20,7 @@ function git(root, args) {
 }
 
 function fixture() {
-  const root = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-path-test-"));
+  const root = testTmpdir(join(SCRATCH_ROOT, "pinprotect-path-test-"));
   git(root, ["init", "-q"]);
   git(root, ["config", "user.email", "pinprotect@example.invalid"]);
   git(root, ["config", "user.name", "Pinprotect Test"]);
@@ -156,7 +157,7 @@ test("a rename between two unprotected paths passes", (t) => {
 
 test("changing a protected-list entry fails closed and names the change", (t) => {
   const root = fixture();
-  const scriptRoot = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-list-test-"));
+  const scriptRoot = testTmpdir(join(SCRATCH_ROOT, "pinprotect-list-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   t.after(() => rmSync(scriptRoot, { recursive: true, force: true }));
   const base = git(root, ["rev-parse", "HEAD"]);

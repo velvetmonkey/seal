@@ -12,6 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -26,7 +27,7 @@ function assertExactSurfaces(output, readme) {
 }
 
 function runDemo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-authorization-status-control-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-authorization-status-control-"));
   try {
     const output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       cwd: ROOT, input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],

@@ -4,6 +4,8 @@ import { resolve, join } from "node:path";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import test from "node:test";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = resolve(ROOT, "scripts/claim-bearing-file-inventory.mjs");
@@ -20,7 +22,7 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
   const result = spawnSync(process.execPath, [GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^README\.md\tCOVERED by /m);
-  const worktree = mkdtempSync(join(tmpdir(), "seal-claim-inventory-"));
+  const worktree = testTmpdir(join(tmpdir(), "seal-claim-inventory-"));
   try {
     mkdirSync(join(worktree, "scripts"));
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
@@ -37,7 +39,7 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
 });
 
 test("a bare contextual component reference remains outside the subject-keyed rule", () => {
-  const worktree = mkdtempSync(join(tmpdir(), "seal-claim-inventory-bare-"));
+  const worktree = testTmpdir(join(tmpdir(), "seal-claim-inventory-bare-"));
   try {
     mkdirSync(join(worktree, "scripts"));
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
@@ -55,7 +57,7 @@ test("a bare contextual component reference remains outside the subject-keyed ru
 
 test("a coveredBy marker must exist in the cited proof file", () => {
   mkdirSync(ARTIFACT_ROOT, { recursive: true });
-  const worktree = mkdtempSync(join(ARTIFACT_ROOT, "inventory-marker-"));
+  const worktree = testTmpdir(join(ARTIFACT_ROOT, "inventory-marker-"));
   try {
     mkdirSync(join(worktree, "scripts"));
     mkdirSync(join(worktree, "test"));

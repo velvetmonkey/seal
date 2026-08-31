@@ -15,6 +15,7 @@ set -uo pipefail
 
 declared_tests=()
 roster_reported=0
+tmpguard_owns_run_root=0
 
 report_roster_line() {
   echo "$1"
@@ -45,6 +46,12 @@ report_unreconciled_exit() {
   if [[ -n "${record_snapshot_file:-}" ]]; then
     rm -f -- "$record_snapshot_file"
   fi
+  if [[ -n "${tmp_before:-}" ]]; then
+    rm -f -- "$tmp_before"
+  fi
+  if (( tmpguard_owns_run_root == 1 )) && [[ -n "${TMPGUARD_RUN_ROOT:-}" && -n "${script_root:-}" ]]; then
+    node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
+  fi
   if (( roster_reported == 0 )); then
     echo "ROSTER: unknown; driver exited $status before reconciliation"
   fi
@@ -56,6 +63,19 @@ report_driver_signal() {
   if (( roster_reported == 0 )); then
     echo "ROSTER: unknown; driver died at SIG$signal"
     roster_reported=1
+  fi
+  if [[ -n "${output_file:-}" ]]; then
+    rm -f -- "$output_file"
+  fi
+  if [[ -n "${record_snapshot_file:-}" ]]; then
+    rm -f -- "$record_snapshot_file"
+  fi
+  if [[ -n "${tmp_before:-}" ]]; then
+    rm -f -- "$tmp_before"
+  fi
+  if (( tmpguard_owns_run_root == 1 )) && [[ -n "${TMPGUARD_RUN_ROOT:-}" && -n "${script_root:-}" ]]; then
+    node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
+    tmpguard_owns_run_root=0
   fi
   trap - EXIT HUP INT TERM
   exit "$status"
@@ -93,6 +113,20 @@ if [[ ! -d "$test_directory" || ! -r "$test_directory" ]]; then
   exit 1
 fi
 test_directory="$(cd "$test_directory" && pwd)"
+
+# Choke point: never let the suite inherit the OS default /tmp. Honour a
+# caller-owned TMPDIR; otherwise use an owned parent outside the repository.
+# The EXIT handler removes this root after success, failure, or a thrown test.
+if ! TMPGUARD_RUN_ROOT="$(node "$script_root/scripts/temp-root.cjs" --make "$script_root" seal-suite)"; then
+  echo "::error::cannot create the suite temporary root"
+  exit 1
+fi
+tmpguard_owns_run_root=1
+export TMPGUARD_RUN_ROOT
+export TMPDIR="$TMPGUARD_RUN_ROOT"
+export TMP="$TMPGUARD_RUN_ROOT"
+export TEMP="$TMPGUARD_RUN_ROOT"
+export GIT_CEILING_DIRECTORIES="${GIT_CEILING_DIRECTORIES:-$TMPGUARD_RUN_ROOT}"
 
 roster_file="${SEAL_PRODUCT_TEST_ROSTER:-$script_root/scripts/product-test-roster.txt}"
 if [[ ! -f "$roster_file" ]]; then
@@ -320,7 +354,7 @@ if (( ${#present_not_declared[@]} > 0 || ${#declared_not_present[@]} > 0 )); the
 fi
 
 run_tests=("${declared_tests[@]}")
-record_directory="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+record_directory="${RUNNER_TEMP:-$TMPGUARD_RUN_ROOT}"
 output_file="$record_directory/seal-node-test.$$.tap"
 record_snapshot_file="$output_file.snapshot"
 if [[ ! -d "$record_directory" ]]; then
@@ -577,6 +611,14 @@ if (( ${#declared_not_executed[@]} > 0 || ${#executed_not_declared[@]} > 0 || ${
   gate_status=1
 else
   report_roster_line "ROSTER: ${#roster_executed_tests[@]} of ${#declared_tests[@]} declared test files ran"
+fi
+
+node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
+if [[ -e "$TMPGUARD_RUN_ROOT" ]]; then
+  echo "::error::suite temporary root survived cleanup: $TMPGUARD_RUN_ROOT"
+  gate_status=1
+else
+  tmpguard_owns_run_root=0
 fi
 
 exit "$gate_status"

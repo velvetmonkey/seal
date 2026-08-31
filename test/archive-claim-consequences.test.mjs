@@ -5,6 +5,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const SOURCE_ROOT = resolve(import.meta.dirname, "..");
 
@@ -19,7 +21,7 @@ function run(root, script, env = {}) {
 }
 
 function inventoryFixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-archive-inventory-"));
+  const root = testTmpdir(join(tmpdir(), "seal-archive-inventory-"));
   write(root, "scripts/claim-bearing-file-inventory.mjs", readFileSync(join(SOURCE_ROOT, "scripts/claim-bearing-file-inventory.mjs")));
   write(root, "scripts/claim-bearing-files.json", JSON.stringify({ files: {
     "docs/archive/WHAT-SEAL-IS.md": { allowlistReason: "fixture claim" },
@@ -32,7 +34,7 @@ function inventoryFixture() {
 }
 
 function coverageFixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-archive-coverage-"));
+  const root = testTmpdir(join(tmpdir(), "seal-archive-coverage-"));
   write(root, "scripts/claim-coverage-inventory.mjs", readFileSync(join(SOURCE_ROOT, "scripts/claim-coverage-inventory.mjs")));
   write(root, "scripts/claim-coverage-allowlist.json", JSON.stringify({ version: 1, uncovered: ["seal/docs/archive/AUTHORIZATION-RECORD.md"] }));
   write(root, "scripts/claim-bearing-files.json", JSON.stringify({ files: {} }));

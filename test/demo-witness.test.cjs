@@ -10,6 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(__dirname, "..", "bin", "seal");
@@ -50,7 +51,7 @@ function attach(child) {
 // --- the scope witness ------------------------------------------------------
 
 test("Act 4: the protected resource changes while the server count and Seal decisions do not", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-witness-"));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
   t.after(run.kill);
@@ -110,7 +111,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
 });
 
 test("demo checker route control rejects an absent path and a receipt-version mismatch", () => {
-  const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-route-control-")), "demo.txt");
+  const outputFile = path.join(testTmpdir(path.join(os.tmpdir(), "seal-demo-route-control-")), "demo.txt");
   const demo = runSeal(["demo", "--dir", path.dirname(outputFile)], "y\n");
   assert.equal(demo.code, 0, demo.out + demo.err);
   fs.writeFileSync(outputFile, demo.out);
@@ -119,7 +120,7 @@ test("demo checker route control rejects an absent path and a receipt-version mi
   assert.equal(green.status, 0, green.stdout + green.stderr);
   assert.match(green.stdout, /PASS demo checker route: checker\/seal-receipt-v2\.mjs accepts emitted v2/);
 
-  const throwingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-route-throwing-checker-"));
+  const throwingRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-route-throwing-checker-"));
   fs.mkdirSync(path.join(throwingRoot, "checker"));
   fs.copyFileSync(path.join(ROOT, "checker", "seal-receipt-v2.mjs"), path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"));
   fs.writeFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), 'throw new Error("physical tamper");\n' + fs.readFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), "utf8"));
@@ -133,7 +134,7 @@ test("demo checker route control rejects an absent path and a receipt-version mi
   assert.notEqual(red.status, 0, red.stdout + red.stderr);
   assert.match(red.stderr, /FAIL demo checker route: repository path does not exist: checker\/does-not-exist\.mjs/);
 
-  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-route-version-"));
+  const fixtureRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-route-version-"));
   fs.mkdirSync(path.join(fixtureRoot, "checker"));
   fs.writeFileSync(path.join(fixtureRoot, "checker", "seal-receipt-v1.mjs"), 'if (receipt.receipt !== "seal.spine/v1") throw new Error("unknown format");\n');
   fs.writeFileSync(outputFile, demo.out.replace("checker/seal-receipt-v2.mjs", "checker/seal-receipt-v1.mjs"));
@@ -143,7 +144,7 @@ test("demo checker route control rejects an absent path and a receipt-version mi
 });
 
 test("Act 4 appears after replay refusal and before the final screen", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-order-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-witness-order-"));
   const result = runSeal(["demo", "--dir", dir], "y\n");
   assert.equal(result.code, 0, result.out + result.err);
 

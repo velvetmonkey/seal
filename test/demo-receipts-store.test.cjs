@@ -7,11 +7,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
 test("seal demo without --dir or XDG_DATA_HOME keeps receipts out of scratch HOME's store", async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-default-home-"));
+  const home = testTmpdir(path.join(os.tmpdir(), "seal-demo-default-home-"));
   const env = { ...process.env, HOME: home };
   delete env.XDG_DATA_HOME;
 
@@ -56,7 +57,7 @@ function receiptNames(store) {
 }
 
 test("seal demo --dir refuses HOME and XDG receipt stores and their canonical aliases before writing", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-refuse-home-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-refuse-home-"));
   const home = path.join(root, "home");
   const xdg = path.join(root, "xdg");
   const homeStore = path.join(home, ".local", "share", "seal");
@@ -88,7 +89,7 @@ test("seal demo --dir refuses HOME and XDG receipt stores and their canonical al
 });
 
 test("a legitimate explicit --dir works and is not called temporary", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-explicit-dir-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-explicit-dir-"));
   const home = path.join(root, "home");
   const directory = path.join(root, "genuine-scratch");
   const result = runDemo(["--dir", directory], { HOME: home, XDG_DATA_HOME: path.join(root, "xdg") });

@@ -6,6 +6,7 @@ const path = require("node:path");
 const { spawn, execFile, execFileSync } = require("node:child_process");
 const { promisify } = require("node:util");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
 const {
@@ -29,7 +30,7 @@ test("the production kernel has one runtime location and the retired fixture pat
 });
 
 test("a valid kernel placed only at the retired fixture path cannot satisfy the adapter", (t) => {
-  const product = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-old-path-only-"));
+  const product = testTmpdir(path.join(os.tmpdir(), "seal-kernel-old-path-only-"));
   t.after(() => fs.rmSync(product, { recursive: true, force: true }));
   fs.mkdirSync(path.join(product, "contract"), { recursive: true });
   fs.mkdirSync(path.dirname(path.join(product, "test-support", "runtime-fixture", "kernel")), { recursive: true });
@@ -56,7 +57,7 @@ function acceptedRetry(contract, state, overrides = {}) {
 }
 
 function proxyHarness(t, env = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-real-path-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-kernel-real-path-"));
   const store = path.join(dir, "approvals.journal");
   const receipts = path.join(dir, "receipts");
   const data = path.join(dir, "data.txt");
@@ -111,7 +112,7 @@ function proxyHarness(t, env = {}) {
 }
 
 function redirectedKernelWorker(t, workerSource) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-worker-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-mcp-kernel-worker-"));
   const worker = path.join(dir, "worker.cjs");
   const preload = path.join(dir, "redirect-worker.cjs");
   fs.writeFileSync(worker, workerSource);
@@ -151,7 +152,7 @@ test("real MCP retry uses the proved authorization kernel and forwards only its 
 });
 
 test("real MCP timeout after all child phases reports that worker exit was not observed", async (t) => {
-  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-timeout-")), "delay-response.cjs");
+  const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-mcp-kernel-timeout-")), "delay-response.cjs");
   fs.writeFileSync(control, `
 const write = process.stdout.write.bind(process.stdout);
 process.stdout.write = function(chunk, ...rest) {
@@ -222,7 +223,7 @@ test("the MCP proxy contains no separate literal child phase-name array", () => 
 });
 
 test("real MCP timeout while a child phase runs still names that phase", async (t) => {
-  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-mcp-kernel-phase-")), "delay-decision.cjs");
+  const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-mcp-kernel-phase-")), "delay-decision.cjs");
   fs.writeFileSync(control, `
 const Module = require("node:module");
 const originalLoad = Module._load;
@@ -330,7 +331,7 @@ test("Node state rows refuse without consulting the authorization kernel", () =>
 });
 
 test("physical wasm corruption refuses by name with no JavaScript fallback", (t) => {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-corrupt-"));
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-kernel-corrupt-"));
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   fs.cpSync(DEFAULT_KERNEL_ROOT, scratch, { recursive: true });
   const wasm = path.join(scratch, "wasm", "seal.wasm");
@@ -359,7 +360,7 @@ test("a hung kernel worker reaches its product deadline and refuses closed", () 
 });
 
 test("an injected delayed decision carries completed phases through the shipped retry refusal", (t) => {
-  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-delay-")), "delay-kernel-decision.cjs");
+  const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-kernel-delay-")), "delay-kernel-decision.cjs");
   fs.writeFileSync(control, `
 const Module = require("node:module");
 const originalLoad = Module._load;
@@ -418,7 +419,7 @@ Module._load = function(request, parent, isMain) {
 });
 
 test("a response write that does not flush reports completed security work and lifecycle state", (t) => {
-  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-response-write-")), "block.cjs");
+  const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-kernel-response-write-")), "block.cjs");
   fs.writeFileSync(control, `
 const write = process.stdout.write.bind(process.stdout);
 process.stdout.write = function(chunk, ...rest) {
@@ -516,7 +517,7 @@ test("each blocked worker phase names itself in the timeout refusal", async (t) 
   const controls = [];
   t.after(() => controls.forEach((control) => fs.rmSync(path.dirname(control), { recursive: true, force: true })));
   const results = await Promise.all(phases.map(async (phase) => {
-    const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-phase-")), "block.cjs");
+    const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-kernel-phase-")), "block.cjs");
     controls.push(control);
     fs.writeFileSync(control, blockingPreload(phase));
     const program = `
@@ -539,7 +540,7 @@ process.stdout.write(JSON.stringify(result));`;
 });
 
 test("an active wasm load publishes the gap from request parse to its start", async (t) => {
-  const control = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-kernel-active-gap-")), "block.cjs");
+  const control = path.join(testTmpdir(path.join(os.tmpdir(), "seal-kernel-active-gap-")), "block.cjs");
   t.after(() => fs.rmSync(path.dirname(control), { recursive: true, force: true }));
   fs.writeFileSync(control, blockingPreload("wasm_load"));
   const program = `

@@ -84,6 +84,8 @@ test/seal-reproduce.test.cjs
 test/seal-verify.test.cjs
 test/spine-retry.test.cjs
 test/step2-negative-control.test.cjs
+test/suite-tmpdir-leak.test.cjs
+test/temp-root.test.cjs
 test/tool-validation.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs

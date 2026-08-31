@@ -7,13 +7,14 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
 
 function makeRealReceipt() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-receipt-v2-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-receipt-v2-"));
   const demo = spawnSync(process.execPath, [SEAL, "demo", "--dir", dir], {
     input: "y\n", encoding: "utf8", timeout: 30000,
   });
@@ -92,7 +93,7 @@ test("the signature is the unforgeable backstop: repairing commitments still ref
 
 test("the checker runs with the seal binary absent (copied to a clean dir)", () => {
   const real = makeRealReceipt();
-  const clean = fs.mkdtempSync(path.join(os.tmpdir(), "seal-v2-checker-only-"));
+  const clean = testTmpdir(path.join(os.tmpdir(), "seal-v2-checker-only-"));
   fs.mkdirSync(path.join(clean, "checker"));
   fs.cpSync(path.join(ROOT, "runtime"), path.join(clean, "runtime"), { recursive: true });
   const isolated = path.join(clean, "checker", "seal-receipt-v2.mjs");

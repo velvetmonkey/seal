@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
@@ -13,7 +14,7 @@ const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
 const { readState, statePathFor } = require("../spine/protection.cjs");
 
 function setup() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-tool-validation-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-tool-validation-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const bin = path.join(root, "bin");

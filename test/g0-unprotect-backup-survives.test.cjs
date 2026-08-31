@@ -4,8 +4,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = path.join(__dirname, "..");
-function copyTree() { const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-unprotect-mutant-")); fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") }); return out; }
+function copyTree() { const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-unprotect-mutant-")); fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") }); return out; }
 function fakeClaude(root) {
   const bin = path.join(root, "fake-bin"); fs.mkdirSync(bin, { recursive: true }); const file = path.join(bin, "claude");
   fs.writeFileSync(file, `#!/usr/bin/env node
@@ -18,7 +19,7 @@ if (args[1] === "remove") { const next = read(); if (!next.projects?.[cwd]?.mcpS
 `); fs.chmodSync(file, 0o755); return bin;
 }
 function probe(root) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-unprotect-probe-")); const project = path.join(work, "project"); const home = path.join(work, "home"); const config = path.join(work, "claude-config"); const xdg = path.join(work, "xdg"); fs.mkdirSync(project, { recursive: true }); fs.mkdirSync(home, { recursive: true });
+  const work = testTmpdir(path.join(os.tmpdir(), "seal-g0-unprotect-probe-")); const project = path.join(work, "project"); const home = path.join(work, "home"); const config = path.join(work, "claude-config"); const xdg = path.join(work, "xdg"); fs.mkdirSync(project, { recursive: true }); fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: { db: { command: process.execPath, args: [path.join(root, "test-support", "tool-list-server.cjs"), "ok", "demo.mutate"] } } }) + "\n"); const fake = fakeClaude(work); const env = { ...process.env, PATH: `${fake}${path.delimiter}${process.env.PATH}`, HOME: home, CLAUDE_CONFIG_DIR: config, XDG_DATA_HOME: xdg };
   const protect = spawnSync(process.execPath, [path.join(root, "bin", "seal"), "protect", "db", "demo.mutate"], { cwd: project, env, encoding: "utf8", timeout: 30000 }); assert.equal(protect.status, 0, `${protect.stdout}\n${protect.stderr}`);
   const backup = path.join(home, ".claude", "backups", "planted-backup"); fs.mkdirSync(path.dirname(backup), { recursive: true }); fs.writeFileSync(backup, "keep me"); const unprotect = spawnSync(process.execPath, [path.join(root, "bin", "seal"), "unprotect", "db"], { cwd: project, env, encoding: "utf8", timeout: 30000 }); assert.equal(unprotect.status, 0, `${unprotect.stdout}\n${unprotect.stderr}`); assert.equal(fs.existsSync(backup), true, `unprotect backup-survival claim failed: planted backup ${backup} was removed`); assert.equal(fs.readFileSync(backup, "utf8"), "keep me", `unprotect backup-survival claim failed: planted backup ${backup} changed`);

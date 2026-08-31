@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, buildPinnedKernel, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
@@ -37,7 +38,7 @@ function harness(options = {}) {
         }
       },
       installPublished(_asset, _declared, work) {
-        const prefix = fs.mkdtempSync(path.join(work, "test-prefix-"));
+        const prefix = testTmpdir(path.join(work, "test-prefix-"));
         installedPath = path.join(prefix, "runtime", "kernel", "wasm", "seal.wasm");
         fs.mkdirSync(path.dirname(installedPath), { recursive: true });
         fs.writeFileSync(installedPath, PUBLISHED_KERNEL);
@@ -198,7 +199,7 @@ test("Lean launcher defaults to portable lake and accepts the serialization over
 });
 
 test("same-process rebuild resolves the executable declared by the pinned installer without GITHUB_PATH", (t) => {
-  const fixture = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
+  const fixture = testTmpdir(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
   t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
   const home = path.join(fixture, "home");
   const emptyPath = path.join(fixture, "empty-path");
@@ -225,7 +226,7 @@ test("pinned Lean toolchain CI check exercises every post-installer child enviro
 });
 
 test("pinned toolchain provisioning retries once and still requires a completed rebuild", (t) => {
-  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   let provisionAttempts = 0;
   let cloneAttempts = 0;
@@ -257,7 +258,7 @@ test("pinned toolchain provisioning retries once and still requires a completed 
 });
 
 test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
-  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-refusal-"));
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-refusal-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   let provisionAttempts = 0;
   assert.throws(() => buildPinnedKernel(TAG, work, {
@@ -275,7 +276,7 @@ test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
 });
 
 test("pinned toolchain provisioning refuses when the failed provisioner removed its stage", (t) => {
-  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-absent-source-"));
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-absent-source-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   const source = path.join(work, "pinned-source");
   let cloneAttempts = 0;
@@ -298,7 +299,7 @@ test("pinned toolchain provisioning refuses when the failed provisioner removed 
 });
 
 test("pinned toolchain provisioning refuses when the source name changes before delete", (t) => {
-  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-changed-source-"));
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-changed-source-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   const source = path.join(work, "pinned-source");
   const accepted = path.join(work, "accepted-source");
@@ -339,7 +340,7 @@ test("pinned toolchain provisioning refuses when the source name changes before 
 });
 
 test("pinned toolchain provisioning retries through a symbolic work path", (t) => {
-  const root = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-work-symlink-"));
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-work-symlink-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const physicalWork = path.join(root, "physical-work");
   const work = path.join(root, "work-link");
@@ -371,7 +372,7 @@ test("pinned toolchain provisioning retries through a symbolic work path", (t) =
 });
 
 test("pinned toolchain provisioning refuses a source symlink outside the resolved work directory", (t) => {
-  const root = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const work = path.join(root, "work");
   const outside = path.join(root, "outside");
@@ -397,7 +398,7 @@ test("pinned toolchain provisioning refuses a source symlink outside the resolve
 });
 
 test("pinned toolchain provisioning does not retry another failure status", (t) => {
-  const work = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
   t.after(() => fs.rmSync(work, { recursive: true, force: true }));
   let provisionAttempts = 0;
   assert.throws(() => buildPinnedKernel(TAG, work, {
@@ -415,7 +416,7 @@ test("pinned toolchain provisioning does not retry another failure status", (t) 
 });
 
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
-  const outputDirectory = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
+  const outputDirectory = testTmpdir(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
   t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
   const output = path.join(outputDirectory, "rebuilt-seal.wasm");
   let observedTag;

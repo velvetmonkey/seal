@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { helperPlatform, requireHelperPlatform } = require("../scripts/macos-helper.cjs");
 
 function thinMachO(cpuType) {
@@ -19,7 +20,7 @@ test("thin Mach-O helpers are identified by CPU type", () => {
 });
 
 test("the architecture gate refuses a deliberately wrong helper", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-macos-helper-"));
+  const directory = testTmpdir(path.join(os.tmpdir(), "seal-macos-helper-"));
   const helper = path.join(directory, "macos-process-start-witness");
   try {
     fs.writeFileSync(helper, thinMachO(0x01000007));

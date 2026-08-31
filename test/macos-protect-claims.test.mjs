@@ -5,12 +5,14 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(import.meta.dirname, "..");
 const CHECK = resolve(ROOT, "scripts/check-macos-protect-claims.mjs");
 
 function scratch(t) {
-  const directory = mkdtempSync(join(tmpdir(), "seal-macos-protect-claims-"));
+  const directory = testTmpdir(join(tmpdir(), "seal-macos-protect-claims-"));
   cpSync(ROOT, join(directory, "seal"), { recursive: true, filter: (source) => !source.includes("/.git") && !source.includes("/node_modules") });
   const copy = join(directory, "seal");
   t.after(() => rmSync(directory, { recursive: true, force: true }));

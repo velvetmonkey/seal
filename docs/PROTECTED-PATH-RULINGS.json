@@ -1,15 +1,25 @@
 {
   "version": 1,
   "ruling": {
-    "base": "6bec1a39c10c1cc84e68c5aa866795b9d3be27af",
+    "base": "4c736b43060db66754c48482a7d47b1895e28297",
     "author": "velvetmonkey",
-    "date": "2026-08-30",
-    "scope": "Ben ruled on 2026-08-30. The fixture Scope line was false after the sentence was shortened, and this ruling authorises updating it to what the product now prints, and nothing else.",
-    "retires": [],
+    "date": "2026-08-31",
+    "scope": "Ben ruled approve on 2026-08-31 at 20:11. The complete product suite left temporary directories behind and filled the disk over twelve days. This ruling authorises routing three protected pin tests through the new run-scoped temporary root, and nothing else. The change in these three files is 13 lines. Every one replaces fs.mkdtempSync(X) with testTmpdir(X) using the identical argument, plus three require lines. No assertion, no expected value, no fixture and no pin value changed.",
+    "retires": [
+      "The 2026-08-30 ruling on test/fixtures/readme-demo-output.txt, base 6bec1a39c10c1cc84e68c5aa866795b9d3be27af, which landed and no longer applies to any open change."
+    ],
     "files": [
       {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "be528188bb8458b31a864e955559414e9ab29507"
+        "path": "test/dist-pin.test.cjs",
+        "blob": "b575a517b573241abc6f7c5e2a02c9fcde22460f"
+      },
+      {
+        "path": "test/installed-tree-pin-manifest-review.test.cjs",
+        "blob": "3e4273cd995c9af002612b933ab06630b9e64d7b"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "a44c91cf252c747e196d9bc5d4de947b082187aa"
       }
     ]
   }

@@ -8,6 +8,7 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const CANONICAL_EMAIL = "9402464+velvetmonkey@users.noreply.github.com";
 // RFC 2606 section 3 reserves .invalid.  Only this exact lane domain is safe
@@ -126,7 +127,7 @@ function check(root, base, head) {
 }
 
 function fixture(beforeInit) {
-  const root = mkdtempSync(join(tmpdir(), "seal-commit-author-"));
+  const root = testTmpdir(join(tmpdir(), "seal-commit-author-"));
   mkdirSync(join(root, ".fixture-home"));
   if (beforeInit) beforeInit(root);
   requireGit(root, ["init", "-q"]);
@@ -237,7 +238,7 @@ test("the fixture pins ambient HOME ignore input", (t) => {
     HOME: process.env.HOME,
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
   };
-  const hostileHome = mkdtempSync(join(tmpdir(), "seal-commit-author-hostile-home-"));
+  const hostileHome = testTmpdir(join(tmpdir(), "seal-commit-author-hostile-home-"));
   mkdirSync(join(hostileHome, ".config", "git"), { recursive: true });
   writeFileSync(join(hostileHome, ".config", "git", "ignore"), "README.md\n");
   process.env.HOME = hostileHome;
@@ -265,7 +266,7 @@ test("the fixture ignores repository-root Git ignore files", (t) => {
 
 test("the fixture pins ambient XDG_CONFIG_HOME ignore input", (t) => {
   const savedXdgConfigHome = process.env.XDG_CONFIG_HOME;
-  const hostileXdgConfigHome = mkdtempSync(join(tmpdir(), "seal-commit-author-hostile-xdg-"));
+  const hostileXdgConfigHome = testTmpdir(join(tmpdir(), "seal-commit-author-hostile-xdg-"));
   mkdirSync(join(hostileXdgConfigHome, "git"), { recursive: true });
   writeFileSync(join(hostileXdgConfigHome, "git", "ignore"), "README.md\n");
   process.env.XDG_CONFIG_HOME = hostileXdgConfigHome;

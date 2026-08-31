@@ -1,4 +1,5 @@
 dist/
 .cache/
+.tmp/
 *.log
 runtime/macos-process-start-witness

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/linkcheck.mjs");
@@ -148,7 +150,7 @@ test("clean CI family linkcheck exits 0 after checking every reference-parsed ta
 });
 
 test("path matcher stays tight around versions, digests, and ordinary prose", () => {
-  const scratch = mkdtempSync(path.join(tmpdir(), "seal-linkcheck-tight-"));
+  const scratch = testTmpdir(path.join(tmpdir(), "seal-linkcheck-tight-"));
   try {
     const contents = [
       "version 0.2.0",

@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const CLI = path.join(__dirname, "../bin/seal");
 
@@ -17,7 +18,7 @@ function run(args, input = "") {
 }
 
 function realReceipt() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-v2-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-verify-v2-"));
   const demo = run(["demo", "--dir", dir], "y\n");
   assert.equal(demo.code, 0, demo.out);
   const name = fs.readdirSync(path.join(dir, "receipts")).find((entry) => entry.endsWith("-ALLOW.json"));
@@ -35,7 +36,7 @@ test("seal verify replays a real receipt emitted by the producer", () => {
 });
 
 test("verify distinguishes an uninspectable path from unreadable receipt contents", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-inputs-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-verify-inputs-"));
   const absent = path.join(root, "absent.json");
   const missing = run(["verify", absent]);
   assert.notEqual(missing.code, 0, missing.out);
@@ -46,7 +47,7 @@ test("verify distinguishes an uninspectable path from unreadable receipt content
 });
 
 test("verify refuses empty, malformed, and non-receipt JSON paths", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-verify-invalid-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-verify-invalid-"));
   for (const [name, bytes, pattern] of [
     ["empty.json", "", /receipt is empty/],
     ["bad.json", "{", /read_failed/],

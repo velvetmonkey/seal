@@ -4,13 +4,14 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const DRIVER = join(ROOT, "scripts", "run-complete-product-suite.sh");
 const CRITICAL_MANIFEST = join(ROOT, "scripts", "critical-property-manifest.tsv");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-product-suite-roster-"));
+  const root = testTmpdir(join(tmpdir(), "seal-product-suite-roster-"));
   const tests = join(root, "tests");
   mkdirSync(tests);
   for (const name of ["one", "two", "three"]) {

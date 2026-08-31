@@ -5,12 +5,13 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const CHECK = join(ROOT, "scripts", "container-check.mjs");
 
 function run(readme, env = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "seal-container-check-test-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-container-check-test-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
   const result = spawnSync(process.execPath, [CHECK], {
