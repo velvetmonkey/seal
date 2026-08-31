@@ -36,28 +36,36 @@ function requiredCases(source, declaration) {
   const block = source.match(new RegExp(`const ${declaration} = [\\s\\S]*?\\n\\];`))?.[0]
     || source.match(new RegExp(`const ${declaration} = Object\\.freeze\\(\\[[\\s\\S]*?\\n\\]\\);`))?.[0];
   assert.ok(block, `${declaration} declaration is present`);
-  return [...block.matchAll(/\{ id: "([^"]+)", required: "([^"]+)" \}/gu)]
-    .map((match) => ({ id: match[1], required: match[2] }));
+  return [...block.matchAll(/\{ id: "([^"]+)", required: "([^"]+)"(?:, summary: "([^"]+)")? \}/gu)]
+    .map((match) => ({ id: match[1], required: match[2], summary: match[3] }));
 }
 
-test("documented required-observation summaries are bound to both code requirement lists", () => {
+function renderRequiredObservationTable(cases) {
+  return [
+    "| Case | Required observation |",
+    "|---|---|",
+    ...cases.map(({ id, summary }) => `| \`${id}\` | ${summary} |`),
+  ].join("\n");
+}
+
+test("documented required-observation table is rendered from the harness cases", () => {
   const harnessSource = fs.readFileSync(path.join(CONTRACT_ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8");
   const checkerSource = fs.readFileSync(path.join(CONTRACT_ROOT, "scripts", "check-cc-evidence.mjs"), "utf8");
   const doc = fs.readFileSync(path.join(CONTRACT_ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8");
   const harnessCases = requiredCases(harnessSource, "CASES");
   const checkerCases = requiredCases(checkerSource, "REQUIRED_CASES");
   assert.equal(harnessCases.length, 8, "the harness has all eight required cases");
-  assert.deepEqual(checkerCases, harnessCases, "the checker and harness use the same required observations");
+  assert.deepEqual(
+    checkerCases.map(({ id, required }) => ({ id, required })),
+    harnessCases.map(({ id, required }) => ({ id, required })),
+    "the checker and harness use the same required observations",
+  );
+  assert.ok(harnessCases.every(({ summary }) => summary), "each harness case has a document summary");
 
-  const rows = [...doc.matchAll(/^\| `([^`]+)` \| (.*?) <!-- cc-required-observation-binding: ([0-9a-f]{64}) --> \|$/gmu)]
-    .map((match) => ({ id: match[1], summary: match[2], binding: match[3] }));
-  assert.equal(rows.length, harnessCases.length, "the document binds all eight required-observation rows");
-  assert.deepEqual(rows.map(({ id }) => id), harnessCases.map(({ id }) => id), "the document uses the code case order");
-  for (const [index, row] of rows.entries()) {
-    const required = harnessCases[index].required;
-    const expected = createHash("sha256").update(`${row.id}\0${required}\0${row.summary}`).digest("hex");
-    assert.equal(row.binding, expected, `${row.id} summary names an observation that is not bound to the code requirement`);
-  }
+  const table = doc.match(/^\| Case \| Required observation \|\n\|---\|---\|\n(?:\|.*\|\n?)+/mu)?.[0].trimEnd();
+  // This check verifies one writer. It does not verify that the summaries are true.
+  // The document cannot disagree with the harness cases when this check passes.
+  assert.equal(table, renderRequiredObservationTable(harnessCases), "the document table is the harness rendering");
 });
 
 test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {

@@ -56,14 +56,14 @@ const NOTES = Object.freeze({
 });
 
 const CASES = Object.freeze([
-  { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
-  { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call" },
-  { id: "before_approval", required: "Child call count remains 0" },
-  { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
-  { id: "decline", required: "Child call count remains 0" },
-  { id: "missing_launcher", required: "While the launcher is absent, each protected-server start records the installed Seal proxy script digest, no child-call record is added, .mcp.json is unchanged, and the installed tree is restored" },
-  { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical" },
+  { id: "activation", required: "After restart, Claude Code selects the local Seal override", summary: "After restart, Claude Code selects the local Seal override" },
+  { id: "negotiation", required: "The proxy records the retry-model interaction", summary: "The proxy records the retry-model interaction" },
+  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call", summary: "The terminal recording shows the complete exact-call dialog" },
+  { id: "before_approval", required: "Child call count remains 0", summary: "Child call count remains `0`" },
+  { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches", summary: "Child call count becomes exactly `1`; expected effect hash matches" },
+  { id: "decline", required: "Child call count remains 0", summary: "Child call count remains `0`" },
+  { id: "missing_launcher", required: "While the launcher is absent, each protected-server start records the installed Seal proxy script digest, no child-call record is added, .mcp.json is unchanged, and the installed tree is restored", summary: "Claude Code does not fall back to the original `.mcp.json` server" },
+  { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical", summary: "The local override disappears and `.mcp.json` remains byte-identical" },
 ]);
 
 class HarnessError extends Error {
