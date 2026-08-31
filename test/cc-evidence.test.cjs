@@ -314,6 +314,16 @@ test("the checker derives renderer identity from the renderer source", () => {
   assert.match(result.out, /^REFUSE renderer_identity_unknown: /m, result.out);
 });
 
+test("the checker refuses the previous last-frame-only result name", () => {
+  const copy = copyOfPack();
+  copy.rewriteManifest((manifest) => {
+    manifest.rendering.renderer_result = "last-visible-frame";
+  });
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE renderer_result_unknown: /m, result.out);
+});
+
 test("the checker refuses a manifest whose file hash does not match", () => {
   const copy = copyOfPack();
   fs.appendFileSync(path.join(copy.dir, "child.jsonl"), `${JSON.stringify({ kind: "child-call", tool: "append_note" })}\n`);

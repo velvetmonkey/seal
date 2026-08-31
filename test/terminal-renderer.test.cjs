@@ -6,8 +6,9 @@ const path = require("node:path");
 const { RENDERER_IDENTITY, renderCast, rendererIdentity } = require("../harness/claude-code/terminal-renderer.cjs");
 
 function fixture(events, width = 20, height = 3) {
-  fs.mkdirSync("/home/monkey/scratch/castrender5", { recursive: true });
-  const directory = fs.mkdtempSync("/home/monkey/scratch/castrender5/renderer-test-");
+  const scratch = path.join(process.env.TMPDIR || "/home/monkey/scratch/castrender5", "castrender");
+  fs.mkdirSync(scratch, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(scratch, "renderer-test-"));
   const cast = `${directory}/fixture.cast`;
   fs.writeFileSync(cast, [
     JSON.stringify({ version: 2, width, height }),
@@ -23,8 +24,7 @@ test("OSC 8 becomes visible text without escape or session identifier bytes", ()
   assert.equal(transcript.includes(0x1b), false);
   assert.equal(transcript.includes(Buffer.from("claude.ai/code/session_")), false);
   assert.deepEqual([...transcript].filter((byte) => byte !== 0x0a && (byte <= 0x1f || (byte >= 0x7f && byte <= 0x9f))), []);
-  assert.match(transcript.toString("utf8"), /This is the LAST VISIBLE FRAME of a repainting terminal/);
-  assert.match(transcript.toString("utf8"), /Earlier content was overwritten rather than scrolled/);
+  assert.match(transcript.toString("utf8"), /^This file holds the terminal's LAST VISIBLE FRAME\. It has 0 scrollback lines\. Content that the terminal overwrote before it scrolled is not present\./);
   assert.match(transcript.toString("utf8"), /This is NOT a record of the whole session/);
   assert.match(transcript.toString("utf8"), /final/);
 });
@@ -39,7 +39,16 @@ test("CHA, CUP, and CUF use terminal columns and overwrite cells", () => {
 test("scrollback emits each scrolled line before the final frame", () => {
   const cast = fixture(["one\r\ntwo\r\nthree\r\nfour"], 10, 2);
   const transcript = renderCast(cast);
+  assert.match(transcript, /^This file holds 2 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\./);
+  assert.doesNotMatch(transcript, /Earlier content was overwritten rather than scrolled/);
   assert.match(transcript, /one\ntwo\nthree\nfour/);
+});
+
+test("a longer scroll derives its larger scrollback count", () => {
+  const cast = fixture(["one\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix"], 10, 2);
+  const transcript = renderCast(cast);
+  assert.match(transcript, /^This file holds 4 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\./);
+  assert.match(transcript, /one\ntwo\nthree\nfour\nfive\nsix/);
 });
 
 test("line feeds preserve seal-accepted-note after it scrolls out of a DECSTBM region", () => {

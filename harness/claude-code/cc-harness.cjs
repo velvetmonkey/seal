@@ -290,8 +290,8 @@ function loadSnapshot(state, caseId, edge) {
 const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
 // The screen text of a cast comes from the same terminal renderer that writes
-// the public transcript. Real Claude Code recordings publish the last visible
-// frame because the client repaints in place.
+// the public transcript. The transcript holds any retained scrollback
+// followed by the terminal's last visible frame.
 function castScreenText(castPath) {
   return parseCast(castPath);
 }
@@ -1547,7 +1547,7 @@ function finish(state, options) {
       home: state.paths.home,
       xdg_data_home: state.paths.data,
       project: state.paths.project,
-      recorder: "util-linux script → asciinema cast v2; the pack publishes the last visible frame, and raw casts remain in the run directory",
+      recorder: "util-linux script → asciinema cast v2; the pack publishes any retained scrollback followed by the last visible frame, and raw casts remain in the run directory",
       recordings: transcriptFiles,
     },
     fixture: {
@@ -1584,7 +1584,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("Read rendered-transcript.txt before you publish this pack: it is the LAST VISIBLE FRAME of a repainting terminal. Earlier content was overwritten rather than scrolled. It is NOT a record of the whole session. It still contains visible content.");
+  say("Read rendered-transcript.txt before you publish this pack: it holds any retained scrollback followed by the terminal's last visible frame. It is NOT a record of the whole session. It still contains visible content.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }

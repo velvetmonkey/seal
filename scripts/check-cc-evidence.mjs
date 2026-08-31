@@ -306,7 +306,7 @@ function checkRenderingProvenance(packDir, manifest, report, { repoRoot }) {
   if (expectedIdentity && rendering.renderer_identity !== expectedIdentity) {
     report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}, not source-derived identity ${JSON.stringify(expectedIdentity)}`);
   }
-  if (rendering.renderer_result !== "last-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
+  if (rendering.renderer_result !== "rendered-terminal-state") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
   const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
   for (const entry of entries) {
     const transcriptName = manifest.environment?.recordings?.find((recording) => recording.case === entry.case)?.file;

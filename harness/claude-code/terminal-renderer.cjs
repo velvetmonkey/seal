@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// This renderer is deliberately small. It renders the last visible frame from
-// an asciinema v2 cast. It redacts
+// This renderer is deliberately small. It renders any retained scrollback
+// followed by the last visible frame from an asciinema v2 cast. It redacts
 // named session identifier shapes, but it does not otherwise sanitise a cast.
 //
 // LIMIT: the rendered transcript loses timing, cursor movement, colour,
@@ -19,9 +19,9 @@ function rendererIdentity(source) {
   return `seal-terminal-renderer/js-screen-sha256-${createHash("sha256").update(source).digest("hex")}`;
 }
 const RENDERER_IDENTITY = rendererIdentity(fs.readFileSync(__filename));
-// Real Claude Code recordings repaint in place. Their published transcript is
-// the last visible frame. Synthetic casts still exercise the scroll model.
-const RENDERER_RESULT = "last-visible-frame";
+// The result name covers both layouts that the renderer derives from the cast.
+// It does not claim that a transcript has scrollback when its count is zero.
+const RENDERER_RESULT = "rendered-terminal-state";
 const SESSION_URL = /claude\.ai\/code\/session_[A-Za-z0-9_-]+/giu;
 const SESSION_ID = /\bsession_[A-Za-z0-9_-]+\b/giu;
 // Match the displayed UUID text shape. Do not infer an RFC version or variant.
@@ -240,7 +240,7 @@ class Screen {
   }
 }
 
-function parseCast(castPath) {
+function parseScreen(castPath) {
   const lines = fs.readFileSync(castPath, "utf8").split("\n").filter((line) => line.trim() !== "");
   if (lines.length === 0) throw new Error("cast is empty");
   const header = JSON.parse(lines[0]);
@@ -251,18 +251,28 @@ function parseCast(castPath) {
     if (Array.isArray(event) && event[1] === "o") payload += String(event[2] ?? "");
   }
   screen.feed(payload);
-  return screen.text()
+  return screen;
+}
+
+function parseCast(castPath) {
+  return parseScreen(castPath).text()
     .replaceAll(INTERNAL_SESSION_URL, "[REDACTED-SESSION-URL]")
     .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]");
 }
 
 function renderCast(castPath) {
-  const visible = parseCast(castPath)
+  const screen = parseScreen(castPath);
+  const visible = screen.text()
+    .replaceAll(INTERNAL_SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]")
     .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
     .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
     .replace(UUID, "[REDACTED-SESSION-ID]")
     .replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
-  return `This is the LAST VISIBLE FRAME of a repainting terminal. Earlier content was overwritten rather than scrolled. This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
+  const header = screen.scrollback.length === 0
+    ? "This file holds the terminal's LAST VISIBLE FRAME. It has 0 scrollback lines. Content that the terminal overwrote before it scrolled is not present."
+    : `This file holds ${screen.scrollback.length} scrollback ${screen.scrollback.length === 1 ? "line" : "lines"} PLUS the terminal's LAST VISIBLE FRAME.`;
+  return `${header} This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
 module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };

@@ -182,12 +182,12 @@ publish raw `.cast` files instead of the required rendered transcript.
 `manifest.json` names the artifact, the client, the environment, the fixture
 revision, the eight expected cases with their required observations, what was
 observed, the renderer provenance, and the SHA-256 and byte length of every
-other file in the pack. The rendered transcript is the LAST VISIBLE FRAME of
-a repainting terminal. Earlier content was overwritten rather than scrolled.
-It is NOT a record of the whole session. The renderer keeps scrollback for
-synthetic casts. Real Claude Code recordings contribute no scrollback because
-the client repaints in place. If a line is repainted, the transcript carries
-its final content once. Earlier versions of that line are lost.
+other file in the pack. The rendered transcript holds any retained scrollback
+followed by the terminal's last visible frame. It is NOT a record of the whole
+session. The renderer keeps scrollback for synthetic casts. Real Claude Code
+recordings can contribute scrollback when terminal output scrolls. If a line
+is repainted, the transcript carries its final content once. Earlier versions
+of that line are lost.
 It removes terminal control sequences. It also redacts Claude Code session
 URLs, bare `session_` identifiers, and UUID-shaped identifiers. Other visible
 text can still contain secrets or sensitive content. A ULID or a 32-character
