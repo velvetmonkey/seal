@@ -309,7 +309,7 @@ function writeCastThroughPackPath(source, target) {
 }
 
 function writerPaths(name) {
-  const dir = fs.mkdtempSync(path.join("/home/monkey/scratch/castleak2/", `${name}-`));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `seal-${name}-`));
   return { source: path.join(dir, "source.cast"), target: path.join(dir, "packed.cast") };
 }
 
@@ -399,6 +399,33 @@ test("the pack writer removes OSC 8 from input events", () => {
   assert.equal(JSON.parse(fs.readFileSync(target, "utf8").split("\n")[1])[2], "typed");
 });
 
+test("the pack writer refuses its packed-byte session identifier post-condition", () => {
+  const { source, target } = writerPaths("writer-session-boundary");
+  fs.writeFileSync(source, `${JSON.stringify({ version: 2, width: 80, height: 24 })}\n${JSON.stringify([0, "m", "https://claude.ai/code/session_EXAMPLE"])}\n`);
+  assert.throws(
+    () => writeCastThroughPackPath(source, target),
+    (error) => error.code === "packed_cast_session_identifier_present"
+      && /packed\.cast carries 1 Claude Code session identifier pattern\(s\)/.test(error.message),
+  );
+});
+
+for (const [name, records, expected] of [
+  ["across output and input records", [[0, "o", "left\u001b]8"], [0.1, "i", ";id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]], [[0, "o", "left"], [0.1, "i", "VISIBLE"]]],
+  ["with a zero-padded OSC parameter", [[0, "o", "left\u001b]08;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]], [[0, "o", "leftVISIBLE"]]],
+  ["from a marker record", [[0, "m", "left\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]], [[0, "m", "leftVISIBLE"]]],
+  ["with whitespace after the OSC parameter", [[0, "o", "left\u001b]8 ;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007VISIBLE"]], [[0, "o", "leftVISIBLE"]]],
+]) {
+  test(`the pack writer removes OSC 8 ${name}`, () => {
+    const { source, target } = writerPaths(`writer-${name.replace(/[^a-z]+/g, "-")}`);
+    const raw = `${JSON.stringify({ version: 2, width: 80, height: 24 })}\n${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+    fs.writeFileSync(source, raw);
+    writeCastThroughPackPath(source, target);
+    const packed = fs.readFileSync(target, "utf8");
+    assert.doesNotMatch(packed, /session_EXAMPLE/, `${name} reached the packed cast`);
+    assert.deepEqual(packed.trim().split("\n").slice(1).map((line) => JSON.parse(line)), expected);
+  });
+}
+
 test("the pack writer refuses a non-JSON cast line", () => {
   const { source, target } = writerPaths("writer-non-json");
   fs.writeFileSync(source, `${fixtureCast("visible")}not-json \u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u0007EXTRA\n`);
@@ -459,6 +486,15 @@ test("the checker refuses OSC 8 in an input event", () => {
     JSON.stringify([0.1, "i", "\u001b]8;id=fixture;https://claude.ai/code/session_EXAMPLE\u001b\\typed"]),
   ]);
   assert.match(out, /^REFUSE terminal_osc8_present: terminal\.cast carries 1 OSC 8 hyperlink sequence\(s\)$/m);
+});
+
+test("the checker refuses a session identifier pattern that has no OSC 8 syntax", () => {
+  const out = checkCastControl("session identifier post-condition", [
+    JSON.stringify({ version: 2, width: 80, height: 24 }),
+    JSON.stringify([0, "m", `${harness.SYNTHETIC_BANNER}\nhttps://claude.ai/code/session_EXAMPLE`]),
+  ]);
+  assert.match(out, /^REFUSE terminal_session_identifier_present: terminal\.cast carries 1 Claude Code session identifier pattern\(s\)$/m);
+  assert.doesNotMatch(out, /session_EXAMPLE/);
 });
 
 test("the checker refuses a non-JSON cast line", () => {

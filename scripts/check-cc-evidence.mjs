@@ -40,14 +40,25 @@ const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code c
 const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
 const REQUIRED_FILES = ["terminal.cast", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
 const CAST_SANITISER = "seal.cc-harness/osc8-stream-strip/v1";
+// LIMIT: This boundary detects only this Claude Code session identifier prefix.
+// A different identifier class can pass this boundary. It does not make a pack safe.
+const CLAUDE_CODE_SESSION_IDENTIFIER = "claude.ai/code/session_";
+
+function countSessionIdentifiers(bytes) {
+  const needle = Buffer.from(CLAUDE_CODE_SESSION_IDENTIFIER, "utf8");
+  let count = 0;
+  for (let offset = bytes.indexOf(needle); offset !== -1; offset = bytes.indexOf(needle, offset + needle.length)) count += 1;
+  return count;
+}
 
 function osc8Findings(text) {
   let count = 0;
   let unterminated = 0;
   for (let index = 0; index < text.length;) {
-    const introducerLength = text.startsWith("\u001B]8;", index) ? 4
-      : text.startsWith("\u009D8;", index) ? 3
-        : 0;
+    // Match the same narrow xterm-compatible spellings as the pack writer.
+    // This accepts 8 or 08 and ASCII space or tab before the separator.
+    const introducer = /^(?:\u001B\]|\u009D)0?8[ \t]*;/.exec(text.slice(index));
+    const introducerLength = introducer ? introducer[0].length : 0;
     if (introducerLength === 0) {
       index += 1;
       continue;
@@ -279,23 +290,25 @@ function checkCasts(packDir, manifest, report) {
       report.refuse("terminal_recording_empty", `${name} is empty`);
       continue;
     }
-    const streams = { o: [], i: [] };
+    const payloads = [];
     for (const [index, line] of bytes.toString("utf8").split("\n").entries()) {
       if (line.trim() === "") continue;
       try {
         const event = JSON.parse(line);
-        if (Array.isArray(event) && (event[1] === "o" || event[1] === "i") && typeof event[2] === "string") streams[event[1]].push(event[2]);
+        if (Array.isArray(event) && typeof event[2] === "string") payloads.push(event[2]);
       } catch {
         report.refuse("terminal_cast_malformed", `${name} line ${index + 1} is not valid JSON`);
       }
     }
-    const findings = [osc8Findings(streams.o.join("")), osc8Findings(streams.i.join(""))];
+    const findings = [osc8Findings(payloads.join(""))];
     const osc8 = {
       count: findings.reduce((sum, finding) => sum + finding.count, 0),
       unterminated: findings.reduce((sum, finding) => sum + finding.unterminated, 0),
     };
     if (osc8.count > 0) report.refuse("terminal_osc8_present", `${name} carries ${osc8.count} OSC 8 hyperlink sequence(s)`);
     if (osc8.unterminated > 0) report.refuse("terminal_osc8_malformed", `${name} carries ${osc8.unterminated} unterminated OSC 8 hyperlink sequence(s)`);
+    const identifierCount = countSessionIdentifiers(bytes);
+    if (identifierCount > 0) report.refuse("terminal_session_identifier_present", `${name} carries ${identifierCount} Claude Code session identifier pattern(s)`);
     const rawDigest = recording.raw_recording_digest;
     if (!rawDigest || !/^[0-9a-f]{64}$/.test(rawDigest.sha256 || "") || !Number.isSafeInteger(rawDigest.bytes)) {
       report.refuse("terminal_transform_provenance_incomplete", `${name} has no valid raw recording digest`);

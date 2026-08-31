@@ -46,6 +46,16 @@ const CURRENT_STEP_FILE = "CURRENT-STEP.txt";
 const ENTER_RETRY_WAIT_MS = 25;
 const ENTER_RETRY_SIGNAL = new Int32Array(new SharedArrayBuffer(4));
 const CAST_SANITISER = "seal.cc-harness/osc8-stream-strip/v1";
+// LIMIT: This boundary detects only this Claude Code session identifier prefix.
+// A different identifier class can pass this boundary. It does not make a pack safe.
+const CLAUDE_CODE_SESSION_IDENTIFIER = "claude.ai/code/session_";
+
+function countSessionIdentifiers(bytes) {
+  const needle = Buffer.from(CLAUDE_CODE_SESSION_IDENTIFIER, "utf8");
+  let count = 0;
+  for (let offset = bytes.indexOf(needle); offset !== -1; offset = bytes.indexOf(needle, offset + needle.length)) count += 1;
+  return count;
+}
 
 // The three note values the human is instructed to use. They are fixed so the
 // expected effect digest can be computed before the run, and so the declined
@@ -354,9 +364,13 @@ function stripOsc8Chunks(chunks) {
   let removed = 0;
   let unterminated = 0;
   for (let index = 0; index < stream.length;) {
-    const introducerLength = stream.startsWith("\u001B]8;", index) ? 4
-      : stream.startsWith("\u009D8;", index) ? 3
-        : 0;
+    // xterm documents Ps as one or more digits: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html.
+    // That documents 08 as numeric. ASSUMED: terminals tolerate ASCII space or tab
+    // before the separator. No xterm is available on this host to measure it.
+    // Accept only 8 or 08, then ASCII space or tab. Exclude other padding,
+    // other whitespace, and other OSC command numbers.
+    const introducer = /^(?:\u001B\]|\u009D)0?8[ \t]*;/.exec(stream.slice(index));
+    const introducerLength = introducer ? introducer[0].length : 0;
     if (introducerLength === 0) {
       output[owners[index]] += stream[index];
       index += 1;
@@ -396,15 +410,15 @@ function stripOsc8FromCast(raw) {
   });
   let removed = 0;
   let unterminated = 0;
-  for (const kind of ["o", "i"]) {
-    const selected = lines.filter(({ event }) => Array.isArray(event) && event[1] === kind && typeof event[2] === "string");
-    const stripped = stripOsc8Chunks(selected.map(({ event }) => event[2]));
-    removed += stripped.removed;
-    unterminated += stripped.unterminated;
-    for (let index = 0; index < selected.length; index += 1) {
-      if (selected[index].event[2] !== stripped.chunks[index]) selected[index].changed = true;
-      selected[index].event[2] = stripped.chunks[index];
-    }
+  // Cast record types state provenance. Terminal control bytes can cross o, i,
+  // and m records. Process every string payload in recording order.
+  const selected = lines.filter(({ event }) => Array.isArray(event) && typeof event[2] === "string");
+  const stripped = stripOsc8Chunks(selected.map(({ event }) => event[2]));
+  removed += stripped.removed;
+  unterminated += stripped.unterminated;
+  for (let index = 0; index < selected.length; index += 1) {
+    if (selected[index].event[2] !== stripped.chunks[index]) selected[index].changed = true;
+    selected[index].event[2] = stripped.chunks[index];
   }
   const changed = lines.some((line) => line.changed);
   const cleaned = changed
@@ -417,6 +431,11 @@ function copyCastForPack(source, target) {
   const raw = fs.readFileSync(source, "utf8");
   const { cleaned, changed, removed, unterminated } = stripOsc8FromCast(raw);
   fs.writeFileSync(target, cleaned);
+  const packedBytes = fs.readFileSync(target);
+  const identifierCount = countSessionIdentifiers(packedBytes);
+  if (identifierCount > 0) {
+    refuse("packed_cast_session_identifier_present", `packed cast ${path.basename(target)} carries ${identifierCount} Claude Code session identifier pattern(s)`);
+  }
   return {
     changed,
     bytes: Buffer.byteLength(cleaned),
