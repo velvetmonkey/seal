@@ -132,6 +132,10 @@ async function runDemoToKernelRefusal(phase, t) {
   fs.writeFileSync(blockState, "retry");
   child.stdin.write("y\n");
   await run.waitForErr(new RegExp(`^seal: kernel timing active phase: ${phase}$`, "m"));
+  // The active-phase line is the first timing diagnostic. Wait for the last
+  // required timing section before ending the demo, so this test observes the
+  // complete refusal rather than killing the process during its stderr write.
+  await run.waitForErr(/^seal: kernel timing unmeasured spans:$/m);
   run.kill();
   const code = await run.exit;
   return { code, ...run };
