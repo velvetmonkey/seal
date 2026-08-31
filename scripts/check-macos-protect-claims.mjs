@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// Scan the shipped prose and CLI help for macOS Protect claims. The platform
-// table is the fact. Historical release notes remain historical records.
+// Scan shipped prose and CLI help for macOS Protect claims. This scanner
+// detects a fixed set of word-pattern phrasings that cite testing as backing
+// for macOS Protect execution. The platform table is the fact. Historical
+// release notes remain historical records.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -59,10 +61,16 @@ function sentences(block) {
 
 function backsMacosProtectExecution(block) {
   return sentences(block).find((sentence) => {
-    // This is a language guard, not a list of forbidden sentences. It catches
-    // an evidence relationship between macOS Protect execution and a test,
-    // check, CI job, workflow, or their result. It allows evidence for the
-    // platform table and helper readiness because those are not execution.
+    // This language guard detects a fixed set of word-pattern phrasings. It
+    // does not detect every sentence that cites testing as backing for macOS
+    // Protect execution. These sentences defeat this guard:
+    // "macOS Protect is shown to execute by the Darwin integration test."
+    // "The darwin-arm64 pipeline is the proof that Protect executes on macOS."
+    // "CI success confirms that macOS Protect is operational."
+    // A claim ledger would make this check real. See
+    // docs/reference/receipt-operations.md and
+    // scripts/receipt-operations-claims.mjs for the existing design.
+    // The guard allows evidence for the platform table and helper readiness.
     const namesMacosProtect = /(?:macOS[^.!?]{0,120}Protect|Protect[^.!?]{0,120}macOS)/iu.test(sentence);
     const namesEvidenceSource = /\b(?:test(?:s|ed)?|check(?:s|ed)?|CI|job(?:s)?|workflow(?:s)?)\b/iu.test(sentence);
     const namesEvidenceRelationship = /\b(?:because|back(?:s|ed|ing)?|evidence|proof|demonstrat(?:e|es|ed|ing)|show(?:s|ed|ing)?|confirm(?:s|ed|ing)?|establish(?:es|ed|ing)?|verif(?:y|ies|ied|ying)|prove(?:s|d)?|pass(?:es|ed|ing)?)\b/iu.test(sentence);
@@ -86,7 +94,7 @@ for (const file of shippedFiles()) {
     if (name !== FROZEN_GUIDE) {
       const backingSentence = backsMacosProtectExecution(block);
       if (backingSentence) {
-        failures.push(`${name}#${index + 1} names a test as backing for macOS Protect execution: ${backingSentence.trim()}`);
+        failures.push(`${name}#${index + 1} matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution: ${backingSentence.trim()}`);
       }
     }
     if (HISTORICAL_RELEASE_NOTE.test(name)) {

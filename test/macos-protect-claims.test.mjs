@@ -51,7 +51,7 @@ test("macOS Protect scanner rejects a missing install-guide support sentence", (
   assert.match(result.stderr, /docs\/start\/install\.md must state current macOS Protect support twice; found 1/);
 });
 
-test("macOS Protect scanner rejects execution evidence in different wording", (t) => {
+test("macOS Protect scanner rejects known word-pattern phrasings for execution evidence", (t) => {
   const root = scratch(t);
   writeFileSync(join(root, "docs", "new-macos-protect-backing.md"), [
     "macOS Protect runs correctly because the Darwin integration test passed.",
@@ -60,9 +60,9 @@ test("macOS Protect scanner rejects execution evidence in different wording", (t
   ].join("\n\n"));
   const result = run(root);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#1 names a test as backing for macOS Protect execution/);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#2 names a test as backing for macOS Protect execution/);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#3 names a test as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#1 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#2 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#3 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
 });
 
 test("macOS Protect scanner allows table and helper-readiness evidence", (t) => {
