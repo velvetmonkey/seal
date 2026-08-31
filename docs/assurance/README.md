@@ -41,10 +41,11 @@ the Node CLI this repository ships.
 1. [“What Seal covers, and what it does not”](../../README.md) — the boundary
    list at the end of the README is the current, tested statement. Gate, not
    sandbox; one server's named tool set; and receipt-key custody limits.
-   macOS source portability is CI-exercised for install, demo and receipt checking.
-   Protect is not supported on macOS yet.
+   Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
+   macOS x64/arm64. Windows, Linux ARM and other platforms are unsupported.
 2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
-   the same boundary with citations.
+   the historical rc.3 boundary with its historical citations. It differs from
+   the current macOS Protect boundary in the platform table above.
 
 ## I want to check the evidence myself
 

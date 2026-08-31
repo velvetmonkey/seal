@@ -286,13 +286,30 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   assert.equal(sync.code, 0, sync.stderr);
   const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
   const generatedSlot = new RegExp(
-    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)`,
+    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)`,
     "gm",
   );
+  const canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
   const expected = crypto.createHash("sha256")
-    .update(fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>"))
+    .update(canonical)
     .digest("hex");
   assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
+});
+
+test("reviewed-guide canonicalizers disclose the only unpinned canonicalized slot", () => {
+  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one anchored release-version slot. This canonicalizer maps only that slot to a stable marker before hashing. GUIDE_SHA256 does not cover the generated version slot. The pin covers every other byte in the guide.";
+  const expectedCopies = new Map([["scripts/sync-version.cjs", 2], ["test/guide-tokens.test.mjs", 1]]);
+  const missing = [...expectedCopies].filter(([file, expected]) => {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){3}/gu)]
+      .map((match) => match[0].replace(/^\/\/ ?/gmu, "").replace(/\s+/gu, " ").trim());
+    return comments.length !== expected || comments.some((comment) => comment !== requiredComment);
+  }).map(([file]) => file);
+  assert.deepEqual(
+    missing,
+    [],
+    `reviewed-guide canonicalizer comments must name the only generated release-version slot, state that the pin does not cover it, and state that the pin covers every other guide byte; missing: ${missing.join(", ")}`,
+  );
 });
 
 test("stale-version scope preserves a historical release-note filename in a live document", () => {

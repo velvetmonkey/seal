@@ -4,8 +4,9 @@ const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { hasSealProtectInvocation, workflowRunValues } = require("../scripts/workflow-run-values.cjs");
 
-const ROOT = path.join(__dirname, "..");
+const ROOT = process.env.SEAL_RELEASE_NOTES_ROOT ?? path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const NOTES_RELATIVE = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`;
 const RC3_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#release-notes-rc3
@@ -23,7 +24,13 @@ test("the current VERSION has a release note with the same identity", () => {
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
-  assert.match(notes, /supports install, demo, receipt checking, and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  const helperProvenance = "native macOS process-start witness helper is release-produced, not independ" + "ently reproduced.";
+  assert.ok(notes.includes(helperProvenance));
+  assert.match(notes, /macOS Protect execution is not exercised in CI\./);
+  for (const citation of ["spine/platform.cjs", "test/darwin-readiness.test.cjs", "test/release-matrix.test.mjs"]) {
+    assert.match(notes, new RegExp(citation.replaceAll(".", "\\.")), `release notes cite ${citation}`);
+  }
   assert.match(notes, /one `seal\.receipt\/v2` envelope/);
   assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
   assert.match(notes, /Positive VERIFY is unreachable in this release/);
@@ -45,7 +52,7 @@ test("replacement rc.3 citations retain their specific evidence", () => {
   assert.match(approvalContract, /expired approval; child receives nothing/);
 
   const distribution = fs.readFileSync(path.join(ROOT, "docs", "assurance", "distribution.md"), "utf8");
-  assert.match(distribution, /Linux x86-64 is the supported Protect path\./);
+  assert.match(distribution, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
 
   const noVerification = fs.readFileSync(path.join(ROOT, "test", "no-verification-claim.test.cjs"), "utf8");
   assert.match(noVerification, /arm's-length verification/);
@@ -64,16 +71,48 @@ test("v0.2.0-rc.2 release notes retain the immutable tag's Linux-only platform c
 test("current product and release surfaces state macOS Protect parity", () => {
   const claimSites = [
     ".github/workflows/release.yml",
+    "README.md",
     "bin/seal",
+    "docs/assurance/README.md",
+    "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+    "docs/assurance/distribution.md",
+    "docs/assurance/index.html",
+    "docs/guide/README.md",
+    "docs/guide/when-something-looks-wrong.md",
     "scripts/install.cjs",
     "scripts/seal-launch.cjs",
     "spine/platform.cjs",
   ];
   for (const file of claimSites) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
+    assert.match(text.replace(/\s+/g, " "), /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
     assert.doesNotMatch(text, /Protect is not supported on macOS yet\./, `${file}: retired exclusion`);
   }
+});
+
+test("the macOS workflow does not claim Protect execution", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "macos.yml"), "utf8");
+  assert.equal(workflowRunValues(workflow).filter(hasSealProtectInvocation).length, 0);
+});
+
+test("the macOS workflow guard checks YAML run values only", () => {
+  const mentions = [
+    "# seal protect is not run here",
+    "name: seal protect",
+    "description: this text mentions seal protect",
+  ].join("\n");
+  assert.equal(workflowRunValues(mentions).filter(hasSealProtectInvocation).length, 0);
+
+  for (const workflow of [
+    "run: seal protect",
+    "run: \tseal protect --path target",
+    "run: |\n  seal protect --path target",
+    "run: bin/seal protect now",
+    "run: |\n  seal \\\n  protect",
+  ]) {
+    assert.equal(workflowRunValues(workflow).filter(hasSealProtectInvocation).length, 1, workflow);
+  }
+  assert.equal(hasSealProtectInvocation("$SEAL protect"), false);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {

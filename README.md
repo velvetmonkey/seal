@@ -14,9 +14,9 @@ The [documentation map](docs/README.md) helps you choose a route through Seal.
 
 ## Supported path
 
-Use Node 20+ on Linux x86-64; Protect also needs Claude Code's `claude`
-command. Protect is not supported on macOS yet, and Windows and Linux ARM are
-unsupported. The [full install guide](docs/start/install.md) covers the
+Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
+macOS x64/arm64. Protect also needs Claude Code's `claude` command. Windows,
+Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
 ## Try Seal in two minutes

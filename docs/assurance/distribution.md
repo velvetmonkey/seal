@@ -1,7 +1,7 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+Seal v0.2.0.
+Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other platforms are not supported.
 It ships **one** installable artifact, for **Linux x86-64**.
 
