@@ -60,9 +60,9 @@ test("macOS Protect scanner rejects known word-pattern phrasings for execution e
   ].join("\n\n"));
   const result = run(root);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#1 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#2 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
-  assert.match(result.stderr, /new-macos-protect-backing\.md#3 matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#1 matches a known word-pattern phrasing that connects testing evidence to an affirmative claim or denial about macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#2 matches a known word-pattern phrasing that connects testing evidence to an affirmative claim or denial about macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#3 matches a known word-pattern phrasing that connects testing evidence to an affirmative claim or denial about macOS Protect execution/);
 });
 
 test("macOS Protect scanner allows table and helper-readiness evidence", (t) => {

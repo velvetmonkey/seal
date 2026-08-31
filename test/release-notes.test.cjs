@@ -91,7 +91,7 @@ test("current product and release surfaces state macOS Protect parity", () => {
 
 test("the macOS workflow does not claim Protect execution", () => {
   const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "macos.yml"), "utf8");
-  assert.equal(workflow.match(/(?:^|[\\s"'])seal\s+protect(?:[\\s"']|$)/g)?.length ?? 0, 0);
+  assert.equal(workflow.match(/\bseal\s+protect\b/g)?.length ?? 0, 0);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {

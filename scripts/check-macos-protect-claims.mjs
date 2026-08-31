@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 // Scan shipped prose and CLI help for macOS Protect claims. This scanner
-// detects a fixed set of word-pattern phrasings that cite testing as backing
-// for macOS Protect execution. The platform table is the fact. Historical
+// detects a fixed set of word-pattern phrasings that connect testing evidence
+// to affirmative claims or denials about macOS Protect execution. The platform
+// table is the fact. Historical
 // release notes remain historical records.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
@@ -94,7 +95,7 @@ for (const file of shippedFiles()) {
     if (name !== FROZEN_GUIDE) {
       const backingSentence = backsMacosProtectExecution(block);
       if (backingSentence) {
-        failures.push(`${name}#${index + 1} matches a known word-pattern phrasing that cites testing as backing for macOS Protect execution: ${backingSentence.trim()}`);
+        failures.push(`${name}#${index + 1} matches a known word-pattern phrasing that connects testing evidence to an affirmative claim or denial about macOS Protect execution: ${backingSentence.trim()}`);
       }
     }
     if (HISTORICAL_RELEASE_NOTE.test(name)) {
