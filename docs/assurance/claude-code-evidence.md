@@ -86,7 +86,7 @@ elicitation, or declines to fall back.
 |---|---|
 | `activation` | After restart, Claude Code selects the local Seal override |
 | `negotiation` | The proxy records the retry-model interaction |
-| `approval_shown` | The rendered transcript carries the dialog text that the screen model retained for the exact call |
+| `approval_shown` | The last visible frame carries the dialog text for the exact call |
 | `before_approval` | Child call count remains `0` |
 | `accept` | Child call count becomes exactly `1`; expected effect hash matches |
 | `decline` | Child call count remains `0` |
@@ -182,11 +182,12 @@ publish raw `.cast` files instead of the required rendered transcript.
 `manifest.json` names the artifact, the client, the environment, the fixture
 revision, the eight expected cases with their required observations, what was
 observed, the renderer provenance, and the SHA-256 and byte length of every
-other file in the pack. The rendered transcript is derived from the raw cast.
-It contains lines displaced by modeled upward scrolling. The modeled final
-visible frame follows these lines.
-If a line is repainted before it scrolls off, the transcript carries its final
-content once. Earlier versions of that line are lost.
+other file in the pack. The rendered transcript is the LAST VISIBLE FRAME of
+a repainting terminal. Earlier content was overwritten rather than scrolled.
+It is NOT a record of the whole session. The renderer keeps scrollback for
+synthetic casts. Real Claude Code recordings contribute no scrollback because
+the client repaints in place. If a line is repainted, the transcript carries
+its final content once. Earlier versions of that line are lost.
 It removes terminal control sequences. It also redacts Claude Code session
 URLs, bare `session_` identifiers, and UUID-shaped identifiers. Other visible
 text can still contain secrets or sensitive content. A ULID or a 32-character

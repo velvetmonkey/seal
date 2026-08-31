@@ -259,10 +259,10 @@ function checkCasts(packDir, manifest, report) {
     const text = bytes.toString("utf8");
     const required = TRANSCRIPT_PRESENCE[recording.case] || [];
     if (recording.case === "missing_launcher") {
-      if (!required.some((phrase) => text.includes(phrase))) report.refuse("rendered_transcript_content_absent", `${name} does not carry fallback refusal content`);
+      if (!required.some((phrase) => text.includes(phrase))) report.refuse("rendered_transcript_content_absent", `${name} does not carry fallback refusal content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner`);
     } else {
       for (const phrase of required) {
-        if (!text.includes(phrase)) report.refuse("rendered_transcript_content_absent", `${name} does not carry required ${JSON.stringify(phrase)} content`);
+        if (!text.includes(phrase)) report.refuse("rendered_transcript_content_absent", `${name} does not carry required ${JSON.stringify(phrase)} content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner`);
       }
     }
     for (const identifier of IDENTIFIER_PATTERNS) {
@@ -306,7 +306,7 @@ function checkRenderingProvenance(packDir, manifest, report, { repoRoot }) {
   if (expectedIdentity && rendering.renderer_identity !== expectedIdentity) {
     report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}, not source-derived identity ${JSON.stringify(expectedIdentity)}`);
   }
-  if (rendering.renderer_result !== "scrollback-and-final-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
+  if (rendering.renderer_result !== "last-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
   const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
   for (const entry of entries) {
     const transcriptName = manifest.environment?.recordings?.find((recording) => recording.case === entry.case)?.file;

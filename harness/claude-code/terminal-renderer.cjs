@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// This renderer is deliberately small. It renders modeled terminal scrollback
-// and the modeled final visible screen from an asciinema v2 cast. It redacts
+// This renderer is deliberately small. It renders the last visible frame from
+// an asciinema v2 cast. It redacts
 // named session identifier shapes, but it does not otherwise sanitise a cast.
 //
 // LIMIT: the rendered transcript loses timing, cursor movement, colour,
@@ -19,7 +19,9 @@ function rendererIdentity(source) {
   return `seal-terminal-renderer/js-screen-sha256-${createHash("sha256").update(source).digest("hex")}`;
 }
 const RENDERER_IDENTITY = rendererIdentity(fs.readFileSync(__filename));
-const RENDERER_RESULT = "scrollback-and-final-visible-frame";
+// Real Claude Code recordings repaint in place. Their published transcript is
+// the last visible frame. Synthetic casts still exercise the scroll model.
+const RENDERER_RESULT = "last-visible-frame";
 const SESSION_URL = /claude\.ai\/code\/session_[A-Za-z0-9_-]+/giu;
 const SESSION_ID = /\bsession_[A-Za-z0-9_-]+\b/giu;
 // Match the displayed UUID text shape. Do not infer an RFC version or variant.
@@ -260,7 +262,7 @@ function renderCast(castPath) {
     .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
     .replace(UUID, "[REDACTED-SESSION-ID]")
     .replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
-  return `This is a rendered terminal transcript. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
+  return `This is the LAST VISIBLE FRAME of a repainting terminal. Earlier content was overwritten rather than scrolled. This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
 module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };

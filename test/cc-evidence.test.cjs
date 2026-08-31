@@ -284,9 +284,9 @@ test("presence controls refuse a rehashed transcript with its evidence removed",
   }
   const result = check([copy.dir, "--allow-synthetic"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript\.txt does not carry required "seal-accepted-note" content$/m);
-  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-decline\.txt does not carry required "seal-declined-note" content$/m);
-  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-missing-launcher\.txt does not carry fallback refusal content$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript\.txt does not carry required "seal-accepted-note" content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-decline\.txt does not carry required "seal-declined-note" content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-missing-launcher\.txt does not carry fallback refusal content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
 });
 
 test("the checker refuses version-7 UUID shape and a bare session identifier", () => {

@@ -23,7 +23,9 @@ test("OSC 8 becomes visible text without escape or session identifier bytes", ()
   assert.equal(transcript.includes(0x1b), false);
   assert.equal(transcript.includes(Buffer.from("claude.ai/code/session_")), false);
   assert.deepEqual([...transcript].filter((byte) => byte !== 0x0a && (byte <= 0x1f || (byte >= 0x7f && byte <= 0x9f))), []);
-  assert.match(transcript.toString("utf8"), /This is a rendered terminal transcript/);
+  assert.match(transcript.toString("utf8"), /This is the LAST VISIBLE FRAME of a repainting terminal/);
+  assert.match(transcript.toString("utf8"), /Earlier content was overwritten rather than scrolled/);
+  assert.match(transcript.toString("utf8"), /This is NOT a record of the whole session/);
   assert.match(transcript.toString("utf8"), /final/);
 });
 

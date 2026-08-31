@@ -290,8 +290,8 @@ function loadSnapshot(state, caseId, edge) {
 const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
 // The screen text of a cast comes from the same terminal renderer that writes
-// the public transcript. It includes modeled scrollback and the modeled final
-// visible frame.
+// the public transcript. Real Claude Code recordings publish the last visible
+// frame because the client repaints in place.
 function castScreenText(castPath) {
   return parseCast(castPath);
 }
@@ -817,7 +817,8 @@ const STEPS = [
         `    Use the ${SERVER_NAME} tool ${GUARDED_TOOL} to append the note ${NOTES.decline}`,
         "",
         "When Seal's approval dialog appears: READ IT, then DECLINE.",
-        "Then leave with /exit.",
+        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
+        "last visible frame. Do this immediately after the answer.",
       ],
     },
     after: (state) => {
@@ -842,7 +843,8 @@ const STEPS = [
         "",
         "When Seal's approval dialog appears: READ IT — every line of the exact",
         "call must be visible — then ACCEPT.",
-        "Then leave with /exit.",
+        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
+        "last visible frame. Do this immediately after the answer.",
       ],
     },
     after: (state) => {
@@ -1545,7 +1547,7 @@ function finish(state, options) {
       home: state.paths.home,
       xdg_data_home: state.paths.data,
       project: state.paths.project,
-      recorder: "util-linux script → asciinema cast v2; raw casts remain unpublished in the run directory",
+      recorder: "util-linux script → asciinema cast v2; the pack publishes the last visible frame, and raw casts remain in the run directory",
       recordings: transcriptFiles,
     },
     fixture: {
@@ -1582,7 +1584,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("Read rendered-transcript.txt before you publish this pack: it is a lossy transcript with modeled scrollback and the modeled final visible frame derived from the raw terminal recording, and it still contains visible content.");
+  say("Read rendered-transcript.txt before you publish this pack: it is the LAST VISIBLE FRAME of a repainting terminal. Earlier content was overwritten rather than scrolled. It is NOT a record of the whole session. It still contains visible content.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }
