@@ -87,6 +87,7 @@ test/spine-retry.test.cjs
 test/step2-negative-control.test.cjs
 test/suite-tmpdir-leak.test.cjs
 test/temp-root.test.cjs
+test/terminal-renderer.test.cjs
 test/tool-validation.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
