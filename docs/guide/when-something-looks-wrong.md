@@ -344,20 +344,15 @@ status.
 
 ### `process_witness_unavailable`
 
-Seal raises this token for a stored lease owner (`lockOwnerIsLive`), a
-project lock owner (`acquireProjectLock`), an approval-journal-lock owner
-(`withFileLock`), and Seal's own process-start witness at project-lock acquire
-(`activationLease` -> `acquireProjectLock`). It raises this token before it
-acquires the approval-journal lock when its own process-start witness is
-unavailable. The approval-journal lock path runs on any platform,
-including macOS. On Linux x86-64, Seal reads `/proc/<pid>/stat`; it refuses
-with `process_witness_unavailable` if it cannot read that file, if the stat
-record is malformed, or if the process-start field is absent. On macOS
-x64/arm64, the stored lease and project-lock path uses the native
-process-start witness helper. That path reports helper or witness failures
-with Darwin-specific refusal tokens. For an owner path, stop the recorded
-owner and retry. For Seal's own witness path, fix the local process-start
-witness source and retry.
+Seal raises this token when a protected state operation cannot establish a
+process-start witness for a live process. The error message names the specific
+situation and states the correct remedy. The approval-journal lock path runs
+on any platform, including macOS. On Linux x86-64, Seal reads
+`/proc/<pid>/stat`; it refuses with `process_witness_unavailable` if it cannot
+read that file, if the stat record is malformed, or if the process-start field
+is absent. On macOS x64/arm64, the stored lease and project-lock path uses the
+native process-start witness helper. That path reports helper or witness
+failures with Darwin-specific refusal tokens.
 
 ### `drifted`
 

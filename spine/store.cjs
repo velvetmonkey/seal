@@ -57,7 +57,7 @@ function withFileLock(filePath, callback) {
   if (owner.startWitness === null) {
     throw new ProtectionError(
       "process_witness_unavailable",
-      `cannot establish process-start witness for live pid ${owner.pid}`,
+      `cannot establish process-start witness for approval-journal-lock owner pid ${owner.pid}; fix the local process-start witness source and retry`,
     );
   }
   for (;;) {
@@ -74,7 +74,7 @@ function withFileLock(filePath, callback) {
       if (error.code !== "EEXIST") throw error;
       let existing;
       try { existing = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { existing = null; }
-      if (!lockOwnerIsLive(existing)) {
+      if (!lockOwnerIsLive(existing, "approval-journal-lock owner")) {
         try { fs.unlinkSync(lockPath); } catch (unlinkError) {
           if (unlinkError.code !== "ENOENT") throw unlinkError;
         }

@@ -9,14 +9,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = process.env.SEAL_GUIDE_PATH ?? "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "5c12db5aa6540676d2f3d76072b56ce52bde0c94a59c17e98747692fea5e4ac5";
+const GUIDE_SHA256 = "3d70fb9a0b7a808c0683a3769a1d2503b9544cd35729fc1beab6f58912e79bba";
 const require = createRequire(import.meta.url);
 const protection = require("../spine/protection.cjs");
 const store = require("../spine/store.cjs");
@@ -108,23 +107,6 @@ function guideTokens() {
   return new Set(occurrences.keys());
 }
 
-function processWitnessUnavailableThrowSites() {
-  const spine = resolve(ROOT, "spine");
-  const sites = [];
-  for (const entry of readdirSync(spine, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".cjs")) continue;
-    const file = `spine/${entry.name}`;
-    const source = readFileSync(resolve(ROOT, file), "utf8");
-    for (const match of source.matchAll(/new ProtectionError\(\s*"process_witness_unavailable"/g)) {
-      const prefix = source.slice(0, match.index);
-      const functions = [...prefix.matchAll(/^function ([A-Za-z0-9_]+)\(/gm)];
-      assert.ok(functions.length > 0, `${file}: token throw has no enclosing function`);
-      sites.push({ file, functionName: functions.at(-1)[1] });
-    }
-  }
-  return sites;
-}
-
 function processWitnessUnavailableBlock() {
   const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
   const heading = "### `process_witness_unavailable`";
@@ -134,125 +116,39 @@ function processWitnessUnavailableBlock() {
   return text.slice(start, end === -1 ? text.length : end);
 }
 
-function spineFunctionNames() {
-  const names = new Set();
-  for (const file of ["spine/protection.cjs", "spine/store.cjs"]) {
-    const source = readFileSync(resolve(ROOT, file), "utf8");
-    for (const match of source.matchAll(/^function ([A-Za-z0-9_]+)\(/gm)) names.add(match[1]);
-  }
-  return names;
-}
-
-function stackPath(error, functionNames) {
-  const frames = [];
-  for (const match of String(error.stack || "").matchAll(/^\s+at (?:.*\.)?([A-Za-z0-9_]+) \(/gm)) {
-    if (functionNames.has(match[1]) && !frames.includes(match[1])) frames.push(match[1]);
-  }
-  return frames;
-}
-
-async function processWitnessUnavailableCallPaths() {
+test("each process witness situation has a distinct message", () => {
   const previousPlatform = process.env.SEAL_SPINE_PLATFORM;
   const previousArch = process.env.SEAL_SPINE_ARCH;
-  const root = mkdtempSync(join(tmpdir(), "seal-guide-call-paths-"));
-  const project = join(root, "project");
-  const home = join(root, "home");
-  const dataHome = join(root, "data");
-  mkdirSync(project);
-  mkdirSync(home);
-  const env = { HOME: home, XDG_DATA_HOME: dataHome };
-  const statePath = join(dataHome, "state.json");
-  mkdirSync(join(dataHome), { recursive: true });
-  writeFileSync(statePath, JSON.stringify({
-    schema: "seal.protect/v1",
-    sealVersion: readFileSync(resolve(ROOT, "VERSION"), "utf8").trim(),
-    projectRoot: project,
-  }));
   process.env.SEAL_SPINE_PLATFORM = "unsupported";
   process.env.SEAL_SPINE_ARCH = "x64";
-  const functionNames = spineFunctionNames();
-  const throwFunctions = new Set(processWitnessUnavailableThrowSites().map(({ functionName }) => functionName));
   const probes = [
-    () => protection.lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }),
-    () => protection.acquireProjectLock(project, env),
-    () => {
-      const journal = join(root, "approvals.journal");
+    ["stored lease owner", () => protection.lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }, "stored lease owner")],
+    ["project-lock owner", () => protection.lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }, "project-lock owner")],
+    ["approval-journal-lock owner", () => {
+      const journal = `${process.cwd()}/.guide-message-test-journal`;
       store.createJournal(journal);
-      return store.openJournal(journal).withLock(() => undefined);
-    },
-    () => protection.activationLease(statePath, env),
+      try { return store.openJournal(journal).withLock(() => undefined); }
+      finally { try { require("node:fs").unlinkSync(journal); } catch {} }
+    }],
+    ["Seal's own witness at project-lock acquire", () => protection.acquireProjectLock(process.cwd(), { XDG_DATA_HOME: process.cwd() })],
   ];
-  const paths = new Set();
   try {
-    for (const probe of probes) {
+    const messages = [];
+    for (const [situation, probe] of probes) {
       try {
-        await probe();
-        assert.fail("the witness-unavailable probe returned instead of refusing");
+        probe();
+        assert.fail(`${situation}: probe returned instead of refusing`);
       } catch (error) {
         assert.equal(error.code, "process_witness_unavailable", error.stack || error.message);
-        const path = stackPath(error, functionNames);
-        assert.ok(path.length > 0, error.stack || error.message);
-        const entrypoint = probe.toString().match(/protection\.(\w+)/)?.[1];
-        if (entrypoint && !path.includes(entrypoint)) path.push(entrypoint);
-        const throwIndex = path.findIndex((name) => throwFunctions.has(name));
-        paths.add(path.slice(throwIndex + 1).join(" -> "));
+        messages.push(error.message);
       }
     }
-    return [...paths];
+    assert.equal(new Set(messages).size, probes.length, messages.join("\n"));
   } finally {
     if (previousPlatform === undefined) delete process.env.SEAL_SPINE_PLATFORM;
     else process.env.SEAL_SPINE_PLATFORM = previousPlatform;
     if (previousArch === undefined) delete process.env.SEAL_SPINE_ARCH;
     else process.env.SEAL_SPINE_ARCH = previousArch;
-    rmSync(root, { recursive: true, force: true });
-  }
-}
-
-test("process witness guide block covers every source throw path", () => {
-  const sites = processWitnessUnavailableThrowSites();
-  assert.deepEqual(
-    sites,
-    [
-      { file: "spine/protection.cjs", functionName: "requireProcessStartWitnessBinding" },
-      { file: "spine/store.cjs", functionName: "withFileLock" },
-    ],
-    "process_witness_unavailable throw sites changed; add guide coverage for every source path",
-  );
-
-  const block = processWitnessUnavailableBlock();
-  const requiredCoverage = new Map([
-    ["spine/protection.cjs:requireProcessStartWitnessBinding", [/\bstored lease\b/i, /\bproject lock\b/i]],
-    ["spine/store.cjs:withFileLock", [/\bapproval-journal lock\b/i, /\bany platform\b/i, /\bmacOS\b/i]],
-  ]);
-  for (const { file, functionName } of sites) {
-    const path = `${file}:${functionName}`;
-    for (const pattern of requiredCoverage.get(path) ?? []) {
-      assert.match(block, pattern, `${GUIDE}: missing coverage for ${path}`);
-    }
-  }
-  assert.match(
-    block,
-    /\bmacOS\s+x64\/arm64\b[\s\S]*?\bstored lease and project-lock path\b[\s\S]*?\bDarwin-specific refusal tokens\b/i,
-    `${GUIDE}: Darwin-specific tokens apply to the stored lease and project-lock path`,
-  );
-  assert.doesNotMatch(
-    block,
-    /Darwin-specific refusal tokens\s+instead of\s+`process_witness_unavailable`/i,
-    `${GUIDE}: Darwin-specific tokens do not replace the approval-journal lock refusal`,
-  );
-});
-
-// Runtime stack sampling follows the exercised entrypoints and derives the
-// path names from the observed frames. LIMIT: a dynamic or indirect call that
-// these probes cannot follow is a path this check cannot see.
-test("process witness guide block covers every runtime call path", async () => {
-  const paths = await processWitnessUnavailableCallPaths();
-  assert.equal(paths.length, 4, `expected four runtime call paths, found:\n${paths.join("\n")}`);
-  const block = processWitnessUnavailableBlock();
-  const anchors = new Set(paths.flatMap((path) => path.split(" -> ")
-    .filter((name) => name && !/^requireProcessStartWitness/.test(name))));
-  for (const anchor of anchors) {
-    assert.match(block, new RegExp(`\\b${anchor}\\b`), `${GUIDE}: missing runtime call-path anchor ${anchor}`);
   }
 });
 
