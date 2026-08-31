@@ -82,17 +82,31 @@ function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-function digestOf(filePath) {
+function readBytesWithDigest(filePath) {
   try {
-    const bytes = fs.readFileSync(filePath);
-    return { present: true, sha256: sha256(bytes), bytes: bytes.length };
+    const content = fs.readFileSync(filePath);
+    return { present: true, sha256: sha256(content), bytes: content.length, content };
   } catch (error) {
-    return { present: false, sha256: null, bytes: null, reason: error.code || error.message };
+    return { present: false, sha256: null, bytes: null, reason: error.code || error.message, content: null };
   }
+}
+
+function digestOf(filePath) {
+  const { content: _content, ...digest } = readBytesWithDigest(filePath);
+  return digest;
 }
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function readJsonWithDigest(filePath) {
+  const { content, ...digest } = readBytesWithDigest(filePath);
+  let body = null;
+  if (content !== null) {
+    try { body = JSON.parse(content.toString("utf8")); } catch { body = null; }
+  }
+  return { ...digest, body };
 }
 
 function writeJson(filePath, value) {
@@ -174,9 +188,8 @@ function run(state, file, args, options = {}) {
 // ------------------------------------------------------------------ reading
 
 function readChildLog(state) {
-  const raw = (() => {
-    try { return fs.readFileSync(state.paths.childLog, "utf8"); } catch { return ""; }
-  })();
+  const { content, ...digest } = readBytesWithDigest(state.paths.childLog);
+  const raw = content === null ? "" : content.toString("utf8");
   const records = [];
   for (const [index, line] of raw.split("\n").entries()) {
     if (line.trim() === "") continue;
@@ -188,7 +201,7 @@ function readChildLog(state) {
     } catch { records.push({ kind: "unparseable-log-line", line: index + 1 }); }
   }
   return {
-    ...digestOf(state.paths.childLog),
+    ...digest,
     lines: records.length,
     records,
     // Counted out of the file. Nothing reports this number; records are counted.
@@ -201,9 +214,7 @@ function readReceipts(state) {
   try { names = fs.readdirSync(state.paths.receiptsDir).filter((name) => name.endsWith(".json")).sort(); } catch { names = []; }
   return names.map((name) => {
     const target = path.join(state.paths.receiptsDir, name);
-    const digest = digestOf(target);
-    let body = null;
-    try { body = readJson(target); } catch { body = null; }
+    const { body, ...digest } = readJsonWithDigest(target);
     return {
       name,
       ...digest,
@@ -219,23 +230,20 @@ function readReceipts(state) {
 }
 
 function readApprovalJournal(state) {
-  const raw = (() => {
-    try { return fs.readFileSync(state.paths.storePath, "utf8"); } catch { return ""; }
-  })();
+  const { content, ...digest } = readBytesWithDigest(state.paths.storePath);
+  const raw = content === null ? "" : content.toString("utf8");
   const events = [];
   for (const line of raw.split("\n")) {
     if (line.trim() === "") continue;
     try { events.push(JSON.parse(line)); } catch { events.push({ type: "unparseable" }); }
   }
-  return { ...digestOf(state.paths.storePath), events };
+  return { ...digest, events };
 }
 
 function readLocalOverride(state) {
   const configPath = path.join(state.paths.home, ".claude.json");
-  let config = null;
-  try { config = readJson(configPath); } catch { config = null; }
-  let protection = null;
-  try { protection = readJson(state.paths.protectState); } catch { protection = null; }
+  const { body: config, ...configDigest } = readJsonWithDigest(configPath);
+  const { body: protection, ...protectionDigest } = readJsonWithDigest(state.paths.protectState);
   const expected = protection?.localOverride?.definition ?? null;
   const declaredProject = protection?.localOverride?.claudeProjectRoot ?? state.paths.project;
   const declaredEntry = config?.projects?.[declaredProject]?.mcpServers?.[SERVER_NAME] ?? null;
@@ -251,7 +259,9 @@ function readLocalOverride(state) {
     : exactMatches.length === 1 ? exactMatches[0] : { project_key: null, entry: null };
   return {
     config_path: configPath,
-    ...digestOf(configPath),
+    ...configDigest,
+    protect_state_path: state.paths.protectState,
+    protect_state: protectionDigest,
     project_key: resolved.project_key,
     entry: resolved.entry,
     exact_definition_matches: exactMatches.length,
@@ -259,10 +269,9 @@ function readLocalOverride(state) {
 }
 
 function readProtectionState(state) {
-  let body = null;
-  try { body = readJson(state.paths.protectState); } catch { body = null; }
+  const { body, ...digest } = readJsonWithDigest(state.paths.protectState);
   return {
-    ...digestOf(state.paths.protectState),
+    ...digest,
     state: body?.state ?? null,
     lease: body?.lease ?? null,
     guard_tool: body?.guardTool ?? null,
@@ -1354,15 +1363,22 @@ function certifyStep(state, step) {
     }
     if (caseId === "activation") {
       const recorded = end.local_override;
+      // Older recorded walks stored this same raw input in protection_state.
+      // Keep that evidence usable when it has the required byte digest.
+      const recordedProtection = recorded?.protect_state ?? end.protection_state;
       const current = readLocalOverride(state);
       const rawInputMatches = recorded?.config_path === current.config_path &&
-        recorded?.present === current.present && recorded?.sha256 === current.sha256 && recorded?.bytes === current.bytes;
+        recorded?.present === current.present && recorded?.sha256 === current.sha256 && recorded?.bytes === current.bytes &&
+        (recorded?.protect_state_path === undefined || recorded.protect_state_path === current.protect_state_path) &&
+        recordedProtection?.present === current.protect_state?.present &&
+        recordedProtection?.sha256 === current.protect_state?.sha256 &&
+        recordedProtection?.bytes === current.protect_state?.bytes;
       if (!rawInputMatches) {
-        failures.push(`${caseId}: recorded local override config input changed after the snapshot`);
+        failures.push(`${caseId}: recorded local override raw input changed after the snapshot`);
         continue;
       }
-      // entry is derived from the recorded config and the protection state.
-      // Recompute it after checking that the recorded config input is unchanged.
+      // entry is derived from the recorded config and protection-state bytes.
+      // Recompute it after checking both recorded raw inputs are unchanged.
       end = { ...end, local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches } };
       say("  CERTIFYING activation from recorded raw local override evidence");
     }

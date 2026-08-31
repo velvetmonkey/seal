@@ -249,6 +249,57 @@ test("an attempted activation certifies by recomputing a stale derived local ent
   assert.equal(harness.loadState(runDir).step_index, 1);
 });
 
+test("activation refuses when the recorded protection-state raw input changes", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-protect-state-join-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  const state = harness.loadState(runDir);
+  const protection = JSON.parse(fs.readFileSync(state.paths.protectState, "utf8"));
+  protection.localOverride.claudeProjectRoot = "/changed/project";
+  fs.writeFileSync(state.paths.protectState, `${JSON.stringify(protection, null, 2)}\n`);
+  state.step_index = 0;
+  state.steps.activation.attempted = true;
+  harness.saveState(state);
+
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" && /recorded local override raw input changed/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 0);
+});
+
+test("local override hashes the one config buffer that it parses", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-one-read-"));
+  const home = path.join(workspace, "home");
+  const protectState = path.join(workspace, "protect.json");
+  const configPath = path.join(home, ".claude.json");
+  fs.mkdirSync(home, { recursive: true });
+  const expected = { type: "stdio", command: "/installed/seal", args: [], env: {} };
+  const falseEntry = { type: "stdio", command: "/false-seal-binary", args: [], env: {} };
+  const originalConfig = Buffer.from(JSON.stringify({ projects: { "/recorded/project": { mcpServers: { notes: expected } } } }));
+  const falseConfig = Buffer.from(JSON.stringify({ projects: { "/recorded/project": { mcpServers: { notes: falseEntry } } } }));
+  const harness = require(HARNESS);
+  fs.writeFileSync(configPath, originalConfig);
+  fs.writeFileSync(protectState, JSON.stringify({ localOverride: { claudeProjectRoot: "/recorded/project", definition: falseEntry } }));
+  const originalRead = fs.readFileSync;
+  let configReads = 0;
+  fs.readFileSync = function patchedRead(filePath, ...args) {
+    if (filePath === configPath) {
+      configReads += 1;
+      return configReads === 1 ? Buffer.from(falseConfig) : Buffer.from(originalConfig);
+    }
+    return originalRead.call(this, filePath, ...args);
+  };
+  try {
+    const resolved = harness.readLocalOverride({ paths: { home, project: "/recorded/project", protectState } });
+    assert.equal(configReads, 1);
+    assert.equal(resolved.entry.command, "/false-seal-binary");
+    assert.equal(resolved.sha256, createHash("sha256").update(falseConfig).digest("hex"));
+  } finally {
+    fs.readFileSync = originalRead;
+  }
+});
+
 test("missing_launcher certifies recorder facts without stand-in screen text", () => {
   const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
