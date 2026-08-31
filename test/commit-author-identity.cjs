@@ -66,12 +66,14 @@ function git(root, args) {
   env.GIT_TEMPLATE_DIR = "/dev/null";
   env.GIT_CONFIG_COUNT = "0";
   delete env.GIT_CONFIG_PARAMETERS;
-  // HOME uses root.  Any HOME config is inside the fixture and cleanup removes it.
-  env.HOME = root;
+  // HOME uses a fixture-created empty directory, not the repository root.
+  env.HOME = join(root, ".fixture-home");
   // XDG_CONFIG_HOME selects a global ignore outside HOME.  Delete it so Git uses HOME.
   delete env.XDG_CONFIG_HOME;
   delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
+  // ROUTE 1b: Delete GIT_WORK_TREE because it earns no identity control and its only measured damage came from ambient GIT_DIR, which this fixture already deletes.
+  // LIMIT: GIT_COMMON_DIR, GIT_QUARANTINE_PATH, GIT_ATTR_SOURCE, GIT_CONFIG, and GIT_ALLOC_LIMIT break the fixture, fatal visibly, and do not forge an author.
+  // TESTED: 67 ambient inputs were probed on Linux with git version 2.43.0. This list is not exhaustive. Darwin and Windows are UNKNOWN.
   // NAMED NON-CLAIM: This fixture assumes a trusted git on PATH.
   // This test does not test that assumption.
   // Resolving git here would give false comfort because tests outside this file inherit PATH.
@@ -125,6 +127,7 @@ function check(root, base, head) {
 
 function fixture(beforeInit) {
   const root = mkdtempSync(join(tmpdir(), "seal-commit-author-"));
+  mkdirSync(join(root, ".fixture-home"));
   if (beforeInit) beforeInit(root);
   requireGit(root, ["init", "-q"]);
   requireGit(root, ["config", "user.name", "velvetmonkey"]);
@@ -249,6 +252,15 @@ test("the fixture pins ambient HOME ignore input", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   assert.equal(requireGit(root, ["status", "--porcelain"]), "");
+});
+
+test("the fixture ignores repository-root Git ignore files", (t) => {
+  const root = fixture((fixtureRoot) => {
+    mkdirSync(join(fixtureRoot, ".config", "git"), { recursive: true });
+    writeFileSync(join(fixtureRoot, ".config", "git", "ignore"), "README.md\n");
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(requireGit(root, ["status", "--porcelain"]), "?? .config/");
 });
 
 test("the fixture pins ambient XDG_CONFIG_HOME ignore input", (t) => {
