@@ -240,10 +240,10 @@ function readApprovalJournal(state) {
   return { ...digest, events };
 }
 
-function readLocalOverride(state) {
+function readLocalOverride(state, protectionRead = readJsonWithDigest(state.paths.protectState)) {
   const configPath = path.join(state.paths.home, ".claude.json");
   const { body: config, ...configDigest } = readJsonWithDigest(configPath);
-  const { body: protection, ...protectionDigest } = readJsonWithDigest(state.paths.protectState);
+  const { body: protection, ...protectionDigest } = protectionRead;
   const expected = protection?.localOverride?.definition ?? null;
   const declaredProject = protection?.localOverride?.claudeProjectRoot ?? state.paths.project;
   const declaredEntry = config?.projects?.[declaredProject]?.mcpServers?.[SERVER_NAME] ?? null;
@@ -268,8 +268,8 @@ function readLocalOverride(state) {
   };
 }
 
-function readProtectionState(state) {
-  const { body, ...digest } = readJsonWithDigest(state.paths.protectState);
+function readProtectionState(state, protectionRead = readJsonWithDigest(state.paths.protectState)) {
+  const { body, ...digest } = protectionRead;
   return {
     ...digest,
     state: body?.state ?? null,
@@ -283,14 +283,15 @@ function snapshot(state, label) {
   const sealVersion = run(state, path.join(state.paths.prefix, "bin", "seal"), ["--version"]);
   const sealStatus = run(state, path.join(state.paths.prefix, "bin", "seal"), ["status"]);
   const mcpGet = run(state, "claude", ["mcp", "get", SERVER_NAME]);
+  const protectionRead = readJsonWithDigest(state.paths.protectState);
   return {
     label,
     at: new Date().toISOString(),
     child_log: readChildLog(state),
     receipts: readReceipts(state),
     approvals_journal: readApprovalJournal(state),
-    protection_state: readProtectionState(state),
-    local_override: readLocalOverride(state),
+    protection_state: readProtectionState(state, protectionRead),
+    local_override: readLocalOverride(state, protectionRead),
     mcp_json: digestOf(path.join(state.paths.project, ".mcp.json")),
     effect: digestOf(state.paths.effect),
     effect_text: (() => { try { return fs.readFileSync(state.paths.effect, "utf8"); } catch { return null; } })(),
@@ -1366,20 +1367,46 @@ function certifyStep(state, step) {
       // Older recorded walks stored this same raw input in protection_state.
       // Keep that evidence usable when it has the required byte digest.
       const recordedProtection = recorded?.protect_state ?? end.protection_state;
-      const current = readLocalOverride(state);
+      // Read the protection state once. The digest and every derived value
+      // below come from these same bytes.
+      const protectionRead = readJsonWithDigest(state.paths.protectState);
+      const current = readLocalOverride(state, protectionRead);
+      const currentProtection = readProtectionState(state, protectionRead);
       const rawInputMatches = recorded?.config_path === current.config_path &&
         recorded?.present === current.present && recorded?.sha256 === current.sha256 && recorded?.bytes === current.bytes &&
         (recorded?.protect_state_path === undefined || recorded.protect_state_path === current.protect_state_path) &&
         recordedProtection?.present === current.protect_state?.present &&
         recordedProtection?.sha256 === current.protect_state?.sha256 &&
-        recordedProtection?.bytes === current.protect_state?.bytes;
+        recordedProtection?.bytes === current.protect_state?.bytes &&
+        end.protection_state?.present === currentProtection.present &&
+        end.protection_state?.sha256 === currentProtection.sha256 &&
+        end.protection_state?.bytes === currentProtection.bytes;
       if (!rawInputMatches) {
         failures.push(`${caseId}: recorded local override raw input changed after the snapshot`);
         continue;
       }
-      // entry is derived from the recorded config and protection-state bytes.
-      // Recompute it after checking both recorded raw inputs are unchanged.
-      end = { ...end, local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches } };
+      const derivedFields = [
+        ["protection_state.state", end.protection_state?.state, currentProtection.state],
+        ["protection_state.lease", end.protection_state?.lease, currentProtection.lease],
+        ["protection_state.guard_tool", end.protection_state?.guard_tool, currentProtection.guard_tool],
+        ["protection_state.server_name", end.protection_state?.server_name, currentProtection.server_name],
+        ["local_override.project_key", recorded?.project_key, current.project_key],
+        ["local_override.entry", recorded?.entry, current.entry],
+        ["local_override.exact_definition_matches", recorded?.exact_definition_matches, current.exact_definition_matches],
+      ];
+      const disagreement = derivedFields.find(([, recordedValue, recomputedValue]) =>
+        !isDeepStrictEqual(recordedValue, recomputedValue));
+      if (disagreement) {
+        failures.push(`${caseId}: recorded derived field ${disagreement[0]} disagrees with recomputed evidence`);
+        continue;
+      }
+      // All activation-derived fields agree with values recomputed from raw,
+      // digest-joined evidence. Certification uses that recomputed object.
+      end = {
+        ...end,
+        protection_state: currentProtection,
+        local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches },
+      };
       say("  CERTIFYING activation from recorded raw local override evidence");
     }
     const outcome = OBSERVERS[caseId](state, begin, end);
@@ -1780,6 +1807,7 @@ module.exports = {
   nonProxyStarts,
   proxyEvidenceForStart,
   readLocalOverride,
+  readProtectionState,
   runEnv,
   saveState,
   show,

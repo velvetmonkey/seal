@@ -231,7 +231,7 @@ test("activation refuses when the local notes override was not selected or conne
   assert.equal(harness.loadState(runDir).step_index, 0);
 });
 
-test("an attempted activation certifies by recomputing a stale derived local entry from unchanged raw config", () => {
+test("activation refuses when recorded local_override.entry disagrees with recomputed evidence", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stale-activation-entry-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
@@ -245,8 +245,72 @@ test("an attempted activation certifies by recomputing a stale derived local ent
   state.steps.activation.attempted = true;
   harness.saveState(state);
 
-  assert.doesNotThrow(() => harness.next(harness.loadState(runDir)));
-  assert.equal(harness.loadState(runDir).step_index, 1);
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /recorded derived field local_override\.entry disagrees with recomputed evidence/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 0);
+});
+
+test("activation refuses when recorded protection_state.state disagrees with joined raw evidence", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-frozen-activation-state-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  const state = harness.loadState(runDir);
+  const endPath = path.join(runDir, "snapshots", "activation.end.json");
+  const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+  const changed = JSON.parse(fs.readFileSync(state.paths.protectState, "utf8"));
+  changed.state = "IDLE";
+  const changedBytes = Buffer.from(`${JSON.stringify(changed, null, 2)}\n`);
+  fs.writeFileSync(state.paths.protectState, changedBytes);
+  const joined = { present: true, sha256: createHash("sha256").update(changedBytes).digest("hex"), bytes: changedBytes.length };
+  end.local_override.protect_state = { ...joined };
+  end.protection_state = { ...end.protection_state, ...joined };
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+  state.step_index = 0;
+  state.steps.activation.attempted = true;
+  harness.saveState(state);
+
+  assert.throws(
+    () => harness.next(harness.loadState(runDir)),
+    (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+      /recorded derived field protection_state\.state disagrees with recomputed evidence/.test(error.message),
+  );
+  assert.equal(harness.loadState(runDir).step_index, 0);
+});
+
+test("A8, A11, and A14 refuse a frozen ACTIVE protection state", () => {
+  for (const attack of ["A8", "A11", "A14"]) {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `seal-cc-${attack.toLowerCase()}-`));
+    const { harness, runDir } = initSyntheticRun(workspace);
+    runSyntheticStep(harness, runDir, "activation", "");
+    const state = harness.loadState(runDir);
+    const endPath = path.join(runDir, "snapshots", "activation.end.json");
+    const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+    const original = fs.readFileSync(state.paths.protectState, "utf8");
+    const idle = attack === "A11"
+      ? original.replace(/"state"\s*:\s*"ACTIVE"/, '"state":"ACTIVE","state":"IDLE"')
+      : original.replace(/"state"\s*:\s*"ACTIVE"/, '"state":"IDLE"');
+    assert.notEqual(idle, original, `${attack} must change the protected raw bytes`);
+    const idleBytes = Buffer.from(idle);
+    fs.writeFileSync(state.paths.protectState, idleBytes);
+    const joined = { present: true, sha256: createHash("sha256").update(idleBytes).digest("hex"), bytes: idleBytes.length };
+    if (attack !== "A14") end.local_override.protect_state = { ...joined };
+    if (attack !== "A8") end.protection_state = { ...end.protection_state, ...joined };
+    fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+    state.step_index = 0;
+    state.steps.activation.attempted = true;
+    harness.saveState(state);
+
+    assert.throws(
+      () => harness.next(harness.loadState(runDir)),
+      (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify",
+      attack,
+    );
+    assert.equal(harness.loadState(runDir).step_index, 0, attack);
+    assert.equal(JSON.parse(idle).state, "IDLE", `${attack} uses the JSON parser value that its digest covers`);
+  }
 });
 
 test("activation refuses when the recorded protection-state raw input changes", () => {
