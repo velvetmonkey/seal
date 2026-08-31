@@ -63,7 +63,9 @@ for (const file of [path.join("docs", "guide", "when-something-looks-wrong.md")]
 // anchored release-version slot. This canonicalizer maps only that slot to a
 // stable marker before hashing. GUIDE_SHA256 does not cover the generated
 // version slot. The pin covers every other byte in the guide.
-const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\.$)`;
+// End the slot match at the version's own period. This keeps the generated
+// slot stable when the following platform-support prose changes.
+const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\.)`;
 const generatedVersionSlot = new RegExp(generatedVersionSlotSource, "gm");
 const guidePath = path.join(ROOT, "docs", "guide", "when-something-looks-wrong.md");
 const guideText = fs.readFileSync(guidePath, "utf8");

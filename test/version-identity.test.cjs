@@ -286,7 +286,7 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   assert.equal(sync.code, 0, sync.stderr);
   const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
   const generatedSlot = new RegExp(
-    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)`,
+    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\.)`,
     "gm",
   );
   const canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");

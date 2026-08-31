@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "f2811872fdbc9456266c01b3707309932926493ea02cf3831ad0b58a7fae8dda";
+const GUIDE_SHA256 = "f90e49f2733fe529a102e7593b23ef7d25c65ff90a88096ec6b96916fbcf641b";
 
 // REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one
 // anchored release-version slot. This canonicalizer maps only that slot to a
@@ -22,7 +22,7 @@ const GUIDE_SHA256 = "f2811872fdbc9456266c01b3707309932926493ea02cf3831ad0b58a7f
 // version slot. The pin covers every other byte in the guide.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
-const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)", "gm");
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\.)", "gm");
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;
@@ -186,8 +186,8 @@ test("whole-file pin rejects locator defeats and earlier claim tampering", () =>
     ["deleted reviewed body", text.replace("Receipt refusals use the same tokens", "Receipt refusals use different tokens")],
     ["deleted reviewed sentence", text.replace("there is no second receipt format", "there is another receipt format")],
     ["changed macOS Protect support", text.replace(
-      "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
-      "newer. Seal supports install, demo, and receipt checking on macOS x64/arm64.",
+      "macOS Protect execution is not exercised in CI.",
+      "macOS Protect execution is exercised in CI.",
     )],
     ["novel assertion", `${text}\n${falseClaim}\n`],
     ["deleted heading", text.replace(heading, "")],
