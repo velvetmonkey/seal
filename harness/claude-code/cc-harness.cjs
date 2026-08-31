@@ -104,7 +104,10 @@ function readJsonWithDigest(filePath) {
   const { content, ...digest } = readBytesWithDigest(filePath);
   let body = null;
   if (content !== null) {
-    try { body = JSON.parse(content.toString("utf8")); } catch { body = null; }
+    try {
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(content);
+      body = JSON.parse(text);
+    } catch { body = null; }
   }
   return { ...digest, body };
 }
@@ -187,18 +190,80 @@ function run(state, file, args, options = {}) {
 
 // ------------------------------------------------------------------ reading
 
-function readChildLog(state) {
-  const { content, ...digest } = readBytesWithDigest(state.paths.childLog);
-  const raw = content === null ? "" : content.toString("utf8");
+function jsonHasDuplicateObjectKeys(text) {
+  let index = 0;
+  let duplicate = false;
+  const whitespace = () => { while (/\s/u.test(text[index] || "")) index += 1; };
+  function string() {
+    const start = index++;
+    while (index < text.length) {
+      if (text[index] === "\\") { index += 2; continue; }
+      if (text[index++] === '"') return JSON.parse(text.slice(start, index));
+    }
+    throw new Error("unterminated JSON string");
+  }
+  function value() {
+    whitespace();
+    if (text[index] === "{") {
+      index += 1; whitespace();
+      const keys = new Set();
+      if (text[index] === "}") { index += 1; return; }
+      for (;;) {
+        whitespace();
+        if (text[index] !== '"') throw new Error("object key is not a string");
+        const key = string();
+        if (keys.has(key)) duplicate = true;
+        keys.add(key);
+        whitespace();
+        if (text[index++] !== ":") throw new Error("object colon is absent");
+        value(); whitespace();
+        const token = text[index++];
+        if (token === "}") return;
+        if (token !== ",") throw new Error("object separator is invalid");
+      }
+    }
+    if (text[index] === "[") {
+      index += 1; whitespace();
+      if (text[index] === "]") { index += 1; return; }
+      for (;;) {
+        value(); whitespace();
+        const token = text[index++];
+        if (token === "]") return;
+        if (token !== ",") throw new Error("array separator is invalid");
+      }
+    }
+    if (text[index] === '"') { string(); return; }
+    const match = text.slice(index).match(/^(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/);
+    if (!match) throw new Error("JSON value is invalid");
+    index += match[0].length;
+  }
+  value(); whitespace();
+  if (index !== text.length) throw new Error("JSON has trailing data");
+  return duplicate;
+}
+
+function parseChildLog(content, digest) {
+  let raw = "";
+  let failure = null;
+  if (content !== null) {
+    try { raw = new TextDecoder("utf-8", { fatal: true }).decode(content); }
+    catch { failure = "child.jsonl is not valid UTF-8"; }
+  }
   const records = [];
   for (const [index, line] of raw.split("\n").entries()) {
     if (line.trim() === "") continue;
     try {
+      if (jsonHasDuplicateObjectKeys(line)) {
+        failure ||= `child.jsonl record ${index + 1} has a duplicate JSON object key`;
+      }
       // The verbatim frame stays in child.jsonl, which the pack carries and
       // the checker re-reads; a snapshot keeps the shape, not the bytes.
       const { raw: _frame, ...record } = JSON.parse(line);
       records.push(record);
-    } catch { records.push({ kind: "unparseable-log-line", line: index + 1 }); }
+    } catch {
+      failure ||= `child.jsonl record ${index + 1} is not valid JSON`;
+      records.push({ kind: "unparseable-log-line", line: index + 1 });
+    }
   }
   return {
     ...digest,
@@ -206,7 +271,44 @@ function readChildLog(state) {
     records,
     // Counted out of the file. Nothing reports this number; records are counted.
     guarded_calls: records.filter((record) => record.kind === "child-call").length,
+    ...(failure ? { failure } : {}),
   };
+}
+
+function readChildLogEvidence(state) {
+  const { content, ...digest } = readBytesWithDigest(state.paths.childLog);
+  return { content, childLog: parseChildLog(content, digest) };
+}
+
+function readChildLog(state) {
+  return readChildLogEvidence(state).childLog;
+}
+
+function childLogPrefix(content, present, recordCount) {
+  if (!Number.isSafeInteger(recordCount) || recordCount < 0) return null;
+  if (!present) {
+    if (recordCount !== 0) return null;
+    return parseChildLog(null, { present: false, sha256: null, bytes: null });
+  }
+  if (content === null) return null;
+  if (recordCount === 0) {
+    const prefix = Buffer.alloc(0);
+    return parseChildLog(prefix, { present: true, sha256: sha256(prefix), bytes: 0 });
+  }
+  let records = 0;
+  let offset = 0;
+  while (offset < content.length) {
+    const newline = content.indexOf(0x0a, offset);
+    const end = newline === -1 ? content.length : newline + 1;
+    const line = content.subarray(offset, newline === -1 ? end : newline);
+    if (line.some((byte) => ![0x09, 0x0d, 0x20].includes(byte))) records += 1;
+    if (records === recordCount) {
+      const prefix = content.subarray(0, end);
+      return parseChildLog(prefix, { present: true, sha256: sha256(prefix), bytes: prefix.length });
+    }
+    offset = end;
+  }
+  return null;
 }
 
 function claudeMcpGetEvidence(result) {
@@ -553,9 +655,11 @@ function nonProxyStarts(records, protectStatePath, expectedDigest) {
     !proxyEvidenceForStart(record, protectStatePath, expectedDigest).mediated);
 }
 
-function argvIsClient(argv, clientExecutable) {
-  if (!Array.isArray(argv)) return false;
-  return argv.some((word) => word === clientExecutable || path.basename(word) === path.basename(clientExecutable));
+function processIsClient(step, client) {
+  if (!step || !client?.present || typeof client.sha256 !== "string" || !Number.isSafeInteger(client.bytes)) return false;
+  const identities = [step.executable, step.script, ...(Array.isArray(step.argv_files) ? step.argv_files : [])];
+  return identities.some((identity) => identity?.path === client.executable &&
+    identity.sha256 === client.sha256 && identity.bytes === client.bytes);
 }
 
 function observeActivation(state, begin, end) {
@@ -565,7 +669,7 @@ function observeActivation(state, begin, end) {
   const mediated = starts.filter((record) => proxyEvidenceForStart(record, state.paths.protectState, proxyDigest).mediated);
   const leaseMatched = mediated.filter((record) => (record.ancestry || [])
     .some((step) => argvHasSealProxyShape(step.argv, state.paths.protectState) && step.pid === leasePid));
-  const clientAbove = mediated.filter((record) => (record.ancestry || []).some((step) => argvIsClient(step.argv, state.claude.executable)));
+  const clientAbove = mediated.filter((record) => (record.ancestry || []).some((step) => processIsClient(step, state.claude)));
   const direct = starts.filter((record) => !proxyEvidenceForStart(record, state.paths.protectState, proxyDigest).mediated);
   const localScopeSelected = /^ {2}Scope: Local config \(private to you in this project\)$/m.test(end.claude_mcp_get.stdout || "");
   const localEntryIsProxy = argvHasSealProxyShape([
@@ -600,18 +704,21 @@ function sameChildLog(recorded, current) {
     isDeepStrictEqual(recorded?.records, current.records);
 }
 
-function activationEvidence(state, begin, end) {
+function activationEvidence(state, begin, end, initialConfig, initialProtection) {
   // Read child.jsonl before `claude mcp get`. That command can itself start a
   // server. The saved end boundary must name the complete file at that point.
-  const childLog = readChildLog(state);
+  const { content: childLogContent, childLog } = readChildLogEvidence(state);
+  if (childLog.failure) {
+    return { failure: childLog.failure };
+  }
   if (!sameChildLog(end.child_log, childLog)) {
     return { failure: "recorded child log evidence changed after the snapshot" };
   }
-  // The begin boundary is a prefix of the current append-only child log.
-  // Compare the parsed records to the bytes now read from child.jsonl before
-  // `newRecords` uses the boundary count.
-  if (!Array.isArray(begin.child_log?.records) ||
-      !isDeepStrictEqual(begin.child_log.records, childLog.records.slice(0, begin.child_log.lines))) {
+  // Reconstruct the exact byte prefix at the recorded begin line count. The
+  // begin digest, byte length, line count, parsed records, and derived count
+  // must all describe that one prefix before `newRecords` uses the boundary.
+  const beginChildLog = childLogPrefix(childLogContent, begin.child_log?.present, begin.child_log?.lines);
+  if (!beginChildLog || beginChildLog.failure || !sameChildLog(begin.child_log, beginChildLog)) {
     return { failure: "recorded child log begin boundary changed after the snapshot" };
   }
   const mcp = claudeMcpGetEvidence(run(state, "claude", ["mcp", "get", SERVER_NAME]));
@@ -625,6 +732,23 @@ function activationEvidence(state, begin, end) {
   if ((end.claude_mcp_get?.sha256 !== undefined &&
       (end.claude_mcp_get.sha256 !== recordedMcp.sha256 || end.claude_mcp_get.bytes !== recordedMcp.bytes))) {
     return { failure: "recorded Claude MCP digest does not bind its result bytes" };
+  }
+  // The command above consumes the live client configuration. Re-read both
+  // files after that use. Refuse if either input changed after its joined read.
+  const configAfterUse = digestOf(initialConfig.config_path);
+  const protectionAfterUse = digestOf(state.paths.protectState);
+  if (initialConfig.present !== configAfterUse.present || initialConfig.sha256 !== configAfterUse.sha256 ||
+      initialConfig.bytes !== configAfterUse.bytes) {
+    return { failure: "local override input changed before Claude MCP use completed" };
+  }
+  if (initialProtection.present !== protectionAfterUse.present || initialProtection.sha256 !== protectionAfterUse.sha256 ||
+      initialProtection.bytes !== protectionAfterUse.bytes) {
+    return { failure: "protection-state input changed before activation use completed" };
+  }
+  const clientExecutable = digestOf(state.claude.executable);
+  if (state.claude.present !== clientExecutable.present || state.claude.sha256 !== clientExecutable.sha256 ||
+      state.claude.bytes !== clientExecutable.bytes) {
+    return { failure: "recorded Claude executable identity changed before activation use" };
   }
   return { childLog, mcp };
 }
@@ -1436,14 +1560,19 @@ function certifyStep(state, step) {
         failures.push(`${caseId}: recorded local override raw input changed after the snapshot`);
         continue;
       }
+      const legacyLocalOverride = recorded?.protect_state_path === undefined &&
+        recorded?.protect_state === undefined && recorded?.project_key === undefined &&
+        recorded?.exact_definition_matches === undefined;
       const derivedFields = [
         ["protection_state.state", end.protection_state?.state, currentProtection.state],
         ["protection_state.lease", end.protection_state?.lease, currentProtection.lease],
         ["protection_state.guard_tool", end.protection_state?.guard_tool, currentProtection.guard_tool],
         ["protection_state.server_name", end.protection_state?.server_name, currentProtection.server_name],
-        ["local_override.project_key", recorded?.project_key, current.project_key],
-        ["local_override.entry", recorded?.entry, current.entry],
-        ["local_override.exact_definition_matches", recorded?.exact_definition_matches, current.exact_definition_matches],
+        ...(legacyLocalOverride ? [] : [
+          ["local_override.project_key", recorded?.project_key, current.project_key],
+          ["local_override.entry", recorded?.entry, current.entry],
+          ["local_override.exact_definition_matches", recorded?.exact_definition_matches, current.exact_definition_matches],
+        ]),
       ];
       const disagreement = derivedFields.find(([, recordedValue, recomputedValue]) =>
         !isDeepStrictEqual(recordedValue, recomputedValue));
@@ -1458,7 +1587,7 @@ function certifyStep(state, step) {
         protection_state: currentProtection,
         local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches },
       };
-      const bound = activationEvidence(state, begin, end);
+      const bound = activationEvidence(state, begin, end, current, currentProtection);
       if (bound.failure) {
         failures.push(`${caseId}: ${bound.failure}`);
         continue;

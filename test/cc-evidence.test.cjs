@@ -132,8 +132,10 @@ test("documented required-observation table rejects heading_duplicated", () => {
   const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
   const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
   assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n### The eight fixed cases\n`, cases));
+});
+
 test("local override lookup resolves only the exact protected definition when the project key differs", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-override-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-override-"));
   const home = path.join(workspace, "home");
   const project = path.join(workspace, "project");
   const protectState = path.join(workspace, "protect.json");
@@ -172,7 +174,7 @@ test("local override lookup resolves only the exact protected definition when th
 });
 
 test("local override lookup ignores a foreign declared entry and uses one exact fallback", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-declared-foreign-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-declared-foreign-"));
   const home = path.join(workspace, "home");
   const protectState = path.join(workspace, "protect.json");
   fs.mkdirSync(home, { recursive: true });

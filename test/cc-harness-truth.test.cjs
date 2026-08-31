@@ -116,6 +116,30 @@ function runSyntheticStep(harness, runDir, scenario, note) {
   harness.next(harness.loadState(runDir));
 }
 
+function preparedActivationRun(workspace) {
+  const prepared = initSyntheticRun(workspace);
+  runSyntheticStep(prepared.harness, prepared.runDir, "activation", "");
+  const state = prepared.harness.loadState(prepared.runDir);
+  state.step_index = 0;
+  state.steps.activation.attempted = true;
+  prepared.harness.saveState(state);
+  const files = [
+    path.join(prepared.runDir, "harness-state.json"),
+    path.join(prepared.runDir, "snapshots", "activation.begin.json"),
+    path.join(prepared.runDir, "snapshots", "activation.end.json"),
+    state.paths.childLog,
+    state.paths.protectState,
+    path.join(state.paths.home, ".claude.json"),
+  ];
+  const original = new Map(files.map((file) => [file, fs.readFileSync(file)]));
+  return {
+    ...prepared,
+    reset() {
+      for (const [file, content] of original) fs.writeFileSync(file, content);
+    },
+  };
+}
+
 function completeSyntheticRun(harness, runDir) {
   runSyntheticStep(harness, runDir, "activation", "");
   runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
@@ -232,7 +256,7 @@ test("activation refuses when the local notes override was not selected or conne
 });
 
 test("activation refuses when recorded local_override.entry disagrees with recomputed evidence", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stale-activation-entry-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-stale-activation-entry-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   const endPath = path.join(runDir, "snapshots", "activation.end.json");
@@ -253,8 +277,29 @@ test("activation refuses when recorded local_override.entry disagrees with recom
   assert.equal(harness.loadState(runDir).step_index, 0);
 });
 
+test("activation recomputes derived local override fields omitted by an older snapshot", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-legacy-activation-entry-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  const endPath = path.join(runDir, "snapshots", "activation.end.json");
+  const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+  delete end.local_override.protect_state_path;
+  delete end.local_override.protect_state;
+  delete end.local_override.project_key;
+  delete end.local_override.exact_definition_matches;
+  end.local_override.entry = null;
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+  const state = harness.loadState(runDir);
+  state.step_index = 0;
+  state.steps.activation.attempted = true;
+  harness.saveState(state);
+
+  harness.next(harness.loadState(runDir));
+  assert.equal(harness.loadState(runDir).step_index, 1);
+});
+
 test("activation refuses when recorded protection_state.state disagrees with joined raw evidence", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-frozen-activation-state-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-frozen-activation-state-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   const state = harness.loadState(runDir);
@@ -281,10 +326,11 @@ test("activation refuses when recorded protection_state.state disagrees with joi
 });
 
 test("A8, A11, and A14 refuse a frozen ACTIVE protection state", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-frozen-active-attacks-"));
+  const prepared = preparedActivationRun(workspace);
   for (const attack of ["A8", "A11", "A14"]) {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `seal-cc-${attack.toLowerCase()}-`));
-    const { harness, runDir } = initSyntheticRun(workspace);
-    runSyntheticStep(harness, runDir, "activation", "");
+    prepared.reset();
+    const { harness, runDir } = prepared;
     const state = harness.loadState(runDir);
     const endPath = path.join(runDir, "snapshots", "activation.end.json");
     const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
@@ -324,10 +370,11 @@ test("activation binds every recorded Claude MCP and child-log value before cert
     ["child-duplicated-real-record", (end) => { end.child_log.records.push(structuredClone(end.child_log.records[0])); end.child_log.lines += 1; }],
     ["child-outside-window", (end) => { end.child_log.records.unshift({ kind: "start", ancestry: [] }); end.child_log.lines += 1; }],
   ];
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-recorded-input-attacks-"));
+  const prepared = preparedActivationRun(workspace);
   for (const [name, tamper] of attacks) {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `seal-cc-${name}-`));
-    const { harness, runDir } = initSyntheticRun(workspace);
-    runSyntheticStep(harness, runDir, "activation", "");
+    prepared.reset();
+    const { harness, runDir } = prepared;
     const state = harness.loadState(runDir);
     const endPath = path.join(runDir, "snapshots", "activation.end.json");
     const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
@@ -346,8 +393,145 @@ test("activation binds every recorded Claude MCP and child-log value before cert
   }
 });
 
+test("activation binds begin bytes, live inputs, parser input, and client identity", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-activation-input-attacks-"));
+  const shared = preparedActivationRun(workspace);
+  function preparedRun() {
+    shared.reset();
+    const prepared = shared;
+    return prepared;
+  }
+  function snapshot(runDir, edge) {
+    const file = path.join(runDir, "snapshots", `activation.${edge}.json`);
+    return { file, body: JSON.parse(fs.readFileSync(file, "utf8")) };
+  }
+  function writeSnapshot(value) {
+    fs.writeFileSync(value.file, `${JSON.stringify(value.body, null, 2)}\n`);
+  }
+  function insertAtBegin(runDir, line) {
+    const begin = snapshot(runDir, "begin").body;
+    const childPath = path.join(runDir, "child.jsonl");
+    const lines = fs.readFileSync(childPath, "utf8").split("\n");
+    let count = 0;
+    const output = [];
+    for (const existing of lines) {
+      if (existing.trim() !== "") {
+        if (count === begin.child_log.lines) output.push(line);
+        count += 1;
+      }
+      output.push(existing);
+    }
+    fs.writeFileSync(childPath, output.join("\n"));
+  }
+  function refreshEndChildLog(runDir) {
+    const childPath = path.join(runDir, "child.jsonl");
+    const content = fs.readFileSync(childPath);
+    const records = content.toString("utf8").split("\n").filter((line) => line.trim() !== "")
+      .map((line) => { const { raw: _raw, ...record } = JSON.parse(line); return record; });
+    const end = snapshot(runDir, "end");
+    end.body.child_log = {
+      present: true,
+      sha256: createHash("sha256").update(content).digest("hex"),
+      bytes: content.length,
+      lines: records.length,
+      records,
+      guarded_calls: records.filter((record) => record.kind === "child-call").length,
+    };
+    writeSnapshot(end);
+  }
+  function refuses(prepared, pattern) {
+    assert.throws(
+      () => prepared.harness.next(prepared.harness.loadState(prepared.runDir)),
+      (error) => error instanceof prepared.harness.HarnessError && error.code === "step_cannot_certify" && pattern.test(error.message),
+    );
+  }
+
+  {
+    const prepared = preparedRun("begin-window");
+    const begin = snapshot(prepared.runDir, "begin");
+    const direct = JSON.stringify({ kind: "start", argv: ["/bin/false"], ancestry: [] });
+    insertAtBegin(prepared.runDir, direct);
+    refreshEndChildLog(prepared.runDir);
+    begin.body.child_log.records.push(JSON.parse(direct));
+    begin.body.child_log.lines += 1;
+    writeSnapshot(begin);
+    refuses(prepared, /recorded child log begin boundary changed/);
+  }
+  {
+    const prepared = preparedRun("begin-digest");
+    const begin = snapshot(prepared.runDir, "begin");
+    begin.body.child_log.sha256 = "0".repeat(64);
+    begin.body.child_log.bytes = 1;
+    writeSnapshot(begin);
+    refuses(prepared, /recorded child log begin boundary changed/);
+  }
+  {
+    const prepared = preparedRun("duplicate-key");
+    insertAtBegin(prepared.runDir, '{"kind":"start","argv":["/bin/false"],"ancestry":[],"kind":"frame"}');
+    refreshEndChildLog(prepared.runDir);
+    refuses(prepared, /duplicate JSON object key/);
+  }
+  {
+    const prepared = preparedRun("config-toctou");
+    const state = prepared.harness.loadState(prepared.runDir);
+    const configPath = path.join(state.paths.home, ".claude.json");
+    const originalRead = fs.readFileSync;
+    let changed = false;
+    fs.readFileSync = function readThenReplace(filePath, ...args) {
+      const result = originalRead.call(this, filePath, ...args);
+      if (filePath === configPath && !changed) {
+        changed = true;
+        const config = JSON.parse(Buffer.isBuffer(result) ? result.toString("utf8") : result);
+        const project = Object.keys(config.projects || {})[0];
+        config.projects[project].mcpServers.notes.command = "/false-seal-binary";
+        fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      }
+      return result;
+    };
+    try { refuses(prepared, /local override input changed before Claude MCP use completed/); }
+    finally { fs.readFileSync = originalRead; }
+  }
+  {
+    const prepared = preparedRun("invalid-utf8");
+    const state = prepared.harness.loadState(prepared.runDir);
+    const raw = fs.readFileSync(state.paths.protectState);
+    const changed = Buffer.concat([Buffer.from('{"noise":"'), Buffer.from([0xff]), Buffer.from('",'), raw.subarray(1)]);
+    fs.writeFileSync(state.paths.protectState, changed);
+    const digest = { present: true, sha256: createHash("sha256").update(changed).digest("hex"), bytes: changed.length };
+    const end = snapshot(prepared.runDir, "end");
+    end.body.protection_state = { ...end.body.protection_state, ...digest };
+    end.body.local_override.protect_state = { ...end.body.local_override.protect_state, ...digest };
+    writeSnapshot(end);
+    refuses(prepared, /recorded derived field protection_state\.state disagrees/);
+  }
+  {
+    const prepared = preparedRun("client-identity");
+    const state = prepared.harness.loadState(prepared.runDir);
+    state.claude.executable = "/evil/not-the-client/node";
+    prepared.harness.saveState(state);
+    refuses(prepared, /recorded Claude executable identity changed/);
+  }
+  {
+    const prepared = preparedRun("protection-toctou");
+    const state = prepared.harness.loadState(prepared.runDir);
+    const protectPath = state.paths.protectState;
+    const originalRead = fs.readFileSync;
+    let reads = 0;
+    fs.readFileSync = function secondReadIsIdle(filePath, ...args) {
+      const result = originalRead.call(this, filePath, ...args);
+      if (filePath !== protectPath || ++reads < 2) return result;
+      const idle = JSON.parse(Buffer.isBuffer(result) ? result.toString("utf8") : result);
+      idle.state = "IDLE";
+      return Buffer.from(`${JSON.stringify(idle, null, 2)}\n`);
+    };
+    try { refuses(prepared, /protection-state input changed before activation use completed/); }
+    finally { fs.readFileSync = originalRead; }
+    assert.equal(reads, 2);
+  }
+});
+
 test("activation refuses when the recorded protection-state raw input changes", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-protect-state-join-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-protect-state-join-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   const state = harness.loadState(runDir);
@@ -366,7 +550,7 @@ test("activation refuses when the recorded protection-state raw input changes", 
 });
 
 test("local override hashes the one config buffer that it parses", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-one-read-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-one-read-"));
   const home = path.join(workspace, "home");
   const protectState = path.join(workspace, "protect.json");
   const configPath = path.join(home, ".claude.json");
