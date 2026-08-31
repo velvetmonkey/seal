@@ -10,7 +10,7 @@ Current shipped assurance status: authorization rule — TESTED; product state/f
 
 Receipts use one `seal.receipt/v2` envelope across the demo, protected path, and sibling release verifier. The format fixes member order, canonical JSON, duplicate-member refusal, kernel inputs, verdict mapping, replay commitments, and Ed25519 signature preimage. See `docs/SEAL-RECEIPT-V2.md`, `spine/receipt-v2.cjs`, and `test/receipt-canonicalization-conformance.test.mjs`.
 
-v0.2.0 was withdrawn before publication. It has no published release assets. v0.2.1 is the first published release of this line.
+v0.2.0 was withdrawn before publication. It has no published release assets. This note records v0.2.1.
 
 ## What Seal does not cover
 
@@ -26,7 +26,7 @@ The sibling `seal-receipt-v2.mjs` verifier reports document structure, signature
 
 - `741e3df` routes test-created directories through a run-scoped lifecycle helper. The complete product suite no longer leaves temporary directories behind.
 
-- `4631a6c` lets an operator select protected calls by argument value as well as tool name. Exact JSON-number equality treats signed zero and zero as one scalar. Therefore `{"count":-0}` does not pass a `count=0` gate.
+- `4631a6c` lets an operator select protected calls by argument value as well as tool name. Exact JSON-number equality treats signed zero and zero as one scalar. The `count=0` predicate matches `{"count":-0}`. The call is selected and needs approval.
 
 - `b51a01d` adds rendered Claude Code transcripts to the evidence pack. The renderer redacts session identifiers at the source layer. This evidence does not observe a real Claude Code call. The Claude Code matrix row remains UNTESTED.
 
