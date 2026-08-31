@@ -4,17 +4,18 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
 function copyTree() {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-install-mutant-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-install-mutant-"));
   fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") });
   return out;
 }
 
 function probe(root) {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-install-probe-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-install-probe-"));
   const built = spawnSync(process.execPath, [path.join(root, "scripts", "build-dist.cjs"), "--out", out], { cwd: root, encoding: "utf8", timeout: 60000 });
   assert.equal(built.status, 0, `${built.stdout}\n${built.stderr}`);
   const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);

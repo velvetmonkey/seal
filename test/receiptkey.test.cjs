@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -16,7 +17,7 @@ const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, stateP
 
 function fixture() {
   fs.mkdirSync(SCRATCH, { recursive: true });
-  const root = fs.mkdtempSync(path.join(SCRATCH, "test-"));
+  const root = testTmpdir(path.join(SCRATCH, "test-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, "data-home");
   const receiptsDir = path.join(root, "receipts");
@@ -140,7 +141,7 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
 
 test("receipt key absence generates, while ambiguous private-key states refuse by name", () => {
   fs.mkdirSync(SCRATCH, { recursive: true });
-  const env = { XDG_DATA_HOME: fs.mkdtempSync(path.join(SCRATCH, "ambiguity-")) };
+  const env = { XDG_DATA_HOME: testTmpdir(path.join(SCRATCH, "ambiguity-")) };
   let announcements = 0;
   loadReceiptSigner(env, () => { announcements += 1; });
   const keys = receiptKeyPaths(env);

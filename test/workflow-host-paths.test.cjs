@@ -5,13 +5,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { findForbiddenHostPaths } = require("../scripts/check-workflow-host-paths.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
 function fixture(contents) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-workflow-host-path-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-workflow-host-path-"));
   fs.mkdirSync(path.join(root, ".github", "workflows"), { recursive: true });
   fs.writeFileSync(path.join(root, ".github", "workflows", "ci.yml"), contents);
   return root;

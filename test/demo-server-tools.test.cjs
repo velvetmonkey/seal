@@ -5,11 +5,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
 test("the demo server advertises append and erase with real file effects", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-tools-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-tools-"));
   const dataFile = path.join(root, "data.txt");
   const child = spawn(process.execPath, [SEAL, "__demo-server", dataFile], {
     stdio: ["pipe", "pipe", "inherit"],

@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -35,7 +36,7 @@ test("seal demo names the retained scratch directory and its recovery command", 
 });
 
 test("seal demo --dir never deletes a user-named directory", () => {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-scratch-test-"));
+  const parent = testTmpdir(path.join(os.tmpdir(), "seal-demo-scratch-test-"));
   const demoDir = path.join(parent, "user-owned");
   const marker = path.join(demoDir, "keep.txt");
   fs.mkdirSync(demoDir);

@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { createHash } = require("node:crypto");
 
 const ROOT = path.join(__dirname, "..");
@@ -22,7 +23,12 @@ function buildArtifact(workspace) {
 
 let sharedArtifact = null;
 function artifactFixture() {
-  if (!sharedArtifact) sharedArtifact = buildArtifact(fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-harness-artifact-")));
+  if (!sharedArtifact) {
+    sharedArtifact = buildArtifact(testTmpdir(
+      path.join(os.tmpdir(), "seal-cc-harness-artifact-"),
+      { keep: true },
+    ));
+  }
   return sharedArtifact;
 }
 
@@ -119,7 +125,7 @@ function completeSyntheticRun(harness, runDir) {
 }
 
 test("a hand-written dialog cast is not evidence from the recorded session", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
   const { harness, runDir } = initSyntheticRun(workspace);
 
   process.env.SEAL_CC_SYNTHETIC_CASE = "activation";
@@ -156,7 +162,7 @@ test("a hand-written dialog cast is not evidence from the recorded session", () 
 });
 
 test("finish refuses before writing when any declared case lacks positive evidence", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-finish-absence-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-finish-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   const out = path.join(workspace, "out");
 
@@ -169,7 +175,7 @@ test("finish refuses before writing when any declared case lacks positive eviden
 });
 
 test("decline refuses and does not advance when the human does nothing", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-harness-truth-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-harness-truth-"));
   const runDir = path.join(workspace, "run");
   const { stubBin, client } = syntheticSetup(workspace);
   const artifact = artifactFixture();
@@ -204,7 +210,7 @@ test("decline refuses and does not advance when the human does nothing", () => {
 });
 
 test("activation refuses when the local notes override was not selected or connected", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-activation-silent-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-activation-silent-"));
   const runDir = path.join(workspace, "run");
   const { stubBin, client } = syntheticSetup(workspace);
   const artifact = artifactFixture();
@@ -226,7 +232,7 @@ test("activation refuses when the local notes override was not selected or conne
 });
 
 test("missing_launcher certifies recorder facts without stand-in screen text", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
@@ -241,7 +247,7 @@ test("missing_launcher certifies recorder facts without stand-in screen text", (
 });
 
 test("missing_launcher ignores harness probe lifecycle records but names a fallback child call", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-missing-launcher-lifecycle-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-missing-launcher-lifecycle-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
@@ -319,7 +325,7 @@ test("missing_launcher ignores harness probe lifecycle records but names a fallb
 });
 
 test("unprotect refuses when its successful removal command is absent", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-unprotect-absence-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-unprotect-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   completeSyntheticRun(harness, runDir);
   const state = harness.loadState(runDir);
@@ -336,7 +342,7 @@ test("unprotect refuses when its successful removal command is absent", () => {
 });
 
 test("a self-consistent recorder-bundle rewrite passes only with the bookkeeping boundary label", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-bundle-rewrite-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-bundle-rewrite-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   completeSyntheticRun(harness, runDir);
   const state = harness.loadState(runDir);
@@ -367,7 +373,7 @@ test("a self-consistent recorder-bundle rewrite passes only with the bookkeeping
 });
 
 test("init refuses a PE client by its resolved-path header bytes", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-pe-client-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-pe-client-"));
   const clientBytes = Buffer.alloc(20);
   clientBytes[0] = 0x4d;
   clientBytes[1] = 0x5a;
@@ -379,7 +385,7 @@ test("init refuses a PE client by its resolved-path header bytes", () => {
 });
 
 test("init refuses a shell-script client because the resolved client is not ELF", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-script-client-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-script-client-"));
   const result = initWithPathClient(workspace, Buffer.from("#!/bin/sh\nprintf '9.9.9\\n'\n", "utf8"));
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 1, output);
@@ -392,7 +398,7 @@ test("the client format check accepts the Node Linux x86-64 ELF", () => {
 });
 
 test("two distinct claude executables on PATH refuse with both resolved paths and digests", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-ambiguous-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-ambiguous-"));
   const first = buildClaude(workspace, "claude-one", "1.2.3");
   const second = buildClaude(workspace, "claude-two", "4.5.6");
   const firstBin = path.join(workspace, "first-bin");
@@ -413,7 +419,7 @@ test("two distinct claude executables on PATH refuse with both resolved paths an
 });
 
 test("one claude executable auto-resolves and records its full candidate list", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-auto-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-auto-"));
   const client = buildClaude(workspace, "claude", "1.2.3");
   const harness = require(HARNESS);
   const identity = harness.clientIdentity(pathEnv(workspace));
@@ -422,7 +428,7 @@ test("one claude executable auto-resolves and records its full candidate list", 
 });
 
 test("two PATH entries that resolve to one claude executable do not refuse", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-symlink-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-symlink-"));
   const client = buildClaude(workspace, "client", "1.2.3");
   const firstBin = path.join(workspace, "first-bin");
   const secondBin = path.join(workspace, "second-bin");
@@ -437,7 +443,7 @@ test("two PATH entries that resolve to one claude executable do not refuse", () 
 });
 
 test("an explicit client ignores a different claude executable on PATH", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-explicit-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-explicit-"));
   const explicit = buildClaude(workspace, "explicit", "1.2.3");
   const other = buildClaude(workspace, "other", "4.5.6");
   const bin = path.join(workspace, "bin");
@@ -451,7 +457,7 @@ test("an explicit client ignores a different claude executable on PATH", () => {
 });
 
 test("an explicit client path that does not exist refuses instead of throwing", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-missing-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-missing-"));
   const client = path.join(workspace, "client-that-does-not-exist");
   const harness = require(HARNESS);
   assert.throws(
@@ -462,7 +468,7 @@ test("an explicit client path that does not exist refuses instead of throwing", 
 });
 
 test("a relative explicit client refusal quotes the path supplied to --client", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-relative-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-relative-"));
   const artifact = artifactFixture();
   const result = spawnSync(process.execPath, [HARNESS, "init",
     "--artifact", artifact.path,
@@ -477,7 +483,7 @@ test("a relative explicit client refusal quotes the path supplied to --client", 
 });
 
 test("a missing stand-in client path refuses instead of throwing", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-missing-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-stand-in-missing-"));
   const client = path.join(workspace, "client-that-does-not-exist");
   const result = initWithStandInClient(workspace, client);
   const output = `${result.stdout}${result.stderr}`;
@@ -486,7 +492,7 @@ test("a missing stand-in client path refuses instead of throwing", () => {
 });
 
 test("a stand-in client directory refuses as client_unreadable", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-directory-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-stand-in-directory-"));
   const result = initWithStandInClient(workspace, workspace);
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 1, output);
@@ -494,7 +500,7 @@ test("a stand-in client directory refuses as client_unreadable", () => {
 });
 
 test("a stand-in client without execute permission remains valid", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stand-in-no-execute-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-stand-in-no-execute-"));
   const client = path.join(workspace, "client");
   fs.copyFileSync(SYNTHETIC_CLIENT, client);
   fs.chmodSync(client, 0o644);
@@ -508,7 +514,7 @@ test("a stand-in client without execute permission remains valid", () => {
 });
 
 test("an explicit client directory refuses as client_unreadable", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-directory-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-directory-"));
   const harness = require(HARNESS);
   assert.throws(
     () => harness.clientIdentity(pathEnv(workspace), workspace),
@@ -518,7 +524,7 @@ test("an explicit client directory refuses as client_unreadable", () => {
 });
 
 test("an explicit client without execute permission refuses with a token", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-no-execute-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-no-execute-"));
   const client = buildClaude(workspace, "client", "1.2.3");
   fs.chmodSync(client, 0o644);
   const harness = require(HARNESS);
@@ -530,7 +536,7 @@ test("an explicit client without execute permission refuses with a token", () =>
 });
 
 test("an explicit client that runs and exits non-zero reports its real version exit status", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-version-exit-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-version-exit-"));
   const client = buildClaude(workspace, "client", "1.2.3", 23);
   const harness = require(HARNESS);
   assert.throws(
@@ -541,7 +547,7 @@ test("an explicit client that runs and exits non-zero reports its real version e
 });
 
 test("an explicit non-ELF client retains the client_not_linux_x64 refusal", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-explicit-non-elf-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-explicit-non-elf-"));
   const client = path.join(workspace, "client");
   fs.writeFileSync(client, "#!/bin/sh\nprintf 'not claude'\n", { mode: 0o755 });
   const harness = require(HARNESS);
@@ -552,7 +558,7 @@ test("an explicit non-ELF client retains the client_not_linux_x64 refusal", () =
 });
 
 test("an empty client read refuses as client_unreadable", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-empty-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-empty-"));
   const client = path.join(workspace, "client");
   fs.writeFileSync(client, "", { mode: 0o755 });
   const harness = require(HARNESS);
@@ -568,7 +574,7 @@ test("an empty client read refuses as client_unreadable", () => {
 });
 
 test("a short client read refuses as client_unreadable", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-short-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-short-"));
   const client = path.join(workspace, "client");
   fs.writeFileSync(client, Buffer.from([0x7f, 0x45, 0x4c]), { mode: 0o755 });
   const harness = require(HARNESS);
@@ -580,7 +586,7 @@ test("a short client read refuses as client_unreadable", () => {
 });
 
 test("no claude executable retains the client_absent refusal bytes", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-client-absent-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-client-absent-"));
   const harness = require(HARNESS);
   assert.throws(
     () => harness.clientIdentity(pathEnv(workspace)),
@@ -630,7 +636,7 @@ test("waitForEnter keeps the non-TTY refusal", () => {
 });
 
 test("init names a missing executable bit", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-not-executable-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-not-executable-"));
   const artifact = path.join(workspace, "seal-artifact");
   fs.writeFileSync(artifact, "not executable\n", { mode: 0o644 });
   const bytes = fs.readFileSync(artifact);
@@ -647,7 +653,7 @@ test("init names a missing executable bit", () => {
 });
 
 test("init surfaces an exec error and gives immutable-store recovery", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-install-error-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-install-error-"));
   const artifact = path.join(workspace, "seal-artifact");
   fs.writeFileSync(artifact, "#!/definitely/absent/seal-interpreter\n", { mode: 0o755 });
   const bytes = fs.readFileSync(artifact);
@@ -666,7 +672,7 @@ test("init surfaces an exec error and gives immutable-store recovery", () => {
 });
 
 test("an unclean immutable run names the chmod command before rm", () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-unclean-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-unclean-"));
   const runDir = path.join(workspace, "run");
   const store = path.join(runDir, "home", ".local", "lib", "seal", "store", "tree");
   fs.mkdirSync(store, { recursive: true });

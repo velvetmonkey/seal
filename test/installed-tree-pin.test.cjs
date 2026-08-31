@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const {
   buildDist,
   namedArtifact,
@@ -193,7 +194,7 @@ function externalPublishedTreeSha256() {
   const version = fs.readFileSync(path.join(ROOT, "README.md"), "utf8").match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
   assert.ok(version, "README.md has no release version command");
   const name = `seal-${version[1]}-linux-x64`;
-  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-external-published-tree-"));
+  const scratch = testTmpdir(path.join(scratchRoot(), "seal-external-published-tree-"));
   try {
     const artifact = path.join(scratch, name);
     const download = spawnSync("curl", ["-fsSL", "--max-time", "30", "-o", artifact, `https://github.com/velvetmonkey/seal/releases/download/${version[1]}/${name}`], { encoding: "utf8" });
@@ -235,7 +236,7 @@ function markedBlockBytes(text, role) {
 }
 
 test("repin refuses published-asset blocks by name and changes only marked fresh-build hashes", (t) => {
-  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-role-"));
+  const copy = testTmpdir(path.join(scratchRoot(), "seal-repin-role-"));
   t.after(() => removeScratch(copy));
   fs.cpSync(ROOT, copy, {
     recursive: true,
@@ -265,7 +266,7 @@ test("repin refuses published-asset blocks by name and changes only marked fresh
 });
 
 test("repin refuses two role markers before one fence and names both markers", (t) => {
-  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-ambiguous-role-"));
+  const copy = testTmpdir(path.join(scratchRoot(), "seal-repin-ambiguous-role-"));
   t.after(() => removeScratch(copy));
   fs.cpSync(ROOT, copy, {
     recursive: true,
@@ -293,7 +294,7 @@ test("repin refuses two role markers before one fence and names both markers", (
 });
 
 test("repin rewrites a legitimate single-marker fresh-build block", (t) => {
-  const copy = fs.mkdtempSync(path.join(scratchRoot(), "seal-repin-fresh-role-"));
+  const copy = testTmpdir(path.join(scratchRoot(), "seal-repin-fresh-role-"));
   t.after(() => removeScratch(copy));
   fs.cpSync(ROOT, copy, {
     recursive: true,
@@ -451,7 +452,7 @@ test("a metadata locator that escapes the output directory is a named refusal", 
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
   const artifact = namedArtifact(out, built.stdout);
-  const outsideDir = fs.mkdtempSync(path.join(scratchRoot(), "seal-locator-outside-"));
+  const outsideDir = testTmpdir(path.join(scratchRoot(), "seal-locator-outside-"));
   t.after(() => removeScratch(outsideDir));
   const outside = path.join(outsideDir, path.basename(artifact));
   fs.copyFileSync(artifact, outside);

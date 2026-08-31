@@ -3,6 +3,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const {
   STATES,
@@ -57,7 +58,7 @@ function withSimulatedDarwin(fn) {
 
 function workspace(prefix) {
   fs.mkdirSync(SCRATCH, { recursive: true, mode: 0o700 });
-  const root = fs.mkdtempSync(path.join(SCRATCH, `${prefix}-`));
+  const root = testTmpdir(path.join(SCRATCH, `${prefix}-`));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const dataHome = path.join(root, "data");

@@ -9,7 +9,13 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+
+const testScopedRoots = new Set();
+const processScopedRoots = new Set();
+let testCleanupHooked = false;
+let processCleanupHooked = false;
 
 function isUnderTmp(root) {
   const resolved = path.resolve(root);
@@ -33,13 +39,13 @@ function defaultParent(repoRoot) {
     process.env.TMP,
     process.env.TEMP,
     process.env.RUNNER_TEMP,
-  ]) || path.join(repoRoot, ".tmp");
+  ]) || path.join(path.dirname(path.resolve(repoRoot)), ".seal-tmp");
 }
 
 function makeTempRoot(repoRoot, name) {
   const parent = defaultParent(repoRoot);
   fs.mkdirSync(parent, { recursive: true });
-  return fs.mkdtempSync(path.join(parent, `${name}-`));
+  return fs.realpathSync(fs.mkdtempSync(path.join(parent, `${name}-`)));
 }
 
 function chmodTree(dir) {
@@ -56,24 +62,66 @@ function chmodTree(dir) {
   }
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory() && !entry.isSymbolicLink()) chmodTree(full);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) chmodTree(full);
     else {
       try { fs.chmodSync(full, 0o600); } catch { /* continue */ }
     }
   }
 }
 
-function cleanup(root = process.env.TMPGUARD_RUN_ROOT) {
+function cleanup(root = process.env.TMPGUARD_RUN_ROOT, options = {}) {
   if (!root) return;
   const keep = process.env.KEEP_TMP;
   if (keep === "1" || keep === "true") return;
   if (isUnderTmp(root)) return;
+  if (
+    process.env.TMPGUARD_RUN_ROOT
+    && path.resolve(root) === path.resolve(process.env.TMPGUARD_RUN_ROOT)
+    && options.allowRunRoot !== true
+  ) return;
   try {
     chmodTree(root);
     fs.rmSync(root, { recursive: true, force: true });
   } catch {
     /* best-effort: a leftover owned root is a finding, not a /tmp write */
   }
+}
+
+function cleanupProcessScopedRoots() {
+  for (const root of testScopedRoots) cleanup(root);
+  for (const root of processScopedRoots) cleanup(root);
+  testScopedRoots.clear();
+  processScopedRoots.clear();
+}
+
+function hookProcessCleanup() {
+  if (processCleanupHooked) return;
+  processCleanupHooked = true;
+  process.once("exit", cleanupProcessScopedRoots);
+}
+
+function hookTestCleanup() {
+  if (testCleanupHooked) return;
+  testCleanupHooked = true;
+  const { after } = require("node:test");
+  after(() => {
+    for (const root of testScopedRoots) cleanup(root);
+    testScopedRoots.clear();
+  });
+  hookProcessCleanup();
+}
+
+function testTmpdir(prefix, options = {}) {
+  const resolvedPrefix = path.dirname(prefix) === "." ? path.join(os.tmpdir(), prefix) : prefix;
+  const root = fs.realpathSync(fs.mkdtempSync(resolvedPrefix));
+  if (options.keep === true) {
+    processScopedRoots.add(root);
+  } else {
+    testScopedRoots.add(root);
+  }
+  hookTestCleanup();
+  return root;
 }
 
 function install(repoRoot, name) {
@@ -87,13 +135,13 @@ function install(repoRoot, name) {
   }
   if (process.env.TMPGUARD_CLEANUP_HOOKED !== "1") {
     process.env.TMPGUARD_CLEANUP_HOOKED = "1";
-    process.once("exit", () => cleanup(root));
+    process.once("exit", () => cleanup(root, { allowRunRoot: true }));
     process.once("SIGTERM", () => {
-      cleanup(root);
+      cleanup(root, { allowRunRoot: true });
       process.exit(143);
     });
     process.once("SIGINT", () => {
-      cleanup(root);
+      cleanup(root, { allowRunRoot: true });
       process.exit(130);
     });
   }
@@ -113,13 +161,21 @@ function main() {
     return;
   }
   if (mode === "--cleanup") {
-    cleanup(process.argv[3] || process.env.TMPGUARD_RUN_ROOT);
+    cleanup(process.argv[3] || process.env.TMPGUARD_RUN_ROOT, { allowRunRoot: true });
     return;
   }
   console.error("usage: temp-root.cjs --make <repoRoot> <name> | --cleanup [root]");
   process.exit(2);
 }
 
+if (require.main !== module && process.env.NODE_TEST_CONTEXT) hookTestCleanup();
 if (require.main === module) main();
 
-module.exports = { install, makeTempRoot, cleanup, isUnderTmp, firstOwnedParent };
+module.exports = {
+  install,
+  makeTempRoot,
+  cleanup,
+  isUnderTmp,
+  firstOwnedParent,
+  testTmpdir,
+};

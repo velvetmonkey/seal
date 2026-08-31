@@ -12,6 +12,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
 const { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth } = require("../contract/renderer.cjs");
@@ -22,7 +23,7 @@ const CHILD = path.join(__dirname, "..", "contract", "fixtures", "counting-child
 // --- child harness ----------------------------------------------------------
 
 async function startChild(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-"));
   const dataFile = path.join(dir, "data.txt");
   const countFile = `${dataFile}.count`;
   const child = spawn(process.execPath, [CHILD, dataFile], { stdio: ["pipe", "pipe", "inherit"] });
@@ -319,7 +320,7 @@ test("every offered message obeys the envelope across argument sizes", () => {
 const { createJournal, openJournal } = require("../spine/store.cjs");
 
 test("the journal stores the handle hash, never the raw handle", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-journal-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-journal-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
   const contract = createApprovalContract({ store: openJournal(storePath) });
@@ -334,7 +335,7 @@ test("the journal stores the handle hash, never the raw handle", () => {
 
 test("consumed survives a restart; pending does not (connection epoch)", async (t) => {
   const child = await startChild(t);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-epoch-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-epoch-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
 

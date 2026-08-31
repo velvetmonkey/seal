@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
@@ -40,7 +41,7 @@ process.exit(2);
 }
 
 test("protect prints a real local State path for a nested project", () => {
-  const root = fs.mkdtempSync(path.join(os.homedir(), "scratch-stateguard-witness-"));
+  const root = testTmpdir(path.join(os.homedir(), "scratch-stateguard-witness-"));
   const project = path.join(root, "parent", "seal-protect-demo");
   const home = path.join(root, "home");
   const config = path.join(root, "claude-config");

@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const HELPER = path.join(ROOT, "scripts", "temp-root.cjs");
@@ -48,9 +49,7 @@ test("temp-root points os.tmpdir away from /tmp when TMPDIR is the OS default", 
 });
 
 test("temp-root honours an owned TMPDIR parent and still avoids /tmp", () => {
-  const scratch = path.join("/home/monkey/scratch", "tmpguard-owned-parents");
-  fs.mkdirSync(scratch, { recursive: true });
-  const parent = fs.mkdtempSync(path.join(scratch, "tmpguard-owned-"));
+  const parent = testTmpdir("tmpguard-owned-");
   const result = run(`
     const os = require("node:os");
     const { install } = require(${JSON.stringify(HELPER)});
@@ -78,10 +77,8 @@ test("temp-root refuses to treat /tmp as an owned parent", () => {
 });
 
 test("--make creates a new child even when TMPGUARD_RUN_ROOT is already set", () => {
-  const scratch = path.join("/home/monkey/scratch", "tmpguard-owned-parents");
-  fs.mkdirSync(scratch, { recursive: true });
-  const parent = fs.mkdtempSync(path.join(scratch, "tmpguard-nested-"));
-  const existing = fs.mkdtempSync(path.join(parent, "existing-"));
+  const parent = testTmpdir("tmpguard-nested-");
+  const existing = testTmpdir(path.join(parent, "existing-"));
   const result = spawnSync(process.execPath, [HELPER, "--make", ROOT, "s"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -97,4 +94,40 @@ test("--make creates a new child even when TMPGUARD_RUN_ROOT is already set", ()
   assert.notEqual(created, existing);
   assert.ok(created.startsWith(parent + path.sep));
   fs.rmSync(parent, { recursive: true, force: true });
+});
+
+test("testTmpdir removes its directory when a copied test throws", () => {
+  const copyRoot = testTmpdir("tmpguard-throw-copy-");
+  const copy = path.join(copyRoot, "deliberate-throw.test.cjs");
+  const marker = path.join(copyRoot, "created-path.txt");
+  fs.writeFileSync(copy, `
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const test = require("node:test");
+    const { testTmpdir } = require(${JSON.stringify(HELPER)});
+
+    test("deliberate throw after temp creation", () => {
+      const created = testTmpdir(path.join(process.env.TMPDIR, "seal-throw-copy-"));
+      fs.writeFileSync(${JSON.stringify(marker)}, created);
+      throw new Error("deliberate throw for cleanup proof");
+    });
+  `);
+
+  const result = spawnSync(process.execPath, ["--test", copy], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TMPDIR: copyRoot,
+      TMP: copyRoot,
+      TEMP: copyRoot,
+      KEEP_TMP: undefined,
+      NODE_TEST_CONTEXT: undefined,
+    },
+  });
+  const created = fs.readFileSync(marker, "utf8");
+  process.stdout.write(`THROW COPY RAW\n${result.stdout}${result.stderr}THROW COPY DIRECTORY ${created}\nTHROW COPY EXISTS ${fs.existsSync(created) ? "yes" : "no"}\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /deliberate throw for cleanup proof/);
+  assert.equal(fs.existsSync(created), false);
 });

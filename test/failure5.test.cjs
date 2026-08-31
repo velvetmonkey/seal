@@ -11,15 +11,13 @@ const path = require("node:path");
 const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
-}
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 function countOf(dataFile) {
   const file = `${dataFile}.count`;
@@ -76,7 +74,7 @@ process.exit(2);
   return bin;
 }
 function setup(prefix) {
-  const root = tmpdir(prefix);
+  const root = testTmpdir(prefix);
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -326,7 +324,7 @@ test("10 elicitation hook: doctor names elicitation_hook_configured", () => {
 });
 
 test("11 declined-call: DECLINED, child stays at 0", async () => {
-  const dir = tmpdir("f5-decline-");
+  const dir = testTmpdir("f5-decline-");
   const countFile = path.join(dir, "child", "data.txt.count");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   let out = "";

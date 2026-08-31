@@ -7,6 +7,8 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { LEGACY_RELEASE_TAGS, sha256 } from "../scripts/release-manifest-lib.mjs";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = path.join(import.meta.dirname, "..");
 const GENERATOR = path.join(ROOT, "scripts", "generate-release-docs.mjs");
@@ -30,7 +32,7 @@ function run(args, env) {
 }
 
 function docsRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-docs-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-release-docs-"));
   fs.copyFileSync(path.join(ROOT, "README.md"), path.join(root, "README.md"));
   fs.cpSync(path.join(ROOT, "docs"), path.join(root, "docs"), { recursive: true });
   for (const directory of ["bin", "scripts", "spine"]) fs.mkdirSync(path.join(root, directory), { recursive: true });
@@ -41,8 +43,8 @@ function docsRoot() {
 }
 
 function releaseAssets(tag) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-assets-"));
-  const source = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-source-"));
+  const directory = testTmpdir(path.join(os.tmpdir(), "seal-release-assets-"));
+  const source = testTmpdir(path.join(os.tmpdir(), "seal-release-source-"));
   const archive = spawnSync("git", ["archive", "--format=tar", tag], { cwd: ROOT, maxBuffer: 128 * 1024 * 1024 });
   assert.equal(archive.status, 0, archive.stderr?.toString() || `cannot archive ${tag}`);
   const extracted = spawnSync("tar", ["-xf", "-", "-C", source], { input: archive.stdout, maxBuffer: 128 * 1024 * 1024 });

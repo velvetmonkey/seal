@@ -12,6 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -28,9 +29,6 @@ function repositoryRelativeOutput(text) {
   return text.replaceAll(`${ROOT}${path.sep}`, `.${path.sep}`);
 }
 
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
 
 function readCount(countFile) {
   return fs.readFileSync(countFile, "utf8").trim();
@@ -111,12 +109,12 @@ Module._load = function(request, parent, isMain) {
 }
 
 async function runDemoToKernelRefusal(phase, t) {
-  const controlDir = tmpdir("seal-cli-kernel-phase-");
+  const controlDir = testTmpdir("seal-cli-kernel-phase-");
   const control = path.join(controlDir, "block.cjs");
   const blockState = path.join(controlDir, "worker-count");
   fs.writeFileSync(control, blockedKernelPreload(phase));
   t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
-  const dir = tmpdir("seal-cli-kernel-demo-");
+  const dir = testTmpdir("seal-cli-kernel-demo-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
     env: {
@@ -144,7 +142,7 @@ async function runDemoToKernelRefusal(phase, t) {
 // --- demo acceptance --------------------------------------------------------
 
 test("seal demo: input_required, approve once, replay refused, then direct write; counts from the child's file", async (t) => {
-  const dir = tmpdir("seal-spine2-demo-");
+  const dir = testTmpdir("seal-spine2-demo-");
   const countFile = path.join(dir, "child", "data.txt.count");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
@@ -187,7 +185,7 @@ test("seal demo: input_required, approve once, replay refused, then direct write
 });
 
 test("seal demo: declining sends a decline retry; child stays at 0", async (t) => {
-  const dir = tmpdir("seal-spine2-demo-decline-");
+  const dir = testTmpdir("seal-spine2-demo-decline-");
   const countFile = path.join(dir, "child", "data.txt.count");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
@@ -213,7 +211,7 @@ test("seal demo prints the active kernel phase for blocked workers", async (t) =
 });
 
 test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
-  const dir = tmpdir("seal-cli-block-demo-");
+  const dir = testTmpdir("seal-cli-block-demo-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
@@ -284,7 +282,7 @@ function receiptFor(dir, decision) {
 }
 
 test("a client without elicitation gets a named refusal and no held call", async (t) => {
-  const dir = tmpdir("seal-receipt-correlation-");
+  const dir = testTmpdir("seal-receipt-correlation-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
@@ -302,7 +300,7 @@ test("a client without elicitation gets a named refusal and no held call", async
 });
 
 test("real elicitation accept flows once and duplicate or unmatched responses do not flow", async (t) => {
-  const dir = tmpdir("seal-receipt-approved-retry-");
+  const dir = testTmpdir("seal-receipt-approved-retry-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
@@ -336,7 +334,7 @@ test("real elicitation accept flows once and duplicate or unmatched responses do
 });
 
 for (const action of ["decline", "cancel"]) test(`real elicitation ${action} refuses and does not flow`, async (t) => {
-  const dir = tmpdir(`seal-elicit-${action}-`);
+  const dir = testTmpdir(`seal-elicit-${action}-`);
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
@@ -355,7 +353,7 @@ for (const action of ["decline", "cancel"]) test(`real elicitation ${action} ref
 });
 
 test("the retired client-supplied continuation shape is refused", async (t) => {
-  const dir = tmpdir("seal-receipt-only-retry-");
+  const dir = testTmpdir("seal-receipt-only-retry-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, responseFor } = spawnProxy(dir, dataFile);
@@ -376,7 +374,7 @@ test("the retired client-supplied continuation shape is refused", async (t) => {
 });
 
 test("two guarded calls receive distinct elicitation ids", async (t) => {
-  const dir = tmpdir("seal-elicit-distinct-");
+  const dir = testTmpdir("seal-elicit-distinct-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
   const { proxy, run, responses, responseFor } = spawnProxy(dir, dataFile);
@@ -397,7 +395,7 @@ test("two guarded calls receive distinct elicitation ids", async (t) => {
 });
 
 test("receipt correlations refuse loudly at capacity without orphaning live approvals", async (t) => {
-  const dir = tmpdir("seal-elicit-correlation-capacity-");
+  const dir = testTmpdir("seal-elicit-correlation-capacity-");
   const storePath = path.join(dir, "approvals.journal");
   const dataFile = path.join(dir, "data.txt");
   createJournal(storePath);
@@ -446,7 +444,7 @@ test("receipt correlations refuse loudly at capacity without orphaning live appr
 });
 
 test("an unanswered capable client times out to cancelled", async (t) => {
-  const dir = tmpdir("seal-elicit-timeout-");
+  const dir = testTmpdir("seal-elicit-timeout-");
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
   const frames = [];
@@ -473,7 +471,7 @@ test("an unanswered capable client times out to cancelled", async (t) => {
 // --- silence must fail ------------------------------------------------------
 
 test("corrupt approval store: exit non-zero, named, never approves, no tick", async (t) => {
-  const dir = tmpdir("seal-spine2-corrupt-");
+  const dir = testTmpdir("seal-spine2-corrupt-");
   const storePath = path.join(dir, "approvals.journal");
   fs.writeFileSync(storePath, "this is not an event\n");
   const { run } = spawnProxy(dir, path.join(dir, "data.txt"), { storePath });
@@ -486,7 +484,7 @@ test("corrupt approval store: exit non-zero, named, never approves, no tick", as
 });
 
 test("absent approval store: a refusal, not an empty store", async (t) => {
-  const dir = tmpdir("seal-spine2-absent-");
+  const dir = testTmpdir("seal-spine2-absent-");
   const { run } = spawnProxy(dir, path.join(dir, "data.txt")); // no --init-store ran
   t.after(run.kill);
   const code = await run.exit;
@@ -495,7 +493,7 @@ test("absent approval store: a refusal, not an empty store", async (t) => {
 });
 
 test("unreadable approval store: a refusal, not an empty store", async (t) => {
-  const dir = tmpdir("seal-spine2-unreadable-");
+  const dir = testTmpdir("seal-spine2-unreadable-");
   const storePath = path.join(dir, "approvals.journal");
   fs.writeFileSync(storePath, "", { mode: 0o000 });
   const { run } = spawnProxy(dir, path.join(dir, "data.txt"), { storePath });
@@ -508,7 +506,7 @@ test("unreadable approval store: a refusal, not an empty store", async (t) => {
 // --- supported lane ---------------------------------------------------------
 
 test("unsupported platform returns unsupported, not a warning", async (t) => {
-  const dir = tmpdir("seal-spine2-platform-");
+  const dir = testTmpdir("seal-spine2-platform-");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env, SEAL_SPINE_PLATFORM: "plan9", SEAL_SPINE_ARCH: "mips" },

@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = resolve(ROOT, "scripts/claims-drift.mjs"); // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#limitations; CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box; CLAIM-COVERAGE: docs/assurance/index.html#index-drift
@@ -35,7 +37,7 @@ const FIXTURE_FILES = [
 ];
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-claims-drift-"));
+  const root = testTmpdir(join(tmpdir(), "seal-claims-drift-"));
   for (const file of FIXTURE_FILES) {
     const target = resolve(root, file);
     mkdirSync(dirname(target), { recursive: true });

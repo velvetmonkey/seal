@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { countDestination, markdownDestinations } from "../scripts/linkcheck.mjs";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 test("family target is unverified only while its family root is absent", () => {
-  const scratch = mkdtempSync(path.join(tmpdir(), "seal-linkcheck-family-outcome-"));
+  const scratch = testTmpdir(path.join(tmpdir(), "seal-linkcheck-family-outcome-"));
   const familyRoot = path.join(scratch, "sister");
   const roots = new Map([["sister", familyRoot]]);
   const messages = [];

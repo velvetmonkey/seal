@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
@@ -91,7 +92,7 @@ function guidanceCommands(text) {
 }
 
 test("printed Next and Undo seal commands resolve to public CLI commands", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-next-steps-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-next-steps-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -133,7 +134,7 @@ test("printed Next and Undo seal commands resolve to public CLI commands", () =>
 });
 
 test("Undo states unprotect clears every guarded tool on the server", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-next-steps-scope-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-next-steps-scope-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);

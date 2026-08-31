@@ -5,6 +5,7 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const GUARD = join(ROOT, "scripts", "readme-demo-transcript-guard.mjs");
@@ -13,7 +14,7 @@ const DEMO_OUTPUT = join(ROOT, "test", "fixtures", "readme-demo-output.txt");
 const CHECKER_OUTPUT = join(ROOT, "test", "fixtures", "readme-demo-checker-output.txt");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-readme-transcript-"));
+  const root = testTmpdir(join(tmpdir(), "seal-readme-transcript-"));
   const transcriptPath = join(root, "demo.txt");
   const checkerPath = join(root, "checker.txt");
   writeFileSync(transcriptPath, readFileSync(DEMO_OUTPUT));

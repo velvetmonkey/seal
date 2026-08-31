@@ -10,12 +10,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
-function tempDir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
 
 function copyRunnableProduct(destination) {
   for (const name of ["bin", "contract", "spine", "runtime"]) {
@@ -155,9 +153,9 @@ async function runBrokenProtected(productRoot, dir) {
 }
 
 test("the same broken retry transition kills both demo and protected consumers", async (t) => {
-  const product = tempDir("seal-step2-broken-product-");
-  const demoDir = tempDir("seal-step2-broken-demo-");
-  const protectedDir = tempDir("seal-step2-broken-protected-");
+  const product = testTmpdir("seal-step2-broken-product-");
+  const demoDir = testTmpdir("seal-step2-broken-demo-");
+  const protectedDir = testTmpdir("seal-step2-broken-protected-");
   t.after(() => {
     fs.rmSync(product, { recursive: true, force: true });
     fs.rmSync(demoDir, { recursive: true, force: true });

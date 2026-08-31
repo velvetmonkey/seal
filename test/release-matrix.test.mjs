@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { manifestFromObserved, sha256, validateManifestShape } from "../scripts/release-manifest-lib.mjs";
 import integrity from "../spine/integrity.cjs";
+import tempRoot from "../scripts/temp-root.cjs";
+const { testTmpdir } = tempRoot;
 
 const ROOT = path.join(import.meta.dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
@@ -22,7 +24,7 @@ function machO(cpuType) {
 }
 
 test("the release manifest binds all platforms and publication rewrites every release-note label and href", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-matrix-"));
+  const directory = testTmpdir(path.join(os.tmpdir(), "seal-release-matrix-"));
   try {
     const artifacts = [];
     for (const [platform, cpuType] of [

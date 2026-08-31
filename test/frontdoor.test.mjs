@@ -11,6 +11,9 @@ import {
   DOCS_ROUTE_TABLE,
   README_SECTIONS,
 } from "../test-support/front-door-invariants.mjs";
+import tempRoot from "../scripts/temp-root.cjs";
+
+const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SEAL = resolve(ROOT, "bin", "seal");
@@ -55,7 +58,7 @@ test("public pages use the banked language discipline", (t) => {
   const green = spawnSync(process.execPath, [LANGUAGE_GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(green.status, 0, green.stdout + green.stderr);
 
-  const dir = mkdtempSync(join(tmpdir(), "seal-public-language-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-public-language-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "page.md"), "This product is production-ready.\n");
   writeFileSync(join(dir, "scope.json"), JSON.stringify({ pages: ["page.md"] }));
@@ -134,7 +137,7 @@ test("the first architecture diagram is the shipped Node path", () => {
 
 test("README claim: Seal holds one exact call and permits at most one execution", () => {
   const claim = "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.";
-  const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-")); let output;
+  const dir = testTmpdir(join(tmpdir(), "seal-readme-claim-")); let output;
   assert.doesNotThrow(() => {
     output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
@@ -146,7 +149,7 @@ test("README claim: Seal holds one exact call and permits at most one execution"
 });
 
 test("public proved-class claims fail and explicit denials pass", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-public-proved-class-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-public-proved-class-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const scope = join(dir, "scope.json");
   writeFileSync(scope, JSON.stringify({ pages: ["page.md"] }));
@@ -190,7 +193,7 @@ test("public proved-class claims fail and explicit denials pass", (t) => {
 });
 
 test("launch truth gate compares the complete self-repository path", () => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-launch-truth-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-launch-truth-"));
   const required = [
     "README.md",
     ".github/workflows/ci.yml",
@@ -234,7 +237,7 @@ test("launch truth gate compares the complete self-repository path", () => {
 });
 
 test("README installer check executes the command without restoring the installed-tree transcript", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-frontdoor-installer-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-frontdoor-installer-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const readmePath = join(dir, "README.md");
   const artifact = join(dir, "fixture-installer");

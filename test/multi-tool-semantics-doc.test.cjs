@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { spawnSync } = require("node:child_process");
 
 const ROOT = path.join(__dirname, "..");
@@ -19,7 +20,7 @@ const {
 } = require("../spine/protection.cjs");
 
 function setup(mode = "ok", source = DECLARED_TOOLS.join(",")) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-multi-tool-atomicity-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-multi-tool-atomicity-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const bin = path.join(root, "bin");

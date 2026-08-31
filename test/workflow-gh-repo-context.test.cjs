@@ -5,13 +5,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { auditWorkflowGhRepoContext, formatFinding } = require("../scripts/check-workflow-gh-repo-context.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
 function fixture(workflow) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-workflow-gh-repo-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-workflow-gh-repo-"));
   fs.mkdirSync(path.join(root, ".github", "workflows"), { recursive: true });
   fs.writeFileSync(path.join(root, ".github", "workflows", "fixture.yml"), workflow);
   return root;

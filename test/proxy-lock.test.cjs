@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const {
   acquireProjectLock,
@@ -12,10 +13,10 @@ const {
   processStartWitness,
 } = require("../spine/protection.cjs");
 
-const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "seal-proxy-lock-"));
+const SCRATCH = testTmpdir(path.join(os.tmpdir(), "seal-proxy-lock-"));
 
 function project() {
-  const root = fs.mkdtempSync(path.join(SCRATCH, "test-"));
+  const root = testTmpdir(path.join(SCRATCH, "test-"));
   return { root, lockPath: lockPathFor(root) };
 }
 

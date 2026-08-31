@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const GATE = fs.readFileSync(path.join(ROOT, "scripts", "check-version-identity.cjs"), "utf8");
@@ -24,7 +25,7 @@ function writeVersion(repo, version) {
 }
 
 function fixture() {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-gate-"));
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-version-gate-"));
   const remote = path.join(scratch, "origin.git");
   const repo = path.join(scratch, "repo");
   fs.mkdirSync(repo);
@@ -201,7 +202,7 @@ test("version identity gate accepts an absent tag when other remote tags exist",
 
 test("version identity gate accepts a remote with zero tags", () => {
   const { repo, next } = fixture();
-  const emptyRemote = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-empty-origin-"));
+  const emptyRemote = testTmpdir(path.join(os.tmpdir(), "seal-version-empty-origin-"));
   git(emptyRemote, "init", "--bare", ".");
   git(repo, "remote", "set-url", "origin", emptyRemote);
   git(repo, "push", "origin", `${next}:refs/heads/main`);
@@ -212,7 +213,7 @@ test("version identity gate accepts a remote with zero tags", () => {
 
 test("version identity gate refuses ambiguous base history", () => {
   const { repo } = fixture();
-  const emptyRemote = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-empty-origin-"));
+  const emptyRemote = testTmpdir(path.join(os.tmpdir(), "seal-version-empty-origin-"));
   git(emptyRemote, "init", "--bare", ".");
   git(repo, "remote", "set-url", "origin", emptyRemote);
   git(repo, "update-ref", "-d", "refs/remotes/origin/main");
