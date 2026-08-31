@@ -85,7 +85,10 @@ test("current product and release surfaces state macOS Protect parity", () => {
   ];
   for (const file of claimSites) {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-    assert.match(text.replace(/\s+/g, " "), /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./, `${file}: product parity`);
+    const productParity = file === "docs/guide/when-something-looks-wrong.md"
+      ? /supports install, demo and receipt checking on Linux x86-64 and macOS x64\/arm64\. Protect is supported on Linux x86-64 and macOS x64\/arm64;/
+      : /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./;
+    assert.match(text.replace(/\s+/g, " "), productParity, `${file}: product parity`);
     assert.doesNotMatch(text, /Protect is not supported on macOS yet\./, `${file}: retired exclusion`);
   }
 });

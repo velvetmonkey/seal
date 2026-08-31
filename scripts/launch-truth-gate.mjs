@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url);
 const { protectPlatformSupported } = require('../spine/platform.cjs');
 const ROOT = path.resolve(import.meta.dirname, '..');
 const MACOS_PROTECT_SUPPORT = 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.';
+const GUIDE_MACOS_PROTECT_SUPPORT = 'Seal supports install, demo and receipt checking on Linux x86-64 and macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;';
 const RETIRED_MACOS_PROTECT_DENIAL = 'Protect is not supported on macOS yet';
 const CURRENT_MACOS_PROTECT_SURFACES = [
   '.github/workflows/release.yml',
@@ -177,7 +178,10 @@ if (darwinX64ProtectSupported !== darwinArm64ProtectSupported) {
 for (const relative of CURRENT_MACOS_PROTECT_SURFACES) {
   const source = relative === 'README.md' ? readme : readRequired(relative, path.join(ROOT, relative));
   const normalizedSource = source.replace(/\s+/gu, ' ');
-  if (darwinX64ProtectSupported && !normalizedSource.includes(MACOS_PROTECT_SUPPORT)) {
+  const requiredSupport = relative === 'docs/guide/when-something-looks-wrong.md'
+    ? GUIDE_MACOS_PROTECT_SUPPORT
+    : MACOS_PROTECT_SUPPORT;
+  if (darwinX64ProtectSupported && !normalizedSource.includes(requiredSupport)) {
     fail(`${relative} must state the macOS Protect support carried by spine/platform.cjs`);
   }
   if (!darwinX64ProtectSupported && normalizedSource.includes(MACOS_PROTECT_SUPPORT)) {

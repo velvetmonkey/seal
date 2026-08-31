@@ -811,7 +811,11 @@ function processStartWitness(pid) {
   }
 }
 
-function requireProcessStartWitnessBinding(pid) {
+function processWitnessUnavailableMessage(situation, pid, remedy) {
+  return `cannot establish process-start witness for ${situation} pid ${pid}; ${remedy}`;
+}
+
+function requireProcessStartWitnessBinding(pid, situation = "live process") {
   const support = platformSupport();
   if (support.platform === "darwin") {
     const result = macosProcessWitness(pid, support.platform, support.arch);
@@ -822,23 +826,25 @@ function requireProcessStartWitnessBinding(pid) {
   if (witness === null) {
     throw new ProtectionError(
       "process_witness_unavailable",
-      `cannot establish process-start witness for live pid ${pid}`,
+      processWitnessUnavailableMessage(situation, pid, situation.includes("owner")
+        ? "stop the recorded owner and retry"
+        : "fix the local process-start witness source and retry"),
     );
   }
   return { witness, helperIdentity: null };
 }
 
-function requireProcessStartWitness(pid) {
-  return requireProcessStartWitnessBinding(pid).witness;
+function requireProcessStartWitness(pid, situation = "live process") {
+  return requireProcessStartWitnessBinding(pid, situation).witness;
 }
 
 function lockPathFor(projectRoot, env = process.env) {
   return path.join(projectDirectory(projectRoot, env), "proxy.lock");
 }
 
-function lockOwnerIsLive(owner) {
+function lockOwnerIsLive(owner, situation = "stored lease owner") {
   if (!owner || !livePid(owner.pid)) return false;
-  const witness = requireProcessStartWitness(owner.pid);
+  const witness = requireProcessStartWitness(owner.pid, situation);
   return owner.startWitness === witness;
 }
 
@@ -849,7 +855,7 @@ function leaseMatches(lease, token) {
 
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
-  const witness = requireProcessStartWitnessBinding(process.pid);
+  const witness = requireProcessStartWitnessBinding(process.pid, "Seal's own witness at project-lock acquire");
   const owner = { pid: process.pid, startWitness: witness.witness };
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
@@ -879,7 +885,7 @@ function acquireProjectLock(projectRoot, env = process.env) {
       if (error.code !== "EEXIST") throw error;
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
-      if (lockOwnerIsLive(existing)) {
+      if (lockOwnerIsLive(existing, "project-lock owner")) {
         const state = readState(statePathFor(projectRoot, env));
         const generation = state?.lease?.generation ?? "unknown";
         throw new ProtectionError(

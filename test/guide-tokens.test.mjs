@@ -8,13 +8,17 @@
 // each documented token as a heading of the exact form `### `token``.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "f2811872fdbc9456266c01b3707309932926493ea02cf3831ad0b58a7fae8dda";
+const GUIDE = process.env.SEAL_GUIDE_PATH ?? "docs/guide/when-something-looks-wrong.md";
+const GUIDE_SHA256 = "3d70fb9a0b7a808c0683a3769a1d2503b9544cd35729fc1beab6f58912e79bba";
+const require = createRequire(import.meta.url);
+const protection = require("../spine/protection.cjs");
+const store = require("../spine/store.cjs");
 
 // REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one
 // anchored release-version slot. This canonicalizer maps only that slot to a
@@ -22,7 +26,7 @@ const GUIDE_SHA256 = "f2811872fdbc9456266c01b3707309932926493ea02cf3831ad0b58a7f
 // version slot. The pin covers every other byte in the guide.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
-const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)", "gm");
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\.)", "gm");
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;
@@ -102,6 +106,51 @@ function guideTokens() {
   );
   return new Set(occurrences.keys());
 }
+
+function processWitnessUnavailableBlock() {
+  const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
+  const heading = "### `process_witness_unavailable`";
+  const start = text.indexOf(heading);
+  assert.notEqual(start, -1, `${GUIDE}: process_witness_unavailable heading is absent`);
+  const end = text.indexOf("\n### ", start + heading.length);
+  return text.slice(start, end === -1 ? text.length : end);
+}
+
+test("each process witness situation has a distinct message", () => {
+  const previousPlatform = process.env.SEAL_SPINE_PLATFORM;
+  const previousArch = process.env.SEAL_SPINE_ARCH;
+  process.env.SEAL_SPINE_PLATFORM = "unsupported";
+  process.env.SEAL_SPINE_ARCH = "x64";
+  const probes = [
+    ["stored lease owner", () => protection.lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }, "stored lease owner")],
+    ["project-lock owner", () => protection.lockOwnerIsLive({ pid: process.pid, startWitness: "unavailable" }, "project-lock owner")],
+    ["approval-journal-lock owner", () => {
+      const journal = `${process.cwd()}/.guide-message-test-journal`;
+      store.createJournal(journal);
+      try { return store.openJournal(journal).withLock(() => undefined); }
+      finally { try { require("node:fs").unlinkSync(journal); } catch {} }
+    }],
+    ["Seal's own witness at project-lock acquire", () => protection.acquireProjectLock(process.cwd(), { XDG_DATA_HOME: process.cwd() })],
+  ];
+  try {
+    const messages = [];
+    for (const [situation, probe] of probes) {
+      try {
+        probe();
+        assert.fail(`${situation}: probe returned instead of refusing`);
+      } catch (error) {
+        assert.equal(error.code, "process_witness_unavailable", error.stack || error.message);
+        messages.push(error.message);
+      }
+    }
+    assert.equal(new Set(messages).size, probes.length, messages.join("\n"));
+  } finally {
+    if (previousPlatform === undefined) delete process.env.SEAL_SPINE_PLATFORM;
+    else process.env.SEAL_SPINE_PLATFORM = previousPlatform;
+    if (previousArch === undefined) delete process.env.SEAL_SPINE_ARCH;
+    else process.env.SEAL_SPINE_ARCH = previousArch;
+  }
+});
 
 test("every refusal token in the source is documented in the guide", () => {
   const inSource = sourceTokens();
@@ -186,8 +235,8 @@ test("whole-file pin rejects locator defeats and earlier claim tampering", () =>
     ["deleted reviewed body", text.replace("Receipt refusals use the same tokens", "Receipt refusals use different tokens")],
     ["deleted reviewed sentence", text.replace("there is no second receipt format", "there is another receipt format")],
     ["changed macOS Protect support", text.replace(
-      "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
-      "newer. Seal supports install, demo, and receipt checking on macOS x64/arm64.",
+      "macOS Protect execution is not exercised in CI.",
+      "macOS Protect execution is exercised in CI.",
     )],
     ["novel assertion", `${text}\n${falseClaim}\n`],
     ["deleted heading", text.replace(heading, "")],

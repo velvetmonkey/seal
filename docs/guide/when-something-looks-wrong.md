@@ -344,11 +344,15 @@ status.
 
 ### `process_witness_unavailable`
 
-Seal found a live PID for a stored lease or project lock but could not read a
-process-start witness for that PID. It refuses instead of guessing whether
-the owner is current or stale. On Linux x86-64, Seal can read `/proc/<pid>/stat`;
-on macOS x64/arm64 that witness is unavailable, so Seal refuses rather than
-guessing. Stop the recorded owner and retry.
+Seal raises this token when a protected state operation cannot establish a
+process-start witness for a live process. The error message names the specific
+situation and states the correct remedy. The approval-journal lock path runs
+on any platform, including macOS. On Linux x86-64, Seal reads
+`/proc/<pid>/stat`; it refuses with `process_witness_unavailable` if it cannot
+read that file, if the stat record is malformed, or if the process-start field
+is absent. On macOS x64/arm64, the stored lease and project-lock path uses the
+native process-start witness helper. That path reports helper or witness
+failures with Darwin-specific refusal tokens.
 
 ### `drifted`
 
@@ -451,13 +455,17 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
+v0.2.0. Seal supports install, demo and receipt checking on Linux x86-64 and
+macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
+macOS Protect execution is not exercised in CI.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
 
 ### `node_missing`
 
 The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
-newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
+newer. Seal supports install, demo and receipt checking on Linux x86-64 and
+macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
+macOS Protect execution is not exercised in CI.
 
 ### `version_mismatch`
 

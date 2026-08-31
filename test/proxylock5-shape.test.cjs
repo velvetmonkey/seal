@@ -105,7 +105,7 @@ test("current protection liveness verdicts use the witness gate", () => {
   const [predicateStart, predicateEnd] = functionRange(source, "lockOwnerIsLive");
   assert.ok(livePidUses[1] > predicateStart && livePidUses[1] < predicateEnd,
     "the only livePid call must be inside lockOwnerIsLive");
-  assert.match(source, /function lockOwnerIsLive\(owner\)\s*\{[\s\S]*?requireProcessStartWitness\(owner\.pid\)/);
+  assert.match(source, /function lockOwnerIsLive\(owner(?:, [^)]+)?\)\s*\{[\s\S]*?requireProcessStartWitness\(owner\.pid/);
   assert.match(source, /if \(lockOwnerIsLive\(state\?\.lease\)\)/);
   assert.doesNotMatch(source, /if \([^\n]*livePid\([^\n]*\)[^\n]*\)\s*\{[\s\S]*?active_claude_session/);
 });
@@ -162,5 +162,5 @@ test("store has no raw liveness predicate around the shared guarded one", () => 
   const source = fs.readFileSync(storePath, "utf8");
   assert.doesNotMatch(source, /function\s+livePid\b/);
   assert.doesNotMatch(source, /process\.kill\s*\(/);
-  assert.match(source, /lockOwnerIsLive\(existing\)/);
+  assert.match(source, /lockOwnerIsLive\(existing(?:, [^)]+)?\)/);
 });

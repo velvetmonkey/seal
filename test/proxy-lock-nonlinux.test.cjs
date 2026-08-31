@@ -244,7 +244,7 @@ test("journal lock refuses when a live owner has no process-start witness", () =
     assert.throws(
       () => openJournal(journalPath).withLock(() => assert.fail("journal lock must refuse before its callback")),
       (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+        /cannot establish process-start witness for approval-journal-lock owner pid \d+; fix the local process-start witness source and retry/.test(error.message),
     );
   });
 });
@@ -258,7 +258,7 @@ test("journal lock refuses its first acquire when its witness is unavailable", (
     assert.throws(
       () => openJournal(journalPath).withLock(() => { callbackRan = true; }),
       (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+        /cannot establish process-start witness for approval-journal-lock owner pid \d+; fix the local process-start witness source and retry/.test(error.message),
     );
     assert.equal(callbackRan, false, "journal callback must not run after a null-witness refusal");
     assert.equal(fs.existsSync(`${journalPath}.lock`), false, "refusal must not write a null-witness lock");
