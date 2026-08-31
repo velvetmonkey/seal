@@ -291,7 +291,7 @@ function checkRenderingProvenance(packDir, manifest, report) {
   for (const field of ["raw_recording_digest", "renderer_identity", "renderer_result", "public_derived_transcript_digest"]) {
     if (rendering[field] === undefined) report.refuse("rendering_provenance_absent", `the manifest carries no ${field}`);
   }
-  if (rendering.renderer_identity !== "seal-terminal-renderer/js-screen-v1") report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}`);
+  if (rendering.renderer_identity !== "seal-terminal-renderer/js-screen-v2") report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}`);
   if (rendering.renderer_result !== "scrollback-and-final-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
   const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
   for (const entry of entries) {

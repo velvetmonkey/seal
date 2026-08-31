@@ -12,9 +12,13 @@
 // file is ASCII plus LF.
 const fs = require("node:fs");
 
-const RENDERER_IDENTITY = "seal-terminal-renderer/js-screen-v1";
+// This version changes when renderer behaviour changes. It identifies the
+// rendering rules, not the recorded terminal or the Seal artifact.
+const RENDERER_IDENTITY = "seal-terminal-renderer/js-screen-v2";
 const RENDERER_RESULT = "scrollback-and-final-visible-frame";
 const SESSION_URL = /claude\.ai\/code\/session_[A-Za-z0-9_-]+/giu;
+// Redact Claude Code session URLs and RFC 4122 UUID versions 1 through 5.
+// Other identifier classes, including UUID version 7, pass unchanged.
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
 
 function number(value, fallback) {
@@ -31,6 +35,8 @@ class Screen {
     this.x = 0;
     this.y = 0;
     this.saved = { x: 0, y: 0 };
+    this.scrollTop = 0;
+    this.scrollBottom = height - 1;
     this.state = "text";
     this.csi = "";
     this.osc = "";
@@ -44,12 +50,24 @@ class Screen {
     for (let y = 0; y < this.height; y += 1) this.clearLine(y);
   }
 
-  lineFeed() {
-    if (this.y < this.height - 1) this.y += 1;
-    else {
-      this.scrollback.push(this.cells.shift());
-      this.cells.push(Array(this.width).fill(" "));
+  scrollUp(count = 1) {
+    for (let step = 0; step < count; step += 1) {
+      this.scrollback.push(this.cells[this.scrollTop]);
+      this.cells.splice(this.scrollTop, 1);
+      this.cells.splice(this.scrollBottom, 0, Array(this.width).fill(" "));
     }
+  }
+
+  scrollDown(count = 1) {
+    for (let step = 0; step < count; step += 1) {
+      this.cells.splice(this.scrollBottom, 1);
+      this.cells.splice(this.scrollTop, 0, Array(this.width).fill(" "));
+    }
+  }
+
+  lineFeed() {
+    if (this.y === this.scrollBottom) this.scrollUp();
+    else if (this.y < this.height - 1) this.y += 1;
   }
 
   put(char) {
@@ -85,11 +103,27 @@ class Screen {
       case "@": { const count = Math.min(first, this.width - this.x); this.cells[this.y].splice(this.x, 0, ...Array(count).fill(" ")); this.cells[this.y].splice(this.width, count); break; }
       case "s": this.saved = { x: this.x, y: this.y }; break;
       case "u": this.x = this.saved.x; this.y = this.saved.y; break;
+      case "r": {
+        const top = (values[0] || 1) - 1;
+        const bottom = (values[1] || this.height) - 1;
+        if (top >= 0 && bottom < this.height && top < bottom) {
+          this.scrollTop = top;
+          this.scrollBottom = bottom;
+          this.x = 0;
+          this.y = 0;
+        }
+        break;
+      }
+      case "S": this.scrollUp(first); break;
+      case "T": this.scrollDown(first); break;
       case "h": case "l": break;
       case "m": break;
-      // Handled CSI: A B e C a D E F G ` d H f J K P @ s u.
-      // Ignored CSI: all other final bytes, including c, q, r, S, T, and
-      // private-mode h/l. These sequences do not change the text grid here.
+      // Handled CSI: A B e C a D E F G ` d H f J K P @ r S T s u.
+      // Ignored CSI final bytes are unsupported rendering operations. CSI c
+      // requests device attributes. CSI q changes cursor style. CSI m changes
+      // attributes only. Private-mode h/l is ignored because the copied real
+      // casts contain no modes 47, 1047, or 1049. Other private modes are not
+      // needed to preserve their text on these casts.
       default: break;
     }
   }

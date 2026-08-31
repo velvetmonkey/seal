@@ -5,7 +5,8 @@ const test = require("node:test");
 const { renderCast } = require("../harness/claude-code/terminal-renderer.cjs");
 
 function fixture(events, width = 20, height = 3) {
-  const directory = fs.mkdtempSync("/home/monkey/scratch/castrender2/renderer-test-");
+  fs.mkdirSync("/home/monkey/scratch/castrender3", { recursive: true });
+  const directory = fs.mkdtempSync("/home/monkey/scratch/castrender3/renderer-test-");
   const cast = `${directory}/fixture.cast`;
   fs.writeFileSync(cast, [
     JSON.stringify({ version: 2, width, height }),
@@ -36,4 +37,23 @@ test("scrollback emits each scrolled line before the final frame", () => {
   const cast = fixture(["one\r\ntwo\r\nthree\r\nfour"], 10, 2);
   const transcript = renderCast(cast);
   assert.match(transcript, /one\ntwo\nthree\nfour/);
+});
+
+test("line feeds preserve seal-accepted-note after it scrolls out of a DECSTBM region", () => {
+  const cast = fixture([
+    "\u001b[1;2r\u001b[1;1Hseal-accepted-note\r\nnext\r\n\u001b[1;1H                  ",
+  ], 20, 3);
+  assert.match(renderCast(cast), /seal-accepted-note/, "seal-accepted-note is missing after line-feed scrolling");
+});
+
+test("CSI S preserves seal-accepted-note after it scrolls out of a DECSTBM region", () => {
+  const cast = fixture([
+    "\u001b[1;3r\u001b[1;1Hseal-accepted-note\u001b[1S\u001b[1;1H                  ",
+  ], 20, 3);
+  assert.match(renderCast(cast), /seal-accepted-note/, "seal-accepted-note is missing after CSI S scrolling");
+});
+
+test("CSI T scrolls the DECSTBM region down", () => {
+  const cast = fixture(["\u001b[1;3rone\r\ntwo\r\nthree\u001b[1T"], 20, 3);
+  assert.match(renderCast(cast), /\n\none\ntwo\n/);
 });
