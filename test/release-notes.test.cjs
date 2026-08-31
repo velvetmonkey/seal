@@ -4,8 +4,9 @@ const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { hasSealProtectInvocation, workflowRunValues } = require("../scripts/workflow-run-values.cjs");
 
-const ROOT = path.join(__dirname, "..");
+const ROOT = process.env.SEAL_RELEASE_NOTES_ROOT ?? path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const NOTES_RELATIVE = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`;
 const RC3_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#release-notes-rc3
@@ -91,7 +92,27 @@ test("current product and release surfaces state macOS Protect parity", () => {
 
 test("the macOS workflow does not claim Protect execution", () => {
   const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "macos.yml"), "utf8");
-  assert.equal(workflow.match(/\bseal\s+protect\b/g)?.length ?? 0, 0);
+  assert.equal(workflowRunValues(workflow).filter(hasSealProtectInvocation).length, 0);
+});
+
+test("the macOS workflow guard checks YAML run values only", () => {
+  const mentions = [
+    "# seal protect is not run here",
+    "name: seal protect",
+    "description: this text mentions seal protect",
+  ].join("\n");
+  assert.equal(workflowRunValues(mentions).filter(hasSealProtectInvocation).length, 0);
+
+  for (const workflow of [
+    "run: seal protect",
+    "run: \tseal protect --path target",
+    "run: |\n  seal protect --path target",
+    "run: bin/seal protect now",
+    "run: |\n  seal \\\n  protect",
+  ]) {
+    assert.equal(workflowRunValues(workflow).filter(hasSealProtectInvocation).length, 1, workflow);
+  }
+  assert.equal(hasSealProtectInvocation("$SEAL protect"), false);
 });
 
 test("every release-note commit and repository-path citation resolves", () => {

@@ -37,6 +37,7 @@
     "scripts/sync-version.cjs": { "allowlistReason": "The candidate strings are canonical forms for generated guide fact slots; the script does not publish them as an additional product claim." },
     "spine/platform.cjs": { "allowlistReason": "This module is the canonical platform-message data source; its release/platform assertion is checked at the README and launcher surfaces." },
     "test/frontdoor.test.mjs": { "allowlistReason": "The candidate strings are expected front-door assertions consumed by this test; they are test fixtures, not an additional published claim surface." },
+    "test/release-notes.test.cjs": { "allowlistReason": "The candidate strings are release-note and workflow guard fixtures consumed by this test; they are test data, not an additional published claim surface." },
     "test-support/front-door-invariants.mjs": { "allowlistReason": "The candidate strings are exact README and route-table fixtures consumed by the front-door invariant tests; they are test data, not an additional published claim surface." },
     "test/fixtures/readme-demo-output.txt": { "allowlistReason": "This is captured demo output supplied to the README transcript guard; it is test evidence, not an additional published claim surface." },
     "docs/assurance/architecture.md": { "coveredBy": ["test/docs-scope.test.mjs#architecture"] },
