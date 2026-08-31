@@ -26,10 +26,113 @@ const SYNTHETIC_RUN = path.join(ROOT, "harness", "claude-code", "synthetic-run.c
 const EVIDENCE_ROOT = path.join(ROOT, "evidence", "claude-code");
 const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "assurance", "claude-code-evidence.md");
 const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
+const CONTRACT_ROOT = process.env.SEAL_CC_CONTRACT_ROOT || ROOT;
 
 let sharedPack = null;
 
 const INSTALLED_SEAL_DIGEST = { present: true, sha256: "a".repeat(64) };
+
+function requiredCases(source, declaration) {
+  const block = source.match(new RegExp(`const ${declaration} = [\\s\\S]*?\\n\\];`))?.[0]
+    || source.match(new RegExp(`const ${declaration} = Object\\.freeze\\(\\[[\\s\\S]*?\\n\\]\\);`))?.[0];
+  assert.ok(block, `${declaration} declaration is present`);
+  return [...block.matchAll(/\{ id: "([^"]+)", required: "([^"]+)"(?:, summary: "([^"]+)")? \}/gu)]
+    .map((match) => ({ id: match[1], required: match[2], summary: match[3] }));
+}
+
+function renderRequiredObservationTable(cases) {
+  return [
+    "| Case | Required observation |",
+    "|---|---|",
+    ...cases.map(({ id, summary }) => `| \`${id}\` | ${summary} |`),
+  ].join("\n");
+}
+
+function documentedRequiredObservationTables(doc) {
+  return [...doc.matchAll(/^\| Case \| Required observation \|\n\|---\|---\|\n(?:\|.*\|\n?)+/gmu)]
+    .map((match) => ({ text: match[0].trimEnd(), index: match.index }));
+}
+
+function markdownFiles(root) {
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) return markdownFiles(target);
+    return entry.isFile() && entry.name.endsWith(".md") ? [target] : [];
+  });
+}
+
+function assertDocumentedRequiredObservationTable(doc, cases, docsRoot = path.join(ROOT, "docs")) {
+  const heading = "### The eight fixed cases";
+  const headingCount = [...doc.matchAll(/^### The eight fixed cases$/gmu)].length;
+  assert.equal(headingCount, 1, "the required-observation heading occurs exactly once");
+  assert.doesNotMatch(doc, /<\s*table(?:\s|>)/iu, "the document has no HTML table outside this rendering contract");
+  assert.doesNotMatch(doc, /^(?:[ \t]+|(?:>\s*)+)\| Case \| Required observation \|$/gmu, "the document has no indented or quoted required-observation table");
+  assert.doesNotMatch(doc, /[\u200B-\u200D\uFEFF]/u, "the document has no zero-width character");
+  assert.doesNotMatch(doc, /(?:!INCLUDE\b|\{\{<\s*include\b)/iu, "the document has no transclusion directive");
+  const tableDocuments = markdownFiles(docsRoot)
+    .filter((file) => /^\| Case \| Required observation \|$/mu.test(fs.readFileSync(file, "utf8")))
+    .map((file) => path.relative(docsRoot, file));
+  assert.deepEqual(tableDocuments, ["assurance/claude-code-evidence.md"], "the required-observation table appears in one document");
+
+  const tables = documentedRequiredObservationTables(doc);
+  assert.equal(tables.length, 1, "the document has exactly one required-observation table");
+  const expected = renderRequiredObservationTable(cases);
+  assert.equal(tables[0].text, expected, "the document table is the harness rendering");
+
+  const headingEnd = doc.indexOf(heading) + heading.length;
+  assert.equal(doc.slice(headingEnd, tables[0].index), "\n\n", "the unique heading owns the unique table");
+}
+
+test("documented required-observation table is rendered from the harness cases", () => {
+  const harnessSource = fs.readFileSync(path.join(CONTRACT_ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8");
+  const checkerSource = fs.readFileSync(path.join(CONTRACT_ROOT, "scripts", "check-cc-evidence.mjs"), "utf8");
+  const doc = fs.readFileSync(path.join(CONTRACT_ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8");
+  const harnessCases = requiredCases(harnessSource, "CASES");
+  const checkerCases = requiredCases(checkerSource, "REQUIRED_CASES");
+  assert.equal(harnessCases.length, 8, "the harness has all eight required cases");
+  assert.deepEqual(
+    checkerCases.map(({ id, required }) => ({ id, required })),
+    harnessCases.map(({ id, required }) => ({ id, required })),
+    "the checker and harness use the same required observations",
+  );
+  assert.ok(harnessCases.every(({ summary }) => summary), "each harness case has a document summary");
+
+  // This check verifies one writer. It does not verify that the summaries are true.
+  // It verifies that this document cannot disagree with the harness cases.
+  assertDocumentedRequiredObservationTable(doc, harnessCases, path.join(CONTRACT_ROOT, "docs"));
+});
+
+test("documented required-observation table rejects duplicate_after", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const table = renderRequiredObservationTable(requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES"));
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n${table.replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction")}\n`, requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES")));
+});
+
+test("documented required-observation table rejects duplicate_before", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  const table = renderRequiredObservationTable(cases).replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${table}\n${doc}`, cases));
+});
+
+test("documented required-observation table rejects html_comment", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  const table = renderRequiredObservationTable(cases).replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n<!--\n${table}\n-->\n`, cases));
+});
+
+test("documented required-observation table rejects heading_moved", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc.replace("### The eight fixed cases\n\n", "")}\n### The eight fixed cases\n`, cases));
+});
+
+test("documented required-observation table rejects heading_duplicated", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n### The eight fixed cases\n`, cases));
+});
 
 test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
   const directStart = {
@@ -173,6 +276,25 @@ function rehash(copy, name) {
   });
 }
 
+function rewriteTranscript(copy, name, edit) {
+  const file = path.join(copy.dir, name);
+  const text = edit(fs.readFileSync(file, "utf8"));
+  fs.writeFileSync(file, text);
+  const bytes = Buffer.from(text);
+  const fileDigest = digest(bytes);
+  copy.rewriteManifest((manifest) => {
+    const fileEntry = manifest.files.find((entry) => entry.path === name);
+    fileEntry.sha256 = fileDigest;
+    fileEntry.bytes = bytes.length;
+    const caseId = manifest.environment.recordings.find((recording) => recording.file === name).case;
+    const rendering = manifest.rendering.recordings.find((entry) => entry.case === caseId);
+    rendering.public_derived_transcript_digest = { sha256: fileDigest, bytes: bytes.length };
+    const publicDigest = manifest.rendering.public_derived_transcript_digest.find((entry) => entry.case === caseId);
+    publicDigest.sha256 = fileDigest;
+    publicDigest.bytes = bytes.length;
+  });
+}
+
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -237,6 +359,74 @@ test("the checker ACCEPTS a correct pack", () => {
   assert.match(result.out, /1 pack\(s\), 1 accepted, 0 refused/);
 });
 
+test("presence controls refuse a rehashed transcript with its evidence removed", () => {
+  const copy = copyOfPack();
+  const replacements = {
+    "rendered-transcript.txt": ["seal-accepted-note", "append_note"],
+    "rendered-transcript-decline.txt": ["seal-declined-note", "append_note"],
+    "rendered-transcript-missing-launcher.txt": ["seal-fallback-note", "does not fall back"],
+  };
+  for (const [name, needles] of Object.entries(replacements)) {
+    const file = path.join(copy.dir, name);
+    let text = fs.readFileSync(file, "utf8");
+    for (const needle of needles) text = text.replaceAll(needle, "REMOVED-EVIDENCE");
+    fs.writeFileSync(file, text);
+    const bytes = Buffer.from(text);
+    const fileDigest = digest(bytes);
+    copy.rewriteManifest((manifest) => {
+      const fileEntry = manifest.files.find((entry) => entry.path === name);
+      fileEntry.sha256 = fileDigest;
+      fileEntry.bytes = bytes.length;
+      const caseId = manifest.environment.recordings.find((recording) => recording.file === name).case;
+      const rendering = manifest.rendering.recordings.find((entry) => entry.case === caseId);
+      rendering.public_derived_transcript_digest = { sha256: fileDigest, bytes: bytes.length };
+      const publicDigest = manifest.rendering.public_derived_transcript_digest.find((entry) => entry.case === caseId);
+      publicDigest.sha256 = fileDigest;
+      publicDigest.bytes = bytes.length;
+    });
+  }
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript\.txt does not carry required "seal-accepted-note" content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-decline\.txt does not carry required "seal-declined-note" content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-missing-launcher\.txt does not carry fallback refusal content; the recording probably continued past the approval and overwrote the dialog; re-record and stop sooner$/m);
+});
+
+test("the checker refuses version-7 UUID shape and a bare session identifier", () => {
+  const cases = [
+    { value: "00000000-0000-7000-8000-000000000000", name: "UUID-shaped session identifier" },
+    { value: "session_FABRICATED_CHECKER_ONLY", name: "bare Claude Code session identifier" },
+  ];
+  for (const candidate of cases) {
+    const copy = copyOfPack();
+    rewriteTranscript(copy, "rendered-transcript.txt", (text) => `${text}${candidate.value}\n`);
+    const result = check([copy.dir, "--allow-synthetic"]);
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.out, new RegExp(`^REFUSE rendered_transcript_identifier_present: rendered-transcript\\.txt carries a ${candidate.name}$`, "m"), result.out);
+  }
+});
+
+test("the checker derives renderer identity from the renderer source", () => {
+  const copy = copyOfPack();
+  copy.rewriteManifest((manifest) => {
+    manifest.rendering.renderer_identity = "seal-terminal-renderer/js-screen-v2";
+    for (const entry of manifest.rendering.recordings) entry.renderer_identity = "seal-terminal-renderer/js-screen-v2";
+  });
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE renderer_identity_unknown: /m, result.out);
+});
+
+test("the checker refuses the previous last-frame-only result name", () => {
+  const copy = copyOfPack();
+  copy.rewriteManifest((manifest) => {
+    manifest.rendering.renderer_result = "last-visible-frame";
+  });
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE renderer_result_unknown: /m, result.out);
+});
+
 test("the checker refuses a manifest whose file hash does not match", () => {
   const copy = copyOfPack();
   fs.appendFileSync(path.join(copy.dir, "child.jsonl"), `${JSON.stringify({ kind: "child-call", tool: "append_note" })}\n`);
@@ -259,25 +449,25 @@ test("the checker refuses a manifest naming the wrong artifact", () => {
 
 test("the checker refuses a manifest referencing a file that is absent", () => {
   const copy = copyOfPack();
-  fs.rmSync(path.join(copy.dir, "terminal.cast"));
+  fs.rmSync(path.join(copy.dir, "rendered-transcript.txt"));
   const result = check([copy.dir, "--allow-synthetic"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /^REFUSE evidence_file_absent: manifest names terminal\.cast, which is not present in the pack$/m, result.out);
+  assert.match(result.out, /^REFUSE evidence_file_absent: manifest names rendered-transcript\.txt, which is not present in the pack$/m, result.out);
 });
 
 test("the checker refuses an empty terminal recording by name", () => {
   const copy = copyOfPack();
-  const castPath = path.join(copy.dir, "terminal.cast");
+  const castPath = path.join(copy.dir, "rendered-transcript.txt");
   fs.writeFileSync(castPath, "");
   copy.rewriteManifest((manifest) => {
-    const entry = manifest.files.find((file) => file.path === "terminal.cast");
+    const entry = manifest.files.find((file) => file.path === "rendered-transcript.txt");
     entry.sha256 = digest(Buffer.alloc(0));
     entry.bytes = 0;
   });
   const result = check([copy.dir, "--allow-synthetic"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /^REFUSE evidence_file_empty: terminal\.cast is empty$/m, result.out);
-  assert.match(result.out, /^REFUSE terminal_recording_empty: terminal\.cast is empty$/m, result.out);
+  assert.match(result.out, /^REFUSE evidence_file_empty: rendered-transcript\.txt is empty$/m, result.out);
+  assert.match(result.out, /^REFUSE terminal_recording_empty: rendered-transcript\.txt is empty$/m, result.out);
 });
 
 test("the checker refuses evidence added beside the manifest", () => {
@@ -369,7 +559,7 @@ test("PATH 3 refuses an impostor named claude against the operator's trusted exe
   ]);
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^REFUSE client_executable_identity_mismatch: /m, result.out);
-  assert.match(result.out, /^OK\s+terminal\.cast carries the synthetic fixture banner$/m, result.out);
+  assert.match(result.out, /^OK\s+rendered-transcript\.txt carries the synthetic fixture banner$/m, result.out);
 });
 
 test("a release pack without an operator-supplied client digest is refused by name", () => {

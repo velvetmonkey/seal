@@ -93,6 +93,11 @@ elicitation, or declines to fall back.
 | `missing_launcher` | Claude Code does not fall back to the original `.mcp.json` server |
 | `unprotect` | The local override disappears and `.mcp.json` remains byte-identical |
 
+This table summarizes each requirement because the literal requirement strings
+also name the file-backed facts that support the observation.
+The test renders this table from the harness cases. The test rejects a document
+that differs from that rendering.
+
 How each one is established from files rather than from the operator's memory:
 
 - **activation** — the fixture's `start` record carries its process ancestry.
@@ -113,9 +118,9 @@ How each one is established from files rather than from the operator's memory:
   the append-only log, plus the effect digest, which is computed three ways
   that must agree: by the fixture as it wrote the file, by the harness from the
   instructed note, and by the checker from the pack alone.
-- **missing_launcher** — the harness moves the override's command aside, the
-  session's recorder-corresponding cast must say both that the local command
-  was missing and that no `.mcp.json` fallback occurred. The child log must
+- **missing_launcher** — the harness moves the override's command aside. The
+  session's rendered transcript must carry `seal-fallback-note` or `does not
+  fall back`. The child log must
   gain no record at all: not a Seal-started one, and not a directly started
   one. `.mcp.json` must be unchanged, and the installed tree must re-verify
   after the launcher is restored.
@@ -149,8 +154,9 @@ Two cautions for the operator:
 
 1. Claude Code starts in a fresh `HOME` and may ask you to sign in. Do that in
    the first recorded session **before** anything else, or sign in beforehand:
-   the recording is a verbatim capture of your terminal, and anything you type
-   into it is in the pack. Read `terminal.cast` before publishing it.
+   the raw recording is a verbatim capture of your terminal, and anything you type
+   into it is in the run directory. The pack carries a rendered transcript. Read
+   `rendered-transcript.txt` before publishing it.
 2. The installed store is read-only by design. `chmod -R u+w` the run directory
    before deleting it.
 
@@ -162,19 +168,36 @@ Two cautions for the operator:
     linux-x64/
       <seal-artifact-sha256>/
         manifest.json
-        terminal.cast
+        rendered-transcript.txt
         proxy.jsonl
         child.jsonl
         before-after.json
         approvals.journal
         receipts/
         snapshots.json
-        terminal-<case>.cast
+        rendered-transcript-<case>.txt
 ```
+
+The evidence contract is `seal.claude-code-evidence/v2`. The identifier lives
+in `manifest.json.manifest`. The harness writes it in
+`harness/claude-code/cc-harness.cjs`, and the checker reads it in
+`scripts/check-cc-evidence.mjs`. Version 1 packs are refused because they
+publish raw `.cast` files instead of the required rendered transcript.
 
 `manifest.json` names the artifact, the client, the environment, the fixture
 revision, the eight expected cases with their required observations, what was
-observed, and the SHA-256 and byte length of every other file in the pack.
+observed, the renderer provenance, and the SHA-256 and byte length of every
+other file in the pack. The rendered transcript holds any retained scrollback
+followed by the terminal's last visible frame. It is NOT a record of the whole
+session. The renderer keeps scrollback for synthetic casts. Real Claude Code
+recordings can contribute scrollback when terminal output scrolls. If a line
+is repainted, the transcript carries its final content once. Earlier versions
+of that line are lost.
+It removes terminal control sequences. It also redacts Claude Code session
+URLs, bare `session_` identifiers, and UUID-shaped identifiers. Other visible
+text can still contain secrets or sensitive content. A ULID or a 32-character
+hex string is not a Claude Code session identifier by shape alone, so these
+forms remain visible. This pack is not safe to publish without inspection.
 
 ## The checker
 
@@ -194,8 +217,12 @@ not the label the observations produce. It also strictly parses the fixture's
 numbered digest chain, compares the complete log to the independent final
 boundary digest, length, and record count in `snapshots.json`, and derives the
 client executable identity from process ancestry the fixture read from `/proc`
-while the client and Seal proxy were alive. It also reads every recorded cast;
-a synthetic fixture banner in a cast is synthetic evidence, not ignored data.
+while the client and Seal proxy were alive. It also reads every rendered
+transcript; a synthetic fixture banner in a transcript is synthetic evidence,
+not ignored data. It refuses a transcript that contains a Claude Code session
+URL, a bare `session_` identifier, a UUID-shaped session identifier, or a
+C0/C1 control byte other than LF. A ULID or a 32-character hex string can pass
+this check because its text shape does not identify it as a Claude Code session.
 
 For a release claim, the operator must additionally supply the SHA-256 of the
 actual Claude Code executable they independently verified (not a hash copied
