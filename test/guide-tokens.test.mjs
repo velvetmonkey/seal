@@ -16,6 +16,11 @@ const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
 const GUIDE_SHA256 = "dd785473baa5573b4dbc604fc2d485f67c7850d17a10b2bcf30415f875610949";
 
+// REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored
+// release-version slot. This canonicalizer maps two platform-support passages
+// to their reviewed prior text so platform-support changes do not move
+// GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges.
+// The pin covers all other guide bytes.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
 const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)", "gm");

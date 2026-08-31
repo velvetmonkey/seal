@@ -306,6 +306,22 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
 });
 
+test("reviewed-guide canonicalizers disclose every unpinned canonicalized slot", () => {
+  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored release-version slot. This canonicalizer maps two platform-support passages to their reviewed prior text so platform-support changes do not move GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges. The pin covers all other guide bytes.";
+  const expectedCopies = new Map([["scripts/sync-version.cjs", 2], ["test/guide-tokens.test.mjs", 1]]);
+  const missing = [...expectedCopies].filter(([file, expected]) => {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){4}/gu)]
+      .map((match) => match[0].replace(/^\/\/ ?/gmu, "").replace(/\s+/gu, " ").trim());
+    return comments.length !== expected || comments.some((comment) => comment !== requiredComment);
+  }).map(([file]) => file);
+  assert.deepEqual(
+    missing,
+    [],
+    `reviewed-guide canonicalizer comments must name the release-version slot and two platform-support passages, state that the pin does not cover their canonicalized bytes, and limit pin coverage to all other guide bytes; missing: ${missing.join(", ")}`,
+  );
+});
+
 test("stale-version scope preserves a historical release-note filename in a live document", () => {
   assertStaleMatches(
     "0.2.0",

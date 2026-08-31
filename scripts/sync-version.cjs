@@ -59,9 +59,11 @@ for (const file of [path.join("docs", "guide", "when-something-looks-wrong.md")]
   replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
 }
 
-// REVIEWED_GUIDE_GENERATED_VERSION_SLOT: the release version in this guide is
-// generated from VERSION. Canonicalize only this anchored, exact-version slot
-// before hashing; every other byte remains covered by the reviewed-guide pin.
+// REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored
+// release-version slot. This canonicalizer maps two platform-support passages
+// to their reviewed prior text so platform-support changes do not move
+// GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges.
+// The pin covers all other guide bytes.
 const generatedVersionSlotSource = String.raw`(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\n)v${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\.$)`;
 const generatedVersionSlot = new RegExp(generatedVersionSlotSource, "gm");
 const guidePath = path.join(ROOT, "docs", "guide", "when-something-looks-wrong.md");
@@ -88,6 +90,11 @@ function canonicalReviewedGuideText(text) {
 const reviewedGuideSha256 = crypto.createHash("sha256").update(canonicalReviewedGuideText(guideText)).digest("hex");
 
 const canonicalizer = `
+// REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored
+// release-version slot. This canonicalizer maps two platform-support passages
+// to their reviewed prior text so platform-support changes do not move
+// GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges.
+// The pin covers all other guide bytes.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = \`v\${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}\`;
 const GENERATED_VERSION_SLOT = new RegExp(${JSON.stringify(generatedVersionSlotSource)}, "gm");
@@ -121,8 +128,10 @@ function installReviewedGuideCanonicalizer() {
       .replace('createHash("sha256").update(text).digest("hex")', 'createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex")')
       .replace("sha256(text),\n    entry.sha256,", "sha256(canonicalReviewedGuide(entry.file, text)),\n    entry.sha256,");
   }
-  const canonicalizerStart = after.indexOf('const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";');
-  if (canonicalizerStart !== -1) {
+  const canonicalizerBodyStart = after.indexOf('const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";');
+  if (canonicalizerBodyStart !== -1) {
+    const canonicalizerCommentStart = after.lastIndexOf("// REVIEWED_GUIDE_CANONICALIZED_SLOTS:", canonicalizerBodyStart);
+    const canonicalizerStart = canonicalizerCommentStart === -1 ? canonicalizerBodyStart : canonicalizerCommentStart;
     const canonicalizerEnd = after.indexOf("// Where refusal tokens live", canonicalizerStart);
     if (canonicalizerEnd === -1) throw new Error(`reviewed guide canonicalizer end marker not found in ${file}`);
     after = `${after.slice(0, canonicalizerStart)}${canonicalizer.trimStart()}\n${after.slice(canonicalizerEnd)}`;

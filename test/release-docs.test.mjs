@@ -10,6 +10,7 @@ import { LEGACY_RELEASE_TAGS, sha256 } from "../scripts/release-manifest-lib.mjs
 
 const ROOT = path.join(import.meta.dirname, "..");
 const GENERATOR = path.join(ROOT, "scripts", "generate-release-docs.mjs");
+const MACOS_PROTECT_CLAIMS = path.join(ROOT, "scripts", "check-macos-protect-claims.mjs");
 const COMMIT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 function run(args, env) {
@@ -32,6 +33,10 @@ function docsRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-release-docs-"));
   fs.copyFileSync(path.join(ROOT, "README.md"), path.join(root, "README.md"));
   fs.cpSync(path.join(ROOT, "docs"), path.join(root, "docs"), { recursive: true });
+  for (const directory of ["bin", "scripts", "spine"]) fs.mkdirSync(path.join(root, directory), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, "bin", "seal"), path.join(root, "bin", "seal"));
+  fs.copyFileSync(path.join(ROOT, "scripts", "claims-drift.mjs"), path.join(root, "scripts", "claims-drift.mjs"));
+  fs.copyFileSync(path.join(ROOT, "spine", "platform.cjs"), path.join(root, "spine", "platform.cjs"));
   return root;
 }
 
@@ -119,6 +124,16 @@ test("legacy docs state release-listing facts and check compares claims with tha
     };
     const generated = await run([], env);
     assert.equal(generated.code, 0, generated.stderr);
+    const claims = spawnSync(process.execPath, [MACOS_PROTECT_CLAIMS], {
+      cwd: docs,
+      encoding: "utf8",
+      env: { ...process.env, SEAL_MACOS_PROTECT_CLAIMS_ROOT: docs },
+    });
+    assert.equal(
+      claims.status,
+      0,
+      `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
+    );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
     assert.match(readme, /The current source is the unreleased `v0\.2\.0` candidate\. The install commands below fetch the\s*> published `v0\.2\.0-rc\.3`, which carries the previous receipt format and Linux-only Protect support\./);
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });

@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import {
   isLegacyReleaseTag,
   legacyManifestFromObserved,
@@ -10,6 +11,8 @@ import {
   validateManifestShape,
 } from "./release-manifest-lib.mjs";
 
+const require = createRequire(import.meta.url);
+const { protectPlatformSupported } = require("../spine/platform.cjs");
 const ROOT = path.resolve(process.env.SEAL_RELEASE_DOCS_ROOT || path.join(import.meta.dirname, ".."));
 const SENTINEL = "<!-- generated from published release; do not edit -->";
 const END = "<!-- end generated release docs -->";
@@ -208,6 +211,30 @@ function platformSentence(platform) {
   refuse("platform", `no documentation wording exists for ${platform}`);
 }
 
+function installPlatformParagraphs(manifest, platform) {
+  const linux = protectPlatformSupported("linux", "x64");
+  const darwinX64 = protectPlatformSupported("darwin", "x64");
+  const darwinArm64 = protectPlatformSupported("darwin", "arm64");
+  if (darwinX64 !== darwinArm64) {
+    refuse("platform_table", `darwin-x64 Protect support is ${darwinX64}, but darwin-arm64 Protect support is ${darwinArm64}`);
+  }
+  if (!linux) refuse("platform_table", "linux-x64 Protect support is absent");
+  if (!darwinX64) {
+    return [
+      "macOS source portability is CI-exercised for install, demo and receipt checking.",
+      `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+    ];
+  }
+  return [
+    manifest.artifacts
+      ? "This checkout supports Protect on Linux x86-64 and macOS x64/arm64."
+      : `The published release asset is ${platform}. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.`,
+    manifest.artifacts
+      ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`
+      : `Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+  ];
+}
+
 function version(manifest) {
   return manifest.tag.slice(1);
 }
@@ -334,16 +361,13 @@ function readmeRegions({ manifest }) {
 
 function installRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
+  const [platformSupport, platformLimit] = installPlatformParagraphs(manifest, platform);
   return [
     [
       SENTINEL,
       `# Install Seal ${manifest.tag}`,
-      manifest.artifacts
-        ? `${releaseSentence(manifest, manifestPublished)} Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.`
-        : `${releaseSentence(manifest, manifestPublished)} macOS source portability is CI-exercised for install, demo and receipt checking.`,
-      manifest.artifacts
-        ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`
-        : `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+      `${releaseSentence(manifest, manifestPublished)} ${platformSupport}`,
+      platformLimit,
       "The installer refuses before changing anything on an unsupported or mismatched platform.",
       "",
       "This page is the SHA256SUMS verification wall. The [README](../../README.md)",
