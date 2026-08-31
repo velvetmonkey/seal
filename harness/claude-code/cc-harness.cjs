@@ -209,6 +209,19 @@ function readChildLog(state) {
   };
 }
 
+function claudeMcpGetEvidence(result) {
+  // This serialization is the complete raw result that activation reads.
+  // Keep it stable so the digest joins code and both output streams together.
+  const raw = Buffer.from(JSON.stringify({ code: result.code, stdout: result.stdout, stderr: result.stderr }), "utf8");
+  return {
+    code: result.code,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    sha256: sha256(raw),
+    bytes: raw.length,
+  };
+}
+
 function readReceipts(state) {
   let names = [];
   try { names = fs.readdirSync(state.paths.receiptsDir).filter((name) => name.endsWith(".json")).sort(); } catch { names = []; }
@@ -300,7 +313,7 @@ function snapshot(state, label) {
     // installed-tree check at each case boundary.
     seal_version: { code: sealVersion.code, stdout: sealVersion.stdout.trim(), stderr: sealVersion.stderr.trim() },
     seal_status: { code: sealStatus.code, stdout: sealStatus.stdout, stderr: sealStatus.stderr },
-    claude_mcp_get: { code: mcpGet.code, stdout: mcpGet.stdout, stderr: mcpGet.stderr },
+    claude_mcp_get: claudeMcpGetEvidence(mcpGet),
   };
 }
 
@@ -576,6 +589,44 @@ function observeActivation(state, begin, end) {
       ancestry: starts.map((record) => (record.ancestry || []).map((step) => ({ pid: step.pid, argv: step.argv }))),
     },
   };
+}
+
+function sameChildLog(recorded, current) {
+  return recorded?.present === current.present &&
+    recorded?.sha256 === current.sha256 &&
+    recorded?.bytes === current.bytes &&
+    recorded?.lines === current.lines &&
+    recorded?.guarded_calls === current.guarded_calls &&
+    isDeepStrictEqual(recorded?.records, current.records);
+}
+
+function activationEvidence(state, begin, end) {
+  // Read child.jsonl before `claude mcp get`. That command can itself start a
+  // server. The saved end boundary must name the complete file at that point.
+  const childLog = readChildLog(state);
+  if (!sameChildLog(end.child_log, childLog)) {
+    return { failure: "recorded child log evidence changed after the snapshot" };
+  }
+  // The begin boundary is a prefix of the current append-only child log.
+  // Compare the parsed records to the bytes now read from child.jsonl before
+  // `newRecords` uses the boundary count.
+  if (!Array.isArray(begin.child_log?.records) ||
+      !isDeepStrictEqual(begin.child_log.records, childLog.records.slice(0, begin.child_log.lines))) {
+    return { failure: "recorded child log begin boundary changed after the snapshot" };
+  }
+  const mcp = claudeMcpGetEvidence(run(state, "claude", ["mcp", "get", SERVER_NAME]));
+  const recordedMcp = claudeMcpGetEvidence(end.claude_mcp_get || {});
+  if (recordedMcp.sha256 !== mcp.sha256 || recordedMcp.bytes !== mcp.bytes) {
+    return { failure: "recorded Claude MCP result changed after the snapshot" };
+  }
+  // Older accepted walks predate explicit MCP digest fields. Recompute their
+  // digest from the recorded result, then compare it to a fresh command read.
+  // New snapshots also verify their stored digest before use.
+  if ((end.claude_mcp_get?.sha256 !== undefined &&
+      (end.claude_mcp_get.sha256 !== recordedMcp.sha256 || end.claude_mcp_get.bytes !== recordedMcp.bytes))) {
+    return { failure: "recorded Claude MCP digest does not bind its result bytes" };
+  }
+  return { childLog, mcp };
 }
 
 function observeNegotiation(state, begin, end) {
@@ -1407,6 +1458,14 @@ function certifyStep(state, step) {
         protection_state: currentProtection,
         local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches },
       };
+      const bound = activationEvidence(state, begin, end);
+      if (bound.failure) {
+        failures.push(`${caseId}: ${bound.failure}`);
+        continue;
+      }
+      // observeActivation may only decide from the child-log bytes and MCP
+      // result that this certification invocation just bound and checked.
+      end = { ...end, child_log: bound.childLog, claude_mcp_get: bound.mcp };
       say("  CERTIFYING activation from recorded raw local override evidence");
     }
     const outcome = OBSERVERS[caseId](state, begin, end);

@@ -313,6 +313,39 @@ test("A8, A11, and A14 refuse a frozen ACTIVE protection state", () => {
   }
 });
 
+test("activation binds every recorded Claude MCP and child-log value before certification", () => {
+  const attacks = [
+    ["mcp-wholly-invented", (end) => { end.claude_mcp_get = { code: 0, stdout: "  Scope: Local config (private to you in this project)\\n", stderr: "" }; }],
+    ["mcp-real-altered", (end) => { end.claude_mcp_get.stdout += "altered\\n"; }],
+    ["mcp-duplicated-scope", (end) => { end.claude_mcp_get.stdout += end.claude_mcp_get.stdout; }],
+    ["mcp-nonzero-success", (end) => { end.claude_mcp_get.code = 23; }],
+    ["child-appended-fake-start", (end) => { end.child_log.records.push({ kind: "start", ancestry: [] }); end.child_log.lines += 1; }],
+    ["child-altered-clientInfo-name", (end) => { end.child_log.records[0].clientInfo = { name: "forged" }; }],
+    ["child-duplicated-real-record", (end) => { end.child_log.records.push(structuredClone(end.child_log.records[0])); end.child_log.lines += 1; }],
+    ["child-outside-window", (end) => { end.child_log.records.unshift({ kind: "start", ancestry: [] }); end.child_log.lines += 1; }],
+  ];
+  for (const [name, tamper] of attacks) {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `seal-cc-${name}-`));
+    const { harness, runDir } = initSyntheticRun(workspace);
+    runSyntheticStep(harness, runDir, "activation", "");
+    const state = harness.loadState(runDir);
+    const endPath = path.join(runDir, "snapshots", "activation.end.json");
+    const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+    tamper(end);
+    fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+    state.step_index = 0;
+    state.steps.activation.attempted = true;
+    harness.saveState(state);
+    assert.throws(
+      () => harness.next(harness.loadState(runDir)),
+      (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
+        /recorded (Claude MCP result|child log evidence) changed after the snapshot/.test(error.message),
+      name,
+    );
+    assert.equal(harness.loadState(runDir).step_index, 0, name);
+  }
+});
+
 test("activation refuses when the recorded protection-state raw input changes", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-protect-state-join-"));
   const { harness, runDir } = initSyntheticRun(workspace);
