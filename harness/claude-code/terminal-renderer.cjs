@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// This renderer is deliberately small. It renders the final visible terminal
-// screen from an asciinema v2 cast. It does not rewrite or sanitise a cast.
+// This renderer is deliberately small. It renders terminal scrollback and the
+// final visible screen from an asciinema v2 cast. It does not rewrite or
+// sanitise a cast.
 //
-// LIMIT: the rendered transcript loses timing, cursor movement, redraws,
-// colour, non-ASCII glyph fidelity, and the ability to replay with asciinema.
-// It is not equivalent to the raw recording. A repainting line emits only its
-// final cells. Non-ASCII cells become '?' so the public file is ASCII plus LF.
+// LIMIT: the rendered transcript loses timing, cursor movement, colour,
+// non-ASCII glyph fidelity, and the ability to replay with asciinema. It is
+// not equivalent to the raw recording. A line repainted before it scrolls off
+// emits only its final cells once. Non-ASCII cells become '?' so the public
+// file is ASCII plus LF.
 const fs = require("node:fs");
 
 const RENDERER_IDENTITY = "seal-terminal-renderer/js-screen-v1";
-const RENDERER_RESULT = "final-visible-frame-only";
+const RENDERER_RESULT = "scrollback-and-final-visible-frame";
+const SESSION_URL = /claude\.ai\/code\/session_[A-Za-z0-9_-]+/giu;
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
 
 function number(value, fallback) {
   const parsed = Number(value);
@@ -23,6 +27,7 @@ class Screen {
     this.width = width;
     this.height = height;
     this.cells = Array.from({ length: height }, () => Array(width).fill(" "));
+    this.scrollback = [];
     this.x = 0;
     this.y = 0;
     this.saved = { x: 0, y: 0 };
@@ -42,7 +47,7 @@ class Screen {
   lineFeed() {
     if (this.y < this.height - 1) this.y += 1;
     else {
-      this.cells.shift();
+      this.scrollback.push(this.cells.shift());
       this.cells.push(Array(this.width).fill(" "));
     }
   }
@@ -57,7 +62,8 @@ class Screen {
   }
 
   params() {
-    return (this.csi.slice(1).split(";").map((part) => Number(part || 0)));
+    const parameters = this.csi.slice(0, -1);
+    return parameters.replace(/^[>?]*/u, "").split(";").map((part) => Number(part || 0));
   }
 
   csiCommand(command) {
@@ -81,6 +87,9 @@ class Screen {
       case "u": this.x = this.saved.x; this.y = this.saved.y; break;
       case "h": case "l": break;
       case "m": break;
+      // Handled CSI: A B e C a D E F G ` d H f J K P @ s u.
+      // Ignored CSI: all other final bytes, including c, q, r, S, T, and
+      // private-mode h/l. These sequences do not change the text grid here.
       default: break;
     }
   }
@@ -105,6 +114,7 @@ class Screen {
         continue;
       }
       if (this.state === "escape") {
+        // Handled ESC: [, ], 7, and 8. Ignored ESC: every other final byte.
         if (char === "[") { this.state = "csi"; this.csi = ""; }
         else if (char === "]") { this.state = "osc"; this.osc = ""; }
         else if (char === "7") { this.saved = { x: this.x, y: this.y }; this.state = "text"; }
@@ -119,6 +129,7 @@ class Screen {
       if (code === 0x0d) { this.x = 0; continue; }
       if (code === 0x08) { this.x = Math.max(0, this.x - 1); continue; }
       if (code === 0x09) { this.x = Math.min(this.width, this.x + (8 - (this.x % 8))); continue; }
+      // Handled C0: LF, CR, BS, and HT. Ignored C0/C1: every other control.
       if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
       this.put(char);
     }
@@ -126,7 +137,9 @@ class Screen {
   }
 
   text() {
-    return this.cells.map((line) => line.join("").replace(/[ ]+$/u, "")).join("\n");
+    return [...this.scrollback, ...this.cells]
+      .map((line) => line.join("").replace(/[ ]+$/u, ""))
+      .join("\n");
   }
 }
 
@@ -143,7 +156,10 @@ function parseCast(castPath) {
 }
 
 function renderCast(castPath) {
-  const visible = parseCast(castPath).replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
+  const visible = parseCast(castPath)
+    .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replace(UUID, "[REDACTED-SESSION-ID]")
+    .replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
   return `This is a rendered terminal transcript. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 

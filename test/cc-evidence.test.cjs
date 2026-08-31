@@ -237,6 +237,39 @@ test("the checker ACCEPTS a correct pack", () => {
   assert.match(result.out, /1 pack\(s\), 1 accepted, 0 refused/);
 });
 
+test("presence controls refuse a rehashed transcript with its evidence removed", () => {
+  const copy = copyOfPack();
+  const replacements = {
+    "rendered-transcript.txt": ["seal-accepted-note", "append_note"],
+    "rendered-transcript-decline.txt": ["seal-declined-note", "append_note"],
+    "rendered-transcript-missing-launcher.txt": ["seal-fallback-note", "does not fall back"],
+  };
+  for (const [name, needles] of Object.entries(replacements)) {
+    const file = path.join(copy.dir, name);
+    let text = fs.readFileSync(file, "utf8");
+    for (const needle of needles) text = text.replaceAll(needle, "REMOVED-EVIDENCE");
+    fs.writeFileSync(file, text);
+    const bytes = Buffer.from(text);
+    const fileDigest = digest(bytes);
+    copy.rewriteManifest((manifest) => {
+      const fileEntry = manifest.files.find((entry) => entry.path === name);
+      fileEntry.sha256 = fileDigest;
+      fileEntry.bytes = bytes.length;
+      const caseId = manifest.environment.recordings.find((recording) => recording.file === name).case;
+      const rendering = manifest.rendering.recordings.find((entry) => entry.case === caseId);
+      rendering.public_derived_transcript_digest = { sha256: fileDigest, bytes: bytes.length };
+      const publicDigest = manifest.rendering.public_derived_transcript_digest.find((entry) => entry.case === caseId);
+      publicDigest.sha256 = fileDigest;
+      publicDigest.bytes = bytes.length;
+    });
+  }
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript\.txt does not carry required "seal-accepted-note" content$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-decline\.txt does not carry required "seal-declined-note" content$/m);
+  assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-missing-launcher\.txt does not carry fallback refusal content$/m);
+});
+
 test("the checker refuses a manifest whose file hash does not match", () => {
   const copy = copyOfPack();
   fs.appendFileSync(path.join(copy.dir, "child.jsonl"), `${JSON.stringify({ kind: "child-call", tool: "append_note" })}\n`);

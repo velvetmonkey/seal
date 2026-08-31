@@ -39,7 +39,15 @@ const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
 const UNTESTED_LABEL = "Claude Code integration: UNTESTED — real Claude Code call not observed";
 const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack. A determined author with local file access can produce a passing pack. It is an instrument against mistakes, not against forgery.";
 const REQUIRED_FILES = ["rendered-transcript.txt", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
-const SESSION_IDENTIFIER = Buffer.from("claude.ai/code/session_", "utf8");
+const IDENTIFIER_PATTERNS = [
+  { name: "Claude Code session URL", pattern: /claude\.ai\/code\/session_[A-Za-z0-9_-]+/u },
+  { name: "UUID-shaped session identifier", pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/iu },
+];
+const TRANSCRIPT_PRESENCE = {
+  accept: ["seal-accepted-note", "append_note"],
+  decline: ["seal-declined-note", "append_note"],
+  missing_launcher: ["seal-fallback-note", "does not fall back"],
+};
 
 const REQUIRED_CASES = [
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
@@ -247,8 +255,17 @@ function checkCasts(packDir, manifest, report) {
       report.refuse("terminal_recording_empty", `${name} is empty`);
       continue;
     }
-    if (bytes.includes(SESSION_IDENTIFIER)) {
-      report.refuse("rendered_transcript_identifier_present", `${name} carries a Claude Code session identifier pattern`);
+    const text = bytes.toString("utf8");
+    const required = TRANSCRIPT_PRESENCE[recording.case] || [];
+    if (recording.case === "missing_launcher") {
+      if (!required.some((phrase) => text.includes(phrase))) report.refuse("rendered_transcript_content_absent", `${name} does not carry fallback refusal content`);
+    } else {
+      for (const phrase of required) {
+        if (!text.includes(phrase)) report.refuse("rendered_transcript_content_absent", `${name} does not carry required ${JSON.stringify(phrase)} content`);
+      }
+    }
+    for (const identifier of IDENTIFIER_PATTERNS) {
+      if (identifier.pattern.test(text)) report.refuse("rendered_transcript_identifier_present", `${name} carries a ${identifier.name}`);
     }
     const controls = [...bytes].filter((value) => (value >= 0 && value <= 0x1f) || (value >= 0x7f && value <= 0x9f));
     const nonNewlineControls = controls.filter((value) => value !== 0x0a);
@@ -275,7 +292,7 @@ function checkRenderingProvenance(packDir, manifest, report) {
     if (rendering[field] === undefined) report.refuse("rendering_provenance_absent", `the manifest carries no ${field}`);
   }
   if (rendering.renderer_identity !== "seal-terminal-renderer/js-screen-v1") report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}`);
-  if (rendering.renderer_result !== "final-visible-frame-only") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
+  if (rendering.renderer_result !== "scrollback-and-final-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
   const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
   for (const entry of entries) {
     const transcriptName = manifest.environment?.recordings?.find((recording) => recording.case === entry.case)?.file;

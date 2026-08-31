@@ -290,8 +290,7 @@ function loadSnapshot(state, caseId, edge) {
 const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
 // The screen text of a cast comes from the same terminal renderer that writes
-// the public transcript. It is a final visible frame, not a sanitised byte
-// stream.
+// the public transcript. It includes scrollback and the final visible frame.
 function castScreenText(castPath) {
   return parseCast(castPath);
 }
@@ -1488,7 +1487,7 @@ function finish(state, options) {
     const source = path.join(state.paths.logs, `${step.record.caseId}.cast`);
     if (!fs.existsSync(source)) continue;
     // The raw cast stays in the run directory. The pack carries only the
-    // rendered final visible frame derived from that cast.
+    // rendered transcript derived from that cast.
     const target = step.record.caseId === "accept" ? "rendered-transcript.txt" : `rendered-transcript-${step.record.caseId.replace(/_/g, "-")}.txt`;
     fs.writeFileSync(path.join(packDir, target), renderCast(source));
     const rawDigest = digestOf(source);
@@ -1582,7 +1581,7 @@ function finish(state, options) {
   say("");
   for (const line of manifest.label.split("\n")) say(line);
   say("");
-  say("Read rendered-transcript.txt before you publish this pack: it is a lossy final-frame transcript derived from the raw terminal recording, and it still contains visible content.");
+  say("Read rendered-transcript.txt before you publish this pack: it is a lossy transcript with scrollback and the final visible frame derived from the raw terminal recording, and it still contains visible content.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
   return packDir;
 }

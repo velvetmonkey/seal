@@ -183,6 +183,9 @@ publish raw `.cast` files instead of the required rendered transcript.
 revision, the eight expected cases with their required observations, what was
 observed, the renderer provenance, and the SHA-256 and byte length of every
 other file in the pack. The rendered transcript is derived from the raw cast.
+It contains lines that scrolled off the top, followed by the final visible frame.
+If a line is repainted before it scrolls off, the transcript carries its final
+content once. Earlier versions of that line are lost.
 It removes terminal control sequences, not content. Visible text can still
 contain secrets or other sensitive content. This pack is not safe to publish
 without inspection.
@@ -207,8 +210,9 @@ boundary digest, length, and record count in `snapshots.json`, and derives the
 client executable identity from process ancestry the fixture read from `/proc`
 while the client and Seal proxy were alive. It also reads every rendered
 transcript; a synthetic fixture banner in a transcript is synthetic evidence,
-not ignored data. It refuses a transcript that contains a session identifier
-or a C0/C1 control byte other than LF.
+not ignored data. It refuses a transcript that contains a Claude Code session
+URL, a UUID-shaped session identifier, or a C0/C1 control byte other than LF.
+Other identifier formats can pass this check.
 
 For a release claim, the operator must additionally supply the SHA-256 of the
 actual Claude Code executable they independently verified (not a hash copied
