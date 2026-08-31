@@ -48,6 +48,41 @@ function renderRequiredObservationTable(cases) {
   ].join("\n");
 }
 
+function documentedRequiredObservationTables(doc) {
+  return [...doc.matchAll(/^\| Case \| Required observation \|\n\|---\|---\|\n(?:\|.*\|\n?)+/gmu)]
+    .map((match) => ({ text: match[0].trimEnd(), index: match.index }));
+}
+
+function markdownFiles(root) {
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) return markdownFiles(target);
+    return entry.isFile() && entry.name.endsWith(".md") ? [target] : [];
+  });
+}
+
+function assertDocumentedRequiredObservationTable(doc, cases, docsRoot = path.join(ROOT, "docs")) {
+  const heading = "### The eight fixed cases";
+  const headingCount = [...doc.matchAll(/^### The eight fixed cases$/gmu)].length;
+  assert.equal(headingCount, 1, "the required-observation heading occurs exactly once");
+  assert.doesNotMatch(doc, /<\s*table(?:\s|>)/iu, "the document has no HTML table outside this rendering contract");
+  assert.doesNotMatch(doc, /^(?:[ \t]+|(?:>\s*)+)\| Case \| Required observation \|$/gmu, "the document has no indented or quoted required-observation table");
+  assert.doesNotMatch(doc, /[\u200B-\u200D\uFEFF]/u, "the document has no zero-width character");
+  assert.doesNotMatch(doc, /(?:!INCLUDE\b|\{\{<\s*include\b)/iu, "the document has no transclusion directive");
+  const tableDocuments = markdownFiles(docsRoot)
+    .filter((file) => /^\| Case \| Required observation \|$/mu.test(fs.readFileSync(file, "utf8")))
+    .map((file) => path.relative(docsRoot, file));
+  assert.deepEqual(tableDocuments, ["assurance/claude-code-evidence.md"], "the required-observation table appears in one document");
+
+  const tables = documentedRequiredObservationTables(doc);
+  assert.equal(tables.length, 1, "the document has exactly one required-observation table");
+  const expected = renderRequiredObservationTable(cases);
+  assert.equal(tables[0].text, expected, "the document table is the harness rendering");
+
+  const headingEnd = doc.indexOf(heading) + heading.length;
+  assert.equal(doc.slice(headingEnd, tables[0].index), "\n\n", "the unique heading owns the unique table");
+}
+
 test("documented required-observation table is rendered from the harness cases", () => {
   const harnessSource = fs.readFileSync(path.join(CONTRACT_ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8");
   const checkerSource = fs.readFileSync(path.join(CONTRACT_ROOT, "scripts", "check-cc-evidence.mjs"), "utf8");
@@ -62,10 +97,41 @@ test("documented required-observation table is rendered from the harness cases",
   );
   assert.ok(harnessCases.every(({ summary }) => summary), "each harness case has a document summary");
 
-  const table = doc.match(/^\| Case \| Required observation \|\n\|---\|---\|\n(?:\|.*\|\n?)+/mu)?.[0].trimEnd();
   // This check verifies one writer. It does not verify that the summaries are true.
-  // The document cannot disagree with the harness cases when this check passes.
-  assert.equal(table, renderRequiredObservationTable(harnessCases), "the document table is the harness rendering");
+  // It verifies that this document cannot disagree with the harness cases.
+  assertDocumentedRequiredObservationTable(doc, harnessCases, path.join(CONTRACT_ROOT, "docs"));
+});
+
+test("documented required-observation table rejects duplicate_after", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const table = renderRequiredObservationTable(requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES"));
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n${table.replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction")}\n`, requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES")));
+});
+
+test("documented required-observation table rejects duplicate_before", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  const table = renderRequiredObservationTable(cases).replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${table}\n${doc}`, cases));
+});
+
+test("documented required-observation table rejects html_comment", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  const table = renderRequiredObservationTable(cases).replace("After restart, Claude Code selects the local Seal override", "The proxy records the retry-model interaction");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n<!--\n${table}\n-->\n`, cases));
+});
+
+test("documented required-observation table rejects heading_moved", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc.replace("### The eight fixed cases\n\n", "")}\n### The eight fixed cases\n`, cases));
+});
+
+test("documented required-observation table rejects heading_duplicated", () => {
+  const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
+  const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
+  assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n### The eight fixed cases\n`, cases));
 });
 
 test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
