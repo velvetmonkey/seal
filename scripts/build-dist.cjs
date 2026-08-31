@@ -33,6 +33,7 @@ const PAYLOAD_PATHS = [
   "spine/receipts.cjs",
   "spine/receipt-v2.cjs",
   "spine/store.cjs",
+  "spine/tool-selection.cjs",
   "contract/canonical.cjs",
   "contract/contract.cjs",
   "contract/kernel-authorization.cjs",

@@ -351,14 +351,14 @@ async function protectCommand(args) {
     }
   }
   if (positional.length < 2) {
-    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]");
+    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
   }
   const [serverName, ...requestedTools] = positional;
   const guardTools = [...new Set(requestedTools)];
   const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
-  const guarded = new Set(guardTools);
+  const guarded = new Set(result.state.guardTools);
   const outside = result.toolNames.filter((name) => !guarded.has(name));
   const shownOutside = outside.slice(0, 20);
   const hiddenOutside = outside.length - shownOutside.length;
@@ -415,7 +415,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]\n                         install a local Claude Code override for named tools\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
 if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {

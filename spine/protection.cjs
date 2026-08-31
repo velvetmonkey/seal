@@ -320,6 +320,21 @@ function protectedToolNames(state) {
   return [...new Set(state.guardTools)];
 }
 
+function protectedToolSelections(state) {
+  const names = protectedToolNames(state);
+  if (state.guardPredicates === undefined) return names.map((name) => ({ name, predicate: null }));
+  if (!Array.isArray(state.guardPredicates) || state.guardPredicates.some((entry) =>
+    !entry || typeof entry !== "object" || Array.isArray(entry) ||
+    typeof entry.tool !== "string" || !names.includes(entry.tool) || typeof entry.predicate !== "string")) {
+    throw new ProtectionError("state_broken", "stored protection state has an invalid guardPredicates list");
+  }
+  const predicatesByTool = new Map(names.map((name) => [name, []]));
+  for (const entry of state.guardPredicates) predicatesByTool.get(entry.tool).push(entry.predicate);
+  return names.flatMap((name) => predicatesByTool.get(name).length > 0
+    ? predicatesByTool.get(name).map((predicate) => ({ name, predicate }))
+    : [{ name, predicate: null }]);
+}
+
 function configuredOtherServerNames(state, projectRoot) {
   try {
     const config = readProjectConfig(projectRoot || state?.projectRoot);
@@ -931,10 +946,16 @@ async function protect({
   env = process.env,
   timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
 }) {
-  const requestedTools = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))];
-  if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
-    throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
+  const { parseToolSelection } = require("./tool-selection.cjs");
+  const requestedSelections = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))]
+    .map(parseToolSelection);
+  if (!serverName || requestedSelections.length === 0 || requestedSelections.some((selection) => !selection.ok)) {
+    const invalid = requestedSelections.find((selection) => !selection.ok);
+    throw new ProtectionError("usage", invalid
+      ? `invalid tool predicate ${JSON.stringify(invalid.source)}: ${invalid.error}`
+      : "usage: seal protect SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
   }
+  const requestedTools = [...new Set(requestedSelections.map((selection) => selection.name))];
   const paddedName = requestedTools.find((name) => name.trim() !== name);
   if (paddedName !== undefined) {
     throw new ProtectionError("usage", `protected tool name has surrounding whitespace: ${JSON.stringify(paddedName)}`);
@@ -985,6 +1006,9 @@ async function protect({
     projectId: projectId(root),
     serverName,
     guardTools: requestedTools,
+    guardPredicates: requestedSelections
+      .filter((selection) => selection.predicate !== null)
+      .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),
     mcpJsonPath: project.filePath,
     mcpJsonHashAtProtect: project.hash,
     projectServerDigest: project.serverDigest,
@@ -1203,6 +1227,7 @@ module.exports = {
   protectReadiness,
   protectionBoundary,
   protectedToolNames,
+  protectedToolSelections,
   protect,
   protectionView,
   projectDirectory,

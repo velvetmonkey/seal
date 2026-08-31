@@ -7,7 +7,7 @@
 const readline = require("node:readline");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
-const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolNames, ProtectionError } = require("./protection.cjs");
+const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
 const { requireProtectSupportedPlatform } = require("./platform.cjs");
 const { printKernelTiming } = require("./presentation.cjs");
 
@@ -61,7 +61,7 @@ async function run(argv) {
       const signer = loadReceiptSigner(process.env, (message) => process.stderr.write(message));
       if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
-        guardTools: protectedToolNames(state),
+        guardSelections: protectedToolSelections(state),
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
@@ -92,7 +92,8 @@ async function run(argv) {
   for (const required of ["storePath", "receiptsDir"]) {
     if (!proxyOptions[required]) { process.stderr.write(`seal __proxy: ${required} is required\n`); process.exit(2); }
   }
-  if ((!Array.isArray(proxyOptions.guardTools) || proxyOptions.guardTools.length === 0) && !proxyOptions.guardTool) {
+  if ((!Array.isArray(proxyOptions.guardSelections) || proxyOptions.guardSelections.length === 0) &&
+      (!Array.isArray(proxyOptions.guardTools) || proxyOptions.guardTools.length === 0) && !proxyOptions.guardTool) {
     process.stderr.write("seal __proxy: guardTools is required\n"); process.exit(2);
   }
   if (proxyOptions.childArgv.length === 0) {

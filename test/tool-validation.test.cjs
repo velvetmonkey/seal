@@ -193,9 +193,22 @@ test("protect refuses an empty tool list", (t) => {
   const ctx = setup("ok", "db.drop_table,db.read");
   const result = run(ctx, ["protect", "db"]);
   assert.notEqual(result.code, 0);
-  assert.match(result.out, /usage: seal protect .* SERVER TOOL \[TOOL\.\.\.\]/);
+  assert.match(result.out, /usage: seal protect .* SERVER TOOL\[\?ARG=SCALAR\|\?ARG~"PATTERN"\] \[TOOL\.\.\.\]/);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
   t.diagnostic(result.out.trim());
+});
+
+test("protect persists a predicate beside its tool name", (t) => {
+  const ctx = setup("ok", "db.mutate,db.read");
+  const selector = 'db.mutate?operation="delete"';
+  const result = run(ctx, ["protect", "db", selector]);
+  assert.equal(result.code, 0, result.out);
+  const state = readState(statePathFor(ctx.project, ctx.env));
+  assert.deepEqual(state.guardTools, ["db.mutate"]);
+  assert.deepEqual(state.guardPredicates, [{ tool: "db.mutate", predicate: 'operation="delete"' }]);
+  assert.match(result.out, /Protection scope: 1 other tool NOT APPROVAL-GATED/);
+  t.diagnostic(`guardTools: ${JSON.stringify(state.guardTools)}`);
+  t.diagnostic(`guardPredicates: ${JSON.stringify(state.guardPredicates)}`);
 });
 
 test("duplicate protected tool names are deduped in stored order", (t) => {

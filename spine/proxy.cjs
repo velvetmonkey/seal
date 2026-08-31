@@ -25,6 +25,7 @@ const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
+const { evaluateSelection, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
@@ -42,7 +43,8 @@ const TERMINAL_REFUSALS = new Set([
 
 function createProxy(options) {
   const {
-    guardTools,       // the selected literal tool names
+    guardTools,       // legacy selected literal tool names
+    guardSelections,  // tool names with optional shell-owned predicates
     guardTool,        // legacy direct-call spelling for one selected tool
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
@@ -59,17 +61,22 @@ function createProxy(options) {
     elicitationTimeoutMs = ttlMs ?? DEFAULT_ELICITATION_TIMEOUT_MS,
     receiptCorrelationCapacity = DEFAULT_RECEIPT_CORRELATION_CAPACITY,
   } = options;
-  const selectedTools = Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []);
-  if (selectedTools.length === 0 || selectedTools.some((name) => typeof name !== "string" || name.length === 0)) {
+  const hasSelections = Array.isArray(guardSelections);
+  const selectedTools = hasSelections ? guardSelections
+    : Array.isArray(guardTools) ? guardTools.map((name) => ({ name, predicate: null }))
+      : (guardTool ? [{ name: guardTool, predicate: null }] : []);
+  if (selectedTools.length === 0) {
     throw new Error("guardTools is required");
   }
+  const selections = selectedTools.map(normalizeToolSelection);
+  if (selections.some((selection) => !selection.name)) throw new Error("guardTools is required");
   if (!Number.isSafeInteger(receiptCorrelationCapacity) || receiptCorrelationCapacity < 1) {
     throw new Error("receiptCorrelationCapacity must be a positive safe integer");
   }
   if (!Number.isSafeInteger(elicitationTimeoutMs) || elicitationTimeoutMs < 1) {
     throw new Error("elicitationTimeoutMs must be a positive safe integer");
   }
-  const guardedToolNames = new Set(selectedTools);
+  const guardedToolNames = new Set(selections.map((selection) => selection.name));
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
@@ -285,7 +292,7 @@ function createProxy(options) {
     return true;
   }
 
-  function decideGuarded(frame) {
+  function decideGuarded(frame, matchedSelection) {
     const params = frame.params || {};
     if (params.requestState !== undefined || params.inputResponses !== undefined) {
       blockForward(frame, "response_malformed", "client-supplied approval continuations are not accepted; answer the elicitation/create request");
@@ -307,6 +314,10 @@ function createProxy(options) {
       return;
     }
     const requestState = decision.result.requestState;
+    decision.elicitationParams = {
+      ...decision.elicitationParams,
+      message: `${decision.elicitationParams.message}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
+    };
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });
     const elicitationId = newElicitationId();
@@ -349,8 +360,15 @@ function createProxy(options) {
           : {};
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
-        decideGuarded(frame);
-        return;
+        const args = frame.params?.arguments ?? {};
+        const matching = selections
+          .filter((selection) => selection.name === frame.params.name)
+          .map((selection) => evaluateSelection(selection, args, line))
+          .find((result) => result.gate);
+        if (matching) {
+          decideGuarded(frame, matching);
+          return;
+        }
       }
       if (canForward(frame)) child.stdin.write(line + "\n");
     },
