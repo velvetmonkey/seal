@@ -239,13 +239,14 @@ function readLocalOverride(state) {
   const expected = protection?.localOverride?.definition ?? null;
   const declaredProject = protection?.localOverride?.claudeProjectRoot ?? state.paths.project;
   const declaredEntry = config?.projects?.[declaredProject]?.mcpServers?.[SERVER_NAME] ?? null;
+  const declaredMatches = declaredEntry !== null && expected !== null && isDeepStrictEqual(declaredEntry, expected);
   const exactMatches = Object.entries(config?.projects || {}).flatMap(([projectKey, projectConfig]) => {
     const candidate = projectConfig?.mcpServers?.[SERVER_NAME] ?? null;
     return candidate !== null && expected !== null && isDeepStrictEqual(candidate, expected)
       ? [{ project_key: projectKey, entry: candidate }]
       : [];
   });
-  const resolved = declaredEntry !== null
+  const resolved = declaredMatches
     ? { project_key: declaredProject, entry: declaredEntry }
     : exactMatches.length === 1 ? exactMatches[0] : { project_key: null, entry: null };
   return {
@@ -1346,10 +1347,24 @@ function certifyStep(state, step) {
   const failures = [];
   for (const caseId of STEP_CASES[step.name] || []) {
     const begin = loadSnapshot(state, caseId, "begin");
-    const end = loadSnapshot(state, caseId, "end");
+    let end = loadSnapshot(state, caseId, "end");
     if (!begin || !end) {
       failures.push(`${caseId}: begin or end evidence is absent or unreadable`);
       continue;
+    }
+    if (caseId === "activation") {
+      const recorded = end.local_override;
+      const current = readLocalOverride(state);
+      const rawInputMatches = recorded?.config_path === current.config_path &&
+        recorded?.present === current.present && recorded?.sha256 === current.sha256 && recorded?.bytes === current.bytes;
+      if (!rawInputMatches) {
+        failures.push(`${caseId}: recorded local override config input changed after the snapshot`);
+        continue;
+      }
+      // entry is derived from the recorded config and the protection state.
+      // Recompute it after checking that the recorded config input is unchanged.
+      end = { ...end, local_override: { ...recorded, project_key: current.project_key, entry: current.entry, exact_definition_matches: current.exact_definition_matches } };
+      say("  CERTIFYING activation from recorded raw local override evidence");
     }
     const outcome = OBSERVERS[caseId](state, begin, end);
     if (!outcome.observed) {
@@ -1365,7 +1380,17 @@ function next(state) {
   const step = STEPS[state.step_index];
   if (!step) refuse("run_complete", "every step of this run has already been taken");
   const current = state.steps[step.name] || {};
-  if (current.attempted === true) certifyStep(state, step);
+  if (current.attempted === true) {
+    certifyStep(state, step);
+    say(`  CERTIFIED ${step.name} from its recorded evidence`);
+    state.step_index += 1;
+    writeCurrentStep(state);
+    saveState(state);
+    const following = STEPS[state.step_index];
+    say("");
+    say(following ? `Next: cc-harness next --run-dir ${state.paths.run}   (${following.name})` : "The run is complete.");
+    return;
+  }
   say(`Step ${state.step_index + 1}/${STEPS.length}: ${step.name}`);
   const currentStepPath = writeCurrentStep(state);
   say(`  current instruction: ${currentStepPath}`);

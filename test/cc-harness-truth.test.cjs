@@ -231,6 +231,24 @@ test("activation refuses when the local notes override was not selected or conne
   assert.equal(harness.loadState(runDir).step_index, 0);
 });
 
+test("an attempted activation certifies by recomputing a stale derived local entry from unchanged raw config", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-stale-activation-entry-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  const endPath = path.join(runDir, "snapshots", "activation.end.json");
+  const end = JSON.parse(fs.readFileSync(endPath, "utf8"));
+  assert.notEqual(end.local_override.entry, null);
+  end.local_override.entry = null;
+  fs.writeFileSync(endPath, `${JSON.stringify(end, null, 2)}\n`);
+  const state = harness.loadState(runDir);
+  state.step_index = 0;
+  state.steps.activation.attempted = true;
+  harness.saveState(state);
+
+  assert.doesNotThrow(() => harness.next(harness.loadState(runDir)));
+  assert.equal(harness.loadState(runDir).step_index, 1);
+});
+
 test("missing_launcher certifies recorder facts without stand-in screen text", () => {
   const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-missing-launcher-absence-"));
   const { harness, runDir } = initSyntheticRun(workspace);

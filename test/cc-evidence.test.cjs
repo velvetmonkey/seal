@@ -171,6 +171,25 @@ test("local override lookup resolves only the exact protected definition when th
   assert.equal(harness.readLocalOverride(state).entry, null, "an ambiguous exact definition must not certify any project");
 });
 
+test("local override lookup ignores a foreign declared entry and uses one exact fallback", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-declared-foreign-"));
+  const home = path.join(workspace, "home");
+  const protectState = path.join(workspace, "protect.json");
+  fs.mkdirSync(home, { recursive: true });
+  const expected = { type: "stdio", command: "/installed/seal", args: ["__proxy", "--protect-state", protectState], env: {} };
+  const foreign = { type: "stdio", command: "/foreign/server", args: [], env: {} };
+  fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify({ projects: {
+    "/declared/project": { mcpServers: { notes: foreign } },
+    "/client/recorded/project": { mcpServers: { notes: expected } },
+  } }));
+  fs.writeFileSync(protectState, JSON.stringify({ localOverride: { claudeProjectRoot: "/declared/project", definition: expected } }));
+
+  const resolved = harness.readLocalOverride({ paths: { home, project: "/project", protectState } });
+  assert.deepEqual(resolved.entry, expected);
+  assert.equal(resolved.project_key, "/client/recorded/project");
+  assert.equal(resolved.exact_definition_matches, 1);
+});
+
 test("activation refusal names a false local proxy entry", () => {
   const outcome = {
     observed: false,
