@@ -289,36 +289,26 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
     `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)`,
     "gm",
   );
-  let canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
-  for (const [current, reviewed] of [
-    [
-      "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
-      "macOS source portability is CI-exercised for install, demo and receipt checking.\nProtect is not supported on macOS yet. Linux x86-64 is the supported Protect path.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
-    ],
-    [
-      "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
-      "newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.",
-    ],
-  ]) canonical = canonical.replace(current, reviewed);
+  const canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
   const expected = crypto.createHash("sha256")
     .update(canonical)
     .digest("hex");
   assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
 });
 
-test("reviewed-guide canonicalizers disclose every unpinned canonicalized slot", () => {
-  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored release-version slot. This canonicalizer maps two platform-support passages to their reviewed prior text so platform-support changes do not move GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges. The pin covers all other guide bytes.";
+test("reviewed-guide canonicalizers disclose the only unpinned canonicalized slot", () => {
+  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one anchored release-version slot. This canonicalizer maps only that slot to a stable marker before hashing. GUIDE_SHA256 does not cover the generated version slot. The pin covers every other byte in the guide.";
   const expectedCopies = new Map([["scripts/sync-version.cjs", 2], ["test/guide-tokens.test.mjs", 1]]);
   const missing = [...expectedCopies].filter(([file, expected]) => {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8");
-    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){4}/gu)]
+    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){3}/gu)]
       .map((match) => match[0].replace(/^\/\/ ?/gmu, "").replace(/\s+/gu, " ").trim());
     return comments.length !== expected || comments.some((comment) => comment !== requiredComment);
   }).map(([file]) => file);
   assert.deepEqual(
     missing,
     [],
-    `reviewed-guide canonicalizer comments must name the release-version slot and two platform-support passages, state that the pin does not cover their canonicalized bytes, and limit pin coverage to all other guide bytes; missing: ${missing.join(", ")}`,
+    `reviewed-guide canonicalizer comments must name the only generated release-version slot, state that the pin does not cover it, and state that the pin covers every other guide byte; missing: ${missing.join(", ")}`,
   );
 });
 

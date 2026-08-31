@@ -14,37 +14,21 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "dd785473baa5573b4dbc604fc2d485f67c7850d17a10b2bcf30415f875610949";
+const GUIDE_SHA256 = "f2811872fdbc9456266c01b3707309932926493ea02cf3831ad0b58a7fae8dda";
 
-// REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the anchored
-// release-version slot. This canonicalizer maps two platform-support passages
-// to their reviewed prior text so platform-support changes do not move
-// GUIDE_SHA256. The pin does not cover these three canonicalized byte ranges.
-// The pin covers all other guide bytes.
+// REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one
+// anchored release-version slot. This canonicalizer maps only that slot to a
+// stable marker before hashing. GUIDE_SHA256 does not cover the generated
+// version slot. The pin covers every other byte in the guide.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
 const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64\\.$)", "gm");
-const GENERATED_PLATFORM_SLOTS = [
-  [
-    "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.\nWindows, Linux ARM and other unsupported installations refuse without changing files.",
-    "macOS source portability is CI-exercised for install, demo and receipt checking.\nProtect is not supported on macOS yet. Linux x86-64 is the supported Protect path.\nWindows, Linux ARM and other unsupported installations refuse without changing files."
-  ],
-  [
-    "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
-    "newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet."
-  ]
-];
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;
   const matches = [...text.matchAll(GENERATED_VERSION_SLOT)];
   assert.equal(matches.length, 1, `${file}: expected exactly one generated release-version slot containing ${EXPECTED_RELEASE_VERSION}`);
-  let canonical = text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
-  for (const [current, reviewed] of GENERATED_PLATFORM_SLOTS) {
-    assert.equal(canonical.split(current).length - 1, 1, `${file}: expected exactly one generated platform-support slot`);
-    canonical = canonical.replace(current, reviewed);
-  }
-  return canonical;
+  return text.replace(GENERATED_VERSION_SLOT, "v<generated-version>");
 }
 
 // Where refusal tokens live and the shapes they are minted in. A new refusal
@@ -201,6 +185,10 @@ test("whole-file pin rejects locator defeats and earlier claim tampering", () =>
     ["backtick-different heading", text.replace(heading, "### read_failed")],
     ["deleted reviewed body", text.replace("Receipt refusals use the same tokens", "Receipt refusals use different tokens")],
     ["deleted reviewed sentence", text.replace("there is no second receipt format", "there is another receipt format")],
+    ["changed macOS Protect support", text.replace(
+      "newer. Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
+      "newer. Seal supports install, demo, and receipt checking on macOS x64/arm64.",
+    )],
     ["novel assertion", `${text}\n${falseClaim}\n`],
     ["deleted heading", text.replace(heading, "")],
     ["renamed heading", text.replace(heading, "### `receipt_read_failed`")],
