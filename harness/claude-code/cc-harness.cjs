@@ -365,8 +365,8 @@ function stripOsc8Chunks(chunks) {
   let unterminated = 0;
   for (let index = 0; index < stream.length;) {
     // xterm documents Ps as one or more digits: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html.
-    // That documents 08 as numeric. ASSUMED: terminals tolerate ASCII space or tab
-    // before the separator. No xterm is available on this host to measure it.
+    // That documents 08 as numeric. tmux on this host accepts ASCII space or tab
+    // before the separator.
     // Accept only 8 or 08, then ASCII space or tab. Exclude other padding,
     // other whitespace, and other OSC command numbers.
     const introducer = /^(?:\u001B\]|\u009D)0?8[ \t]*;/.exec(stream.slice(index));
