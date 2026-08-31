@@ -50,3 +50,28 @@ test("macOS Protect scanner rejects a missing install-guide support sentence", (
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /docs\/start\/install\.md must state current macOS Protect support twice; found 1/);
 });
+
+test("macOS Protect scanner rejects execution evidence in different wording", (t) => {
+  const root = scratch(t);
+  writeFileSync(join(root, "docs", "new-macos-protect-backing.md"), [
+    "macOS Protect runs correctly because the Darwin integration test passed.",
+    "A CI job confirms that Protect can execute on macOS.",
+    "Successful checks demonstrate working macOS Protect on both Darwin architectures.",
+  ].join("\n\n"));
+  const result = run(root);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#1 names a test as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#2 names a test as backing for macOS Protect execution/);
+  assert.match(result.stderr, /new-macos-protect-backing\.md#3 names a test as backing for macOS Protect execution/);
+});
+
+test("macOS Protect scanner allows table and helper-readiness evidence", (t) => {
+  const root = scratch(t);
+  writeFileSync(join(root, "docs", "legitimate-macos-protect-evidence.md"), [
+    "The platform table is backed by tests for macOS Protect support.",
+    "Tests confirm that the macOS helper is ready for Protect.",
+  ].join("\n\n"));
+  const result = run(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stderr, /legitimate-macos-protect-evidence\.md/);
+});

@@ -44,7 +44,8 @@ the Node CLI this repository ships.
    Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
    macOS x64/arm64. Windows, Linux ARM and other platforms are unsupported.
 2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
-   the same boundary with citations.
+   the historical rc.3 boundary with its historical citations. It differs from
+   the current macOS Protect boundary in the platform table above.
 
 ## I want to check the evidence myself
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Scan the shipped prose and CLI help for macOS Protect claims. The platform
 // table is the fact. Historical release notes remain historical records.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -58,11 +58,18 @@ function sentences(block) {
 }
 
 function backsMacosProtectExecution(block) {
-  const hasExecutionLimit = /macOS Protect execution is not exercised in CI\./iu.test(block);
   return sentences(block).find((sentence) => {
-    const namesTestAsBacking = /\btest\b/iu.test(sentence) && /\bback(?:s|ing)?\b/iu.test(sentence);
-    const namesExecutionDirectly = /macOS Protect execution/iu.test(sentence);
-    return namesTestAsBacking && (hasExecutionLimit || namesExecutionDirectly);
+    // This is a language guard, not a list of forbidden sentences. It catches
+    // an evidence relationship between macOS Protect execution and a test,
+    // check, CI job, workflow, or their result. It allows evidence for the
+    // platform table and helper readiness because those are not execution.
+    const namesMacosProtect = /(?:macOS[^.!?]{0,120}Protect|Protect[^.!?]{0,120}macOS)/iu.test(sentence);
+    const namesEvidenceSource = /\b(?:test(?:s|ed)?|check(?:s|ed)?|CI|job(?:s)?|workflow(?:s)?)\b/iu.test(sentence);
+    const namesEvidenceRelationship = /\b(?:because|back(?:s|ed|ing)?|evidence|proof|demonstrat(?:e|es|ed|ing)|show(?:s|ed|ing)?|confirm(?:s|ed|ing)?|establish(?:es|ed|ing)?|verif(?:y|ies|ied|ying)|prove(?:s|d)?|pass(?:es|ed|ing)?)\b/iu.test(sentence);
+    const namesExecution = /\b(?:execution|execute(?:s|d|ing)?|run(?:s|ning)?|work(?:s|ed|ing)?|function(?:s|al|ality)?|behavio(?:u)?r|live)\b/iu.test(sentence);
+    const namesLegitimateNonExecutionSubject = /\b(?:platform\s+table|support\s+table|support\s+matrix|helper\s+readiness|helper\s+is\s+ready|readiness|source\s+portability|install|demo|receipt\s+checking)\b/iu.test(sentence);
+    return namesMacosProtect && namesEvidenceSource && namesEvidenceRelationship
+      && namesExecution && !namesLegitimateNonExecutionSubject;
   });
 }
 
