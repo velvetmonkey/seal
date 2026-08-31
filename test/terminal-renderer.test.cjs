@@ -2,11 +2,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const test = require("node:test");
-const { renderCast } = require("../harness/claude-code/terminal-renderer.cjs");
+const path = require("node:path");
+const { RENDERER_IDENTITY, renderCast, rendererIdentity } = require("../harness/claude-code/terminal-renderer.cjs");
 
 function fixture(events, width = 20, height = 3) {
-  fs.mkdirSync("/home/monkey/scratch/castrender3", { recursive: true });
-  const directory = fs.mkdtempSync("/home/monkey/scratch/castrender3/renderer-test-");
+  fs.mkdirSync("/home/monkey/scratch/castrender5", { recursive: true });
+  const directory = fs.mkdtempSync("/home/monkey/scratch/castrender5/renderer-test-");
   const cast = `${directory}/fixture.cast`;
   fs.writeFileSync(cast, [
     JSON.stringify({ version: 2, width, height }),
@@ -43,17 +44,65 @@ test("line feeds preserve seal-accepted-note after it scrolls out of a DECSTBM r
   const cast = fixture([
     "\u001b[1;2r\u001b[1;1Hseal-accepted-note\r\nnext\r\n\u001b[1;1H                  ",
   ], 20, 3);
-  assert.match(renderCast(cast), /seal-accepted-note/, "seal-accepted-note is missing after line-feed scrolling");
+  const transcript = renderCast(cast);
+  assert.equal((transcript.match(/seal-accepted-note/g) || []).length, 1, "line-feed scrolling must retain one seal-accepted-note");
 });
 
 test("CSI S preserves seal-accepted-note after it scrolls out of a DECSTBM region", () => {
   const cast = fixture([
     "\u001b[1;3r\u001b[1;1Hseal-accepted-note\u001b[1S\u001b[1;1H                  ",
   ], 20, 3);
-  assert.match(renderCast(cast), /seal-accepted-note/, "seal-accepted-note is missing after CSI S scrolling");
+  const transcript = renderCast(cast);
+  assert.equal((transcript.match(/seal-accepted-note/g) || []).length, 1, "CSI S scrolling must retain one seal-accepted-note");
 });
 
 test("CSI T scrolls the DECSTBM region down", () => {
   const cast = fixture(["\u001b[1;3rone\r\ntwo\r\nthree\u001b[1T"], 20, 3);
   assert.match(renderCast(cast), /\n\none\ntwo\n/);
+});
+
+test("source-layer redaction closes the width-20 UUID wrap", () => {
+  const cast = fixture(["aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"], 20, 3);
+  const transcript = renderCast(cast);
+  assert.match(transcript, /\[REDACTED-SESSION-ID\]/);
+  assert.doesNotMatch(transcript, /aaaaaaaa-bbbb-4ccc-8/);
+  assert.doesNotMatch(transcript, /ddd-eeeeeeeeeeee/);
+});
+
+test("source-layer redaction closes a UUID split by a cursor move", () => {
+  const cast = fixture(["aaaaaaaa-bbbb-4ccc-8\u001b[2;1Hddd-eeeeeeeeeeee"], 20, 3);
+  const transcript = renderCast(cast);
+  assert.match(transcript, /\[REDACTED-SESSION-ID\]/);
+  assert.doesNotMatch(transcript, /aaaaaaaa-bbbb-4ccc-8/);
+  assert.doesNotMatch(transcript, /ddd-eeeeeeeeeeee/);
+});
+
+test("source-layer redaction closes a wrapped Claude Code session URL", () => {
+  const cast = fixture(["https://claude.ai/code/session_FABRICATED-SESSION-ONLY"], 20, 4);
+  const transcript = renderCast(cast);
+  assert.match(transcript, /\[REDACTED-SESSION-URL\]/);
+  assert.doesNotMatch(transcript, /claude\.ai\/code\/session_/);
+  assert.doesNotMatch(transcript, /FABRICATED-SESSION-ONLY/);
+});
+
+test("UUID shape redaction includes version 7 and bare session identifiers", () => {
+  const cast = fixture(["00000000-0000-7000-8000-000000000000 session_FABRICATED_ONLY"], 80, 3);
+  const transcript = renderCast(cast);
+  assert.equal((transcript.match(/\[REDACTED-SESSION-ID\]/g) || []).length, 2);
+  assert.doesNotMatch(transcript, /00000000-0000-7000-8000-000000000000/);
+  assert.doesNotMatch(transcript, /session_FABRICATED_ONLY/);
+});
+
+test("ULID and 32-character hex shapes remain out of session-identifier scope", () => {
+  const ulid = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  const hex = "0123456789abcdef0123456789abcdef";
+  const transcript = renderCast(fixture([`${ulid} ${hex}`], 80, 3));
+  assert.match(transcript, new RegExp(ulid));
+  assert.match(transcript, new RegExp(hex));
+});
+
+test("renderer identity derives from source and moves with a source edit", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../harness/claude-code/terminal-renderer.cjs"));
+  assert.equal(RENDERER_IDENTITY, rendererIdentity(source));
+  assert.notEqual(rendererIdentity(source), rendererIdentity(Buffer.concat([source, Buffer.from("\n// behaviour edit\n")])));
 });

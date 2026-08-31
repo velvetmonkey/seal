@@ -41,7 +41,8 @@ const HONESTY_LABEL = "LIMIT: this checker establishes internal consistency, rea
 const REQUIRED_FILES = ["rendered-transcript.txt", "proxy.jsonl", "child.jsonl", "before-after.json", "snapshots.json"];
 const IDENTIFIER_PATTERNS = [
   { name: "Claude Code session URL", pattern: /claude\.ai\/code\/session_[A-Za-z0-9_-]+/u },
-  { name: "UUID-shaped session identifier", pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/iu },
+  { name: "bare Claude Code session identifier", pattern: /\bsession_[A-Za-z0-9_-]+\b/u },
+  { name: "UUID-shaped session identifier", pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/iu },
 ];
 const TRANSCRIPT_PRESENCE = {
   accept: ["seal-accepted-note", "append_note"],
@@ -282,7 +283,11 @@ function checkCasts(packDir, manifest, report) {
   return synthetic;
 }
 
-function checkRenderingProvenance(packDir, manifest, report) {
+function rendererIdentity(source) {
+  return `seal-terminal-renderer/js-screen-sha256-${sha256(source)}`;
+}
+
+function checkRenderingProvenance(packDir, manifest, report, { repoRoot }) {
   const rendering = manifest.rendering;
   if (!rendering || typeof rendering !== "object") {
     report.refuse("rendering_provenance_absent", "the manifest carries no rendering provenance");
@@ -291,7 +296,16 @@ function checkRenderingProvenance(packDir, manifest, report) {
   for (const field of ["raw_recording_digest", "renderer_identity", "renderer_result", "public_derived_transcript_digest"]) {
     if (rendering[field] === undefined) report.refuse("rendering_provenance_absent", `the manifest carries no ${field}`);
   }
-  if (rendering.renderer_identity !== "seal-terminal-renderer/js-screen-v2") report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}`);
+  const rendererPath = join(repoRoot, "harness/claude-code/terminal-renderer.cjs");
+  let expectedIdentity;
+  try {
+    expectedIdentity = rendererIdentity(readFileSync(rendererPath));
+  } catch (error) {
+    report.refuse("renderer_source_unreadable", `${rendererPath} cannot be read: ${error.message}`);
+  }
+  if (expectedIdentity && rendering.renderer_identity !== expectedIdentity) {
+    report.refuse("renderer_identity_unknown", `the manifest names renderer ${JSON.stringify(rendering.renderer_identity)}, not source-derived identity ${JSON.stringify(expectedIdentity)}`);
+  }
   if (rendering.renderer_result !== "scrollback-and-final-visible-frame") report.refuse("renderer_result_unknown", `the manifest names renderer result ${JSON.stringify(rendering.renderer_result)}`);
   const entries = Array.isArray(rendering.recordings) ? rendering.recordings : [];
   for (const entry of entries) {
@@ -594,7 +608,7 @@ function checkPack(packDir, options) {
   const observed = checkCases(manifest, report);
   const childRecords = checkChildLog(packDir, manifest, report);
   const castSynthetic = checkCasts(packDir, manifest, report);
-  checkRenderingProvenance(packDir, manifest, report);
+  checkRenderingProvenance(packDir, manifest, report, options);
   const processSynthetic = checkProcessProvenance(childRecords, manifest, report, options);
   checkSynthetic(packDir, manifest, report, options, { processSynthetic, castSynthetic });
   checkFixtureRevision(manifest, report, options);

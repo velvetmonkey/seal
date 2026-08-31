@@ -86,7 +86,7 @@ elicitation, or declines to fall back.
 |---|---|
 | `activation` | After restart, Claude Code selects the local Seal override |
 | `negotiation` | The proxy records the retry-model interaction |
-| `approval_shown` | The terminal recording shows the complete exact-call dialog |
+| `approval_shown` | The rendered transcript carries the dialog text that the screen model retained for the exact call |
 | `before_approval` | Child call count remains `0` |
 | `accept` | Child call count becomes exactly `1`; expected effect hash matches |
 | `decline` | Child call count remains `0` |
@@ -183,12 +183,15 @@ publish raw `.cast` files instead of the required rendered transcript.
 revision, the eight expected cases with their required observations, what was
 observed, the renderer provenance, and the SHA-256 and byte length of every
 other file in the pack. The rendered transcript is derived from the raw cast.
-It contains lines that scrolled off the top, followed by the final visible frame.
+It contains lines displaced by modeled upward scrolling. The modeled final
+visible frame follows these lines.
 If a line is repainted before it scrolls off, the transcript carries its final
 content once. Earlier versions of that line are lost.
-It removes terminal control sequences, not content. Visible text can still
-contain secrets or other sensitive content. This pack is not safe to publish
-without inspection.
+It removes terminal control sequences. It also redacts Claude Code session
+URLs, bare `session_` identifiers, and UUID-shaped identifiers. Other visible
+text can still contain secrets or sensitive content. A ULID or a 32-character
+hex string is not a Claude Code session identifier by shape alone, so these
+forms remain visible. This pack is not safe to publish without inspection.
 
 ## The checker
 
@@ -211,8 +214,9 @@ client executable identity from process ancestry the fixture read from `/proc`
 while the client and Seal proxy were alive. It also reads every rendered
 transcript; a synthetic fixture banner in a transcript is synthetic evidence,
 not ignored data. It refuses a transcript that contains a Claude Code session
-URL, a UUID-shaped session identifier, or a C0/C1 control byte other than LF.
-Other identifier formats can pass this check.
+URL, a bare `session_` identifier, a UUID-shaped session identifier, or a
+C0/C1 control byte other than LF. A ULID or a 32-character hex string can pass
+this check because its text shape does not identify it as a Claude Code session.
 
 For a release claim, the operator must additionally supply the SHA-256 of the
 actual Claude Code executable they independently verified (not a hash copied

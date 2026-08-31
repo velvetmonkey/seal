@@ -1,25 +1,70 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// This renderer is deliberately small. It renders terminal scrollback and the
-// final visible screen from an asciinema v2 cast. It does not rewrite or
-// sanitise a cast.
+// This renderer is deliberately small. It renders modeled terminal scrollback
+// and the modeled final visible screen from an asciinema v2 cast. It redacts
+// named session identifier shapes, but it does not otherwise sanitise a cast.
 //
 // LIMIT: the rendered transcript loses timing, cursor movement, colour,
 // non-ASCII glyph fidelity, and the ability to replay with asciinema. It is
 // not equivalent to the raw recording. A line repainted before it scrolls off
 // emits only its final cells once. Non-ASCII cells become '?' so the public
 // file is ASCII plus LF.
+const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 
-// This version changes when renderer behaviour changes. It identifies the
-// rendering rules, not the recorded terminal or the Seal artifact.
-const RENDERER_IDENTITY = "seal-terminal-renderer/js-screen-v2";
+// The identity is derived from every renderer source byte. A source edit must
+// therefore move the identity without a separate human version choice.
+function rendererIdentity(source) {
+  return `seal-terminal-renderer/js-screen-sha256-${createHash("sha256").update(source).digest("hex")}`;
+}
+const RENDERER_IDENTITY = rendererIdentity(fs.readFileSync(__filename));
 const RENDERER_RESULT = "scrollback-and-final-visible-frame";
 const SESSION_URL = /claude\.ai\/code\/session_[A-Za-z0-9_-]+/giu;
-// Redact Claude Code session URLs and RFC 4122 UUID versions 1 through 5.
-// Other identifier classes, including UUID version 7, pass unchanged.
-const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
+const SESSION_ID = /\bsession_[A-Za-z0-9_-]+\b/giu;
+// Match the displayed UUID text shape. Do not infer an RFC version or variant.
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
+const INTERNAL_SESSION_URL = "\u{f0000}";
+const INTERNAL_SESSION_ID = "\u{f0001}";
+const REDACTIONS = [
+  { pattern: SESSION_URL, marker: INTERNAL_SESSION_URL },
+  { pattern: SESSION_ID, marker: INTERNAL_SESSION_ID },
+  { pattern: UUID, marker: INTERNAL_SESSION_ID },
+];
+
+// Redact decoded printable text before terminal controls place it into rows.
+// CSI cursor operations do not split this text layer. Line controls do split it.
+function redactOperations(operations) {
+  let decoded = "";
+  const decodedToOperation = [];
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (operation.type === "text") {
+      decoded += operation.value;
+      for (let unit = 0; unit < operation.value.length; unit += 1) decodedToOperation.push(index);
+    } else if (["lf", "cr", "bs", "ht"].includes(operation.type)) {
+      decoded += "\n";
+      decodedToOperation.push(null);
+    }
+  }
+
+  const occupied = new Set();
+  for (const { pattern, marker } of REDACTIONS) {
+    pattern.lastIndex = 0;
+    for (const match of decoded.matchAll(pattern)) {
+      const positions = [];
+      for (let offset = match.index; offset < match.index + match[0].length; offset += 1) {
+        const operationIndex = decodedToOperation[offset];
+        if (operationIndex !== null && !positions.includes(operationIndex)) positions.push(operationIndex);
+      }
+      if (positions.length === 0 || positions.some((position) => occupied.has(position))) continue;
+      operations[positions[0]].value = marker;
+      for (const position of positions.slice(1)) operations[position].value = "";
+      for (const position of positions) occupied.add(position);
+    }
+  }
+  return operations;
+}
 
 function number(value, fallback) {
   const parsed = Number(value);
@@ -79,13 +124,13 @@ class Screen {
     this.x += 1;
   }
 
-  params() {
-    const parameters = this.csi.slice(0, -1);
+  params(csi = this.csi) {
+    const parameters = csi.slice(0, -1);
     return parameters.replace(/^[>?]*/u, "").split(";").map((part) => Number(part || 0));
   }
 
-  csiCommand(command) {
-    const values = this.params();
+  csiCommand(command, csi = this.csi) {
+    const values = this.params(csi);
     const first = values[0] || 1;
     switch (command) {
       case "A": this.y = Math.max(0, this.y - first); break;
@@ -129,6 +174,7 @@ class Screen {
   }
 
   feed(text) {
+    const operations = [];
     for (const char of text) {
       const code = char.codePointAt(0);
       if (this.state === "osc") {
@@ -144,30 +190,45 @@ class Screen {
       }
       if (this.state === "csi") {
         this.csi += char;
-        if (code >= 0x40 && code <= 0x7e) { this.csiCommand(char); this.state = "text"; this.csi = ""; }
+        if (code >= 0x40 && code <= 0x7e) {
+          operations.push({ type: "csi", command: char, csi: this.csi });
+          this.state = "text";
+          this.csi = "";
+        }
         continue;
       }
       if (this.state === "escape") {
         // Handled ESC: [, ], 7, and 8. Ignored ESC: every other final byte.
         if (char === "[") { this.state = "csi"; this.csi = ""; }
         else if (char === "]") { this.state = "osc"; this.osc = ""; }
-        else if (char === "7") { this.saved = { x: this.x, y: this.y }; this.state = "text"; }
-        else if (char === "8") { this.x = this.saved.x; this.y = this.saved.y; this.state = "text"; }
+        else if (char === "7") { operations.push({ type: "save" }); this.state = "text"; }
+        else if (char === "8") { operations.push({ type: "restore" }); this.state = "text"; }
         else this.state = "text";
         continue;
       }
       if (char === "\u001b") { this.state = "escape"; continue; }
       if (code === 0x9b) { this.state = "csi"; this.csi = ""; continue; }
       if (code === 0x9d) { this.state = "osc"; this.osc = ""; continue; }
-      if (code === 0x0a) { this.lineFeed(); continue; }
-      if (code === 0x0d) { this.x = 0; continue; }
-      if (code === 0x08) { this.x = Math.max(0, this.x - 1); continue; }
-      if (code === 0x09) { this.x = Math.min(this.width, this.x + (8 - (this.x % 8))); continue; }
+      if (code === 0x0a) { operations.push({ type: "lf" }); continue; }
+      if (code === 0x0d) { operations.push({ type: "cr" }); continue; }
+      if (code === 0x08) { operations.push({ type: "bs" }); continue; }
+      if (code === 0x09) { operations.push({ type: "ht" }); continue; }
       // Handled C0: LF, CR, BS, and HT. Ignored C0/C1: every other control.
       if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
-      this.put(char);
+      operations.push({ type: "text", value: char });
     }
     if (this.state === "escape") this.state = "text";
+    for (const operation of redactOperations(operations)) {
+      if (operation.type === "text") {
+        if (operation.value) this.put(operation.value);
+      } else if (operation.type === "csi") this.csiCommand(operation.command, operation.csi);
+      else if (operation.type === "save") this.saved = { x: this.x, y: this.y };
+      else if (operation.type === "restore") { this.x = this.saved.x; this.y = this.saved.y; }
+      else if (operation.type === "lf") this.lineFeed();
+      else if (operation.type === "cr") this.x = 0;
+      else if (operation.type === "bs") this.x = Math.max(0, this.x - 1);
+      else if (operation.type === "ht") this.x = Math.min(this.width, this.x + (8 - (this.x % 8)));
+    }
   }
 
   text() {
@@ -182,19 +243,24 @@ function parseCast(castPath) {
   if (lines.length === 0) throw new Error("cast is empty");
   const header = JSON.parse(lines[0]);
   const screen = new Screen(number(header.width, 80), number(header.height, 24));
+  let payload = "";
   for (const line of lines.slice(1)) {
     const event = JSON.parse(line);
-    if (Array.isArray(event) && event[1] === "o") screen.feed(String(event[2] ?? ""));
+    if (Array.isArray(event) && event[1] === "o") payload += String(event[2] ?? "");
   }
-  return screen.text();
+  screen.feed(payload);
+  return screen.text()
+    .replaceAll(INTERNAL_SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]");
 }
 
 function renderCast(castPath) {
   const visible = parseCast(castPath)
     .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
     .replace(UUID, "[REDACTED-SESSION-ID]")
     .replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
   return `This is a rendered terminal transcript. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
-module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast };
+module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };

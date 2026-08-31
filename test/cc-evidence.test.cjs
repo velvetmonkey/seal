@@ -173,6 +173,25 @@ function rehash(copy, name) {
   });
 }
 
+function rewriteTranscript(copy, name, edit) {
+  const file = path.join(copy.dir, name);
+  const text = edit(fs.readFileSync(file, "utf8"));
+  fs.writeFileSync(file, text);
+  const bytes = Buffer.from(text);
+  const fileDigest = digest(bytes);
+  copy.rewriteManifest((manifest) => {
+    const fileEntry = manifest.files.find((entry) => entry.path === name);
+    fileEntry.sha256 = fileDigest;
+    fileEntry.bytes = bytes.length;
+    const caseId = manifest.environment.recordings.find((recording) => recording.file === name).case;
+    const rendering = manifest.rendering.recordings.find((entry) => entry.case === caseId);
+    rendering.public_derived_transcript_digest = { sha256: fileDigest, bytes: bytes.length };
+    const publicDigest = manifest.rendering.public_derived_transcript_digest.find((entry) => entry.case === caseId);
+    publicDigest.sha256 = fileDigest;
+    publicDigest.bytes = bytes.length;
+  });
+}
+
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -268,6 +287,31 @@ test("presence controls refuse a rehashed transcript with its evidence removed",
   assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript\.txt does not carry required "seal-accepted-note" content$/m);
   assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-decline\.txt does not carry required "seal-declined-note" content$/m);
   assert.match(result.out, /^REFUSE rendered_transcript_content_absent: rendered-transcript-missing-launcher\.txt does not carry fallback refusal content$/m);
+});
+
+test("the checker refuses version-7 UUID shape and a bare session identifier", () => {
+  const cases = [
+    { value: "00000000-0000-7000-8000-000000000000", name: "UUID-shaped session identifier" },
+    { value: "session_FABRICATED_CHECKER_ONLY", name: "bare Claude Code session identifier" },
+  ];
+  for (const candidate of cases) {
+    const copy = copyOfPack();
+    rewriteTranscript(copy, "rendered-transcript.txt", (text) => `${text}${candidate.value}\n`);
+    const result = check([copy.dir, "--allow-synthetic"]);
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.out, new RegExp(`^REFUSE rendered_transcript_identifier_present: rendered-transcript\\.txt carries a ${candidate.name}$`, "m"), result.out);
+  }
+});
+
+test("the checker derives renderer identity from the renderer source", () => {
+  const copy = copyOfPack();
+  copy.rewriteManifest((manifest) => {
+    manifest.rendering.renderer_identity = "seal-terminal-renderer/js-screen-v2";
+    for (const entry of manifest.rendering.recordings) entry.renderer_identity = "seal-terminal-renderer/js-screen-v2";
+  });
+  const result = check([copy.dir, "--allow-synthetic"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^REFUSE renderer_identity_unknown: /m, result.out);
 });
 
 test("the checker refuses a manifest whose file hash does not match", () => {
