@@ -11,6 +11,7 @@ const ROOT = resolve(process.env.SEAL_MACOS_PROTECT_CLAIMS_ROOT ?? resolve(impor
 const { protectPlatformSupported } = require(resolve(ROOT, "spine/platform.cjs"));
 const SUPPORT = "supports Protect on Linux x86-64 and macOS x64/arm64";
 const HISTORICAL_RELEASE_NOTE = /^docs\/assurance\/RELEASE-NOTES-v.+-rc\.\d+\.md$/u;
+const FROZEN_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const TEXT_SUFFIX = /\.(?:md|html)$/u;
 const failures = [];
 
@@ -52,6 +53,19 @@ function contradictsUnsupportedFact(block) {
   return new RegExp(SUPPORT.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u").test(block);
 }
 
+function sentences(block) {
+  return block.match(/[^.!?]+[.!?]+/gu) ?? [block];
+}
+
+function backsMacosProtectExecution(block) {
+  const hasExecutionLimit = /macOS Protect execution is not exercised in CI\./iu.test(block);
+  return sentences(block).find((sentence) => {
+    const namesTestAsBacking = /\btest\b/iu.test(sentence) && /\bback(?:s|ing)?\b/iu.test(sentence);
+    const namesExecutionDirectly = /macOS Protect execution/iu.test(sentence);
+    return namesTestAsBacking && (hasExecutionLimit || namesExecutionDirectly);
+  });
+}
+
 const darwinX64 = protectPlatformSupported("darwin", "x64");
 const darwinArm64 = protectPlatformSupported("darwin", "arm64");
 if (darwinX64 !== darwinArm64) failures.push(`platform table disagrees for darwin-x64 (${darwinX64}) and darwin-arm64 (${darwinArm64})`);
@@ -62,6 +76,12 @@ for (const file of shippedFiles()) {
   const name = relative(ROOT, file);
   const blocks = claimBlocks(readFileSync(file, "utf8"));
   for (const [index, block] of blocks.entries()) {
+    if (name !== FROZEN_GUIDE) {
+      const backingSentence = backsMacosProtectExecution(block);
+      if (backingSentence) {
+        failures.push(`${name}#${index + 1} names a test as backing for macOS Protect execution: ${backingSentence.trim()}`);
+      }
+    }
     if (HISTORICAL_RELEASE_NOTE.test(name)) {
       historicalClaimCount += 1;
       console.log(`SKIP  ${name}#${index + 1} historical release claim`);
