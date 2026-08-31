@@ -33,6 +33,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { isDeepStrictEqual } = require("node:util");
 
 const HARNESS_SCHEMA = "seal.cc-harness/v1";
 const MANIFEST_SCHEMA = "seal.claude-code-evidence/v2";
@@ -144,6 +145,10 @@ function runEnv(state) {
   env.XDG_DATA_HOME = state.paths.data;
   env.XDG_CONFIG_HOME = state.paths.config;
   env.XDG_CACHE_HOME = state.paths.cache;
+  // Claude Code 2.1.251 uses PWD when it selects the project key for a local
+  // MCP server. spawnSync changes the operating-system cwd but preserves an
+  // inherited PWD unless the caller replaces it.
+  env.PWD = state.paths.project;
   env.SEAL_CC_RUN_DIR = state.paths.run;
   env.PATH = [state.paths.stubBin, path.join(state.paths.prefix, "bin"), process.env.PATH || ""].filter(Boolean).join(path.delimiter);
   return env;
@@ -229,8 +234,27 @@ function readLocalOverride(state) {
   const configPath = path.join(state.paths.home, ".claude.json");
   let config = null;
   try { config = readJson(configPath); } catch { config = null; }
-  const entry = config?.projects?.[state.paths.project]?.mcpServers?.[SERVER_NAME] ?? null;
-  return { config_path: configPath, ...digestOf(configPath), entry };
+  let protection = null;
+  try { protection = readJson(state.paths.protectState); } catch { protection = null; }
+  const expected = protection?.localOverride?.definition ?? null;
+  const declaredProject = protection?.localOverride?.claudeProjectRoot ?? state.paths.project;
+  const declaredEntry = config?.projects?.[declaredProject]?.mcpServers?.[SERVER_NAME] ?? null;
+  const exactMatches = Object.entries(config?.projects || {}).flatMap(([projectKey, projectConfig]) => {
+    const candidate = projectConfig?.mcpServers?.[SERVER_NAME] ?? null;
+    return candidate !== null && expected !== null && isDeepStrictEqual(candidate, expected)
+      ? [{ project_key: projectKey, entry: candidate }]
+      : [];
+  });
+  const resolved = declaredEntry !== null
+    ? { project_key: declaredProject, entry: declaredEntry }
+    : exactMatches.length === 1 ? exactMatches[0] : { project_key: null, entry: null };
+  return {
+    config_path: configPath,
+    ...digestOf(configPath),
+    project_key: resolved.project_key,
+    entry: resolved.entry,
+    exact_definition_matches: exactMatches.length,
+  };
 }
 
 function readProtectionState(state) {
@@ -660,6 +684,7 @@ function observeAccept(state, begin, end) {
       added[0]?.arguments?.note === NOTES.accept && end.effect.sha256 === expectedEffect,
     facts: {
       child_call_records_added: delta,
+      child_call_records_in_window: added.length,
       child_call_records_total: end.child_log.guarded_calls,
       call_arguments: added.map((record) => record.arguments),
       expected_effect_sha256: expectedEffect,
@@ -687,6 +712,7 @@ function observeDecline(state, begin, end) {
       end.child_log.guarded_calls === begin.child_log.guarded_calls && !declinedNoteInEffect,
     facts: {
       child_call_records_added: added.length,
+      child_call_records_at_start_of_window: begin.child_log.guarded_calls,
       child_call_records_total: end.child_log.guarded_calls,
       declined_note: NOTES.decline,
       declined_note_present_in_effect_file: declinedNoteInEffect,
@@ -743,11 +769,14 @@ function observeMissingLauncher(state, begin, end) {
 function observeUnprotect(state, begin, end) {
   const original = state.project.mcp_json_before_protect;
   const window = state.steps.unprotect || {};
+  const reportedOutsideSeal = /Sealed MCP route(?::| [^:]+:) - outside Seal/m.test(window.output || "");
+  const localOverrideRemoved = end.local_override.entry === null;
+  const projectShaUnchanged = end.mcp_json.sha256 === original.sha256;
+  const projectBytesUnchanged = end.mcp_json.bytes === original.bytes;
+  const localScopeAbsent = !/^ {2}Scope: Local config /m.test(end.claude_mcp_get.stdout);
   return {
-    observed: window.code === 0 && /Sealed MCP route(?::| [^:]+:) - outside Seal/m.test(window.output || "") &&
-      end.local_override.entry === null &&
-      end.mcp_json.sha256 === original.sha256 && end.mcp_json.bytes === original.bytes &&
-      !/^ {2}Scope: Local config /m.test(end.claude_mcp_get.stdout),
+    observed: window.code === 0 && reportedOutsideSeal && localOverrideRemoved &&
+      projectShaUnchanged && projectBytesUnchanged && localScopeAbsent,
     facts: {
       local_override_before: begin.local_override.entry,
       local_override_after: end.local_override.entry,
@@ -758,6 +787,11 @@ function observeUnprotect(state, begin, end) {
       mcp_json_bytes_after_unprotect: end.mcp_json.bytes,
       unprotect_output: (state.steps.unprotect || {}).output ?? null,
       unprotect_exit: window.code ?? null,
+      unprotect_reported_outside_seal: reportedOutsideSeal,
+      local_override_removed: localOverrideRemoved,
+      project_config_sha256_unchanged: projectShaUnchanged,
+      project_config_bytes_unchanged: projectBytesUnchanged,
+      claude_mcp_get_local_scope_absent: localScopeAbsent,
     },
   };
 }
@@ -1240,6 +1274,74 @@ const STEP_CASES = Object.freeze({
   unprotect: ["unprotect"],
 });
 
+function observerFailure(caseId, outcome) {
+  const facts = outcome.facts;
+  if (caseId === "activation") {
+    if (facts.protection_state_after !== "ACTIVE") return `protection state must be ACTIVE (observed ${facts.protection_state_after ?? "absent"})`;
+    if (facts.claude_mcp_get_exit !== 0) return `\`claude mcp get notes\` exit must be 0 (observed ${facts.claude_mcp_get_exit ?? "absent"})`;
+    if (!facts.claude_mcp_get_local_scope_selected) return "local scope must be selected";
+    if (!facts.local_override_is_recorded_seal_proxy) return "local entry must be the recorded Seal proxy";
+    if (facts.starts_whose_proxy_pid_is_the_recorded_lease <= 0) return "a fixture start must match the recorded Seal lease";
+    if (facts.starts_with_the_client_above_the_proxy <= 0) return "a fixture start must have the client above the Seal proxy";
+    if (facts.starts_not_launched_by_seal !== 0) return `direct fixture starts must equal 0 (observed ${facts.starts_not_launched_by_seal})`;
+  }
+  if (caseId === "negotiation") {
+    if (facts.retry_round_trips <= 0) return `retry_round_trips must be greater than 0 (observed ${facts.retry_round_trips})`;
+  }
+  if (caseId === "approval_shown") {
+    if (!facts.recorder_correspondence?.observed) return `accept.cast must correspond to the recorder output (${facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`;
+    const missingLine = facts.expected_dialog_lines?.find((entry) => !entry.found);
+    if (missingLine) return `accept.cast must contain the expected dialog line ${JSON.stringify(missingLine.line)}`;
+    if (facts.exact_call_elicitation_receipt_pairs.length === 0) return "the exact-call INPUT_REQUIRED/ALLOW receipt pair must be present";
+    if (facts.child_call_records_added !== 1) return `exactly one child-call record must be present during the dialog window (observed ${facts.child_call_records_added})`;
+    if (facts.exact_call_child_records_added !== 1) return `exactly one exact-call child-call record must be present (observed ${facts.exact_call_child_records_added})`;
+  }
+  if (caseId === "before_approval") {
+    if (facts.child_call_records_at_end_of_window !== 0) return `child_call_records_at_end_of_window must equal 0 (observed ${facts.child_call_records_at_end_of_window})`;
+    if (facts.child_call_records_added !== 0) return `child_call_records_added must equal 0 (observed ${facts.child_call_records_added})`;
+  }
+  if (caseId === "accept") {
+    if (facts.child_call_records_added !== 1) return `child_call_records_added must equal 1 (observed ${facts.child_call_records_added})`;
+    if (facts.child_call_records_total !== 1) return `child_call_records_total must equal 1 (observed ${facts.child_call_records_total})`;
+    if (facts.child_call_records_in_window !== 1) return `exactly one child-call record must be present in the accept window (observed ${facts.child_call_records_in_window})`;
+    if (facts.call_arguments[0]?.note !== NOTES.accept) return `the accepted child-call note must equal ${JSON.stringify(NOTES.accept)}`;
+    if (facts.observed_effect_sha256 !== facts.expected_effect_sha256) return `observed_effect_sha256 must equal expected_effect_sha256 (observed ${facts.observed_effect_sha256} and ${facts.expected_effect_sha256})`;
+  }
+  if (caseId === "decline") {
+    if (facts.exact_call_decline_receipt_pairs.length === 0) return "the exact-call INPUT_REQUIRED/BLOCK receipt pair must be present";
+    const dialog = facts.exact_call_dialog;
+    if (!dialog?.recorder_correspondence?.observed) return `decline.cast must correspond to the recorder output (${dialog?.recorder_correspondence?.reason || "correspondence evidence is absent"})`;
+    const missingLine = dialog.expected_dialog_lines?.find((entry) => !entry.found);
+    if (missingLine) return `decline.cast must contain the expected dialog line ${JSON.stringify(missingLine.line)}`;
+    if (facts.child_call_records_added !== 0) return `child_call_records_added must equal 0 (observed ${facts.child_call_records_added})`;
+    if (facts.child_call_records_total !== facts.child_call_records_at_start_of_window) return `child_call_records_total must remain ${facts.child_call_records_at_start_of_window} (observed ${facts.child_call_records_total})`;
+    if (facts.declined_note_present_in_effect_file) return "the declined note must be absent from the effect file";
+  }
+  if (caseId === "missing_launcher") {
+    if (facts.child_call_records_added !== 0) return `child_call_records_added must equal 0 (observed ${facts.child_call_records_added}); offending child-call records: ${JSON.stringify(facts.offending_child_call_records)}`;
+    if (facts.non_proxy_start_records_added !== 0) {
+      const start = facts.offending_non_proxy_start_records[0];
+      if (start.proxy_rejection === "digest at the wrong position") return `start ${JSON.stringify(start.argv)} has a proxy-shaped ancestor with a digest at the wrong position`;
+      if (start.proxy_rejection === "digest mismatch") return `start ${JSON.stringify(start.argv)} has a proxy-shaped ancestor with a digest mismatch`;
+      if (start.proxy_rejection === "digest absent") return `start ${JSON.stringify(start.argv)} has a proxy-shaped ancestor whose digest is absent or unreadable`;
+      return `start ${JSON.stringify(start.argv)} has no Seal proxy ancestor`;
+    }
+    if (facts.mcp_json_sha256_before !== facts.mcp_json_sha256_after) return `mcp_json_sha256_before must equal mcp_json_sha256_after (observed ${facts.mcp_json_sha256_before} and ${facts.mcp_json_sha256_after})`;
+    if (facts.launcher_absent_during_window !== true) return `launcher_absent_during_window must equal true (observed ${facts.launcher_absent_during_window})`;
+    if (facts.installed_tree_restored !== true) return `installed_tree_restored must equal true (observed ${facts.installed_tree_restored})`;
+    if (!facts.recorder_correspondence?.observed) return `missing_launcher.cast must correspond to the recorder output (${facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`;
+  }
+  if (caseId === "unprotect") {
+    if (facts.unprotect_exit !== 0) return `seal unprotect notes exit must be 0 (observed ${facts.unprotect_exit ?? "absent"})`;
+    if (!facts.unprotect_reported_outside_seal) return "seal unprotect notes must report the route outside Seal";
+    if (!facts.local_override_removed) return "the local override must be absent after unprotect";
+    if (!facts.project_config_sha256_unchanged) return `the project configuration sha256 must remain ${facts.mcp_json_sha256_before_protect} (observed ${facts.mcp_json_sha256_after_unprotect})`;
+    if (!facts.project_config_bytes_unchanged) return `the project configuration byte count must remain ${facts.mcp_json_bytes_before_protect} (observed ${facts.mcp_json_bytes_after_unprotect})`;
+    if (!facts.claude_mcp_get_local_scope_absent) return "local scope must be absent after unprotect";
+  }
+  return `observer conditions failed with facts ${JSON.stringify(facts)}`;
+}
+
 function certifyStep(state, step) {
   const failures = [];
   for (const caseId of STEP_CASES[step.name] || []) {
@@ -1251,52 +1353,7 @@ function certifyStep(state, step) {
     }
     const outcome = OBSERVERS[caseId](state, begin, end);
     if (!outcome.observed) {
-      if (caseId === "decline") {
-        const digest = outcome.facts.exact_call_dialog?.recording_digest;
-        if (!digest?.present) failures.push(`${caseId}: decline.cast is absent or unreadable (${digest?.reason || "no readable digest"})`);
-        else if (digest.bytes === 0) failures.push(`${caseId}: decline.cast is empty`);
-        else if (outcome.facts.exact_call_decline_receipt_pairs.length === 0) failures.push(`${caseId}: the exact-call BLOCK/declined receipt pair is absent`);
-        else if (!outcome.facts.exact_call_dialog?.recorder_correspondence?.observed) failures.push(`${caseId}: decline.cast does not correspond to the recorder output (${outcome.facts.exact_call_dialog?.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-        else failures.push(`${caseId}: the complete exact-call dialog is absent from decline.cast`);
-      } else if (caseId === "approval_shown" && !outcome.facts.recorder_correspondence?.observed) {
-        failures.push(`${caseId}: accept.cast does not correspond to the recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-      } else if (caseId === "approval_shown" && outcome.facts.exact_call_elicitation_receipt_pairs.length === 0) {
-        failures.push(`${caseId}: the exact-call INPUT_REQUIRED/ALLOW receipt pair is absent`);
-      } else if (caseId === "approval_shown" && outcome.facts.child_call_records_added !== 1) {
-        failures.push(`${caseId}: exactly one child-call record is required during the dialog window`);
-      } else if (caseId === "approval_shown" && outcome.facts.exact_call_child_records_added !== 1) {
-        failures.push(`${caseId}: the exact-call child-call record is absent`);
-      } else if (caseId === "activation") {
-        if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
-        else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
-        else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
-      } else if (caseId === "missing_launcher") {
-        if (!outcome.facts.recorder_correspondence?.observed) failures.push(`${caseId}: missing_launcher.cast does not correspond to recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-        else if (outcome.facts.child_call_records_added !== 0) failures.push(`${caseId}: child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_added}); offending child-call records: ${JSON.stringify(outcome.facts.offending_child_call_records)}`);
-        else if (outcome.facts.non_proxy_start_records_added !== 0) {
-          for (const start of outcome.facts.offending_non_proxy_start_records) {
-            if (start.proxy_rejection === "digest at the wrong position") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest at the wrong position`);
-            else if (start.proxy_rejection === "digest mismatch") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest mismatch`);
-            else if (start.proxy_rejection === "digest absent") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor digest is absent or unreadable`);
-            else failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because it has no proxy ancestor at all`);
-          }
-        }
-        else if (outcome.facts.mcp_json_sha256_before !== outcome.facts.mcp_json_sha256_after) failures.push(`${caseId}: mcp_json_sha256_before must equal mcp_json_sha256_after (observed ${outcome.facts.mcp_json_sha256_before} and ${outcome.facts.mcp_json_sha256_after})`);
-        else if (outcome.facts.launcher_absent_during_window !== true) failures.push(`${caseId}: launcher_absent_during_window must equal true (observed ${outcome.facts.launcher_absent_during_window})`);
-        else if (outcome.facts.installed_tree_restored !== true) failures.push(`${caseId}: installed_tree_restored must equal true (observed ${outcome.facts.installed_tree_restored})`);
-        else failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
-      } else if (caseId === "unprotect") {
-        if (outcome.facts.unprotect_exit !== 0) failures.push(`${caseId}: seal unprotect notes did not succeed (exit ${outcome.facts.unprotect_exit ?? "absent"})`);
-        else failures.push(`${caseId}: the local override removal and byte-identical project configuration evidence is absent`);
-      } else if (caseId === "negotiation") {
-        failures.push(`${caseId}: retry_round_trips must be greater than 0 (observed ${outcome.facts.retry_round_trips})`);
-      } else if (caseId === "before_approval") {
-        failures.push(`${caseId}: child_call_records_at_end_of_window must equal 0 and child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_at_end_of_window} and ${outcome.facts.child_call_records_added})`);
-      } else if (caseId === "accept") {
-        failures.push(`${caseId}: child_call_records_added must equal 1, child_call_records_total must equal 1, and observed_effect_sha256 must equal expected_effect_sha256 (observed ${outcome.facts.child_call_records_added}, ${outcome.facts.child_call_records_total}, ${outcome.facts.observed_effect_sha256}, and ${outcome.facts.expected_effect_sha256})`);
-      } else {
-        failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
-      }
+      failures.push(`${caseId}: ${observerFailure(caseId, outcome)}`);
     }
   }
   if (failures.length) {
@@ -1677,8 +1734,11 @@ module.exports = {
   loadState,
   next,
   observeAll,
+  observeActivation,
+  observerFailure,
   nonProxyStarts,
   proxyEvidenceForStart,
+  readLocalOverride,
   runEnv,
   saveState,
   show,

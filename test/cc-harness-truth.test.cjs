@@ -156,7 +156,7 @@ test("a hand-written dialog cast is not evidence from the recorded session", () 
   assert.throws(
     () => harness.next(harness.loadState(runDir)),
     (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
-      /CANNOT CERTIFY decline; decline: decline\.cast does not correspond to the recorder output/.test(error.message),
+      /CANNOT CERTIFY decline; decline: decline\.cast must correspond to the recorder output/.test(error.message),
   );
   assert.equal(harness.loadState(runDir).step_index, 1);
 });
@@ -201,7 +201,7 @@ test("decline refuses and does not advance when the human does nothing", () => {
   assert.throws(
     () => harness.next(harness.loadState(runDir)),
     (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
-      /CANNOT CERTIFY decline; decline: the exact-call BLOCK\/declined receipt pair is absent/.test(error.message),
+      /CANNOT CERTIFY decline; decline: the exact-call INPUT_REQUIRED\/BLOCK receipt pair must be present/.test(error.message),
   );
   assert.equal(harness.loadState(runDir).step_index, 1);
   assert.match(fs.readFileSync(path.join(runDir, "CURRENT-STEP.txt"), "utf8"), /STEP 2 of 6[\s\S]*seal-declined-note/);
@@ -336,7 +336,7 @@ test("unprotect refuses when its successful removal command is absent", () => {
   assert.throws(
     () => harness.next(harness.loadState(runDir)),
     (error) => error instanceof harness.HarnessError && error.code === "step_cannot_certify" &&
-      /CANNOT CERTIFY unprotect; unprotect: seal unprotect notes did not succeed \(exit 1\)/.test(error.message),
+      /CANNOT CERTIFY unprotect; unprotect: seal unprotect notes exit must be 0 \(observed 1\)/.test(error.message),
   );
   assert.equal(harness.loadState(runDir).step_index, 4);
 });

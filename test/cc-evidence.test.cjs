@@ -132,6 +132,59 @@ test("documented required-observation table rejects heading_duplicated", () => {
   const doc = fs.readFileSync(CLAUDE_CODE_DOC, "utf8");
   const cases = requiredCases(fs.readFileSync(path.join(ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8"), "CASES");
   assert.throws(() => assertDocumentedRequiredObservationTable(`${doc}\n### The eight fixed cases\n`, cases));
+test("local override lookup resolves only the exact protected definition when the project key differs", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-override-"));
+  const home = path.join(workspace, "home");
+  const project = path.join(workspace, "project");
+  const protectState = path.join(workspace, "protect.json");
+  fs.mkdirSync(home, { recursive: true });
+  fs.mkdirSync(project, { recursive: true });
+  const expected = {
+    type: "stdio",
+    command: "/installed/seal",
+    args: ["__proxy", "--protect-state", protectState],
+    env: {},
+  };
+  const wrong = { type: "stdio", command: "/other/server", args: [], env: {} };
+  const config = {
+    projects: {
+      "/unrelated/project": { mcpServers: { notes: wrong } },
+      "/client/recorded/project": { mcpServers: { notes: expected } },
+    },
+  };
+  fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify(config));
+  fs.writeFileSync(protectState, JSON.stringify({
+    localOverride: {
+      claudeProjectRoot: "/expected/project",
+      definition: expected,
+    },
+  }));
+  const state = { paths: { home, project, protectState } };
+
+  const oldEntry = config.projects?.[project]?.mcpServers?.notes ?? null;
+  assert.equal(oldEntry, null, "the old project-path lookup must miss this fixture");
+  assert.deepEqual(harness.readLocalOverride(state).entry, expected);
+  assert.equal(harness.readLocalOverride(state).project_key, "/client/recorded/project");
+
+  config.projects["/duplicate/project"] = { mcpServers: { notes: expected } };
+  fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify(config));
+  assert.equal(harness.readLocalOverride(state).entry, null, "an ambiguous exact definition must not certify any project");
+});
+
+test("activation refusal names a false local proxy entry", () => {
+  const outcome = {
+    observed: false,
+    facts: {
+      protection_state_after: "ACTIVE",
+      claude_mcp_get_exit: 0,
+      claude_mcp_get_local_scope_selected: true,
+      local_override_is_recorded_seal_proxy: false,
+      starts_whose_proxy_pid_is_the_recorded_lease: 1,
+      starts_with_the_client_above_the_proxy: 1,
+      starts_not_launched_by_seal: 0,
+    },
+  };
+  assert.equal(harness.observerFailure("activation", outcome), "local entry must be the recorded Seal proxy");
 });
 
 test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
