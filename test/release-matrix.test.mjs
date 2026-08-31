@@ -12,6 +12,8 @@ const { testTmpdir } = tempRoot;
 
 const ROOT = path.join(import.meta.dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+const FINAL_NOTES = `RELEASE-NOTES-v${VERSION}.md`;
+const FINAL_NOTES_PATTERN = FINAL_NOTES.replaceAll(".", "\\.");
 const HELPER_PROVENANCE = "release-produced, not independ" + "ently reproduced";
 const { unpackPayload } = integrity;
 const PAYLOAD_MARKER = Buffer.from("\n// --SEAL-PAYLOAD--\n", "utf8");
@@ -91,11 +93,11 @@ test("the release manifest binds all platforms and publication rewrites every re
     const mismatchPath = path.join(docsRoot, "docs", "archive", "AUTHORIZATION-MESH.md");
     const mismatch = fs.readFileSync(mismatchPath, "utf8").replace(
       "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
-      "docs/assurance/RELEASE-NOTES-v0.2.0.md",
+      `docs/assurance/${FINAL_NOTES}`,
     );
     assert.match(
       mismatch,
-      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\(\.\.\/assurance\/RELEASE-NOTES-v0\.2\.0-rc\.3\.md\)/,
+      new RegExp(`\\[docs/assurance/${FINAL_NOTES_PATTERN.replaceAll("/", "\\/")}\\]\\(\\.\\.\\/assurance\\/RELEASE-NOTES-v0\\.2\\.0-rc\\.3\\.md\\)`),
       "fixture must reproduce the mismatched final-version label and rc.3 href",
     );
     fs.writeFileSync(mismatchPath, mismatch);
@@ -114,12 +116,12 @@ test("the release manifest binds all platforms and publication rewrites every re
     const rewrittenMismatch = fs.readFileSync(mismatchPath, "utf8");
     assert.match(
       rewrittenMismatch,
-      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\(\.\.\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\)/,
+      new RegExp(`\\[docs/assurance/${FINAL_NOTES_PATTERN.replaceAll("/", "\\/")}\\]\\(\\.\\.\\/assurance\\/${FINAL_NOTES_PATTERN.replaceAll("/", "\\/")}\\)`),
       "publication must retarget every release-note occurrence",
     );
     assert.doesNotMatch(
       rewrittenMismatch,
-      /\[docs\/assurance\/RELEASE-NOTES-v0\.2\.0\.md\]\([^)]*RELEASE-NOTES-v(?!0\.2\.0\.md)[^)]*\)/,
+      new RegExp(`\\[docs/assurance/${FINAL_NOTES_PATTERN.replaceAll("/", "\\/")}\\]\\([^)]*RELEASE-NOTES-v(?!${VERSION.replaceAll(".", "\\.")}\\.md)[^)]*\\)`),
       "a final-version label must not retain a prerelease href",
     );
   } finally {
