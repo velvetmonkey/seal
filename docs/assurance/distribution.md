@@ -1,6 +1,6 @@
 # Distribution (roadmap 3D)
 
-Seal v0.2.0.
+Seal v0.2.1.
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other platforms are not supported.
 It ships **one** installable artifact, for **Linux x86-64**.

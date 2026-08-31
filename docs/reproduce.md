@@ -9,9 +9,9 @@ source recipe verifies and installs elan v4.2.3, selects the repository's
 Emscripten 6.0.0 and patched Lean WASM source trees; those toolchain versions are not left to the
 reader to choose.
 
-The tag named by this command was withdrawn and has no downloadable assets.
-Do not run this comparison for that tag.
-Run it only against a tag that has a published GitHub release with its required assets.
+The command requires a published GitHub release with its required assets.
+Do not run this comparison for a tag without that release.
+The command below targets the version in this checkout.
 
 ```bash
 tag="v$(cat VERSION)"

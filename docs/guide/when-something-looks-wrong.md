@@ -455,7 +455,7 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0. Seal supports install, demo and receipt checking on Linux x86-64 and
+v0.2.1. Seal supports install, demo and receipt checking on Linux x86-64 and
 macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
 macOS Protect execution is not exercised in CI.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
