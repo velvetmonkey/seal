@@ -3,7 +3,7 @@
 // policy and its fixtures together prevents a separately maintained check
 // from drifting away from the proof that exercises it.
 const assert = require("node:assert/strict");
-const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -61,6 +61,23 @@ function git(root, args) {
   delete env.GIT_AUTHOR_EMAIL;
   delete env.GIT_COMMITTER_NAME;
   delete env.GIT_COMMITTER_EMAIL;
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_SYSTEM = "/dev/null";
+  env.GIT_TEMPLATE_DIR = "/dev/null";
+  env.GIT_CONFIG_COUNT = "0";
+  delete env.GIT_CONFIG_PARAMETERS;
+  // HOME uses a fixture-created empty directory, not the repository root.
+  env.HOME = join(root, ".fixture-home");
+  // XDG_CONFIG_HOME selects a global ignore outside HOME.  Delete it so Git uses HOME.
+  delete env.XDG_CONFIG_HOME;
+  delete env.GIT_DIR;
+  // ROUTE 1b: Delete GIT_WORK_TREE because it earns no identity control and its only measured damage came from ambient GIT_DIR, which this fixture already deletes.
+  // LIMIT: GIT_COMMON_DIR, GIT_QUARANTINE_PATH, GIT_ATTR_SOURCE, GIT_CONFIG, and GIT_ALLOC_LIMIT break the fixture, fatal visibly, and do not forge an author.
+  // TESTED: 67 ambient inputs were probed on Linux with git version 2.43.0. This list is not exhaustive. Darwin and Windows are UNKNOWN.
+  // NAMED NON-CLAIM: This fixture assumes a trusted git on PATH.
+  // This test does not test that assumption.
+  // Resolving git here would give false comfort because tests outside this file inherit PATH.
+  // LIMIT: This fixture does not pin PATH.  It makes no claim about other test files.
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", env });
 }
 
@@ -108,8 +125,10 @@ function check(root, base, head) {
   return true;
 }
 
-function fixture() {
+function fixture(beforeInit) {
   const root = mkdtempSync(join(tmpdir(), "seal-commit-author-"));
+  mkdirSync(join(root, ".fixture-home"));
+  if (beforeInit) beforeInit(root);
   requireGit(root, ["init", "-q"]);
   requireGit(root, ["config", "user.name", "velvetmonkey"]);
   requireGit(root, ["config", "user.email", CANONICAL_EMAIL]);
@@ -211,6 +230,139 @@ test("the fixture constructs author and committer identity", (t) => {
     "fixture author",
     "fixture-author@example.invalid",
   ].join("\n"));
+});
+
+test("the fixture pins ambient HOME ignore input", (t) => {
+  const saved = {
+    HOME: process.env.HOME,
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+  };
+  const hostileHome = mkdtempSync(join(tmpdir(), "seal-commit-author-hostile-home-"));
+  mkdirSync(join(hostileHome, ".config", "git"), { recursive: true });
+  writeFileSync(join(hostileHome, ".config", "git", "ignore"), "README.md\n");
+  process.env.HOME = hostileHome;
+  delete process.env.XDG_CONFIG_HOME;
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  t.after(() => rmSync(hostileHome, { recursive: true, force: true }));
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(requireGit(root, ["status", "--porcelain"]), "");
+});
+
+test("the fixture ignores repository-root Git ignore files", (t) => {
+  const root = fixture((fixtureRoot) => {
+    mkdirSync(join(fixtureRoot, ".config", "git"), { recursive: true });
+    writeFileSync(join(fixtureRoot, ".config", "git", "ignore"), "README.md\n");
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(requireGit(root, ["status", "--porcelain"]), "?? .config/");
+});
+
+test("the fixture pins ambient XDG_CONFIG_HOME ignore input", (t) => {
+  const savedXdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const hostileXdgConfigHome = mkdtempSync(join(tmpdir(), "seal-commit-author-hostile-xdg-"));
+  mkdirSync(join(hostileXdgConfigHome, "git"), { recursive: true });
+  writeFileSync(join(hostileXdgConfigHome, "git", "ignore"), "README.md\n");
+  process.env.XDG_CONFIG_HOME = hostileXdgConfigHome;
+  t.after(() => {
+    if (savedXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = savedXdgConfigHome;
+  });
+  t.after(() => rmSync(hostileXdgConfigHome, { recursive: true, force: true }));
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(requireGit(root, ["status", "--porcelain"]), "");
+});
+
+test("the fixture pins ambient GIT_DIR identity rewrite input", (t) => {
+  const saved = {
+    GIT_DIR: process.env.GIT_DIR,
+    GIT_WORK_TREE: process.env.GIT_WORK_TREE,
+  };
+  const root = fixture((fixtureRoot) => {
+    const hostileRepository = join(fixtureRoot, "hostile-git-dir-repository");
+    const hostileGitDir = join(hostileRepository, ".git");
+    const hookDir = join(fixtureRoot, "hostile-git-dir-hooks");
+    const hook = [
+      "#!/bin/sh",
+      "set -eu",
+      "if ! parent=$(git rev-parse HEAD^ 2>/dev/null); then exit 0; fi",
+      "tree=$(git rev-parse HEAD^{tree})",
+      "GIT_AUTHOR_NAME=allowed GIT_AUTHOR_EMAIL=allowed@lanes.seal.invalid GIT_COMMITTER_NAME=allowed GIT_COMMITTER_EMAIL=allowed@lanes.seal.invalid new=$(git commit-tree \"$tree\" -p \"$parent\" -m tampered)",
+      "git update-ref HEAD \"$new\" HEAD",
+      "",
+    ].join("\n");
+    const setupEnv = { ...process.env };
+    delete setupEnv.GIT_DIR;
+    delete setupEnv.GIT_WORK_TREE;
+    setupEnv.GIT_CONFIG_GLOBAL = "/dev/null";
+    setupEnv.GIT_CONFIG_SYSTEM = "/dev/null";
+    assert.equal(spawnSync("git", ["init", "-q", hostileRepository], { encoding: "utf8", env: setupEnv }).status, 0);
+    mkdirSync(hookDir, { recursive: true });
+    writeFileSync(join(hookDir, "post-commit"), hook);
+    chmodSync(join(hookDir, "post-commit"), 0o700);
+    assert.equal(spawnSync("git", ["-C", hostileRepository, "config", "core.hooksPath", hookDir], { encoding: "utf8", env: setupEnv }).status, 0);
+    process.env.GIT_DIR = hostileGitDir;
+    delete process.env.GIT_WORK_TREE;
+  });
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = requireGit(root, ["rev-parse", "HEAD"]);
+  const sha = commit(root, "ambient GIT_DIR", "ccclient", "ccclient@users.noreply.github.com");
+  assert.equal(requireGit(root, ["show", "-s", "--format=%ae", sha]), "ccclient@users.noreply.github.com");
+  assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "ccclient@users.noreply.github.com" }]);
+});
+
+test("the fixture pins ambient Git hook configuration inputs", (t) => {
+  const names = Object.keys(process.env).filter((name) =>
+    name === "GIT_CONFIG_GLOBAL" || name === "GIT_CONFIG_SYSTEM" || name === "GIT_CONFIG_PARAMETERS" ||
+    name === "GIT_TEMPLATE_DIR" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name));
+  const saved = new Map(names.map((name) => [name, process.env[name]]));
+  const root = fixture((fixtureRoot) => {
+    const hook = "#!/bin/sh\nset -eu\ntree=$(git rev-parse HEAD^{tree})\nparent=$(git rev-parse HEAD^)\nGIT_AUTHOR_NAME=allowed GIT_AUTHOR_EMAIL=allowed@lanes.seal.invalid GIT_COMMITTER_NAME=allowed GIT_COMMITTER_EMAIL=allowed@lanes.seal.invalid new=$(git commit-tree \"$tree\" -p \"$parent\" -m tampered)\ngit update-ref HEAD \"$new\" HEAD\n";
+    const hookDir = join(fixtureRoot, "hostile-hooks");
+    const templateHooks = join(fixtureRoot, "hostile-template", "hooks");
+    const globalConfig = join(fixtureRoot, "hostile-global-config");
+    const systemConfig = join(fixtureRoot, "hostile-system-config");
+    mkdirSync(hookDir, { recursive: true });
+    mkdirSync(templateHooks, { recursive: true });
+    writeFileSync(join(hookDir, "post-commit"), hook);
+    writeFileSync(join(templateHooks, "post-commit"), hook);
+    writeFileSync(globalConfig, `[core]\n\thooksPath = ${hookDir}\n`);
+    writeFileSync(systemConfig, `[core]\n\thooksPath = ${hookDir}\n`);
+    chmodSync(join(hookDir, "post-commit"), 0o700);
+    chmodSync(join(templateHooks, "post-commit"), 0o700);
+    Object.assign(process.env, {
+      GIT_CONFIG_GLOBAL: globalConfig,
+      GIT_CONFIG_SYSTEM: systemConfig,
+      GIT_CONFIG_PARAMETERS: `'core.hooksPath=${hookDir}'`,
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath",
+      GIT_CONFIG_VALUE_0: hookDir,
+      GIT_TEMPLATE_DIR: join(fixtureRoot, "hostile-template"),
+    });
+  });
+  t.after(() => {
+    for (const name of Object.keys(process.env)) {
+      if (name === "GIT_CONFIG_GLOBAL" || name === "GIT_CONFIG_SYSTEM" || name === "GIT_CONFIG_PARAMETERS" ||
+        name === "GIT_TEMPLATE_DIR" || name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete process.env[name];
+    }
+    for (const [name, value] of saved) process.env[name] = value;
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = requireGit(root, ["rev-parse", "HEAD"]);
+  const sha = commit(root, "ambient inputs", "ccclient", "ccclient@users.noreply.github.com");
+  assert.deepEqual(violations(root, base, "HEAD"), [{ sha, email: "ccclient@users.noreply.github.com" }]);
 });
 
 test("a rewind range with zero added commits is rejected", (t) => {
