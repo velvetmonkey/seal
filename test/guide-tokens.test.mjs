@@ -8,13 +8,13 @@
 // each documented token as a heading of the exact form `### `token``.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const GUIDE = "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "f90e49f2733fe529a102e7593b23ef7d25c65ff90a88096ec6b96916fbcf641b";
+const GUIDE = process.env.SEAL_GUIDE_PATH ?? "docs/guide/when-something-looks-wrong.md";
+const GUIDE_SHA256 = "bfb71cff0ccbfa7acb0cf75bc6b354b3192d70e56b85cccc70b2bea26d82a1e4";
 
 // REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one
 // anchored release-version slot. This canonicalizer maps only that slot to a
@@ -102,6 +102,66 @@ function guideTokens() {
   );
   return new Set(occurrences.keys());
 }
+
+function processWitnessUnavailableThrowSites() {
+  const spine = resolve(ROOT, "spine");
+  const sites = [];
+  for (const entry of readdirSync(spine, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".cjs")) continue;
+    const file = `spine/${entry.name}`;
+    const source = readFileSync(resolve(ROOT, file), "utf8");
+    for (const match of source.matchAll(/new ProtectionError\(\s*"process_witness_unavailable"/g)) {
+      const prefix = source.slice(0, match.index);
+      const functions = [...prefix.matchAll(/^function ([A-Za-z0-9_]+)\(/gm)];
+      assert.ok(functions.length > 0, `${file}: token throw has no enclosing function`);
+      sites.push({ file, functionName: functions.at(-1)[1] });
+    }
+  }
+  return sites;
+}
+
+function processWitnessUnavailableBlock() {
+  const text = readFileSync(resolve(ROOT, GUIDE), "utf8");
+  const heading = "### `process_witness_unavailable`";
+  const start = text.indexOf(heading);
+  assert.notEqual(start, -1, `${GUIDE}: process_witness_unavailable heading is absent`);
+  const end = text.indexOf("\n### ", start + heading.length);
+  return text.slice(start, end === -1 ? text.length : end);
+}
+
+test("process witness guide block covers every source throw path", () => {
+  const sites = processWitnessUnavailableThrowSites();
+  assert.deepEqual(
+    sites,
+    [
+      { file: "spine/protection.cjs", functionName: "requireProcessStartWitnessBinding" },
+      { file: "spine/store.cjs", functionName: "withFileLock" },
+    ],
+    "process_witness_unavailable throw sites changed; add guide coverage for every source path",
+  );
+
+  const block = processWitnessUnavailableBlock();
+  const requiredCoverage = new Map([
+    ["spine/protection.cjs:requireProcessStartWitnessBinding", [/\bstored lease\b/i, /\bproject lock\b/i]],
+    ["spine/store.cjs:withFileLock", [/\bapproval-journal lock\b/i, /\bany platform\b/i, /\bmacOS\b/i]],
+  ]);
+  for (const { file, functionName } of sites) {
+    const path = `${file}:${functionName}`;
+    for (const pattern of requiredCoverage.get(path) ?? []) {
+      assert.match(block, pattern, `${GUIDE}: missing coverage for ${path}`);
+    }
+  }
+  assert.match(
+    block,
+    /\bmacOS\s+x64\/arm64\b[\s\S]*?\bstored lease and project-lock path\b[\s\S]*?\bDarwin-specific refusal tokens\b/i,
+    `${GUIDE}: Darwin-specific tokens apply to the stored lease and project-lock path`,
+  );
+  assert.doesNotMatch(
+    block,
+    /Darwin-specific refusal tokens\s+instead of\s+`process_witness_unavailable`/i,
+    `${GUIDE}: Darwin-specific tokens do not replace the approval-journal lock refusal`,
+  );
+});
 
 test("every refusal token in the source is documented in the guide", () => {
   const inSource = sourceTokens();
