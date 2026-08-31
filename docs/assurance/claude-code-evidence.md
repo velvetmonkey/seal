@@ -84,14 +84,19 @@ elicitation, or declines to fall back.
 
 | Case | Required observation |
 |---|---|
-| `activation` | After restart, Claude Code selects the local Seal override |
-| `negotiation` | The proxy records the retry-model interaction |
-| `approval_shown` | The last visible frame carries the dialog text for the exact call |
-| `before_approval` | Child call count remains `0` |
-| `accept` | Child call count becomes exactly `1`; expected effect hash matches |
-| `decline` | Child call count remains `0` |
-| `missing_launcher` | Claude Code does not fall back to the original `.mcp.json` server |
-| `unprotect` | The local override disappears and `.mcp.json` remains byte-identical |
+| `activation` | After restart, Claude Code selects the local Seal override <!-- cc-required-observation-binding: 70a7e372337b8e4b2ff4ee45a86858c7af5556782116646863c1496430af11c2 --> |
+| `negotiation` | The proxy records the retry-model interaction <!-- cc-required-observation-binding: 76d8501a652f19e47a60420273bcb323756a13feb52b500b3f7ff7747384f940 --> |
+| `approval_shown` | The terminal recording shows the complete exact-call dialog <!-- cc-required-observation-binding: 21a2fcfedff1fb4b3a13e8527dfb81c560a4044fc40dd2fd3116f342c0ad0233 --> |
+| `before_approval` | Child call count remains `0` <!-- cc-required-observation-binding: 36b0f881c704e8622321aad32425473b112490e3dc7b5c9379fdc30e13867ffe --> |
+| `accept` | Child call count becomes exactly `1`; expected effect hash matches <!-- cc-required-observation-binding: 6e8bcaa9b563816081d03650aac251363bf41573e441918575b5aaffd2080d5e --> |
+| `decline` | Child call count remains `0` <!-- cc-required-observation-binding: ce6c4a0bc59c9621ecf0994a9fb5a5f6b32c945aaa93397cbe532cd07edb2870 --> |
+| `missing_launcher` | Claude Code does not fall back to the original `.mcp.json` server <!-- cc-required-observation-binding: f04c1292d416430ef09010861e6cee02851ef6f9b9b261e97beb17b42faea09d --> |
+| `unprotect` | The local override disappears and `.mcp.json` remains byte-identical <!-- cc-required-observation-binding: 4f9aeb0cd22efb40d8b289e2bb9a060c66388dec6aa79e0ce705015b9d267f46 --> |
+
+This table summarizes each requirement because the literal requirement strings
+also name the file-backed facts that support the observation.
+The hidden binding on each row makes a summary or code requirement change fail
+until a reviewer updates their relationship together.
 
 How each one is established from files rather than from the operator's memory:
 
@@ -113,9 +118,9 @@ How each one is established from files rather than from the operator's memory:
   the append-only log, plus the effect digest, which is computed three ways
   that must agree: by the fixture as it wrote the file, by the harness from the
   instructed note, and by the checker from the pack alone.
-- **missing_launcher** — the harness moves the override's command aside, the
-  session's recorder-corresponding cast must say both that the local command
-  was missing and that no `.mcp.json` fallback occurred. The child log must
+- **missing_launcher** — the harness moves the override's command aside. The
+  session's rendered transcript must carry `seal-fallback-note` or `does not
+  fall back`. The child log must
   gain no record at all: not a Seal-started one, and not a directly started
   one. `.mcp.json` must be unchanged, and the installed tree must re-verify
   after the launcher is restored.

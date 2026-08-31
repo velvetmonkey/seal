@@ -26,10 +26,39 @@ const SYNTHETIC_RUN = path.join(ROOT, "harness", "claude-code", "synthetic-run.c
 const EVIDENCE_ROOT = path.join(ROOT, "evidence", "claude-code");
 const CLAUDE_CODE_DOC = path.join(ROOT, "docs", "assurance", "claude-code-evidence.md");
 const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
+const CONTRACT_ROOT = process.env.SEAL_CC_CONTRACT_ROOT || ROOT;
 
 let sharedPack = null;
 
 const INSTALLED_SEAL_DIGEST = { present: true, sha256: "a".repeat(64) };
+
+function requiredCases(source, declaration) {
+  const block = source.match(new RegExp(`const ${declaration} = [\\s\\S]*?\\n\\];`))?.[0]
+    || source.match(new RegExp(`const ${declaration} = Object\\.freeze\\(\\[[\\s\\S]*?\\n\\]\\);`))?.[0];
+  assert.ok(block, `${declaration} declaration is present`);
+  return [...block.matchAll(/\{ id: "([^"]+)", required: "([^"]+)" \}/gu)]
+    .map((match) => ({ id: match[1], required: match[2] }));
+}
+
+test("documented required-observation summaries are bound to both code requirement lists", () => {
+  const harnessSource = fs.readFileSync(path.join(CONTRACT_ROOT, "harness", "claude-code", "cc-harness.cjs"), "utf8");
+  const checkerSource = fs.readFileSync(path.join(CONTRACT_ROOT, "scripts", "check-cc-evidence.mjs"), "utf8");
+  const doc = fs.readFileSync(path.join(CONTRACT_ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8");
+  const harnessCases = requiredCases(harnessSource, "CASES");
+  const checkerCases = requiredCases(checkerSource, "REQUIRED_CASES");
+  assert.equal(harnessCases.length, 8, "the harness has all eight required cases");
+  assert.deepEqual(checkerCases, harnessCases, "the checker and harness use the same required observations");
+
+  const rows = [...doc.matchAll(/^\| `([^`]+)` \| (.*?) <!-- cc-required-observation-binding: ([0-9a-f]{64}) --> \|$/gmu)]
+    .map((match) => ({ id: match[1], summary: match[2], binding: match[3] }));
+  assert.equal(rows.length, harnessCases.length, "the document binds all eight required-observation rows");
+  assert.deepEqual(rows.map(({ id }) => id), harnessCases.map(({ id }) => id), "the document uses the code case order");
+  for (const [index, row] of rows.entries()) {
+    const required = harnessCases[index].required;
+    const expected = createHash("sha256").update(`${row.id}\0${required}\0${row.summary}`).digest("hex");
+    assert.equal(row.binding, expected, `${row.id} summary names an observation that is not bound to the code requirement`);
+  }
+});
 
 test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
   const directStart = {

@@ -270,9 +270,9 @@ function renderCast(castPath) {
     .replace(UUID, "[REDACTED-SESSION-ID]")
     .replace(/[^\x09\x0A\x20-\x7E]/gu, "?");
   const header = screen.scrollback.length === 0
-    ? "This file holds the terminal's LAST VISIBLE FRAME. It has 0 scrollback lines. Content that the terminal overwrote before it scrolled is not present."
+    ? "This file holds the terminal's LAST VISIBLE FRAME. It has 0 scrollback lines."
     : `This file holds ${screen.scrollback.length} scrollback ${screen.scrollback.length === 1 ? "line" : "lines"} PLUS the terminal's LAST VISIBLE FRAME.`;
-  return `${header} This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
+  return `${header} Content that the terminal overwrote before it scrolled is not present. This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
 module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };

@@ -39,7 +39,7 @@ test("CHA, CUP, and CUF use terminal columns and overwrite cells", () => {
 test("scrollback emits each scrolled line before the final frame", () => {
   const cast = fixture(["one\r\ntwo\r\nthree\r\nfour"], 10, 2);
   const transcript = renderCast(cast);
-  assert.match(transcript, /^This file holds 2 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\./);
+  assert.match(transcript, /^This file holds 2 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\. Content that the terminal overwrote before it scrolled is not present\./);
   assert.doesNotMatch(transcript, /Earlier content was overwritten rather than scrolled/);
   assert.match(transcript, /one\ntwo\nthree\nfour/);
 });
@@ -47,7 +47,7 @@ test("scrollback emits each scrolled line before the final frame", () => {
 test("a longer scroll derives its larger scrollback count", () => {
   const cast = fixture(["one\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix"], 10, 2);
   const transcript = renderCast(cast);
-  assert.match(transcript, /^This file holds 4 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\./);
+  assert.match(transcript, /^This file holds 4 scrollback lines PLUS the terminal's LAST VISIBLE FRAME\. Content that the terminal overwrote before it scrolled is not present\./);
   assert.match(transcript, /one\ntwo\nthree\nfour\nfive\nsix/);
 });
 
