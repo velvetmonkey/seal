@@ -215,10 +215,12 @@ test("sync leaves no old product version in human-maintained reader-facing prose
   const notesDirectory = path.join(scratch, "docs", "assurance");
   const historicalNotes = fs.readdirSync(notesDirectory).filter((file) => /^RELEASE-NOTES-.*\.md$/.test(file)).sort();
   const historicalBytes = new Map(historicalNotes.map((file) => [file, fs.readFileSync(path.join(notesDirectory, file))]));
+  const checkerReleaseRoute = /\/releases\/download\/v[^/]+\/seal-receipt-(?:check|v2)\.mjs/;
   const publishedRouteBeforeCut = new Map([
-    ["docs/assurance/distribution.md", fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(/\/releases\/download\/v[^/]+\/seal-receipt-check\.mjs/)?.[0]],
+    ["docs/assurance/distribution.md", fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(checkerReleaseRoute)?.[0]],
     ["docs/assurance/index.html", fs.readFileSync(path.join(scratch, "docs/assurance/index.html"), "utf8").match(/RELEASE-NOTES-v[^\"]+\.md/)?.[0]],
   ]);
+  assert.ok(publishedRouteBeforeCut.get("docs/assurance/distribution.md"), "published checker route must be present before a candidate cut");
   fs.writeFileSync(path.join(scratch, "VERSION"), `${bumpedVersion}\n`);
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
   assert.equal(sync.code, 0, sync.stderr);
@@ -234,7 +236,7 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     assert.deepEqual(fs.readFileSync(path.join(notesDirectory, file)), bytes, `${file} must remain byte-identical across a candidate version bump`);
   }
   assert.equal(
-    fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(/\/releases\/download\/v[^/]+\/seal-receipt-check\.mjs/)?.[0],
+    fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8").match(checkerReleaseRoute)?.[0],
     publishedRouteBeforeCut.get("docs/assurance/distribution.md"),
     "candidate sync must not rewrite the published checker route",
   );
@@ -243,8 +245,13 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     publishedRouteBeforeCut.get("docs/assurance/index.html"),
     "candidate sync must not rewrite release-note navigation",
   );
+  assert.match(
+    fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8"),
+    new RegExp(`Seal v${bumpedVersion.replaceAll(".", "\\.")}`),
+    "candidate sync must still update the source-version heading around the preserved published route",
+  );
   assert.deepEqual(
-    staleVersionMatches(scratch, oldVersion),
+    staleVersionMatches(scratch, oldVersion).filter((file) => ![...publishedDocs, "docs/assurance/distribution.md"].includes(file)),
     [],
     `reader-facing search surface retains old ${oldVersion}; search surface: ${READER_FACING_VERSION_SEARCH_ROOTS.join(", ")}`,
   );

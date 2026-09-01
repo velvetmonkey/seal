@@ -440,6 +440,8 @@ function replaceRegions(relative, replacements) {
 }
 
 const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`;
+const CHECKER_ASSET = String.raw`seal-receipt-(?:check|v2)\.mjs`;
+const HISTORICAL_LIMITATIONS_NOTES = "RELEASE-NOTES-v0.2.0-rc.3.md";
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function replacePublishedSurface(relative, replacements) {
@@ -460,6 +462,7 @@ function replacePublishedSurface(relative, replacements) {
 function publishedSurfaceChanges(manifest) {
   const tag = manifest.tag;
   const releaseNotes = `RELEASE-NOTES-${tag}.md`;
+  const historicalLimitationsLabel = `“What Seal does not cover” in assurance/${HISTORICAL_LIMITATIONS_NOTES}`;
   const version = tag.slice(1);
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
@@ -484,12 +487,16 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
-      [new RegExp(`(?<=^2\\. \\[“What Seal does not cover” in the release notes\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) —$)`, "m"), releaseNotes, "limitations release-note route"],
-      [new RegExp(`https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/seal-receipt-check\\.mjs`), checkerUrl, "checker release route"],
+      [new RegExp(`(?<=^2\\. \\[)(?:“What Seal does not cover” in the release notes|${escapeRegExp(historicalLimitationsLabel)})(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) —$)`, "m"), historicalLimitationsLabel, "historical limitations release-note label"],
+      [new RegExp(`(?<=^2\\. \\[${escapeRegExp(historicalLimitationsLabel)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) —$)`, "m"), HISTORICAL_LIMITATIONS_NOTES, "historical limitations release-note route"],
+      [new RegExp(`(?<=^5\\. \\[The \\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
+      [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
     ]),
     replacePublishedSurface("docs/assurance/distribution.md", [
-      [new RegExp(`https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/seal-receipt-check\\.mjs`), checkerUrl, "checker release route"],
+      [new RegExp(`(?<=^The current install payload excludes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "excluded checker asset label"],
+      [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
+      [new RegExp(`(?<=^\\[\\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\)$)`, "m"), checkerUrl, "checker release route"],
     ]),
     replacePublishedSurface("docs/assurance/index.html", [
       [new RegExp(`(?<=href=")RELEASE-NOTES-v${SEMVER}\\.md(?=">Release notes</a>)`), releaseNotes, "release-note navigation"],
@@ -596,6 +603,11 @@ function checkReadmePublishedClaims(facts) {
     `sums_sha256=${JSON.stringify(manifest.checksums.sha256)}`,
   ]) {
     if (document.text.split(expected).length - 1 !== 1) document.failures.push(`published install fact is absent or duplicated: ${expected}`);
+  }
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
+  if (manifest.tag === `v${sourceVersion}` && document.text.includes("The current source is the unreleased")) {
+    document.failures.push(`source/release divergence claim is present even though source and release both name ${manifest.tag}`);
   }
   return document;
 }

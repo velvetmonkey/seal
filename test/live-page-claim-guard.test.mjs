@@ -14,6 +14,8 @@ const ROOT = resolve(import.meta.dirname, "..");
 const GUARD = join(ROOT, "scripts/live-page-claim-guard.mjs");
 const originalReadme = readFileSync(join(ROOT, "docs/start/evaluator-walk.md"), "utf8");
 const PIN_COMMIT = "fixturecommit";
+const PRODUCTION_PIN_COMMIT = readFileSync(GUARD, "utf8").match(/commit: process\.env\.LIVE_CLAIM_GUARD_COMMIT \?\? "([0-9a-f]{40})"/)?.[1];
+assert.ok(PRODUCTION_PIN_COMMIT, "live-page guard must declare one production commit pin");
 
 async function withPage(body, fn) {
   const server = createServer((_request, response) => response.end(body));
@@ -61,7 +63,7 @@ test("passes when fetched controls, README population, and pin agree", async () 
 test("passes against the real production pin without environment overrides [network required]", async () => {
   const result = await run(undefined, undefined, undefined, undefined, { productionPin: true });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /INFO  served bytes match pinned seal-check@e152a053637845600e1eceaee70cea873801c609/);
+  assert.match(result.stdout, new RegExp(`INFO  served bytes match pinned seal-check@${PRODUCTION_PIN_COMMIT}`));
 });
 
 test("does not print a success verdict after README claim-population failure", async () => {

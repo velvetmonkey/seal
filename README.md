@@ -25,16 +25,13 @@ Download and verify the published release asset, install it under `~/.local`, th
 the command on your current shell's `PATH`:
 
 <!-- generated from published release; do not edit -->
-> The current source is the unreleased `v0.2.0` candidate. The install commands below fetch the
-> published `v0.2.0-rc.3`, which carries the previous receipt format and Linux-only Protect support.
-
 ```bash
-SEAL_VERSION=v0.2.0-rc.3
-artifact_name="seal-v0.2.0-rc.3-linux-x64"
-artifact_sha256="2b1710ece93295543b820b081734d9014f1d9bc4cf4dd772d7d59023858a46b4"
-artifact_bytes=6151598
+SEAL_VERSION=v0.2.1
+artifact_name="seal-v0.2.1-linux-x64"
+artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd"
+artifact_bytes=6214316
 sums_name="SHA256SUMS"
-sums_sha256="7c03029aba5aa10fd04d003b0a5a1604dd9b87f25990a6c5142ab9ded04bedd7"
+sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; else sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; fi
