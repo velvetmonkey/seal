@@ -78,7 +78,7 @@ still remain on disk.
 ### `PENDING RESTART`
 
 ```output
-Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -96,7 +96,7 @@ yet. Calls made before the restart are **not** gated. Restart Claude Code in
 this project. You will see `STALE`, with a detail line, after a session ends:
 
 ```output
-Sealed MCP route notes: STALE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: STALE (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -117,7 +117,7 @@ and the next session will raise the gate again on start.
 ### `ACTIVE`
 
 ```output
-Sealed MCP route notes: ACTIVE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: ACTIVE (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -144,7 +144,7 @@ project status and does not persist a conflict mode.
 ### `DRIFTED`
 
 ```output
-Sealed MCP route notes: DRIFTED (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: DRIFTED (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -198,7 +198,7 @@ The state file is damaged (here it was deliberately corrupted). Seal refuses
 to guess what it used to say.
 
 ```output
-Sealed MCP route notes: BROKEN (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: BROKEN (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   delete_all_notes

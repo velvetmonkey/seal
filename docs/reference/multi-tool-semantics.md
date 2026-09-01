@@ -23,7 +23,7 @@ seal protect db db.drop_table
 ```
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   db.execute_sql
@@ -60,7 +60,7 @@ seal status
 ```
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   db.execute_sql
@@ -127,7 +127,7 @@ seal unprotect db
 ```
 
 ```output
-Sealed MCP route db: - outside Seal (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route db: - outside Seal (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   none

@@ -95,7 +95,7 @@ Protect validates both names, installs a private Claude Code local override,
 and leaves the project `.mcp.json` unchanged. Its report includes:
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/dd55a80b52f8ff195a70be9d9dbaff16/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
 
 Gated through this route:
   demo.mutate
