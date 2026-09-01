@@ -187,6 +187,19 @@ function createProxy(options) {
     if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult(refusal, detail));
   }
 
+  function blockMalformedClientFrame(frame, detail) {
+    // A malformed client frame might not have a usable tool name.  Use the
+    // proxy's fixed, valid receipt carrier and replace its kernel decision
+    // text with the perimeter fact this receipt records.
+    const receipt = contract.receiptFor({ tool: "seal.proxy", args: {}, accepted: false });
+    receipt.reason = detail;
+    emitReceipt("BLOCK", { params: { name: "seal.proxy", arguments: {} } }, {
+      refusal: "response_malformed",
+      detail,
+    }, receipt);
+    if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult("response_malformed", detail));
+  }
+
   function canForward(frame) {
     if (childSpawnError) {
       blockForward(frame, childSpawnError, `protected server command failed to start: ${childArgv[0]}`);
@@ -349,20 +362,16 @@ function createProxy(options) {
         return;
       }
       if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
-        blockForward(
-          { params: { name: "seal.proxy", arguments: {} } },
-          "response_malformed",
-          "client frame must be a single JSON object",
-        );
+        blockMalformedClientFrame(frame, "client frame must be a single JSON object");
         return;
       }
       try {
         if (jsonHasDuplicateObjectKeys(line)) {
-          blockForward(frame, "response_malformed", "client frame contains a duplicate JSON object key");
+          blockMalformedClientFrame(frame, "client frame contains a duplicate JSON object key");
           return;
         }
       } catch (error) {
-        blockForward(frame, "response_malformed", `client frame inspection failed: ${error.message}`);
+        blockMalformedClientFrame(frame, `client frame inspection failed: ${error.message}`);
         return;
       }
       if (!frame.method && Object.hasOwn(frame, "id")) {
