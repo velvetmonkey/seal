@@ -59,8 +59,8 @@ $ seal protect notes delete_all_notes
 ```
 
 ```output
-Project .mcp.json hash before protect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
-Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
+Project .mcp.json hash before protect: fdc7bbaff3ff5f52cdb27142417c76a69e117687408d2dc6c1410211072f9c47
+Sealed MCP route notes: PENDING RESTART (/home/monkey/scratch/recapture13-captures/guide-unprotect/home/.local/share/seal/projects/180189864b97f3e1941605bb846c698c/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -72,7 +72,7 @@ Not controlled:
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 1 other tool NOT APPROVAL-GATED (they pass through Seal): append_note
-State: /home/you/.local/share/seal/projects/guide-example/state.json
+State: /home/monkey/scratch/recapture13-captures/guide-unprotect/home/.local/share/seal/projects/180189864b97f3e1941605bb846c698c/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
