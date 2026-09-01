@@ -13,6 +13,10 @@ const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced
 const LEAN_LAUNCHER_ENV = "SEAL_LEAN_LAUNCHER";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SOURCE_PINS = Object.freeze({
+  "v0.2.1": Object.freeze({
+    repository: "https://github.com/velvetmonkey/seal-host.git",
+    commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
+  }),
   "v0.2.0": Object.freeze({
     repository: "https://github.com/velvetmonkey/seal-host.git",
     commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
