@@ -386,35 +386,8 @@ you. No approval should be trusted until the hook is removed.
 
 ## From `seal verify`
 
-The optional verifier reads and parses the receipt before it obtains the
-pinned runtime needed to re-derive a kernel receipt. Each runtime refusal
-below names the exact cache path and source it tried, gives the next `seal
-verify` command, and says whether the runtime file was changed.
-
-### `runtime_download_failed`
-
-The fetch to the named pinned runtime source failed; the refusal includes the
-underlying fetch error. This does not establish why it failed or whether the
-machine is offline. Check the source and its network path, then run the
-printed `seal verify` command. Seal did not write the missing runtime file.
-
-### `runtime_download_not_found`
-
-The named source responded HTTP 404 for the pinned runtime file. Check that
-the pinned runtime revision is published, then run the printed `seal verify`
-command. Seal did not write the missing runtime file.
-
-### `runtime_download_unavailable`
-
-The named runtime source responded with the HTTP status in the refusal. Check
-the runtime source, then run the printed `seal verify` command. Seal did not
-write the missing runtime file.
-
-### `runtime_cache_unreadable`
-
-Seal found the named cached runtime path but could not read it. Make that path
-readable, then run the printed `seal verify` command. Seal did not replace the
-cached runtime file.
+The optional verifier reads and parses the receipt, then replays it with the
+shipped kernel.
 
 ### `duplicate_member`
 
@@ -445,10 +418,8 @@ The receipt supplies non-empty `grants` or `forecasts`, which the current
 kernel does not consume. They must be empty so signed-but-ignored input cannot
 appear to affect replay.
 
-Receipt refusals use the same tokens whether you invoke the installed
-`seal verify` command or the standalone v2 checker. The producer, command,
-and checker all use `seal.receipt/v2`; there is no second receipt format to
-select.
+The producer, command, and checker all use `seal.receipt/v2`; there is no
+second receipt format to select.
 
 ## Platform and version refusals
 

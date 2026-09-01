@@ -41,8 +41,8 @@ Exit code: `0`.
 
 Three parts, always in this order:
 
-- **Runtime** — a cached component that `seal verify` uses. Its presence does
-  not decide whether your project is protected; see below.
+- **Runtime** — its presence does not decide whether your project is protected;
+  see below.
 - **Protection** — this project's one shared server state, then the guarded
   names: `server.tool` for one tool or `server.{tool, tool}` for several,
   followed by the path of the state file the answer came from. There is one
