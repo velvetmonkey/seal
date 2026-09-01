@@ -25,7 +25,7 @@ prints `seal: unknown command: <name>` and the list, and exits `2`
 
 `seal __proxy` and `seal __demo-server` also exist in the dispatch. They are
 private spine subcommands that the product starts for itself, not part of the
-public command surface, and `seal --help` does not list them
+public command surface, and `seal --help` omits them
 (`bin/seal:401-403`).
 
 Previous: [Reference](README.md).
