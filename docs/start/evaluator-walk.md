@@ -62,8 +62,10 @@ the thing that can sign is the same machine that made the decision. A
 production-grade check would verify against a key you obtained from a
 source you already trust, not a file written next to the receipt.
 
-The separate browser product at https://velvetmonkey.github.io/seal-check/ does
-not check this demo's v2 receipt. Use the checkout-root command above.
+The separate browser product at https://velvetmonkey.github.io/seal-check/ shares
+this checker's kernel WASM and recognizes `seal_receipt: "v2"`, but it refuses
+this demo's differently shaped v2 receipt at schema validation. Use the
+checkout-root command above.
 The landing page has **zero `<button>` controls**.
 
 See [distribution.md](../assurance/distribution.md) for what the payload contains, and
