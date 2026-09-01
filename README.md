@@ -92,22 +92,18 @@ seal protect db demo.mutate demo.erase
 ```
 
 Protect validates both names, installs a private Claude Code local override,
-and leaves the project `.mcp.json` unchanged. Its report includes:
+and leaves the project `.mcp.json` unchanged. The following is an excerpt of
+its report; the project id and remaining lines vary by run:
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/…/state.json)
 
 Gated through this route:
   demo.mutate
   demo.erase
 
-Not controlled:
-  Bash and subprocesses outside this MCP route
-  direct resource access outside this MCP route
-  other clients
-  other MCP servers not routed through this Seal wrapper
-  other uncontrolled routes can also exist
-Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
+Not controlled: …
+Protection scope: …
 ```
 
 Restart Claude Code before using the tools, then ask the machine rather than
