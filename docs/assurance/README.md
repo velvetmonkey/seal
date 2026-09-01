@@ -17,7 +17,7 @@ the Node CLI this repository ships.
 3. [evaluator-walk.md](../start/evaluator-walk.md) — the forensic receipt check for a
    source build after `seal demo`, using the checkout checker, with no captured
    transcript.
-4. [assurance/RELEASE-NOTES-v0.2.0-rc.3.md](RELEASE-NOTES-v0.2.0-rc.3.md) — what v0.2.0-rc.3 contains and
+4. [assurance/RELEASE-NOTES-v0.2.1.md](RELEASE-NOTES-v0.2.1.md) — what v0.2.1 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
@@ -45,7 +45,7 @@ the Node CLI this repository ships.
    sandbox; one server's named tool set; and receipt-key custody limits.
    Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
    macOS x64/arm64. Windows, Linux ARM and other platforms are unsupported.
-2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.0-rc.3.md) —
+2. [“What Seal does not cover” in the release notes](RELEASE-NOTES-v0.2.1.md) —
    the historical rc.3 boundary with its historical citations. It differs from
    the current macOS Protect boundary in the platform table above.
 
@@ -66,7 +66,7 @@ the Node CLI this repository ships.
 4. [assurance/claude-code-evidence.md](claude-code-evidence.md) — the client matrix, why
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
-5. [The `seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.0-rc.3/seal-receipt-check.mjs) — the
+5. [The `seal-receipt-check.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.1/seal-receipt-v2.mjs) — the
    receipt checker is a sibling asset published with the release, not in the
    installed payload. Download it with the binary and verify both against that
    release's `SHA256SUMS` asset before using it.
@@ -110,7 +110,7 @@ the Node CLI this repository ships.
 
 ## I want the design history
 
-Dated records of how v0.2.0-rc.3 got its shape. Several describe designs that were
+Dated records of how v0.2.1 got its shape. Several describe designs that were
 ruled on and explicitly never built; each says so in its opening lines.
 
 - [ROADMAP-KERNEL-OUTWARD.md](../archive/ROADMAP-KERNEL-OUTWARD.md) — the working order
