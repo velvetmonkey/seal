@@ -92,10 +92,10 @@ seal protect db demo.mutate demo.erase
 ```
 
 Protect validates both names, installs a private Claude Code local override,
-and leaves the project `.mcp.json` unchanged. It ends with:
+and leaves the project `.mcp.json` unchanged. Its report includes:
 
 ```output
-Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/dd55a80b52f8ff195a70be9d9dbaff16/state.json)
 
 Gated through this route:
   demo.mutate
@@ -105,7 +105,7 @@ Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  configured MCP servers not routed through this Seal wrapper: cache
+  other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```
@@ -173,6 +173,7 @@ Receipts are signed decision records, not proof that an effect happened.
 - [Choose what to protect](docs/guide/choosing-what-to-protect.md).
 - [Operate and inspect protection](docs/guide/what-is-protected-right-now.md).
 - [Understand receipts](docs/reference/receipt-operations.md).
+- [Look up a command](docs/reference/commands.md).
 - [Troubleshoot refusals](docs/guide/when-something-looks-wrong.md).
 - [Audit architecture and assurance](docs/assurance/README.md).
 - Apache-2.0. See [LICENSE](LICENSE).

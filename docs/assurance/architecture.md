@@ -12,7 +12,7 @@ flowchart LR
     proxy["Node proxy\nspine/proxy.cjs"]
     state["TESTED state machine\nhandle · freshness · protocol · one-use"]
     wasm["pinned vendored WASM; load-bearing"]
-    server["Selected MCP server\none selected tool"]
+    server["Selected MCP server\nnamed tool set"]
 
     claude --> proxy
     proxy --> state

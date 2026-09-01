@@ -11,8 +11,8 @@ This guide is for using that gate day to day. It assumes you have seen a
 `.mcp.json` before and can run commands in a terminal, and nothing more. Every
 command shown here was actually run. Literal output blocks reproduce that run;
 blocks marked with an ellipsis or explanatory text are excerpts. The outputs
-were captured in a scratch project on 2026-08-15, so paths in them will differ
-from yours.
+were captured in scratch projects on 2026-08-15 and 2026-09-01, so paths in
+them will differ from yours.
 
 ## How examples are labeled
 
@@ -80,7 +80,7 @@ published evidence archive. It does not establish the receipt is true.
 Read these in order the first time; each one stands alone afterwards.
 
 1. **[Choosing what to protect](choosing-what-to-protect.md)** — the judgement
-   call: which tool earns the gate, what `seal protect` changes, and what it
+   call: which tools earn the gate, what `seal protect` changes, and what it
    deliberately leaves alone.
 2. **[What is protected right now](what-is-protected-right-now.md)** — asking
    the machine instead of remembering: `seal status` and `seal doctor`, every
@@ -91,8 +91,8 @@ Read these in order the first time; each one stands alone afterwards.
    refusal token Seal can print, what caused it, and what to do next.
 
 One honest sentence to carry into all four pages: Seal is a gate, not a
-sandbox. It controls the path through it — Claude Code calling that one tool
-of that one server — and only that path. Bash, the network, subprocesses, and
+sandbox. It controls the path through it — Claude Code calling the named
+tools of that one server — and only that path. Bash, the network, subprocesses, and
 every other tool and server are outside it, and the approval prompt says so
 every time.
 

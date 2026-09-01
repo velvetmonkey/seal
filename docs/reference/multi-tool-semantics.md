@@ -199,6 +199,11 @@ with the omitted tool named when its state exposed only two guarded members.
 
 ## Document/code disagreements
 
+These bullets record the documentation as it stood on 2026-08-22. The
+2026-09-01 documentation coherence pass fixed the named pages; the guide and
+README now describe the named-set behavior. The code citations remain true of
+the code. The bullets stay as the dated record of what this audit found.
+
 - `docs/guide/choosing-what-to-protect.md:3-5,35-42` says Seal protects exactly
   one tool and that the gate holds one name. The code accepts `TOOL [TOOL...]`
   and stores a nonempty list (`bin/seal:290-317` and

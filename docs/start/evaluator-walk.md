@@ -66,7 +66,7 @@ The separate browser product at https://velvetmonkey.github.io/seal-check/ does
 not check this demo's v2 receipt. Use the checkout-root command above.
 The landing page has **zero `<button>` controls**.
 
-See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and
+See [distribution.md](../assurance/distribution.md) for what the payload contains, and
 [LIMITATIONS.md](../archive/LIMITATIONS.md) for the family-level claims block.
 
 Previous: [Install](install.md).

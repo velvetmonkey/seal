@@ -1,8 +1,10 @@
 # Choosing what to protect
 
 Seal protects a declared set of tools on one MCP server per project. This page
-about making that choice well, and about what `seal protect` does and — just
-as important — what it leaves alone.
+is about making that choice well, and about what `seal protect` does and — just
+as important — what it leaves alone. Every command on this page runs against
+the same example server: a `notes` server whose `delete_all_notes` tool earns
+the gate and whose `append_note` tool stays open on purpose.
 
 ## The judgement call
 
@@ -20,6 +22,8 @@ The bundled demo is the useful contrast: `demo.mutate` appends to its demo data
 file, while `demo.erase` truncates it. They are different risks; naming both
 when both need approval is the point of choosing a set rather than selecting a
 single winner.
+
+This page's example `notes` server is a plain `stdio` entry in `.mcp.json`:
 
 ```json
 {
@@ -46,34 +50,35 @@ Two constraints to know before you choose:
 
 ## What `seal protect` does
 
-Run it in the project directory, naming the server and the complete tool set:
+Run it in the project directory, naming the server and the complete tool set.
+For the `notes` server that set is one tool: `delete_all_notes` needs the
+gate, and `append_note` stays open.
 
 ```bash
-$ seal protect db demo.mutate demo.erase
+$ seal protect notes delete_all_notes
 ```
 
 ```output
-Project .mcp.json hash before protect: 3b4703e3d8c33826df5926e5409547e0aff4b54fb58c634277f45ced003cb8e9
-Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+Project .mcp.json hash before protect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
+Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
 
 Gated through this route:
-  demo.mutate
-  demo.erase
+  delete_all_notes
 
 Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  configured MCP servers not routed through this Seal wrapper: cache
+  other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json
+Protection scope: 1 other tool NOT APPROVAL-GATED (they pass through Seal): append_note
+State: /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
+  To clear protection for every guarded tool on server notes, including guarded tools: delete_all_notes, stop Claude Code, then run `seal unprotect notes`.
 ```
 
 Exit code: `0`.
@@ -85,11 +90,13 @@ The same server cannot be extended by running `protect` again; the second
 command was refused:
 
 ```bash
-$ seal protect db demo.mutate demo.erase
+$ seal protect notes delete_all_notes
 ```
 
 ```output
 seal: REFUSE already_protected: project is already PENDING RESTART
+Next:
+  Run `seal status` to see the current protection before changing it.
 ```
 
 Exit code: `1`.
@@ -98,11 +105,15 @@ The three user-visible changes are:
 
 1. **Seal recorded the server as it is right now** — the exact `.mcp.json`
    entry, hashed — in a state file under your home directory (the `State:`
-   path). If that entry later changes, Seal notices and refuses to forward to
-   the changed server until you look at it.
+   path). That state file lives in this project's data directory,
+   `~/.local/share/seal/projects/<project-id>/`, next to the `receipts`
+   directory this project's decision records go to. Seal puts the data
+   directory under `$XDG_DATA_HOME` instead when that is set. If the recorded
+   entry later changes, Seal notices and refuses to forward to the changed
+   server until you look at it.
 2. **Seal asked Claude Code for a local override**: it ran
    `claude mcp add --scope local`, so that in this project, for you only,
-   the name `db` now starts Seal's wrapper, and the wrapper starts your
+   the name `notes` now starts Seal's wrapper, and the wrapper starts your
    real server behind the gate. Local scope is private to your machine — it
    is not written to `.mcp.json` and teammates never see it.
 3. **It printed the hash of your `.mcp.json`** so you can see it was not
@@ -151,8 +162,8 @@ $ seal unprotect notes
 ```
 
 ```output
-Project .mcp.json hash before unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
-Project .mcp.json hash after unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
+Project .mcp.json hash before unprotect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
+Project .mcp.json hash after unprotect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
 Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
 
 Gated through this route:
@@ -164,6 +175,11 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
+Next:
+  1. Run `seal status`.
+  2. Confirm the sealed MCP route is outside Seal.
+Undo:
+  Run `seal protect notes delete_all_notes`.
 ```
 
 The local override is removed; when the before and after hashes match, they
@@ -179,4 +195,4 @@ remain until you or Claude Code remove them.
 
 Previous: [Guide](README.md).
 Up: [Guide](README.md).
-Next: [Knowing it worked](knowing-it-worked.md).
+Next: [What is protected right now](what-is-protected-right-now.md).

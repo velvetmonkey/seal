@@ -5,6 +5,7 @@
     "docs/assurance/evaluator-start.md": { "coveredBy": ["scripts/launch-truth-gate.mjs#evaluator-start"] },
     "docs/assurance/linkcheck-population-control.md": { "coveredBy": ["test/linkcheck-assertions.test.mjs#linkcheck-population"] },
     "docs/reference/multi-tool-semantics.md": { "coveredBy": ["test/multi-tool-semantics-doc.test.cjs#multi-tool-semantics"] },
+    "docs/reference/commands.md": { "allowlistReason": "This command reference table names a bin/seal or spine source line for every row; each row is checked against those cited lines by a reader, and no deterministic doc test binds the table yet." },
     "docs/reference/receipt-operations-v1/README.md": { "coveredBy": ["test/receipt-operations-doc.test.mjs#receipt-vector"] },
     "docs/reference/receipt-operations.md": { "coveredBy": ["test/receipt-operations-doc.test.mjs#receipt-operations-verify"] },
     "docs/reproduce.md": { "coveredBy": ["test/seal-reproduce.test.cjs#result"] },

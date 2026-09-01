@@ -104,7 +104,10 @@ of this page is for.
 ## Checking a receipt afterwards
 
 When the gate can write its receipt directory, every decision — the prompt
-being offered, an allowed call, a refusal — writes one JSON file. `seal status`
+being offered, an allowed call, a refusal — writes one JSON file. The demo
+writes them to the `receipts` directory inside the demo directory it prints.
+A protected project writes them to the `receipts` directory in the project
+data directory, next to its state file. `seal status`
 shows where they live and which is newest. A receipt records what the gate
 decided and about what. Both `seal demo` and the protected Claude Code path
 write signed receipts. The demo generates a temporary key for its run; the
@@ -193,6 +196,6 @@ and read its scope witness; it ends with the honest summary this guide keeps
 returning to: Seal is a gate, not a sandbox — it controls the path through
 it, and only that path.
 
-Previous: [Choosing what to protect](choosing-what-to-protect.md).
+Previous: [What is protected right now](what-is-protected-right-now.md).
 Up: [Guide](README.md).
 Next: [GitHub Actions provenance](github-actions-provenance.md).

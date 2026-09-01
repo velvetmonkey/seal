@@ -95,7 +95,7 @@ the Node CLI this repository ships.
 - [guide/README.md](../guide/README.md) — the operating-guide entry point,
   including prerequisites and a recommended route through the guide.
 - [guide/choosing-what-to-protect.md](../guide/choosing-what-to-protect.md) — how
-  to choose the one tool that needs a gate and understand what protection
+  to choose the tool set that needs a gate and understand what protection
   changes or leaves alone.
 - [guide/what-is-protected-right-now.md](../guide/what-is-protected-right-now.md)
   — how to read every `seal status` protection state and use `seal doctor`.
@@ -104,9 +104,11 @@ the Node CLI this repository ships.
 - [guide/when-something-looks-wrong.md](../guide/when-something-looks-wrong.md) —
   what each refusal token means, what caused it, and what to do next.
 - [reference/README.md](../reference/README.md) — the reference section map.
+- [reference/commands.md](../reference/commands.md) — every public `seal`
+  command, its arguments, and the source line behind each row.
 - [reference/multi-tool-semantics.md](../reference/multi-tool-semantics.md) — the
   shipped named-set behavior, its code and command evidence, and the measured
-  multi-tool state-coverage gap.
+  multi-tool state coverage across all six state classes.
 
 ## I want the design history
 
@@ -168,7 +170,8 @@ disposition is an open ruling.
 - [findings.md](../archive/findings.md) — the preserved NEEDS BEN items.
 
 The evaluator-facing family truth surface is
-[docs/assurance/evaluator-start.md](../assurance/evaluator-start.md), at the repository root; it audits
+[docs/assurance/evaluator-start.md](../assurance/evaluator-start.md), in this
+`docs/assurance/` directory; it audits
 the family's artifacts and proofs, not this CLI.
 
 Previous: [Receipt operations vector set v1](../reference/receipt-operations-v1/README.md).

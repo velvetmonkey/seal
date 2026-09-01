@@ -14,6 +14,7 @@
       "pages": [
         { "path": "docs/guide/README.md", "label": "Guide" },
         { "path": "docs/guide/choosing-what-to-protect.md", "label": "Choosing what to protect" },
+        { "path": "docs/guide/what-is-protected-right-now.md", "label": "What is protected right now" },
         { "path": "docs/guide/knowing-it-worked.md", "label": "Knowing it worked" },
         { "path": "docs/guide/github-actions-provenance.md", "label": "GitHub Actions provenance" }
       ]
@@ -22,6 +23,7 @@
       "name": "reference",
       "pages": [
         { "path": "docs/reference/README.md", "label": "Reference" },
+        { "path": "docs/reference/commands.md", "label": "Commands" },
         { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
         { "path": "docs/reference/multi-tool-semantics.md", "label": "Multi-tool semantics" },
         { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt operations vector set v1" }
@@ -46,15 +48,6 @@
       "footer": [
         { "role": "Up", "label": "Guide", "target": "README.md" },
         { "role": "Next", "label": "What is protected right now", "target": "what-is-protected-right-now.md" }
-      ]
-    },
-    {
-      "path": "docs/guide/what-is-protected-right-now.md",
-      "reason": "digest-pinned guide page",
-      "footer": [
-        { "role": "Previous", "label": "When something looks wrong", "target": "when-something-looks-wrong.md" },
-        { "role": "Up", "label": "Guide", "target": "README.md" },
-        { "role": "Next", "label": "Knowing it worked", "target": "knowing-it-worked.md" }
       ]
     },
     {

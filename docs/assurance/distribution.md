@@ -10,7 +10,7 @@ It ships **one** installable artifact, for **Linux x86-64**.
 `scripts/build-dist.cjs` writes `dist/seal-v<identity>-linux-x64`, where the
 identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
 otherwise `<version>-dev.g<commit>` — see
-[VERSION-IDENTITY.md](version-identity.md). That file
+[version-identity.md](version-identity.md). That file
 is the installer and the payload. The published pin lives in the `SHA256SUMS`
 release asset alongside the artifact (digest and byte length). The repository
 root intentionally has no hand-maintained copy. `test/dist-pin.test.cjs`

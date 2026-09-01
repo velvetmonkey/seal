@@ -1,8 +1,21 @@
 # Receipt operations
 
-Seal is the canonical reference for the four operations of the shipped v2
+This page is the canonical reference for the four operations of the shipped v2
 receipt verifier, `checker/seal-receipt-v2.mjs`. It describes TESTED behaviour
 of that checker, not a claim that a receipt makes an outside event true.
+
+## Where receipts live
+
+- `seal demo` writes receipts to the `receipts` directory inside the demo
+  directory it prints, on purpose, so that a demo run cannot plant fabricated
+  decisions in a project's durable receipt store (`spine/demo.cjs:107-118`).
+- A protected project writes receipts to the `receipts` directory inside the
+  project data directory, `~/.local/share/seal/projects/<project-id>/`, under
+  `$XDG_DATA_HOME` instead when that is set (`spine/protection.cjs:228-230`
+  and `spine/protection.cjs:996`).
+- The `<project-id>` part comes from a hash of the project path, so instead of
+  guessing it, run `seal status` in the project and read the exact path from
+  its `Receipts:` line.
 
 ## The four verbs
 
@@ -63,6 +76,6 @@ The normative envelope and canonicalisation rules remain in
 [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md). This page owns the meaning of the
 four operational verbs and the trust ceiling of the shipped verifier.
 
-Previous: [Reference](README.md).
+Previous: [Commands](commands.md).
 Up: [Reference](README.md).
 Next: [Multi-tool semantics](multi-tool-semantics.md).
