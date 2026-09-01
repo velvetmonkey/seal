@@ -173,7 +173,6 @@ Receipts are signed decision records, not proof that an effect happened.
 - [Choose what to protect](docs/guide/choosing-what-to-protect.md).
 - [Operate and inspect protection](docs/guide/what-is-protected-right-now.md).
 - [Understand receipts](docs/reference/receipt-operations.md).
-- [Look up a command](docs/reference/commands.md).
 - [Troubleshoot refusals](docs/guide/when-something-looks-wrong.md).
 - [Audit architecture and assurance](docs/assurance/README.md).
 - Apache-2.0. See [LICENSE](LICENSE).

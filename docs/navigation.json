@@ -23,7 +23,6 @@
       "name": "reference",
       "pages": [
         { "path": "docs/reference/README.md", "label": "Reference" },
-        { "path": "docs/reference/commands.md", "label": "Commands" },
         { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
         { "path": "docs/reference/multi-tool-semantics.md", "label": "Multi-tool semantics" },
         { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt operations vector set v1" }

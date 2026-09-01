@@ -104,8 +104,6 @@ the Node CLI this repository ships.
 - [guide/when-something-looks-wrong.md](../guide/when-something-looks-wrong.md) —
   what each refusal token means, what caused it, and what to do next.
 - [reference/README.md](../reference/README.md) — the reference section map.
-- [reference/commands.md](../reference/commands.md) — every public `seal`
-  command, its arguments, and the source line behind each row.
 - [reference/multi-tool-semantics.md](../reference/multi-tool-semantics.md) — the
   shipped named-set behavior, its code and command evidence, and the measured
   multi-tool state coverage across all six state classes.
