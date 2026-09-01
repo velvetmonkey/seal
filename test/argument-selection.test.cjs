@@ -90,6 +90,46 @@ test("a bare tool name gates every call as before", async (t) => {
   t.diagnostic(prompt.params.message.split("\n").at(-1));
 });
 
+test("a bare tool name scans duplicate JSON keys before selecting the call", () => {
+  const selection = normalizeToolSelection("db.mutate");
+  const raw = '{"jsonrpc":"2.0","params":{"name":"db.read","name":"db.mutate","arguments":{}}}';
+  assert.deepEqual(evaluateSelection(selection, {}, raw), {
+    gate: true,
+    label: "db.mutate",
+    detail: "duplicate JSON object key",
+  });
+});
+
+test("non-object frames and duplicate params keys are blocked before the child", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-frame-gate-"));
+  const storePath = path.join(dir, "approvals.journal");
+  const receiptsDir = path.join(dir, "receipts");
+  const childData = path.join(dir, "child.ndjson");
+  createJournal(storePath);
+  const decisions = [];
+  const proxy = createProxy({
+    guardTools: ["db.mutate"],
+    storePath,
+    receiptsDir,
+    childArgv: [process.execPath, path.join(ROOT, "contract/fixtures/counting-child.cjs"), childData],
+    onClientLine() {},
+    onDecision: (decision) => decisions.push(decision),
+  });
+  t.after(() => { proxy.stop(); fs.rmSync(dir, { recursive: true, force: true }); });
+  while (!fs.existsSync(`${childData}.count`)) await new Promise((resolve) => setTimeout(resolve, 10));
+
+  proxy.write('[{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"db.mutate","arguments":{}}}]');
+  proxy.write('{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"db.mutate","name":"db.read","arguments":{}}}');
+  await waitFor(decisions, (decision) => decisions.length === 2 && decision);
+
+  assert.equal(fs.readFileSync(`${childData}.count`, "utf8").trim(), "0");
+  assert.deepEqual(decisions.map(({ decision, refusal }) => ({ decision, refusal })), [
+    { decision: "BLOCK", refusal: "response_malformed" },
+    { decision: "BLOCK", refusal: "response_malformed" },
+  ]);
+  assert.equal(fs.readdirSync(receiptsDir).filter((name) => name.endsWith("-BLOCK.json")).length, 2);
+});
+
 test("JSON number zero and signed zero are one scalar", () => {
   const zero = normalizeToolSelection({ name: "db.mutate", predicate: "count=0" });
   const negative = normalizeToolSelection({ name: "db.mutate", predicate: "count=-0" });

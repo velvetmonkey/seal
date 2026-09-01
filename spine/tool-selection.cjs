@@ -105,12 +105,12 @@ function jsonHasDuplicateObjectKeys(text) {
 function evaluateSelection(selection, args, rawFrame) {
   const label = selection.source || `${selection.name}?${selection.predicate}`;
   if (!selection.ok) return { gate: true, label, detail: `predicate failed to parse: ${selection.error}` };
-  if (selection.predicate === null) return { gate: true, label, detail: "bare tool name selects all calls" };
   try {
     if (jsonHasDuplicateObjectKeys(rawFrame)) return { gate: true, label, detail: "duplicate JSON object key" };
   } catch (error) {
     return { gate: true, label, detail: `argument inspection failed: ${error.message}` };
   }
+  if (selection.predicate === null) return { gate: true, label, detail: "bare tool name selects all calls" };
   const predicate = selection.parsedPredicate;
   if (!args || typeof args !== "object" || Array.isArray(args)) return { gate: true, label, detail: "predicate does not apply to a non-object arguments value" };
   if (!Object.hasOwn(args, predicate.argument)) return { gate: true, label, detail: `predicate does not apply because argument ${predicate.argument} is absent` };

@@ -25,7 +25,7 @@ const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
-const { evaluateSelection, normalizeToolSelection } = require("./tool-selection.cjs");
+const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
@@ -346,6 +346,23 @@ function createProxy(options) {
         frame = JSON.parse(line);
       } catch {
         onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "seal proxy: unparseable frame refused" } }));
+        return;
+      }
+      if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
+        blockForward(
+          { params: { name: "seal.proxy", arguments: {} } },
+          "response_malformed",
+          "client frame must be a single JSON object",
+        );
+        return;
+      }
+      try {
+        if (jsonHasDuplicateObjectKeys(line)) {
+          blockForward(frame, "response_malformed", "client frame contains a duplicate JSON object key");
+          return;
+        }
+      } catch (error) {
+        blockForward(frame, "response_malformed", `client frame inspection failed: ${error.message}`);
         return;
       }
       if (!frame.method && Object.hasOwn(frame, "id")) {
