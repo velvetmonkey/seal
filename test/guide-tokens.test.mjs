@@ -26,7 +26,7 @@ const store = require("../spine/store.cjs");
 // version slot. The pin covers every other byte in the guide.
 const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";
 const EXPECTED_RELEASE_VERSION = `v${readFileSync(resolve(ROOT, "VERSION"), "utf8").trim()}`;
-const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.0(?=\\.)", "gm");
+const GENERATED_VERSION_SLOT = new RegExp("(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v0\\.2\\.1(?=\\.)", "gm");
 
 function canonicalReviewedGuide(file, text) {
   if (file !== VERSIONED_GUIDE) return text;

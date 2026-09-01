@@ -88,6 +88,11 @@
       "footer": []
     },
     {
+      "path": "docs/assurance/RELEASE-NOTES-v0.2.1.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
       "path": "docs/assurance/installed-tree-pin-control.md",
       "reason": "standalone control description",
       "footer": []
