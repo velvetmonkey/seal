@@ -162,9 +162,9 @@ $ seal unprotect notes
 ```
 
 ```output
-Project .mcp.json hash before unprotect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
-Project .mcp.json hash after unprotect: 0c49dc5f3ddc7b3a540ddaceaa2d889ce554be280b8d7abc5dd7c4f34a0e7d54
-Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/guide-example/state.json)
+Project .mcp.json hash before unprotect: fdc7bbaff3ff5f52cdb27142417c76a69e117687408d2dc6c1410211072f9c47
+Project .mcp.json hash after unprotect: fdc7bbaff3ff5f52cdb27142417c76a69e117687408d2dc6c1410211072f9c47
+Sealed MCP route notes: - outside Seal (/home/monkey/scratch/recapture13-captures/guide-unprotect/home/.local/share/seal/projects/180189864b97f3e1941605bb846c698c/state.json)
 
 Gated through this route:
   none

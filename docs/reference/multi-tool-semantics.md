@@ -23,7 +23,8 @@ seal protect db db.drop_table
 ```
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
+Project .mcp.json hash before protect: fa5ec5dd0c5fdca779d85565202294b553c70090b7804663f916910393d5ff38
+Sealed MCP route db: PENDING RESTART (/home/monkey/scratch/recapture13-captures/multi-one-tool/home/.local/share/seal/projects/4dd1b12b78f5f57cf3a6f6e22bc116fb/state.json)
 
 Gated through this route:
   db.execute_sql
@@ -34,13 +35,21 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-exit 0
+Protection scope: 2 other tools NOT APPROVAL-GATED (they pass through Seal): db.drop_table, db.read
+State: /home/monkey/scratch/recapture13-captures/multi-one-tool/home/.local/share/seal/projects/4dd1b12b78f5f57cf3a6f6e22bc116fb/state.json
+Next:
+  1. Restart Claude Code in this project.
+  2. Run `seal status`.
+  3. Confirm the sealed MCP route is ACTIVE.
+Undo:
+  To clear protection for every guarded tool on server db, including guarded tools: db.execute_sql, stop Claude Code, then run `seal unprotect db`.
 seal: REFUSE already_protected: project is already PENDING RESTART
-exit 1
+Next:
+  Run `seal status` to see the current protection before changing it.
 ```
 
-The doubled `db.db.execute_sql` is not a transcription error: the server name is
-`db` and this test server advertises a tool whose full name is
+The first command exited `0`; the refused second command exited `1`. The server
+name is `db`, and this test server advertises a tool whose full name is
 `db.execute_sql`.
 
 ## 2. What does `seal status` show per tool?
@@ -53,14 +62,15 @@ independent state or lease for each tool.
 beside `view.state`, and prints the one `view.lease`; `spine/protection.cjs:12-19`
 defines the six shared state values.
 
-**Observation.** After protecting three advertised tools:
+**Observation.** After protecting three advertised tools, this is the
+contiguous protection excerpt from `seal status`:
 
 ```bash
 seal status
 ```
 
 ```output
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route db: PENDING RESTART (/home/monkey/scratch/recapture13-captures/multi-three-tools/home/.local/share/seal/projects/b735e98c3ff17b98b02da21c81fbc6ae/state.json)
 
 Gated through this route:
   db.execute_sql
@@ -73,10 +83,10 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-exit 0
 ```
 
-There is one `PENDING RESTART` value for the set, not three per-tool rows.
+The command exited `0`. There is one `PENDING RESTART` value for the set, not
+three per-tool rows.
 
 ## 3. What happens when one of three tools vanishes at activation?
 
@@ -127,7 +137,9 @@ seal unprotect db
 ```
 
 ```output
-Sealed MCP route db: - outside Seal (/home/you/.local/share/seal/projects/guide-example/state.json)
+Project .mcp.json hash before unprotect: fa5ec5dd0c5fdca779d85565202294b553c70090b7804663f916910393d5ff38
+Project .mcp.json hash after unprotect: fa5ec5dd0c5fdca779d85565202294b553c70090b7804663f916910393d5ff38
+Sealed MCP route db: - outside Seal (/home/monkey/scratch/recapture13-captures/multi-three-tools/home/.local/share/seal/projects/b735e98c3ff17b98b02da21c81fbc6ae/state.json)
 
 Gated through this route:
   none
@@ -138,8 +150,14 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-exit 0
+Next:
+  1. Run `seal status`.
+  2. Confirm the sealed MCP route is outside Seal.
+Undo:
+  Run `seal protect db db.execute_sql db.drop_table db.read`.
 ```
+
+The command exited `0`.
 
 Stored-state readback after the command:
 

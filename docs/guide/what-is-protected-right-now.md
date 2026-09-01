@@ -55,6 +55,10 @@ Three parts, always in this order:
 
 ## Every protection state
 
+Each block in this catalog is a contiguous protection excerpt from its own full
+`seal status` run. The Runtime, guidance, and Receipts lines outside each
+excerpt are omitted.
+
 ### `- outside Seal`
 
 ```output
@@ -67,7 +71,7 @@ Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  other MCP servers not routed through this Seal wrapper
+  configured MCP servers not routed through this Seal wrapper: notes
   other uncontrolled routes can also exist
 ```
 
@@ -78,7 +82,7 @@ still remain on disk.
 ### `PENDING RESTART`
 
 ```output
-Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route notes: PENDING RESTART (/home/monkey/scratch/recapture13-captures/guide-pending/home/.local/share/seal/projects/931a03760958af6d5115f8f8331dcf77/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -96,7 +100,7 @@ yet. Calls made before the restart are **not** gated. Restart Claude Code in
 this project. You will see `STALE`, with a detail line, after a session ends:
 
 ```output
-Sealed MCP route notes: STALE (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route notes: STALE (/home/monkey/scratch/recapture13-captures/guide-active-stale/home/.local/share/seal/projects/203647569f0f7890fcd9a3b0a88ce75e/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -107,8 +111,8 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection lease: pid 4127 generation 6
-Protection detail: previous wrapper lease is not live (generation 6); restart Claude Code to replace it
+Protection lease: pid 358692 generation 1
+Protection detail: previous wrapper lease is not live (generation 1); restart Claude Code to replace it
 ```
 
 That is normal, not an error: the wrapper from the last session has exited,
@@ -117,7 +121,7 @@ and the next session will raise the gate again on start.
 ### `ACTIVE`
 
 ```output
-Sealed MCP route notes: ACTIVE (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route notes: ACTIVE (/home/monkey/scratch/recapture13-captures/guide-active-stale/home/.local/share/seal/projects/203647569f0f7890fcd9a3b0a88ce75e/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -128,7 +132,7 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection lease: pid 4127 generation 6
+Protection lease: pid 358692 generation 1
 ```
 
 A live Claude Code session is running the wrapper right now. Calls to the
@@ -144,7 +148,7 @@ project status and does not persist a conflict mode.
 ### `DRIFTED`
 
 ```output
-Sealed MCP route notes: DRIFTED (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route notes: DRIFTED (/home/monkey/scratch/recapture13-captures/guide-drifted/home/.local/share/seal/projects/100846014db23d1ce923f95ac1f49019/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -177,7 +181,7 @@ matching entry.
 
 ### `BROKEN`
 
-`BROKEN` means the recorded state itself cannot be trusted. Two real forms:
+`BROKEN` means the recorded state cannot be used safely. Three real forms:
 
 ```output
 Sealed MCP route: BROKEN
@@ -189,16 +193,16 @@ Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  other MCP servers not routed through this Seal wrapper
+  configured MCP servers not routed through this Seal wrapper: notes
   other uncontrolled routes can also exist
-Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{
+Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{" is not valid JSON
 ```
 
 The state file is damaged (here it was deliberately corrupted). Seal refuses
 to guess what it used to say.
 
 ```output
-Sealed MCP route notes: BROKEN (/home/you/.local/share/seal/projects/guide-example/state.json)
+Sealed MCP route notes: BROKEN (/home/monkey/scratch/recapture13-captures/guide-broken-vanished/home/.local/share/seal/projects/18239a1b6be3bf11ec87c033cbd664fe/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -209,19 +213,16 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection detail: simulated: cannot write local config
+Protection detail: protected_tool_vanished: protected tool "delete_all_notes" vanished before activation; observed tools: append_note
 ```
 
-`seal protect` got halfway: it recorded the state, then the
-`claude mcp add` step failed, and the failure reason is kept as the detail.
-Seal did not finish installing the gate; because the external command failed,
-check Claude Code's local override before assuming it made no partial change.
+Here the server advertised `delete_all_notes` during `seal protect`, then no
+longer advertised it when the proxy tried to activate. Seal refused activation
+and recorded the whole route as broken instead of silently protecting a
+different tool set.
 
-What to do about `BROKEN` is honest but currently not smooth:
-`seal protect` refuses (`already_protected: project is already BROKEN`) and
-`seal unprotect` needs the Claude Code override to exist before it will
-finish. The working recovery, exercised for real, is in
-[when-something-looks-wrong](when-something-looks-wrong.md#claude_install_failed).
+For an activation failure like this one, restore the expected server and tool
+set, unprotect the route, then protect the intended complete set again.
 
 A related message you can see here:
 
@@ -235,7 +236,7 @@ Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  other MCP servers not routed through this Seal wrapper
+  configured MCP servers not routed through this Seal wrapper: notes
   other uncontrolled routes can also exist
 Protection detail: stored protection state is from another binary version
 ```
@@ -265,15 +266,19 @@ Three states:
 
 ## The Receipts lines
 
+This contiguous excerpt is from the PENDING RESTART status run above,
+immediately after `seal protect` created the project's empty receipts directory:
+
 ```output
-Receipts: 1 stored in /home/you/.local/share/seal/projects/guide-example/receipts
-Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
+Receipts: 0 stored in /home/monkey/scratch/recapture13-captures/guide-pending/home/.local/share/seal/projects/931a03760958af6d5115f8f8331dcf77/receipts
+Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 
-"Most recent (by write time)" is exactly that: the newest receipt file, not a
-verdict on your last session. A successful demo run ends with a BLOCK receipt
-— the blocked replay — so a BLOCK here can be the record of the gate holding,
-not of something going wrong. Open the named file to see which call it was.
+After decisions exist, "Most recent (by write time)" means the newest receipt
+file, not a verdict on your last session. A successful demo run ends with a
+BLOCK receipt — the blocked replay — so a BLOCK can be the record of the gate
+holding, not of something going wrong. Open the named file to see which call it
+was.
 
 Two less happy forms, both from real runs:
 
