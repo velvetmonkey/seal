@@ -251,18 +251,22 @@ than reinterpret another binary's records.
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 ```
 
-The runtime is a pinned, hash-checked component that only `seal verify`
-loads, and it is downloaded on demand the first time `seal verify` needs it.
+The shipped runtime includes pinned, hash-checked kernel files under
+`runtime/kernel/`; `seal status` checks those files, and `seal verify` loads
+the local checker, which replays using the shipped kernel.
 Three states:
 
-- `Runtime: absent … (kernel/wasm/seal.js is unavailable)` — not downloaded
-  yet. **This is the normal state of a fresh install** and affects nothing
-  but `seal verify`.
-- `Runtime: present …` — cached and every file matches its pinned hash.
+- `Runtime: absent … (kernel/wasm/seal.js is unavailable)` — a checked
+  shipped kernel file is unavailable; this is not the normal state when the
+  shipped kernel is present.
+- `Runtime: present …` — the checked shipped kernel files are present and
+  match their pinned hashes; this status does not say that every manifest
+  file, including the separate `src/verify.cjs`, is present in the shipped
+  tree.
 - `Runtime: integrity check failed … (kernel/wasm/seal.js hash mismatch;
-  cached bytes do not match the published runtime)` — the cached copy does
-  not match what was published. Seal will not use it; delete the cache
-  directory (`~/.cache/seal`) and let `seal verify` re-download.
+  runtime bytes do not match the published runtime)` — one or more checked
+  shipped kernel files do not match their pinned hashes, and Seal will not
+  treat that shipped runtime as present.
 
 ## The Receipts lines
 
