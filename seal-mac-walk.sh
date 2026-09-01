@@ -181,7 +181,15 @@ fi
 INSTALL=PASS
 
 run_capture version "$SEAL" --version
-if [ "$?" -eq 0 ]; then VERSION=PASS; else VERSION=FAIL; gatekeeper_note "$WORK/logs/version.txt"; finish 1; fi
+if [ "$?" -ne 0 ]; then VERSION=FAIL; gatekeeper_note "$WORK/logs/version.txt"; finish 1; fi
+# Exit 0 alone would pass for any version string, including the wrong asset.
+if grep -Fq '0.2.1' "$WORK/logs/version.txt"; then
+  VERSION=PASS
+else
+  VERSION='FAIL (expected 0.2.1)'
+  say 'FAIL: the installed Seal did not report version 0.2.1.'
+  finish 1
+fi
 
 run_capture status-initial "$SEAL" status
 if [ "$?" -eq 0 ]; then STATUS_INITIAL=PASS; else STATUS_INITIAL=FAIL; gatekeeper_note "$WORK/logs/status-initial.txt"; finish 1; fi
@@ -242,10 +250,18 @@ EOF
 chmod 700 "$WORK/start-claude-code.sh"
 
 run_capture witness-helper "$SEAL" doctor
-if [ "$?" -eq 0 ]; then WITNESS=PASS; else WITNESS=FAIL; gatekeeper_note "$WORK/logs/witness-helper.txt"; fi
-if [ "$WITNESS" != PASS ]; then
-  say 'FAIL: Protect will not be attempted because the product-reported native witness readiness failed.'
+if [ "$?" -ne 0 ]; then
+  WITNESS=FAIL
+  gatekeeper_note "$WORK/logs/witness-helper.txt"
+  say 'FAIL: Protect will not be attempted because `seal doctor` exited non-zero.'
   finish 1
+fi
+# `seal doctor` exits 0 even when it reports that it has NOT established
+# readiness, so report what it said instead of reading exit 0 as readiness.
+if grep -Fq 'ASSUMPTION' "$WORK/logs/witness-helper.txt"; then
+  WITNESS='UNKNOWN (seal doctor exited 0 and reported ASSUMPTION: readiness not established)'
+else
+  WITNESS=PASS
 fi
 
 (cd "$WORK/project" && run_capture protect "$SEAL" protect db db.write)
