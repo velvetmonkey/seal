@@ -243,7 +243,7 @@ test("README installer check executes the command without restoring the installe
   const artifact = join(dir, "fixture-installer");
   const tree = "a".repeat(64);
   writeFileSync(readmePath, readFileSync(resolve(ROOT, "README.md"), "utf8"));
-  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal 0.2.0-rc.3 linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
+  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal ${VERSION} linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
   const env = {
     ...process.env,
     SEAL_INSTALL_TRANSCRIPT_README: readmePath,

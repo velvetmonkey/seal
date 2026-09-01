@@ -92,8 +92,8 @@ test("the release manifest binds all platforms and publication rewrites every re
     fs.cpSync(path.join(ROOT, "docs"), path.join(docsRoot, "docs"), { recursive: true });
     const mismatchPath = path.join(docsRoot, "docs", "archive", "AUTHORIZATION-MESH.md");
     const mismatch = fs.readFileSync(mismatchPath, "utf8").replace(
-      "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md",
-      `docs/assurance/${FINAL_NOTES}`,
+      `[docs/assurance/${FINAL_NOTES}](../assurance/${FINAL_NOTES})`,
+      `[docs/assurance/${FINAL_NOTES}](../assurance/RELEASE-NOTES-v0.2.0-rc.3.md)`,
     );
     assert.match(
       mismatch,
@@ -108,11 +108,31 @@ test("the release manifest binds all platforms and publication rewrites every re
       "--tag-commit", "a".repeat(40),
     ], { cwd: ROOT, encoding: "utf8", env: { ...process.env, SEAL_RELEASE_DOCS_ROOT: docsRoot } });
     assert.equal(generated.status, 0, generated.stderr);
+    const checked = spawnSync(process.execPath, [
+      path.join(ROOT, "scripts", "generate-release-docs.mjs"),
+      "--check",
+      "--manifest", manifestPath,
+      "--assets-dir", directory,
+      "--tag-commit", "a".repeat(40),
+    ], { cwd: ROOT, encoding: "utf8", env: { ...process.env, SEAL_RELEASE_DOCS_ROOT: docsRoot } });
+    assert.equal(checked.status, 0, checked.stderr);
+    assert.match(checked.stdout, new RegExp(`PASS release docs match latest published release v${VERSION.replaceAll(".", "\\.")}`));
     const readme = fs.readFileSync(path.join(docsRoot, "README.md"), "utf8");
     assert.doesNotMatch(readme, /The current source is the unreleased/);
     const install = fs.readFileSync(path.join(docsRoot, "docs", "start", "install.md"), "utf8");
     assert.ok(install.includes(`The native macOS process-start witness helper is ${HELPER_PROVENANCE}.`));
     for (const artifact of manifest.artifacts) assert.match(install, new RegExp(artifact.name.replaceAll(".", "\\.")));
+    const assuranceReadme = fs.readFileSync(path.join(docsRoot, "docs", "assurance", "README.md"), "utf8");
+    assert.match(
+      assuranceReadme,
+      new RegExp(`\\[The \\x60${checkerName.replaceAll(".", "\\.")}\\x60 release asset\\]\\(https://github\\.com/velvetmonkey/seal/releases/download/v${VERSION.replaceAll(".", "\\.")}/${checkerName.replaceAll(".", "\\.")}\\)`),
+    );
+    const distribution = fs.readFileSync(path.join(docsRoot, "docs", "assurance", "distribution.md"), "utf8");
+    assert.match(distribution, new RegExp(`current install payload excludes \\x60${checkerName.replaceAll(".", "\\.")}\\x60`));
+    assert.match(
+      distribution,
+      new RegExp(`\\[\\x60${checkerName.replaceAll(".", "\\.")}\\x60 release asset\\]\\(https://github\\.com/velvetmonkey/seal/releases/download/v${VERSION.replaceAll(".", "\\.")}/${checkerName.replaceAll(".", "\\.")}\\)`),
+    );
     const rewrittenMismatch = fs.readFileSync(mismatchPath, "utf8");
     assert.match(
       rewrittenMismatch,
