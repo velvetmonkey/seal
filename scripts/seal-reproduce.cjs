@@ -171,12 +171,24 @@ function verifyAsset(assetFile, declared, report) {
 
 function child(command, args, options = {}) {
   const { label, missingMessage, ...execOptions } = options;
+  const environment = execOptions.env ? { ...process.env, ...execOptions.env } : process.env;
   try {
-    execFileSync(command, args, { ...execOptions, stdio: ["ignore", 2, 2] });
+    execFileSync(command, args, { ...execOptions, env: environment, stdio: ["ignore", 2, 2] });
   } catch (error) {
     if (error.code === "ENOENT" && missingMessage) refuse(missingMessage);
     refuse(`${label || path.basename(command)} failed (exit ${error.status ?? "unknown"})`);
   }
+}
+
+function gitEnvironment(environment = process.env) {
+  return {
+    ...environment,
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "gc.auto",
+    GIT_CONFIG_VALUE_0: "0",
+    GIT_CONFIG_KEY_1: "maintenance.auto",
+    GIT_CONFIG_VALUE_1: "false",
+  };
 }
 
 function installerBinDirectory(installerFile, environment) {
@@ -307,24 +319,25 @@ function installPublished(assetFile, declared, work) {
   return installed;
 }
 
-function clonePinnedSource(pin, destination) {
+function clonePinnedSource(pin, destination, environment = process.env) {
   fs.mkdirSync(destination);
-  child("git", ["init", "--quiet"], { cwd: destination, label: "initialize pinned source checkout" });
-  child("git", ["remote", "add", "origin", pin.repository], { cwd: destination, label: "configure pinned source remote" });
-  child("git", ["fetch", "--quiet", "--depth", "1", "origin", pin.commit], { cwd: destination, label: `fetch pinned source ${pin.commit}` });
-  child("git", ["checkout", "--quiet", "--detach", "FETCH_HEAD"], { cwd: destination, label: `checkout pinned source ${pin.commit}` });
+  const options = { cwd: destination, env: gitEnvironment(environment) };
+  child("git", ["init", "--quiet"], { ...options, label: "initialize pinned source checkout" });
+  child("git", ["remote", "add", "origin", pin.repository], { ...options, label: "configure pinned source remote" });
+  child("git", ["fetch", "--quiet", "--depth", "1", "origin", pin.commit], { ...options, label: `fetch pinned source ${pin.commit}` });
+  child("git", ["checkout", "--quiet", "--detach", "FETCH_HEAD"], { ...options, label: `checkout pinned source ${pin.commit}` });
   let observed;
   try {
-    observed = execFileSync("git", ["rev-parse", "HEAD"], { cwd: destination, encoding: "utf8" }).trim();
+    observed = execFileSync("git", ["rev-parse", "HEAD"], { cwd: destination, env: gitEnvironment(environment), encoding: "utf8" }).trim();
   } catch (error) {
     refuse(`cannot identify pinned source checkout (exit ${error.status ?? "unknown"})`);
   }
   if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
 }
 
-function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
+function provisionPinnedToolchains(runChild, cloneSource, pin, work, source, environment = process.env) {
   const command = ["wasm-spike/provision_toolchain.sh"];
-  const options = { cwd: source, label: "provision pinned wasm toolchains" };
+  const options = { cwd: source, env: gitEnvironment(environment), label: "provision pinned wasm toolchains" };
   try {
     runChild("bash", command, options);
   } catch (error) {
@@ -349,7 +362,7 @@ function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
     makeTreeRemovable(source);
     fs.rmSync(source, { recursive: true, force: true });
     process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
-    cloneSource(pin, source);
+    cloneSource(pin, source, environment);
     runChild("bash", command, options);
   }
 }
@@ -362,9 +375,9 @@ function buildPinnedKernel(tag, work, operations = {}) {
   const pin = SOURCE_PINS[tag];
   if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
   const source = path.join(work, "pinned-source");
-  cloneSource(pin, source);
+  cloneSource(pin, source, environment);
 
-  provisionPinnedToolchains(runChild, cloneSource, pin, work, source);
+  provisionPinnedToolchains(runChild, cloneSource, pin, work, source, environment);
   const installer = path.join(source, "scripts", "install_pinned_elan.py");
   runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   const launcher = leanLauncher(environment, installer);
