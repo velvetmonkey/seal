@@ -200,7 +200,9 @@ fi
 # The published checker imports ../runtime/kernel/decision-runner.cjs.  Its
 # release download is one file, so give it a private temporary runtime sibling
 # copied from the verified temporary Seal installation.
-INSTALLED_CHECKER="$(find "$PREFIX/lib/seal/store" -type f -path '*/checker/seal-receipt-v2.mjs' -print -quit)"
+# `find -quit` is a GNU extension and the BSD find on macOS rejects it, so take
+# the first match with `head` instead.  Both userlands accept this form.
+INSTALLED_CHECKER="$(find "$PREFIX/lib/seal/store" -type f -path '*/checker/seal-receipt-v2.mjs' -print | head -n 1)"
 if [ -z "$INSTALLED_CHECKER" ]; then
   RECEIPT=FAIL
   say 'FAIL: the temporary Seal installation has no checker location for the downloaded checker.'
