@@ -15,24 +15,25 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
-Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
 
 Gated through this route:
-  delete_all_notes
+  demo.mutate
+  demo.erase
 
 Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  other MCP servers not routed through this Seal wrapper
+  configured MCP servers not routed through this Seal wrapper: cache
   other uncontrolled routes can also exist
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  To clear protection for every guarded tool on server notes, including guarded tools: delete_all_notes, stop Claude Code, then run `seal unprotect notes`.
-Receipts: 0 stored in /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
+Receipts: 0 stored in /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 
