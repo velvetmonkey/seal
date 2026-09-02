@@ -89,6 +89,9 @@ function status() {
     }
     for (const line of protection.protectionBoundary({ state: "BROKEN", brokenReason: error.message }, process.cwd())) console.log(line);
     console.log(`Protection detail: ${error.message}`);
+    console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
+    console.log("Most recent: unavailable because the project receipt directory could not be resolved");
+    return;
   }
 
   let entries;
