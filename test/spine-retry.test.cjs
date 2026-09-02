@@ -281,6 +281,45 @@ function receiptFor(dir, decision) {
   return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
 }
 
+test("a top-level batch is refused as one frame and never reaches the child", async (t) => {
+  const dir = testTmpdir("seal-batch-frame-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    childArgv: [process.execPath, path.join(ROOT, "contract", "fixtures", "counting-child.cjs"), dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const countFile = `${dataFile}.count`;
+  const waitForCount = async () => {
+    const started = Date.now();
+    while (!fs.existsSync(countFile)) {
+      if (Date.now() - started > 5000) assert.fail("counting child did not start");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
+  await waitForCount();
+  proxy.write(JSON.stringify([callParams("batched", {})]));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(readCount(countFile), "0");
+  const body = receiptFor(dir, "BLOCK");
+  assert.equal(body.tool, "<batch>");
+  assert.match(body.reason, /^safety kernel: /);
+  assert.deepEqual(frames, [{
+    jsonrpc: "2.0",
+    id: null,
+    error: {
+      code: -32600,
+      message: "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.",
+    },
+  }]);
+});
+
 test("a client without elicitation gets a named refusal and no held call", async (t) => {
   const dir = testTmpdir("seal-receipt-correlation-");
   const dataFile = path.join(dir, "data.txt");
