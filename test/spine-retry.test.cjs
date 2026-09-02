@@ -10,12 +10,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn, spawnSync, execFileSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
+const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
 const { createProxy } = require("../spine/proxy.cjs");
 const { createJournal } = require("../spine/store.cjs");
 
@@ -343,8 +344,101 @@ test("a duplicate-key frame is refused before it can reach the child", async (t)
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(readCount(countFile), "0");
   const body = receiptFor(dir, "BLOCK");
-  assert.equal(body.tool, "other");
+  assert.equal(body.tool, "<ambiguous>");
   assert.match(body.reason, /^safety kernel: /);
+});
+
+test("all duplicate-key frame shapes refuse with a checker-valid ambiguous receipt", async (t) => {
+  const lines = [
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","name":"other","arguments":{}}}',
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"a":1,"a":2}}',
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":null,"name":null}}',
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":{},"name":{}}}',
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"","name":""}}',
+    '{"jsonrpc":"2.0","id":1,"method":"notifications/x","params":{"a":1,"a":2}}',
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"a":1,"a":2}}}',
+  ];
+  for (const [index, line] of lines.entries()) {
+    const dir = testTmpdir(`seal-duplicate-key-shape-${index}-`);
+    const storePath = path.join(dir, "approvals.journal");
+    const dataFile = path.join(dir, "data.txt");
+    createJournal(storePath);
+    const proxy = createProxy({
+      guardTool: "demo.mutate",
+      storePath,
+      receiptsDir: path.join(dir, "receipts"),
+      childArgv: [process.execPath, path.join(ROOT, "contract", "fixtures", "counting-child.cjs"), dataFile],
+      onClientLine() {},
+    });
+    t.after(() => proxy.stop());
+    const countFile = `${dataFile}.count`;
+    const started = Date.now();
+    while (!fs.existsSync(countFile)) {
+      if (Date.now() - started > 5000) assert.fail(`counting child did not start for shape ${index + 1}`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    proxy.write(line);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(readCount(countFile), "0", `shape ${index + 1}`);
+    const files = fs.readdirSync(path.join(dir, "receipts"));
+    assert.equal(files.length, 1, `shape ${index + 1}`);
+    const receiptPath = path.join(dir, "receipts", files[0]);
+    const body = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+    assert.equal(body.tool, "<ambiguous>", `shape ${index + 1}`);
+    const checked = spawnSync(process.execPath, [CHECKER, receiptPath], { encoding: "utf8" });
+    assert.equal(checked.status, 0, `shape ${index + 1}: ${checked.stdout}${checked.stderr}`);
+  }
+});
+
+test("duplicate-key gate controls preserve guarded, unguarded, and ordinary frames", async (t) => {
+  const dir = testTmpdir("seal-duplicate-key-controls-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    childArgv: [process.execPath, path.join(ROOT, "contract", "fixtures", "counting-child.cjs"), dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const countFile = `${dataFile}.count`;
+  const started = Date.now();
+  while (!fs.existsSync(countFile)) {
+    if (Date.now() - started > 5000) assert.fail("counting child did not start");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  proxy.write('{"jsonrpc":"2.0","id":90,"method":"initialize","params":{"capabilities":{"elicitation":{}}}}');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const baseline = Number(readCount(countFile));
+  proxy.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":"guarded alone"}}}');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(Number(readCount(countFile)) - baseline, 0);
+  assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
+  const guardedReceipt = JSON.parse(fs.readFileSync(path.join(dir, "receipts", fs.readdirSync(path.join(dir, "receipts"))[0]), "utf8"));
+  assert.equal(guardedReceipt.tool, "demo.mutate");
+  assert.notEqual(guardedReceipt.tool, "<ambiguous>");
+  assert.equal(frames.filter((frame) => frame.method === "elicitation/create").length, 1);
+
+  proxy.write('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"demo.read","arguments":{"line":"unguarded"}}}');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(Number(readCount(countFile)) - baseline, 1);
+  assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
+
+  const falseLookalike = JSON.stringify({
+    jsonrpc: "2.0", id: 3, method: "tools/call",
+    params: { name: "demo.read", arguments: { text: '{"a":1,"a":2}' } },
+  });
+  const largeParams = { name: "demo.read", arguments: {} };
+  for (let index = 0; index < 100; index += 1) largeParams.arguments[`key${index}`] = index;
+  proxy.write(falseLookalike);
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: largeParams }));
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(Number(readCount(countFile)) - baseline, 3);
+  assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
 });
 
 test("a client without elicitation gets a named refusal and no held call", async (t) => {

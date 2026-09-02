@@ -361,13 +361,15 @@ function createProxy(options) {
         blockMalformedClientFrame(frame, "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.");
         return;
       }
+      let hasDuplicateKeys;
       try {
-        if (jsonHasDuplicateObjectKeys(line)) {
-          blockForward(frame, "response_malformed", "duplicate JSON object key");
-          return;
-        }
+        hasDuplicateKeys = jsonHasDuplicateObjectKeys(line);
       } catch {
         blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
+        return;
+      }
+      if (hasDuplicateKeys) {
+        blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
         return;
       }
       if (!frame.method && Object.hasOwn(frame, "id")) {
