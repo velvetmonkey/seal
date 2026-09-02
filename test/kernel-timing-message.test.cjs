@@ -32,7 +32,7 @@ test("kernel timing message control refuses a first-instruction claim with a com
 test("kernel timeout after all security phases reports the unobserved exit", () => {
   const output = rendered({
     kernel_timing_active_phase: null,
-    kernel_timing_deadline_ms: 5000,
+    kernel_timing_deadline_ms: 30000,
     kernel_timing_ms: {
       child_bootstrap_to_module_load: 151.798726,
       child_request_read: 5.818265,
@@ -47,7 +47,7 @@ test("kernel timeout after all security phases reports the unobserved exit", () 
     },
   });
   assert.equal(output, [
-    "seal: kernel_worker_exit_not_observed within its 5000 ms deadline.",
+    "seal: kernel_worker_exit_not_observed within its 30000 ms deadline.",
     "seal: measured security-relevant phases complete.",
     "seal: response write state: response_generated, response_write_started.",
     "seal: active resources after response generation: {\"handles\":[\"Socket\"],\"requests\":[]}.",
@@ -69,11 +69,11 @@ test("kernel timeout after all security phases reports the unobserved exit", () 
 test("kernel timeout with no child timing reports the evidence limit", () => {
   const output = rendered({
     kernel_timing_active_phase: null,
-    kernel_timing_deadline_ms: 5000,
+    kernel_timing_deadline_ms: 30000,
     kernel_timing_ms: { parent_kernel_worker_wait: 5015.472308 },
   });
   assert.equal(output, [
-    "seal: kernel worker did not publish a child timing phase within its 5000 ms deadline.",
+    "seal: kernel worker did not publish a child timing phase within its 30000 ms deadline.",
     "seal: kernel timing completed phases:",
     "seal:   parent_kernel_worker_wait: 5015.472308 ms",
     "",

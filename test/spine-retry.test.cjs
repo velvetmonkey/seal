@@ -41,7 +41,7 @@ function attach(child) {
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => { state.out += chunk; });
   child.stderr.on("data", (chunk) => { state.err += chunk; });
-  state.waitFor = (pattern, ms = 15000) => new Promise((resolve, reject) => {
+  state.waitFor = (pattern, ms = 35000) => new Promise((resolve, reject) => {
     const started = Date.now();
     const poll = setInterval(() => {
       if (pattern.test(state.out)) { clearInterval(poll); resolve(); }
@@ -51,7 +51,7 @@ function attach(child) {
       }
     }, 25);
   });
-  state.waitForErr = (pattern, ms = 15000) => new Promise((resolve, reject) => {
+  state.waitForErr = (pattern, ms = 35000) => new Promise((resolve, reject) => {
     const started = Date.now();
     const poll = setInterval(() => {
       if (pattern.test(state.err)) { clearInterval(poll); resolve(); }
@@ -65,7 +65,7 @@ function attach(child) {
 }
 
 function blockedKernelPreload(phase) {
-  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);";
   const gate = `
 const fs = require("node:fs");
 const blockRetry = (() => {

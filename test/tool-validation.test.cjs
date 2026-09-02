@@ -274,21 +274,21 @@ test("an initialize failure refuses protection", () => {
 });
 
 test("a slow initialize refuses at the default deadline and names --timeout-ms", () => {
-  const ctx = setup("slow-initialize", "5100");
+  const ctx = setup("slow-initialize", "30100");
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_initialize_failed/);
-  assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
+  assert.match(result.out, /after 30000ms \(default: 30000ms; increase with --timeout-ms <milliseconds>\)/);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
 });
 
 test("--timeout-ms permits a legitimate slow initialize and is persisted for activation", () => {
-  const ctx = setup("slow-initialize", "5100");
-  const result = run(ctx, ["protect", "--timeout-ms", "6000", "db", "db.drop_table"]);
+  const ctx = setup("slow-initialize", "30100");
+  const result = run(ctx, ["protect", "--timeout-ms", "31000", "db", "db.drop_table"]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /Sealed MCP route db: PENDING RESTART/);
   assert.match(result.out, /^  db\.drop_table$/m);
-  assert.equal(readState(statePathFor(ctx.project, ctx.env)).discoveryTimeoutMs, 6000);
+  assert.equal(readState(statePathFor(ctx.project, ctx.env)).discoveryTimeoutMs, 31000);
 });
 
 test("a dead initialize still refuses at the default deadline", () => {
@@ -296,7 +296,7 @@ test("a dead initialize still refuses at the default deadline", () => {
   const result = run(ctx, ["protect", "db", "db.drop_table"]);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /protected_server_initialize_failed/);
-  assert.match(result.out, /after 5000ms \(default: 5000ms; increase with --timeout-ms <milliseconds>\)/);
+  assert.match(result.out, /after 30000ms \(default: 30000ms; increase with --timeout-ms <milliseconds>\)/);
   assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env)), false);
 });
 
