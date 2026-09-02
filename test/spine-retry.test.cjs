@@ -320,6 +320,33 @@ test("a top-level batch is refused as one frame and never reaches the child", as
   }]);
 });
 
+test("a duplicate-key frame is refused before it can reach the child", async (t) => {
+  const dir = testTmpdir("seal-duplicate-key-frame-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    childArgv: [process.execPath, path.join(ROOT, "contract", "fixtures", "counting-child.cjs"), dataFile],
+    onClientLine() {},
+  });
+  t.after(() => proxy.stop());
+  const countFile = `${dataFile}.count`;
+  const started = Date.now();
+  while (!fs.existsSync(countFile)) {
+    if (Date.now() - started > 5000) assert.fail("counting child did not start");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  proxy.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","name":"other","arguments":{}}}');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(readCount(countFile), "0");
+  const body = receiptFor(dir, "BLOCK");
+  assert.equal(body.tool, "other");
+  assert.match(body.reason, /^safety kernel: /);
+});
+
 test("a client without elicitation gets a named refusal and no held call", async (t) => {
   const dir = testTmpdir("seal-receipt-correlation-");
   const dataFile = path.join(dir, "data.txt");
