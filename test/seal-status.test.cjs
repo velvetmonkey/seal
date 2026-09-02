@@ -66,6 +66,24 @@ function protectedStatusPrefix(statePath) {
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
 
+function brokenStatusWithReceipt(detail, receiptDir) {
+  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+    "Sealed MCP route: BROKEN\n" +
+    "\n" +
+    "Gated through this route:\n" +
+    "  unknown: stored protection state has no protected tool list\n" +
+    "\n" +
+    "Not controlled:\n" +
+    "  Bash and subprocesses outside this MCP route\n" +
+    "  direct resource access outside this MCP route\n" +
+    "  other clients\n" +
+    "  other MCP servers not routed through this Seal wrapper\n" +
+    "  other uncontrolled routes can also exist\n" +
+    `Protection detail: ${detail}\n` +
+    `Receipts: 1 stored in ${receiptDir}\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n";
+}
+
 test("status finds the shipped kernel runtime with an empty cache", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
@@ -144,8 +162,73 @@ test("status reads the protected project's recorded receipt directory", () => {
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Receipts: 1 stored in ${receiptDir}$`, "m"));
-  assert.match(result.out, /^Most recent \(by write time\): APPROVE at receipt time 1786896000 \(approved\.json\)$/m);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: 1 stored in ${receiptDir}\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n");
+});
+
+test("status reads a recorded receipt directory when the protection state has no protected tool list", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-broken-tools-readable-receipts-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "broken-tools", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir));
+});
+
+test("status does not count files from a receipt directory named by refused protection state", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-refused-readable-receipts-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "refused-state", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(receiptDir, "operator-notes.txt"), "not a receipt\n");
+  fs.writeFileSync(path.join(receiptDir, "staging-payload.dat"), "not a receipt either\n");
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    schema: "seal.protect/v0-not-this",
+    state: "PENDING RESTART",
+    guardTool: "write",
+    receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.doesNotMatch(result.out, new RegExp(`^Receipts: 2 stored in ${receiptDir}$`, "m"));
+  assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
+});
+
+test("status does not invent a receipt directory when protection state is unreadable", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-unreadable-state-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, "garbage{");
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Sealed MCP route: BROKEN$/m);
+  assert.match(result.out, /^Protection detail: stored protection state is unreadable:/m);
+  assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
+  assert.match(result.out, /^Most recent: unavailable because the project receipt directory could not be resolved$/m);
+  assert.doesNotMatch(result.out, /undefined|check its permissions/);
 });
 
 test("status says an existing empty receipt directory has no recorded decision", () => {
