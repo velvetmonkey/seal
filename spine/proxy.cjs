@@ -25,7 +25,7 @@ const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
-const { evaluateSelection, normalizeToolSelection } = require("./tool-selection.cjs");
+const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
@@ -359,6 +359,17 @@ function createProxy(options) {
       }
       if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
         blockMalformedClientFrame(frame, "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.");
+        return;
+      }
+      let hasDuplicateKeys;
+      try {
+        hasDuplicateKeys = jsonHasDuplicateObjectKeys(line);
+      } catch {
+        blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
+        return;
+      }
+      if (hasDuplicateKeys) {
+        blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
         return;
       }
       if (!frame.method && Object.hasOwn(frame, "id")) {
