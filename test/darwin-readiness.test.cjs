@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
@@ -16,7 +17,7 @@ function macho(arch) {
 }
 
 function isolatedTree(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-darwin-readiness-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-darwin-readiness-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ["spine", "scripts", "runtime"]) fs.mkdirSync(path.join(root, directory));
   for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
@@ -266,7 +267,7 @@ test("ACTIVE lease commit refuses a helper replacement after the witness gate", 
       projectServer: projectServer.server,
       childArgv: projectServer.childArgv,
       childEnv: projectServer.childEnv,
-      discoveryTimeoutMs: 5000,
+      discoveryTimeoutMs: 30000,
       lease: null,
     }, null, 2) + "\n");
 

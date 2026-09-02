@@ -128,7 +128,7 @@ pin. Restore a complete pinned installation; do not invent a replacement hash.
 
 ### `kernel_execution_refused`
 
-The isolated kernel worker could not start, exceeded its 5000ms execution
+The isolated kernel worker could not start, exceeded its 30000ms execution
 deadline, `seal_init` rejected its signed configuration, or kernel execution
 failed. Nothing forwards. A deadline refusal includes the exceeded limit in
 milliseconds, which distinguishes a hung worker from other execution failures.
@@ -344,11 +344,15 @@ status.
 
 ### `process_witness_unavailable`
 
-Seal found a live PID for a stored lease or project lock but could not read a
-process-start witness for that PID. It refuses instead of guessing whether
-the owner is current or stale. On Linux x86-64, Seal can read `/proc/<pid>/stat`;
-on macOS x64/arm64 that witness is unavailable, so Seal refuses rather than
-guessing. Stop the recorded owner and retry.
+Seal raises this token when a protected state operation cannot establish a
+process-start witness for a live process. The error message names the specific
+situation and states the correct remedy. The approval-journal lock path runs
+on any platform, including macOS. On Linux x86-64, Seal reads
+`/proc/<pid>/stat`; it refuses with `process_witness_unavailable` if it cannot
+read that file, if the stat record is malformed, or if the process-start field
+is absent. On macOS x64/arm64, the stored lease and project-lock path uses the
+native process-start witness helper. That path reports helper or witness
+failures with Darwin-specific refusal tokens.
 
 ### `drifted`
 
@@ -417,6 +421,13 @@ cached runtime file.
 The receipt JSON repeats an object member name. Duplicate names make the
 meaning parser-dependent, so the checker refuses before validation.
 
+### `unexpected_member`
+
+The signature object contains one or more members that the checker does not
+allow. The checker refuses the receipt and names every member it did not allow;
+the signature object must contain exactly `algorithm` and `value`. Remove every
+named member and obtain a new valid receipt before you run the checker again.
+
 ### `number_not_canonical`
 
 The receipt contains a number that is not a finite safe integer. The v2
@@ -444,14 +455,17 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.2.0. macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+v0.2.0. Seal supports install, demo and receipt checking on Linux x86-64 and
+macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
+macOS Protect execution is not exercised in CI.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
 
 ### `node_missing`
 
 The install artifact could not find `node` on `PATH`. Seal requires Node 20 or
-newer on Linux x86-64. On macOS, install and demo are CI-exercised, but Protect is not supported yet.
+newer. Seal supports install, demo and receipt checking on Linux x86-64 and
+macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
+macOS Protect execution is not exercised in CI.
 
 ### `version_mismatch`
 
@@ -585,8 +599,9 @@ ill-formed UTF-8, and duplicate names at any depth refuse here.
 ### `member_order` and `number_not_canonical`
 
 The envelope does not use the fixed v2 top-level order, or a number is not a
-finite safe integer. Object members inside values retain insertion order;
-they are never sorted.
+finite safe integer. Object members inside values use ECMAScript own-property
+enumeration order after parsing: integer-index keys come first in ascending
+numeric order, followed by other string keys in insertion order.
 
 ### `commitment_mismatch`
 
@@ -608,3 +623,6 @@ A receipt-embedded key is never trusted as authority.
 
 Replaying the exact recorded inputs through the WASM kernel produced a
 different verdict. The receipt does not establish the decision it records.
+
+Up: [Guide](README.md).
+Next: [What is protected right now](what-is-protected-right-now.md).

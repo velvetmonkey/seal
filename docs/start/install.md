@@ -1,7 +1,7 @@
 <!-- generated from published release; do not edit -->
 # Install Seal v0.2.0-rc.3
-The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) publishes `seal-v0.2.0-rc.3-linux-x64`, `seal-receipt-check.mjs`, and `SHA256SUMS`; its tag resolves to commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d). macOS source portability is CI-exercised for install, demo and receipt checking.
-Protect is not supported on macOS yet. The published release asset and supported Protect path are Linux x86-64; Windows and Linux ARM are unsupported. Node 20+ is required.
+The [v0.2.0-rc.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.2.0-rc.3) publishes `seal-v0.2.0-rc.3-linux-x64`, `seal-receipt-check.mjs`, and `SHA256SUMS`; its tag resolves to commit [`8dc16042cc1e865651185778df38dd114ff9ba3d`](https://github.com/velvetmonkey/seal/commit/8dc16042cc1e865651185778df38dd114ff9ba3d). The published asset is Linux x86-64.
+This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI. Windows, Linux ARM, and other platforms are unsupported. Node 20+ is required.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -65,7 +65,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 1de47d7060e711995c0b1f6653215150c9faacb9327c79d715f146b273fe8e29
+tree: 43d6b9029cef7e2063c653f8a4e35c0f2db8783f45aa58d1b23ea87236644cad
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
@@ -104,4 +104,8 @@ chmod +x "dist/$expected_name"
 ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
-macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path.
+This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI.
+
+Previous: [Start](README.md).
+Up: [Start](README.md).
+Next: [Evaluator walk](evaluator-walk.md).

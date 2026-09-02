@@ -9,7 +9,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
 const STATE_SCHEMA = "seal.protect/v1";
-const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 5000;
+const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 30000;
 const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",
@@ -294,7 +294,7 @@ function readState(statePath) {
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
   if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state && state.schema)}, not ${STATE_SCHEMA}`);
+    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${STATE_SCHEMA}`);
   }
   if (state.sealVersion !== sealVersion()) {
     throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
@@ -310,7 +310,57 @@ function protectedToolNames(state) {
       state.guardTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("state_broken", "stored protection state has no protected tool list");
   }
+  const paddedName = state.guardTools.find((name) => name.trim() !== name);
+  if (paddedName !== undefined) {
+    throw new ProtectionError(
+      "state_broken",
+      `stored protection state contains protected tool name with surrounding whitespace: ${JSON.stringify(paddedName)}`,
+    );
+  }
   return [...new Set(state.guardTools)];
+}
+
+function configuredOtherServerNames(state, projectRoot) {
+  try {
+    const config = readProjectConfig(projectRoot || state?.projectRoot);
+    return Object.keys(config.parsed.mcpServers || {})
+      .filter((name) => name !== state?.serverName)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function notControlledEntries(state, projectRoot) {
+  const entries = [
+    "Bash and subprocesses outside this MCP route",
+    "direct resource access outside this MCP route",
+    "other clients",
+  ];
+  const otherServers = configuredOtherServerNames(state, projectRoot);
+  if (otherServers.length > 0) {
+    entries.push(`configured MCP servers not routed through this Seal wrapper: ${otherServers.join(", ")}`);
+  } else {
+    entries.push("other MCP servers not routed through this Seal wrapper");
+  }
+  entries.push("other uncontrolled routes can also exist");
+  return entries;
+}
+
+function protectionBoundary(state, projectRoot, statePath) {
+  const printedState = state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
+  const route = state?.serverName ? `Sealed MCP route ${state.serverName}: ${printedState}` : `Sealed MCP route: ${printedState}`;
+  let gated;
+  try {
+    gated = state?.state === STATES.UNPROTECTED ? ["none"] : protectedToolNames(state);
+  } catch (error) {
+    gated = [`unknown: ${error.message}`];
+  }
+  const lines = [statePath ? `${route} (${statePath})` : route, "", "Gated through this route:"];
+  for (const name of gated) lines.push(`  ${name}`);
+  lines.push("", "Not controlled:");
+  for (const name of notControlledEntries(state, projectRoot)) lines.push(`  ${name}`);
+  return lines;
 }
 
 function writeState(statePath, state, { beforeCommit } = {}) {
@@ -511,7 +561,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
       }
       if (phase === "initialize" && frame.id === 1) {
         if (frame.error || !frame.result || typeof frame.result !== "object") {
-          fail("protected_server_initialize_failed", `configured server refused or malformed initialize: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          fail("protected_server_initialize_failed", `configured server refused or malformed initialize: ${JSON.stringify(frame.error || frame.result || "no response details")}${detail()}`);
           return;
         }
         phase = "tools/list";
@@ -522,7 +572,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
       }
       if (phase === "tools/list" && frame.id === listId) {
         if (frame.error || !frame.result || !Array.isArray(frame.result.tools)) {
-          fail("protected_server_tools_list_failed", `configured server refused or malformed tools/list: ${JSON.stringify(frame.error || frame.result)}${detail()}`);
+          fail("protected_server_tools_list_failed", `configured server refused or malformed tools/list: ${JSON.stringify(frame.error || frame.result || "no response details")}${detail()}`);
           return;
         }
         for (const tool of frame.result.tools) {
@@ -761,7 +811,11 @@ function processStartWitness(pid) {
   }
 }
 
-function requireProcessStartWitnessBinding(pid) {
+function processWitnessUnavailableMessage(situation, pid, remedy) {
+  return `cannot establish process-start witness for ${situation} pid ${pid}; ${remedy}`;
+}
+
+function requireProcessStartWitnessBinding(pid, situation = "live process") {
   const support = platformSupport();
   if (support.platform === "darwin") {
     const result = macosProcessWitness(pid, support.platform, support.arch);
@@ -772,23 +826,25 @@ function requireProcessStartWitnessBinding(pid) {
   if (witness === null) {
     throw new ProtectionError(
       "process_witness_unavailable",
-      `cannot establish process-start witness for live pid ${pid}`,
+      processWitnessUnavailableMessage(situation, pid, situation.includes("owner")
+        ? "stop the recorded owner and retry"
+        : "fix the local process-start witness source and retry"),
     );
   }
   return { witness, helperIdentity: null };
 }
 
-function requireProcessStartWitness(pid) {
-  return requireProcessStartWitnessBinding(pid).witness;
+function requireProcessStartWitness(pid, situation = "live process") {
+  return requireProcessStartWitnessBinding(pid, situation).witness;
 }
 
 function lockPathFor(projectRoot, env = process.env) {
   return path.join(projectDirectory(projectRoot, env), "proxy.lock");
 }
 
-function lockOwnerIsLive(owner) {
+function lockOwnerIsLive(owner, situation = "stored lease owner") {
   if (!owner || !livePid(owner.pid)) return false;
-  const witness = requireProcessStartWitness(owner.pid);
+  const witness = requireProcessStartWitness(owner.pid, situation);
   return owner.startWitness === witness;
 }
 
@@ -799,7 +855,7 @@ function leaseMatches(lease, token) {
 
 function acquireProjectLock(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
-  const witness = requireProcessStartWitnessBinding(process.pid);
+  const witness = requireProcessStartWitnessBinding(process.pid, "Seal's own witness at project-lock acquire");
   const owner = { pid: process.pid, startWitness: witness.witness };
   let recovered = false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
@@ -829,7 +885,7 @@ function acquireProjectLock(projectRoot, env = process.env) {
       if (error.code !== "EEXIST") throw error;
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
-      if (lockOwnerIsLive(existing)) {
+      if (lockOwnerIsLive(existing, "project-lock owner")) {
         const state = readState(statePathFor(projectRoot, env));
         const generation = state?.lease?.generation ?? "unknown";
         throw new ProtectionError(
@@ -878,6 +934,10 @@ async function protect({
   const requestedTools = [...new Set(Array.isArray(guardTools) ? guardTools : (guardTool ? [guardTool] : []))];
   if (!serverName || requestedTools.length === 0 || requestedTools.some((name) => typeof name !== "string" || name.length === 0)) {
     throw new ProtectionError("usage", "usage: seal protect SERVER TOOL [TOOL...]");
+  }
+  const paddedName = requestedTools.find((name) => name.trim() !== name);
+  if (paddedName !== undefined) {
+    throw new ProtectionError("usage", `protected tool name has surrounding whitespace: ${JSON.stringify(paddedName)}`);
   }
   requireHumanApprovalOrigin(env);
   requireProtectReadiness(env);
@@ -1141,6 +1201,7 @@ module.exports = {
   parseMacosProcessWitness,
   processStartWitness,
   protectReadiness,
+  protectionBoundary,
   protectedToolNames,
   protect,
   protectionView,

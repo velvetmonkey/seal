@@ -58,14 +58,13 @@ function status() {
     const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
-      console.log("Protection: - outside Seal");
+      for (const line of protection.protectionBoundary({ state: "UNPROTECTED" }, root)) console.log(line);
       console.log("Receipts: unavailable outside a protected project");
       console.log("Most recent: no project receipt directory is recorded");
       return;
     } else {
       const guarded = protection.protectedToolNames(view);
-      const scope = guarded.length === 1 ? `${view.serverName}.${guarded[0]}` : `${view.serverName}.{${guarded.join(", ")}}`;
-      console.log(`Protection: ${view.state} ${scope} (${filePath})`);
+      for (const line of protection.protectionBoundary(view, root, filePath)) console.log(line);
       if (view.lease?.pid && view.lease?.generation !== undefined) {
         console.log(`Protection lease: pid ${view.lease.pid} generation ${view.lease.generation}`);
       }
@@ -91,7 +90,8 @@ function status() {
       process.exitCode = 1;
       return;
     }
-    console.log(`Protection: BROKEN (${error.message})`);
+    for (const line of protection.protectionBoundary({ state: "BROKEN", brokenReason: error.message }, process.cwd())) console.log(line);
+    console.log(`Protection detail: ${error.message}`);
   }
 
   let entries;
@@ -195,7 +195,7 @@ function protectGuidance(serverName, guardTools = []) {
     next: [
       "1. Restart Claude Code in this project.",
       "2. Run `seal status`.",
-      "3. Look for `Protection: ACTIVE`.",
+      "3. Confirm the sealed MCP route is ACTIVE.",
     ],
     undo: [`To clear protection for every guarded tool on server ${shellWord(serverName)}${guarded}, stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
   };
@@ -233,6 +233,7 @@ function printFailureGuidance(command, error, context, writeLine = (line) => con
   const next = failureGuidance(command, error, context);
   if (next.length > 0) printGuidance({ next }, writeLine);
 }
+const { printKernelTiming } = require(path.join(ROOT, "spine", "presentation.cjs"));
 async function fetchBytes(url) {
   let response;
   try {
@@ -356,8 +357,7 @@ async function protectCommand(args) {
   const guardTools = [...new Set(requestedTools)];
   const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
-  const protectedScope = guardTools.length === 1 ? `${serverName}.${guardTools[0]}` : `${serverName}.{${guardTools.join(", ")}}`;
-  console.log(`Protection: PENDING RESTART ${protectedScope}`);
+  for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(guardTools);
   const outside = result.toolNames.filter((name) => !guarded.has(name));
   const shownOutside = outside.slice(0, 20);
@@ -373,7 +373,7 @@ function unprotectCommand(args) {
   const result = protection.unprotect({ serverName, projectRoot: process.cwd(), env: process.env });
   console.log(`Project .mcp.json hash before unprotect: ${result.beforeHash}`);
   console.log(`Project .mcp.json hash after unprotect: ${result.afterHash}`);
-  console.log("Protection: - outside Seal");
+  for (const line of protection.protectionBoundary({ ...(result.previousState || {}), state: "UNPROTECTED" }, process.cwd(), result.statePath)) console.log(line);
   const guardTools = protection.protectedToolNames(result.previousState || {});
   const undo = guardTools.length > 0
     ? [`Run \`seal protect ${shellWord(serverName)} ${guardTools.map(shellWord).join(" ")}\`.`]
@@ -381,7 +381,7 @@ function unprotectCommand(args) {
   printGuidance({
     next: [
       "1. Run `seal status`.",
-      "2. Look for `Protection: - outside Seal`.",
+      "2. Confirm the sealed MCP route is outside Seal.",
     ],
     undo,
   });
@@ -415,9 +415,9 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]\n                         install a local Claude Code override for named tools\n                         (server discovery timeout default: 5000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]\n                         install a local Claude Code override for named tools\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
-main().catch((error) => {
+if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {
     console.error(`REFUSED ${error.code}`);
     if (error.message) console.error(error.message);
@@ -427,6 +427,7 @@ main().catch((error) => {
   }
   const prefix = typeof error.code === "string" ? `${error.refusal ? "REFUSE " : ""}${error.code}: ` : "";
   console.error(`seal: ${prefix}${error.message}`);
+  printKernelTiming(error);
   printFailureGuidance(process.argv[2], error);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
   process.exitCode = 1;
