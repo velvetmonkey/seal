@@ -17,13 +17,7 @@ source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CFLAGS="-O2 -I lean4-src/src/include -I gen/include -I gen -D LEAN_EMSCRIPTEN=1"
-MCP_TYPE="$(jq -r '.packages[] | select(.name | contains("mcp-seal")) | .type' "$ROOT/lake-manifest.json")"
-if [ "$MCP_TYPE" = "path" ]; then
-  MCP_DIR="$(jq -r '.packages[] | select(.name | contains("mcp-seal")) | .dir' "$ROOT/lake-manifest.json")"
-  SEAL_ROOT="$(realpath "$ROOT/$MCP_DIR")"
-else
-  SEAL_ROOT="$ROOT/.lake/packages/mcp-seal"
-fi
+SEAL_ROOT="$ROOT/kernel-source"
 
 echo "[build_wasm] recompiling wrapper + shim"
 emcc $CFLAGS -c seal_wrapper.c          -o build-core/seal_wrapper.o || exit 1

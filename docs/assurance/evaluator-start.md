@@ -78,7 +78,7 @@ The limits are part of the result:
 - The checked-in provenance recipe is not the recipe that succeeded. It names
   `/home/you/bin/leanbuild` and omits the separate dependency C-object build;
   the clean recipe used pinned `lake build` and first ran
-  `.lake/packages/mcp-seal/c/build.sh`. Backing:
+  `kernel-source/c/build.sh`. Backing:
   `seal-host/wasm-spike/verified/PROVENANCE.txt:76-91` and
   `/home/you/scratch/seal-wasm-clean-final/reproduce.sh:77-90`.
 

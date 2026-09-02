@@ -374,10 +374,8 @@ function buildPinnedKernel(tag, work, operations = {}) {
     ...options,
     env: postInstallerEnvironment,
   });
-  if (!exists(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
-  }
-  postInstallerChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
+  postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
+  postInstallerChild("bash", ["kernel-source/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
   postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],

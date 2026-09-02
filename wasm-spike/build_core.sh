@@ -52,13 +52,7 @@ for m in "${MODULES[@]}"; do
 done
 echo "[build_core] done: $(ls build-core/*.o | grep -vcE 'stubs|seal_wrapper|ffi_shim') project objects"
 
-MCP_TYPE="$(jq -r '.packages[] | select(.name | contains("mcp-seal")) | .type' "$ROOT/lake-manifest.json")"
-if [ "$MCP_TYPE" = "path" ]; then
-  MCP_DIR="$(jq -r '.packages[] | select(.name | contains("mcp-seal")) | .dir' "$ROOT/lake-manifest.json")"
-  SEAL_ROOT="$(realpath "$ROOT/$MCP_DIR")"
-else
-  SEAL_ROOT="$ROOT/.lake/packages/mcp-seal"
-fi
+SEAL_ROOT="$ROOT/kernel-source"
 SEAL_IR="$SEAL_ROOT/.lake/build/ir"
 SEAL_MODULES=(
   SealCore SealCore/Automaton SealCore/Event SealCore/Safety SealCore/Sha256

@@ -15,7 +15,6 @@ const MODEL = path.join(ROOT, "test-support", "kernel-authorization-model.lean")
 const LEAN_TOOLCHAIN = "Lean (version 4.28.0";
 const FFI_SHA256 = "092b67ff2a17380c3b3f9ed560395443bc0b749a3ae3a42b3d9af1a8256fe0f3";
 const LAKE_MANIFEST_SHA256 = "ad4d98ca35cde0598794e4c08509bc8b21e79cbab39151c9a65d9e1cb3821dc0";
-const MCP_SEAL_REVISION = "316d74126b4cb164d501fea21738d6880469bcb4";
 
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
@@ -35,11 +34,6 @@ function leanEnvironment() {
   if (sha256(ffi) !== FFI_SHA256) refuse(`Ffi.lean is not pinned sha256 ${FFI_SHA256}`);
   if (sha256(manifest) !== LAKE_MANIFEST_SHA256) {
     refuse(`lake-manifest.json is not pinned sha256 ${LAKE_MANIFEST_SHA256}`);
-  }
-  const mcpSeal = path.join(sourceRoot, ".lake", "packages", "mcp-seal");
-  const revision = spawnSync("git", ["-C", mcpSeal, "rev-parse", "HEAD"], { encoding: "utf8" });
-  if (revision.status !== 0 || revision.stdout.trim() !== MCP_SEAL_REVISION) {
-    refuse(`mcp-seal source is not pinned revision ${MCP_SEAL_REVISION}: ${(revision.stderr || revision.stdout).trim()}`);
   }
   const lean = process.env.SEAL_LEAN || "lean";
   const version = spawnSync(lean, ["--version"], { encoding: "utf8" });
