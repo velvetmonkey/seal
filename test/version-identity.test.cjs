@@ -276,7 +276,7 @@ test("sync refuses when the current VERSION release note is absent", () => {
   assert.match(sync.stderr, new RegExp(`current release notes are absent: docs/assurance/RELEASE-NOTES-v${VERSION.replaceAll(".", "\\.")}\\.md`));
 });
 
-test("sync recomputes the reviewed-guide digest when its input moves", () => {
+test("sync refuses to rewrite the reviewed-guide digest when its input moves", () => {
   const scratch = testTmpdir(path.join(scratchRoot(), "seal-version-guide-digest-"));
   fs.cpSync(ROOT, scratch, {
     recursive: true,
@@ -290,18 +290,12 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   });
   const guide = path.join(scratch, "docs", "guide", "when-something-looks-wrong.md");
   fs.appendFileSync(guide, "\nDerived digest recomputation fixture.\n");
+  const testPath = path.join(scratch, "test", "guide-tokens.test.mjs");
+  const testSourceBefore = fs.readFileSync(testPath, "utf8");
   const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
-  assert.equal(sync.code, 0, sync.stderr);
-  const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
-  const generatedSlot = new RegExp(
-    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\.)`,
-    "gm",
-  );
-  const canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
-  const expected = crypto.createHash("sha256")
-    .update(canonical)
-    .digest("hex");
-  assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
+  assert.notEqual(sync.code, 0, "sync must go red when the reviewed guide differs from its pinned digest");
+  assert.match(sync.stderr, /reviewed guide digest changed; a human must review the guide and update GUIDE_SHA256/);
+  assert.equal(fs.readFileSync(testPath, "utf8"), testSourceBefore, "sync must not rewrite the guide-token test when the guide digest drifts");
 });
 
 test("reviewed-guide canonicalizers disclose the only unpinned canonicalized slot", () => {

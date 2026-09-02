@@ -96,26 +96,18 @@ function installReviewedGuideCanonicalizer() {
   const file = "test/guide-tokens.test.mjs";
   const target = path.join(ROOT, file);
   const before = fs.readFileSync(target, "utf8");
-  let after = before.replace(
-    /const GUIDE_SHA256 = "[0-9a-f]+";\n/,
-    `const GUIDE_SHA256 = "${reviewedGuideSha256}";\n`,
-  );
-  const needsMigration = !after.includes("const GENERATED_VERSION_SLOT =");
-  if (needsMigration) {
-    after = after
-      .replace(/const GUIDE_SHA256 = "[0-9a-f]+";\n/, `$&${canonicalizer}`)
-      .replace('createHash("sha256").update(text).digest("hex")', 'createHash("sha256").update(canonicalReviewedGuide(GUIDE, text)).digest("hex")')
-      .replace("sha256(text),\n    entry.sha256,", "sha256(canonicalReviewedGuide(entry.file, text)),\n    entry.sha256,");
+  const pinnedDigest = before.match(/^const GUIDE_SHA256 = "([0-9a-f]{64})";$/m);
+  if (!pinnedDigest) throw new Error(`reviewed guide digest pin not found in ${file}`);
+  if (reviewedGuideSha256 !== pinnedDigest[1]) {
+    throw new Error(`${file}: reviewed guide digest changed; a human must review the guide and update GUIDE_SHA256`);
   }
-  const canonicalizerBodyStart = after.indexOf('const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";');
-  if (canonicalizerBodyStart !== -1) {
-    const canonicalizerCommentStart = after.lastIndexOf("// REVIEWED_GUIDE_CANONICALIZED_SLOTS:", canonicalizerBodyStart);
-    const canonicalizerStart = canonicalizerCommentStart === -1 ? canonicalizerBodyStart : canonicalizerCommentStart;
-    const canonicalizerEnd = after.indexOf("// Where refusal tokens live", canonicalizerStart);
-    if (canonicalizerEnd === -1) throw new Error(`reviewed guide canonicalizer end marker not found in ${file}`);
-    after = `${after.slice(0, canonicalizerStart)}${canonicalizer.trimStart()}\n${after.slice(canonicalizerEnd)}`;
-  }
-  if (needsMigration && after === before) throw new Error(`reviewed guide canonicalizer migration marker not found in ${file}`);
+  const canonicalizerBodyStart = before.indexOf('const VERSIONED_GUIDE = "docs/guide/when-something-looks-wrong.md";');
+  if (canonicalizerBodyStart === -1) throw new Error(`reviewed guide canonicalizer marker not found in ${file}`);
+  const canonicalizerCommentStart = before.lastIndexOf("// REVIEWED_GUIDE_CANONICALIZED_SLOTS:", canonicalizerBodyStart);
+  const canonicalizerStart = canonicalizerCommentStart === -1 ? canonicalizerBodyStart : canonicalizerCommentStart;
+  const canonicalizerEnd = before.indexOf("// Where refusal tokens live", canonicalizerStart);
+  if (canonicalizerEnd === -1) throw new Error(`reviewed guide canonicalizer end marker not found in ${file}`);
+  const after = `${before.slice(0, canonicalizerStart)}${canonicalizer.trimStart()}\n${before.slice(canonicalizerEnd)}`;
   if (after !== before) fs.writeFileSync(target, after);
 }
 
