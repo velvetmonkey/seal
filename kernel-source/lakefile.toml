@@ -1,0 +1,243 @@
+name = "mcp-seal"
+version = "0.1.0"
+defaultTargets = [
+  "seal",
+  "v2_m4_axiom_check",
+  "k5_framing_show",
+  "classify_enum",
+  "numeric_agreement_show",
+  "escape_events_show",
+  "nonce_ledger_show",
+  "field_warrant_tests",
+  "field_warrant_mutation",
+  "channel_tests",
+  "meta_identity_controls",
+  "mrtr_identity_controls",
+  "v2_meta_identity_controls",
+  "v2_mrtr_identity_controls",
+]
+
+# M5: link the vendored Ed25519 (TweetNaCl) + FFI shim into every exe. SealV2 now
+# references the @[extern] `lean_seal_ed25519_verify`, so all exes importing SealV2
+# need this object. Build it first with `bash c/build.sh` (the README verify block
+# and ci.yml run it before `lake build`).
+moreLinkArgs = ["c/build/libsealcrypto.o"]
+
+[[require]]
+name = "batteries"
+git = "https://github.com/leanprover-community/batteries.git"
+rev = "v4.28.0"
+
+# Proof-development only: aesop is a Batteries-based proof-search tactic.
+# Kernel-checked, adds no axioms, and is NOT linked into the runtime `seal` binary.
+[[require]]
+name = "aesop"
+git = "https://github.com/leanprover-community/aesop.git"
+rev = "v4.28.0"
+
+[[lean_lib]]
+name = "SealCore"
+
+[[lean_lib]]
+name = "Seal"
+
+[[lean_lib]]
+name = "SealV2"
+
+[[lean_lib]]
+name = "Test"
+globs = ["Test.+"]
+
+[[lean_exe]]
+name = "seal"
+root = "Seal.Main"
+
+[[lean_exe]]
+name = "automaton_tests"
+root = "Test.Automaton"
+
+[[lean_exe]]
+name = "policy_v2_tests"
+root = "Test.PolicyV2"
+
+[[lean_exe]]
+name = "policy_bundle_tests"
+root = "Test.PolicyBundle"
+
+[[lean_exe]]
+name = "policy_diff_tests"
+root = "Test.PolicyDiff"
+
+[[lean_exe]]
+name = "policy_schema_emit"
+root = "Test.PolicySchemaEmit"
+
+[[lean_exe]]
+name = "scaffold_tests"
+root = "Test.Scaffold"
+
+[[lean_exe]]
+name = "channel_tests"
+root = "Test.Channel"
+
+[[lean_exe]]
+name = "effect_vectors"
+root = "Test.EffectVectors"
+
+[[lean_exe]]
+name = "meta_identity_controls"
+root = "Test.MetaIdentityControls"
+
+[[lean_exe]]
+name = "mrtr_identity_controls"
+root = "Test.MrtrIdentityControls"
+
+[[lean_exe]]
+name = "v2_meta_identity_controls"
+root = "Test.V2MetaIdentityControls"
+
+[[lean_exe]]
+name = "v2_mrtr_identity_controls"
+root = "Test.V2MrtrIdentityControls"
+
+[[lean_exe]]
+name = "scan_oracle"
+root = "Test.ScanOracle"
+
+[[lean_exe]]
+name = "axiom_check"
+root = "Test.Axioms"
+
+[[lean_exe]]
+name = "module_axiom_check"
+root = "Test.ModuleAxiomScan"
+# `Seal.Main` cannot be imported statically because it defines root `main`.
+# Building `seal` and `ffi_shared` supplies their `.olean` files for the
+# checker's two isolated imports.
+needs = ["seal", "ffi_shared"]
+
+[[lean_exe]]
+name = "v2_parse_tests"
+root = "Test.V2Parse"
+
+[[lean_exe]]
+name = "v2_m1_axiom_check"
+root = "Test.V2M1Axioms"
+
+[[lean_exe]]
+name = "v2_parse_line"
+root = "Test.V2ParseLine"
+
+[[lean_exe]]
+name = "v2_validate_tests"
+root = "Test.V2Validate"
+
+[[lean_exe]]
+name = "v2_m2_axiom_check"
+root = "Test.V2M2Axioms"
+
+[[lean_exe]]
+name = "v2_validate_line"
+root = "Test.V2ValidateLine"
+
+[[lean_exe]]
+name = "v2_serialize_tests"
+root = "Test.V2Serialize"
+
+[[lean_exe]]
+name = "v2_m3_axiom_check"
+root = "Test.V2M3Axioms"
+
+[[lean_exe]]
+name = "v2_m3_parser_axiom_check"
+root = "Test.V2M3ParserAxioms"
+
+[[lean_exe]]
+name = "v2_m4_axiom_check"
+root = "Test.V2M4Axioms"
+
+[[lean_exe]]
+name = "v2_m6_axiom_check"
+root = "Test.V2M6Axioms"
+
+[[lean_exe]]
+name = "v2_serialize_line"
+root = "Test.V2SerializeLine"
+
+[[lean_exe]]
+name = "v2_decide_line"
+root = "Test.V2DecideLine"
+
+# M7: exe-shaped shared-object target. Forces Ffi.lean (the @[export] surface) to
+# compile + emit its objects; the self-contained .so is hand-linked by
+# scripts/build_ffi_so.sh (full transitive object set + ffi_shim + ed25519 leaf).
+# M7: the Ffi @[export] surface. A NORMAL exe target (root Ffi, has `def main`) so
+# `lake build ffi_shared` triggers C codegen of Ffi → emits Ffi.c.o.export and links
+# cleanly. The self-contained .so is then hand-linked by scripts/build_ffi_so.sh against
+# the DYNAMIC libleanshared (the static runtime's TLS relocs cannot enter a -shared object,
+# so we never link the exe with -shared — the exe is a throwaway to force codegen).
+[[lean_exe]]
+name = "ffi_shared"
+root = "Ffi"
+
+[[lean_exe]]
+name = "v2_signed_bytes"
+root = "Test.V2SignedBytes"
+
+[[lean_exe]]
+name = "v2_verify_line"
+root = "Test.V2VerifyLine"
+
+[[lean_exe]]
+name = "v2_lifecycle_tests"
+root = "Test.V2Lifecycle"
+
+[[lean_exe]]
+name = "principal_non_influence_show"
+root = "Test.PrincipalNonInfluence"
+
+# K5: framing-injectivity SHOW (GREEN kernel framing / RED --tamper byte-count)
+[[lean_exe]]
+name = "k5_framing_show"
+root = "Test.K5FramingShow"
+
+# K3/K4: STEP 0 enumerator + SHOW control for the classify seam.
+[[lean_exe]]
+name = "classify_enum"
+root = "Test.ClassifyEnum"
+
+[[lean_exe]]
+name = "numeric_agreement_show"
+root = "Test.NumericAgreementShow"
+
+# K3/K4 part 3: escape-events non-influence SHOW (real-crypto Allow witness).
+[[lean_exe]]
+name = "escape_events_show"
+root = "Test.EscapeEventsShow"
+
+# Nonce ledger: fail-closed generation pin SHOW (GREEN honest run + honest
+# limits / RED --tamper: deleted replay check, generation-blind gate,
+# fenceless executor).
+[[lean_exe]]
+name = "nonce_ledger_show"
+root = "Test.NonceLedgerShow"
+
+[[lean_exe]]
+name = "field_warrant_tests"
+root = "Test.FieldWarrant"
+
+[[lean_exe]]
+name = "field_warrant_mutation"
+root = "Test.FieldWarrantMutation"
+
+[[lean_exe]]
+name = "m2_adapter_revision_set"
+root = "Test.M2AdapterRevisionSet"
+
+[[lean_exe]]
+name = "m7_version_gate"
+root = "Test.M7VersionGate"
+
+[[lean_exe]]
+name = "field_warrant_dishonest_probe"
+root = "Test.FieldWarrantDishonest"

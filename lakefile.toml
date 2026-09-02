@@ -1,0 +1,160 @@
+name = "seal-host"
+version = "0.1.6"
+testDriver = "lean_tests"
+# Lint driver: a thin wrapper (LintDriver.lean) around Batteries' runLinter,
+# which derives its module list from this package's defaultTargets (their root
+# modules: Host.Main -> Host, Test.* -> Test). The wrapper exists because the
+# mcp-seal dependency also ships Test.* modules and Lake's driver LEAN_PATH
+# lists dependencies first, so a bare runLinter resolves Test.* into the wrong
+# package. This keeps `lake lint` available as an explicit on-disk diagnostic;
+# CI disables the hours-long lint phase at every lean-action call site.
+lintDriver = "lint_driver"
+# `repin_step2_guards` added 2026-07-25. Test/RepinStep2Guards.lean carried five
+# compile-time `example ... := by native_decide` assertions covering the
+# duplicate-key mediation bypass and the Unicode canonical-equivalence key case,
+# plus three positive controls. The Test lib globs `Test.+`, so Lake knew the
+# module existed; it simply was never a default target, so it had NEVER been
+# built (no olean on disk, verified). Written, correct, and inert.
+defaultTargets = ["seal-host", "axiom_check", "host_unit_tests", "dx_surface_tests", "classify_encoding_tests", "repin_step2_guards", "guard_unify_tests", "three_artifact_byte_lock"]
+moreLinkArgs = [".lake/packages/mcp-seal/c/build/libsealcrypto.o"]
+
+# Mathlib-carrying libraries first so mathlib's transitive pins win resolution order.
+[[require]]
+name = "crdt-lean"
+git = "https://github.com/velvetmonkey/crdt-lean.git"
+rev = "08e06785db8b175ad814357319dce17863090d9b"
+
+[[require]]
+name = "temporal-logic-lean"
+git = "https://github.com/velvetmonkey/temporal-logic-lean.git"
+rev = "6e1cb65409f11c3edebbfd937f56175787774583"
+
+[[require]]
+name = "consensus-lean"
+git = "https://github.com/velvetmonkey/consensus-lean.git"
+rev = "6b300f00ab98660dc87a363c087ed8114fd36206"
+
+[[require]]
+name = "calibration-lean"
+git = "https://github.com/velvetmonkey/calibration-lean.git"
+rev = "804c9a6c49400de779a39a5aca00407bd96c46f4"
+
+[[require]]
+name = "mcp-seal"
+git = "https://github.com/velvetmonkey/mcp-seal-dev.git"
+rev = "316d74126b4cb164d501fea21738d6880469bcb4"
+
+# Unicode 17 canonical decomposition data for the raw-wire object-key
+# identity guard. This is pinned to the last release built with Lean 4.28.0.
+[[require]]
+name = "UnicodeBasic"
+git = "https://github.com/fgdorais/lean4-unicode-basic.git"
+rev = "ff04f5c424e50e23476d3539c7c0cc4956e971ad"
+
+# One library for the host + kernels + FFI surface. Host and Kernels modules
+# import each other across the prefix boundary (Kernels implement Host.Kernel;
+# Host.Config carries kernel config types), so they must live in ONE Lake lib
+# or the per-lib shared facets cycle.
+[[lean_lib]]
+name = "Ffi"
+globs = ["Host", "Host.+", "Kernels", "Kernels.+", "Ffi", "FfiSpec"]
+
+[[lean_lib]]
+name = "Test"
+globs = ["Test.+"]
+
+# The `lake lint` entry point — see the lintDriver comment above. `needs`
+# makes Lake build the real linter BEFORE running this driver: the driver
+# itself must never spawn a nested `lake build` while `lake lint` runs.
+[[lean_exe]]
+name = "lint_driver"
+root = "LintDriver"
+needs = ["batteries/runLinter"]
+
+[[lean_exe]]
+name = "seal-host"
+root = "Host.Main"
+
+# Self-contained shared library for the Rust host: an exe-shaped link (so it
+# carries the FULL transitive object set, mathlib included) emitted as a
+# shared object. The per-lib `:shared` facet cannot do this — it links only
+# the lib's own modules.
+[[lean_exe]]
+name = "ffi_shared"
+root = "FfiMain"
+moreLinkArgs = ["-shared"]
+
+[[lean_exe]]
+name = "axiom_check"
+root = "Test.Axioms"
+
+[[lean_exe]]
+name = "host_unit_tests"
+root = "Test.HostUnit"
+
+[[lean_exe]]
+name = "dx_surface_tests"
+root = "Test.DxSurface"
+
+[[lean_exe]]
+name = "classify_encoding_tests"
+root = "Test.ClassifyEncoding"
+
+[[lean_exe]]
+name = "policy_server_identity_tests"
+root = "Test.PolicyServerIdentity"
+
+# A2 — derives the honesty matrix's machine-derivable cells (proven/wired/
+# arithmetic) by term-binding the nine FfiSpec theorems and evaluating
+# `activeKernels` over all 32 deployable configs. Rendered by
+# scripts/honesty-matrix.mjs into docs/HONESTY-MATRIX.md; CI diffs the two.
+[[lean_exe]]
+name = "honesty_matrix"
+root = "Test.HonestyMatrix"
+
+[[lean_exe]]
+name = "sha256_selfcheck"
+root = "Test.Sha256SelfCheck"
+
+[[lean_exe]]
+name = "l0_liveness_measure"
+root = "Test.L0LivenessMeasure"
+
+# Runs the raw-wire guard matrix. The assertions are compile-time `example`s, so
+# building this target IS the check; the exe exists to give CI a named thing to
+# invoke and a non-zero exit if the module ever stops compiling.
+[[lean_exe]]
+name = "repin_step2_guards"
+root = "Test.RepinStep2Guards"
+
+[[lean_exe]]
+name = "guard_unify_tests"
+root = "Test.GuardUnify"
+
+[[lean_exe]]
+name = "three_artifact_byte_lock"
+root = "Test.ThreeArtifactByteLock"
+
+# V3.1 downstream parser-agreement oracle. Given one terminator-stripped
+# JSON-RPC frame, print the production classifier's CanonicalAction as JSON.
+[[lean_exe]]
+name = "downstream_parser_oracle"
+root = "Test.DownstreamParserOracle"
+
+# Passthrough-perimeter control: runs the compiled router + widened `wrun`
+# over the witness corpus and exits non-zero (RED) if any message inside the
+# mediation perimeter S is ever forwarded to the child undecided, or if a
+# witnessed escape stops escaping. The kernel cannot evaluate `Json.parse`
+# (partial), so this exit-status control complements the module's #guards.
+[[lean_exe]]
+name = "perimeter_probe"
+root = "Test.PerimeterProbe"
+
+# Lake accepts one test driver, while the suite's assertions are spread across
+# ten executables. Building this driver builds every child (including the four
+# whose assertions run at elaboration time), then Test.LeanTests runs each child
+# and reports every nonzero exit after the full roster has run.
+[[lean_exe]]
+name = "lean_tests"
+root = "Test.LeanTests"
+needs = ["axiom_check", "host_unit_tests", "dx_surface_tests", "classify_encoding_tests", "policy_server_identity_tests", "honesty_matrix", "sha256_selfcheck", "repin_step2_guards", "guard_unify_tests", "perimeter_probe"]
