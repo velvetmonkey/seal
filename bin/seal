@@ -53,6 +53,7 @@ function status() {
   let receiptDir;
   try {
     const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
+    if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
       for (const line of protection.protectionBoundary({ state: "UNPROTECTED" }, root)) console.log(line);
@@ -69,8 +70,7 @@ function status() {
       if (view.state === "BROKEN") console.log(`Protection detail: ${view.brokenReason || "stored state is broken"}`);
       if (view.detail) console.log(`Protection detail: ${view.detail}`);
       if (view.state === "PENDING RESTART" || view.state === "STALE") printGuidance(protectGuidance(view.serverName, guarded));
-      if (typeof state.receiptsDir === "string") receiptDir = state.receiptsDir;
-      else {
+      if (receiptDir === undefined) {
         console.log("Receipts: unavailable (protected project has no recorded receipt directory)");
         console.log("Most recent: no project receipt directory is recorded");
         return;
@@ -87,11 +87,14 @@ function status() {
       process.exitCode = 1;
       return;
     }
+    if (receiptDir === undefined && typeof error.receiptDir === "string") receiptDir = error.receiptDir;
     for (const line of protection.protectionBoundary({ state: "BROKEN", brokenReason: error.message }, process.cwd())) console.log(line);
     console.log(`Protection detail: ${error.message}`);
-    console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
-    console.log("Most recent: unavailable because the project receipt directory could not be resolved");
-    return;
+    if (receiptDir === undefined) {
+      console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
+      console.log("Most recent: unavailable because the project receipt directory could not be resolved");
+      return;
+    }
   }
 
   let entries;

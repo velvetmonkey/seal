@@ -66,6 +66,24 @@ function protectedStatusPrefix(statePath) {
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
 
+function brokenStatusWithReceipt(detail, receiptDir) {
+  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+    "Sealed MCP route: BROKEN\n" +
+    "\n" +
+    "Gated through this route:\n" +
+    "  unknown: stored protection state has no protected tool list\n" +
+    "\n" +
+    "Not controlled:\n" +
+    "  Bash and subprocesses outside this MCP route\n" +
+    "  direct resource access outside this MCP route\n" +
+    "  other clients\n" +
+    "  other MCP servers not routed through this Seal wrapper\n" +
+    "  other uncontrolled routes can also exist\n" +
+    `Protection detail: ${detail}\n` +
+    `Receipts: 1 stored in ${receiptDir}\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n";
+}
+
 test("status finds the shipped kernel runtime with an empty cache", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
@@ -144,8 +162,63 @@ test("status reads the protected project's recorded receipt directory", () => {
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Receipts: 1 stored in ${receiptDir}$`, "m"));
-  assert.match(result.out, /^Most recent \(by write time\): APPROVE at receipt time 1786896000 \(approved\.json\)$/m);
+  assert.equal(result.out, protectedStatusPrefix(statePath) +
+    `Receipts: 1 stored in ${receiptDir}\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n");
+});
+
+test("status reads a recorded receipt directory when the protection state has no protected tool list", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-broken-tools-readable-receipts-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "broken-tools", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir));
+});
+
+test("status reads a recorded receipt directory from parsed incompatible protection state", async (t) => {
+  const cases = [
+    {
+      name: "wrong schema",
+      fields: { schema: "seal.protect/v0-not-this" },
+      detail: 'stored protection state has schema "seal.protect/v0-not-this", not seal.protect/v1',
+    },
+    {
+      name: "wrong Seal version",
+      fields: { sealVersion: "0.0.0-not-this" },
+      detail: "stored protection state is from another binary version",
+    },
+  ];
+  for (const item of cases) await t.test(item.name, () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-status-incompatible-readable-receipts-"));
+    const project = path.join(root, "project");
+    const dataHome = path.join(root, ".local", "share");
+    const receiptDir = path.join(dataHome, "seal", "projects", "incompatible", "receipts");
+    const { statePathFor } = require("../spine/protection.cjs");
+    fs.mkdirSync(project);
+    fs.mkdirSync(receiptDir, { recursive: true });
+    fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+    const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    writeOwnedState(root, project, statePath, {
+      state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir, ...item.fields,
+    });
+
+    const result = run(["status"], root, "", project);
+    assert.equal(result.code, 0, result.out);
+    assert.equal(result.out, brokenStatusWithReceipt(item.detail, receiptDir));
+  });
 });
 
 test("status does not invent a receipt directory when protection state is unreadable", () => {

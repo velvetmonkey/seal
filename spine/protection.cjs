@@ -293,16 +293,21 @@ function readState(statePath) {
     if (error.code === "ENOENT") return null;
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
-  if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${STATE_SCHEMA}`);
+  try {
+    if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
+      throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${STATE_SCHEMA}`);
+    }
+    if (state.sealVersion !== sealVersion()) {
+      throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
+    }
+    if (state.guardTools === undefined && typeof state.guardTool === "string" && state.guardTool.length > 0) {
+      return { ...state, guardTools: [state.guardTool] };
+    }
+    return state;
+  } catch (error) {
+    if (typeof state?.receiptsDir === "string") error.receiptDir = state.receiptsDir;
+    throw error;
   }
-  if (state.sealVersion !== sealVersion()) {
-    throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
-  }
-  if (state.guardTools === undefined && typeof state.guardTool === "string" && state.guardTool.length > 0) {
-    return { ...state, guardTools: [state.guardTool] };
-  }
-  return state;
 }
 
 function protectedToolNames(state) {
