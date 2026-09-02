@@ -310,7 +310,14 @@ test("a top-level batch is refused as one frame and never reaches the child", as
   const body = receiptFor(dir, "BLOCK");
   assert.equal(body.tool, "<batch>");
   assert.match(body.reason, /^safety kernel: /);
-  assert.equal(frames.length, 0);
+  assert.deepEqual(frames, [{
+    jsonrpc: "2.0",
+    id: null,
+    error: {
+      code: -32600,
+      message: "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.",
+    },
+  }]);
 });
 
 test("a client without elicitation gets a named refusal and no held call", async (t) => {

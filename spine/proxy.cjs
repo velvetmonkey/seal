@@ -193,7 +193,7 @@ function createProxy(options) {
       refusal: "response_malformed",
       detail,
     }, receipt);
-    if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult("response_malformed", detail));
+    onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32600, message: detail } }));
   }
 
   function canForward(frame) {
