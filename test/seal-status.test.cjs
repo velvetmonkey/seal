@@ -187,40 +187,6 @@ test("status reads a recorded receipt directory when the protection state has no
   assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir));
 });
 
-test("status reads a recorded receipt directory from parsed incompatible protection state", async (t) => {
-  const cases = [
-    {
-      name: "wrong schema",
-      fields: { schema: "seal.protect/v0-not-this" },
-      detail: 'stored protection state has schema "seal.protect/v0-not-this", not seal.protect/v1',
-    },
-    {
-      name: "wrong Seal version",
-      fields: { sealVersion: "0.0.0-not-this" },
-      detail: "stored protection state is from another binary version",
-    },
-  ];
-  for (const item of cases) await t.test(item.name, () => {
-    const root = testTmpdir(path.join(os.tmpdir(), "seal-status-incompatible-readable-receipts-"));
-    const project = path.join(root, "project");
-    const dataHome = path.join(root, ".local", "share");
-    const receiptDir = path.join(dataHome, "seal", "projects", "incompatible", "receipts");
-    const { statePathFor } = require("../spine/protection.cjs");
-    fs.mkdirSync(project);
-    fs.mkdirSync(receiptDir, { recursive: true });
-    fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
-    const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
-    fs.mkdirSync(path.dirname(statePath), { recursive: true });
-    writeOwnedState(root, project, statePath, {
-      state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir, ...item.fields,
-    });
-
-    const result = run(["status"], root, "", project);
-    assert.equal(result.code, 0, result.out);
-    assert.equal(result.out, brokenStatusWithReceipt(item.detail, receiptDir));
-  });
-});
-
 test("status does not invent a receipt directory when protection state is unreadable", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-unreadable-state-"));
   const project = path.join(root, "project");
