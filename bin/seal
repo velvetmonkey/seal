@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-// The product shell. Runtime semantics remain in the separately published
-// assurance-kit artifact named by runtime-manifest.json.
+// The product shell.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -13,8 +12,6 @@ const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dir
 
 const ROOT = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
-const runtimeBase = process.env.SEAL_RUNTIME_BASE_URL ||
-  `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
 const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
 const shippedRuntime = path.join(ROOT, "runtime");
 const shippedRuntimeFiles = Object.entries(manifest.files).filter(([relative]) => relative.startsWith("kernel/"));
@@ -169,13 +166,6 @@ function sealOnPath() {
   }
   return false;
 }
-function verifyHint(receipt) {
-  const launcher = path.resolve(process.argv[1] || "");
-  const npxByArgv = /(?:^|[/\\])_npx(?:[/\\])/.test(launcher);
-  if (npxByArgv) return `npx github:velvetmonkey/seal verify ${shellWord(receipt)}`;
-  if (sealOnPath()) return `seal verify ${shellWord(receipt)}`;
-  return `${shellWord(fs.realpathSync(launcher))} verify ${shellWord(receipt)}`;
-}
 function printGuidance({ next = [], undo = [] }, writeLine = (line) => console.log(line)) {
   if (next.length > 0) {
     writeLine("Next:");
@@ -234,64 +224,6 @@ function printFailureGuidance(command, error, context, writeLine = (line) => con
   if (next.length > 0) printGuidance({ next }, writeLine);
 }
 const { printKernelTiming } = require(path.join(ROOT, "spine", "presentation.cjs"));
-async function fetchBytes(url) {
-  let response;
-  try {
-    response = await fetch(url);
-  } catch (cause) {
-    const error = new Error(`runtime fetch failed: ${cause.name}: ${cause.message}`);
-    error.runtimeDownload = "failed";
-    throw error;
-  }
-  if (!response.ok) {
-    const error = new Error(`runtime download returned HTTP ${response.status}`);
-    error.runtimeDownload = response.status === 404 ? "not_found" : "unavailable";
-    error.status = response.status;
-    throw error;
-  }
-  return Buffer.from(await response.arrayBuffer());
-}
-function runtimeRefusal(code, message) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
-async function ensureRuntime(receiptPath) {
-  for (const [relative, expected] of Object.entries(manifest.files)) {
-    const target = path.join(cache, relative);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (fs.existsSync(target)) {
-      let got;
-      try { got = sha256(fs.readFileSync(target)); }
-      catch {
-        throw runtimeRefusal("runtime_cache_unreadable", `Seal needed the pinned runtime file at ${target}; it could not read the cached file. Make that cache path readable, then run \`${verifyHint(receiptPath)}\`. Seal did not replace this runtime file.`);
-      }
-      if (got !== expected) throw new Error(`cached runtime hash mismatch for ${relative}: ${got}`);
-      continue;
-    }
-    const source = `${runtimeBase}/${relative}`;
-    let bytes;
-    try { bytes = await fetchBytes(source); }
-    catch (error) {
-      if (error.runtimeDownload === "failed") {
-        throw runtimeRefusal("runtime_download_failed", `Seal needs the pinned runtime file at ${target}, but it is not cached and the fetch from ${source} failed (${error.message}). Verification cannot continue without this runtime file. Restore access to that source, then run: \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
-      }
-      if (error.runtimeDownload === "not_found") {
-        throw runtimeRefusal("runtime_download_not_found", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP 404. Check that the pinned runtime revision is published, then run \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
-      }
-      if (error.runtimeDownload === "unavailable") {
-        throw runtimeRefusal("runtime_download_unavailable", `Seal needed the pinned runtime file at ${target}; ${source} responded HTTP ${error.status}. Check the runtime source, then run \`${verifyHint(receiptPath)}\`. Seal did not write this runtime file.`);
-      }
-      throw error;
-    }
-    const got = sha256(bytes);
-    if (got !== expected) throw new Error(`downloaded runtime hash mismatch for ${relative}: ${got}`);
-    const temporary = `${target}.download-${process.pid}`;
-    fs.writeFileSync(temporary, bytes, { mode: 0o600 });
-    fs.renameSync(temporary, target);
-  }
-  return cache;
-}
 function ask(question) {
   return new Promise((resolve) => {
     const input = readline.createInterface({ input: process.stdin, output: process.stderr });
