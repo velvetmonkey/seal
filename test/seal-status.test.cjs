@@ -187,6 +187,31 @@ test("status reads a recorded receipt directory when the protection state has no
   assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir));
 });
 
+test("status does not count files from a receipt directory named by refused protection state", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-refused-readable-receipts-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(dataHome, "seal", "projects", "refused-state", "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(receiptDir, "operator-notes.txt"), "not a receipt\n");
+  fs.writeFileSync(path.join(receiptDir, "staging-payload.dat"), "not a receipt either\n");
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    schema: "seal.protect/v0-not-this",
+    state: "PENDING RESTART",
+    guardTool: "write",
+    receiptsDir: receiptDir,
+  });
+
+  const result = run(["status"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.doesNotMatch(result.out, new RegExp(`^Receipts: 2 stored in ${receiptDir}$`, "m"));
+  assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
+});
+
 test("status does not invent a receipt directory when protection state is unreadable", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-unreadable-state-"));
   const project = path.join(root, "project");
