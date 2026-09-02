@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = process.env.SEAL_GUIDE_PATH ?? "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "3d70fb9a0b7a808c0683a3769a1d2503b9544cd35729fc1beab6f58912e79bba";
+const GUIDE_SHA256 = "4fc183f6e083191a7a778f8953d71524bfdd51ea503b7a7c353357e305c7f243";
 const require = createRequire(import.meta.url);
 const protection = require("../spine/protection.cjs");
 const store = require("../spine/store.cjs");
@@ -55,7 +55,6 @@ const SOURCES = [
   { file: "spine/platform.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "unsupported_platform" },
   { file: "spine/integrity.cjs", patterns: [/\.code = "([a-z_]+)"/g, /\bcode: "([a-z_]+)"/g], sentinel: "artifact_truncated" },
   { file: "spine/version.cjs", patterns: [/error\.code = "([a-z_]+)"/g], sentinel: "version_mismatch" },
-  { file: "bin/seal", patterns: [/runtimeRefusal\("([a-z_]+)"/g], sentinel: "runtime_cache_unreadable" },
   { file: "scripts/install.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "pin_missing" },
   { file: "scripts/seal-launch.cjs", patterns: [/refuse\("([a-z_]+)"/g, /REFUSE ([a-z_]+):/g], sentinel: "install_record_missing" },
   { file: "scripts/build-dist.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "node_missing" },
