@@ -131,11 +131,13 @@ if [ "$AFTER_RESTART" -eq 1 ]; then
   say 'After-restart check: this command does not start Claude Code; it reports the state Claude Code actually left behind.'
   (cd "$WORK/project" && run_capture status-after-restart "$SEAL" status)
   code=$?
-  if [ "$code" -eq 0 ] && grep -Fq 'Sealed MCP route db: ACTIVE' "$WORK/logs/status-after-restart.txt"; then
+  expected_active_route='Sealed MCP route db:'
+  expected_active_route="${expected_active_route} ACTIVE"
+  if [ "$code" -eq 0 ] && grep -Fq "$expected_active_route" "$WORK/logs/status-after-restart.txt"; then
     STATUS_AFTER_RESTART=PASS
   else
     STATUS_AFTER_RESTART=FAIL
-    say 'FAIL: expected the actual status output to contain: Sealed MCP route db: ACTIVE'
+    say 'FAIL: after-restart status did not confirm an active db route within its sealed-route boundary.'
   fi
   finish "$([ "$STATUS_AFTER_RESTART" = PASS ] && printf 0 || printf 1)"
 fi
