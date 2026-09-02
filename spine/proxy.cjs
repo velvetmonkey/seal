@@ -187,6 +187,15 @@ function createProxy(options) {
     if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult(refusal, detail));
   }
 
+  function blockMalformedClientFrame(frame, detail) {
+    const receipt = contract.receiptFor({ tool: "<batch>", args: {}, accepted: false });
+    emitReceipt("BLOCK", { params: { name: "<batch>", arguments: {} } }, {
+      refusal: "response_malformed",
+      detail,
+    }, receipt);
+    if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult("response_malformed", detail));
+  }
+
   function canForward(frame) {
     if (childSpawnError) {
       blockForward(frame, childSpawnError, `protected server command failed to start: ${childArgv[0]}`);
@@ -346,6 +355,10 @@ function createProxy(options) {
         frame = JSON.parse(line);
       } catch {
         onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "seal proxy: unparseable frame refused" } }));
+        return;
+      }
+      if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
+        blockMalformedClientFrame(frame, "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.");
         return;
       }
       if (!frame.method && Object.hasOwn(frame, "id")) {
