@@ -51,8 +51,8 @@ jobs:
           git config --global \
             url."https://x-access-token:${SEAL_CI_READ_TOKEN}@github.com/velvetmonkey/".insteadOf \
             "https://github.com/velvetmonkey/"
-          test -d .lake/packages/mcp-seal || lake update
-          bash .lake/packages/mcp-seal/c/build.sh
+          lake update
+          bash kernel-source/c/build.sh
 
       - name: Build Lean sources once for wasm C inputs
         run: lake build
@@ -68,5 +68,5 @@ jobs:
 
       - name: Require rebuilt seal.wasm to match the tracked pin
         run: |
-          expected=$(sha256sum wasm-spike/verified/seal.wasm | awk '{print $1}')
+          expected=$(sha256sum runtime/kernel/wasm/seal.wasm | awk '{print $1}')
           printf '%s  %s\n' "$expected" wasm-spike/build-core/seal.wasm | sha256sum -c -
