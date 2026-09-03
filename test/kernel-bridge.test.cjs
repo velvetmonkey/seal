@@ -73,7 +73,7 @@ function proxyHarness(t, env = {}) {
   child.stderr.on("data", (chunk) => { err += chunk; });
   async function response(id) {
     const started = Date.now();
-    while (Date.now() - started < 15000) {
+    while (Date.now() - started < 35000) {
       for (const line of out.split("\n")) {
         if (!line.trim()) continue;
         const frame = JSON.parse(line);
@@ -85,7 +85,7 @@ function proxyHarness(t, env = {}) {
   }
   async function request(method) {
     const started = Date.now();
-    while (Date.now() - started < 15000) {
+    while (Date.now() - started < 35000) {
       for (const line of out.split("\n")) {
         if (!line.trim()) continue;
         const frame = JSON.parse(line);
@@ -157,7 +157,7 @@ test("real MCP timeout after all child phases reports that worker exit was not o
 const write = process.stdout.write.bind(process.stdout);
 process.stdout.write = function(chunk, ...rest) {
   if (process.argv[1]?.endsWith("kernel-authorization-worker.cjs") && typeof chunk === "string" && chunk.includes('"verdict":"ALLOW"')) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
   }
   return write(chunk, ...rest);
 };
@@ -169,14 +169,14 @@ process.stdout.write = function(chunk, ...rest) {
   const refused = await run.response(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
   t.diagnostic(refused.result.content[0].text);
-  assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 5000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
+  assert.equal(refused.result.content[0].text, "approval refused: kernel_execution_refused — kernel worker exceeded its 30000 ms deadline; Node authorization did not override the kernel refusal (kernel worker exit was not observed after all measured phases completed)");
   assert.doesNotMatch(refused.result.content[0].text, /null|undefined/);
   run.child.stdin.end();
 });
 
 test("real MCP hanging worker with no child phases does not claim measured phases completed", async (t) => {
   const preload = redirectedKernelWorker(t, `
-Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
 `);
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
   run.send(1, { name: TOOL, arguments: ARGS });
@@ -204,7 +204,7 @@ for (const name of [
     timestamps: { started_ns: "1", finished_ns: "2" },
   }) + "\\n");
 }
-Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
 `);
   const run = proxyHarness(t, { NODE_OPTIONS: `--require=${preload}` });
   run.send(1, { name: TOOL, arguments: ARGS });
@@ -232,7 +232,7 @@ Module._load = function(request, parent, isMain) {
   if (request.endsWith("runner.cjs")) {
     const decide = value.decide;
     value.decide = async function(...args) {
-      if (args[1]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+      if (args[1]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
       return decide.apply(this, args);
     };
   }
@@ -354,9 +354,9 @@ test("a hung kernel worker reaches its product deadline and refuses closed", () 
   const refused = acceptedRetry(contract, fresh(contract));
   const elapsed = Date.now() - started;
   assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
-  assert.match(refused.detail, /kernel worker exceeded its 5000 ms deadline/);
-  assert.ok(elapsed >= 5000, `worker returned before its deadline: ${elapsed} ms`);
-  assert.ok(elapsed < 7000, `worker did not return promptly: ${elapsed} ms`);
+  assert.match(refused.detail, /kernel worker exceeded its 30000 ms deadline/);
+  assert.ok(elapsed >= 30000, `worker returned before its deadline: ${elapsed} ms`);
+  assert.ok(elapsed < 32000, `worker did not return promptly: ${elapsed} ms`);
 });
 
 test("an injected delayed decision carries completed phases through the shipped retry refusal", (t) => {
@@ -369,7 +369,7 @@ Module._load = function(request, parent, isMain) {
   if (request.endsWith("runner.cjs")) {
     const decide = loaded.decide;
     loaded.decide = async (...args) => {
-      await new Promise((resolve) => setTimeout(resolve, 5100));
+      await new Promise((resolve) => setTimeout(resolve, 30100));
       return decide(...args);
     };
   }
@@ -387,7 +387,7 @@ Module._load = function(request, parent, isMain) {
   const refused = acceptedRetry(contract, fresh(contract));
   assert.equal(refused.kind, "refuse");
   assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
-  assert.match(refused.detail, /exceeded its 5000 ms deadline/);
+  assert.match(refused.detail, /exceeded its 30000 ms deadline/);
   assert.ok(refused.timing, "the returned refusal carries timing");
   const published = Object.keys(refused.timing.kernel_timing_timestamps.child_process_hrtime_ns).sort();
   assert.deepEqual(published, [
@@ -424,7 +424,7 @@ test("a response write that does not flush reports completed security work and l
 const write = process.stdout.write.bind(process.stdout);
 process.stdout.write = function(chunk, ...rest) {
   if (typeof chunk === "string" && chunk.includes('"receipt_record"')) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
   }
   return write(chunk, ...rest);
 };
@@ -452,7 +452,7 @@ process.stdout.write = function(chunk, ...rest) {
 });
 
 function blockingPreload(phase) {
-  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5100);";
+  const sleep = "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);";
   const controls = {
     child_bootstrap_to_module_load: `
 const Module = require("node:module");
@@ -529,7 +529,7 @@ const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stri
 process.stdout.write(JSON.stringify(result));`;
     const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
       env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
-      timeout: 10000,
+      timeout: 40000,
     });
     return [phase, JSON.parse(stdout)];
   }));
@@ -552,7 +552,7 @@ const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stri
 process.stdout.write(JSON.stringify(result));`;
   const { stdout } = await execFileAsync(process.execPath, ["-e", program], {
     env: { ...process.env, NODE_OPTIONS: `--require=${control}` },
-    timeout: 10000,
+    timeout: 40000,
   });
   const refused = JSON.parse(stdout);
   assert.equal(refused.timing.kernel_timing_active_phase, "wasm_load");

@@ -9,7 +9,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
 const STATE_SCHEMA = "seal.protect/v1";
-const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 5000;
+const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 30000;
 const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
   PENDING_RESTART: "PENDING RESTART",

@@ -53,7 +53,7 @@ TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
 accepted by `seal_init`; this is demo-grade self-authorization, not a
 production config-signing trust root. Corrupt or unpinned WASM refuses and has
 no JavaScript authorization fallback. Each kernel worker invocation has a
-5000ms product-enforced deadline and is killed if it exceeds that deadline; the
+30000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The current install payload excludes `seal-receipt-v2.mjs`. Download the sibling
@@ -67,7 +67,7 @@ under a trusted supplied key; semantically irrelevant JSON formatting
 differences are not distinguished. It does not detect defects in those
 shared implementation choices.
 
-For `seal protect`, MCP discovery has a 5000ms deadline per phase by
+For `seal protect`, MCP discovery has a 30000ms deadline per phase by
 default. Slow but legitimate servers can use
 `seal protect --timeout-ms MILLISECONDS SERVER TOOL`; timeout refusals name
 that flag, and the selected deadline is retained for the activation re-check.

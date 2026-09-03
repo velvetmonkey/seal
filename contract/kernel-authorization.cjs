@@ -10,7 +10,7 @@ const { spawnSync } = require("node:child_process");
 const PRODUCT_ROOT = path.resolve(__dirname, "..");
 const DEFAULT_KERNEL_ROOT = path.join(PRODUCT_ROOT, "runtime", "kernel");
 const DEFAULT_MANIFEST = path.join(PRODUCT_ROOT, "runtime-manifest.json");
-const DEFAULT_KERNEL_TIMEOUT_MS = 5000;
+const DEFAULT_KERNEL_TIMEOUT_MS = 30000;
 
 class KernelAuthorizationError extends Error {
   constructor(code, message) {
