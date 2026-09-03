@@ -60,6 +60,8 @@ function validate(r) {
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
   if (!Array.isArray(r.kernel_inputs.approvals) || !r.kernel_inputs.approvals.every((x) => typeof x === "string")) fail("approvals must be strings");
   for (const k of ["votes", "grants", "forecasts"]) if (typeof r.kernel_inputs[k] !== "string") fail(`kernel_inputs.${k} must be a string`);
+  if (r.kernel_inputs.approval_handle_sha256 !== undefined && !HEX64.test(r.kernel_inputs.approval_handle_sha256))
+    fail("kernel_inputs.approval_handle_sha256 must be 64 lowercase hex");
   const targets = r.granted_capabilities.map((g) => g && g.target);
   if (!r.granted_capabilities.every((g) => g && typeof g === "object" && typeof g.target === "string") ||
       JSON.stringify(targets) !== JSON.stringify(r.kernel_inputs.approvals))

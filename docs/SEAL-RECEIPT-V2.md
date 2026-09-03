@@ -36,7 +36,7 @@ It refuses an authentic `seal.receipt/v2` receipt with `REFUSE unknown_format: u
   "now": "non-negative safe integer",
   "kernel_config": "exact configuration given to the kernel",
   "granted_capabilities": "exact grants given to the kernel",
-  "kernel_inputs": {"approvals": [], "votes": "", "grants": "", "forecasts": ""},
+  "kernel_inputs": {"approvals": [], "votes": "", "grants": "", "forecasts": "", "approval_handle_sha256": "64 lowercase hex (optional)"},
   "verdict": "ALLOW | BLOCK | ERROR",
   "reason": "string",
   "replay": {"args_sha256": "sha256", "config_sha256": "sha256"},
@@ -57,7 +57,10 @@ contain `{ "target": string }` entries in the same order and with the same
 strings as `kernel_inputs.approvals`; a mismatch is refused. The current
 kernel consumes `votes`; `grants` and `forecasts` are reserved inert channels
 and must be the empty string, so any tampering with either is refused rather
-than silently ignored.
+than silently ignored. `approval_handle_sha256`, when present, is the SHA-256
+identity of the opaque approval handle associated with this decision. It is
+signed as part of `kernel_inputs` but is not a decision input. Its omission is
+accepted for receipts produced before per-grant identity was added.
 
 ## Canonicalisation
 
