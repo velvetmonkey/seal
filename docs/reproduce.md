@@ -1,4 +1,4 @@
-# Compare a post-import release kernel with its in-tree source build
+# Seal reproduces post-import release kernels from their in-tree source builds
 
 Run the release comparison on a Linux x86-64 machine with network access and at least 8 GiB free.
 It requires Node 20 or newer, Git, Curl, Python 3, Bash, `awk`, `df`, `mv`, `sha256sum`, `stat`, a
@@ -10,10 +10,10 @@ Emscripten 6.0.0 and patched Lean WASM source trees; those toolchain versions ar
 reader to choose.
 
 The command requires a published GitHub release with its required assets and a checkout of that
-exact tag. The tag tree must contain `kernel-source/`. All eight tags published before the kernel
-import — v0.1.0, v0.1.1, v0.2.0-rc.1, v0.2.0-rc.2, v0.2.0-rc.3, v0.2.0, v0.2.1, and
-v1.1.0-rc.1 — lack that directory and are no longer reproducible by this command. They refuse in
-plain words instead of falling back to the former external repository.
+exact tag. The tag tree must contain `kernel-source/`. Releases published before the kernel import
+lack that directory and are no longer reproducible by this command. They refuse in plain words
+instead of falling back to the former external repository.
+The `seal reproduce` command refuses those pre-import tags rather than cloning an external source.
 
 For a later release, check out the tag before running the comparison:
 

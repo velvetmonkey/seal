@@ -180,7 +180,7 @@ test("the public command surface inventory lists only public commands and nothin
   const help = runSeal([]);
   assert.equal(help.code, 0);
   const listed = [...help.out.matchAll(/^  seal ([a-z-]+)/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(listed, ["demo", "doctor", "protect", "status", "unprotect", "verify"], help.out);
+  assert.deepEqual(listed, ["demo", "doctor", "protect", "reproduce", "status", "unprotect", "verify"], help.out);
   assert.doesNotMatch(help.out, /__/, "private subcommands must be absent from help");
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
   assert.deepEqual(Object.keys(pkg.bin), ["seal"], "one binary, no harness export");

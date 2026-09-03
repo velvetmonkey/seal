@@ -32,7 +32,7 @@ The sibling `seal-receipt-v2.mjs` verifier reports document structure, signature
 
 - Cut the exact release tag to start the release workflow. The workflow builds artifacts, creates a draft, rebuilds the kernel, and verifies the draft on Linux x64, macOS arm64, and macOS x64. The `release-publish` environment requires a reviewer before the `publish` job starts. Repository administrators cannot bypass that rule. Only then does the `publish` job make the release public. See the `release`, `verify-draft`, and `publish` jobs in `.github/workflows/release.yml`.
 
-- The v0.2.0 reproduction recipe formerly cloned an external pinned source. The current command intentionally refuses this pre-import tag because its tree lacks `kernel-source/`; the retired commit remains recorded in the script's provenance comment. See `docs/reproduce.md` and `test/seal-reproduce.test.cjs`.
+- `node scripts/seal-reproduce.cjs "v$(cat VERSION)" --platform linux-x64` can rebuild from the release's pinned source outside the maintainer's machine. It provisions the pinned toolchains, accepts an explicit executable launcher when a builder must serialize Lean work, and reports a named refusal when that launcher is unavailable. See `docs/reproduce.md` and `test/seal-reproduce.test.cjs`.
 
 - `docs/reference/receipt-operations.md` is now the canonical page for READ, VALIDATE, REPLAY, and VERIFY. Its checked output and versioned vectors state the trust ceiling without collapsing replay into authority or occurrence. See `test/receipt-operations-doc.test.mjs` and `docs/reference/receipt-operations-v1/README.md`.
 
@@ -40,6 +40,8 @@ The sibling `seal-receipt-v2.mjs` verifier reports document structure, signature
 
 The release gate verifies the draft bytes and exercises each platform artifact before publication, but the post-publication documentation update is a follow-up pull request. A documentation failure cannot unpublish a release; it leaves a visible failing job or review branch for a human to resolve. See the `release-docs` job in `.github/workflows/release.yml`.
 
-The current reproduction command does not support v0.2.0 because that tag predates the in-tree kernel. It refuses rather than cloning the retired external recipe. See `docs/reproduce.md`.
+The fresh-source reproduction command covers the Linux x86-64 kernel. It does not reproduce the native macOS helper, and selecting a Darwin platform refuses rather than substituting a Linux result. The caller supplies the authority label for a reproduction result; the script does not infer who ran it. See `docs/reproduce.md`.
 
 The product-suite roster completeness boundary is INJECTED, not enforced: an actor that controls the measured test process could also forge its executed-file record and verdict. See `scripts/run-complete-product-suite.sh`.
+
+As of 2026-09-03 (PR 215 / `cceee9c`), the current in-tree `seal reproduce` command refuses the pre-import v0.2.0 tag instead of cloning the external recipe recorded above. See `docs/reproduce.md`.

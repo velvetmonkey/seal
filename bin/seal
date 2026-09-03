@@ -11,6 +11,7 @@ const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, "..
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
+const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
 const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
 const shippedRuntime = path.join(ROOT, "runtime");
@@ -278,7 +279,7 @@ function reproduce(args) {
     process.exitCode = 1;
     return;
   }
-  return require(path.join(sourceRoot, "scripts", "seal-reproduce.cjs")).main(args);
+  return reproduceOwner.main(args);
 }
 
 async function protectCommand(args) {

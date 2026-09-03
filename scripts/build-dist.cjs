@@ -49,6 +49,7 @@ const PAYLOAD_PATHS = [
   "runtime/kernel/wasm/seal.wasm",
   "scripts/macos-helper.cjs",
   "scripts/seal-launch.cjs",
+  "scripts/seal-reproduce.cjs",
 ];
 
 function copyInto(staging, rel) {
