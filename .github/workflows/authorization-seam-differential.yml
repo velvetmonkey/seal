@@ -11,7 +11,7 @@ jobs:
     name: interpreted Lean vs shipped WASM
     runs-on: ubuntu-latest
     env:
-      SEAL_INTERPRETED_LEAN_ROOT: ${{ github.workspace }}/.interpreted/seal-host
+      SEAL_INTERPRETED_LEAN_ROOT: ${{ github.workspace }}
     steps:
       - name: Check out the product
         uses: actions/checkout@v4
@@ -21,18 +21,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Check out the provenance-matching Lean source
-        uses: actions/checkout@v4
-        with:
-          repository: velvetmonkey/seal-host
-          ref: d1af738b1f17966a18d7f86c51392b5cd3b8b0a1
-          path: .interpreted/seal-host
-          persist-credentials: false
-
       - name: Provision pinned Lean and build the pinned import graph
         uses: leanprover/lean-action@v1
         with:
-          lake-package-directory: .interpreted/seal-host
+          lake-package-directory: kernel-source
           auto-config: false
           build: true
           build-args: +Ffi:c.o.export

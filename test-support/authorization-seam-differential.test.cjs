@@ -14,7 +14,7 @@ const ROOT = path.resolve(__dirname, "..");
 const MODEL = path.join(ROOT, "test-support", "kernel-authorization-model.lean");
 const LEAN_TOOLCHAIN = "Lean (version 4.28.0";
 const FFI_SHA256 = "092b67ff2a17380c3b3f9ed560395443bc0b749a3ae3a42b3d9af1a8256fe0f3";
-const LAKE_MANIFEST_SHA256 = "ad4d98ca35cde0598794e4c08509bc8b21e79cbab39151c9a65d9e1cb3821dc0";
+const IN_TREE_LAKE_MANIFEST_SHA256 = "bfeb39beac1e2bdc3513fb15a4d0163c6557be67540199e334459f68054b2604";
 
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
@@ -27,13 +27,13 @@ function refuse(message) {
 function leanEnvironment() {
   const sourceRoot = process.env.SEAL_INTERPRETED_LEAN_ROOT;
   if (!sourceRoot) {
-    refuse("set SEAL_INTERPRETED_LEAN_ROOT to the built pinned seal-host source tree");
+    refuse("set SEAL_INTERPRETED_LEAN_ROOT to the built in-tree source tree");
   }
   const ffi = path.join(sourceRoot, "Ffi.lean");
   const manifest = path.join(sourceRoot, "lake-manifest.json");
   if (sha256(ffi) !== FFI_SHA256) refuse(`Ffi.lean is not pinned sha256 ${FFI_SHA256}`);
-  if (sha256(manifest) !== LAKE_MANIFEST_SHA256) {
-    refuse(`lake-manifest.json is not pinned sha256 ${LAKE_MANIFEST_SHA256}`);
+  if (sha256(manifest) !== IN_TREE_LAKE_MANIFEST_SHA256) {
+    refuse(`in-tree lake-manifest.json is not pinned sha256 ${IN_TREE_LAKE_MANIFEST_SHA256}`);
   }
   const lean = process.env.SEAL_LEAN || "lean";
   const version = spawnSync(lean, ["--version"], { encoding: "utf8" });
