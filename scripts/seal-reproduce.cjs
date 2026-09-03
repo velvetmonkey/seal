@@ -11,19 +11,24 @@ const SCHEMA = "seal.artifact-kernel-correspondence/v1";
 const LIMIT = "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
 const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced";
 const LEAN_LAUNCHER_ENV = "SEAL_LEAN_LAUNCHER";
+const HISTORICAL_KERNEL_BUILD_PATH = ".lake/packages/mcp-seal/c/build.sh";
+const CURRENT_KERNEL_BUILD_PATH = "kernel-source/c/build.sh";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SOURCE_PINS = Object.freeze({
   "v0.2.1": Object.freeze({
     repository: "https://github.com/velvetmonkey/seal-host.git",
     commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
+    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
   }),
   "v0.2.0": Object.freeze({
     repository: "https://github.com/velvetmonkey/seal-host.git",
     commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
+    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
   }),
   "v0.2.0-rc.3": Object.freeze({
     repository: "https://github.com/velvetmonkey/seal-host.git",
     commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
+    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
   }),
 });
 
@@ -374,10 +379,9 @@ function buildPinnedKernel(tag, work, operations = {}) {
     ...options,
     env: postInstallerEnvironment,
   });
-  if (!exists(path.join(source, ".lake", "packages", "mcp-seal"))) {
-    postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
-  }
-  postInstallerChild("bash", [".lake/packages/mcp-seal/c/build.sh"], { cwd: source, label: "build pinned kernel C dependency" });
+  postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
+  const kernelBuildPath = pin.kernelBuildPath ?? CURRENT_KERNEL_BUILD_PATH;
+  postInstallerChild("bash", [kernelBuildPath], { cwd: source, label: `build pinned kernel C dependency (${kernelBuildPath})` });
   postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
