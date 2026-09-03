@@ -198,12 +198,16 @@ fetch_git_ref() {
 
   git init -q "$directory"
   git -C "$directory" remote add origin "$repository"
-  git -C "$directory" fetch --quiet --no-tags --depth 1 origin "$commit"
+  # Fetch the pinned, advertised tag rather than asking the server for an
+  # unadvertised raw object ID.  The latter produced an unreadable shallow
+  # pack on the GitHub runner during kernel reproduction.
+  git -C "$directory" fetch --quiet --no-tags --depth 1 origin \
+    "refs/tags/$tag:refs/tags/$tag"
+  [[ $(git -C "$directory" rev-parse "refs/tags/$tag^{}") == "$commit" ]] ||
+    die "$repository tag $tag does not resolve to $commit"
   [[ $(git -C "$directory" rev-parse FETCH_HEAD) == "$commit" ]] ||
     die "$repository returned the wrong commit for $commit"
   git -C "$directory" checkout --quiet --detach "$commit"
-  git -C "$directory" fetch --quiet --no-tags --depth 1 origin \
-    "refs/tags/$tag:refs/tags/$tag"
   verify_tag "$directory" "$tag" "$commit"
   git -C "$directory" fsck --strict --no-dangling
 }
