@@ -79,7 +79,7 @@ AUDIT_LOG=build-core/link_set_audit.log
 rm -f "$AUDIT_LOG"
 echo "[build_wasm] link-set audit (gate: no PASS verdict, no artifact)"
 set +e
-./audit_link_set.sh > "$AUDIT_LOG" 2>&1
+bash ./audit_link_set.sh > "$AUDIT_LOG" 2>&1
 audit_rc=$?
 set -e
 if [ "$audit_rc" -ne 0 ]; then
