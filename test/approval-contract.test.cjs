@@ -16,7 +16,8 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
 const { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth } = require("../contract/renderer.cjs");
-const { canonicalString } = require("../contract/canonical.cjs");
+const { canonicalString, sha256Hex } = require("../contract/canonical.cjs");
+const { canonical, generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
 
 const CHILD = path.join(__dirname, "..", "contract", "fixtures", "counting-child.cjs");
 
@@ -197,6 +198,28 @@ test("allow evidence states the limit: human presence is unknown", async (t) => 
   assert.equal(decision.evidence.human_present, "unknown");
   assert.match(decision.evidence.human_present_detail, /can fabricate an accepting elicitation response/);
   assert.match(decision.evidence.human_present_detail, /declared assumption, not an enforced property/);
+});
+
+test("separate one-use grants for the same effect have distinct signed receipt bytes", () => {
+  const contract = createApprovalContract({ now: () => 5_000_000 });
+  const firstHandle = freshPending(contract);
+  const first = contract.retry({
+    tool: TOOL, args: ARGS, requestState: firstHandle, inputResponses: ACCEPT,
+  });
+  const secondHandle = freshPending(contract);
+  const second = contract.retry({
+    tool: TOOL, args: ARGS, requestState: secondHandle, inputResponses: ACCEPT,
+  });
+  assert.equal(first.kind, "allow");
+  assert.equal(second.kind, "allow");
+  assert.notEqual(firstHandle, secondHandle);
+  assert.equal(first.receipt.kernel_inputs.approval_handle_sha256, sha256Hex(firstHandle));
+  assert.equal(second.receipt.kernel_inputs.approval_handle_sha256, sha256Hex(secondHandle));
+
+  const signer = generateSigner();
+  const firstBytes = canonical(sealReceipt(signer, first.receipt, "ALLOW"));
+  const secondBytes = canonical(sealReceipt(signer, second.receipt, "ALLOW"));
+  assert.notEqual(sha256Hex(firstBytes), sha256Hex(secondBytes));
 });
 
 // --- the rendering envelope, measured --------------------------------------

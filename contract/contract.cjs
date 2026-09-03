@@ -130,6 +130,17 @@ function createApprovalContract({
     record.status = status;
   }
 
+  function bindApprovalIdentity(receipt, record) {
+    if (!receipt) return receipt;
+    return {
+      ...receipt,
+      kernel_inputs: {
+        ...receipt.kernel_inputs,
+        approval_handle_sha256: record.handle_hash,
+      },
+    };
+  }
+
   function beginUnlocked({ tool, args }) {
     const rendered = renderApprovalMessage(tool, args, { terminalWidth, ttlMs });
     if (!rendered.ok) return refuse(REFUSALS.UNRENDERABLE, rendered.reason);
@@ -288,17 +299,18 @@ function createApprovalContract({
       return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, `${error.message}; Node authorization did not override the kernel refusal`);
     }
     const kernelAuthorized = kernel.verdict === "ALLOW";
+    const receipt = bindApprovalIdentity(kernel.receipt_record, record);
     if (nodeAuthorized !== kernelAuthorized) {
       const side = nodeAuthorized ? "kernel" : "Node";
       return { ...refuse(
         REFUSALS.AUTHORIZATION_DISAGREEMENT,
         `${side} refused while ${side === "kernel" ? "Node" : "kernel"} allowed; authorization disagreement fails closed`,
-      ), receipt: kernel.receipt_record };
+      ), receipt };
     }
     if (!nodeAuthorized) {
-      if (!contextMatches) return { ...refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding"), receipt: kernel.receipt_record };
-      if (!toolMatches) return { ...refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool"), receipt: kernel.receipt_record };
-      return { ...refuse(REFUSALS.ARGUMENTS_ALTERED, "Node and kernel refused: retry effect differs from the exact issue-time effect"), receipt: kernel.receipt_record };
+      if (!contextMatches) return { ...refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding"), receipt };
+      if (!toolMatches) return { ...refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool"), receipt };
+      return { ...refuse(REFUSALS.ARGUMENTS_ALTERED, "Node and kernel refused: retry effect differs from the exact issue-time effect"), receipt };
     }
 
     // 7. Atomically consume BEFORE the caller may forward anything.
@@ -314,7 +326,7 @@ function createApprovalContract({
 
     return {
       kind: "allow",
-      receipt: kernel.receipt_record,
+      receipt,
       evidence: {
         handle_returned_unaltered: true,
         effect_matches_bound_bytes: true,
