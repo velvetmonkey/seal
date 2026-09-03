@@ -1,6 +1,6 @@
 # WASM browser demo spike — resume state (2026-06-16)
 
-## STATUS: WORKING ✅ — init-trap fixed; seal_decide runs end-to-end in node AND browser.
+## STATUS: WORKING ✅ — init-trap fixed; Seal kernel runs seal_decide end-to-end in node AND browser.
 **Lean proof source:** seal-host holds the Lean proofs for this spike.
 - All 7 kernels decide correctly; determinism tested (100 runs node / 50 browser, identical certs).
 - Strict link: ZERO undefined symbols (no DCE-hides-undefined trickery).

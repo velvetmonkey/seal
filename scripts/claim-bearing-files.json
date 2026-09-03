@@ -5,6 +5,7 @@
     "kernel-source/SealV2/ResponseTransport.lean": { "allowlistReason": "This imported Lean source is proof input whose theorem claims are checked by the pinned Lean build, not by the claim-bearing prose inventory." },
     "kernel-source/lakefile.toml": { "allowlistReason": "This imported Lean build manifest is executable build metadata, not an independently published product claim." },
     "lakefile.toml": { "allowlistReason": "This imported Lean build manifest is executable build metadata, not an independently published product claim." },
+    "wasm-spike/RESUME.md": { "coveredBy": ["wasm-spike/test_kernels.mjs#node-kernel-determinism"] },
     "wasm-spike/verified/seal.js": { "allowlistReason": "Generated Emscripten output is a tracked text byte-carrier for the verified WebAssembly runtime; its incidental strings are not maintained human-facing statements." },
     "assets/seal-flow.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs#seal-flow"] },
     "scripts/seal-flow-layout.svg": { "coveredBy": ["test/seal-flow-diagram.test.mjs#seal-flow-layout"] },
