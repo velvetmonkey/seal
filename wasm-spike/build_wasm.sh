@@ -12,10 +12,10 @@ set -euo pipefail
 # valid) bytes from identical objects. Pin the C locale so every environment
 # links the clean runner's bytes.
 export LC_ALL=C
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$(dirname "$0")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CFLAGS="-O2 -I lean4-src/src/include -I gen/include -I gen -D LEAN_EMSCRIPTEN=1"
 SEAL_ROOT="$ROOT/kernel-source"
 
