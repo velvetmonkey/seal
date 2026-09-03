@@ -5,14 +5,17 @@
 <h1>seal verified kernel — in-browser smoke test</h1>
 <pre id="out">loading…</pre>
 <!-- emscripten MODULARIZE module: defines window.SealModule -->
-<script src="./build-core/seal.js"></script>
+<script src="./verified/seal.js"></script>
 <script type="module">
 import { scenarios, buildEnvelope, PUBKEY } from "./seal_scenarios.mjs";
 const out = document.getElementById("out");
 const lines = [];
 const say = (s) => { lines.push(s); out.textContent = lines.join("\n"); };
 try {
-  const M = await window.SealModule({ print: () => {}, printErr: () => {} });
+  const M = await window.SealModule({
+    locateFile: (file) => file === "seal.wasm" ? "../runtime/kernel/wasm/seal.wasm" : file,
+    print: () => {}, printErr: () => {},
+  });
   const seal_init = (e, p) => M.ccall("seal_init", "string", ["string", "string"], [e, p]);
   const seal_decide = (i) => M.ccall("seal_decide", "string", ["string"], [i]);
   const env = buildEnvelope();

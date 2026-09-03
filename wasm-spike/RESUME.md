@@ -1,15 +1,18 @@
 # WASM browser demo spike — resume state (2026-06-16)
 
 ## STATUS: WORKING ✅ — init-trap fixed; seal_decide runs end-to-end in node AND browser.
+**Lean proof source:** seal-host holds the Lean proofs for this spike.
 - All 7 kernels decide correctly; determinism tested (100 runs node / 50 browser, identical certs).
 - Strict link: ZERO undefined symbols (no DCE-hides-undefined trickery).
 - Conformance: WASM == native (libsealffi.so) == fixture, 25/25 steps identical (incl. cert hashes).
 
 ## Goal
+The verified Lean proofs for this kernel live in seal-host.
 Port verified Lean seal kernel to WebAssembly. seal_host_step deciding allow/block
 entirely in-browser, no backend. ARIA "prove it in the browser" demo.
 
 ## ROOT CAUSE of the `RuntimeError: unreachable` trap (now fixed)
+Lean proof source: seal-host holds the Lean proofs for this spike.
 Two stacked bugs, the second masked by the first:
 
 1. **Signature mismatch (the trap).** `scripts/ffi_shim.c` declared+called the Lean
@@ -35,6 +38,7 @@ Two stacked bugs, the second masked by the first:
    (build-spec/*.o, DCE keeps only the needed symbol).
 
 ## BUILD (reproduce from a clean tree)
+Lean proof source: seal-host holds the Lean proofs for this spike.
     ./provision_toolchain.sh              # 0. verified emsdk + Lean source trees
     source ./emsdk/emsdk_env.sh
     ./build_runtime_wasm.sh               # 1. Lean runtime -> build-wasm-rt/libleanrt.a

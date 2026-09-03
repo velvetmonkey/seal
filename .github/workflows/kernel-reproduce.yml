@@ -59,14 +59,13 @@ jobs:
 
       - name: Rebuild the published wasm artifact
         run: |
-          cd wasm-spike
-          ./build_runtime_wasm.sh
-          ./build_base.sh
-          ./build_core.sh
-          ./build_closure.sh
-          ./build_wasm.sh strict
+          bash wasm-spike/build_runtime_wasm.sh
+          bash wasm-spike/build_base.sh
+          bash wasm-spike/build_core.sh
+          bash wasm-spike/build_closure.sh
+          bash wasm-spike/build_wasm.sh strict
 
       - name: Require rebuilt seal.wasm to match the tracked pin
         run: |
           expected=$(sha256sum runtime/kernel/wasm/seal.wasm | awk '{print $1}')
-          printf '%s  %s\n' "$expected" wasm-spike/build-core/seal.wasm | sha256sum -c -
+          (cd wasm-spike/build-core && printf '%s  %s\n' "$expected" seal.wasm | sha256sum -c -)
