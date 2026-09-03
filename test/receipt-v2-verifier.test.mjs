@@ -156,6 +156,23 @@ test("every recorded input channel is consumed or refuses tampering", async () =
   console.log("CHANNEL approvals: consumed by decision input");
 });
 
+test("optional approval handle identity is checked without rejecting earlier v2 receipts", async () => {
+  const earlier = envelope();
+  assert.equal((await verify(text(earlier), { publicKeyHex: pub })).replay, true);
+
+  const identified = resign({
+    ...earlier,
+    kernel_inputs: { ...earlier.kernel_inputs, approval_handle_sha256: "a".repeat(64) },
+  });
+  assert.equal((await verify(text(identified), { publicKeyHex: pub })).replay, true);
+
+  const malformed = resign({
+    ...earlier,
+    kernel_inputs: { ...earlier.kernel_inputs, approval_handle_sha256: "not-a-sha256" },
+  });
+  await expectRed("malformed approval handle identity", text(malformed), "invalid_receipt");
+});
+
 test("duplicates are rejected at every depth after name unescaping", async () => {
   const good = text(envelope());
   const nested = good.replace('"arguments":{"database":"prod","sql":"drop table users"}',
