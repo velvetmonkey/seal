@@ -30,7 +30,9 @@ jobs:
           build-args: +Ffi:c.o.export
           test: false
           lint: false
-          use-mathlib-cache: true
+          # kernel-source depends on Batteries and Aesop, not Mathlib; asking the
+          # action for Mathlib's cache runs the unavailable `lake exe cache get`.
+          use-mathlib-cache: false
 
       - name: Run the interpreted-Lean versus shipped-WASM differential
         run: |
