@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GUIDE = process.env.SEAL_GUIDE_PATH ?? "docs/guide/when-something-looks-wrong.md";
-const GUIDE_SHA256 = "a63d82346e55dccc1751573d27892f28d898a5cff312e44d509266f4f0757749";
+const GUIDE_SHA256 = "010d3bec8e72ca5deeaacd2846ce5d871d5eac650d17fd039231e5ec33a9f8f7";
 const require = createRequire(import.meta.url);
 const protection = require("../spine/protection.cjs");
 const store = require("../spine/store.cjs");

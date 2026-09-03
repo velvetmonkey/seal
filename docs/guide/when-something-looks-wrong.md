@@ -592,5 +592,11 @@ A receipt-embedded key is never trusted as authority.
 Replaying the exact recorded inputs through the WASM kernel produced a
 different verdict. The receipt does not establish the decision it records.
 
+### `action_verdict_mismatch`
+
+The receipt's signed action says ALLOW, but replaying its recorded kernel inputs
+does not produce ALLOW. The checker refuses the receipt rather than reporting a
+decision the kernel did not make. Preserve the receipt and report the mismatch.
+
 Up: [Guide](README.md).
 Next: [What is protected right now](what-is-protected-right-now.md).
