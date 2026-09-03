@@ -41,3 +41,5 @@ The release gate verifies draft bytes and exercises each platform artifact befor
 The fresh-source reproduction command covers the Linux x86-64 kernel. It does not reproduce the native macOS helper. Selecting a Darwin platform refuses rather than substituting a Linux result. The caller supplies the authority label for a reproduction result. The script does not infer who ran it. See `docs/reproduce.md`.
 
 The product-suite roster completeness boundary is INJECTED, not enforced. An actor that controls the measured test process could also forge its executed-file record and verdict. See `scripts/run-complete-product-suite.sh`.
+
+As of 2026-09-03 (PR 215 / `cceee9c`), the current in-tree `seal reproduce` command refuses the pre-import v0.2.1 tag instead of cloning the external recipe recorded above. See `docs/reproduce.md`.

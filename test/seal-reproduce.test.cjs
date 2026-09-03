@@ -8,9 +8,9 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
-const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, buildPinnedKernel, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, PRE_IMPORT_TAGS, SCHEMA, buildPinnedKernel, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
-const TAG = "v0.2.0-rc.3";
+const TAG = "v9.0.0";
 const ASSET = `seal-${TAG}-linux-x64`;
 const PUBLISHED_KERNEL = Buffer.from("published kernel bytes\n");
 const OUTSIDE_AUTHORITY = "independ" + "ent";
@@ -76,7 +76,7 @@ test("honest comparison names and scopes the selected artifact kernel", () => {
   assert.equal(h.builds, 1);
   assert.ok(h.installedPath.includes("test-prefix-"));
   assert.equal(fs.existsSync(h.installedPath), false);
-  assert.ok(SOURCE_PINS[TAG].commit.match(/^[0-9a-f]{40}$/));
+  assert.equal(PRE_IMPORT_TAGS.has(TAG), false);
 });
 
 test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
@@ -87,6 +87,16 @@ test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
   assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md#schema
   assert.equal(run.stdout.trim().split(/\r?\n/)[0], "{");
   assert.match(run.stderr, /^REFUSE seal-reproduce/m);
+  assert.equal(run.status, 1);
+});
+
+test("seal reproduce clearly refuses a pre-import tag", () => {
+  const run = spawnSync(path.join(__dirname, "..", "bin", "seal"), ["reproduce", "build-pinned-kernel", "v0.2.1"], {
+    cwd: path.join(__dirname, ".."),
+    encoding: "utf8",
+  });
+  assert.equal(run.stdout, "");
+  assert.equal(run.stderr, "REFUSE seal-rebuild-pinned v0.2.1: release tag v0.2.1 predates the in-tree kernel, so it is no longer reproducible from this repository\n");
   assert.equal(run.status, 1);
 });
 
@@ -225,46 +235,48 @@ test("pinned Lean toolchain CI check exercises every post-installer child enviro
   assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);
 });
 
-test("pinned toolchain provisioning retries once and still requires a completed rebuild", (t) => {
-  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
-  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
-  let provisionAttempts = 0;
-  let cloneAttempts = 0;
-  const stalePack = path.join(work, "pinned-source", "stale-pack");
-  const rebuilt = buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      cloneAttempts += 1;
-      assert.equal(fs.existsSync(stalePack), false, `clone ${cloneAttempts} must start without the first-attempt stage`);
-      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
-    },
-    child(command, args) {
-      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-        provisionAttempts += 1;
-        if (provisionAttempts === 1) {
-          fs.writeFileSync(stalePack, "left by first attempt\n");
-          throw new Error("provision pinned wasm toolchains failed (exit 68)");
-        }
-      }
-      if (command === "./build_wasm.sh") {
-        const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
-        fs.mkdirSync(path.dirname(output), { recursive: true });
-        fs.writeFileSync(output, PUBLISHED_KERNEL);
-      }
+test("kernel rebuild uses the supplied in-repository tree and its kernel-source build", (t) => {
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-in-tree-source-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "kernel-source"), { recursive: true });
+  fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
+  const calls = [];
+  const rebuilt = buildPinnedKernel(TAG, root, {
+    sourceRoot: root,
+    existsSync: () => true,
+    child(command, args, options) {
+      calls.push({ command, args, cwd: options.cwd });
     },
   });
-  assert.equal(cloneAttempts, 2);
-  assert.equal(provisionAttempts, 2);
-  assert.equal(rebuilt, path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm"));
+  assert.equal(rebuilt, path.join(root, "wasm-spike", "build-core", "seal.wasm"));
+  assert.ok(calls.length > 0);
+  assert.ok(calls.every(({ cwd }) => cwd === root || cwd === path.join(root, "wasm-spike")));
+  assert.deepEqual(
+    calls.find(({ command, args }) => command === "bash" && args[0] === "kernel-source/c/build.sh"),
+    { command: "bash", args: ["kernel-source/c/build.sh"], cwd: root },
+  );
+  assert.equal(calls.some(({ command }) => command === "git"), false);
 });
 
-test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
-  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-refusal-"));
-  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+test("pre-import recipes refuse before any build command", () => {
+  let commands = 0;
+  for (const tag of PRE_IMPORT_TAGS) {
+    assert.throws(() => buildPinnedKernel(tag, "/unused", {
+      child() { commands += 1; },
+    }), new RegExp(`release tag ${tag.replaceAll(".", "\\.")} predates the in-tree kernel, so it is no longer reproducible from this repository`));
+  }
+  assert.equal(commands, 0);
+});
+
+test("in-tree toolchain provisioning failure is not retried by replacing the source", (t) => {
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-in-tree-provision-refusal-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "kernel-source"), { recursive: true });
+  const canary = path.join(root, "canary");
+  fs.writeFileSync(canary, "must survive\n");
   let provisionAttempts = 0;
-  assert.throws(() => buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      fs.mkdirSync(destination, { recursive: true });
-    },
+  assert.throws(() => buildPinnedKernel(TAG, root, {
+    sourceRoot: root,
     child(command, args) {
       if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
         provisionAttempts += 1;
@@ -272,147 +284,8 @@ test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
       }
     },
   }), /provision pinned wasm toolchains failed \(exit 68\)/);
-  assert.equal(provisionAttempts, 2);
-});
-
-test("pinned toolchain provisioning refuses when the failed provisioner removed its stage", (t) => {
-  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-absent-source-"));
-  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
-  const source = path.join(work, "pinned-source");
-  let cloneAttempts = 0;
-  let provisionAttempts = 0;
-  assert.throws(() => buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      cloneAttempts += 1;
-      fs.mkdirSync(destination, { recursive: true });
-    },
-    child(command, args) {
-      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-        provisionAttempts += 1;
-        fs.rmSync(source, { recursive: true, force: true });
-        throw new Error("provision pinned wasm toolchains failed (exit 68)");
-      }
-    },
-  }), /pinned source stage is absent/);
-  assert.equal(cloneAttempts, 1);
   assert.equal(provisionAttempts, 1);
-});
-
-test("pinned toolchain provisioning refuses when the source name changes before delete", (t) => {
-  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-changed-source-"));
-  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
-  const source = path.join(work, "pinned-source");
-  const accepted = path.join(work, "accepted-source");
-  const replacementCanary = path.join(source, "replacement-canary");
-  let cloneAttempts = 0;
-  let provisionAttempts = 0;
-  let swapped = false;
-  const originalRealpathSync = fs.realpathSync;
-  fs.realpathSync = function swapAfterResolvedChecks(target, options) {
-    if (!swapped && target === path.resolve(__dirname, "..")) {
-      fs.renameSync(source, accepted);
-      fs.mkdirSync(source);
-      fs.writeFileSync(replacementCanary, "must survive\n");
-      swapped = true;
-    }
-    return originalRealpathSync.call(this, target, options);
-  };
-  try {
-    assert.throws(() => buildPinnedKernel(TAG, work, {
-      clonePinnedSource(_pin, destination) {
-        cloneAttempts += 1;
-        fs.mkdirSync(destination, { recursive: true });
-      },
-      child(command, args) {
-        if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-          provisionAttempts += 1;
-          throw new Error("provision pinned wasm toolchains failed (exit 68)");
-        }
-      },
-    }), /pinned source stage changed before delete/);
-  } finally {
-    fs.realpathSync = originalRealpathSync;
-  }
-  assert.equal(cloneAttempts, 1);
-  assert.equal(provisionAttempts, 1);
-  assert.equal(fs.readFileSync(replacementCanary, "utf8"), "must survive\n");
-  assert.equal(fs.existsSync(accepted), true);
-});
-
-test("pinned toolchain provisioning retries through a symbolic work path", (t) => {
-  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-work-symlink-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const physicalWork = path.join(root, "physical-work");
-  const work = path.join(root, "work-link");
-  const source = path.join(work, "pinned-source");
-  fs.mkdirSync(physicalWork);
-  fs.symlinkSync(physicalWork, work, "dir");
-  let cloneAttempts = 0;
-  let provisionAttempts = 0;
-  const rebuilt = buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      cloneAttempts += 1;
-      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
-    },
-    child(command, args) {
-      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-        provisionAttempts += 1;
-        if (provisionAttempts === 1) throw new Error("provision pinned wasm toolchains failed (exit 68)");
-      }
-      if (command === "./build_wasm.sh") {
-        const output = path.join(source, "wasm-spike", "build-core", "seal.wasm");
-        fs.mkdirSync(path.dirname(output), { recursive: true });
-        fs.writeFileSync(output, PUBLISHED_KERNEL);
-      }
-    },
-  });
-  assert.equal(cloneAttempts, 2);
-  assert.equal(provisionAttempts, 2);
-  assert.equal(rebuilt, path.join(source, "wasm-spike", "build-core", "seal.wasm"));
-});
-
-test("pinned toolchain provisioning refuses a source symlink outside the resolved work directory", (t) => {
-  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const work = path.join(root, "work");
-  const outside = path.join(root, "outside");
-  const source = path.join(work, "pinned-source");
-  fs.mkdirSync(work);
-  fs.mkdirSync(outside);
-  fs.writeFileSync(path.join(outside, "canary"), "must survive\n");
-  let provisionAttempts = 0;
-  assert.throws(() => buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      fs.symlinkSync(outside, destination, "dir");
-    },
-    child(command, args) {
-      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-        provisionAttempts += 1;
-        throw new Error("provision pinned wasm toolchains failed (exit 68)");
-      }
-    },
-  }), /pinned source stage is not disposable/);
-  assert.equal(provisionAttempts, 1);
-  assert.equal(fs.lstatSync(source).isSymbolicLink(), true);
-  assert.equal(fs.readFileSync(path.join(outside, "canary"), "utf8"), "must survive\n");
-});
-
-test("pinned toolchain provisioning does not retry another failure status", (t) => {
-  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
-  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
-  let provisionAttempts = 0;
-  assert.throws(() => buildPinnedKernel(TAG, work, {
-    clonePinnedSource(_pin, destination) {
-      fs.mkdirSync(destination, { recursive: true });
-    },
-    child(command, args) {
-      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
-        provisionAttempts += 1;
-        throw new Error("provision pinned wasm toolchains failed (exit 1)");
-      }
-    },
-  }), /provision pinned wasm toolchains failed \(exit 1\)/);
-  assert.equal(provisionAttempts, 1);
+  assert.equal(fs.readFileSync(canary, "utf8"), "must survive\n");
 });
 
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
@@ -437,7 +310,17 @@ test("rebuild-only entry point delegates to the owning pinned recipe and copies 
   assert.deepEqual(fs.readFileSync(output), PUBLISHED_KERNEL);
 });
 
-test("rebuild-only entry point refuses an unpinned tag before building", () => {
+test("rebuild-only entry point refuses a pre-import tag before requiring output", () => {
+  let builds = 0;
+  const outcome = executeBuildPinned(["v0.2.1"], {
+    buildPinnedKernel() { builds += 1; },
+  });
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.error, "release tag v0.2.1 predates the in-tree kernel, so it is no longer reproducible from this repository");
+  assert.equal(builds, 0);
+});
+
+test("rebuild-only entry point refuses an invalid tag before building", () => {
   let builds = 0;
   const outcome = executeBuildPinned(["not-a-tag", "--output", "unused.wasm"], {
     buildPinnedKernel() { builds += 1; },

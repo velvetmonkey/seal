@@ -1,4 +1,4 @@
-# Compare a release kernel with a fresh pinned-source build
+# Seal reproduces post-import release kernels from their in-tree source builds
 
 Run the release comparison on a Linux x86-64 machine with network access and at least 8 GiB free.
 It requires Node 20 or newer, Git, Curl, Python 3, Bash, `awk`, `df`, `mv`, `sha256sum`, `stat`, a
@@ -9,29 +9,36 @@ source recipe verifies and installs elan v4.2.3, selects the repository's
 Emscripten 6.0.0 and patched Lean WASM source trees; those toolchain versions are not left to the
 reader to choose.
 
-The command requires a published GitHub release with its required assets.
-Do not run this comparison for a tag without that release.
-The command below targets the version in this checkout.
+The command requires a published GitHub release with its required assets and a checkout of that
+exact tag. The tag tree must contain `kernel-source/`. Releases published before the kernel import
+lack that directory and are no longer reproducible by this command. They refuse in plain words
+instead of falling back to the former external repository.
+The `seal reproduce` command refuses those pre-import tags rather than cloning an external source.
+
+For a later release, check out the tag before running the comparison:
 
 ```bash
-tag="v$(cat VERSION)"
-node scripts/seal-reproduce.cjs "$tag" --platform linux-x64
+tag=vX.Y.Z
+git checkout "$tag"
+seal reproduce "$tag" --platform linux-x64
 ```
 
-For a published release with those assets, the command checks only `seal-<tag>-linux-x64`.
+For a post-import published release with those assets and `kernel-source/`, the command checks only
+`seal-<tag>-linux-x64`.
 It downloads that artifact and `SHA256SUMS`, refuses before installation
 when the declared byte count or SHA-256 does not match the downloaded asset, installs into a new
-temporary prefix, and hashes the installed `runtime/kernel/wasm/seal.wasm`. Separately, it checks
-out the release's pinned `seal-host` source commit, provisions the pinned toolchains, builds the
-Lean source once through `lake`, runs the `kernel-reproduce` WASM recipe, and
-hashes that fresh output. The two compared byte strings therefore come from different origins.
+temporary prefix, and hashes the installed `runtime/kernel/wasm/seal.wasm`. Separately, it uses the
+current checkout, builds `kernel-source/`, provisions the pinned toolchains, builds the Lean source
+once through `lake`, runs the `kernel-reproduce` WASM recipe, and hashes that fresh output. It does
+not clone or fetch kernel source. The two compared byte strings therefore come from the published
+artifact and the checked-out source tree.
 
 `lake` is the portable default. A machine that must serialize Lean builds can select an executable
 launcher by name or path; the value is one executable, not a shell command with arguments:
 
 ```bash
 SEAL_LEAN_LAUNCHER=/path/to/serializing-lake-wrapper \
-  node scripts/seal-reproduce.cjs "$tag" --platform linux-x64
+  seal reproduce "$tag" --platform linux-x64
 ```
 
 The launcher receives `update` or `build` as its argument. If neither `lake` nor the configured
@@ -51,18 +58,16 @@ The native macOS helper is release-produced, not independently reproduced, and i
 
 ## Authority declaration
 
-For a published release with the required assets, the default is `same-authority`:
+For a supported post-import release with the required assets, the default is `same-authority`:
 
 ```bash
-tag="v$(cat VERSION)"
-node scripts/seal-reproduce.cjs "$tag" --platform linux-x64
+seal reproduce "$tag" --platform linux-x64
 ```
 
 An external rebuilder may make their execution context explicit:
 
 ```bash
-tag="v$(cat VERSION)"
-node scripts/seal-reproduce.cjs "$tag" --platform linux-x64 \
+seal reproduce "$tag" --platform linux-x64 \
   --authority independent \
   --authority-name "Example Rebuild Lab"
 ```

@@ -11,6 +11,7 @@ const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, "..
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
+const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
 const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
 const shippedRuntime = path.join(ROOT, "runtime");
@@ -268,6 +269,19 @@ async function verify(receiptPath) {
   process.exitCode = 0;
 }
 
+function reproduce(args) {
+  const sourceRoot = [ROOT, process.cwd()].find((candidate) => (
+    fs.existsSync(path.join(candidate, "kernel-source")) &&
+    fs.existsSync(path.join(candidate, "scripts", "seal-reproduce.cjs"))
+  ));
+  if (!sourceRoot) {
+    console.error("REFUSE seal-reproduce <no-tag>: reproduce requires a Seal source checkout containing kernel-source/");
+    process.exitCode = 1;
+    return;
+  }
+  return reproduceOwner.main(args);
+}
+
 async function protectCommand(args) {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
@@ -340,6 +354,7 @@ async function main() {
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv[3]);
+  if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
@@ -353,7 +368,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
 if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {

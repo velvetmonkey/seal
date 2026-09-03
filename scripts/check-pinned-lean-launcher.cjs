@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const TAG = "v0.2.0";
+const TAG = "v9.0.0";
 
 function isExecutableFile(file) {
   try {
@@ -32,16 +32,17 @@ function exerciseOwner(owner, fixture, override) {
   const postInstallerCalls = [];
   let installerReturned = false;
   fs.mkdirSync(work, { recursive: true });
+  const source = path.join(work, "source-checkout");
+  fs.mkdirSync(path.join(source, "kernel-source"), { recursive: true });
+  fs.mkdirSync(path.join(source, "scripts"), { recursive: true });
   fs.mkdirSync(emptyPath);
   fs.writeFileSync(githubPath, decoy);
 
   const environment = { HOME: home, PATH: emptyPath, GITHUB_PATH: githubPath };
   if (override) environment[owner.LEAN_LAUNCHER_ENV] = override;
   const rebuilt = owner.buildPinnedKernel(TAG, work, {
+    sourceRoot: source,
     environment,
-    clonePinnedSource(_pin, destination) {
-      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
-    },
     child(command, args, options = {}) {
       if (command === "python3") {
         fs.writeFileSync(args[0], 'bin_directory = Path.home() / ".guard-elan" / "installer-bin"\n');
@@ -62,7 +63,7 @@ function exerciseOwner(owner, fixture, override) {
       }
       if (args[0] === "update" || args[0] === "build") launcherCommands.push(command);
       if (command === "./build_wasm.sh") {
-        const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+        const output = path.join(source, "wasm-spike", "build-core", "seal.wasm");
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, "not a real kernel build\n");
       }
@@ -92,7 +93,7 @@ function exerciseOwner(owner, fixture, override) {
   if (fs.readFileSync(githubPath, "utf8") !== decoy) {
     findings.push("real buildPinnedKernel owner read or changed the GITHUB_PATH handoff file");
   }
-  if (rebuilt !== path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm")) {
+  if (rebuilt !== path.join(source, "wasm-spike", "build-core", "seal.wasm")) {
     findings.push("real buildPinnedKernel owner did not finish the command-stubbed recipe");
   }
   return findings;

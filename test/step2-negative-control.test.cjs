@@ -20,10 +20,9 @@ function copyRunnableProduct(destination) {
     fs.cpSync(path.join(ROOT, name), path.join(destination, name), { recursive: true });
   }
   fs.mkdirSync(path.join(destination, "scripts"));
-  fs.copyFileSync(
-    path.join(ROOT, "scripts", "macos-helper.cjs"),
-    path.join(destination, "scripts", "macos-helper.cjs"),
-  );
+  for (const name of ["macos-helper.cjs", "seal-reproduce.cjs"]) {
+    fs.copyFileSync(path.join(ROOT, "scripts", name), path.join(destination, "scripts", name));
+  }
   for (const name of ["VERSION", "package.json", "runtime-manifest.json"]) {
     fs.copyFileSync(path.join(ROOT, name), path.join(destination, name));
   }
