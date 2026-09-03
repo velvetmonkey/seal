@@ -110,7 +110,9 @@ export async function verify(text, { publicKeyHex, authorityRoot, occurrenceWitn
   if (authorityRoot !== undefined) fail("authority roots cannot be checked by the v2 verifier");
   if (occurrenceWitness !== undefined) fail("occurrence witnesses cannot be checked by the v2 verifier");
   const signed = checkSignature(r, publicKeyHex);
-  await replay(r);
+  const replayed = await replay(r);
+  if (r.action === "ALLOW" && replayed.verdict !== "ALLOW")
+    fail("signed action ALLOW requires replayed verdict ALLOW", "action_verdict_mismatch");
   return {
     read: true,
     validate: true,
