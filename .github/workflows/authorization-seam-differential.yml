@@ -32,6 +32,9 @@ jobs:
           lint: false
           use-mathlib-cache: true
 
+      - name: Expose the built in-tree path dependency to import discovery
+        run: ln -s ../../kernel-source .lake/packages/mcp-seal
+
       - name: Run the interpreted-Lean versus shipped-WASM differential
         run: |
           export ELAN_TOOLCHAIN="$(cat "$SEAL_INTERPRETED_LEAN_ROOT/lean-toolchain")"
