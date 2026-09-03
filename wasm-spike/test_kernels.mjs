@@ -1,7 +1,5 @@
 // D1e: drive all 7 verified kernels through the WASM module end-to-end, assert
 // the expected route per step, and prove determinism (N runs -> identical certs).
-// This gate exercises the node kernel and determinism claims in wasm-spike/RESUME.md.
-// CLAIM-COVERAGE: wasm-spike/RESUME.md#node-kernel-determinism
 import SealModule from "./build-core/seal.js";
 import { scenarios, buildEnvelope, PUBKEY } from "./seal_scenarios.mjs";
 
