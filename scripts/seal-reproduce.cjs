@@ -13,6 +13,8 @@ const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced
 const LEAN_LAUNCHER_ENV = "SEAL_LEAN_LAUNCHER";
 const CURRENT_KERNEL_BUILD_PATH = "kernel-source/c/build.sh";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const SOURCE_PROVENANCE = new Map();
+const SOURCE_WORKTREES = new Map();
 // Retired recipe provenance: v0.2.0-rc.3, v0.2.0, and v0.2.1 all used
 // commit d1af738b1f17966a18d7f86c51392b5cd3b8b0a1 from the former external
 // kernel repository and built .lake/packages/mcp-seal/c/build.sh. Their tag
@@ -62,6 +64,11 @@ function emptyReport(tag, authority = "same-authority", platform = "linux-x64") 
     },
     published_kernel_sha256: null,
     rebuilt_kernel_sha256: null,
+    source_path: null,
+    source_commit: null,
+    source_tree: null,
+    release_tag: tag ?? null,
+    build_script_sha256: null,
     scope: "selected-artifact-kernel-only",
     native_macos_helper: {
       provenance: NATIVE_HELPER_PROVENANCE,
@@ -78,14 +85,16 @@ function parseArguments(argv) {
   let platform = "linux-x64";
   let requestedAuthority = "same-authority";
   let authorityName;
+  let sourceRoot;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--authority" || token === "--authority-name" || token === "--platform") {
+    if (token === "--authority" || token === "--authority-name" || token === "--platform" || token === "--source") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) refuse(`${token} needs a value`);
       if (token === "--authority") requestedAuthority = value;
       else if (token === "--authority-name") authorityName = value;
-      else platform = value;
+      else if (token === "--platform") platform = value;
+      else sourceRoot = path.resolve(value);
       index += 1;
     } else if (token.startsWith("--")) {
       refuse(`unknown option: ${token}`);
@@ -95,19 +104,25 @@ function parseArguments(argv) {
       refuse(`unexpected argument: ${token}`);
     }
   }
-  if (!tag) refuse("usage: node scripts/seal-reproduce.cjs <tag> [--platform linux-x64] [--authority same-authority|independent] [--authority-name <string>]");
-  return { tag, platform, requestedAuthority, authorityName };
+  if (!tag) refuse("usage: node scripts/seal-reproduce.cjs <tag> [--source <path>] [--platform linux-x64] [--authority same-authority|independent] [--authority-name <string>]");
+  return { tag, platform, requestedAuthority, authorityName, sourceRoot };
 }
 
 function parseBuildPinnedArguments(argv) {
   let tag;
   let output;
+  let sourceRoot;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--output") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) refuse("--output needs a value");
       output = value;
+      index += 1;
+    } else if (token === "--source") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) refuse("--source needs a value");
+      sourceRoot = path.resolve(value);
       index += 1;
     } else if (token.startsWith("--")) {
       refuse(`unknown option: ${token}`);
@@ -118,10 +133,10 @@ function parseBuildPinnedArguments(argv) {
     }
   }
   if (!tag) {
-    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
+    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>]");
   }
   if (!TAG_PATTERN.test(tag)) refuse(`release tag is invalid: ${tag}`);
-  return { tag, output: output ? path.resolve(output) : null };
+  return { tag, output: output ? path.resolve(output) : null, sourceRoot };
 }
 
 function validateRequest(parsed) {
@@ -260,17 +275,74 @@ function makeTreeRemovable(root) {
   for (const name of fs.readdirSync(root)) makeTreeRemovable(path.join(root, name));
 }
 
-function requireTaggedCheckout(tag, source) {
+function removeDetachedWorktrees(work) {
+  for (const [detached, source] of SOURCE_WORKTREES) {
+    if (!pathWithin(detached, work)) continue;
+    try { execFileSync("git", ["worktree", "remove", "--force", detached], { cwd: source, stdio: "ignore" }); } catch {}
+    SOURCE_WORKTREES.delete(detached);
+  }
+}
+
+function gitText(args, source) {
+  return execFileSync("git", args, { cwd: source, encoding: "utf8" }).trim();
+}
+
+function sourceStatus(source) {
+  const status = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: source, encoding: "utf8" }).trimEnd();
+  if (status) {
+    const line = status.split(/\r?\n/)[0];
+    refuse(`source checkout is dirty (${line.slice(0, 2).trim() || "untracked"}): ${line.slice(3)}`);
+  }
+}
+
+function releaseCommit(tag, source, work, operations) {
+  if (operations.releaseCommit) return operations.releaseCommit(tag, source);
+  const manifestFile = path.join(work, "release-manifest.json");
+  const fetchManifest = operations.downloadManifest || download;
+  const url = `https://github.com/velvetmonkey/seal/releases/download/${encodeURIComponent(tag)}/release-manifest.json`;
+  fetchManifest(url, manifestFile);
+  let manifest;
+  try { manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")); }
+  catch (error) { refuse(`cannot read release manifest for ${tag}: ${error.message}`); }
+  if (!manifest || manifest.tag !== tag || !/^[0-9a-f]{40}$/.test(manifest.commitSha || "")) {
+    refuse(`release manifest for ${tag} has no valid commitSha`);
+  }
+  return manifest.commitSha;
+}
+
+function requireTaggedCheckout(tag, source, expectedCommit) {
   let head;
   let tagCommit;
   try {
-    head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
-    tagCommit = execFileSync("git", ["rev-parse", "--verify", `refs/tags/${tag}^{commit}`], { cwd: source, encoding: "utf8" }).trim();
+    head = gitText(["rev-parse", "HEAD"], source);
+    tagCommit = gitText(["rev-parse", "--verify", `refs/tags/${tag}^{commit}`], source);
   } catch (error) {
     refuse(`cannot identify release tag ${tag} in the source checkout (exit ${error.status ?? "unknown"})`);
   }
-  if (head !== tagCommit) {
+  if (expectedCommit && head !== expectedCommit) {
+    refuse(`source checkout is not at manifest commit for release tag ${tag}: manifest resolves to ${expectedCommit}, HEAD is ${head}`);
+  }
+  if (tagCommit !== head) {
     refuse(`source checkout is not at release tag ${tag}: tag resolves to ${tagCommit}, HEAD is ${head}`);
+  }
+  return { head, tree: gitText(["rev-parse", "HEAD^{tree}"], source) };
+}
+
+function detachedSource(tag, source, work, operations) {
+  let identity;
+  try {
+    sourceStatus(source);
+    const commit = releaseCommit(tag, source, work, operations);
+    identity = requireTaggedCheckout(tag, source, commit);
+    const detached = path.join(work, "source");
+    (operations.child || child)("git", ["worktree", "add", "--detach", detached, commit], {
+      cwd: source, label: "create detached source worktree",
+    });
+    SOURCE_WORKTREES.set(detached, source);
+    return { root: detached, commit: identity.head, tree: gitText(["rev-parse", "HEAD^{tree}"], detached) };
+  } catch (error) {
+    if (error instanceof Refusal) throw error;
+    refuse(`cannot prepare detached source worktree for ${tag}: ${error.message}`);
   }
 }
 
@@ -316,8 +388,20 @@ function buildPinnedKernel(tag, work, operations = {}) {
   const exists = operations.existsSync || fs.existsSync;
   const environment = operations.environment || process.env;
   refusePreImportTag(tag);
-  const source = path.resolve(operations.sourceRoot || ROOT);
-  if (!operations.sourceRoot) requireTaggedCheckout(tag, source);
+  const requestedSource = path.resolve(operations.sourceRoot || ROOT);
+  let source = requestedSource;
+  let provenance;
+  if (fs.existsSync(path.join(requestedSource, ".git"))) {
+    const detached = detachedSource(tag, requestedSource, work, operations);
+    source = detached.root;
+    provenance = {
+      source_path: source,
+      source_commit: detached.commit,
+      source_tree: detached.tree,
+      release_tag: tag,
+      build_script_sha256: sha256File(path.join(source, CURRENT_KERNEL_BUILD_PATH)),
+    };
+  }
   const kernelSource = path.join(source, "kernel-source");
   try {
     if (!fs.statSync(kernelSource).isDirectory()) refuse(`in-tree kernel source is not a directory: ${kernelSource}`);
@@ -351,6 +435,7 @@ function buildPinnedKernel(tag, work, operations = {}) {
   }
   const rebuilt = path.join(source, "wasm-spike", "build-core", "seal.wasm");
   if (!exists(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
+  if (provenance) SOURCE_PROVENANCE.set(rebuilt, provenance);
   return rebuilt;
 }
 
@@ -363,19 +448,20 @@ function executeBuildPinned(argv, deps = DEFAULT_DEPS) {
     parsed = parseBuildPinnedArguments(argv);
     refusePreImportTag(parsed.tag);
     if (!parsed.output) {
-      refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
+      refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>]");
     }
     work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-rebuild-pinned-"));
     if (pathWithin(work, ROOT) || work === ROOT) refuse(`work directory must be outside the source checkout: ${work}`);
-    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
+    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work, { sourceRoot: parsed.sourceRoot });
     fs.copyFileSync(rebuiltKernel, parsed.output);
-    return { tag: parsed.tag, output: parsed.output, exitCode: 0, error: null };
+    return { tag: parsed.tag, output: parsed.output, sourcePath: SOURCE_PROVENANCE.get(rebuiltKernel)?.source_path ?? null, exitCode: 0, error: null };
   } catch (error) {
     const message = error instanceof Refusal ? error.message : `unexpected failure: ${error.message}`;
     return { tag: parsed?.tag ?? null, output: parsed?.output ?? null, exitCode: 1, error: message };
   } finally {
     if (work) {
       try {
+        removeDetachedWorktrees(work);
         makeTreeRemovable(work);
         fs.rmSync(work, { recursive: true, force: true });
       } catch {}
@@ -410,8 +496,10 @@ function execute(argv, deps = DEFAULT_DEPS) {
     if (deps.afterPublishedKernel) deps.afterPublishedKernel(publishedKernel);
     report.published_kernel_sha256 = sha256File(publishedKernel);
 
-    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
+    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work, { sourceRoot: parsed.sourceRoot });
     report.rebuilt_kernel_sha256 = sha256File(rebuiltKernel);
+    const provenance = SOURCE_PROVENANCE.get(rebuiltKernel);
+    if (provenance) Object.assign(report, provenance);
     report.result = report.published_kernel_sha256 === report.rebuilt_kernel_sha256 ? "artifact-kernel-match" : "artifact-kernel-mismatch";
     return { report, exitCode: report.result === "artifact-kernel-match" ? 0 : 1, error: null };
   } catch (error) {
@@ -420,6 +508,7 @@ function execute(argv, deps = DEFAULT_DEPS) {
   } finally {
     if (work) {
       try {
+        removeDetachedWorktrees(work);
         makeTreeRemovable(work);
         fs.rmSync(work, { recursive: true, force: true });
       } catch {}
@@ -431,7 +520,7 @@ function main(argv = process.argv.slice(2)) {
   if (argv[0] === "build-pinned-kernel") {
     const outcome = executeBuildPinned(argv.slice(1));
     if (outcome.error) process.stderr.write(`REFUSE seal-rebuild-pinned ${outcome.tag ?? "<no-tag>"}: ${outcome.error}\n`);
-    else process.stdout.write(`BUILT pinned kernel ${outcome.tag} at ${outcome.output}\n`);
+    else process.stdout.write(`BUILT pinned kernel ${outcome.tag} at ${outcome.output} from ${outcome.sourcePath ?? "selected source"}\n`);
     process.exitCode = outcome.exitCode;
     return;
   }
