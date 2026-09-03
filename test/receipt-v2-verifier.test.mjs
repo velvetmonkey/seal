@@ -12,8 +12,10 @@ const cfg = { epoch: 1, safety: { approval: { control_file: "X", ttl_seconds: 12
 const keys = generateKeyPairSync("ed25519");
 const pub = Buffer.from(keys.publicKey.export({ type: "spki", format: "der" })).subarray(-32).toString("hex");
 
-function envelope(verdict = "BLOCK") {
-  const r = { seal_receipt: "v2", tool: "db.execute", arguments: { database: "prod", sql: "drop table users" }, now: 1000, kernel_config: cfg, granted_capabilities: [], kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" }, verdict, reason: "safety kernel denied", replay: { args_sha256: "", config_sha256: "" } };
+function envelope(verdict = "BLOCK", action) {
+  const r = { seal_receipt: "v2", tool: "db.execute" };
+  if (action !== undefined) r.action = action;
+  Object.assign(r, { arguments: { database: "prod", sql: "drop table users" }, now: 1000, kernel_config: cfg, granted_capabilities: [], kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" }, verdict, reason: "safety kernel denied", replay: { args_sha256: "", config_sha256: "" } });
   r.replay.args_sha256 = sha256(canonical(r.arguments));
   r.replay.config_sha256 = sha256(canonical(r.kernel_config));
   r.signature = { algorithm: "ed25519", value: sign(null, Buffer.from(canonical(r)), keys.privateKey).toString("hex") };
@@ -51,6 +53,20 @@ test("v2 positive signed receipt and all five rows", async () => {
   assert.match(format(out), /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
   assert.match(format(out), /Event occurrence         NOT ESTABLISHED/);
   assert.match(format(out), /VERIFY    UNVERIFIED/);
+});
+
+test("ALLOW action refuses when replayed verdict is not ALLOW, while pending approval remains valid", async () => {
+  const blockedResult = resign(envelope("BLOCK", "ALLOW"));
+  await assert.rejects(
+    () => verify(text(blockedResult), { publicKeyHex: pub }),
+    (error) => error.code === "action_verdict_mismatch"
+      && error.message === "signed action ALLOW requires replayed verdict ALLOW",
+  );
+
+  const pendingResult = await verify(text(resign(envelope("BLOCK", "INPUT_REQUIRED"))), { publicKeyHex: pub });
+  assert.equal(pendingResult.replay, true);
+  assert.equal(pendingResult.receipt.action, "INPUT_REQUIRED");
+  assert.equal(pendingResult.receipt.verdict, "BLOCK");
 });
 
 test("unchecked trust inputs are refused rather than counted as evidence", async () => {
