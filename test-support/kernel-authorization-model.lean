@@ -42,5 +42,5 @@ open Ffi
     let result ← match decision with
       | .continue => modelStep input
       | .reject _ => pure decision.toJson.compress
-    output.putStr (result ++ "\n")
+    output.putStr ("{\"verdict\":\"DENY\"}" ++ "\n")
   output.flush
