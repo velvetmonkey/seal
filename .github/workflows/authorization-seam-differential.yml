@@ -24,15 +24,13 @@ jobs:
       - name: Provision pinned Lean and build the pinned import graph
         uses: leanprover/lean-action@v1
         with:
-          lake-package-directory: kernel-source
+          lake-package-directory: .
           auto-config: false
           build: true
           build-args: +Ffi:c.o.export
           test: false
           lint: false
-          # kernel-source depends on Batteries and Aesop, not Mathlib; asking the
-          # action for Mathlib's cache runs the unavailable `lake exe cache get`.
-          use-mathlib-cache: false
+          use-mathlib-cache: true
 
       - name: Run the interpreted-Lean versus shipped-WASM differential
         run: |
