@@ -11,26 +11,22 @@ const SCHEMA = "seal.artifact-kernel-correspondence/v1";
 const LIMIT = "This result covers only the selected artifact's kernel bytes. It is not a proof that the rule is the right rule, and it does not establish independence when the rebuilder and the publisher are the same authority.";
 const NATIVE_HELPER_PROVENANCE = "release-produced, not independently reproduced";
 const LEAN_LAUNCHER_ENV = "SEAL_LEAN_LAUNCHER";
-const HISTORICAL_KERNEL_BUILD_PATH = ".lake/packages/mcp-seal/c/build.sh";
 const CURRENT_KERNEL_BUILD_PATH = "kernel-source/c/build.sh";
 const TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-const SOURCE_PINS = Object.freeze({
-  "v0.2.1": Object.freeze({
-    repository: "https://github.com/velvetmonkey/seal-host.git",
-    commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
-    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
-  }),
-  "v0.2.0": Object.freeze({
-    repository: "https://github.com/velvetmonkey/seal-host.git",
-    commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
-    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
-  }),
-  "v0.2.0-rc.3": Object.freeze({
-    repository: "https://github.com/velvetmonkey/seal-host.git",
-    commit: "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1",
-    kernelBuildPath: HISTORICAL_KERNEL_BUILD_PATH,
-  }),
-});
+// Retired recipe provenance: v0.2.0-rc.3, v0.2.0, and v0.2.1 all used
+// commit d1af738b1f17966a18d7f86c51392b5cd3b8b0a1 from the former external
+// kernel repository and built .lake/packages/mcp-seal/c/build.sh. Their tag
+// trees predate kernel-source/, so those recipes cannot be run in-repository.
+const PRE_IMPORT_TAGS = new Set([
+  "v0.1.0",
+  "v0.1.1",
+  "v0.2.0-rc.1",
+  "v0.2.0-rc.2",
+  "v0.2.0-rc.3",
+  "v0.2.0",
+  "v0.2.1",
+  "v1.1.0-rc.1",
+]);
 
 class Refusal extends Error {}
 
@@ -44,6 +40,12 @@ function sha256File(file) {
 
 function refuse(message) {
   throw new Refusal(message);
+}
+
+function refusePreImportTag(tag) {
+  if (PRE_IMPORT_TAGS.has(tag)) {
+    refuse(`release tag ${tag} predates the in-tree kernel, so it is no longer reproducible from this repository`);
+  }
 }
 
 function emptyReport(tag, authority = "same-authority", platform = "linux-x64") {
@@ -115,15 +117,16 @@ function parseBuildPinnedArguments(argv) {
       refuse(`unexpected argument: ${token}`);
     }
   }
-  if (!tag || !output) {
+  if (!tag) {
     refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
   }
   if (!TAG_PATTERN.test(tag)) refuse(`release tag is invalid: ${tag}`);
-  return { tag, output: path.resolve(output) };
+  return { tag, output: output ? path.resolve(output) : null };
 }
 
 function validateRequest(parsed) {
   if (!TAG_PATTERN.test(parsed.tag)) refuse(`release tag is invalid: ${parsed.tag}`);
+  refusePreImportTag(parsed.tag);
   if (parsed.platform !== "linux-x64") {
     refuse(`platform ${parsed.platform} selects artifact seal-${parsed.tag}-${parsed.platform}; this tool only checks the linux-x64 artifact kernel`);
   }
@@ -249,30 +252,26 @@ function pathWithin(candidate, parent) {
   return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
 }
 
-function lstatSourceOrRefuse(source) {
-  try {
-    return fs.lstatSync(source);
-  } catch (error) {
-    if (error?.code === "ENOENT") refuse(`pinned source stage is absent: ${source}`);
-    throw error;
-  }
-}
-
-function realpathOrRefuse(candidate, absentMessage) {
-  try {
-    return fs.realpathSync(candidate);
-  } catch (error) {
-    if (error?.code === "ENOENT") refuse(absentMessage);
-    throw error;
-  }
-}
-
 function makeTreeRemovable(root) {
   let stat;
   try { stat = fs.lstatSync(root); } catch { return; }
   if (!stat.isDirectory() || stat.isSymbolicLink()) return;
   fs.chmodSync(root, 0o700);
   for (const name of fs.readdirSync(root)) makeTreeRemovable(path.join(root, name));
+}
+
+function requireTaggedCheckout(tag, source) {
+  let head;
+  let tagCommit;
+  try {
+    head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
+    tagCommit = execFileSync("git", ["rev-parse", "--verify", `refs/tags/${tag}^{commit}`], { cwd: source, encoding: "utf8" }).trim();
+  } catch (error) {
+    refuse(`cannot identify release tag ${tag} in the source checkout (exit ${error.status ?? "unknown"})`);
+  }
+  if (head !== tagCommit) {
+    refuse(`source checkout is not at release tag ${tag}: tag resolves to ${tagCommit}, HEAD is ${head}`);
+  }
 }
 
 function installPublished(assetFile, declared, work) {
@@ -312,64 +311,23 @@ function installPublished(assetFile, declared, work) {
   return installed;
 }
 
-function clonePinnedSource(pin, destination) {
-  fs.mkdirSync(destination);
-  child("git", ["init", "--quiet"], { cwd: destination, label: "initialize pinned source checkout" });
-  child("git", ["remote", "add", "origin", pin.repository], { cwd: destination, label: "configure pinned source remote" });
-  child("git", ["fetch", "--quiet", "--depth", "1", "origin", pin.commit], { cwd: destination, label: `fetch pinned source ${pin.commit}` });
-  child("git", ["checkout", "--quiet", "--detach", "FETCH_HEAD"], { cwd: destination, label: `checkout pinned source ${pin.commit}` });
-  let observed;
-  try {
-    observed = execFileSync("git", ["rev-parse", "HEAD"], { cwd: destination, encoding: "utf8" }).trim();
-  } catch (error) {
-    refuse(`cannot identify pinned source checkout (exit ${error.status ?? "unknown"})`);
-  }
-  if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
-}
-
-function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
-  const command = ["wasm-spike/provision_toolchain.sh"];
-  const options = { cwd: source, label: "provision pinned wasm toolchains" };
-  try {
-    runChild("bash", command, options);
-  } catch (error) {
-    if (!/failed \(exit 68\)$/u.test(error?.message || "")) throw error;
-    if (!pathWithin(source, work) || path.dirname(source) !== work || source === ROOT) {
-      refuse(`pinned source stage is not disposable: ${source}`);
-    }
-    const acceptedSource = lstatSourceOrRefuse(source);
-    const resolvedSource = realpathOrRefuse(source, `pinned source stage is absent: ${source}`);
-    const resolvedWork = realpathOrRefuse(work, `pinned source work directory is absent: ${work}`);
-    if (!pathWithin(resolvedSource, resolvedWork) || path.dirname(resolvedSource) !== resolvedWork ||
-        resolvedSource === realpathOrRefuse(ROOT, `source checkout is absent: ${ROOT}`)) {
-      refuse(`pinned source stage is not disposable: ${source}`);
-    }
-    // Re-lstat the named path immediately before rmSync. A matching path
-    // string is not identity: rename plus mkdir can reuse the same name for
-    // a different directory. Device and inode identify the directory object.
-    const currentSource = lstatSourceOrRefuse(source);
-    if (currentSource.dev !== acceptedSource.dev || currentSource.ino !== acceptedSource.ino) {
-      refuse(`pinned source stage changed before delete: ${source}`);
-    }
-    makeTreeRemovable(source);
-    fs.rmSync(source, { recursive: true, force: true });
-    process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
-    cloneSource(pin, source);
-    runChild("bash", command, options);
-  }
-}
-
 function buildPinnedKernel(tag, work, operations = {}) {
   const runChild = operations.child || child;
-  const cloneSource = operations.clonePinnedSource || clonePinnedSource;
   const exists = operations.existsSync || fs.existsSync;
   const environment = operations.environment || process.env;
-  const pin = SOURCE_PINS[tag];
-  if (!pin) refuse(`no pinned kernel source recipe is recorded for release tag ${tag}`);
-  const source = path.join(work, "pinned-source");
-  cloneSource(pin, source);
+  refusePreImportTag(tag);
+  const source = path.resolve(operations.sourceRoot || ROOT);
+  if (!operations.sourceRoot) requireTaggedCheckout(tag, source);
+  const kernelSource = path.join(source, "kernel-source");
+  try {
+    if (!fs.statSync(kernelSource).isDirectory()) refuse(`in-tree kernel source is not a directory: ${kernelSource}`);
+  } catch (error) {
+    if (error instanceof Refusal) throw error;
+    if (error?.code === "ENOENT") refuse(`in-tree kernel source is absent: ${kernelSource}`);
+    throw error;
+  }
 
-  provisionPinnedToolchains(runChild, cloneSource, pin, work, source);
+  runChild("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
   const installer = path.join(source, "scripts", "install_pinned_elan.py");
   runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   const launcher = leanLauncher(environment, installer);
@@ -380,8 +338,7 @@ function buildPinnedKernel(tag, work, operations = {}) {
     env: postInstallerEnvironment,
   });
   postInstallerChild(launcher, ["update"], { cwd: source, label: "materialize manifest-pinned dependencies", missingMessage });
-  const kernelBuildPath = pin.kernelBuildPath ?? CURRENT_KERNEL_BUILD_PATH;
-  postInstallerChild("bash", [kernelBuildPath], { cwd: source, label: `build pinned kernel C dependency (${kernelBuildPath})` });
+  postInstallerChild("bash", [CURRENT_KERNEL_BUILD_PATH], { cwd: source, label: `build pinned kernel C dependency (${CURRENT_KERNEL_BUILD_PATH})` });
   postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
     ["./build_runtime_wasm.sh", []],
@@ -404,6 +361,10 @@ function executeBuildPinned(argv, deps = DEFAULT_DEPS) {
   let work;
   try {
     parsed = parseBuildPinnedArguments(argv);
+    refusePreImportTag(parsed.tag);
+    if (!parsed.output) {
+      refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path>");
+    }
     work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-rebuild-pinned-"));
     if (pathWithin(work, ROOT) || work === ROOT) refuse(`work directory must be outside the source checkout: ${work}`);
     const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work);
@@ -466,8 +427,7 @@ function execute(argv, deps = DEFAULT_DEPS) {
   }
 }
 
-function main() {
-  const argv = process.argv.slice(2);
+function main(argv = process.argv.slice(2)) {
   if (argv[0] === "build-pinned-kernel") {
     const outcome = executeBuildPinned(argv.slice(1));
     if (outcome.error) process.stderr.write(`REFUSE seal-rebuild-pinned ${outcome.tag ?? "<no-tag>"}: ${outcome.error}\n`);
@@ -487,7 +447,7 @@ module.exports = {
   LIMIT,
   LEAN_LAUNCHER_ENV,
   SCHEMA,
-  SOURCE_PINS,
+  PRE_IMPORT_TAGS,
   TAG_PATTERN,
   buildPinnedKernel,
   download,
@@ -497,6 +457,7 @@ module.exports = {
   leanLauncher,
   leanLauncherMissingMessage,
   makeTreeRemovable,
+  main,
   readPublishedEntry,
   sha256Bytes,
 };

@@ -81,8 +81,8 @@ the Node CLI this repository ships.
    site manifest.
 8. [assurance/linkcheck-population-control.md](linkcheck-population-control.md) — what the link-check population
    cross-check measures, and its shared blind spots.
-9. [reproduce.md](../reproduce.md) — compare the kernel installed from a published
-   release artifact with a fresh build from that release's pinned source.
+9. [reproduce.md](../reproduce.md) — for a post-import release whose tag contains
+   `kernel-source/`, compare the installed kernel with a build from that checkout.
 10. [Receipt operations](../reference/receipt-operations.md) — the canonical
     four-verb reference, checked output, vectors, and trust ceiling.
 11. [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md) — the Phase A v2 receipt schema
