@@ -13,8 +13,24 @@ if (!dataFile) { process.stderr.write("usage: counting-child.cjs DATAFILE\n"); p
 const countFile = `${dataFile}.count`;
 
 function writeSynced(filePath, text) {
-  const fd = fs.openSync(filePath, "w", 0o600);
-  try { fs.writeSync(fd, text); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  const temporary = `${filePath}.tmp-${process.pid}`;
+  let fd;
+  try {
+    fd = fs.openSync(temporary, "w", 0o600);
+    fs.writeSync(fd, text);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    fs.renameSync(temporary, filePath);
+  } catch (error) {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch (closeError) { error.closeError = closeError; }
+    }
+    try { fs.unlinkSync(temporary); } catch (unlinkError) {
+      if (unlinkError.code !== "ENOENT") error.cleanupError = unlinkError;
+    }
+    throw error;
+  }
 }
 
 fs.mkdirSync(path.dirname(dataFile), { recursive: true, mode: 0o700 });

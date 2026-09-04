@@ -35,6 +35,16 @@ function readCount(countFile) {
   return fs.readFileSync(countFile, "utf8").trim();
 }
 
+function duplicateKeyControlEvidence({ baseline, countFile, dataFile, receiptsDir }) {
+  return [
+    "duplicate-key control evidence:",
+    `baseline: ${baseline}`,
+    `count-file: ${JSON.stringify(fs.readFileSync(countFile, "utf8"))}`,
+    `child data.txt: ${JSON.stringify(fs.readFileSync(dataFile, "utf8"))}`,
+    `receipts: ${JSON.stringify(fs.readdirSync(receiptsDir))}`,
+  ].join("\n");
+}
+
 function attach(child) {
   const state = { out: "", err: "", exit: new Promise((resolve) => child.once("close", (code) => resolve(code))), kill: () => { try { child.kill("SIGKILL"); } catch {} } };
   child.stdout.setEncoding("utf8");
@@ -416,7 +426,11 @@ test("duplicate-key gate controls preserve guarded, unguarded, and ordinary fram
   const baseline = Number(readCount(countFile));
   proxy.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":"guarded alone"}}}');
   await new Promise((resolve) => setTimeout(resolve, 100));
-  assert.equal(Number(readCount(countFile)) - baseline, 0);
+  assert.equal(
+    Number(readCount(countFile)) - baseline,
+    0,
+    duplicateKeyControlEvidence({ baseline, countFile, dataFile, receiptsDir: path.join(dir, "receipts") }),
+  );
   assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
   const guardedReceipt = JSON.parse(fs.readFileSync(path.join(dir, "receipts", fs.readdirSync(path.join(dir, "receipts"))[0]), "utf8"));
   assert.equal(guardedReceipt.tool, "demo.mutate");
