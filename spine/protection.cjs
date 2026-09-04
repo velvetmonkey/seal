@@ -404,6 +404,21 @@ function claudeConfigPath(env = process.env) {
   return path.join(directory, ".claude.json");
 }
 
+function elicitationHookConfigured(env = process.env) {
+  const hook = env.SEAL_ELICITATION_AUTO_RESPONSE || env.CLAUDE_ELICITATION_AUTO_RESPONSE;
+  if (hook) return true;
+  try {
+    const directory = path.dirname(claudeConfigPath(env));
+    const settingsPath = env.CLAUDE_CONFIG_DIR
+      ? path.join(directory, "settings.json")
+      : path.join(directory, ".claude", "settings.json");
+    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    return ["Elicitation", "ElicitationResult"].some((event) => Array.isArray(settings.hooks?.[event]) && settings.hooks[event].length > 0);
+  } catch {
+    return false;
+  }
+}
+
 function currentLocalOverride(projectRoot, serverName, env = process.env) {
   const localRoot = claudeProjectRoot(projectRoot);
   let config;
@@ -1174,8 +1189,7 @@ function beforeForwardFromState(statePath, leaseToken) {
 }
 
 function doctor(env = process.env) {
-  const hook = env.SEAL_ELICITATION_AUTO_RESPONSE || env.CLAUDE_ELICITATION_AUTO_RESPONSE;
-  if (hook) {
+  if (elicitationHookConfigured(env)) {
     return {
       ok: false,
       code: "elicitation_hook_configured",
@@ -1197,8 +1211,7 @@ function doctor(env = process.env) {
 }
 
 function requireHumanApprovalOrigin(env = process.env) {
-  const hook = env.SEAL_ELICITATION_AUTO_RESPONSE || env.CLAUDE_ELICITATION_AUTO_RESPONSE;
-  if (hook) {
+  if (elicitationHookConfigured(env)) {
     throw new ProtectionError(
       "elicitation_hook_configured",
       "an auto-response hook is set; human approval origin cannot be assumed",
