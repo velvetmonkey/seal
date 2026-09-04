@@ -7,7 +7,7 @@ independently and does not import the producer canonicaliser.
 
 The discriminator is exactly `"seal_receipt":"v2"`. Top-level members occur
 in the order below; optional members are omitted rather than written as `null`.
-The verifier always runs the kernel decision. There is intentionally no
+The verifier always runs its local kernel decision. There is intentionally no
 receipt-only verification path: `VERIFY` calls `REPLAY` so a signed producer
 answer cannot substitute for the kernel decision. REPLAY obtains only the
 decision from a decision-only kernel runner; it does not load the producer's
@@ -90,8 +90,9 @@ Seal uses this rule for the receipt arguments commitment.
 ## Verbs and trust result
 
 `READ` parses received bytes with duplicate and truncation checks. `VALIDATE`
-checks the v2 shape and commitments. `REPLAY` runs the recorded kernel inputs
-and compares the verdict; it does not require a signature. `VERIFY` accepts a
+checks the v2 shape and commitments. `REPLAY` runs the recorded inputs through
+the verifier's local kernel and compares its verdict with the recorded verdict;
+it does not require a signature. `VERIFY` accepts a
 caller-supplied public key, but refuses `authorityRoot` and `occurrenceWitness`
 because the v2 verifier cannot check those inputs. A receipt key is never
 trusted, and a signature alone never establishes occurrence.
@@ -101,7 +102,7 @@ The verifier reports five independent rows:
 ```text
 Document structure       VALID
 Signature and bindings   VALID
-Kernel decision          REPRODUCED
+Verifier-local verdict   REPRODUCED
 Authority key            UNPINNED / CALLER-SUPPLIED
 Event occurrence         NOT ESTABLISHED
                          ------------------

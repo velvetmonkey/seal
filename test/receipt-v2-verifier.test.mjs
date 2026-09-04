@@ -49,7 +49,7 @@ test("v2 positive signed receipt and all five rows", async () => {
   assert.equal(out.occurrence, "NOT ESTABLISHED");
   assert.match(format(out), /Document structure       VALID/);
   assert.match(format(out), /Signature and bindings   VALID/);
-  assert.match(format(out), /Kernel decision          REPRODUCED/);
+  assert.match(format(out), /Verifier-local verdict   REPRODUCED/);
   assert.match(format(out), /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
   assert.match(format(out), /Event occurrence         NOT ESTABLISHED/);
   assert.match(format(out), /VERIFY    UNVERIFIED/);

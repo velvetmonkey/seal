@@ -53,7 +53,7 @@ test("the producer emits a signed v2 receipt accepted by the pre-landed judge", 
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /Document structure       VALID/);
   assert.match(result.stdout, /Signature and bindings   VALID/);
-  assert.match(result.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(result.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(result.stdout, /Event occurrence         NOT ESTABLISHED/);
   assert.match(result.stdout, /VERIFY    UNVERIFIED/);
 });
@@ -101,7 +101,7 @@ test("the checker runs with the seal binary absent (copied to a clean dir)", () 
   assert.equal(fs.existsSync(path.join(clean, "bin", "seal")), false);
   const result = check(real.receipt, real.publicKey, isolated);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(result.stdout, /Verifier-local verdict   REPRODUCED/);
 });
 
 test("the verifier takes its key out of band and never reaches positive VERIFY", () => {

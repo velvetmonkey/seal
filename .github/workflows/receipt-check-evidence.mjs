@@ -72,7 +72,7 @@ async function check([checkerPath, receiptPath, pubkeyPath, challenge, resultPat
   if (checked.status === 0) {
     if (!/Document structure       VALID/.test(checked.stdout)
       || !/Signature and bindings   VALID/.test(checked.stdout)
-      || !/Kernel decision          REPRODUCED/.test(checked.stdout)
+      || !/Verifier-local verdict   REPRODUCED/.test(checked.stdout)
       || !/VERIFY    UNVERIFIED/.test(checked.stdout)) {
       refuse("checker returned success without the required v2 rows");
     }

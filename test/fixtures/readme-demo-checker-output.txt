@@ -1,6 +1,6 @@
 Document structure       VALID
 Signature and bindings   VALID
-Kernel decision          REPRODUCED
+Verifier-local verdict   REPRODUCED
 Authority key            UNPINNED / CALLER-SUPPLIED
 Event occurrence         NOT ESTABLISHED
                          ------------------
