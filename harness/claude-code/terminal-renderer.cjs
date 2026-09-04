@@ -260,10 +260,13 @@ function parseCast(castPath) {
     .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]");
 }
 
-// Read terminal output history rather than terminal state. Unlike parseCast,
-// this retains text which was later overwritten in place. Strip the terminal
-// controls after all output events are joined, so an escape sequence split
-// across recorder writes cannot leave its bytes in the evidence text.
+// Read displayed terminal-output history rather than terminal state. Unlike
+// parseCast, this retains a completed line which was later overwritten in
+// place. A pending line is still terminal input: BS and erasing CSI commands
+// alter it before it enters history. Thus `x\b` is not evidence for `x`, while
+// a completed dialog remains evidence after a later screen clear. Cursor-only
+// CSI commands do not break the history, because a TUI can paint one displayed
+// dialog at several cursor addresses.
 function rawCastOutputText(castPath) {
   const lines = fs.readFileSync(castPath, "utf8").split("\n").filter((line) => line.trim() !== "");
   if (lines.length === 0) throw new Error("cast is empty");
@@ -273,12 +276,57 @@ function rawCastOutputText(castPath) {
     const event = JSON.parse(line);
     if (Array.isArray(event) && event[1] === "o") output += String(event[2] ?? "");
   }
-  return output
-    .replace(/\u001B\][\s\S]*?(?:\u0007|\u001B\\)/gu, "")
-    .replace(/\u009D[\s\S]*?(?:\u0007|\u009C)/gu, "")
-    .replace(/(?:\u001B\[|\u009B)[\x20-\x3F]*[\x40-\x7E]/gu, "")
-    .replace(/\u001B[\x20-\x2F]*[\x30-\x7E]/gu, "")
-    .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/gu, "")
+  const history = [];
+  let pending = [];
+  let state = "text";
+  let csi = "";
+
+  const commit = () => {
+    history.push(pending.join(""));
+    pending = [];
+  };
+  const erasePending = () => { pending = []; };
+  for (const char of output) {
+    const code = char.codePointAt(0);
+    if (state === "osc") {
+      if (char === "\u0007") state = "text";
+      else if (char === "\u001b") state = "osc-st";
+      continue;
+    }
+    if (state === "osc-st") {
+      state = char === "\\" ? "text" : "osc";
+      continue;
+    }
+    if (state === "csi") {
+      csi += char;
+      if (code >= 0x40 && code <= 0x7e) {
+        // Screen.csiCommand's J, K and P erase cells. There is no displayed
+        // history for the still-pending paint they erase. Other CSI commands,
+        // including CUP, only place subsequent paint and leave it contiguous.
+        if (["J", "K", "P"].includes(char)) erasePending();
+        state = "text";
+        csi = "";
+      }
+      continue;
+    }
+    if (state === "escape") {
+      if (char === "[") { state = "csi"; csi = ""; }
+      else if (char === "]") state = "osc";
+      else state = "text";
+      continue;
+    }
+    if (char === "\u001b") { state = "escape"; continue; }
+    if (code === 0x9b) { state = "csi"; csi = ""; continue; }
+    if (code === 0x9d) { state = "osc"; continue; }
+    if (code === 0x08) { pending.pop(); continue; }
+    if (code === 0x0a) { commit(); history.push("\n"); continue; }
+    if (code === 0x0d) { commit(); continue; }
+    if (code === 0x09) { pending.push(" "); continue; }
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    pending.push(char);
+  }
+  commit();
+  return history.join("")
     .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
     .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
     .replace(UUID, "[REDACTED-SESSION-ID]");

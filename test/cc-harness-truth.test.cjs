@@ -189,7 +189,7 @@ test("a hand-written dialog cast is not evidence from the recorded session", () 
   assert.equal(harness.loadState(runDir).step_index, 1);
 });
 
-test("approval evidence retains overwritten raw output but refuses absent or partial dialogs", () => {
+test("approval evidence retains overwritten raw output but refuses absent, partial, scattered, and erased dialogs", () => {
   const overwriteWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-overwritten-dialog-"));
   const { harness: overwriteHarness, runDir: overwriteRun } = initSyntheticRun(overwriteWorkspace);
   runSyntheticStep(overwriteHarness, overwriteRun, "activation", "");
@@ -230,6 +230,43 @@ test("approval evidence retains overwritten raw output but refuses absent or par
   const partialRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", partialRun], { encoding: "utf8" });
   assert.equal(partialRefusal.status, 1, `${partialRefusal.stdout}${partialRefusal.stderr}`);
   assert.match(partialRefusal.stderr, /REFUSE step_cannot_certify: CANNOT CERTIFY decline; decline: the complete exact-call dialog is absent from decline\.cast/);
+
+  const scatteredWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-scattered-dialog-"));
+  const { harness: scatteredHarness, runDir: scatteredRun } = initSyntheticRun(scatteredWorkspace);
+  runSyntheticStep(scatteredHarness, scatteredRun, "activation", "");
+  runSyntheticStep(scatteredHarness, scatteredRun, "decline", scatteredHarness.NOTES.decline);
+  const scatteredLines = scatteredHarness.observeAll(scatteredHarness.loadState(scatteredRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const scatteredCast = rewriteDeclineRecorder(scatteredHarness, scatteredRun, (text) => `${scatteredLines.reduce((out, line) => out.replaceAll(line, ""), text)}${scatteredLines.map((line) => `${line}\r\n${"unrelated terminal output ".repeat(20)}`).join("\r\n")}\u001b[2J`);
+  const scattered = scatteredHarness.observeAll(scatteredHarness.loadState(scatteredRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(scatteredCast).includes(scatteredLines[0]), true);
+  assert.deepEqual(scattered.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, true, true]);
+  assert.equal(scattered.facts.exact_call_dialog.dialog_span.observed, false);
+  assert.equal(scattered.result, "NOT OBSERVED");
+  const scatteredRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", scatteredRun], { encoding: "utf8" });
+  assert.equal(scatteredRefusal.status, 1, `${scatteredRefusal.stdout}${scatteredRefusal.stderr}`);
+
+  const erasedWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-erased-dialog-"));
+  const { harness: erasedHarness, runDir: erasedRun } = initSyntheticRun(erasedWorkspace);
+  runSyntheticStep(erasedHarness, erasedRun, "activation", "");
+  runSyntheticStep(erasedHarness, erasedRun, "decline", erasedHarness.NOTES.decline);
+  const erasedLines = erasedHarness.observeAll(erasedHarness.loadState(erasedRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const erasedCast = rewriteDeclineRecorder(erasedHarness, erasedRun, (text) => `${erasedLines.reduce((out, line) => out.replaceAll(line, ""), text)}${erasedLines.map((line) => [...line].map((char) => `${char}\b`).join("")).join("")}\u001b[2J`);
+  const erased = erasedHarness.observeAll(erasedHarness.loadState(erasedRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(erasedCast).includes(erasedLines[0]), false);
+  assert.equal(erased.result, "NOT OBSERVED");
+  const erasedRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", erasedRun], { encoding: "utf8" });
+  assert.equal(erasedRefusal.status, 1, `${erasedRefusal.stdout}${erasedRefusal.stderr}`);
+
+  const cursorWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-cursor-dialog-"));
+  const { harness: cursorHarness, runDir: cursorRun } = initSyntheticRun(cursorWorkspace);
+  runSyntheticStep(cursorHarness, cursorRun, "activation", "");
+  runSyntheticStep(cursorHarness, cursorRun, "decline", cursorHarness.NOTES.decline);
+  const cursorLines = cursorHarness.observeAll(cursorHarness.loadState(cursorRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const cursorCast = rewriteDeclineRecorder(cursorHarness, cursorRun, (text) => `${cursorLines.reduce((out, line) => out.replaceAll(line, ""), text)}${cursorLines.map((line, index) => `\u001b[${index + 1};1H${line}`).join("")}`);
+  const cursor = cursorHarness.observeAll(cursorHarness.loadState(cursorRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(cursorCast).includes(cursorLines[0]), true);
+  assert.equal(cursor.facts.exact_call_dialog.dialog_span.observed, true);
+  assert.equal(cursor.result, "OBSERVED");
 });
 
 test("finish refuses before writing when any declared case lacks positive evidence", () => {

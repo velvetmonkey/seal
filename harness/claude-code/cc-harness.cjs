@@ -58,7 +58,7 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override", summary: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction", summary: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call", summary: "The terminal recording shows the complete exact-call dialog" },
+  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call", summary: "Recorder-corresponding terminal output history contains the complete exact-call dialog; the published pack does not include the raw cast for an independent display check" },
   { id: "before_approval", required: "Child call count remains 0", summary: "Child call count remains `0`" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches", summary: "Child call count becomes exactly `1`; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0", summary: "Child call count remains `0`" },
@@ -590,6 +590,36 @@ function expectedDialogLines(state, note) {
   return [...rendered.lines.slice(1, 3), approve.title, approve.description];
 }
 
+function dialogContiguityBound(state, note) {
+  const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
+  const { renderApprovalMessage } = require(rendererPath);
+  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
+  if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
+  // This is the installed renderer's complete source dialog, normalized in
+  // exactly the same way as the recording. It is the permitted span, rather
+  // than a hand-picked allowance for unrelated terminal output.
+  return rendered.message.replace(/\s+/g, " ").length;
+}
+
+function orderedDialogSpan(haystack, lines, bound) {
+  const needles = lines.map((line) => line.trim().replace(/\s+/g, " "));
+  let first = haystack.indexOf(needles[0]);
+  while (first !== -1) {
+    let cursor = first + needles[0].length;
+    let end = cursor;
+    let complete = true;
+    for (const needle of needles.slice(1)) {
+      const found = haystack.indexOf(needle, cursor);
+      if (found === -1) { complete = false; break; }
+      end = found + needle.length;
+      cursor = end;
+    }
+    if (complete && end - first <= bound) return { observed: true, start: first, end };
+    first = haystack.indexOf(needles[0], first + 1);
+  }
+  return { observed: false, start: null, end: null };
+}
+
 function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, requireElicitation = true) {
   const lines = expectedDialogLines(state, note);
   let text = "";
@@ -603,6 +633,8 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
   // — this check never softens into "something like it appeared".
   const haystack = text.replace(/[\u2500-\u257F|\u00A0]/g, " ").replace(/\s+/g, " ");
   const found = lines.map((line) => ({ line, found: haystack.includes(line.trim().replace(/\s+/g, " ")) }));
+  const contiguityBound = dialogContiguityBound(state, note);
+  const dialogSpan = orderedDialogSpan(haystack, lines, contiguityBound);
   const anchor = haystack.indexOf("Approval required");
   const receipts = newReceipts(begin, end);
   const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
@@ -614,7 +646,7 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
   const childCalls = newRecords(begin, end).filter((record) => record.kind === "child-call");
   const exactChildCalls = childCalls.filter((record) => record.tool === GUARDED_TOOL && record.arguments?.note === note);
   return {
-    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found) &&
+    observed: correspondence.observed && dialogSpan.observed &&
       (!requireElicitation || (answeredReceiptPairs.length > 0 && childCalls.length === 1 && exactChildCalls.length === 1)),
     facts: {
       recording: path.basename(castPath),
@@ -622,6 +654,8 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
       recording_read_error: readError,
       recorder_correspondence: correspondence,
       expected_dialog_lines: found,
+      dialog_contiguity_bound_characters: contiguityBound,
+      dialog_span: dialogSpan,
       exact_call_elicitation_receipt_pairs: answeredReceiptPairs,
       child_call_records_added: childCalls.length,
       exact_call_child_records_added: exactChildCalls.length,

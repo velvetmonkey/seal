@@ -25,8 +25,8 @@ produce a passing pack. The binding detects accidental edits and mismatched
 files; it does not stop that same writer from forging the bundle.
 
 The harness also cannot establish that a human rather than the client
-originated the decline. It records the dialog that was shown and correlates the
-declined call with the proxy's receipts, but the interactive client remains
+originated the decline. It reads the recorder-corresponding terminal output
+history for the dialog text and correlates the declined call with the proxy's receipts, but the interactive client remains
 inside the declared approval-origin boundary. This limit is repeated in every
 pack's `manifest.json`.
 
@@ -86,7 +86,7 @@ elicitation, or declines to fall back.
 |---|---|
 | `activation` | After restart, Claude Code selects the local Seal override |
 | `negotiation` | The proxy records the retry-model interaction |
-| `approval_shown` | The terminal recording shows the complete exact-call dialog |
+| `approval_shown` | Recorder-corresponding terminal output history contains the complete exact-call dialog; the published pack does not include the raw cast for an independent display check |
 | `before_approval` | Child call count remains `0` |
 | `accept` | Child call count becomes exactly `1`; expected effect hash matches |
 | `decline` | Child call count remains `0` |
