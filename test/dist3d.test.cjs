@@ -428,11 +428,12 @@ process.exit(2);
   const cache = path.join(built.out, "runtime-cache");
   const dataHome = path.join(home, ".local", "share");
   const receipt = await writeKernelReceipt(cache, path.join(built.out, "verify-home"));
-  const verified = runNode([seal, "verify", receipt], {
+  const unverified = runNode([seal, "verify", receipt], {
     env: { ...env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome },
   });
-  assert.equal(verified.code, 0, verified.out);
-  assert.match(verified.stdout, /Kernel decision          REPRODUCED/);
+  assert.notEqual(unverified.code, 0, unverified.out);
+  assert.match(unverified.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(unverified.stdout, /VERIFY    UNVERIFIED/);
 
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
   const store = path.join(prefix, record.store);

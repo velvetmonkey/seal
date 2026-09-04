@@ -253,7 +253,9 @@ function ask(question) {
 async function demo(args) {
   return require(path.join(ROOT, "spine", "demo.cjs")).run(args, __filename);
 }
-async function verify(receiptPath) {
+async function verify(args) {
+  const receiptPath = args[0];
+  const keyAt = args.indexOf("--pubkey");
   if (!receiptPath) throw new Error("usage: seal verify PATH");
   const absolute = path.resolve(receiptPath);
   let stat;
@@ -264,9 +266,11 @@ async function verify(receiptPath) {
   try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
   const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
-  const result = await verifier.verify(text);
+  const result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+  result.ok = result.validate && result.signature && result.replay;
+  result.verify = result.ok;
   console.log(verifier.format(result));
-  process.exitCode = 0;
+  if (!result.ok) process.exitCode = 1;
 }
 
 function reproduce(args) {
@@ -353,7 +357,7 @@ async function main() {
   // Private spine subcommands: not part of the command surface, not listed.
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
-  if (command === "verify") return verify(process.argv[3]);
+  if (command === "verify") return verify(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
