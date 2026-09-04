@@ -12,6 +12,7 @@ const ROOT = path.join(__dirname, "..");
 const HARNESS = path.join(ROOT, "harness", "claude-code", "cc-harness.cjs");
 const SYNTHETIC_CLIENT = path.join(ROOT, "harness", "claude-code", "synthetic-client.cjs");
 const { parseCast, rawCastOutputText } = require(path.join(ROOT, "harness", "claude-code", "terminal-renderer.cjs"));
+const REAL_ACCEPT_CAST = "/home/monkey/scratch/rendercheck-accept.cast";
 
 function buildArtifact(workspace) {
   const out = path.join(workspace, "dist");
@@ -152,6 +153,29 @@ function rewriteDeclineRecorder(harness, runDir, rewrite) {
   return castPath;
 }
 
+function castOutput(castPath) {
+  return fs.readFileSync(castPath, "utf8").trimEnd().split("\n").slice(1)
+    .map((line) => JSON.parse(line))
+    .filter((event) => Array.isArray(event) && event[1] === "o")
+    .map((event) => String(event[2] ?? ""))
+    .join("");
+}
+
+test("the real Claude Code acceptance paint certifies after its note is rebuilt as decline", () => {
+  assert.equal(fs.existsSync(REAL_ACCEPT_CAST), true, `missing real cast: ${REAL_ACCEPT_CAST}`);
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-real-dialog-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  const realCast = rewriteDeclineRecorder(harness, runDir, () =>
+    castOutput(REAL_ACCEPT_CAST).replaceAll(harness.NOTES.accept, harness.NOTES.decline));
+  const observed = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "decline");
+  assert.equal(observed.facts.exact_call_dialog.recorder_correspondence.observed, true);
+  assert.equal(observed.facts.exact_call_dialog.dialog_span.observed, true, JSON.stringify(observed.facts));
+  assert.equal(observed.result, "OBSERVED", JSON.stringify(observed.facts));
+  assert.equal(rawCastOutputText(realCast).includes("Approval required"), true);
+});
+
 test("a hand-written dialog cast is not evidence from the recorded session", () => {
   const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
   const { harness, runDir } = initSyntheticRun(workspace);
@@ -189,7 +213,7 @@ test("a hand-written dialog cast is not evidence from the recorded session", () 
   assert.equal(harness.loadState(runDir).step_index, 1);
 });
 
-test("approval evidence retains overwritten raw output but refuses absent, partial, scattered, and erased dialogs", () => {
+test("approval evidence retains overwritten raw output but refuses absent, partial, scattered, backspace, ECH, and DCH dialogs", () => {
   const overwriteWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-overwritten-dialog-"));
   const { harness: overwriteHarness, runDir: overwriteRun } = initSyntheticRun(overwriteWorkspace);
   runSyntheticStep(overwriteHarness, overwriteRun, "activation", "");
@@ -256,6 +280,28 @@ test("approval evidence retains overwritten raw output but refuses absent, parti
   assert.equal(erased.result, "NOT OBSERVED");
   const erasedRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", erasedRun], { encoding: "utf8" });
   assert.equal(erasedRefusal.status, 1, `${erasedRefusal.stdout}${erasedRefusal.stderr}`);
+
+  const echWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-ech-dialog-"));
+  const { harness: echHarness, runDir: echRun } = initSyntheticRun(echWorkspace);
+  runSyntheticStep(echHarness, echRun, "activation", "");
+  runSyntheticStep(echHarness, echRun, "decline", echHarness.NOTES.decline);
+  const echLines = echHarness.observeAll(echHarness.loadState(echRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  rewriteDeclineRecorder(echHarness, echRun, (text) => `${echLines.reduce((out, line) => out.replaceAll(line, ""), text)}\u001b[1;1H${echLines.join("")}\u001b[1;1H\u001b[80X`);
+  const ech = echHarness.observeAll(echHarness.loadState(echRun)).find((entry) => entry.case === "decline");
+  assert.equal(ech.result, "NOT OBSERVED");
+  const echRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", echRun], { encoding: "utf8" });
+  assert.equal(echRefusal.status, 1, `${echRefusal.stdout}${echRefusal.stderr}`);
+
+  const dchWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-dch-dialog-"));
+  const { harness: dchHarness, runDir: dchRun } = initSyntheticRun(dchWorkspace);
+  runSyntheticStep(dchHarness, dchRun, "activation", "");
+  runSyntheticStep(dchHarness, dchRun, "decline", dchHarness.NOTES.decline);
+  const dchLines = dchHarness.observeAll(dchHarness.loadState(dchRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  rewriteDeclineRecorder(dchHarness, dchRun, (text) => `${dchLines.reduce((out, line) => out.replaceAll(line, ""), text)}\u001b[1;1H${dchLines.join("")}\u001b[1;1H\u001b[80P`);
+  const dch = dchHarness.observeAll(dchHarness.loadState(dchRun)).find((entry) => entry.case === "decline");
+  assert.equal(dch.result, "NOT OBSERVED");
+  const dchRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", dchRun], { encoding: "utf8" });
+  assert.equal(dchRefusal.status, 1, `${dchRefusal.stdout}${dchRefusal.stderr}`);
 
   const cursorWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-cursor-dialog-"));
   const { harness: cursorHarness, runDir: cursorRun } = initSyntheticRun(cursorWorkspace);
