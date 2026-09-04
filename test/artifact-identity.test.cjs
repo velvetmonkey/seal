@@ -17,6 +17,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SCRIPTS = ["product-identity.cjs", "check-artifact-identity.cjs"];
@@ -42,7 +43,7 @@ function git(cwd, ...args) {
 // A repository holding only the two scripts under test, its own VERSION and a
 // dist directory. No origin: these questions must be answerable offline.
 function fixture() {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "seal-artifact-identity-"));
+  const repo = testTmpdir(path.join(os.tmpdir(), "seal-artifact-identity-"));
   fs.mkdirSync(path.join(repo, "scripts"));
   fs.mkdirSync(path.join(repo, "dist"));
   for (const name of SCRIPTS) {
@@ -173,7 +174,7 @@ test("the built artifact of this repository carries this repository's identity",
   if (record.kind === "release") assert.equal(record.identity, record.version);
   else assert.equal(record.identity, `${record.version}-dev.g${head.slice(0, 7)}`);
 
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-artifact-identity-build-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-artifact-identity-build-"));
   const built = run(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", out], ROOT);
   assert.equal(built.status, 0, built.stderr);
   assert.ok(fs.existsSync(path.join(out, artifactName(record.identity))), built.stdout);

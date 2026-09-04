@@ -6,8 +6,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
-const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
+const { LEAN_LAUNCHER_ENV, LIMIT, SCHEMA, SOURCE_PINS, buildPinnedKernel, execute, executeBuildPinned, leanLauncher, leanLauncherMissingMessage } = require("../scripts/seal-reproduce.cjs");
 
 const TAG = "v0.2.0-rc.3";
 const ASSET = `seal-${TAG}-linux-x64`;
@@ -37,7 +38,7 @@ function harness(options = {}) {
         }
       },
       installPublished(_asset, _declared, work) {
-        const prefix = fs.mkdtempSync(path.join(work, "test-prefix-"));
+        const prefix = testTmpdir(path.join(work, "test-prefix-"));
         installedPath = path.join(prefix, "runtime", "kernel", "wasm", "seal.wasm");
         fs.mkdirSync(path.dirname(installedPath), { recursive: true });
         fs.writeFileSync(installedPath, PUBLISHED_KERNEL);
@@ -69,7 +70,7 @@ test("honest comparison names and scopes the selected artifact kernel", () => {
     covered_by_result: false,
   });
   assert.equal(outcome.report.authority, "same-authority");
-  assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(outcome.report.limit, LIMIT_CLAIM); // CLAIM-COVERAGE: docs/reproduce.md#limit
   assert.equal(outcome.report.published_kernel_sha256, digest(PUBLISHED_KERNEL));
   assert.equal(outcome.report.rebuilt_kernel_sha256, digest(PUBLISHED_KERNEL));
   assert.equal(h.builds, 1);
@@ -83,7 +84,7 @@ test("the CLI prints exactly one schema-bearing JSON report on refusal", () => {
     encoding: "utf8",
   });
   const parsed = JSON.parse(run.stdout);
-  assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(parsed.schema, SCHEMA); // CLAIM-COVERAGE: docs/reproduce.md#schema
   assert.equal(run.stdout.trim().split(/\r?\n/)[0], "{");
   assert.match(run.stderr, /^REFUSE seal-reproduce/m);
   assert.equal(run.status, 1);
@@ -99,13 +100,13 @@ test("documented report result and field contract is executable", () => {
     },
   }).deps);
   const refused = execute([TAG], harness({ checksum: `${"0".repeat(64)}  24  ${ASSET}\n` }).deps);
-  assert.deepEqual([matched.report.result, mismatch.report.result, refused.report.result], ["artifact-kernel-match", "artifact-kernel-mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md
-  assert.deepEqual([matched.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]); // CLAIM-COVERAGE: docs/reproduce.md
-  assert.deepEqual(Object.keys(matched.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.deepEqual([matched.report.result, mismatch.report.result, refused.report.result], ["artifact-kernel-match", "artifact-kernel-mismatch", "refused"]); // CLAIM-COVERAGE: docs/reproduce.md#result
+  assert.deepEqual([matched.exitCode, mismatch.exitCode, refused.exitCode], [0, 1, 1]); // CLAIM-COVERAGE: docs/reproduce.md#exit-codes
+  assert.deepEqual(Object.keys(matched.report.asset), ["name", "declared_sha256", "declared_bytes", "observed_sha256", "observed_bytes"]); // CLAIM-COVERAGE: docs/reproduce.md#asset-keys
   assert.deepEqual(
     ["published_kernel_sha256", "rebuilt_kernel_sha256", "scope", "native_macos_helper", "result", "authority", "limit"].map((key) => Object.hasOwn(matched.report, key)),
     [true, true, true, true, true, true, true],
-  ); // CLAIM-COVERAGE: docs/reproduce.md
+  ); // CLAIM-COVERAGE: docs/reproduce.md#report-fields
 });
 
 test("one flipped byte in the extracted kernel produces mismatch and nonzero exit", () => {
@@ -154,14 +155,14 @@ test("outside-authority declaration requires a nonempty authority name", () => {
   assert.equal(outcome.report.result, "refused");
   assert.equal(outcome.report.authority, "same-authority");
   assert.match(outcome.error, /requires --authority-name/);
-  assert.equal(downloads, 0); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(downloads, 0); // CLAIM-COVERAGE: docs/reproduce.md#download-refusal
 });
 
 test("caller declaration is the only path to outside authority", () => {
   const h = harness();
   const outcome = execute([TAG, "--authority", OUTSIDE_AUTHORITY, "--authority-name", "Outside Lab"], h.deps);
   assert.equal(outcome.exitCode, 0);
-  assert.equal(outcome.report.authority, OUTSIDE_AUTHORITY); // CLAIM-COVERAGE: docs/reproduce.md
+  assert.equal(outcome.report.authority, OUTSIDE_AUTHORITY); // CLAIM-COVERAGE: docs/reproduce.md#authority
 });
 
 test("invalid tags refuse before download using the published checker pattern", () => {
@@ -198,7 +199,7 @@ test("Lean launcher defaults to portable lake and accepts the serialization over
 });
 
 test("same-process rebuild resolves the executable declared by the pinned installer without GITHUB_PATH", (t) => {
-  const fixture = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
+  const fixture = testTmpdir(path.join(require("node:os").tmpdir(), "seal-pinned-launcher-"));
   t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
   const home = path.join(fixture, "home");
   const emptyPath = path.join(fixture, "empty-path");
@@ -224,8 +225,198 @@ test("pinned Lean toolchain CI check exercises every post-installer child enviro
   assert.deepEqual(checkPinnedLeanLauncher(realRepositoryRoot), []);
 });
 
+test("pinned toolchain provisioning retries once and still requires a completed rebuild", (t) => {
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-retry-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  let cloneAttempts = 0;
+  const stalePack = path.join(work, "pinned-source", "stale-pack");
+  const rebuilt = buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      assert.equal(fs.existsSync(stalePack), false, `clone ${cloneAttempts} must start without the first-attempt stage`);
+      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        if (provisionAttempts === 1) {
+          fs.writeFileSync(stalePack, "left by first attempt\n");
+          throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        }
+      }
+      if (command === "./build_wasm.sh") {
+        const output = path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm");
+        fs.mkdirSync(path.dirname(output), { recursive: true });
+        fs.writeFileSync(output, PUBLISHED_KERNEL);
+      }
+    },
+  });
+  assert.equal(cloneAttempts, 2);
+  assert.equal(provisionAttempts, 2);
+  assert.equal(rebuilt, path.join(work, "pinned-source", "wasm-spike", "build-core", "seal.wasm"));
+});
+
+test("pinned toolchain provisioning refuses after the bounded retry", (t) => {
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-refusal-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /provision pinned wasm toolchains failed \(exit 68\)/);
+  assert.equal(provisionAttempts, 2);
+});
+
+test("pinned toolchain provisioning refuses when the failed provisioner removed its stage", (t) => {
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-absent-source-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  const source = path.join(work, "pinned-source");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        fs.rmSync(source, { recursive: true, force: true });
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /pinned source stage is absent/);
+  assert.equal(cloneAttempts, 1);
+  assert.equal(provisionAttempts, 1);
+});
+
+test("pinned toolchain provisioning refuses when the source name changes before delete", (t) => {
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-changed-source-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  const source = path.join(work, "pinned-source");
+  const accepted = path.join(work, "accepted-source");
+  const replacementCanary = path.join(source, "replacement-canary");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  let swapped = false;
+  const originalRealpathSync = fs.realpathSync;
+  fs.realpathSync = function swapAfterResolvedChecks(target, options) {
+    if (!swapped && target === path.resolve(__dirname, "..")) {
+      fs.renameSync(source, accepted);
+      fs.mkdirSync(source);
+      fs.writeFileSync(replacementCanary, "must survive\n");
+      swapped = true;
+    }
+    return originalRealpathSync.call(this, target, options);
+  };
+  try {
+    assert.throws(() => buildPinnedKernel(TAG, work, {
+      clonePinnedSource(_pin, destination) {
+        cloneAttempts += 1;
+        fs.mkdirSync(destination, { recursive: true });
+      },
+      child(command, args) {
+        if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+          provisionAttempts += 1;
+          throw new Error("provision pinned wasm toolchains failed (exit 68)");
+        }
+      },
+    }), /pinned source stage changed before delete/);
+  } finally {
+    fs.realpathSync = originalRealpathSync;
+  }
+  assert.equal(cloneAttempts, 1);
+  assert.equal(provisionAttempts, 1);
+  assert.equal(fs.readFileSync(replacementCanary, "utf8"), "must survive\n");
+  assert.equal(fs.existsSync(accepted), true);
+});
+
+test("pinned toolchain provisioning retries through a symbolic work path", (t) => {
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-work-symlink-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const physicalWork = path.join(root, "physical-work");
+  const work = path.join(root, "work-link");
+  const source = path.join(work, "pinned-source");
+  fs.mkdirSync(physicalWork);
+  fs.symlinkSync(physicalWork, work, "dir");
+  let cloneAttempts = 0;
+  let provisionAttempts = 0;
+  const rebuilt = buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      cloneAttempts += 1;
+      fs.mkdirSync(path.join(destination, "scripts"), { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        if (provisionAttempts === 1) throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+      if (command === "./build_wasm.sh") {
+        const output = path.join(source, "wasm-spike", "build-core", "seal.wasm");
+        fs.mkdirSync(path.dirname(output), { recursive: true });
+        fs.writeFileSync(output, PUBLISHED_KERNEL);
+      }
+    },
+  });
+  assert.equal(cloneAttempts, 2);
+  assert.equal(provisionAttempts, 2);
+  assert.equal(rebuilt, path.join(source, "wasm-spike", "build-core", "seal.wasm"));
+});
+
+test("pinned toolchain provisioning refuses a source symlink outside the resolved work directory", (t) => {
+  const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-source-symlink-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const work = path.join(root, "work");
+  const outside = path.join(root, "outside");
+  const source = path.join(work, "pinned-source");
+  fs.mkdirSync(work);
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "canary"), "must survive\n");
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.symlinkSync(outside, destination, "dir");
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 68)");
+      }
+    },
+  }), /pinned source stage is not disposable/);
+  assert.equal(provisionAttempts, 1);
+  assert.equal(fs.lstatSync(source).isSymbolicLink(), true);
+  assert.equal(fs.readFileSync(path.join(outside, "canary"), "utf8"), "must survive\n");
+});
+
+test("pinned toolchain provisioning does not retry another failure status", (t) => {
+  const work = testTmpdir(path.join(require("node:os").tmpdir(), "seal-provision-other-status-"));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  let provisionAttempts = 0;
+  assert.throws(() => buildPinnedKernel(TAG, work, {
+    clonePinnedSource(_pin, destination) {
+      fs.mkdirSync(destination, { recursive: true });
+    },
+    child(command, args) {
+      if (command === "bash" && args[0] === "wasm-spike/provision_toolchain.sh") {
+        provisionAttempts += 1;
+        throw new Error("provision pinned wasm toolchains failed (exit 1)");
+      }
+    },
+  }), /provision pinned wasm toolchains failed \(exit 1\)/);
+  assert.equal(provisionAttempts, 1);
+});
+
 test("rebuild-only entry point delegates to the owning pinned recipe and copies its output", (t) => {
-  const outputDirectory = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
+  const outputDirectory = testTmpdir(path.join(require("node:os").tmpdir(), "seal-rebuild-output-"));
   t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
   const output = path.join(outputDirectory, "rebuilt-seal.wasm");
   let observedTag;

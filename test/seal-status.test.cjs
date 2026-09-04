@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const CLI = path.join(__dirname, "../bin/seal");
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../runtime-manifest.json"), "utf8"));
@@ -46,17 +47,27 @@ function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
 
 function protectedStatusPrefix(statePath) {
   return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
-    `Protection: PENDING RESTART db.write (${statePath})\n` +
+    `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
+    "\n" +
+    "Gated through this route:\n" +
+    "  write\n" +
+    "\n" +
+    "Not controlled:\n" +
+    "  Bash and subprocesses outside this MCP route\n" +
+    "  direct resource access outside this MCP route\n" +
+    "  other clients\n" +
+    "  other MCP servers not routed through this Seal wrapper\n" +
+    "  other uncontrolled routes can also exist\n" +
     "Next:\n" +
     "  1. Restart Claude Code in this project.\n" +
     "  2. Run `seal status`.\n" +
-    "  3. Look for `Protection: ACTIVE`.\n" +
+    "  3. Confirm the sealed MCP route is ACTIVE.\n" +
     "Undo:\n" +
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
 
 test("status finds the shipped kernel runtime with an empty cache", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
@@ -64,7 +75,7 @@ test("status finds the shipped kernel runtime with an empty cache", () => {
 });
 
 test("status reports ACTIVE and STALE from observable lease facts", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-lease-states-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-lease-states-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const { statePathFor } = require("../spine/protection.cjs");
@@ -76,18 +87,20 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: liveLease });
   let result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: ACTIVE db\.write /m);
+  assert.match(result.out, /^Sealed MCP route db: ACTIVE /m);
+  assert.match(result.out, /^  write$/m);
+  assert.match(result.out, /^Not controlled:$/m);
   assert.match(result.out, /^Protection lease: pid \d+ generation 3$/m);
 
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: { pid: 999999, startWitness: "dead", generation: 4 } });
   result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: STALE db\.write /m);
+  assert.match(result.out, /^Sealed MCP route db: STALE /m);
 
 });
 
 test("status refuses an unsupported host before a null-witness lease liveness comparison", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-non-linux-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-non-linux-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const { statePathFor } = require("../spine/protection.cjs");
@@ -110,12 +123,12 @@ test("status refuses an unsupported host before a null-witness lease liveness co
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
   assert.match(result.out, /^REFUSE unsupported_platform: this is plan9-mips$/m);
-  assert.doesNotMatch(result.out, /^Protection: (?:ACTIVE|STALE) /m);
+  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:ACTIVE|STALE) /m);
   assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
 
 test("status reads the protected project's recorded receipt directory", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-project-receipts-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-project-receipts-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "recorded-project", "receipts");
@@ -136,7 +149,7 @@ test("status reads the protected project's recorded receipt directory", () => {
 });
 
 test("status says an existing empty receipt directory has no recorded decision", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-existing-empty-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-existing-empty-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "empty-receipts", "receipts");
@@ -157,7 +170,7 @@ test("status says an existing empty receipt directory has no recorded decision",
 });
 
 test("status names a missing receipt directory as no receipt yet", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-empty-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-empty-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "missing-receipts", "receipts");
@@ -176,7 +189,7 @@ test("status names a missing receipt directory as no receipt yet", () => {
 });
 
 test("status names an unreadable receipt directory and its permission action", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-unreadable-dir-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-unreadable-dir-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "unreadable-receipts", "receipts");
@@ -198,7 +211,7 @@ test("status names an unreadable receipt directory and its permission action", (
 });
 
 test("status names a receipt path that is not a directory as misconfigured", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-receipts-file-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-receipts-file-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "receipts-file", "receipts");
@@ -220,7 +233,7 @@ test("status names a receipt path that is not a directory as misconfigured", () 
 });
 
 test("status names receipt files when none can be parsed", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-no-parseable-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-no-parseable-"));
   const project = path.join(root, "project");
   const dataHome = path.join(root, ".local", "share");
   const receiptDir = path.join(dataHome, "seal", "projects", "unparseable-receipts", "receipts");
@@ -242,7 +255,7 @@ test("status names receipt files when none can be parsed", () => {
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-hash-mismatch-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-hash-mismatch-"));
   const staged = path.join(root, ".cache", "seal", "runtime", manifest.commit, "kernel", "wasm", "seal.js");
   fs.mkdirSync(path.dirname(staged), { recursive: true });
   fs.writeFileSync(staged, "one corrupt staged byte\n");
@@ -258,7 +271,7 @@ const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 // signing key is temporary. Status must therefore continue to report the
 // user's durable store as empty after a demo run.
 test("END TO END: seal demo leaves status's durable receipt store untouched", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-e2e-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-e2e-"));
   const demo = run(["demo"], root, "y\n");
   assert.equal(demo.code, 0, demo.out);
 
@@ -276,7 +289,7 @@ test("END TO END: seal demo leaves status's durable receipt store untouched", ()
 });
 
 test("status reports the kernel runtime as present when it is cached", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-status-runtime-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-runtime-"));
   // The helper's job here is only to POPULATE the assurance-kit runtime cache;
   // the kernel receipt it also writes is removed so this test asserts the
   // runtime line, not receipt reading (that is the demo-driven test above).

@@ -23,7 +23,17 @@ seal protect db db.drop_table
 ```
 
 ```output
-Protection: PENDING RESTART db.db.execute_sql
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  db.execute_sql
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 exit 0
 seal: REFUSE already_protected: project is already PENDING RESTART
 exit 1
@@ -50,7 +60,19 @@ seal status
 ```
 
 ```output
-Protection: PENDING RESTART db.{db.execute_sql, db.drop_table, db.read} (…/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  db.execute_sql
+  db.drop_table
+  db.read
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 exit 0
 ```
 
@@ -105,7 +127,17 @@ seal unprotect db
 ```
 
 ```output
-Protection: - outside Seal
+Sealed MCP route db: - outside Seal (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+
+Gated through this route:
+  none
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
 exit 0
 ```
 
@@ -190,3 +222,7 @@ with the omitted tool named when its state exposed only two guarded members.
 The protection state machine has no machine-checked model in the `seal-host` Lean kernel.
 The coverage verdict is based on the shipped CLI and product spine test paths;
 no external Claude Code acceptance claim is made here.
+
+Previous: [Receipt operations](receipt-operations.md).
+Up: [Reference](README.md).
+Next: [Receipt operations vector set v1](receipt-operations-v1/README.md).

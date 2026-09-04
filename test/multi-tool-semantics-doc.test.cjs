@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { spawnSync } = require("node:child_process");
 
 const ROOT = path.join(__dirname, "..");
@@ -13,13 +14,13 @@ const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
 const DECLARED_TOOLS = ["db.drop_table", "db.read", "db.health"];
 const {
   protectedToolNames,
-  protectionView, // CLAIM-COVERAGE: docs/reference/multi-tool-semantics.md
+  protectionView, // CLAIM-COVERAGE: docs/reference/multi-tool-semantics.md#multi-tool-semantics
   readState,
   statePathFor,
 } = require("../spine/protection.cjs");
 
 function setup(mode = "ok", source = DECLARED_TOOLS.join(",")) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-multi-tool-atomicity-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-multi-tool-atomicity-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const bin = path.join(root, "bin");
@@ -176,7 +177,7 @@ test("UNPROTECTED guards none of a former three-tool declaration and clears its 
 
   const unprotected = run(ctx, ["unprotect", "db"]);
   assert.equal(unprotected.code, 0, unprotected.out);
-  assert.match(unprotected.out, /^Protection: - outside Seal$/m);
+  assert.match(unprotected.out, /^Sealed MCP route db: - outside Seal /m);
   const stored = readState(statePath);
   assert.equal(stored.state, "UNPROTECTED");
   assert.equal(stored.lease, null);

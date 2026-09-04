@@ -16,7 +16,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { createHash } = require("node:crypto");
+const harness = require("../harness/claude-code/cc-harness.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
@@ -27,12 +29,99 @@ const UNTESTED_ROW = "UNTESTED — real Claude Code call not observed";
 
 let sharedPack = null;
 
+const INSTALLED_SEAL_DIGEST = { present: true, sha256: "a".repeat(64) };
+
+test("missing launcher refuses a direct fixture start with initialize and tools/list but no tools/call", () => {
+  const directStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    // This is the process chain from a direct .mcp.json launch. It has no
+    // Seal proxy entry. The later initialize and tools/list frames do not
+    // change the start record or make the launch mediated.
+    ancestry: [{ pid: 1, argv: ["/usr/bin/bash", "client"] }],
+  };
+  const hiddenByRoundTwo = [directStart].filter((record) => record.kind === "child-call");
+  assert.equal(hiddenByRoundTwo.length, 0, "the round-2 child-call-only filter hides this start");
+  assert.deepEqual(harness.nonProxyStarts([directStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [directStart]);
+});
+
+test("missing launcher refuses a start whose ancestry is absent", () => {
+  const unreadableStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+  };
+  assert.deepEqual(harness.nonProxyStarts([unreadableStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [unreadableStart]);
+});
+
+test("missing launcher accepts a harness probe start below the Seal proxy", () => {
+  const probeStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [
+      {
+        pid: 42,
+        argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"],
+        script: { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
+        argv_files: [{ path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 }],
+      },
+    ],
+  };
+  assert.deepEqual(harness.nonProxyStarts([probeStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), []);
+});
+
+test("missing launcher refuses a parent that only mentions the installed Seal script", () => {
+  const mentionOnlyStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{
+      pid: 42,
+      argv: [process.execPath, "other-parent.cjs", "__proxy", "--protect-state", "/state/protect.json", "bin/seal"],
+      script: { path: "other-parent.cjs", sha256: "b".repeat(64) },
+      argv_files: [
+        { path: "other-parent.cjs", sha256: "b".repeat(64) },
+        { path: "bin/seal", sha256: INSTALLED_SEAL_DIGEST.sha256 },
+      ],
+    }],
+  };
+  assert.deepEqual(harness.nonProxyStarts([mentionOnlyStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [mentionOnlyStart]);
+  assert.equal(harness.proxyEvidenceForStart(mentionOnlyStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest at the wrong position");
+});
+
+test("missing launcher refuses a lookalike parent that carries proxy words", () => {
+  const lookalikeStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{
+      pid: 42,
+      argv: [process.execPath, "lookalike-chain.cjs", "__proxy", "--protect-state", "/state/protect.json"],
+      script: { path: "lookalike-chain.cjs", sha256: "b".repeat(64) },
+      argv_files: [{ path: "lookalike-chain.cjs", sha256: "b".repeat(64) }],
+    }],
+  };
+  // The previous matcher accepted this record from its argv substrings.
+  assert.deepEqual(harness.nonProxyStarts([lookalikeStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [lookalikeStart]);
+  assert.equal(harness.proxyEvidenceForStart(lookalikeStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest mismatch");
+});
+
+test("missing launcher refuses a proxy-shaped ancestor whose digest is absent", () => {
+  const unreadableProxyStart = {
+    kind: "start",
+    argv: [process.execPath, "harness/claude-code/fixture-server.cjs"],
+    ancestry: [{ pid: 42, argv: [process.execPath, "bin/seal", "__proxy", "--protect-state", "/state/protect.json"], argv_files: [] }],
+  };
+  assert.deepEqual(harness.nonProxyStarts([unreadableProxyStart], "/state/protect.json", INSTALLED_SEAL_DIGEST), [unreadableProxyStart]);
+  assert.equal(harness.proxyEvidenceForStart(unreadableProxyStart, "/state/protect.json", INSTALLED_SEAL_DIGEST).reason, "digest absent");
+});
+
 // One synthetic run serves every test in this file: it installs the built
 // artifact, protects a fixture server, drives the whole eight-case walk with
 // the stand-in client and writes a pack.
 function pack() {
   if (sharedPack) return sharedPack;
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-evidence-"));
+  const workspace = testTmpdir(
+    path.join(os.tmpdir(), "seal-cc-evidence-"),
+    { keep: true },
+  );
   const runDir = path.join(workspace, "run");
   const built = spawnSync(process.execPath, [SYNTHETIC_RUN, "--run-dir", runDir], { encoding: "utf8" });
   assert.equal(built.status, 0, `synthetic run failed:\n${built.stdout}\n${built.stderr}`);
@@ -54,7 +143,7 @@ function pack() {
 // into another test's evidence.
 function copyOfPack() {
   const original = pack();
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-copy-"));
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-copy-"));
   fs.cpSync(original.evidence, path.join(workspace, "evidence"), { recursive: true });
   const relative = path.relative(original.evidence, original.dir);
   const dir = path.join(workspace, "evidence", relative);
@@ -292,7 +381,7 @@ test("a release pack without an operator-supplied client digest is refused by na
 
 test("PATH 2 refuses when the checker cannot read its local stand-in and fixture inputs", () => {
   const promoted = promotedSyntheticPack();
-  const emptyTree = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-tree-"));
+  const emptyTree = testTmpdir(path.join(os.tmpdir(), "seal-cc-empty-tree-"));
   const result = check([
     promoted.dir, "--release", "--artifact-sha256", pack().artifact,
     "--client-executable-sha256", promoted.manifest().client.executable_sha256,
@@ -350,7 +439,7 @@ test("the checker refuses a pack filed under a path that contradicts its manifes
 });
 
 test("a release refuses evidence counted by a fixture this tree no longer ships", () => {
-  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-fixture-drift-"));
+  const elsewhere = testTmpdir(path.join(os.tmpdir(), "seal-cc-fixture-drift-"));
   const fixture = path.join(elsewhere, "harness", "claude-code");
   fs.mkdirSync(fixture, { recursive: true });
   fs.writeFileSync(path.join(fixture, "fixture-server.cjs"), "// a different instrument\n");
@@ -360,7 +449,7 @@ test("a release refuses evidence counted by a fixture this tree no longer ships"
 });
 
 test("a release with no evidence pack reports the untested state instead of passing", () => {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-empty-"));
+  const empty = testTmpdir(path.join(os.tmpdir(), "seal-cc-empty-"));
   const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Claude Code integration: UNTESTED — real Claude Code call not observed$/m, result.out);
@@ -412,7 +501,7 @@ test("the anti-forgery limit is present in both docs and checker output", () => 
   assert.match(document, /instrument against mistakes, not against forgery/);
   assert.match(document, /That row is the honest claim;\s+the\s+checker's exit code is not/);
 
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "seal-cc-honesty-"));
+  const empty = testTmpdir(path.join(os.tmpdir(), "seal-cc-honesty-"));
   const result = check([path.join(empty, "claude-code"), "--release", "--artifact-sha256", "a".repeat(64)]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^LIMIT: this checker establishes internal consistency, readable inputs, and resistance to casual relabelling; it does not establish that a real Claude Code process produced the pack\. A determined author with local file access can produce a passing pack\. It is an instrument against mistakes, not against forgery\.$/m, result.out);

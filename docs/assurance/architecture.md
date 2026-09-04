@@ -129,3 +129,7 @@ flowchart LR
 Claim-status per box: [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
 Fleet links are public and resolve for everyone; `witness-check` remains proprietary.
+
+Previous: [Evaluator truth surface](evaluator-start.md).
+Up: [Assurance](README.md).
+Next: [Distribution](distribution.md).

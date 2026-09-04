@@ -4,12 +4,13 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 
 function copyTree() {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-clock-mutant-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-clock-mutant-"));
   fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") });
   return out;
 }

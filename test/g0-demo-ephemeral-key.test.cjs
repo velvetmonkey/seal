@@ -4,11 +4,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
 function copyTree() {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-demo-mutant-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-demo-mutant-"));
   fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") });
   return out;
 }
@@ -30,7 +31,7 @@ function assertSignerIdentity(root, dir) {
 }
 
 function probe(root) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-demo-probe-"));
+  const work = testTmpdir(path.join(os.tmpdir(), "seal-g0-demo-probe-"));
   const keys = [];
   for (const name of ["one", "two"]) {
     const dir = path.join(work, name);

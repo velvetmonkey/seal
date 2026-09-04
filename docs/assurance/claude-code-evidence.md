@@ -66,6 +66,10 @@ elicitation, or declines to fall back.
 - One frozen Seal artifact, identified by SHA-256, byte length **and** the
   installed-tree digest the installer records.
 - One exact Claude Code version, plus the SHA-256 of the client executable.
+  The harness uses the explicit `--client` path when the human gives one.
+  Otherwise it resolves every executable `claude` entry on `PATH`.
+  It continues only when those entries resolve to one real path.
+  It refuses ambiguous client paths and lists each path and SHA-256.
 - Linux x86-64.
 - A clean temporary `HOME`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME` and project.
 - `seal doctor` reporting no elicitation auto-response hook; with one
@@ -118,8 +122,8 @@ How each one is established from files rather than from the operator's memory:
 - **unprotect** — the override entry is gone from `~/.claude.json` and from
   `claude mcp get`, and `.mcp.json` matches the digest **and** byte length
   recorded before `seal protect` ran. `seal unprotect notes` must also exit
-  zero and report `Protection: - outside Seal`; a pre-existing absent override
-  is not evidence that this act occurred.
+  zero and report that the sealed MCP route is outside Seal. A pre-existing
+  absent override is not evidence that this act occurred.
 
 ## Running the acceptance walk
 
@@ -259,3 +263,6 @@ directory, and
 appears in this repository at all. Committing a real pack is the deliberate act
 of the person who performed the run, in a commit that changes that test and
 this page's status row together.
+
+Previous: [Version identity](version-identity.md).
+Up: [Assurance](README.md).

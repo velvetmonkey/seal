@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
@@ -91,7 +92,7 @@ function guidanceCommands(text) {
 }
 
 test("printed Next and Undo seal commands resolve to public CLI commands", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-next-steps-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-next-steps-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -133,7 +134,7 @@ test("printed Next and Undo seal commands resolve to public CLI commands", () =>
 });
 
 test("Undo states unprotect clears every guarded tool on the server", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-next-steps-scope-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-next-steps-scope-"));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -150,7 +151,9 @@ test("Undo states unprotect clears every guarded tool on the server", () => {
   });
 
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Protection: PENDING RESTART db\.\{demo\.mutate, demo\.read\}$/m);
+  assert.match(result.out, /^Sealed MCP route db: PENDING RESTART /m);
+  assert.match(result.out, /^  demo\.mutate$/m);
+  assert.match(result.out, /^  demo\.read$/m);
   assert.match(
     result.out,
     /^  To clear protection for every guarded tool on server db, including guarded tools: demo\.mutate, demo\.read, stop Claude Code, then run `seal unprotect db`\.$/m,

@@ -3,6 +3,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const {
   STATES,
@@ -57,7 +58,7 @@ function withSimulatedDarwin(fn) {
 
 function workspace(prefix) {
   fs.mkdirSync(SCRATCH, { recursive: true, mode: 0o700 });
-  const root = fs.mkdtempSync(path.join(SCRATCH, `${prefix}-`));
+  const root = testTmpdir(path.join(SCRATCH, `${prefix}-`));
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const dataHome = path.join(root, "data");
@@ -244,7 +245,7 @@ test("journal lock refuses when a live owner has no process-start witness", () =
     assert.throws(
       () => openJournal(journalPath).withLock(() => assert.fail("journal lock must refuse before its callback")),
       (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+        /cannot establish process-start witness for approval-journal-lock owner pid \d+; fix the local process-start witness source and retry/.test(error.message),
     );
   });
 });
@@ -258,7 +259,7 @@ test("journal lock refuses its first acquire when its witness is unavailable", (
     assert.throws(
       () => openJournal(journalPath).withLock(() => { callbackRan = true; }),
       (error) => error.code === "process_witness_unavailable" &&
-        /cannot establish process-start witness/.test(error.message),
+        /cannot establish process-start witness for approval-journal-lock owner pid \d+; fix the local process-start witness source and retry/.test(error.message),
     );
     assert.equal(callbackRan, false, "journal callback must not run after a null-witness refusal");
     assert.equal(fs.existsSync(`${journalPath}.lock`), false, "refusal must not write a null-witness lock");

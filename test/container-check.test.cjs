@@ -5,12 +5,13 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const CHECK = join(ROOT, "scripts", "container-check.mjs");
 
 function run(readme, env = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "seal-container-check-test-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-container-check-test-"));
   const path = join(dir, "README.md");
   writeFileSync(path, readme);
   const result = spawnSync(process.execPath, [CHECK], {
@@ -43,7 +44,7 @@ test("a command failure names the command, exit code, and first error line", () 
 });
 
 test("a protect section without its server setup refuses before executing fences", () => {
-  const result = run("## Protect something real\n```bash\nprintf 'not reached\\n'\n```\n```bash\nseal protect db demo.mutate\n```\n```output\nProtection: PENDING RESTART db.demo.mutate\n```\n```bash\nseal status\n```\n## Remove it\n", { CONTAINERWALK_REQUIRE_PROTECT: "1" });
+  const result = run("## Protect something real\n```bash\nprintf 'not reached\\n'\n```\n```bash\nseal protect db demo.mutate\n```\n```output\nSealed MCP route db: PENDING RESTART (/tmp/state.json)\n\nGated through this route:\n  demo.mutate\n\nNot controlled:\n  Bash and subprocesses outside this MCP route\n  other uncontrolled routes can also exist\n```\n```bash\nseal status\n```\n## Remove it\n", { CONTAINERWALK_REQUIRE_PROTECT: "1" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /has no \.mcp\.json server setup command/);
 });
@@ -51,7 +52,7 @@ test("a protect section without its server setup refuses before executing fences
 test("a protect section without a shown pending-restart result refuses", () => {
   const result = run("## Protect something real\n```bash\nprintf '%s\\n' '{\"mcpServers\":{}}' > .mcp.json\n```\n```bash\nseal protect db demo.mutate\n```\n```bash\nseal status\n```\n## Remove it\n", { CONTAINERWALK_REQUIRE_PROTECT: "1" });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /must be followed by output showing Protection: PENDING RESTART/);
+  assert.match(result.stderr, /must be followed by output showing Sealed MCP route PENDING RESTART with its boundary/);
 });
 
 test("an output path from the builder is not normalized away", () => {

@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { productIdentity, artifactName } = require("../scripts/product-identity.cjs");
 
@@ -95,7 +96,7 @@ function staleVersionMatches(root, version) {
 }
 
 function makeScopedScratch() {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-scope-"));
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-version-scope-"));
   fs.mkdirSync(path.join(scratch, "docs", "archive"), { recursive: true });
   fs.mkdirSync(path.join(scratch, "docs", "guide"), { recursive: true });
   fs.mkdirSync(path.join(scratch, "docs", "start"), { recursive: true });
@@ -134,7 +135,7 @@ test("every emitted release identity derives from VERSION", () => {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`\\bv${VERSION}\\b`), `${file} must carry bare v${VERSION}`);
   }
 
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-version-identity-"));
+  const out = testTmpdir(path.join(os.tmpdir(), "seal-version-identity-"));
   const build = run(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", out]);
   assert.equal(build.code, 0, build.stderr);
   const artifact = path.join(out, builtName);
@@ -180,7 +181,7 @@ test("every emitted release identity derives from VERSION", () => {
 
 test("sync leaves no old product version in human-maintained reader-facing prose", () => {
   const oldVersion = VERSION;
-  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-stale-"));
+  const scratch = testTmpdir(path.join(scratchRoot(), "seal-version-stale-"));
   fs.cpSync(ROOT, scratch, {
     recursive: true,
     filter(source) {
@@ -250,7 +251,7 @@ test("sync leaves no old product version in human-maintained reader-facing prose
 });
 
 test("sync refuses when the current VERSION release note is absent", () => {
-  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-notes-"));
+  const scratch = testTmpdir(path.join(scratchRoot(), "seal-version-notes-"));
   fs.cpSync(ROOT, scratch, {
     recursive: true,
     filter(source) {
@@ -269,7 +270,7 @@ test("sync refuses when the current VERSION release note is absent", () => {
 });
 
 test("sync recomputes the reviewed-guide digest when its input moves", () => {
-  const scratch = fs.mkdtempSync(path.join(scratchRoot(), "seal-version-guide-digest-"));
+  const scratch = testTmpdir(path.join(scratchRoot(), "seal-version-guide-digest-"));
   fs.cpSync(ROOT, scratch, {
     recursive: true,
     filter(source) {
@@ -286,13 +287,30 @@ test("sync recomputes the reviewed-guide digest when its input moves", () => {
   assert.equal(sync.code, 0, sync.stderr);
   const testSource = fs.readFileSync(path.join(scratch, "test", "guide-tokens.test.mjs"), "utf8");
   const generatedSlot = new RegExp(
-    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\. macOS source portability is CI-exercised for install, demo and receipt checking\\.$)`,
+    `(?<=^Printed by the installer, the installed launcher, and the demo alike for Seal\\n)v${VERSION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\.)`,
     "gm",
   );
+  const canonical = fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>");
   const expected = crypto.createHash("sha256")
-    .update(fs.readFileSync(guide, "utf8").replace(generatedSlot, "v<generated-version>"))
+    .update(canonical)
     .digest("hex");
   assert.match(testSource, new RegExp(`const GUIDE_SHA256 = "${expected}";`));
+});
+
+test("reviewed-guide canonicalizers disclose the only unpinned canonicalized slot", () => {
+  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one anchored release-version slot. This canonicalizer maps only that slot to a stable marker before hashing. GUIDE_SHA256 does not cover the generated version slot. The pin covers every other byte in the guide.";
+  const expectedCopies = new Map([["scripts/sync-version.cjs", 2], ["test/guide-tokens.test.mjs", 1]]);
+  const missing = [...expectedCopies].filter(([file, expected]) => {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){3}/gu)]
+      .map((match) => match[0].replace(/^\/\/ ?/gmu, "").replace(/\s+/gu, " ").trim());
+    return comments.length !== expected || comments.some((comment) => comment !== requiredComment);
+  }).map(([file]) => file);
+  assert.deepEqual(
+    missing,
+    [],
+    `reviewed-guide canonicalizer comments must name the only generated release-version slot, state that the pin does not cover it, and state that the pin covers every other guide byte; missing: ${missing.join(", ")}`,
+  );
 });
 
 test("stale-version scope preserves a historical release-note filename in a live document", () => {

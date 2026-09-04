@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const CHECK = path.join(ROOT, "scripts", "check-root-release-pin.cjs");
@@ -21,14 +22,14 @@ function run(pin) {
 }
 
 test("an absent root pin passes between releases", () => {
-  const absent = fs.mkdtempSync(path.join(os.tmpdir(), "seal-root-pin-"));
+  const absent = testTmpdir(path.join(os.tmpdir(), "seal-root-pin-"));
   const result = run(path.join(absent, "SHA256SUMS"));
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS root release pin absent:/);
 });
 
 test("an empty root pin passes between releases", () => {
-  const empty = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "seal-root-pin-")), "SHA256SUMS");
+  const empty = path.join(testTmpdir(path.join(os.tmpdir(), "seal-root-pin-")), "SHA256SUMS");
   fs.writeFileSync(empty, "\n");
   const result = run(empty);
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -36,7 +37,7 @@ test("an empty root pin passes between releases", () => {
 });
 
 test("an unreadable root pin refuses by name", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seal-root-pin-"));
+  const directory = testTmpdir(path.join(os.tmpdir(), "seal-root-pin-"));
   const result = run(directory);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /^REFUSE root_release_pin: cannot read .*SHA256SUMS|^REFUSE root_release_pin: cannot read /);
@@ -105,7 +106,7 @@ test("README published installer consumes the downloaded release pin", async (t)
   }
   const [digest, bytes, name] = sums.toString("utf8").trim().split(/\s+/);
   assert.equal(name, path.basename(command.artifact));
-  const tempRoot = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), "seal-readme-install-"));
+  const tempRoot = testTmpdir(path.join(process.env.RUNNER_TEMP || os.tmpdir(), "seal-readme-install-"));
   const installed = runInstaller(artifactBytes, digest, bytes, command, tempRoot);
   assert.equal(installed.status, 0, `${installed.stdout || ""}${installed.stderr || ""}`);
   assert.match(installed.stdout, new RegExp(`^installed seal ${command.tag.slice(1)} linux-x64$`, "m"));

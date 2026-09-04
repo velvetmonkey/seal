@@ -27,6 +27,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
@@ -115,7 +116,7 @@ function assertNoForbiddenTool(command, args) {
 }
 
 test("four beats from the installed artifact: install, demo, check, protect, unprotect", async () => {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-four-beats-"));
+  const work = testTmpdir(path.join(os.tmpdir(), "seal-four-beats-"));
   const distDir = path.join(work, "dist");
   const prefix = path.join(work, "prefix");
   const demoDir = path.join(work, "demo");

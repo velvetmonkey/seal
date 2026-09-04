@@ -20,7 +20,7 @@
 // checkable by `scripts/check-cc-evidence.mjs`.
 //
 // Usage:
-//   cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR
+//   cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR [--client PATH]
 //   cc-harness plan
 //   cc-harness show                 show the current step without running it
 //   cc-harness next                 attempt the current step
@@ -43,6 +43,8 @@ const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE — NOT A REAL CLAUDE CODE RUN";
 const MIN_COLUMNS = 80;
 const CURRENT_STEP_FILE = "CURRENT-STEP.txt";
+const ENTER_RETRY_WAIT_MS = 25;
+const ENTER_RETRY_SIGNAL = new Int32Array(new SharedArrayBuffer(4));
 
 // The three note values the human is instructed to use. They are fixed so the
 // expected effect digest can be computed before the run, and so the declined
@@ -56,11 +58,11 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the complete exact-call dialog" },
+  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call" },
   { id: "before_approval", required: "Child call count remains 0" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0" },
-  { id: "missing_launcher", required: "Claude Code does not fall back to the original .mcp.json server" },
+  { id: "missing_launcher", required: "While the launcher is absent, each protected-server start records the installed Seal proxy script digest, no child-call record is added, .mcp.json is unchanged, and the installed tree is restored" },
   { id: "unprotect", required: "The local override disappears and .mcp.json remains byte-identical" },
 ]);
 
@@ -391,7 +393,13 @@ function waitForEnter(state) {
   for (;;) {
     let count;
     try { count = fs.readSync(0, byte, 0, 1, null); }
-    catch (error) { refuse("operator_enter_unreadable", `the harness could not read ENTER: ${error.message}`); }
+    catch (error) {
+      if (error.code === "EAGAIN" || error.code === "EWOULDBLOCK") {
+        Atomics.wait(ENTER_RETRY_SIGNAL, 0, 0, ENTER_RETRY_WAIT_MS);
+        continue;
+      }
+      refuse("operator_enter_unreadable", `the harness could not read ENTER: ${error.message}`);
+    }
     if (count === 0) refuse("operator_enter_absent", "stdin closed before the human pressed ENTER; the client was not launched");
     if (byte[0] === 0x0a || byte[0] === 0x0d) return;
   }
@@ -453,10 +461,59 @@ function newReceipts(begin, end) {
   return end.receipts.filter((receipt) => !seen.has(receipt.name));
 }
 
-function argvIsSealProxy(argv, protectStatePath) {
+function argvHasSealProxyShape(argv, protectStatePath) {
   if (!Array.isArray(argv)) return false;
-  const joined = argv.join(" ");
-  return joined.includes("__proxy") && joined.includes("--protect-state") && joined.includes(protectStatePath);
+  // Exact argv words stop one argument from impersonating several proxy flags.
+  return argv.includes("__proxy") && argv.includes("--protect-state") && argv.includes(protectStatePath);
+}
+
+function installedSealProxyDigest(store) {
+  // The installed tree is the pin that the harness runs. Do not use a source
+  // checkout path here. A repin changes this digest without changing code.
+  return digestOf(path.join(store, "bin", "seal"));
+}
+
+function proxyEvidenceForStart(record, protectStatePath, expectedDigest) {
+  const ancestors = Array.isArray(record.ancestry) ? record.ancestry : [];
+  const candidates = ancestors.filter((step) => argvHasSealProxyShape(step?.argv, protectStatePath));
+  if (candidates.length === 0) return { mediated: false, reason: "no proxy ancestor" };
+
+  // Refuse a proxy-shaped ancestor with an absent or unreadable digest. Silence
+  // cannot establish Seal mediation. Only the installed bin/seal SHA256 counts.
+  if (!expectedDigest?.present || !expectedDigest.sha256) {
+    return { mediated: false, reason: "digest absent" };
+  }
+  let hasDigest = false;
+  let hasWrongPositionDigest = false;
+  for (const step of candidates) {
+    // ASSUMED BOUNDARY — This step tests NO FALLBACK OCCURRED UNDER A
+    // CARELESS CLIENT. It does NOT prove NO FALLBACK OCCURRED under a HOSTILE
+    // PARENT. The ancestry record is self-reported from /proc. Nothing
+    // authenticates it. Tightening this match further cannot close this limit
+    // because this class of evidence is self-reported. This is an assumed
+    // boundary, not a proven property.
+    //
+    // Node executes its script at argv[1]. Bind the installed Seal digest to
+    // that position. A matching digest in every other argv word is only an
+    // argument mention and cannot establish mediation.
+    const script = step?.script;
+    if (typeof script?.sha256 === "string" && script.sha256.length > 0) {
+      hasDigest = true;
+      if (script.sha256 === expectedDigest.sha256) return { mediated: true, reason: null };
+    }
+    for (const identity of Array.isArray(step.argv_files) ? step.argv_files : []) {
+      if (typeof identity?.sha256 === "string" && identity.sha256 === expectedDigest.sha256) {
+        hasWrongPositionDigest = true;
+      }
+    }
+  }
+  if (hasWrongPositionDigest) return { mediated: false, reason: "digest at the wrong position" };
+  return { mediated: false, reason: hasDigest ? "digest mismatch" : "digest absent" };
+}
+
+function nonProxyStarts(records, protectStatePath, expectedDigest) {
+  return records.filter((record) => record.kind === "start" &&
+    !proxyEvidenceForStart(record, protectStatePath, expectedDigest).mediated);
 }
 
 function argvIsClient(argv, clientExecutable) {
@@ -467,13 +524,14 @@ function argvIsClient(argv, clientExecutable) {
 function observeActivation(state, begin, end) {
   const starts = newRecords(begin, end).filter((record) => record.kind === "start");
   const leasePid = end.protection_state.lease?.pid ?? null;
-  const mediated = starts.filter((record) => (record.ancestry || []).some((step) => argvIsSealProxy(step.argv, state.paths.protectState)));
+  const proxyDigest = installedSealProxyDigest(state.paths.store);
+  const mediated = starts.filter((record) => proxyEvidenceForStart(record, state.paths.protectState, proxyDigest).mediated);
   const leaseMatched = mediated.filter((record) => (record.ancestry || [])
-    .some((step) => argvIsSealProxy(step.argv, state.paths.protectState) && step.pid === leasePid));
+    .some((step) => argvHasSealProxyShape(step.argv, state.paths.protectState) && step.pid === leasePid));
   const clientAbove = mediated.filter((record) => (record.ancestry || []).some((step) => argvIsClient(step.argv, state.claude.executable)));
-  const direct = starts.filter((record) => !(record.ancestry || []).some((step) => argvIsSealProxy(step.argv, state.paths.protectState)));
+  const direct = starts.filter((record) => !proxyEvidenceForStart(record, state.paths.protectState, proxyDigest).mediated);
   const localScopeSelected = /^ {2}Scope: Local config \(private to you in this project\)$/m.test(end.claude_mcp_get.stdout || "");
-  const localEntryIsProxy = argvIsSealProxy([
+  const localEntryIsProxy = argvHasSealProxyShape([
     end.local_override.entry?.command,
     ...(Array.isArray(end.local_override.entry?.args) ? end.local_override.entry.args : []),
   ], state.paths.protectState);
@@ -517,18 +575,33 @@ function observeNegotiation(state, begin, end) {
 }
 
 // The dialog Seal asks the client to render is computed from the PINNED
-// artifact's own renderer, not from this checkout, and then looked for in the
-// terminal recording. A line the recording does not carry is reported absent
-// rather than assumed present.
+// artifact's own renderer and contract, not from this checkout, and then
+// looked for in the terminal recording. Claude Code shows the first three
+// message lines before its fold and shows the schema-carried title and
+// description after the fold. A line the recording does not carry is reported
+// absent rather than assumed present.
 function expectedDialogLines(state, note) {
   const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
   const { renderApprovalMessage } = require(rendererPath);
   const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
   if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
-  return rendered.lines;
+  const contractPath = path.join(state.paths.store, "contract", "contract.cjs");
+  const { createApprovalContract } = require(contractPath);
+  const contract = createApprovalContract({
+    terminalWidth: MIN_COLUMNS,
+    ttlMs: 120000,
+    kernelAdapter: { authorize() { throw new Error("dialog rendering does not authorize"); } },
+  });
+  const begun = contract.begin({ tool: GUARDED_TOOL, args: { note } });
+  if (begun.kind !== "input_required") refuse("dialog_unrenderable", `the pinned artifact refuses to create this approval: ${begun.refusal || begun.kind}`);
+  const approve = begun.elicitationParams?.requestedSchema?.properties?.approve;
+  if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
+    refuse("dialog_unrenderable", "the pinned artifact approval schema has no title or description");
+  }
+  return [...rendered.lines.slice(1, 3), approve.title, approve.description];
 }
 
-function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) {
+function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, requireElicitation = true) {
   const lines = expectedDialogLines(state, note);
   let text = "";
   let readError = null;
@@ -542,15 +615,29 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept) 
   const haystack = text.replace(/[\u2500-\u257F|\u00A0]/g, " ").replace(/\s+/g, " ");
   const found = lines.map((line) => ({ line, found: haystack.includes(line.trim().replace(/\s+/g, " ")) }));
   const anchor = haystack.indexOf("Approval required");
+  const receipts = newReceipts(begin, end);
+  const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
+    receipt.tool === GUARDED_TOOL && receipt.arguments?.note === note);
+  const answeredReceiptPairs = offers.flatMap((offer) => receipts
+    .filter((receipt) => receipt.name > offer.name && receipt.decision === "ALLOW" &&
+      receipt.tool === GUARDED_TOOL && receipt.arguments?.note === note)
+    .map((receipt) => ({ offer: offer.name, answer: receipt.name, answer_decision: receipt.decision })));
+  const childCalls = newRecords(begin, end).filter((record) => record.kind === "child-call");
+  const exactChildCalls = childCalls.filter((record) => record.tool === GUARDED_TOOL && record.arguments?.note === note);
   return {
-    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found),
+    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found) &&
+      (!requireElicitation || (answeredReceiptPairs.length > 0 && childCalls.length === 1 && exactChildCalls.length === 1)),
     facts: {
       recording: path.basename(castPath),
       recording_digest: recordingDigest,
       recording_read_error: readError,
       recorder_correspondence: correspondence,
       expected_dialog_lines: found,
-      dialog_rendered_by: "contract/renderer.cjs, read out of the installed pinned artifact",
+      exact_call_elicitation_receipt_pairs: answeredReceiptPairs,
+      child_call_records_added: childCalls.length,
+      exact_call_child_records_added: exactChildCalls.length,
+      receipts: receipts.map((receipt) => ({ name: receipt.name, decision: receipt.decision, refusal: receipt.refusal })),
+      dialog_rendered_by: "contract/renderer.cjs and contract/contract.cjs, read out of the installed pinned artifact",
       screen_text_characters: haystack.length,
       // Enough of the screen to see WHY a line was not matched, when one was not.
       screen_excerpt: found.every((entry) => entry.found)
@@ -605,7 +692,7 @@ function observeDecline(state, begin, end) {
       receipt.decision === "BLOCK" &&
       receipt.tool === GUARDED_TOOL && receipt.arguments?.note === NOTES.decline)
     .map((receipt) => ({ offer: offer.name, decline: receipt.name })));
-  const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline);
+  const dialog = observeApprovalShown(state, begin, end, path.join(state.paths.logs, "decline.cast"), NOTES.decline, false);
   return {
     observed: declinedPairs.length > 0 && dialog.observed && added.length === 0 &&
       end.child_log.guarded_calls === begin.child_log.guarded_calls && !declinedNoteInEffect,
@@ -623,20 +710,35 @@ function observeDecline(state, begin, end) {
 
 function observeMissingLauncher(state, begin, end) {
   const records = newRecords(begin, end);
+  const childCalls = records.filter((record) => record.kind === "child-call");
+  const lifecycleRecords = records.filter((record) => record.kind !== "child-call");
+  const proxyDigest = installedSealProxyDigest(state.paths.store);
+  const fallbackStarts = nonProxyStarts(records, state.paths.protectState, proxyDigest);
   const window = state.steps.missing_launcher || {};
   const castPath = path.join(state.paths.logs, "missing_launcher.cast");
   const correspondence = recordingCorrespondence(state, "missing_launcher", castPath);
-  let transcript = "";
-  try { transcript = castScreenText(castPath); } catch { /* correspondence names unreadable evidence */ }
-  const namedMissingLauncher = transcript.includes("local override command is missing:");
-  const namedNoFallback = transcript.includes(`does not fall back to the .mcp.json \"${SERVER_NAME}\" server`);
+  // NON-CLAIM — NO FALLBACK OCCURRED means this instrumented run added no
+  // protected-server record while the launcher was absent. It does not prove
+  // that the human saw a failure report. A real client emits model prose that
+  // differs on every run. The old required strings came only from our stand-in.
   return {
-    observed: records.length === 0 && begin.mcp_json.sha256 === end.mcp_json.sha256 &&
+    observed: childCalls.length === 0 && fallbackStarts.length === 0 &&
+      begin.mcp_json.sha256 === end.mcp_json.sha256 &&
       window.launcher_absent_during_window === true && window.installed_tree_restored === true &&
-      correspondence.observed && namedMissingLauncher && namedNoFallback,
+      correspondence.observed,
     facts: {
-      protected_server_records_added: records.length,
+      protected_server_records_added: childCalls.length,
+      child_call_records_added: childCalls.length,
+      non_proxy_start_records_added: fallbackStarts.length,
+      lifecycle_records_added: lifecycleRecords.length,
+      records_added_total: records.length,
       records_added: records.map((record) => ({ kind: record.kind, argv: record.argv ?? null })),
+      offending_child_call_records: childCalls,
+      offending_non_proxy_start_records: fallbackStarts.map((record) => ({
+        argv: record.argv ?? null,
+        ancestry: Array.isArray(record.ancestry) ? record.ancestry : null,
+        proxy_rejection: proxyEvidenceForStart(record, state.paths.protectState, proxyDigest).reason,
+      })),
       launcher_path: window.launcher_path ?? null,
       launcher_absent_during_window: window.launcher_absent_during_window ?? null,
       seal_version_while_absent: window.seal_version_while_absent ?? null,
@@ -645,8 +747,6 @@ function observeMissingLauncher(state, begin, end) {
       mcp_json_sha256_before: begin.mcp_json.sha256,
       mcp_json_sha256_after: end.mcp_json.sha256,
       recorder_correspondence: correspondence,
-      transcript_names_missing_launcher: namedMissingLauncher,
-      transcript_names_no_fallback: namedNoFallback,
     },
   };
 }
@@ -655,7 +755,7 @@ function observeUnprotect(state, begin, end) {
   const original = state.project.mcp_json_before_protect;
   const window = state.steps.unprotect || {};
   return {
-    observed: window.code === 0 && /Protection: - outside Seal/m.test(window.output || "") &&
+    observed: window.code === 0 && /Sealed MCP route(?::| [^:]+:) - outside Seal/m.test(window.output || "") &&
       end.local_override.entry === null &&
       end.mcp_json.sha256 === original.sha256 && end.mcp_json.bytes === original.bytes &&
       !/^ {2}Scope: Local config /m.test(end.claude_mcp_get.stdout),
@@ -843,13 +943,86 @@ function gitRevision(root) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
-function clientIdentity(env) {
-  const which = spawnSync("sh", ["-c", "command -v claude"], { encoding: "utf8", env });
-  if (which.status !== 0 || !which.stdout.trim()) {
-    refuse("client_absent", "no `claude` command is on PATH; the acceptance run needs the real client");
+function clientExecutableFormat(executable) {
+  const header = Buffer.alloc(20);
+  let descriptor;
+  let count = 0;
+  try {
+    descriptor = fs.openSync(executable, "r");
+    count = fs.readSync(descriptor, header, 0, header.length, 0);
+  } catch (error) {
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes <unreadable: ${error.code || error.message}>; expected 20 readable header bytes`);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
   }
-  const executable = fs.realpathSync(which.stdout.trim());
+  const observed = Array.from(header.subarray(0, count), (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ") || "<empty>";
+  if (count < header.length) {
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected 20 readable header bytes`);
+  }
+  const isElf = count >= 20 && header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+  const is64Bit = header[4] === 0x02;
+  const isX64 = header.readUInt16LE(18) === 0x3e;
+  if (!isElf || !is64Bit || !isX64) {
+    refuse("client_not_linux_x64", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected ELF magic 7F 45 4C 46, EI_CLASS 02, and little-endian e_machine 3E 00`);
+  }
+  return "elf64-x86-64";
+}
+
+function clientCandidates(env) {
+  const candidates = new Map();
+  for (const directory of String(env.PATH || "").split(path.delimiter)) {
+    const command = path.resolve(directory || ".", "claude");
+    try {
+      fs.accessSync(command, fs.constants.X_OK);
+      const executable = fs.realpathSync(command);
+      if (!candidates.has(executable)) candidates.set(executable, { executable, ...digestOf(executable) });
+    } catch {
+      // A PATH entry without an executable claude is not a client candidate.
+    }
+  }
+  return [...candidates.values()].sort((left, right) => left.executable.localeCompare(right.executable));
+}
+
+function candidateDescription(candidate) {
+  const digest = candidate.present ? candidate.sha256 : `<unreadable: ${candidate.reason}>`;
+  return `  ${candidate.executable} sha256 ${digest}`;
+}
+
+function clientIdentity(env, explicitClient) {
+  let executable;
+  let selectionMethod;
+  let candidates;
+  if (explicitClient) {
+    try {
+      executable = fs.realpathSync(explicitClient);
+    } catch (error) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(explicitClient)} cannot be resolved: ${error.code || "<unknown>"}`);
+    }
+    selectionMethod = "explicit";
+  } else {
+    candidates = clientCandidates(env);
+    if (candidates.length === 0) {
+      // Keep these bytes stable. Operators and tests depend on this refusal.
+      refuse("client_absent", "no `claude` command is on PATH; the acceptance run needs the real client");
+    }
+    if (candidates.length > 1) {
+      refuse("client_ambiguous", `more than one executable \`claude\` command is on PATH:\n${candidates.map(candidateDescription).join("\n")}\nPass --client PATH to select one client.`);
+    }
+    executable = candidates[0].executable;
+    selectionMethod = "auto";
+  }
+  const executableFormat = clientExecutableFormat(executable);
+  const digest = digestOf(executable);
+  if (!digest.present || digest.bytes === 0) {
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} cannot supply readable bytes for its sha256: ${digest.reason || "<empty>"}`);
+  }
   const version = spawnSync(executable, ["--version"], { encoding: "utf8", env });
+  if (version.error) {
+    const cause = version.error.code
+      ? `error code ${JSON.stringify(version.error.code)}`
+      : `error ${JSON.stringify(version.error.message || "<unknown>")}`;
+    refuse("client_unreadable", `client executable ${JSON.stringify(executable)} could not be executed: ${cause}`);
+  }
   if (version.status !== 0) refuse("client_version_unavailable", `\`claude --version\` exited ${version.status}`);
   const output = version.stdout.trim();
   const match = /^(\d+\.\d+\.\d+[^\s(]*)/.exec(output);
@@ -860,13 +1033,17 @@ function clientIdentity(env) {
     version_output: output,
     command: executable,
     executable,
-    ...digestOf(executable),
+    executable_format: executableFormat,
+    selection_method: selectionMethod,
+    ...(candidates ? { candidates } : {}),
+    ...digest,
   };
 }
 
 function init(argv) {
   requireLinuxX64();
-  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client-command", "synthetic-client", "stub-bin"]);
+  const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client", "client-command", "synthetic-client", "stub-bin"]);
+  if (options.client === true) refuse("usage", "cc-harness init needs a path after --client");
   for (const required of ["artifact", "sha256", "bytes", "run-dir"]) {
     if (!options[required]) refuse("usage", `cc-harness init needs --${required}`);
   }
@@ -940,16 +1117,29 @@ function init(argv) {
   if (state.synthetic && !options["client-command"]) {
     refuse("synthetic_without_stand_in_client", "--synthetic-client needs the --client-command stand-in it stands in for");
   }
-  state.claude = options["client-command"]
-    ? {
+  if (options["client-command"]) {
+    const typed = options["client-command"];
+    let executable;
+    try {
+      executable = fs.realpathSync(typed);
+    } catch (error) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(typed)} cannot be resolved: ${error.code || "<unknown>"}`);
+    }
+    const digest = digestOf(executable);
+    if (!digest.present) {
+      refuse("client_unreadable", `client executable ${JSON.stringify(executable)} cannot supply readable bytes for its sha256: ${digest.reason || "<unknown>"}`);
+    }
+    state.claude = {
       name: "claude-code-stand-in",
       version: "0.0.0-synthetic-stand-in",
       version_output: SYNTHETIC_BANNER,
-      command: path.resolve(options["client-command"]),
-      executable: fs.realpathSync(options["client-command"]),
-      ...digestOf(options["client-command"]),
-    }
-    : clientIdentity(env);
+      command: path.resolve(typed),
+      executable,
+      ...digest,
+    };
+  } else {
+    state.claude = clientIdentity(env, options.client || null);
+  }
 
   // Install the pinned artifact into the clean prefix and read its identity
   // back out of the install record the installer wrote.
@@ -1079,20 +1269,42 @@ function certifyStep(state, step) {
         else failures.push(`${caseId}: the complete exact-call dialog is absent from decline.cast`);
       } else if (caseId === "approval_shown" && !outcome.facts.recorder_correspondence?.observed) {
         failures.push(`${caseId}: accept.cast does not correspond to the recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
+      } else if (caseId === "approval_shown" && outcome.facts.exact_call_elicitation_receipt_pairs.length === 0) {
+        failures.push(`${caseId}: the exact-call INPUT_REQUIRED/ALLOW receipt pair is absent`);
+      } else if (caseId === "approval_shown" && outcome.facts.child_call_records_added !== 1) {
+        failures.push(`${caseId}: exactly one child-call record is required during the dialog window`);
+      } else if (caseId === "approval_shown" && outcome.facts.exact_call_child_records_added !== 1) {
+        failures.push(`${caseId}: the exact-call child-call record is absent`);
       } else if (caseId === "activation") {
         if (outcome.facts.claude_mcp_get_exit !== 0) failures.push(`${caseId}: \`claude mcp get notes\` did not succeed`);
         else if (!outcome.facts.claude_mcp_get_local_scope_selected) failures.push(`${caseId}: local-scope selection evidence is absent`);
         else failures.push(`${caseId}: a connected fixture start through the recorded local Seal override is absent`);
       } else if (caseId === "missing_launcher") {
         if (!outcome.facts.recorder_correspondence?.observed) failures.push(`${caseId}: missing_launcher.cast does not correspond to recorder output (${outcome.facts.recorder_correspondence?.reason || "correspondence evidence is absent"})`);
-        else if (!outcome.facts.transcript_names_missing_launcher) failures.push(`${caseId}: the recorded session never says the local override command was missing`);
-        else if (!outcome.facts.transcript_names_no_fallback) failures.push(`${caseId}: the recorded session never says it did not fall back to .mcp.json`);
-        else failures.push(`${caseId}: required positive evidence is absent`);
+        else if (outcome.facts.child_call_records_added !== 0) failures.push(`${caseId}: child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_added}); offending child-call records: ${JSON.stringify(outcome.facts.offending_child_call_records)}`);
+        else if (outcome.facts.non_proxy_start_records_added !== 0) {
+          for (const start of outcome.facts.offending_non_proxy_start_records) {
+            if (start.proxy_rejection === "digest at the wrong position") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest at the wrong position`);
+            else if (start.proxy_rejection === "digest mismatch") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor has a digest mismatch`);
+            else if (start.proxy_rejection === "digest absent") failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because its proxy-shaped ancestor digest is absent or unreadable`);
+            else failures.push(`${caseId}: start ${JSON.stringify(start.argv)} was rejected because it has no proxy ancestor at all`);
+          }
+        }
+        else if (outcome.facts.mcp_json_sha256_before !== outcome.facts.mcp_json_sha256_after) failures.push(`${caseId}: mcp_json_sha256_before must equal mcp_json_sha256_after (observed ${outcome.facts.mcp_json_sha256_before} and ${outcome.facts.mcp_json_sha256_after})`);
+        else if (outcome.facts.launcher_absent_during_window !== true) failures.push(`${caseId}: launcher_absent_during_window must equal true (observed ${outcome.facts.launcher_absent_during_window})`);
+        else if (outcome.facts.installed_tree_restored !== true) failures.push(`${caseId}: installed_tree_restored must equal true (observed ${outcome.facts.installed_tree_restored})`);
+        else failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
       } else if (caseId === "unprotect") {
         if (outcome.facts.unprotect_exit !== 0) failures.push(`${caseId}: seal unprotect notes did not succeed (exit ${outcome.facts.unprotect_exit ?? "absent"})`);
         else failures.push(`${caseId}: the local override removal and byte-identical project configuration evidence is absent`);
+      } else if (caseId === "negotiation") {
+        failures.push(`${caseId}: retry_round_trips must be greater than 0 (observed ${outcome.facts.retry_round_trips})`);
+      } else if (caseId === "before_approval") {
+        failures.push(`${caseId}: child_call_records_at_end_of_window must equal 0 and child_call_records_added must equal 0 (observed ${outcome.facts.child_call_records_at_end_of_window} and ${outcome.facts.child_call_records_added})`);
+      } else if (caseId === "accept") {
+        failures.push(`${caseId}: child_call_records_added must equal 1, child_call_records_total must equal 1, and observed_effect_sha256 must equal expected_effect_sha256 (observed ${outcome.facts.child_call_records_added}, ${outcome.facts.child_call_records_total}, ${outcome.facts.observed_effect_sha256}, and ${outcome.facts.expected_effect_sha256})`);
       } else {
-        failures.push(`${caseId}: required positive evidence is absent`);
+        failures.push(`${caseId}: observer conditions failed with facts ${JSON.stringify(outcome.facts)}`);
       }
     }
   }
@@ -1324,6 +1536,9 @@ function finish(state, options) {
       version_output: state.claude.version_output,
       executable: state.claude.executable,
       executable_sha256: state.claude.sha256,
+      selection_method: state.claude.selection_method,
+      ...(state.claude.candidates ? { candidates: state.claude.candidates } : {}),
+      executable_format: state.claude.executable_format,
     },
     environment: {
       platform: "linux-x64",
@@ -1391,7 +1606,7 @@ function main(argv) {
   const command = argv[0];
   if (!command || command === "--help" || command === "-h") {
     say("cc-harness — the Claude Code acceptance harness\n");
-    say("  cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR");
+    say("  cc-harness init --artifact FILE --sha256 HEX --bytes N --run-dir DIR [--client PATH]");
     say("  cc-harness plan   --run-dir DIR");
     say("  cc-harness show   --run-dir DIR");
     say("  cc-harness next   --run-dir DIR");
@@ -1440,6 +1655,10 @@ if (require.main === module) {
 module.exports = {
   CASES,
   castFromScript,
+  clientExecutableFormat,
+  clientCandidates,
+  clientIdentity,
+  digestOf,
   GUARDED_TOOL,
   HarnessError,
   NOTES,
@@ -1451,8 +1670,11 @@ module.exports = {
   loadState,
   next,
   observeAll,
+  nonProxyStarts,
+  proxyEvidenceForStart,
   runEnv,
   saveState,
   show,
   takeSnapshot,
+  waitForEnter,
 };

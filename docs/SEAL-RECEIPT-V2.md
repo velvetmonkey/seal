@@ -1,8 +1,7 @@
-# `seal.receipt/v2` (Phase A)
+# `seal.receipt/v2`
 
-This is the normative Phase A contract. It is written before the Phase B
-producer. Seal implements the Phase A contract independently and does not import
-a producer canonicaliser.
+This is the normative receipt contract. The verifier implements this contract
+independently and does not import the producer canonicaliser.
 
 ## Envelope
 
@@ -14,10 +13,19 @@ answer cannot substitute for the kernel decision. REPLAY obtains only the
 decision from a decision-only kernel runner; it does not load the producer's
 receipt assembler.
 
-The envelope carries a HOST route: `passthrough`, `forward`, `block`, or
-`error`. The kernel decision type is `Allow`/`Block`; the host maps one to the
-other. Nothing in the `seal` checkout reads either Lean tree, so this
-correspondence is maintained by hand across a repository boundary.
+The host route uses `passthrough`, `forward`, `block`, or `error`. The receipt
+`verdict` uses `ALLOW`, `BLOCK`, or `ERROR`. The kernel decision type is
+`Allow`/`Block`; the host maps one to the other. The `seal` checkout includes
+the `Authorization seam differential` workflow. The workflow tests the
+correspondence between interpreted Lean and shipped WASM.
+
+The `seal.receipt/v2` checker cannot verify receipts made by v0.2.0-rc.3 or earlier.
+It refuses an authentic v0.2.0-rc.3 receipt with `REFUSE read_failed: expected string`.
+Keep the v0.2.0-rc.3 `seal-receipt-check.mjs` release asset and the original trusted public key to check old receipts.
+Verify that checker asset against the v0.2.0-rc.3 `SHA256SUMS` release asset before use.
+Seal has no converter from `seal.spine/v1` receipts to `seal.receipt/v2` receipts.
+The v0.2.0-rc.3 checker cannot verify `seal.receipt/v2` receipts.
+It refuses an authentic `seal.receipt/v2` receipt with `REFUSE unknown_format: unknown receipt format: undefined`.
 
 ```json
 {
@@ -32,7 +40,7 @@ correspondence is maintained by hand across a repository boundary.
   "verdict": "ALLOW | BLOCK | ERROR",
   "reason": "string",
   "replay": {"args_sha256": "sha256", "config_sha256": "sha256"},
-  "signature": {"algorithm": "ed25519", "key_id": "string", "value": "128 hex"}
+  "signature": {"algorithm": "ed25519", "value": "128 hex"}
 }
 ```
 
@@ -53,8 +61,8 @@ than silently ignored.
 
 ## Canonicalisation
 
-Canonical JSON is compact JSON. Arrays retain element order. Objects retain
-the member order in the received object; keys are never sorted. Member names
+Canonical JSON is compact JSON. Arrays retain element order. Objects use
+ECMAScript own-property enumeration order after parsing. Member names
 use JSON escaping, followed by `:`, and values use this same rule. Duplicate
 members at every object at every depth are malformed. Duplicate comparison is
 after JSON unescaping of the member name, so `"a"` and `"\\u0061"` collide.
@@ -69,10 +77,12 @@ rule, not a permission to receive ill-formed Unicode. A byte input with
 ill-formed UTF-8 is refused before JSON parsing. Whitespace outside strings
 is accepted on READ but is not canonical bytes.
 
-Insertion order is deliberate: the kernel's Object-B inputs are replayed by
-`JSON.stringify`, which preserves stored order. Sorting would make the receipt
-arguments commitment and kernel `args_hash` different claims. The rule is a
-specification, not a shared implementation; vectors are the boundary.
+Object members are canonicalised in ECMAScript own-property enumeration order
+after parsing: integer-index keys in ascending numeric order, followed by other
+string keys in insertion order. Sorting would make the receipt arguments
+commitment and kernel `args_hash` different claims. The rule is a specification,
+not a shared implementation; vectors are the boundary.
+Seal uses this rule for the receipt arguments commitment.
 
 ## Verbs and trust result
 

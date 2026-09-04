@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // The approval-dialog renderer, fixed to the addendum's SIX-line format
-// inside the MEASURED Claude Code envelope (elicitfit-report.md, client
-// 2.1.232 at 80x24: 8 message lines visible, no scrolling, no hidden-line
-// indicator, usable width = terminal width - 4, schema titles steal lines):
+// inside the MEASURED Claude Code v2.1.251 envelope. The client gave 150
+// message cells at 156 columns and 274 message cells at 280 columns. The
+// measured usable width is terminal width - 6. Schema titles steal lines:
 //
 //   Approval required
 //   Tool: <tool>
 //   Arguments:
 //     <key>: <value>
-//   Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
+//   Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 //   Outside Seal: Bash, network, subprocesses, other tools and servers.
 //
 // When something changed, the caller REPLACES the first line (e.g.
@@ -22,8 +22,8 @@
 const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
-const WIDTH_MARGIN = 4;
-const SCOPE_RULE = "this parsed call (key order and 1/1.0 match); at most one run";
+const WIDTH_MARGIN = 6;
+const SCOPE_RULE = "this parsed call (key order, 1/1.0 match); at most one run";
 const OUTSIDE_LINE = "Outside Seal: Bash, network, subprocesses, other tools and servers.";
 const BARE_VALUE = /^[A-Za-z0-9_.\/:@-]+$/;
 
@@ -79,7 +79,7 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
       reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; the envelope shows ${MESSAGE_LINE_CAP} and hides the rest without any indicator`,
     };
   }
-  return { ok: true, message: lines.join("\n"), lines };
+  return { ok: true, message: lines.join("\n"), lines, argLines };
 }
 
 module.exports = { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };

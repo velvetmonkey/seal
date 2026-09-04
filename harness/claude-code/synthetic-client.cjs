@@ -48,6 +48,25 @@ function projectServer(name) {
   catch { return null; }
 }
 
+// Validate the negotiated base result shape before reading extension fields.
+function validateCallToolResult(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: result must be an object");
+  }
+  if (!Object.hasOwn(result, "content")) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: content is required");
+  }
+  if (!Array.isArray(result.content)) {
+    throw new Error("MCP tools/call result failed CallToolResult schema validation: content must be an array");
+  }
+  for (const [index, block] of result.content.entries()) {
+    if (!block || typeof block !== "object" || Array.isArray(block)
+        || block.type !== "text" || typeof block.text !== "string") {
+      throw new Error(`MCP tools/call result failed CallToolResult schema validation: content[${index}] must be a text content block`);
+    }
+  }
+}
+
 // ------------------------------------------------------ the registry role
 
 function registry(args) {
@@ -98,7 +117,7 @@ function registry(args) {
 
 // -------------------------------------------------------- the client role
 
-function connect(entry) {
+function connect(entry, onServerRequest) {
   const child = spawn(entry.command, entry.args || [], {
     cwd: project,
     stdio: ["pipe", "pipe", "inherit"],
@@ -109,8 +128,22 @@ function connect(entry) {
   lines.on("line", (line) => {
     let frame;
     try { frame = JSON.parse(line); } catch { return; }
-    const resolve = pending.get(frame.id);
-    if (resolve) { pending.delete(frame.id); resolve(frame); }
+    if (frame.method && Object.hasOwn(frame, "id")) {
+      onServerRequest(frame, (result) => {
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: frame.id, result })}\n`);
+      });
+      return;
+    }
+    const request = pending.get(frame.id);
+    if (request) {
+      pending.delete(frame.id);
+      try {
+        if (request.method === "tools/call" && frame.result) validateCallToolResult(frame.result);
+        request.resolve(frame);
+      } catch (error) {
+        request.reject(error);
+      }
+    }
   });
   let nextId = 0;
   return {
@@ -119,7 +152,7 @@ function connect(entry) {
       nextId += 1;
       const id = nextId;
       const waited = new Promise((resolve, reject) => {
-        pending.set(id, resolve);
+        pending.set(id, { method, resolve, reject });
         child.once("exit", (code) => reject(new Error(`the protected server exited ${code} before answering ${method}`)));
         setTimeout(() => reject(new Error(`no answer to ${method} within 20s`)), 20000).unref();
       });
@@ -153,40 +186,45 @@ async function session() {
     return;
   }
 
-  const link = connect(entry);
+  let elicitationMessage = "";
+  const link = connect(entry, (frame, respond) => {
+    if (frame.method !== "elicitation/create") {
+      respond({ action: "cancel" });
+      return;
+    }
+    elicitationMessage = frame.params?.message || "";
+    const approve = frame.params?.requestedSchema?.properties?.approve;
+    if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
+      throw new Error("elicitation/create has no approval title or description");
+    }
+    const action = scenario === "accept" ? "accept" : "decline";
+    const messageLines = elicitationMessage.split("\n");
+    process.stdout.write("\n");
+    for (const line of messageLines.slice(0, 3)) process.stdout.write(`  ${line}\n`);
+    if (messageLines.length > 3) process.stdout.write(`  … (+${messageLines.length - 3} more lines)\n`);
+    process.stdout.write(`\n  ${approve.title}\n`);
+    process.stdout.write(`    ${approve.description}\n`);
+    process.stdout.write("\n  Accept    Decline\n");
+    process.stdout.write("\n");
+    process.stdout.write(`the stand-in answers: ${action}\n`);
+    respond(action === "accept" ? { action: "accept", content: { approve: true } } : { action: "decline" });
+  });
   try {
     await link.request("initialize", {
       protocolVersion: "2025-06-18",
-      capabilities: {},
+      capabilities: { elicitation: {} },
       clientInfo: { name: "seal-cc-synthetic-stand-in", version: "0.0.0-synthetic-stand-in" },
     });
     const listed = await link.request("tools/list", {});
     process.stdout.write(`tools: ${(listed.result?.tools || []).map((tool) => tool.name).join(", ")}\n`);
     if (scenario === "activation") return;
 
-    const first = await link.request("tools/call", { name: GUARDED_TOOL, arguments: { note } });
-    if (first.result?.resultType !== "input_required") {
-      process.stdout.write(`the protected call did not ask for approval: ${JSON.stringify(first.result)}\n`);
-      return;
-    }
-    // Print the approval message where the terminal recording will carry it,
-    // the way the real client renders it on screen.
-    const message = first.result.inputRequests?.approval?.params?.message || "";
-    process.stdout.write("\n");
-    for (const line of message.split("\n")) process.stdout.write(`  ${line}\n`);
-    process.stdout.write("\n");
-
-    const action = scenario === "accept" ? "accept" : "decline";
-    process.stdout.write(`the stand-in answers: ${action}\n`);
-    const answered = await link.request("tools/call", {
-      name: GUARDED_TOOL,
-      arguments: { note },
-      requestState: first.result.requestState,
-      inputResponses: { approval: action === "accept" ? { action: "accept", content: { approve: true } } : { action: "decline" } },
-    });
+    const answered = await link.request("tools/call", { name: GUARDED_TOOL, arguments: { note } });
+    if (!elicitationMessage) throw new Error("the protected call did not issue elicitation/create");
     process.stdout.write(`result: ${JSON.stringify(answered.result)}\n`);
   } catch (error) {
     process.stdout.write(`session error: ${error.message}\n`);
+    throw error;
   } finally {
     link.close();
     await new Promise((resolve) => setTimeout(resolve, 200));

@@ -18,7 +18,7 @@ Approval required
 Tool: delete_all_notes
 Arguments:
   (none)
-Scope: this parsed call (key order and 1/1.0 match); at most one run; 2 min.
+Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 Outside Seal: Bash, network, subprocesses, other tools and servers.
 ```
 
@@ -128,7 +128,7 @@ This signed example is from `seal demo`:
   "verdict": "ALLOW",
   "reason": "every gating kernel allows",
   "replay": { "args_sha256": "...", "config_sha256": "..." },
-  "signature": { "algorithm": "ed25519", "key_id": "...", "value": "..." }
+  "signature": { "algorithm": "ed25519", "value": "..." }
 }
 ```
 
@@ -193,4 +193,6 @@ and read its scope witness; it ends with the honest summary this guide keeps
 returning to: Seal is a gate, not a sandbox — it controls the path through
 it, and only that path.
 
-Next: [When something looks wrong](when-something-looks-wrong.md).
+Previous: [Choosing what to protect](choosing-what-to-protect.md).
+Up: [Guide](README.md).
+Next: [GitHub Actions provenance](github-actions-provenance.md).

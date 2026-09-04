@@ -11,6 +11,9 @@ import {
   DOCS_ROUTE_TABLE,
   README_SECTIONS,
 } from "../test-support/front-door-invariants.mjs";
+import tempRoot from "../scripts/temp-root.cjs";
+
+const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SEAL = resolve(ROOT, "bin", "seal");
@@ -45,9 +48,9 @@ test("README carries the eleven front-door sections in order", () => {
   assert.throws(() => checkReadmeFrontDoor(reordered), /required section absent or out of order/);
 });
 
-test("docs/README contains only its heading and three-route table", () => {
+test("docs/README contains only its heading, three-route table, and Start link", () => {
   const routes = readFileSync(resolve(ROOT, "docs/README.md"), "utf8");
-  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md
+  assert.doesNotThrow(() => checkDocsRouteTable(routes)); // CLAIM-COVERAGE: docs/README.md#docs-readme
   assert.throws(() => checkDocsRouteTable(`${DOCS_ROUTE_TABLE}\nStray paragraph.\n`), /must contain only/);
 });
 
@@ -55,7 +58,7 @@ test("public pages use the banked language discipline", (t) => {
   const green = spawnSync(process.execPath, [LANGUAGE_GUARD], { cwd: ROOT, encoding: "utf8" });
   assert.equal(green.status, 0, green.stdout + green.stderr);
 
-  const dir = mkdtempSync(join(tmpdir(), "seal-public-language-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-public-language-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "page.md"), "This product is production-ready.\n");
   writeFileSync(join(dir, "scope.json"), JSON.stringify({ pages: ["page.md"] }));
@@ -97,7 +100,7 @@ test("public pages use the banked language discipline", (t) => {
 const SOURCED_BLOCKS = [
   "Seal puts an approval gate in front of a named set of tools on one MCP server. You approve one exact call. Seal will not run it twice. It might not run it at all. Seal writes a signed receipt of the decision. The demo generates a temporary signing key for its run; the protected path creates or reuses a machine-local signing key.",
   "Requires Node 20+ and the <code>claude</code> command for Protect. The install creates one command and one read-only store directory under <code>~/.local</code>.",
-  "macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet.",
+  "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
   "The release carries the approval contract and retry continuation through the same proxy for the demo and protected paths.",
   "The demo and the protected path run the same proxy and rule. The state machine is TESTED for the single-tool case. On a guarded retry, Node owns handle lookup, freshness, protocol shape, and durable one-use consumption. The exact-call authorization rule runs through the pinned vendored WASM, and its answer is required before forwarding. Kernel failure or a Node/kernel disagreement refuses — there is no JavaScript authorization fallback. The kernel configuration is currently signed by an Ed25519 key generated inside the same worker that submits it. That is demo-grade self-authorization, not an externally trusted production config key.",
   "Seal is a gate, not a sandbox. It controls the path through it, and only that path; a direct local write, Bash, network access, subprocesses, other tools, and other servers are outside Seal.",
@@ -134,19 +137,19 @@ test("the first architecture diagram is the shipped Node path", () => {
 
 test("README claim: Seal holds one exact call and permits at most one execution", () => {
   const claim = "Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.";
-  const dir = mkdtempSync(join(tmpdir(), "seal-readme-claim-")); let output;
+  const dir = testTmpdir(join(tmpdir(), "seal-readme-claim-")); let output;
   assert.doesNotThrow(() => {
     output = execFileSync(process.execPath, [SEAL, "demo", "--dir", dir], {
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
     });
-  }, claim); // CLAIM-COVERAGE: README.md
+  }, claim); // CLAIM-COVERAGE: README.md#readme
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
   assert.match(output, /BLOCKED.*already_consumed/s, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
 });
 
 test("public proved-class claims fail and explicit denials pass", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-public-proved-class-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-public-proved-class-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const scope = join(dir, "scope.json");
   writeFileSync(scope, JSON.stringify({ pages: ["page.md"] }));
@@ -190,7 +193,7 @@ test("public proved-class claims fail and explicit denials pass", (t) => {
 });
 
 test("launch truth gate compares the complete self-repository path", () => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-launch-truth-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-launch-truth-"));
   const required = [
     "README.md",
     ".github/workflows/ci.yml",
@@ -234,7 +237,7 @@ test("launch truth gate compares the complete self-repository path", () => {
 });
 
 test("README installer check executes the command without restoring the installed-tree transcript", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "seal-frontdoor-installer-"));
+  const dir = testTmpdir(join(tmpdir(), "seal-frontdoor-installer-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const readmePath = join(dir, "README.md");
   const artifact = join(dir, "fixture-installer");

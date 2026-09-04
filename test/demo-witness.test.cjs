@@ -8,8 +8,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn, execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(__dirname, "..", "bin", "seal");
@@ -50,7 +51,7 @@ function attach(child) {
 // --- the scope witness ------------------------------------------------------
 
 test("Act 4: the protected resource changes while the server count and Seal decisions do not", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-witness-"));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(child);
   t.after(run.kill);
@@ -70,9 +71,9 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.match(run.out, /Seal did not observe or authorise this write\./);
   assert.match(run.out, /The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened\./);
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
-  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-v2\.mjs/, "demo must name the v2 checker path inside the source checkout"); assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
-  assert.match(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must name the online browser instrument beside the checker command");
-  assert.match(run.out, /does not establish that this setup routes calls through Seal/, "demo must state the online page's setup limit");
+  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-v2\.mjs/, "demo must name the v2 checker path inside the source checkout");
+  assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
+  assert.doesNotMatch(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must not advertise the incompatible browser checker");
 
   // FILE evidence 1: the proxy emitted nothing for it — the receipts
   // directory holds exactly the three gate decisions and no more.
@@ -94,7 +95,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", f), "utf8")))
     .find((receipt) => receipt.action === "ALLOW");
   const dataLines = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8").trimEnd().split("\n");
-  assert.equal(dataLines[0], allowedReceipt.arguments.line, sameCallClaim); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md
+  assert.equal(dataLines[0], allowedReceipt.arguments.line, sameCallClaim); // CLAIM-COVERAGE: docs/guide/knowing-it-worked.md#same-call
   assert.equal(dataLines[1], "seal demo wrote this line directly");
   assert.equal(dataLines.length, 2, "the same resource must contain exactly the protected and direct writes");
 
@@ -109,8 +110,41 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.doesNotMatch(run.out, /verif/i);
 });
 
+test("demo checker route control rejects an absent path and a receipt-version mismatch", () => {
+  const outputFile = path.join(testTmpdir(path.join(os.tmpdir(), "seal-demo-route-control-")), "demo.txt");
+  const demo = runSeal(["demo", "--dir", path.dirname(outputFile)], "y\n");
+  assert.equal(demo.code, 0, demo.out + demo.err);
+  fs.writeFileSync(outputFile, demo.out);
+  const control = path.join(ROOT, "scripts", "check-demo-checker-route.cjs");
+  const green = spawnSync(process.execPath, [control, outputFile, ROOT], { encoding: "utf8" });
+  assert.equal(green.status, 0, green.stdout + green.stderr);
+  assert.match(green.stdout, /PASS demo checker route: checker\/seal-receipt-v2\.mjs accepts emitted v2/);
+
+  const throwingRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-route-throwing-checker-"));
+  fs.mkdirSync(path.join(throwingRoot, "checker"));
+  fs.copyFileSync(path.join(ROOT, "checker", "seal-receipt-v2.mjs"), path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"));
+  fs.writeFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), 'throw new Error("physical tamper");\n' + fs.readFileSync(path.join(throwingRoot, "checker", "seal-receipt-v2.mjs"), "utf8"));
+  const throwing = spawnSync(process.execPath, [control, outputFile, throwingRoot], { encoding: "utf8" });
+  assert.notEqual(throwing.status, 0, throwing.stdout + throwing.stderr);
+  assert.match(throwing.stderr, /FAIL demo checker route: named checker failed with exit 1:/);
+
+  const tampered = demo.out.replace("checker/seal-receipt-v2.mjs", "checker/does-not-exist.mjs");
+  fs.writeFileSync(outputFile, tampered);
+  const red = spawnSync(process.execPath, [control, outputFile, ROOT], { encoding: "utf8" });
+  assert.notEqual(red.status, 0, red.stdout + red.stderr);
+  assert.match(red.stderr, /FAIL demo checker route: repository path does not exist: checker\/does-not-exist\.mjs/);
+
+  const fixtureRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-route-version-"));
+  fs.mkdirSync(path.join(fixtureRoot, "checker"));
+  fs.writeFileSync(path.join(fixtureRoot, "checker", "seal-receipt-v1.mjs"), 'if (receipt.receipt !== "seal.spine/v1") throw new Error("unknown format");\n');
+  fs.writeFileSync(outputFile, demo.out.replace("checker/seal-receipt-v2.mjs", "checker/seal-receipt-v1.mjs"));
+  const mismatch = spawnSync(process.execPath, [control, outputFile, fixtureRoot], { encoding: "utf8" });
+  assert.notEqual(mismatch.status, 0, mismatch.stdout + mismatch.stderr);
+  assert.match(mismatch.stderr, /FAIL demo checker route: receipt version mismatch: demo emits seal_receipt="v2" \(v2\); checker\/seal-receipt-v1\.mjs accepts receipt="seal\.spine\/v1" \(v1\)/);
+});
+
 test("Act 4 appears after replay refusal and before the final screen", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-witness-order-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-witness-order-"));
   const result = runSeal(["demo", "--dir", dir], "y\n");
   assert.equal(result.code, 0, result.out + result.err);
 

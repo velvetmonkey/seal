@@ -4,13 +4,14 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const DRIVER = join(ROOT, "scripts", "run-complete-product-suite.sh");
 const CRITICAL_MANIFEST = join(ROOT, "scripts", "critical-property-manifest.tsv");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-product-suite-roster-"));
+  const root = testTmpdir(join(tmpdir(), "seal-product-suite-roster-"));
   const tests = join(root, "tests");
   mkdirSync(tests);
   for (const name of ["one", "two", "three"]) {
@@ -19,12 +20,12 @@ function fixture() {
   const roster = join(root, "roster.txt");
   writeFileSync(roster, "one.test.cjs\ntwo.test.cjs\nthree.test.cjs\n");
   const manifest = join(root, "critical-property-manifest.tsv");
-  const properties = readFileSync(CRITICAL_MANIFEST, "utf8")
+  const manifestEntries = readFileSync(CRITICAL_MANIFEST, "utf8")
     .split("\n")
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => line.split("\t")[0]);
-  writeFileSync(manifest, properties.map((property) => `${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
-  return { root, tests, roster, manifest, properties };
+  writeFileSync(manifest, manifestEntries.map((property) => `${property}\tone.test.cjs\tfixture`).join("\n") + "\n");
+  return { root, tests, roster, manifest, properties: manifestEntries };
 }
 
 function run(driver, tests, roster, manifest, extraEnv = {}) {

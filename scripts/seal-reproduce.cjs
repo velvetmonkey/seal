@@ -240,6 +240,24 @@ function pathWithin(candidate, parent) {
   return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
 }
 
+function lstatSourceOrRefuse(source) {
+  try {
+    return fs.lstatSync(source);
+  } catch (error) {
+    if (error?.code === "ENOENT") refuse(`pinned source stage is absent: ${source}`);
+    throw error;
+  }
+}
+
+function realpathOrRefuse(candidate, absentMessage) {
+  try {
+    return fs.realpathSync(candidate);
+  } catch (error) {
+    if (error?.code === "ENOENT") refuse(absentMessage);
+    throw error;
+  }
+}
+
 function makeTreeRemovable(root) {
   let stat;
   try { stat = fs.lstatSync(root); } catch { return; }
@@ -300,6 +318,38 @@ function clonePinnedSource(pin, destination) {
   if (observed !== pin.commit) refuse(`pinned source checkout mismatch: requested ${pin.commit}, observed ${observed}`);
 }
 
+function provisionPinnedToolchains(runChild, cloneSource, pin, work, source) {
+  const command = ["wasm-spike/provision_toolchain.sh"];
+  const options = { cwd: source, label: "provision pinned wasm toolchains" };
+  try {
+    runChild("bash", command, options);
+  } catch (error) {
+    if (!/failed \(exit 68\)$/u.test(error?.message || "")) throw error;
+    if (!pathWithin(source, work) || path.dirname(source) !== work || source === ROOT) {
+      refuse(`pinned source stage is not disposable: ${source}`);
+    }
+    const acceptedSource = lstatSourceOrRefuse(source);
+    const resolvedSource = realpathOrRefuse(source, `pinned source stage is absent: ${source}`);
+    const resolvedWork = realpathOrRefuse(work, `pinned source work directory is absent: ${work}`);
+    if (!pathWithin(resolvedSource, resolvedWork) || path.dirname(resolvedSource) !== resolvedWork ||
+        resolvedSource === realpathOrRefuse(ROOT, `source checkout is absent: ${ROOT}`)) {
+      refuse(`pinned source stage is not disposable: ${source}`);
+    }
+    // Re-lstat the named path immediately before rmSync. A matching path
+    // string is not identity: rename plus mkdir can reuse the same name for
+    // a different directory. Device and inode identify the directory object.
+    const currentSource = lstatSourceOrRefuse(source);
+    if (currentSource.dev !== acceptedSource.dev || currentSource.ino !== acceptedSource.ino) {
+      refuse(`pinned source stage changed before delete: ${source}`);
+    }
+    makeTreeRemovable(source);
+    fs.rmSync(source, { recursive: true, force: true });
+    process.stderr.write("[seal-rebuild-pinned] retrying pinned toolchain provisioning from a clean stage\n");
+    cloneSource(pin, source);
+    runChild("bash", command, options);
+  }
+}
+
 function buildPinnedKernel(tag, work, operations = {}) {
   const runChild = operations.child || child;
   const cloneSource = operations.clonePinnedSource || clonePinnedSource;
@@ -310,7 +360,7 @@ function buildPinnedKernel(tag, work, operations = {}) {
   const source = path.join(work, "pinned-source");
   cloneSource(pin, source);
 
-  runChild("bash", ["wasm-spike/provision_toolchain.sh"], { cwd: source, label: "provision pinned wasm toolchains" });
+  provisionPinnedToolchains(runChild, cloneSource, pin, work, source);
   const installer = path.join(source, "scripts", "install_pinned_elan.py");
   runChild("python3", [installer, "--mathlib-cache"], { cwd: source, label: "install repository-pinned elan and Mathlib cache" });
   const launcher = leanLauncher(environment, installer);

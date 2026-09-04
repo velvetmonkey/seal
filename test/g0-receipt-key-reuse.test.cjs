@@ -4,9 +4,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = path.join(__dirname, "..");
-function copyTree() { const out = fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-key-reuse-mutant-")); fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") }); return out; }
-function probe(root) { const { loadReceiptSigner } = require(path.join(root, "spine", "protection.cjs")); const env = { ...process.env, XDG_DATA_HOME: fs.mkdtempSync(path.join(os.tmpdir(), "seal-g0-key-reuse-data-")) }; const first = loadReceiptSigner(env); const second = loadReceiptSigner(env); assert.equal(second.publicKeyHex, first.publicKeyHex, `receipt signer identity claim failed: repeated load changed publicKeyHex from ${first.publicKeyHex} to ${second.publicKeyHex}`); }
+function copyTree() { const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-key-reuse-mutant-")); fs.cpSync(ROOT, out, { recursive: true, filter: (source) => !source.includes("/node_modules/") && !source.includes("/.family/") && !source.includes("/dist/") }); return out; }
+function probe(root) { const { loadReceiptSigner } = require(path.join(root, "spine", "protection.cjs")); const env = { ...process.env, XDG_DATA_HOME: testTmpdir(path.join(os.tmpdir(), "seal-g0-key-reuse-data-")) }; const first = loadReceiptSigner(env); const second = loadReceiptSigner(env); assert.equal(second.publicKeyHex, first.publicKeyHex, `receipt signer identity claim failed: repeated load changed publicKeyHex from ${first.publicKeyHex} to ${second.publicKeyHex}`); }
 if (process.argv[2] === "--probe") { try { probe(process.argv[3]); } catch (error) { console.error(error.stack || error.message); process.exit(1); } process.exit(0); }
 test("receipt signer reuse returns the same public identity", () => {
   probe(ROOT); const mutant = copyTree(); const file = path.join(mutant, "spine", "protection.cjs"); const source = fs.readFileSync(file, "utf8"); const needle = "  return { privateKey, publicKey, publicKeyHex: publicHex };\n";

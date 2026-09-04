@@ -1,4 +1,5 @@
 test/approval-contract.test.cjs
+test/archive-claim-consequences.test.mjs
 test/artifact-identity.test.cjs
 test/cc-evidence.test.cjs
 test/cc-fixture.test.cjs
@@ -9,6 +10,7 @@ test/claims-drift.test.mjs
 test/container-check.test.cjs
 test/coldwalk-fixes.test.cjs
 test/coldwalk-polish.test.cjs
+test/demo-scratch.test.cjs
 test/demo-receipts-store.test.cjs
 test/demo-server-tools.test.cjs
 test/demo-witness.test.cjs
@@ -19,6 +21,7 @@ test/docs-fenced-languages.test.mjs
 test/receipt-operations-doc.test.mjs
 test/receipt-operations-claim-ledger.test.mjs
 test/docs-index.test.cjs
+test/docs-navigation.test.mjs
 test/docs-scope.test.mjs
 test/executable-population.test.mjs
 test/failure5.test.cjs
@@ -37,12 +40,17 @@ test/identity-wiring.test.cjs
 test/installed-tree-pin-generator.test.cjs
 test/installed-tree-pin-manifest-review.test.cjs
 test/installed-tree-pin.test.cjs
+test/payload-require-graph.test.cjs
+test/payload-test-hook.test.cjs
 test/kernel-bridge.test.cjs
+test/kernel-timing-message.test.cjs
 test/lean-proof-source.test.mjs
 test/lease-generation.test.cjs
 test/limits-list.test.cjs
 test/linkcheck.test.mjs
 test/linkcheck-assertions.test.mjs
+test/linkcheck-helpers.test.mjs
+test/macos-protect-claims.test.mjs
 test/live-page-claim-guard.test.mjs
 test/macos-helper.test.cjs
 test/no-verification-claim.test.cjs
@@ -51,6 +59,7 @@ test/product-suite-roster.test.cjs
 test/protect-already-protected.test.cjs
 test/protect3b.test.cjs
 test/protected-paths.test.cjs
+test/authorization-status-boundaries.test.mjs
 test/authorization-status-surfaces.test.cjs
 test/proxylock5-shape.test.cjs
 test/proxy-lock-nonlinux.test.cjs
@@ -58,11 +67,13 @@ test/proxy-lock.test.cjs
 test/readme-demo-transcript-guard.test.cjs
 test/readme-protect-state-witness.test.cjs
 test/receipt-canonicalization-conformance.test.mjs
+test/receipt-v2-doc-contract.test.mjs
 test/receipt-checker.test.cjs
 test/receipt-v2-verifier.test.mjs
 test/receipt-verdict-agreement.test.mjs
 test/receiptkey.test.cjs
 test/release-note-citation-paths.test.cjs
+test/release-publish-gate.test.cjs
 test/release-matrix.test.mjs
 test/reinstall.test.cjs
 test/release-notes.test.cjs
@@ -73,7 +84,10 @@ test/seal-reproduce.test.cjs
 test/seal-verify.test.cjs
 test/spine-retry.test.cjs
 test/step2-negative-control.test.cjs
+test/suite-tmpdir-leak.test.cjs
+test/temp-root.test.cjs
 test/tool-validation.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
+test/workflow-gh-repo-context.test.cjs
 test/workflow-host-paths.test.cjs

@@ -12,6 +12,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
 const { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth } = require("../contract/renderer.cjs");
@@ -22,7 +23,7 @@ const CHILD = path.join(__dirname, "..", "contract", "fixtures", "counting-child
 // --- child harness ----------------------------------------------------------
 
 async function startChild(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-"));
   const dataFile = path.join(dir, "data.txt");
   const countFile = `${dataFile}.count`;
   const child = spawn(process.execPath, [CHILD, dataFile], { stdio: ["pipe", "pipe", "inherit"] });
@@ -71,6 +72,10 @@ function freshPending(contract) {
   const opened = contract.begin({ tool: TOOL, args: ARGS });
   assert.equal(opened.kind, "input_required");
   assert.equal(opened.result.resultType, "input_required");
+  assert.deepEqual(opened.result.content, [{
+    type: "text",
+    text: opened.elicitationParams.message,
+  }]);
   return opened.result.requestState;
 }
 
@@ -190,7 +195,7 @@ test("allow evidence states the limit: human presence is unknown", async (t) => 
   const decision = await attempt(contract, child, { tool: TOOL, args: ARGS, requestState: state, inputResponses: ACCEPT });
   assert.equal(decision.kind, "allow");
   assert.equal(decision.evidence.human_present, "unknown");
-  assert.match(decision.evidence.human_present_detail, /can fabricate an acceptance/);
+  assert.match(decision.evidence.human_present_detail, /can fabricate an accepting elicitation response/);
   assert.match(decision.evidence.human_present_detail, /declared assumption, not an enforced property/);
 });
 
@@ -213,9 +218,68 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines[1], "Tool: demo.mutate");
   assert.equal(rendered.lines[2], "Arguments:");
   assert.equal(rendered.lines[3], `  line: ${canonicalString(ARGS.line)}`);
-  assert.match(rendered.lines[4], /^Scope: this parsed call \(key order and 1\/1\.0 match\); at most one run; 2 min\.$/);
+  assert.match(rendered.lines[4], /^Scope: this parsed call \(key order, 1\/1\.0 match\); at most one run; 2 min\.$/);
   assert.equal(rendered.lines[5], "Outside Seal: Bash, network, subprocesses, other tools and servers.");
   assert.equal(rendered.lines.length, 6);
+});
+
+test("every fixed approval message line fits the measured default width", () => {
+  const rendered = renderApprovalMessage(TOOL, ARGS);
+  assert.ok(rendered.ok, rendered.reason);
+  for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[4], rendered.lines[5]]) {
+    assert.ok(displayWidth(line) <= 74, `fixed line exceeds 74 columns: ${line}`);
+  }
+});
+
+// The current Scope line has one column of headroom in the 74-column envelope.
+test("the rendered Scope line fits the measured 74-column envelope", () => {
+  const rendered = renderApprovalMessage(TOOL, ARGS);
+  assert.ok(rendered.ok, rendered.reason);
+  const scopeLine = rendered.lines.find((line) => line.startsWith("Scope: "));
+  assert.ok(scopeLine, "rendered approval message must include a Scope line");
+  assert.ok(displayWidth(scopeLine) <= 80 - WIDTH_MARGIN,
+    `Scope line exceeds the default envelope of ${80 - WIDTH_MARGIN} columns: ${scopeLine}`);
+});
+
+test("the approval schema description derives from the actual argument lines", () => {
+  const args = { zeta: 7, alpha: "value with space" };
+  const rendered = renderApprovalMessage(TOOL, args);
+  const opened = createApprovalContract().begin({ tool: TOOL, args });
+  assert.deepEqual(rendered.argLines, ["  alpha: \"value with space\"", "  zeta: 7"]);
+  assert.equal(
+    opened.elicitationParams.requestedSchema.properties.approve.description,
+    "Arguments: alpha: \"value with space\"; zeta: 7. Scope: at most one run.",
+  );
+});
+
+test("the approval schema description ignores non-argument message lines", () => {
+  const rendererPath = require.resolve("../contract/renderer.cjs");
+  const contractPath = require.resolve("../contract/contract.cjs");
+  const originalRenderer = require(rendererPath);
+  const shiftedRenderer = {
+    ...originalRenderer,
+    renderApprovalMessage(...args) {
+      const rendered = originalRenderer.renderApprovalMessage(...args);
+      if (!rendered.ok) return rendered;
+      const lines = ["Review context", ...rendered.lines];
+      return { ...rendered, message: lines.join("\n"), lines };
+    },
+  };
+  let createShiftedApprovalContract;
+  try {
+    require.cache[rendererPath].exports = shiftedRenderer;
+    delete require.cache[contractPath];
+    ({ createApprovalContract: createShiftedApprovalContract } = require(contractPath));
+  } finally {
+    require.cache[rendererPath].exports = originalRenderer;
+    delete require.cache[contractPath];
+  }
+
+  const args = { line: "shifted shape" };
+  const rendered = shiftedRenderer.renderApprovalMessage(TOOL, args);
+  const opened = createShiftedApprovalContract().begin({ tool: TOOL, args });
+  const description = `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. Scope: at most one run.`;
+  assert.equal(opened.elicitationParams.requestedSchema.properties.approve.description, description);
 });
 
 test("a CHANGED first line replaces, never adds", () => {
@@ -256,7 +320,7 @@ test("every offered message obeys the envelope across argument sizes", () => {
 const { createJournal, openJournal } = require("../spine/store.cjs");
 
 test("the journal stores the handle hash, never the raw handle", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-journal-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-journal-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
   const contract = createApprovalContract({ store: openJournal(storePath) });
@@ -271,7 +335,7 @@ test("the journal stores the handle hash, never the raw handle", () => {
 
 test("consumed survives a restart; pending does not (connection epoch)", async (t) => {
   const child = await startChild(t);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-contract-epoch-"));
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-contract-epoch-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
 

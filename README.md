@@ -2,19 +2,21 @@
 
 # Seal
 
-[![Docs & claims consistency](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml)
+[![Product, identity & docs checks](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/ci.yml) [![macOS build evidence](https://github.com/velvetmonkey/seal/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/macos.yml) [![Authorization seam differential](https://github.com/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml) [![Live family claims drift](https://github.com/velvetmonkey/seal/actions/workflows/family-claims-live.yml/badge.svg?branch=main)](https://github.com/velvetmonkey/seal/actions/workflows/family-claims-live.yml)
 
 AI agents can call dangerous tools.
 
 Seal is a local approval boundary for AI-agent tool calls.
 
+The [documentation map](docs/README.md) helps you choose a route through Seal.
+
 *Claude can ask. Seal decides whether that exact call may cross the boundary.*
 
 ## Supported path
 
-Use Node 20+ on Linux x86-64; Protect also needs Claude Code's `claude`
-command. Protect is not supported on macOS yet, and Windows and Linux ARM are
-unsupported. The [full install guide](docs/start/install.md) covers the
+Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
+macOS x64/arm64. Protect also needs Claude Code's `claude` command. Windows,
+Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
 ## Try Seal in two minutes
@@ -96,7 +98,18 @@ Protect validates both names, installs a private Claude Code local override,
 and leaves the project `.mcp.json` unchanged. It ends with:
 
 ```output
-Protection: PENDING RESTART db.{demo.mutate, demo.erase}
+Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+
+Gated through this route:
+  demo.mutate
+  demo.erase
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  configured MCP servers not routed through this Seal wrapper: cache
+  other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
 ```
 
@@ -118,8 +131,8 @@ Stop Claude Code, run this in the protected project, then restart Claude Code:
 seal unprotect db
 ```
 
-The command removes Seal's local override and prints `Protection: - outside
-Seal`; the project `.mcp.json` remains byte-for-byte unchanged.
+The command removes Seal's local override and reports that the sealed MCP route
+is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
 ## Guarantees and non-guarantees
 

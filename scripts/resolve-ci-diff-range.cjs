@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 // Resolve the target-branch candidate range from a GitHub Actions event. Both
-// push and pull-request events use the merge base of the target branch and head;
-// unanswerable event data is a finding, never permission to inspect a smaller range.
+// Pull-request events use the merge base of the target branch and head.
+// Push events use the event before commit and after commit.
+// Unanswerable event data is a finding, never permission to inspect a smaller range.
 const { readFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
@@ -52,6 +53,15 @@ function targetBranchBase(event) {
   return requireCommit(`refs/remotes/origin/${branch}`, `target branch origin/${branch}`);
 }
 
+function requireMergeBase(base, head) {
+  const resolved = git(["merge-base", base, head]);
+  if (resolved.status !== 0) {
+    fail("pull request merge base cannot be found", resolved.stderr.trim());
+    return "";
+  }
+  return resolved.stdout.trim();
+}
+
 const options = parseArgs(process.argv.slice(2));
 if (!options) {
   process.stderr.write("usage: node scripts/resolve-ci-diff-range.cjs --event-name <push|pull_request> --event-path <json>\n");
@@ -65,12 +75,16 @@ if (!options) {
   }
 
   if (event && options.eventName === "pull_request") {
-    const base = requireCommit(event.pull_request?.base?.sha, "pull request base");
+    const eventBase = requireCommit(event.pull_request?.base?.sha, "pull request base");
     const head = requireCommit(event.pull_request?.head?.sha, "pull request head");
-    if (base && head) process.stdout.write(`${base} ${head}\n`);
+    const target = targetBranchBase(event);
+    if (eventBase && target && head) {
+      const base = requireMergeBase(target, head);
+      if (base) process.stdout.write(`${base} ${head}\n`);
+    }
   } else if (event && options.eventName === "push") {
+    const base = requireCommit(event.before, "push before");
     const head = requireCommit(event.after, "push after");
-    const base = targetBranchBase(event);
     if (base && head) process.stdout.write(`${base} ${head}\n`);
   } else if (event) {
     fail(`unsupported event ${options.eventName}`);

@@ -3,6 +3,7 @@ const { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync 
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-protected-paths.cjs");
@@ -19,7 +20,7 @@ function git(root, args) {
 }
 
 function fixture() {
-  const root = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-path-test-"));
+  const root = testTmpdir(join(SCRATCH_ROOT, "pinprotect-path-test-"));
   git(root, ["init", "-q"]);
   git(root, ["config", "user.email", "pinprotect@example.invalid"]);
   git(root, ["config", "user.name", "Pinprotect Test"]);
@@ -156,7 +157,7 @@ test("a rename between two unprotected paths passes", (t) => {
 
 test("changing a protected-list entry fails closed and names the change", (t) => {
   const root = fixture();
-  const scriptRoot = mkdtempSync(join(SCRATCH_ROOT, "pinprotect-list-test-"));
+  const scriptRoot = testTmpdir(join(SCRATCH_ROOT, "pinprotect-list-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   t.after(() => rmSync(scriptRoot, { recursive: true, force: true }));
   const base = git(root, ["rev-parse", "HEAD"]);
@@ -263,7 +264,7 @@ test("widening a ruling allowlist fails closed", (t) => {
   assert.match(result.stderr, /\.github\/workflows\/ci\.yml/);
 });
 
-test("push and pull-request events resolve the same target-branch candidate range", (t) => {
+test("push events use the event before commit instead of the target branch ref", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const base = git(root, ["rev-parse", "HEAD"]);
@@ -272,15 +273,17 @@ test("push and pull-request events resolve the same target-branch candidate rang
   git(root, ["add", "scripts/installed-tree-pin-sites.json"]);
   git(root, ["commit", "-qm", "protected first commit"]);
   const first = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", first]);
   writeFileSync(join(root, "ordinary-note.txt"), "harmless second commit\n");
   git(root, ["add", "ordinary-note.txt"]);
   git(root, ["commit", "-qm", "unprotected second commit"]);
   const head = git(root, ["rev-parse", "HEAD"]);
   const prRange = resolveRange(root, "pull_request", {
     pull_request: { base: { sha: base }, head: { sha: head } },
+    repository: { default_branch: "main" },
   });
   const pushRange = resolveRange(root, "push", {
-    before: first,
+    before: base,
     after: head,
     size: 2,
     commits: [{ id: first }, { id: head }],
@@ -288,14 +291,162 @@ test("push and pull-request events resolve the same target-branch candidate rang
   });
   assert.equal(prRange.status, 0, prRange.stdout + prRange.stderr);
   assert.equal(pushRange.status, 0, pushRange.stdout + pushRange.stderr);
-  assert.equal(prRange.stdout.trim(), `${base} ${head}`);
-  assert.equal(pushRange.stdout.trim(), prRange.stdout.trim());
+  assert.equal(prRange.stdout.trim(), `${first} ${head}`);
+  assert.equal(pushRange.stdout.trim(), `${base} ${head}`);
   const result = run(root, ...pushRange.stdout.trim().split(" "));
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /scripts\/installed-tree-pin-sites\.json/);
 });
 
-test("a push without a target default branch fails by name", (t) => {
+test("a stale pull-request base excludes protected changes already on the target branch", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const staleBase = git(root, ["rev-parse", "HEAD"]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "main-only.txt"), "target branch\n");
+  git(root, ["add", "test/fixtures/main-only.txt"]);
+  git(root, ["commit", "-qm", "protected target-branch change"]);
+  const currentBase = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", currentBase]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "topic-only.txt"), "topic\n");
+  git(root, ["add", "topic-only.txt"]);
+  git(root, ["commit", "-qm", "unprotected topic change"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const range = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: staleBase }, head: { sha: head } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(range.status, 0, range.stdout + range.stderr);
+  assert.equal(range.stdout.trim(), `${currentBase} ${head}`);
+  const result = run(root, ...range.stdout.trim().split(" "));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("a pull-request protected change remains in the merge-base range", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "topic-only.txt"), "topic\n");
+  git(root, ["add", "test/fixtures/topic-only.txt"]);
+  git(root, ["commit", "-qm", "protected topic change"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const range = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: base }, head: { sha: head } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(range.status, 0, range.stdout + range.stderr);
+  assert.equal(range.stdout.trim(), `${base} ${head}`);
+  const result = run(root, ...range.stdout.trim().split(" "));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /test\/fixtures\/topic-only\.txt/);
+});
+
+test("a pull-request protected change remains after the topic merges the target branch", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, ["branch", "-m", "main"]);
+  const staleBase = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "topic-before-merge.txt"), "topic\n");
+  git(root, ["add", "test/fixtures/topic-before-merge.txt"]);
+  git(root, ["commit", "-qm", "protected topic change"]);
+  git(root, ["switch", "main"]);
+  writeFileSync(join(root, "main-after-topic.txt"), "target branch\n");
+  git(root, ["add", "main-after-topic.txt"]);
+  git(root, ["commit", "-qm", "target branch change"]);
+  const currentBase = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", currentBase]);
+  git(root, ["switch", "topic"]);
+  git(root, ["merge", "--no-ff", "main", "-m", "merge target branch"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const range = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: staleBase }, head: { sha: head } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(range.status, 0, range.stdout + range.stderr);
+  assert.equal(range.stdout.trim(), `${currentBase} ${head}`);
+  const result = run(root, ...range.stdout.trim().split(" "));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /test\/fixtures\/topic-before-merge\.txt/);
+});
+
+test("rebased pull requests exclude target changes and retain topic protected changes", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, ["branch", "-m", "main"]);
+  const staleBase = git(root, ["rev-parse", "HEAD"]);
+
+  git(root, ["switch", "-qc", "clean-topic"]);
+  writeFileSync(join(root, "clean-topic.txt"), "ordinary topic change\n");
+  git(root, ["add", "clean-topic.txt"]);
+  git(root, ["commit", "-qm", "ordinary topic change"]);
+
+  git(root, ["switch", "-qc", "protected-topic", staleBase]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "protected-topic.txt"), "protected topic change\n");
+  git(root, ["add", "test/fixtures/protected-topic.txt"]);
+  git(root, ["commit", "-qm", "protected topic change"]);
+
+  git(root, ["switch", "main"]);
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  writeFileSync(join(root, "test", "fixtures", "main-only.txt"), "protected target change\n");
+  git(root, ["add", "test/fixtures/main-only.txt"]);
+  git(root, ["commit", "-qm", "protected target change"]);
+  const currentBase = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", currentBase]);
+
+  git(root, ["switch", "clean-topic"]);
+  git(root, ["rebase", "main"]);
+  const cleanHead = git(root, ["rev-parse", "HEAD"]);
+  const cleanRange = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: staleBase }, head: { sha: cleanHead } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(cleanRange.status, 0, cleanRange.stdout + cleanRange.stderr);
+  assert.equal(cleanRange.stdout.trim(), `${currentBase} ${cleanHead}`);
+  const cleanResult = run(root, ...cleanRange.stdout.trim().split(" "));
+  assert.equal(cleanResult.status, 0, cleanResult.stdout + cleanResult.stderr);
+  assert.match(cleanResult.stdout, /PROTECTED PATH REVIEW OK/);
+
+  git(root, ["switch", "protected-topic"]);
+  git(root, ["rebase", "main"]);
+  const protectedHead = git(root, ["rev-parse", "HEAD"]);
+  const protectedRange = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: staleBase }, head: { sha: protectedHead } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(protectedRange.status, 0, protectedRange.stdout + protectedRange.stderr);
+  assert.equal(protectedRange.stdout.trim(), `${currentBase} ${protectedHead}`);
+  const protectedResult = run(root, ...protectedRange.stdout.trim().split(" "));
+  assert.equal(protectedResult.status, 1, protectedResult.stdout + protectedResult.stderr);
+  assert.match(protectedResult.stderr, /test\/fixtures\/protected-topic\.txt/);
+  assert.doesNotMatch(protectedResult.stderr, /test\/fixtures\/main-only\.txt/);
+});
+
+test("a pull request with no merge base fails by name", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "--orphan", "unrelated"]);
+  writeFileSync(join(root, "unrelated.txt"), "unrelated history\n");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "unrelated head"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const range = resolveRange(root, "pull_request", {
+    pull_request: { base: { sha: base }, head: { sha: head } },
+    repository: { default_branch: "main" },
+  });
+  assert.equal(range.status, 1, range.stdout + range.stderr);
+  assert.equal(range.stdout, "");
+  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: pull request merge base cannot be found\./);
+});
+
+test("a push with an all-zero before commit fails by name", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const head = git(root, ["rev-parse", "HEAD"]);
@@ -306,7 +457,7 @@ test("a push without a target default branch fails by name", (t) => {
     commits: [],
   });
   assert.equal(range.status, 1, range.stdout + range.stderr);
-  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: target default branch is missing from event payload/);
+  assert.match(range.stderr, /CI_DIFF_RANGE_UNREADABLE: push before is missing or is the all-zero object id/);
 });
 
 test("a protected artifact deleted within the candidate range still requires a ruling", (t) => {

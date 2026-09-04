@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
 
@@ -93,7 +94,7 @@ function pathToFileURL(file) {
 
 function interpretedAnswers(t, config, steps, cfg) {
   const { lean, sourceRoot, leanPath } = leanEnvironment();
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "seal-authorization-seamdiff-"));
+  const temporary = testTmpdir(path.join(os.tmpdir(), "seal-authorization-seamdiff-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const payload = path.join(temporary, "payload.json");
   const corpus = path.join(temporary, "corpus.jsonl");

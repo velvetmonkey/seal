@@ -6,13 +6,11 @@ const path = require("node:path");
 const { execFileSync, spawn } = require("node:child_process");
 const readline = require("node:readline");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -128,7 +126,7 @@ async function waitForFile(filePath, timeoutMs = 2000) {
 }
 
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
-  const root = tmpdir("seal-protect3b-hash-");
+  const root = testTmpdir("seal-protect3b-hash-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -153,7 +151,7 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
 });
 
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {
-  const root = tmpdir("seal-protect3b-owned-override-");
+  const root = testTmpdir("seal-protect3b-owned-override-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -190,7 +188,7 @@ test("unprotect refuses a developer-replaced local override and preserves it byt
 });
 
 test("status distinguishes unreadable local configuration from a drifted override", (t) => {
-  const root = tmpdir("seal-protect3b-override-read-");
+  const root = testTmpdir("seal-protect3b-override-read-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -247,7 +245,7 @@ test("status distinguishes unreadable local configuration from a drifted overrid
 });
 
 test("unprotect treats a missing local configuration as absent", () => {
-  const root = tmpdir("seal-protect3b-config-absent-");
+  const root = testTmpdir("seal-protect3b-config-absent-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -264,7 +262,7 @@ test("unprotect treats a missing local configuration as absent", () => {
 });
 
 test("protect names install-time refusals", () => {
-  const root = tmpdir("seal-protect3b-refusals-");
+  const root = testTmpdir("seal-protect3b-refusals-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -311,7 +309,7 @@ test("protect names install-time refusals", () => {
 });
 
 test("proxy activation promotes pending, and live project drift refuses before child delivery", async () => {
-  const root = tmpdir("seal-protect3b-drift-");
+  const root = testTmpdir("seal-protect3b-drift-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -330,21 +328,19 @@ test("proxy activation promotes pending, and live project drift refuses before c
     const nextLine = () => new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
 
     await waitForState(statePath, "ACTIVE");
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: 90, method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
+    }) + "\n");
+    await nextLine();
     proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "held" } } }) + "\n");
-    const opened = await nextLine();
-    assert.equal(opened.result.resultType, "input_required");
+    const elicitation = await nextLine();
+    assert.equal(elicitation.method, "elicitation/create");
 
     writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", dataFile, "--drifted"] });
     proxy.stdin.write(JSON.stringify({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "demo.mutate",
-        arguments: { line: "held" },
-        requestState: opened.result.requestState,
-        inputResponses: { approval: { action: "accept", content: { approve: true } } },
-      },
+      jsonrpc: "2.0", id: elicitation.id,
+      result: { action: "accept", content: { approve: true } },
     }) + "\n");
     const refused = await nextLine();
     assert.match(refused.result.content[0].text, /project_server_drifted/);
@@ -358,7 +354,7 @@ test("proxy activation promotes pending, and live project drift refuses before c
 });
 
 test("unprotect refuses while an activation lease pid is live", () => {
-  const root = tmpdir("seal-protect3b-active-");
+  const root = testTmpdir("seal-protect3b-active-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -378,7 +374,7 @@ test("unprotect refuses while an activation lease pid is live", () => {
 });
 
 test("unprotect recovers a live recycled PID whose witness does not match", () => {
-  const root = tmpdir("seal-protect3b-recycled-pid-");
+  const root = testTmpdir("seal-protect3b-recycled-pid-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -405,7 +401,7 @@ test("unprotect recovers a live recycled PID whose witness does not match", () =
 });
 
 test("unprotect refuses without installed ownership proof", () => {
-  const root = tmpdir("seal-protect3b-unwedge-");
+  const root = testTmpdir("seal-protect3b-unwedge-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -428,7 +424,7 @@ test("unprotect refuses without installed ownership proof", () => {
 });
 
 test("unprotect unwinds an absent override only when state proves Seal installed it", () => {
-  const root = tmpdir("seal-protect3b-owned-absent-");
+  const root = testTmpdir("seal-protect3b-owned-absent-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -450,7 +446,7 @@ test("unprotect unwinds an absent override only when state proves Seal installed
 });
 
 test("unprotect refuses when no Seal state exists", () => {
-  const root = tmpdir("seal-protect3b-no-owned-state-");
+  const root = testTmpdir("seal-protect3b-no-owned-state-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -472,7 +468,7 @@ test("unprotect refuses when no Seal state exists", () => {
 });
 
 test("unprotect still refuses when the Claude command is unavailable during remove", () => {
-  const root = tmpdir("seal-protect3b-remove-failure-");
+  const root = testTmpdir("seal-protect3b-remove-failure-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -490,7 +486,7 @@ test("unprotect still refuses when the Claude command is unavailable during remo
 });
 
 test("status guides an absent Seal-owned local override in a pending project", () => {
-  const root = tmpdir("seal-protect3b-status-absent-");
+  const root = testTmpdir("seal-protect3b-status-absent-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -514,7 +510,7 @@ test("status guides an absent Seal-owned local override in a pending project", (
 });
 
 test("status and doctor use outside-Seal and assumption/refusal language", () => {
-  const root = tmpdir("seal-protect3b-doctor-");
+  const root = testTmpdir("seal-protect3b-doctor-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -522,7 +518,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
 
   const status = run(project, home, ["status"]);
   assert.equal(status.code, 0);
-  assert.match(status.out, /^Protection: - outside Seal$/m);
+  assert.match(status.out, /^Sealed MCP route: - outside Seal$/m);
   assert.doesNotMatch(status.out, /unprotected/i);
 
   const doctor = run(project, home, ["doctor"]);
@@ -539,7 +535,7 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
 
 test("protect refuses both auto-response hooks before creating protection state", () => {
   for (const variable of ["SEAL_ELICITATION_AUTO_RESPONSE", "CLAUDE_ELICITATION_AUTO_RESPONSE"]) {
-    const root = tmpdir(`seal-protect3b-doctor-gate-${variable.toLowerCase()}-`);
+    const root = testTmpdir(`seal-protect3b-doctor-gate-${variable.toLowerCase()}-`);
     const project = path.join(root, "project");
     const home = path.join(root, "home");
     fs.mkdirSync(project);
@@ -551,14 +547,14 @@ test("protect refuses both auto-response hooks before creating protection state"
     const result = run(project, home, ["protect", "db", "demo.mutate"], env);
     assert.notEqual(result.code, 0, result.out);
     assert.match(result.out, /^seal: REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed$/m);
-    assert.doesNotMatch(result.out, /^Protection: (?:PENDING RESTART|ACTIVE) /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|ACTIVE) /m);
     assert.equal(fs.existsSync(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") })), false);
     assert.equal(fs.existsSync(fakeLocalOverridePath(root)), false);
   }
 });
 
 test("status renders a dead activation lease as STALE, not active", () => {
-  const root = tmpdir("seal-protect3b-dead-lease-");
+  const root = testTmpdir("seal-protect3b-dead-lease-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -573,9 +569,10 @@ test("status renders a dead activation lease as STALE, not active", () => {
 
   const status = run(project, home, ["status"], env);
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
+  assert.match(status.out, /^Sealed MCP route db: STALE /m);
+  assert.match(status.out, /^  demo\.mutate$/m);
   assert.match(status.out, /previous wrapper lease is not live/);
-  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
 });
 
 test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
@@ -583,7 +580,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
   // wrapper activates the lease, then exits as any Claude session does. The
   // stored state stays ACTIVE with the now-dead wrapper pid; status must
   // observe the dead lease and report PENDING RESTART, never ACTIVE.
-  const root = tmpdir("seal-protect3b-realexit-");
+  const root = testTmpdir("seal-protect3b-realexit-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -617,6 +614,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
 
   const status = run(project, home, ["status"], { PATH: env.PATH });
   assert.equal(status.code, 0, status.out);
-  assert.match(status.out, /^Protection: STALE db\.demo\.mutate /m);
-  assert.doesNotMatch(status.out, /^Protection: ACTIVE /m);
+  assert.match(status.out, /^Sealed MCP route db: STALE /m);
+  assert.match(status.out, /^  demo\.mutate$/m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
 });

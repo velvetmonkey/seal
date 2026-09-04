@@ -27,7 +27,7 @@ as product output.
 
 ## Before you start
 
-- macOS source portability is CI-exercised for install, demo and receipt checking. Protect is not supported on macOS yet. Linux x86-64 is the supported Protect path. Windows, Linux ARM and other platforms are unsupported.
+- Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64. Windows, Linux ARM and other platforms are unsupported.
 - Node 20 or newer.
 - Claude Code installed (`claude --version` prints a version). `seal protect`
   needs it; `seal demo` and `seal status` do not.
@@ -95,3 +95,7 @@ sandbox. It controls the path through it — Claude Code calling that one tool
 of that one server — and only that path. Bash, the network, subprocesses, and
 every other tool and server are outside it, and the approval prompt says so
 every time.
+
+Previous: [Evaluator walk](../start/evaluator-walk.md).
+Up: [Documentation map](../README.md).
+Next: [Choosing what to protect](choosing-what-to-protect.md).

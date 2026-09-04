@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 
 const LINKCHECK_TEST = path.resolve(import.meta.dirname, "linkcheck.test.mjs");
+const LINKCHECK_HELPERS_TEST = path.resolve(import.meta.dirname, "linkcheck-helpers.test.mjs");
 const CONTROL_DOCUMENT = path.resolve(import.meta.dirname, "../docs/assurance/linkcheck-population-control.md");
 
 const REQUIRED_ASSERTIONS = [
@@ -26,13 +27,13 @@ const REQUIRED_ASSERTIONS = [
 ];
 
 test("linkcheck assertion inventory refuses a removed assertion by name", () => {
-  const source = readFileSync(LINKCHECK_TEST, "utf8");
+  const source = `${readFileSync(LINKCHECK_TEST, "utf8")}\n${readFileSync(LINKCHECK_HELPERS_TEST, "utf8")}`;
   for (const [name, fragment] of REQUIRED_ASSERTIONS) {
     assert.ok(source.includes(fragment), `linkcheck assertion missing: ${name}`);
   }
   const actualCount = (source.match(/assert\.(?:equal|notEqual|ok|match|doesNotMatch|deepEqual|throws|rejects)\(/gu) || []).length;
   assert.equal(actualCount, 18, `linkcheck assertion inventory changed: expected 18 assertions, found ${actualCount}`);
   const control = readFileSync(CONTROL_DOCUMENT, "utf8");
-  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md
+  assert.match(control, /separate-source\s+cross-check/u, "population-control document must name the cross-check"); // CLAIM-COVERAGE: docs/assurance/linkcheck-population-control.md#linkcheck-population
   assert.match(control, /shared rules can hide a target from both routes/u, "population-control document must state the shared blind spot");
 });

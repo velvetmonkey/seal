@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
 
@@ -40,7 +41,7 @@ process.exit(2);
 }
 
 test("protect prints a real local State path for a nested project", () => {
-  const root = fs.mkdtempSync(path.join(os.homedir(), "scratch-stateguard-witness-"));
+  const root = testTmpdir(path.join(os.homedir(), "scratch-stateguard-witness-"));
   const project = path.join(root, "parent", "seal-protect-demo");
   const home = path.join(root, "home");
   const config = path.join(root, "claude-config");
@@ -82,7 +83,8 @@ rl.on("line", (line) => {
   assert.ok(path.isAbsolute(statePath), `State path is not local and absolute: ${statePath}`);
   assert.equal(fs.statSync(statePath).isFile(), true, `State path is not a file: ${statePath}`);
   const status = execFileSync(SEAL, ["status"], { cwd: project, env, encoding: "utf8" });
-  assert.match(status, /Protection: PENDING RESTART db\.demo\.mutate/);
+  assert.match(status, /Sealed MCP route db: PENDING RESTART/);
+  assert.match(status, /^  demo\.mutate$/m);
 
   const activated = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
     cwd: path.join(root, "parent"),

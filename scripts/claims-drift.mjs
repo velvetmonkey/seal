@@ -14,19 +14,24 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = resolve(process.env.SEAL_CLAIMS_DRIFT_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 
 const BLOCKS = [
-  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md; CLAIM-COVERAGE: docs/assurance/index.html
+  { begin: "<!-- claims:begin -->", end: "<!-- claims:end -->", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#claims-block; CLAIM-COVERAGE: docs/assurance/index.html#claims-block
     canonical: "docs/archive/LIMITATIONS.md", mirrors: ["docs/assurance/index.html"] },
+  { begin: "<!-- truthbox:begin -->", end: "<!-- truthbox:end -->", // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box; CLAIM-COVERAGE: docs/assurance/index.html#truth-box
+    canonical: "docs/archive/TRUTH-BOX.md", mirrors: ["docs/assurance/index.html"] },
 ];
 
 const CLAIM_MANIFEST = [
   ["docs/archive/LIMITATIONS.md", "Lane C runs a wasm-vs-interpreted-Lean differential in seal-host CI over a fixed corpus; it is evidence over that corpus, not a universal binary-equals-model proof."],
-  ["docs/archive/README.md", "This archive has eighteen files registered with claim-bearing-file-inventory; removing its WHAT-IS document makes that check fail, removing AUTHORIZATION-RECORD.md makes claim-coverage-inventory fail, and removing this README makes claims-drift fail."],
-  ["docs/archive/TRUTH-BOX.md", "non-claim. index.html mirrors these three lines verbatim between the same"], // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md
-  ["docs/assurance/linkcheck-population-control.md", "separate-source\ncross-check"],
 ];
+
+const ARCHIVE_CLAIM_PAGE = "docs/archive/README.md"; // CLAIM-COVERAGE: docs/archive/README.md#archive-count
+const ARCHIVE_CLAIM_MANIFEST = "scripts/claim-bearing-files.json";
+const EXPECTED_ARCHIVE_CLAIM_FILES = 19;
+const LINKCHECK_SCRIPT = "scripts/linkcheck.mjs";
+const LINKCHECK_TEST = "test/linkcheck.test.mjs";
 
 if (BLOCKS.length === 0) {
   console.error("ERROR claims-drift block population is empty; refusing to treat silence as complete claim synchronization");
@@ -132,3 +137,55 @@ if (!drift && !fatal) {
   console.log("all claim blocks in sync across all surfaces");
 }
 // FAMILY-SHARED:END evaluation
+
+let factDrift = false;
+let archiveManifest;
+try {
+  archiveManifest = JSON.parse(readFileSync(resolve(ROOT, ARCHIVE_CLAIM_MANIFEST), "utf8"));
+} catch (e) {
+  fatalError(`ERROR  ${ARCHIVE_CLAIM_MANIFEST}: ${e.message}`);
+}
+if (archiveManifest) {
+  const files = archiveManifest.files;
+  if (!files || typeof files !== "object" || Array.isArray(files)) {
+    fatalError(`ERROR  ${ARCHIVE_CLAIM_MANIFEST}: files must be an object`);
+  } else {
+    const archiveFiles = Object.keys(files).filter((file) => file.startsWith("docs/archive/"));
+    if (archiveFiles.length === EXPECTED_ARCHIVE_CLAIM_FILES) {
+      console.log(`PASS  ${ARCHIVE_CLAIM_MANIFEST} registers ${EXPECTED_ARCHIVE_CLAIM_FILES} archive files`);
+    } else {
+      factDrift = true;
+      console.error(`FAIL  ${ARCHIVE_CLAIM_MANIFEST} registers ${archiveFiles.length} archive files; expected ${EXPECTED_ARCHIVE_CLAIM_FILES}`);
+    }
+  }
+}
+
+let linkcheckScript;
+let linkcheckTest;
+try { linkcheckScript = readFileSync(resolve(ROOT, LINKCHECK_SCRIPT), "utf8"); }
+catch (e) { fatalError(`ERROR  ${LINKCHECK_SCRIPT}: ${e.message}`); }
+try { linkcheckTest = readFileSync(resolve(ROOT, LINKCHECK_TEST), "utf8"); }
+catch (e) { fatalError(`ERROR  ${LINKCHECK_TEST}: ${e.message}`); }
+if (linkcheckScript !== undefined && linkcheckTest !== undefined) {
+  const linkcheckSpecifier = String.raw`(?:\.\./scripts/linkcheck\.mjs|${LINKCHECK_SCRIPT})`;
+  const takesProductLogic = new RegExp(
+    String.raw`(?:\bfrom\s*["']${linkcheckSpecifier}["']|\bimport\s*\(\s*["']${linkcheckSpecifier}["']|\brequire\s*\(\s*["']${linkcheckSpecifier}["'])`,
+    "u",
+  ).test(linkcheckTest);
+  const runsProduct = linkcheckTest.includes(`path.join(ROOT, "${LINKCHECK_SCRIPT}")`);
+  const hasIndependentPopulation = linkcheckTest.includes("function expectedTargets()")
+    && linkcheckTest.includes("assert.deepEqual(scanned, expectedTargets()");
+  if (!takesProductLogic && runsProduct && hasIndependentPopulation && linkcheckScript.length > 0) {
+    console.log(`PASS  ${LINKCHECK_TEST} cross-checks ${LINKCHECK_SCRIPT} without importing or requiring it`);
+  } else {
+    factDrift = true;
+    console.error(`FAIL  ${LINKCHECK_TEST} must execute ${LINKCHECK_SCRIPT} and reconstruct expected targets without importing or requiring product logic`);
+  }
+}
+
+if (factDrift) {
+  console.error("\nCLAIMS FACT DRIFT — repair the source fact, not its assertion sentence.");
+  if (!fatal) process.exitCode = 1;
+}
+if (fatal) process.exitCode = 2;
+if (!factDrift && !fatal) console.log("all source fact checks pass");

@@ -4,6 +4,7 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-installed-tree-pin-manifest-review.cjs");
@@ -23,7 +24,7 @@ function git(root, args) {
 }
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "seal-pinmanifest-review-"));
+  const root = testTmpdir(join(tmpdir(), "seal-pinmanifest-review-"));
   mkdirSync(join(root, "scripts"), { recursive: true });
   writeFileSync(join(root, "scripts", "installed-tree-pin-sites.json"), "[]\n");
   git(root, ["init"]);

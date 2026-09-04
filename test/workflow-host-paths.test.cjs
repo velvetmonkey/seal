@@ -5,13 +5,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { findForbiddenHostPaths } = require("../scripts/check-workflow-host-paths.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
 function fixture(contents) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seal-workflow-host-path-"));
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-workflow-host-path-"));
   fs.mkdirSync(path.join(root, ".github", "workflows"), { recursive: true });
   fs.writeFileSync(path.join(root, ".github", "workflows", "ci.yml"), contents);
   return root;
@@ -35,7 +36,7 @@ test("both kernel workflows delegate the rebuild recipe to seal-reproduce", () =
   const expected = /run: node scripts\/seal-reproduce\.cjs build-pinned-kernel "\$(?:GITHUB_REF_NAME|RELEASE_TAG)" --output "\$RUNNER_TEMP\/rebuilt-seal\.wasm"/u;
   for (const relative of [".github/workflows/release.yml", ".github/workflows/published-kernel.yml"]) {
     const workflow = fs.readFileSync(path.join(ROOT, relative), "utf8");
-    assert.match(workflow, expected); // CLAIM-COVERAGE: .github/workflows/published-kernel.yml
+    assert.match(workflow, expected); // CLAIM-COVERAGE: .github/workflows/published-kernel.yml#published-kernel
     assert.doesNotMatch(workflow, /provision_toolchain|install_pinned_elan|build_runtime_wasm/u);
   }
 });

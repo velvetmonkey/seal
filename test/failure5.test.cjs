@@ -11,15 +11,13 @@ const path = require("node:path");
 const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
-}
-function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 function countOf(dataFile) {
   const file = `${dataFile}.count`;
@@ -76,7 +74,7 @@ process.exit(2);
   return bin;
 }
 function setup(prefix) {
-  const root = tmpdir(prefix);
+  const root = testTmpdir(prefix);
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   fs.mkdirSync(project);
@@ -136,9 +134,17 @@ async function withProxy(ctx, fn) {
       else if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error(`no response ${id}: ${buf}`)); }
     }, 15);
   });
+  const waitMethod = (method, ms = 8000) => new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const hit = responses.find((r) => r.method === method);
+      if (hit) { clearInterval(iv); resolve(hit); }
+      else if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error(`no request ${method}: ${buf}`)); }
+    }, 15);
+  });
   const send = (obj) => proxy.stdin.write(JSON.stringify(obj) + "\n");
   try {
-    return await fn({ proxy, send, wait, responses, statePath });
+    return await fn({ proxy, send, wait, waitMethod, responses, statePath });
   } finally {
     try { proxy.stdin.end(); } catch {}
     await new Promise((resolve) => proxy.once("close", resolve));
@@ -162,23 +168,15 @@ test("1 branch drift: named refusal, no forward, .mcp.json untouched by the refu
 test("2 manual edit of .mcp.json: same detector, named project_server_drifted on a live call", async () => {
   const ctx = setup("f5-edit-");
   assert.equal(runSeal(ctx, ["protect", "db", "demo.mutate"]).code, 0);
-  await withProxy(ctx, async ({ send, wait }) => {
-    send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  await withProxy(ctx, async ({ send, wait, waitMethod }) => {
+    send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { capabilities: { elicitation: {} } } });
     await wait(1);
     send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "held" } } });
-    const opened = await wait(2);
-    assert.equal(opened.result.resultType, "input_required");
+    const elicitation = await waitMethod("elicitation/create");
     writeProject(ctx.project, { command: process.execPath, args: [SEAL, "__demo-server", ctx.dataFile, "--hand-edit"] });
     const before = snapshot(ctx);
-    send({
-      jsonrpc: "2.0", id: 3, method: "tools/call",
-      params: {
-        name: "demo.mutate", arguments: { line: "held" },
-        requestState: opened.result.requestState,
-        inputResponses: { approval: { action: "accept", content: { approve: true } } },
-      },
-    });
-    const refused = await wait(3);
+    send({ jsonrpc: "2.0", id: elicitation.id, result: { action: "accept", content: { approve: true } } });
+    const refused = await wait(2);
     assert.match(refused.result.content[0].text, /project_server_drifted/);
     assert.equal(countOf(ctx.dataFile), "0");
     assert.equal(sha256(fs.readFileSync(ctx.mcpPath)), before.mcp);
@@ -285,7 +283,7 @@ test("7 live session during protect: works by design as PENDING RESTART", () => 
     const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
     assert.equal(result.code, 0, result.out);
     assert.match(result.out, /PENDING RESTART/);
-    assert.doesNotMatch(result.out, /^Protection: ACTIVE /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: ACTIVE /m);
     assertUntouched(ctx, before, "live protect");
   } finally {
     dummy.kill("SIGKILL");
@@ -326,7 +324,7 @@ test("10 elicitation hook: doctor names elicitation_hook_configured", () => {
 });
 
 test("11 declined-call: DECLINED, child stays at 0", async () => {
-  const dir = tmpdir("f5-decline-");
+  const dir = testTmpdir("f5-decline-");
   const countFile = path.join(dir, "child", "data.txt.count");
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
   let out = "";

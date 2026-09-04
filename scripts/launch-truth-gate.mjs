@@ -2,6 +2,27 @@
 // Truth gate for the launch surfaces.
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { protectPlatformSupported } = require('../spine/platform.cjs');
+const ROOT = path.resolve(import.meta.dirname, '..');
+const MACOS_PROTECT_SUPPORT = 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.';
+const GUIDE_MACOS_PROTECT_SUPPORT = 'Seal supports install, demo and receipt checking on Linux x86-64 and macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;';
+const RETIRED_MACOS_PROTECT_DENIAL = 'Protect is not supported on macOS yet';
+const CURRENT_MACOS_PROTECT_SURFACES = [
+  '.github/workflows/release.yml',
+  'README.md',
+  'bin/seal',
+  'docs/assurance/README.md',
+  'docs/assurance/RELEASE-NOTES-v0.2.0.md',
+  'docs/assurance/distribution.md',
+  'docs/assurance/index.html',
+  'docs/guide/README.md',
+  'docs/guide/when-something-looks-wrong.md',
+  'scripts/install.cjs',
+  'scripts/seal-launch.cjs',
+  'spine/platform.cjs',
+];
 const EXPECTED = {
   readme: 'README.md',
   umbrellaWorkflow: '.github/workflows/ci.yml',
@@ -94,6 +115,12 @@ function repositoryLinkVerdict(link) {
     const nonRepositoryPaths = new Set([
       '/velvetmonkey/seal/actions/workflows/ci.yml/badge.svg',
       '/velvetmonkey/seal/actions/workflows/ci.yml',
+      '/velvetmonkey/seal/actions/workflows/macos.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/macos.yml',
+      '/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/authorization-seam-differential.yml',
+      '/velvetmonkey/seal/actions/workflows/family-claims-live.yml/badge.svg',
+      '/velvetmonkey/seal/actions/workflows/family-claims-live.yml',
       '/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS',
       '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64', '/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs',
     ]);
@@ -143,7 +170,27 @@ const frontDoorClaims = [
 for (const claim of frontDoorClaims) {
   if (readme.split(claim).length - 1 !== 1) fail(`README must carry the canonical front-door sentence exactly once: ${claim}`);
 }
-if (!readme.includes("Protect is not supported on macOS yet")) fail('README must state the macOS Protect boundary');
+const darwinX64ProtectSupported = protectPlatformSupported('darwin', 'x64');
+const darwinArm64ProtectSupported = protectPlatformSupported('darwin', 'arm64');
+if (darwinX64ProtectSupported !== darwinArm64ProtectSupported) {
+  fail(`platform table gives different Protect support for darwin-x64 (${darwinX64ProtectSupported}) and darwin-arm64 (${darwinArm64ProtectSupported})`);
+}
+for (const relative of CURRENT_MACOS_PROTECT_SURFACES) {
+  const source = relative === 'README.md' ? readme : readRequired(relative, path.join(ROOT, relative));
+  const normalizedSource = source.replace(/\s+/gu, ' ');
+  const requiredSupport = relative === 'docs/guide/when-something-looks-wrong.md'
+    ? GUIDE_MACOS_PROTECT_SUPPORT
+    : MACOS_PROTECT_SUPPORT;
+  if (darwinX64ProtectSupported && !normalizedSource.includes(requiredSupport)) {
+    fail(`${relative} must state the macOS Protect support carried by spine/platform.cjs`);
+  }
+  if (!darwinX64ProtectSupported && normalizedSource.includes(MACOS_PROTECT_SUPPORT)) {
+    fail(`${relative} states macOS Protect support that spine/platform.cjs does not carry`);
+  }
+  if (normalizedSource.includes(RETIRED_MACOS_PROTECT_DENIAL)) {
+    fail(`${relative} retains the retired macOS Protect denial`);
+  }
+}
 
 // Claims removed from the developer route must not creep back without their
 // qualifications. If one of these words returns, re-add the qualified wording
@@ -151,17 +198,17 @@ if (!readme.includes("Protect is not supported on macOS yet")) fail('README must
 if (/live-agent|attack replay/i.test(readme)) fail('README reintroduces replay/live-agent language; the qualified wording and this gate must change together');
 if (/mesh/i.test(readme)) fail('README reintroduces a mesh claim; the dated qualification and this gate must change together');
 // --- Landing page and comparison surfaces: corrections stay in place ---
-requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay'); // CLAIM-COVERAGE: docs/assurance/index.html
+requireMatch(landingPage, /scripted attack replay/, 'landing page must identify the demonstration as a scripted attack replay'); // CLAIM-COVERAGE: docs/assurance/index.html#landing-page
 if (/replayed live-agent attack|see a live-agent attack blocked/i.test(landingPage)) fail('the landing page describes the replay as a live-agent attack');
   if (/fail-open heuristic guard/i.test(landingPage)) fail('landing page makes an overbroad fail-open comparison');
 
-requireMatch(comparison, /^LLM judges and prompt filters for agent tools work by judgment:/m, 'comparison must be narrowed to LLM judges and prompt filters'); // CLAIM-COVERAGE: docs/archive/WHY-DIFFERENT.md
+requireMatch(comparison, /^LLM judges and prompt filters for agent tools work by judgment:/m, 'comparison must be narrowed to LLM judges and prompt filters'); // CLAIM-COVERAGE: docs/archive/WHY-DIFFERENT.md#why-different
 requireMatch(comparison, /when one of these heuristic guards guesses wrong it can fail\s+\*\*open\*\*/m, 'comparison must use the qualified “can fail open” claim');
 if (/Most guardrails|heuristic guard guesses wrong it fails \*\*open\*\*|\| \*\*Failure direction\*\* \| Fails open/i.test(comparison)) fail('comparison makes an overbroad fail-open claim');
 
 // --- Evaluator surface: dated corrections stay dated ---
 
-requireMatch(evaluator, /> \*\*Dated correction, measured \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,1200}28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657/, 'fleet hash must remain inside its dated correction'); // CLAIM-COVERAGE: docs/assurance/evaluator-start.md
+requireMatch(evaluator, /> \*\*Dated correction, measured \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,1200}28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657/, 'fleet hash must remain inside its dated correction'); // CLAIM-COVERAGE: docs/assurance/evaluator-start.md#evaluator-start
 requireMatch(evaluator, /The module axiom gate is derived evidence: run `lake exe module_axiom_check`[\s\S]{0,900}Re-run it for the counts in any later tree;/, 'module census must remain derived from the executable gate instead of copied as current prose');
 if (/expected 51 production modules and 25 kernel-baseline assignments/.test(evaluator)) fail('time-dependent module and assignment counts were copied back into the evaluator prose');
 requireMatch(evaluator, /\*\*CLOSED, AS OF \d{4}-\d{2}-\d{2}\.\*\*[\s\S]{0,500}28bb3ae7/, 'current fleet disposition must remain explicitly dated');
