@@ -178,7 +178,7 @@ test("README artifact claim rejects builder paths and development names in publi
   const green = checkArtifactClaim(README);
   assert.equal(green.status, 0, green.stderr);
 
-  const absolute = checkArtifactClaim(README.replace(ARTIFACT, path.join(os.homedir(), "wt", "builder", "dist", ARTIFACT)));
+  const absolute = checkArtifactClaim(README.replace(ARTIFACT, ["/home", "monkey", "wt", "builder", "dist", ARTIFACT].join("/")));
   assert.equal(absolute.status, 1);
   assert.match(absolute.stderr, /builder-local absolute artifact path/);
 
