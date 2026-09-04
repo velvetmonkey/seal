@@ -177,7 +177,7 @@ def envelopeTagV21 : String := "seal/v2.1/principal-envelope\x00"
 /-- **The canonical signed message** — the cross-language contract, pinned by
     golden vectors here, byte-twinned in `rust/tests/principal_identity.rs`,
     and frozen for downstream verifiers in
-    `/home/monkey/src/seal-fixB-envelope-contract.md`:
+    `seal-fixB-envelope-contract.md`:
 
         tag ‖ authority (exactly 32 raw bytes)
             ‖ u64be(|keyId| in UTF-8 bytes) ‖ keyId-bytes
@@ -465,7 +465,7 @@ theorem envelope_constrained_excludes_totality (authority : ByteArray)
 
 Byte-twinned in `rust/tests/principal_identity.rs`
 (`envelope_message_golden_vector_matches_lean`) and frozen in
-`/home/monkey/src/seal-fixB-envelope-contract.md`. `envelopeMessage` is pure
+`seal-fixB-envelope-contract.md`. `envelopeMessage` is pure
 Lean (no extern), so these pins run in every lane including the interpreter. -/
 
 /-- Hex of a byte array (lowercase) — for golden-vector pins and tests. -/

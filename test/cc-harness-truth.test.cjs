@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, "..");
 const HARNESS = path.join(ROOT, "harness", "claude-code", "cc-harness.cjs");
 const SYNTHETIC_CLIENT = path.join(ROOT, "harness", "claude-code", "synthetic-client.cjs");
 const { parseCast, rawCastOutputText } = require(path.join(ROOT, "harness", "claude-code", "terminal-renderer.cjs"));
-const REAL_ACCEPT_CAST = "/home/monkey/scratch/rendercheck-accept.cast";
+const REAL_ACCEPT_CAST = path.join(ROOT, "test", "fixtures", "rendercheck-accept.cast");
 
 function buildArtifact(workspace) {
   const out = path.join(workspace, "dist");

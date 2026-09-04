@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
-const { tmpdir } = require("node:os");
+const { homedir, tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -63,7 +63,7 @@ test("an output path from the builder is not normalized away", () => {
 
 test("a command fence with an absolute home path fails before it runs", () => {
   for (const [pathText, diagnostic] of [
-    ["/home/monkey/not-a-reader-path", /command fence contains \/home\/ absolute path/],
+    [join(homedir(), "not-a-reader-path"), /command fence contains \/home\/ absolute path/],
     ["/Users/reader/not-a-reader-path", /command fence contains \/Users\/ absolute path/],
     ["C:\\Users\\reader\\not-a-reader-path", /command fence contains C:\\Users\\ absolute path/],
     ["'C:\\Users\\reader\\not-a-reader-path'", /command fence contains C:\\Users\\ absolute path/],

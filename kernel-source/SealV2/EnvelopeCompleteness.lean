@@ -50,8 +50,7 @@ open Lean Elab Command
 namespace SealV2.Effect.Completeness
 
 /-- Signed fields DELIBERATELY not consulted by any gate, each carrying its
-    written reason (verdicts from the field-warrant report,
-    `/home/monkey/.mega-monkey/field-warrant-report.md`). Removing a gate
+    written reason (verdicts from the field-warrant report). Removing a gate
     without adding an exemption fails the build; gating an exempted field
     without removing its exemption also fails. -/
 def exemptions : List (Name × String) := [

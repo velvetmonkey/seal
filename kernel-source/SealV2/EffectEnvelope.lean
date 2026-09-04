@@ -12,7 +12,7 @@ fields that are actually authenticated AND interpreted. The original
 `seal.effect/v1` layout (council `bf01363f`) seated every candidate field; the
 E1★ ballot (Ben, 2026-07-22) killed the uninterpreted seats; Stage B stripped
 them; Stage B2 reconciles that strip with the field-warrant campaign verdicts
-(`/home/monkey/.mega-monkey/field-warrant-report.md`) BEFORE the tag ships —
+(the field-warrant report) BEFORE the tag ships —
 one domain-tag bump covers every shape change, per the repin razor.
 
 **Killed and STRIPPED:** F4 `idempotency_key`, F6 `on_behalf_of` /

@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
+const { homedir } = require("node:os");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
@@ -9,9 +10,9 @@ const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-protected-paths.cjs");
 const RANGE_SCRIPT = join(ROOT, "scripts", "resolve-ci-diff-range.cjs");
 // Local evidence stays under the required scratch root. GitHub-hosted CI has
-// no /home/monkey, so it supplies its own runner-managed scratch directory.
+// no local home-directory scratch root, so it supplies its own runner-managed scratch directory.
 const SCRATCH_ROOT = process.env.SEAL_PINPROTECT_TEST_ROOT
-  || (process.env.GITHUB_ACTIONS ? process.env.RUNNER_TEMP : "/home/monkey/scratch");
+  || (process.env.GITHUB_ACTIONS ? process.env.RUNNER_TEMP : join(homedir(), "scratch"));
 
 function git(root, args) {
   const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });

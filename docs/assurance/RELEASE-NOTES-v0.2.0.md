@@ -44,4 +44,4 @@ The fresh-source reproduction command covers the Linux x86-64 kernel. It does no
 
 The product-suite roster completeness boundary is INJECTED, not enforced: an actor that controls the measured test process could also forge its executed-file record and verdict. See `scripts/run-complete-product-suite.sh`.
 
-As of 2026-09-03 (PR 215 / `cceee9c`), the current in-tree `seal reproduce` command refuses the pre-import v0.2.0 tag instead of cloning the external recipe recorded above. See `docs/reproduce.md`.
+As of 2026-09-03 (PR 215 / `4259bfc`), the current in-tree `seal reproduce` command refuses the pre-import v0.2.0 tag instead of cloning the external recipe recorded above. See `docs/reproduce.md`.

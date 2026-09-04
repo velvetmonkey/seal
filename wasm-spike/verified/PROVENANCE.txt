@@ -135,10 +135,10 @@ Local build procedure
 ---------------------
 
 From the repository root, the only host Lean build was serialized by
-`/home/monkey/bin/leanbuild`; no outer flock and no raw host `lake`
+the host `leanbuild` wrapper; no outer flock and no raw host `lake`
 invocation were used:
 
-  /home/monkey/bin/leanbuild build
+  leanbuild build
   (cd wasm-spike && ./build_core.sh)
   (cd wasm-spike && ./build_wasm.sh strict)
 
@@ -174,11 +174,11 @@ Isolation flags were:
   --tmpfs /tmp:rw,nosuid,nodev,size=4g,mode=1777
 
 Only the evidence/bundle directory was mounted at `/runner/io`; the host
-repository, `/home/monkey`, host `.lake`, host toolchains, caches, Docker
+repository, the host home directory, host `.lake`, host toolchains, caches, Docker
 socket, and Docker volumes were not mounted. A transient GitHub credential was
 passed only to the guarded dependency-update exec and was not present during
 compilation. Both Lake phases were invoked through the host's
-`/home/monkey/bin/leanbuild` serialization guard, with no outer flock. The
+host `leanbuild` serialization guard, with no outer flock. The
 runner rejected warm `.lake`, Cargo, toolchain, and wasm object paths before
 building.
 
@@ -192,7 +192,7 @@ wasm SHA-256 to stdout, and
 records the same hash as the file under `/runner/io`. Detailed evidence is
 retained on the build host at:
 
-  /home/monkey/.mega-monkey/kernelbuild-gatefix-hermetic/evidence/
+  the build host's retained kernelbuild-gatefix-hermetic evidence directory
 
 Supersession and limits
 -----------------------
@@ -215,7 +215,7 @@ Phase 2 re-minting. Phase 2 was authorized on 2026-08-02 after the independent
 PROMOTE disposition and advances the fleet/fixtures without changing this
 artifact or any axiom pin. Known target asymmetries versus the native host (pre-init
 gate rejections; guards-first ordering on refuse-class lines) are documented
-in /home/monkey/.mega-monkey/gatefix-report.md.
+in the build host's retained gatefix report.
 
 Fleet pin history
 -----------------
