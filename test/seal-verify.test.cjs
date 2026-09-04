@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
@@ -22,16 +23,43 @@ function realReceipt() {
   const demo = run(["demo", "--dir", dir], "y\n");
   assert.equal(demo.code, 0, demo.out);
   const name = fs.readdirSync(path.join(dir, "receipts")).find((entry) => entry.endsWith("-ALLOW.json"));
-  return { dir, receipt: path.join(dir, "receipts", name) };
+  return {
+    dir,
+    receipt: path.join(dir, "receipts", name),
+    publicKey: fs.readFileSync(path.join(dir, "receipt-signer.pub"), "utf8").trim(),
+  };
 }
 
-test("seal verify replays a real receipt emitted by the producer", () => {
+test("seal verify exits successfully only for a signed receipt and the correct key", () => {
   const real = realReceipt();
-  const result = run(["verify", real.receipt]);
+  const result = run(["verify", real.receipt, "--pubkey", real.publicKey]);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /Document structure       VALID/);
-  assert.match(result.out, /Signature and bindings   UNVERIFIED/);
+  assert.match(result.out, /Signature and bindings   VALID/);
   assert.match(result.out, /Kernel decision          REPRODUCED/);
+  assert.match(result.out, /VERIFY    VERIFIED/);
+
+  const wrong = crypto.generateKeyPairSync("ed25519").publicKey
+    .export({ type: "spki", format: "der" }).subarray(-32).toString("hex");
+  const wrongKey = run(["verify", real.receipt, "--pubkey", wrong]);
+  assert.notEqual(wrongKey.code, 0, wrongKey.out);
+  assert.match(wrongKey.out, /signature_mismatch/);
+
+  const withoutKey = run(["verify", real.receipt]);
+  assert.notEqual(withoutKey.code, 0, withoutKey.out);
+  assert.match(withoutKey.out, /Signature and bindings   UNVERIFIED/);
+  assert.match(withoutKey.out, /VERIFY    UNVERIFIED/);
+});
+
+test("seal verify exits nonzero for a fabricated unsigned receipt", () => {
+  const real = realReceipt();
+  const body = JSON.parse(fs.readFileSync(real.receipt, "utf8"));
+  delete body.signature;
+  const fabricated = path.join(real.dir, "fabricated.json");
+  fs.writeFileSync(fabricated, JSON.stringify(body));
+  const result = run(["verify", fabricated, "--pubkey", real.publicKey]);
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /Signature and bindings   UNVERIFIED/);
   assert.match(result.out, /VERIFY    UNVERIFIED/);
 });
 

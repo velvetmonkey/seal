@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Regression guard (TC-2026-08-14-01): the product binary must never claim an
 // arm's-length verification. Our binary re-deriving our own receipt is not an
-// outside check, and only the separately published checker may say verified.
+// outside check; its VERIFIED verdict is scoped to the caller-supplied key,
+// receipt bindings, and replay rather than arm's-length verification.
 //
 // One exact, subject-bearing negated provenance sentence is permitted. An
 // allowlist entry that does not name its subject is a skeleton key: a control
@@ -159,9 +160,11 @@ test("seal verify output claims re-derivation, never an outside verification", a
   const cache = testTmpdir(path.join(os.tmpdir(), "seal-noclaim-cache-"));
   const dataHome = testTmpdir(path.join(os.tmpdir(), "seal-noclaim-data-"));
   const receipt = await writeKernelReceipt(cache, dataHome);
-  const out = execFileSync(process.execPath, [SEAL, "verify", receipt], {
+  const result = spawnSync(process.execPath, [SEAL, "verify", receipt], {
     env: { ...process.env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome }, encoding: "utf8",
   });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  const out = `${result.stdout}${result.stderr}`;
   for (const needle of BANNED) assert.ok(!out.includes(needle), `seal verify printed a banned claim: ${needle}`);
   assert.equal(out.includes("REFUSE"), false);
 });
