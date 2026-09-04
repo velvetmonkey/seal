@@ -581,6 +581,72 @@ test("a non-integer argument is refused without taking down the protected server
   assert.equal(await run.exit, 0, run.err);
 });
 
+test("a receipt-writer ReceiptRefusal still escapes write and does not elicit", async (t) => {
+  const receiptsMod = require("../spine/receipts.cjs");
+  const { ReceiptRefusal } = require("../spine/receipt-v2.cjs");
+  const origOpen = receiptsMod.openReceiptEmitter;
+  let emits = 0;
+  receiptsMod.openReceiptEmitter = (dir, signer) => {
+    const emitter = origOpen(dir, signer);
+    const inner = emitter.emit.bind(emitter);
+    emitter.emit = (record, action) => {
+      emits += 1;
+      if (emits === 1) throw new ReceiptRefusal("receipt_value_malformed", "injected receipt-writer refusal");
+      return inner(record, action);
+    };
+    return emitter;
+  };
+  const proxyPath = require.resolve("../spine/proxy.cjs");
+  delete require.cache[proxyPath];
+  const { createProxy: createProxyInjected } = require(proxyPath);
+  t.after(() => {
+    receiptsMod.openReceiptEmitter = origOpen;
+    delete require.cache[proxyPath];
+  });
+
+  const dir = testTmpdir("seal-emit-inject-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxyInjected({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const countFile = `${dataFile}.count`;
+  const started = Date.now();
+  while (!fs.existsSync(countFile)) {
+    if (Date.now() - started > 5000) assert.fail("demo-server did not start");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  const initDeadline = Date.now() + 8000;
+  while (!frames.some((frame) => frame.id === 90 && !frame.method)) {
+    if (Date.now() > initDeadline) assert.fail(`no initialize response: ${JSON.stringify(frames)}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  let thrown = null;
+  try {
+    proxy.write(JSON.stringify({
+      jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: "demo.mutate", arguments: { line: "inject" } },
+    }));
+  } catch (error) {
+    thrown = { name: error.name, code: error.code, message: error.message };
+  }
+  assert.equal(thrown && thrown.name, "ReceiptRefusal");
+  assert.equal(thrown.code, "receipt_value_malformed");
+  assert.equal(thrown.message, "injected receipt-writer refusal");
+  assert.equal(emits, 1);
+  assert.equal(frames.filter((frame) => frame.method === "elicitation/create").length, 0);
+  assert.equal(readCount(countFile), "0");
+});
+
 test("the retired client-supplied continuation shape is refused", async (t) => {
   const dir = testTmpdir("seal-receipt-only-retry-");
   const dataFile = path.join(dir, "data.txt");
