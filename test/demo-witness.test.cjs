@@ -71,7 +71,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.match(run.out, /Seal did not observe or authorise this write\./);
   assert.match(run.out, /The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened\./);
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
-  assert.match(run.out, /From the checkout root: node checker\/seal-receipt-v2\.mjs/, "demo must name the v2 checker path inside the source checkout");
+  assert.match(run.out, /Run: \(cd ".+" && node checker\/seal-receipt-v2\.mjs/, "demo must enter its payload root before naming the v2 checker path");
   assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
   assert.doesNotMatch(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must not advertise the incompatible browser checker");
 
