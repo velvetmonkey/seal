@@ -135,7 +135,7 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   const checked = require("node:child_process").spawnSync(process.execPath, [CHECKER, receiptPath, "--pubkey", fs.readFileSync(keys.publicKey, "utf8").trim()], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stdout + checked.stderr);
   assert.match(checked.stdout, /Signature and bindings   VALID/);
-  assert.match(checked.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(checked.stdout, /Event occurrence         NOT ESTABLISHED/);
 });
 

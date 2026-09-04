@@ -42,7 +42,7 @@ test("canonical receipt operations prose matches shipped verifier behavior", asy
 
   includesClaim(markdown, "**READ** parses and displays the receipt.", "READ prose must describe the shipped operation");
   includesClaim(markdown, "**VALIDATE** performs non-executing integrity checks:", "VALIDATE prose must describe the shipped operation");
-  includesClaim(markdown, "**REPLAY** loads the identified kernel and configuration inputs, recomputes,", "REPLAY prose must describe the shipped operation");
+  includesClaim(markdown, "**REPLAY** loads the receipt's recorded inputs, recomputes with the verifier's local kernel,", "REPLAY prose must describe the shipped operation");
   includesClaim(markdown, "**VERIFY** applies a NAMED profile to the available evidence and trust inputs,", "VERIFY prose must describe the shipped operation");
   assert.equal(result.read, true);
   assert.equal(result.validate, true);

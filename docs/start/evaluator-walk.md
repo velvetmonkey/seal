@@ -36,7 +36,7 @@ $ node checker/seal-receipt-v2.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$(cat "$SEAL_
 ```
 
 A matching receipt prints the five rows described in [Receipt operations](../reference/receipt-operations.md),
-including `Kernel decision REPRODUCED`, `Event occurrence NOT ESTABLISHED`,
+including `Verifier-local verdict REPRODUCED`, `Event occurrence NOT ESTABLISHED`,
 and `VERIFY UNVERIFIED`.
 
 That key is the one this demo used to sign the receipt, so checking
