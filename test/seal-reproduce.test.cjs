@@ -255,6 +255,16 @@ test("kernel rebuild uses the supplied in-repository tree and its kernel-source 
     calls.find(({ command, args }) => command === "bash" && args[0] === "kernel-source/c/build.sh"),
     { command: "bash", args: ["kernel-source/c/build.sh"], cwd: root },
   );
+  assert.deepEqual(
+    calls.filter(({ cwd }) => cwd === path.join(root, "wasm-spike")),
+    [
+      { command: "bash", args: ["build_runtime_wasm.sh"], cwd: path.join(root, "wasm-spike") },
+      { command: "bash", args: ["build_base.sh"], cwd: path.join(root, "wasm-spike") },
+      { command: "bash", args: ["build_core.sh"], cwd: path.join(root, "wasm-spike") },
+      { command: "bash", args: ["build_closure.sh"], cwd: path.join(root, "wasm-spike") },
+      { command: "bash", args: ["build_wasm.sh", "strict"], cwd: path.join(root, "wasm-spike") },
+    ],
+  );
   assert.equal(calls.some(({ command }) => command === "git"), false);
 });
 

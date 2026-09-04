@@ -425,13 +425,13 @@ function buildPinnedKernel(tag, work, operations = {}) {
   postInstallerChild("bash", [CURRENT_KERNEL_BUILD_PATH], { cwd: source, label: `build pinned kernel C dependency (${CURRENT_KERNEL_BUILD_PATH})` });
   postInstallerChild(launcher, ["build"], { cwd: source, label: "build Lean sources once for wasm C inputs", missingMessage });
   for (const [script, args] of [
-    ["./build_runtime_wasm.sh", []],
-    ["./build_base.sh", []],
-    ["./build_core.sh", []],
-    ["./build_closure.sh", []],
-    ["./build_wasm.sh", ["strict"]],
+    ["build_runtime_wasm.sh", []],
+    ["build_base.sh", []],
+    ["build_core.sh", []],
+    ["build_closure.sh", []],
+    ["build_wasm.sh", ["strict"]],
   ]) {
-    postInstallerChild(script, args, { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
+    postInstallerChild("bash", [script, ...args], { cwd: path.join(source, "wasm-spike"), label: `rebuild kernel with ${script}` });
   }
   const rebuilt = path.join(source, "wasm-spike", "build-core", "seal.wasm");
   if (!exists(rebuilt)) refuse(`pinned source build did not produce ${rebuilt}`);
