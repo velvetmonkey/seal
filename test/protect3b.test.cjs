@@ -527,6 +527,17 @@ test("status and doctor use outside-Seal and assumption/refusal language", () =>
   assert.match(doctor.out, /Seal has not established whether this Claude Code configuration can\n  automatically answer elicitation requests/);
   assert.doesNotMatch(doctor.out, /✓/);
 
+  fs.mkdirSync(path.join(home, ".claude"));
+  fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({
+    hooks: {
+      Elicitation: [{ hooks: [{ type: "command", command: "true" }] }],
+      ElicitationResult: [{ hooks: [{ type: "command", command: "true" }] }],
+    },
+  }) + "\n");
+  const hookFileRefused = run(project, home, ["doctor"]);
+  assert.notEqual(hookFileRefused.code, 0);
+  assert.match(hookFileRefused.out, /elicitation_hook_configured/);
+
   const refused = run(project, home, ["doctor"], { SEAL_ELICITATION_AUTO_RESPONSE: "accept" });
   assert.notEqual(refused.code, 0);
   assert.match(refused.out, /^REFUSED$/m);
