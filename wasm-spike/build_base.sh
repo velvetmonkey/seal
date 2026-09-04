@@ -2,10 +2,10 @@
 # Rebuild the non-project object sets required by build_closure/build_wasm.
 # No object directory is assumed to exist from an earlier workstation run.
 set -euo pipefail
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$(dirname "$0")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CFLAGS="-O2 -I lean4-src/src/include -I gen/include -I gen -D LEAN_EMSCRIPTEN=1"
 
 mkdir -p build-pkg build-stdlib build-spec

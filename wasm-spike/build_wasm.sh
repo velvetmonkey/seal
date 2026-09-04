@@ -12,10 +12,10 @@ set -euo pipefail
 # valid) bytes from identical objects. Pin the C locale so every environment
 # links the clean runner's bytes.
 export LC_ALL=C
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$(dirname "$0")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CFLAGS="-O2 -I lean4-src/src/include -I gen/include -I gen -D LEAN_EMSCRIPTEN=1"
 SEAL_ROOT="$ROOT/kernel-source"
 
@@ -79,7 +79,7 @@ AUDIT_LOG=build-core/link_set_audit.log
 rm -f "$AUDIT_LOG"
 echo "[build_wasm] link-set audit (gate: no PASS verdict, no artifact)"
 set +e
-./audit_link_set.sh > "$AUDIT_LOG" 2>&1
+bash ./audit_link_set.sh > "$AUDIT_LOG" 2>&1
 audit_rc=$?
 set -e
 if [ "$audit_rc" -ne 0 ]; then
