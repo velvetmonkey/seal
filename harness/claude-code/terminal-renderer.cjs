@@ -260,6 +260,30 @@ function parseCast(castPath) {
     .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]");
 }
 
+// Read terminal output history rather than terminal state. Unlike parseCast,
+// this retains text which was later overwritten in place. Strip the terminal
+// controls after all output events are joined, so an escape sequence split
+// across recorder writes cannot leave its bytes in the evidence text.
+function rawCastOutputText(castPath) {
+  const lines = fs.readFileSync(castPath, "utf8").split("\n").filter((line) => line.trim() !== "");
+  if (lines.length === 0) throw new Error("cast is empty");
+  JSON.parse(lines[0]);
+  let output = "";
+  for (const line of lines.slice(1)) {
+    const event = JSON.parse(line);
+    if (Array.isArray(event) && event[1] === "o") output += String(event[2] ?? "");
+  }
+  return output
+    .replace(/\u001B\][\s\S]*?(?:\u0007|\u001B\\)/gu, "")
+    .replace(/\u009D[\s\S]*?(?:\u0007|\u009C)/gu, "")
+    .replace(/(?:\u001B\[|\u009B)[\x20-\x3F]*[\x40-\x7E]/gu, "")
+    .replace(/\u001B[\x20-\x2F]*[\x30-\x7E]/gu, "")
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/gu, "")
+    .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
+    .replace(UUID, "[REDACTED-SESSION-ID]");
+}
+
 function renderCast(castPath) {
   const screen = parseScreen(castPath);
   const visible = screen.text()
@@ -275,4 +299,4 @@ function renderCast(castPath) {
   return `${header} Content that the terminal overwrote before it scrolled is not present. This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
-module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };
+module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, rawCastOutputText, renderCast, rendererIdentity };

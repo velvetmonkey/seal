@@ -287,13 +287,13 @@ function loadSnapshot(state, caseId, edge) {
 
 // -------------------------------------------------------- terminal recorder
 
-const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
+const { rawCastOutputText, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
-// The screen text of a cast comes from the same terminal renderer that writes
-// the public transcript. The transcript holds any retained scrollback
-// followed by the terminal's last visible frame.
-function castScreenText(castPath) {
-  return parseCast(castPath);
+// Approval evidence reads the raw terminal-output history, rather than the
+// public transcript's reconstructed screen. This retains a dialog that a
+// client later overwrote in place after the human answered it.
+function rawRecordingText(castPath) {
+  return rawCastOutputText(castPath);
 }
 
 // util-linux `script` is the recorder because it is present on a stock Linux
@@ -594,7 +594,7 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
   const lines = expectedDialogLines(state, note);
   let text = "";
   let readError = null;
-  try { text = castScreenText(castPath); } catch (error) { readError = error.code || error.message; }
+  try { text = rawRecordingText(castPath); } catch (error) { readError = error.code || error.message; }
   const recordingDigest = digestOf(castPath);
   const correspondence = recordingCorrespondence(state, path.basename(castPath, ".cast"), castPath);
   // Compare on collapsed whitespace, with box rules and the borders a TUI
@@ -627,9 +627,9 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
       exact_call_child_records_added: exactChildCalls.length,
       receipts: receipts.map((receipt) => ({ name: receipt.name, decision: receipt.decision, refusal: receipt.refusal })),
       dialog_rendered_by: "contract/renderer.cjs and contract/contract.cjs, read out of the installed pinned artifact",
-      screen_text_characters: haystack.length,
-      // Enough of the screen to see WHY a line was not matched, when one was not.
-      screen_excerpt: found.every((entry) => entry.found)
+      recording_text_characters: haystack.length,
+      // Enough of the recording to see WHY a line was not matched, when one was not.
+      recording_excerpt: found.every((entry) => entry.found)
         ? null
         : haystack.slice(Math.max(0, anchor < 0 ? 0 : anchor - 100), (anchor < 0 ? 0 : anchor) + 700),
     },
@@ -817,8 +817,8 @@ const STEPS = [
         `    Use the ${SERVER_NAME} tool ${GUARDED_TOOL} to append the note ${NOTES.decline}`,
         "",
         "When Seal's approval dialog appears: READ IT, then DECLINE.",
-        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
-        "last visible frame. Do this immediately after the answer.",
+        "Then leave with /exit immediately after the answer. The check reads the",
+        "raw recording, which retains the dialog if the client later repaints it.",
       ],
     },
     after: (state) => {
@@ -843,8 +843,8 @@ const STEPS = [
         "",
         "When Seal's approval dialog appears: READ IT — every line of the exact",
         "call must be visible — then ACCEPT.",
-        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
-        "last visible frame. Do this immediately after the answer.",
+        "Then leave with /exit immediately after the answer. The check reads the",
+        "raw recording, which retains the dialog if the client later repaints it.",
       ],
     },
     after: (state) => {
