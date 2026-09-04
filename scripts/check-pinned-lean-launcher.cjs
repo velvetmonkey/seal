@@ -62,7 +62,7 @@ function exerciseOwner(owner, fixture, override) {
         postInstallerCalls.push({ command, options });
       }
       if (args[0] === "update" || args[0] === "build") launcherCommands.push(command);
-      if (command === "./build_wasm.sh") {
+      if (command === "bash" && args[0] === "build_wasm.sh") {
         const output = path.join(source, "wasm-spike", "build-core", "seal.wasm");
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, "not a real kernel build\n");
