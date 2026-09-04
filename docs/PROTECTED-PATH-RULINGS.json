@@ -1,25 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "4c736b43060db66754c48482a7d47b1895e28297",
+    "base": "5923f317e65e51347e2f123ec83573f018fc57cc",
     "author": "velvetmonkey",
-    "date": "2026-08-31",
-    "scope": "Ben ruled approve on 2026-08-31 at 20:11. The complete product suite left temporary directories behind and filled the disk over twelve days. This ruling authorises routing three protected pin tests through the new run-scoped temporary root, and nothing else. The change in these three files is 13 lines. Every one replaces fs.mkdtempSync(X) with testTmpdir(X) using the identical argument, plus three require lines. No assertion, no expected value, no fixture and no pin value changed.",
+    "date": "2026-09-04",
+    "scope": "Ben ruled approve on 2026-09-04 at 23:20. The duplicate-key gate control failed twice in CI this week with a bare 1 !== 0, a message that could not distinguish a harmless torn read from a real gate bypass. contract/fixtures/counting-child.cjs is an EXECUTABLE test child, not a recorded data fixture. It opened its count file with mode w, which truncates, so a concurrent reader could observe an empty string and Number(\"\") is 0. This ruling authorises replacing that write with a same-directory temporary file and a rename, following the repository idiom in spine/protection.cjs, and nothing else. No recorded fixture data changed. The assertion in test/spine-retry.test.cjs still compares Number(readCount(countFile)) - baseline against 0; only a third message argument was added. No sleep, timeout or retry count moved. A cold frisk on grok-4.6, cross-family against builder gpt-5.6-luna, forced a real gate bypass by deleting the return after decideGuarded in spine/proxy.cjs and confirmed the test still goes RED and names the cause.",
     "retires": [
-      "The 2026-08-30 ruling on test/fixtures/readme-demo-output.txt, base 6bec1a39c10c1cc84e68c5aa866795b9d3be27af, which landed and no longer applies to any open change."
+      "The 2026-08-31 ruling on test/dist-pin.test.cjs, test/installed-tree-pin-manifest-review.test.cjs and the third run-scoped temporary-root file, base 4c736b43060db66754c48482a7d47b1895e28297, which landed and no longer applies to any open change."
     ],
     "files": [
       {
-        "path": "test/dist-pin.test.cjs",
-        "blob": "b575a517b573241abc6f7c5e2a02c9fcde22460f"
-      },
-      {
-        "path": "test/installed-tree-pin-manifest-review.test.cjs",
-        "blob": "3e4273cd995c9af002612b933ab06630b9e64d7b"
-      },
-      {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "a44c91cf252c747e196d9bc5d4de947b082187aa"
+        "path": "contract/fixtures/counting-child.cjs",
+        "blob": "eaa38512c741280e5368f3cdab6580f190c1d4f3"
       }
     ]
   }
