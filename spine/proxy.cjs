@@ -25,6 +25,7 @@ const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
+const { ReceiptRefusal } = require("./receipt-v2.cjs");
 const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
@@ -145,14 +146,28 @@ function createProxy(options) {
   childOut.on("line", (line) => onClientLine(line));
 
   function emitReceipt(action, frame, extra, kernelReceipt) {
-    const receipt = kernelReceipt || contract.receiptFor({
-      tool: frame.params?.name,
-      args: frame.params?.arguments ?? {},
-      accepted: false,
-    });
-    const receiptPath = receipts.emit(receipt, action);
-    decisionSink({ decision: action, refusal: extra?.refusal, receiptPath });
-    return receiptPath;
+    const publish = (record) => {
+      const receiptPath = receipts.emit(record, action);
+      decisionSink({ decision: action, refusal: extra?.refusal, receiptPath });
+      return receiptPath;
+    };
+    try {
+      const receipt = kernelReceipt || contract.receiptFor({
+        tool: frame.params?.name,
+        args: frame.params?.arguments ?? {},
+        accepted: false,
+      });
+      return publish(receipt);
+    } catch (error) {
+      // A non-canonical value (1.5, unsafe integers) is a call refusal, not a
+      // proxy crash. Seal a BLOCK receipt the writer can actually emit.
+      if (!(error instanceof ReceiptRefusal)) throw error;
+      return publish(contract.receiptFor({
+        tool: "<malformed>",
+        args: {},
+        accepted: false,
+      }));
+    }
   }
 
   function respond(id, result) {
@@ -357,44 +372,53 @@ function createProxy(options) {
         onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "seal proxy: unparseable frame refused" } }));
         return;
       }
-      if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
-        blockMalformedClientFrame(frame, "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.");
-        return;
-      }
-      let hasDuplicateKeys;
       try {
-        hasDuplicateKeys = jsonHasDuplicateObjectKeys(line);
-      } catch {
-        blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
-        return;
-      }
-      if (hasDuplicateKeys) {
-        blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
-        return;
-      }
-      if (!frame.method && Object.hasOwn(frame, "id")) {
-        if (completeElicitation(frame)) return;
-        if (refuseDuplicateElicitation(frame)) return;
-        if (typeof frame.id === "string" && ELICITATION_ID_PATTERN.test(frame.id)) return;
-      }
-      if (frame.method === "initialize") {
-        const capabilities = frame.params?.capabilities;
-        clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
-          ? capabilities
-          : {};
-      }
-      if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
-        const args = frame.params?.arguments ?? {};
-        const matching = selections
-          .filter((selection) => selection.name === frame.params.name)
-          .map((selection) => evaluateSelection(selection, args, line))
-          .find((result) => result.gate);
-        if (matching) {
-          decideGuarded(frame, matching);
+        if (!frame || typeof frame !== "object" || Array.isArray(frame)) {
+          blockMalformedClientFrame(frame, "MCP 2025-06-18 does not permit JSON-RPC batches; send each call as its own message.");
           return;
         }
+        let hasDuplicateKeys;
+        try {
+          hasDuplicateKeys = jsonHasDuplicateObjectKeys(line);
+        } catch {
+          blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
+          return;
+        }
+        if (hasDuplicateKeys) {
+          blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
+          return;
+        }
+        if (!frame.method && Object.hasOwn(frame, "id")) {
+          if (completeElicitation(frame)) return;
+          if (refuseDuplicateElicitation(frame)) return;
+          if (typeof frame.id === "string" && ELICITATION_ID_PATTERN.test(frame.id)) return;
+        }
+        if (frame.method === "initialize") {
+          const capabilities = frame.params?.capabilities;
+          clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
+            ? capabilities
+            : {};
+        }
+        if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
+          const args = frame.params?.arguments ?? {};
+          const matching = selections
+            .filter((selection) => selection.name === frame.params.name)
+            .map((selection) => evaluateSelection(selection, args, line))
+            .find((result) => result.gate);
+          if (matching) {
+            decideGuarded(frame, matching);
+            return;
+          }
+        }
+        if (canForward(frame)) child.stdin.write(line + "\n");
+      } catch (error) {
+        if (!(error instanceof ReceiptRefusal)) throw error;
+        if (frame && typeof frame === "object" && !Array.isArray(frame) && Object.hasOwn(frame, "id")) {
+          respond(frame.id, refusalResult(error.code, error.message));
+        } else {
+          onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32600, message: error.message } }));
+        }
       }
-      if (canForward(frame)) child.stdin.write(line + "\n");
     },
     stop() {
       stopping = true;
