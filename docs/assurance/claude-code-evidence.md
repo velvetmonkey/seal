@@ -141,8 +141,11 @@ How each one is established from files rather than from the operator's memory:
 ## Running the acceptance walk
 
 First download one published Linux x86-64 artifact and the `SHA256SUMS` asset
-attached to that same GitHub release. Set `SEAL_VERSION` to the release being
-accepted. These commands obtain the frozen artifact and set the digest and
+attached to that same GitHub release. Set `SEAL_VERSION` to the release tag being
+accepted: run `gh release view --repo velvetmonkey/seal --json tagName -q .tagName`
+with the GitHub CLI and enter the printed tag at the prompt below for the latest
+release; if accepting an older release, enter that release's tag from the
+[published releases](https://github.com/velvetmonkey/seal/releases) instead. These commands obtain the frozen artifact and set the digest and
 length used by `init`; they also verify that the downloaded bytes match the
 release's checksum record.
 
