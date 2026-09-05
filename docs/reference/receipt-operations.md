@@ -48,8 +48,8 @@ REPLAY    available
 VERIFY    UNVERIFIED
 ```
 
-The five rows are independent: structure, signature and bindings, kernel
-decision, authority key, and event occurrence. In particular, `REPLAY` does not
+The five rows are independent: structure, signature and bindings, Verifier-local
+verdict, authority key, and event occurrence. In particular, `REPLAY` does not
 establish authority, and no row establishes occurrence.
 
 ## Run it
