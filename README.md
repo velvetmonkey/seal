@@ -22,27 +22,34 @@ published assets, provenance checks, source builds, and platform limits.
 ## Try Seal in two minutes
 
 Download and verify the published release asset, install it under `~/.local`, then put
-the command on your current shell's `PATH`:
+the command on your current shell's `PATH`. Copy the whole POSIX command,
+including its backslashes and `&&` operators; a failed comparison skips both
+`chmod` and execution:
 
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.1
-artifact_name="seal-v0.2.1-linux-x64"
-artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd"
-artifact_bytes=6214316
-sums_name="SHA256SUMS"
-sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
-if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; else sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; fi
-test "$sums_actual" = "$sums_sha256"
-read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" '$3 == name' "$sums_name")
-test "$expected_name" = "$artifact_name" && test "$expected_digest" = "$artifact_sha256" && test "$expected_bytes" = "$artifact_bytes"
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk '{print $1}')"; else actual_digest="$(sha256sum "$artifact_name" | awk '{print $1}')"; fi
-test "$actual_digest" = "$artifact_sha256" && test "$(wc -c < "$artifact_name" | tr -d ' ')" = "$artifact_bytes"
-chmod +x "$expected_name"
-./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
-export PATH="$HOME/.local/bin:$PATH"
+artifact_name="seal-v0.2.1-linux-x64" \
+&& artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd" \
+&& artifact_bytes=6214316 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \
+&& test "${actual_digest%% *}" = "$artifact_sha256" \
+&& actual_bytes="$(wc -c < "$artifact_name")" \
+&& test "$actual_bytes" -eq "$artifact_bytes" \
+&& expected_name="$artifact_name" \
+&& expected_digest="$artifact_sha256" \
+&& expected_bytes="$artifact_bytes" \
+&& chmod +x "$expected_name" \
+&& ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local \
+&& export PATH="$HOME/.local/bin:$PATH"
 ```
 <!-- end generated release docs -->
 
