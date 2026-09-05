@@ -71,7 +71,7 @@ Approve? [y/N] y
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from …/child/data.txt.count)
 replaying the identical elicitation response with the same id…
-BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: "already_consumed"
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
 one-use held: the replay did not run the call again; child calls observed: still 1
 ```
 

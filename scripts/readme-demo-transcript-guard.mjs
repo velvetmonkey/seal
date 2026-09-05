@@ -73,7 +73,7 @@ const actual = stable(`${transcript}\n${checkerTranscript}`);
 for (const [label, pattern] of [
   ["before approval: 0 calls", /child calls observed: 0/],
   ["after approval: 1 call", /child calls observed: 1/],
-  ["after replay: 1 call - refused", /BLOCKED[\s\S]*already_consumed[\s\S]*child calls observed: still 1/],
+  ["after replay: 1 call - refused", /BLOCKED[\s\S]*verdict BLOCK[\s\S]*child calls observed: still 1/],
   ["outside Seal: effect succeeded, 0 Seal decisions", /OUTSIDE THE SEAL PATH[\s\S]*File changed: yes[\s\S]*New Seal decisions: 0/],
 ]) {
   if (!pattern.test(actual)) fail(`MISSING_DEMO_EVIDENCE: ${label}`);
