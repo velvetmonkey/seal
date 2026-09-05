@@ -61,9 +61,9 @@ The current install payload excludes `seal-receipt-v2.mjs`. Download the sibling
 only to verify it against the `SHA256SUMS` asset attached to that same release.
 Run `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout instead.
 The launcher never searches `PATH` for another `seal`.
-The checker imports no Seal module at check time, but copies the receipt
-canonicalisation rule and uses the same Node crypto platform as the
-producer. It detects mutation of the receipt's canonical parsed value
+The checker implements receipt canonicalisation and signature checking itself
+with the same Node crypto platform as the producer, but imports Seal's kernel
+decision runner for decision replay. It detects mutation of the receipt's canonical parsed value
 under a trusted supplied key; semantically irrelevant JSON formatting
 differences are not distinguished. It does not detect defects in those
 shared implementation choices.

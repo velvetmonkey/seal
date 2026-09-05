@@ -4,8 +4,9 @@ Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a
 receipt that has been altered. The producer and checker obey the fixed member
-order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches only the WASM kernel,
-not the producer's assembler. This page walks all three from real runs.
+order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches the kernel through
+Seal's decision runner, not the producer's assembler. This page walks all three
+from real runs.
 
 ## The approval prompt, line by line
 
