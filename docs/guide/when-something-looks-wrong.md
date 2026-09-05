@@ -144,11 +144,14 @@ detail and report it.
 ### `unrenderable_effect`
 
 Seal refused to *ask* for approval, because the complete effect could not be
-shown honestly — an argument line too wide for the terminal, or more lines
-than the approval dialog can display without hiding some. Seal never
-truncates an effect to keep the Approve button. The tool call is refused;
-nothing ran. If you control the arguments, make them smaller; otherwise this
-tool's calls cannot be interactively approved at that terminal size.
+shown honestly — an argument line too wide for the terminal, more lines
+than the approval dialog can display without hiding some, or an argument
+with no canonical form (a non-integer number such as `1.5`). Seal never
+truncates an effect to keep the Approve button, and it does not take the
+protected server down to refuse a value the receipt writer will not seal.
+The tool call is refused; nothing ran. If you control the arguments, make
+them smaller or integral; otherwise this tool's calls cannot be
+interactively approved.
 
 ### `project_server_drifted`
 

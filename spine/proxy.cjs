@@ -25,6 +25,7 @@ const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
+const { ReceiptRefusal, canonical } = require("./receipt-v2.cjs");
 const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
@@ -145,11 +146,24 @@ function createProxy(options) {
   childOut.on("line", (line) => onClientLine(line));
 
   function emitReceipt(action, frame, extra, kernelReceipt) {
-    const receipt = kernelReceipt || contract.receiptFor({
+    let receipt = kernelReceipt || contract.receiptFor({
       tool: frame.params?.name,
       args: frame.params?.arguments ?? {},
       accepted: false,
     });
+    // Canonicalise the caller's arguments only. A ReceiptRefusal here is the
+    // integer rule refusing 1.5; the writer has not been asked yet. receipts.emit
+    // stays outside this catch so a writer refusal still stops the run.
+    try {
+      canonical(receipt.arguments);
+    } catch (error) {
+      if (!(error instanceof ReceiptRefusal)) throw error;
+      receipt = contract.receiptFor({
+        tool: "<malformed>",
+        args: {},
+        accepted: false,
+      });
+    }
     const receiptPath = receipts.emit(receipt, action);
     decisionSink({ decision: action, refusal: extra?.refusal, receiptPath });
     return receiptPath;
