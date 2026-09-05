@@ -18,9 +18,9 @@ child calls observed: 1 (read from /home/monkey/scratch/runner-temp/tty-demo/chi
 replaying the identical elicitation response with the same id…
 BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
 one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867994562-610297-0001-INPUT_REQUIRED.json
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995050-610297-0002-ALLOW.json
-receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995507-610297-0003-BLOCK.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1788547289265-3933287-0001-INPUT_REQUIRED.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1788547289713-3933287-0002-ALLOW.json
+receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1788547290172-3933287-0003-BLOCK.json
 
 OUTSIDE THE SEAL PATH
 
@@ -32,7 +32,7 @@ New Seal decisions: 0
 
 Seal did not observe or authorise this write.
 receipts are claims, not proofs. To inspect the last receipt with the v2 checker, run:
-  Run: (cd "/home/monkey/scratch/demoline2/seal" && node checker/seal-receipt-v2.mjs "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995507-610297-0003-BLOCK.json" --pubkey "$(cat "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub")")
+  Run: (cd "/home/monkey/scratch/demoline3/work" && node checker/seal-receipt-v2.mjs "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1788547290172-3933287-0003-BLOCK.json" --pubkey "$(cat "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub")")
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 
 ENFORCED

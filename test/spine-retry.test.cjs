@@ -45,6 +45,32 @@ function duplicateKeyControlEvidence({ baseline, countFile, dataFile, receiptsDi
   ].join("\n");
 }
 
+function demoDataReadTamperPreload(mode, dataFile, controlDir) {
+  const preload = path.join(controlDir, `demo-data-${mode}.cjs`);
+  fs.writeFileSync(preload, `
+const fs = require("node:fs");
+const target = process.env.SEAL_TEST_DEMO_DATA_FILE;
+const mode = process.env.SEAL_TEST_DEMO_DATA_READ_TAMPER;
+if (target && mode && process.argv.includes("demo")) {
+  const realReadFileSync = fs.readFileSync;
+  let tampered = false;
+  fs.readFileSync = function(filePath, ...args) {
+    if (!tampered && String(filePath) === target) {
+      tampered = true;
+      if (mode === "delete") fs.unlinkSync(target);
+      else if (mode === "corrupt") fs.writeFileSync(target, "seal demo wrote this corrupted line\\n");
+    }
+    return realReadFileSync.apply(this, [filePath, ...args]);
+  };
+}
+`);
+  return {
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preload}`].filter(Boolean).join(" "),
+    SEAL_TEST_DEMO_DATA_FILE: dataFile,
+    SEAL_TEST_DEMO_DATA_READ_TAMPER: mode,
+  };
+}
+
 function attach(child) {
   const state = { out: "", err: "", exit: new Promise((resolve) => child.once("close", (code) => resolve(code))), kill: () => { try { child.kill("SIGKILL"); } catch {} } };
   child.stdout.setEncoding("utf8");
@@ -241,6 +267,47 @@ test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
   assert.equal(code, 0, `${run.out}\n${run.err}`);
   assert.deepEqual(Buffer.from(run.err), Buffer.from(""));
   assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
+});
+
+test("seal demo suppresses the approved reply line when the child's data record is deleted", async (t) => {
+  const dir = testTmpdir("seal-cli-data-record-delete-");
+  const dataFile = path.join(dir, "child", "data.txt");
+  const controlDir = testTmpdir("seal-cli-data-record-delete-control-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
+    env: { ...process.env, ...demoDataReadTamperPreload("delete", dataFile, controlDir) },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  await run.waitFor(/child calls observed: 1/);
+  run.kill();
+  await run.exit;
+  assert.doesNotMatch(run.out, /child replied through the shared proxy:/);
+  assert.match(run.out, /child calls observed: 1/);
+});
+
+test("seal demo derives the approved reply line from the child's data record", async (t) => {
+  const dir = testTmpdir("seal-cli-data-record-corrupt-");
+  const dataFile = path.join(dir, "child", "data.txt");
+  const controlDir = testTmpdir("seal-cli-data-record-corrupt-control-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
+    env: { ...process.env, ...demoDataReadTamperPreload("corrupt", dataFile, controlDir) },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  const code = await run.exit;
+  assert.equal(code, 0, `${run.out}\n${run.err}`);
+  assert.match(run.out, /child replied through the shared proxy: "demo server: appended 36 bytes to data\.txt; total tool calls: 1"/);
+  assert.doesNotMatch(run.out, /child replied through the shared proxy: "demo server: appended 26 bytes to data\.txt; total tool calls: 1"/);
 });
 
 test("seal demo derives the replay BLOCK line from the receipt file", async (t) => {
