@@ -68,8 +68,9 @@ the Node CLI this repository ships.
    harness and checker that would close it.
 5. [The `seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.1/seal-receipt-v2.mjs) — the
    receipt checker is a sibling asset published with the release, not in the
-   installed payload. Download it with the binary and verify both against that
-   release's `SHA256SUMS` asset before using it.
+   installed payload. Download it with the binary only to verify both against
+   that release's `SHA256SUMS` asset. To check a receipt, run
+   `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout.
    It imports no Seal module at check time, but copies the producer's
    canonicalisation rule and uses the same Node crypto platform; read [what
    that does and does not establish](../guide/knowing-it-worked.md).

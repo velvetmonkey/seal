@@ -58,8 +58,9 @@ guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The current install payload excludes `seal-receipt-v2.mjs`. Download the sibling
 [`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.2.1/seal-receipt-v2.mjs)
-and verify it against the `SHA256SUMS` asset attached to that same release before
-running it. The launcher never searches `PATH` for another `seal`.
+only to verify it against the `SHA256SUMS` asset attached to that same release.
+Run `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout instead.
+The launcher never searches `PATH` for another `seal`.
 The checker imports no Seal module at check time, but copies the receipt
 canonicalisation rule and uses the same Node crypto platform as the
 producer. It detects mutation of the receipt's canonical parsed value

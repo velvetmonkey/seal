@@ -420,9 +420,9 @@ function installRegions({ manifest, manifestPublished }) {
       "```",
       "",
       "Further distribution detail, including what each payload contains, is in",
-      "[DISTRIBUTION.md](../assurance/distribution.md). The published payload in the transcript above",
-      `does not include the checker; download the sibling [\`${manifest.checker.name}\` release asset](https://github.com/${REPOSITORY}/releases/download/${manifest.tag}/${manifest.checker.name})`,
-      "and verify it against that release's `SHA256SUMS` asset; see [evaluator-walk.md](../start/evaluator-walk.md).",
+      "[DISTRIBUTION.md](../assurance/distribution.md). The downloaded checker is",
+      "only checked against `SHA256SUMS`; from a source checkout, run",
+      "`node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.",
       END,
     ].join("\n"),
   ];
