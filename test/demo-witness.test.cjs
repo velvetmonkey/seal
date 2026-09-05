@@ -155,7 +155,7 @@ test("Act 4 appears after replay refusal and before the final screen", () => {
   assert.ok(replayAt >= 0, "demo output must include the replay refusal");
   assert.ok(act4At > replayAt, "Act 4 must follow the replay refusal");
   assert.ok(finalScreenAt > act4At, "the final screen must follow Act 4");
-  assert.ok(result.out.trimEnd().endsWith("That direct write; protected-server call count stayed 1 and Seal made 0 new decisions."));
+  assert.ok(result.out.endsWith("That direct write; protected-server call count stayed 1 and Seal made 0 new decisions.\n\n"));
 });
 
 // --- the internal-harness controls ------------------------------------------
