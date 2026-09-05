@@ -149,31 +149,31 @@ release; if accepting an older release, enter that release's tag from the
 length used by `init`; they also verify that the downloaded bytes match the
 release's checksum record.
 
-```bash
-$ read -r -p 'Published release tag (for example vX.Y.Z): ' SEAL_VERSION
-$ test -n "$SEAL_VERSION"
-$ SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64"
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT"
-$ read -r SEAL_SHA256 SEAL_BYTES named < <(awk -v name="$SEAL_ARTIFACT" '$3 == name { print; exit }' SHA256SUMS)
-$ test "$named" = "$SEAL_ARTIFACT"
-$ sha256sum "$SEAL_ARTIFACT" > artifact.sha256
-$ read -r actual_sha256 _ < artifact.sha256
-$ test "$actual_sha256" = "$SEAL_SHA256"
-$ test "$(wc -c < "$SEAL_ARTIFACT")" = "$SEAL_BYTES"
-$ chmod +x "$SEAL_ARTIFACT"
-```
-
 Choose a new, empty run directory. `mkdir` below both creates it and makes the
 empty-directory requirement explicit; do not reuse a directory from an earlier
 run. The harness creates its clean temporary `HOME`, XDG directories, and
-project beneath that run directory.
+project beneath that run directory. Verification, permission change, and harness
+initialization are one POSIX shell command: a failed comparison skips them.
 
 ```bash
-$ run_dir="$PWD/cc-acceptance"
-$ mkdir "$run_dir"
-$ node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir"
-$ node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
+printf '%s' 'Published release tag (for example vX.Y.Z): ' \
+&& read -r SEAL_VERSION \
+&& test -n "$SEAL_VERSION" \
+&& SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" \
+&& SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" \
+&& SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" \
+&& test -n "$SEAL_SHA256" \
+&& if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi \
+&& test "${actual_sha256%% *}" = "$SEAL_SHA256" \
+&& actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" \
+&& test "$actual_bytes" -eq "$SEAL_BYTES" \
+&& chmod +x "$SEAL_ARTIFACT" \
+&& run_dir="$PWD/cc-acceptance" \
+&& mkdir "$run_dir" \
+&& node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" \
+&& node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
 
 `next` is the whole run: it takes the machine readings, prints what the human

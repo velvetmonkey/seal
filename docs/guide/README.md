@@ -8,15 +8,16 @@ Seal were not there; drift, missing state, or a server-start failure refuses
 the server instead.
 
 This guide is for using that gate day to day. It assumes you have seen a
-`.mcp.json` before and can run commands in a terminal, and nothing more. Every
-command shown here was actually run. Literal output blocks reproduce that run;
+`.mcp.json` before and can run commands in a terminal, and nothing more. The
+install command was updated to chain verification before execution. Other
+commands shown here were actually run. Literal output blocks reproduce that run;
 blocks marked with an ellipsis or explanatory text are excerpts. The outputs
 were captured in a scratch project on 2026-08-15, so paths in them will differ
 from yours.
 
 ## How examples are labeled
 
-- `bash` is a command the reader runs.
+- `bash` is a command the reader runs (the install command also uses POSIX syntax).
 - `console` is input the reader types at a prompt.
 - `output` is text the product prints.
 
@@ -42,13 +43,29 @@ $ claude --version
 2.1.233 (Claude Code)
 ```
 
-Download a binary and the `SHA256SUMS` asset attached to the same release,
-then run the binary with that asset's digest and byte length:
+Download and independently verify the pinned Linux x86-64 release, then install.
+Copy the whole POSIX command, including the backslashes and `&&` operators.
+For other supported platforms, see the [install guide](../start/install.md):
 
 ```bash
-$ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
-$ chmod +x "$SEAL_ARTIFACT"
-$ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES"
+SEAL_VERSION=v0.2.1
+artifact_name="seal-v0.2.1-linux-x64" \
+&& artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd" \
+&& artifact_bytes=6214316 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \
+&& test "${actual_digest%% *}" = "$artifact_sha256" \
+&& actual_bytes="$(wc -c < "$artifact_name")" \
+&& test "$actual_bytes" -eq "$artifact_bytes" \
+&& chmod +x "$artifact_name" \
+&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local
 ```
 
 **Seal installed-tree pin role:** `published-asset`
