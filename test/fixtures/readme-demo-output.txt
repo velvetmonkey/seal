@@ -31,7 +31,7 @@ Protected-server call count: still 1
 New Seal decisions: 0
 
 Seal did not observe or authorise this write.
-receipts are claims, not proofs. To inspect the last receipt with the v2 checker, run:
+receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.
   Run: (cd "/home/monkey/scratch/demoline3/work" && node checker/seal-receipt-v2.mjs "/home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1788547290172-3933287-0003-BLOCK.json" --pubkey "$(cat "/home/monkey/scratch/runner-temp/tty-demo/receipt-signer.pub")")
   Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.
 
