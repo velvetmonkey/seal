@@ -432,7 +432,7 @@ process.exit(2);
     env: { ...env, SEAL_CACHE_DIR: cache, XDG_DATA_HOME: dataHome },
   });
   assert.notEqual(unverified.code, 0, unverified.out);
-  assert.match(unverified.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(unverified.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(unverified.stdout, /VERIFY    UNVERIFIED/);
 
   const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
@@ -456,7 +456,7 @@ process.exit(2);
     "--pubkey", fs.readFileSync(path.join(demoDir, "receipt-signer.pub"), "utf8").trim(),
   ], { cwd: built.out });
   assert.equal(checked.code, 0, checked.out);
-  assert.match(checked.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(out, new RegExp(`Run: \\(cd "${store.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}" && node checker/seal-receipt-v2\\.mjs`));
   assert.doesNotMatch(out, /same release page/, "installed demo must not promise an unpublished release asset");
 });

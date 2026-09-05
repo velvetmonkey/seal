@@ -285,7 +285,7 @@ async function run(argv, sealBinPath) {
   console.log("");
   console.log("Seal did not observe or authorise this write.");
   await proxy.stop();
-  console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened.");
+  console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.");
   console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("");

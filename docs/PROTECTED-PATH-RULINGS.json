@@ -1,17 +1,21 @@
 {
   "version": 1,
   "ruling": {
-    "base": "9ccbcf58b6ef4c1e9f185cf31ed6ccea7faf24be",
+    "base": "517e212f280d188631d1219bc223008cd097ffae",
     "author": "velvetmonkey",
-    "date": "2026-09-04",
-    "scope": "Ben ruled approve on 2026-09-04 at 23:20, in his words: 'If it's just that string, they know it's my name.' This ruling authorises ADDING one new recorded fixture, test/fixtures/rendercheck-accept.cast, 70812 bytes, and nothing else. It is a real asciinema recording of a Claude Code session. Without it the certification case only passes on one machine, because the test previously hardcoded an absolute scratch path. TWO SCANS were run before the ruling. Credential patterns: 0 matches, reported as counts, by grok-4.6 cross-family and by me. Identifying strings: exactly one occurrence of the operator home directory /home/ben, which Ben read and accepted; every seal repository is public and his GitHub handle is already public. No existing fixture is edited by this change. The branch was collapsed to a single commit so that an earlier round-4 substitution into ten files, reverted in round 5, does not enter the review range. The five changed files are byte-identical to the cold-frisked head 3bb2ab5f, checked blob by blob, so the MERGE verdict on that head still covers exactly these bytes. Rebased onto 9ccbcf5 after PR 230 landed.",
+    "date": "2026-09-05",
+    "scope": "Ben ruled on 2026-09-05 at 15:28, in his words: \"228 - merge\". This ruling authorises two protected paths. test/fixtures/readme-demo-checker-output.txt changes by one line, replacing the label \"Kernel decision\" with \"Verifier-local verdict\", leaving the verdict word REPRODUCED unchanged. test/fixtures/readme-demo-output.txt is BYTE-IDENTICAL to main; commit a745591 touched it and commit 0153576 reverted it, and the gate reports the touch because it walks every commit in the range. I observed the checker-output diff against origin/main as exactly one insertion and one deletion with only that label changed, and I observed zero output bytes from the demo-output diff against origin/main. I also derived matching demo-output blobs be528188bb8458b31a864e955559414e9ab29507 for HEAD and origin/main, and verified that a745591 changed that blob to e3aef9abec7d58637b77e66d5946b2d713d3fb40 before 0153576 restored be528188bb8458b31a864e955559414e9ab29507.",
     "retires": [
-      "The 2026-09-04 ruling on contract/fixtures/counting-child.cjs, base 5923f317e65e51347e2f123ec83573f018fc57cc, which landed on main as 2d7a99636b1cc969e7133c515fd9ac8ecd237bee and no longer applies to any open change."
+      "The 2026-09-04 ruling on test/fixtures/rendercheck-accept.cast, base 9ccbcf58b6ef4c1e9f185cf31ed6ccea7faf24be, which landed on main as c57f26d1b9f24093f088c138e3cd1b4e674c24a5 with the exact recorded blob and no longer applies to any open change."
     ],
     "files": [
       {
-        "path": "test/fixtures/rendercheck-accept.cast",
-        "blob": "af888f8ee8fdcbfbe16ca766e2bfccbfcb92cc66"
+        "path": "test/fixtures/readme-demo-checker-output.txt",
+        "blob": "91368ba4838472067d3d80ec2f74cef4d196bbd5"
+      },
+      {
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "be528188bb8458b31a864e955559414e9ab29507"
       }
     ]
   }

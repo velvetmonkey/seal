@@ -188,7 +188,7 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
     cwd: work,
   });
   assert.equal(checked.code, 0, checked.out);
-  assert.match(checked.stdout, /Kernel decision          REPRODUCED/);
+  assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
 
   // PROTECT / UNPROTECT — product reads the project's existing .mcp.json.
   // This file is a fixture for "a Claude project already has a server".

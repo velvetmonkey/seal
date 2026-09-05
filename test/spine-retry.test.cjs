@@ -187,7 +187,7 @@ test("seal demo: input_required, approve once, replay refused, then direct write
   const decisions = receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")).action);
   assert.deepEqual(decisions, ["INPUT_REQUIRED", "ALLOW", "BLOCK"]);
 
-  assert.doesNotMatch(run.out, /verif/i);
+  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", ""), /verif/i);
   const data = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8");
   assert.deepEqual(data.split("\n").filter(Boolean), [
     "seal demo wrote this line",
