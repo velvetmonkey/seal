@@ -422,7 +422,11 @@ test("duplicate-key gate controls preserve guarded, unguarded, and ordinary fram
   }
 
   proxy.write('{"jsonrpc":"2.0","id":90,"method":"initialize","params":{"capabilities":{"elicitation":{}}}}');
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  const baselineStarted = Date.now();
+  while (Number(readCount(countFile)) < 1) {
+    if (Date.now() - baselineStarted > 5000) assert.fail("counting child did not count initialize frame");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   const baseline = Number(readCount(countFile));
   proxy.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":"guarded alone"}}}');
   await new Promise((resolve) => setTimeout(resolve, 100));
