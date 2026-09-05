@@ -442,7 +442,11 @@ test("duplicate-key gate controls preserve guarded, unguarded, and ordinary fram
   assert.equal(frames.filter((frame) => frame.method === "elicitation/create").length, 1);
 
   proxy.write('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"demo.read","arguments":{"line":"unguarded"}}}');
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const unguardedStarted = Date.now();
+  while (Number(readCount(countFile)) - baseline < 1) {
+    if (Date.now() - unguardedStarted > 5000) assert.fail("counting child did not count unguarded frame");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   assert.equal(Number(readCount(countFile)) - baseline, 1);
   assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
 
@@ -454,7 +458,11 @@ test("duplicate-key gate controls preserve guarded, unguarded, and ordinary fram
   for (let index = 0; index < 100; index += 1) largeParams.arguments[`key${index}`] = index;
   proxy.write(falseLookalike);
   proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: largeParams }));
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  const ordinaryStarted = Date.now();
+  while (Number(readCount(countFile)) - baseline < 3) {
+    if (Date.now() - ordinaryStarted > 5000) assert.fail("counting child did not count three ordinary frames");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   assert.equal(Number(readCount(countFile)) - baseline, 3);
   assert.equal(fs.readdirSync(path.join(dir, "receipts")).length, 1);
 });
