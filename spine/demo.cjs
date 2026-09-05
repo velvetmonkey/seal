@@ -33,6 +33,20 @@ function readCount(countFile) {
   return fs.readFileSync(countFile, "utf8").trim();
 }
 
+function childReplyFromDataFile(dataFile) {
+  let data;
+  try {
+    data = fs.readFileSync(dataFile, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  const records = data.split("\n").filter((line) => line !== "");
+  const text = records.at(-1);
+  if (text === undefined) return undefined;
+  return `demo server: appended ${Buffer.byteLength(text, "utf8") + 1} bytes to ${path.basename(dataFile)}; total tool calls: ${records.length}`;
+}
+
 function readReceipts(receiptsDir) {
   if (!fs.existsSync(receiptsDir)) return [];
   return fs.readdirSync(receiptsDir)
@@ -249,7 +263,8 @@ async function run(argv, sealBinPath) {
   answerElicitation(elicitation.id, "accept", { approve: true });
   const flowed = await guardedCall;
   if (flowed.result?.isError) fail(`the approved retry was refused: "${flowed.result.content[0].text}"`);
-  console.log(`child replied through the shared proxy: "${flowed.result.content[0].text}"`);
+  const childReply = childReplyFromDataFile(dataFile);
+  if (childReply !== undefined) console.log(`child replied through the shared proxy: "${childReply}"`);
   const after = readCount(countFile);
   if (after !== "1") fail(`the child's own count file reads ${after}, not 1; refusing to describe this as a single call`);
   console.log(`child calls observed: ${after} (read from ${countFile})`);
