@@ -58,7 +58,7 @@ const NOTES = Object.freeze({
 const CASES = Object.freeze([
   { id: "activation", required: "After restart, Claude Code selects the local Seal override", summary: "After restart, Claude Code selects the local Seal override" },
   { id: "negotiation", required: "The proxy records the retry-model interaction", summary: "The proxy records the retry-model interaction" },
-  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call", summary: "The terminal recording shows the complete exact-call dialog" },
+  { id: "approval_shown", required: "The terminal recording shows the exact-call dialog, and receipts and child-call records show that elicitation occurred and was answered for that exact call", summary: "Recorder-corresponding terminal output history contains the complete exact-call dialog; the published pack does not include the raw cast for an independent display check" },
   { id: "before_approval", required: "Child call count remains 0", summary: "Child call count remains `0`" },
   { id: "accept", required: "Child call count becomes exactly 1; expected effect hash matches", summary: "Child call count becomes exactly `1`; expected effect hash matches" },
   { id: "decline", required: "Child call count remains 0", summary: "Child call count remains `0`" },
@@ -287,13 +287,13 @@ function loadSnapshot(state, caseId, edge) {
 
 // -------------------------------------------------------- terminal recorder
 
-const { parseCast, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
+const { rawCastOutputText, renderCast, RENDERER_IDENTITY, RENDERER_RESULT } = require("./terminal-renderer.cjs");
 
-// The screen text of a cast comes from the same terminal renderer that writes
-// the public transcript. The transcript holds any retained scrollback
-// followed by the terminal's last visible frame.
-function castScreenText(castPath) {
-  return parseCast(castPath);
+// Approval evidence reads the raw terminal-output history, rather than the
+// public transcript's reconstructed screen. This retains a dialog that a
+// client later overwrote in place after the human answered it.
+function rawRecordingText(castPath) {
+  return rawCastOutputText(castPath);
 }
 
 // util-linux `script` is the recorder because it is present on a stock Linux
@@ -590,11 +590,41 @@ function expectedDialogLines(state, note) {
   return [...rendered.lines.slice(1, 3), approve.title, approve.description];
 }
 
+function dialogContiguityBound(state, note) {
+  const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
+  const { renderApprovalMessage } = require(rendererPath);
+  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
+  if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
+  // This is the installed renderer's complete source dialog, normalized in
+  // exactly the same way as the recording. It is the permitted span, rather
+  // than a hand-picked allowance for unrelated terminal output.
+  return rendered.message.replace(/\s+/g, " ").length;
+}
+
+function orderedDialogSpan(haystack, lines, bound) {
+  const needles = lines.map((line) => line.trim().replace(/\s+/g, " "));
+  let first = haystack.indexOf(needles[0]);
+  while (first !== -1) {
+    let cursor = first + needles[0].length;
+    let end = cursor;
+    let complete = true;
+    for (const needle of needles.slice(1)) {
+      const found = haystack.indexOf(needle, cursor);
+      if (found === -1) { complete = false; break; }
+      end = found + needle.length;
+      cursor = end;
+    }
+    if (complete && end - first <= bound) return { observed: true, start: first, end };
+    first = haystack.indexOf(needles[0], first + 1);
+  }
+  return { observed: false, start: null, end: null };
+}
+
 function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, requireElicitation = true) {
   const lines = expectedDialogLines(state, note);
   let text = "";
   let readError = null;
-  try { text = castScreenText(castPath); } catch (error) { readError = error.code || error.message; }
+  try { text = rawRecordingText(castPath); } catch (error) { readError = error.code || error.message; }
   const recordingDigest = digestOf(castPath);
   const correspondence = recordingCorrespondence(state, path.basename(castPath, ".cast"), castPath);
   // Compare on collapsed whitespace, with box rules and the borders a TUI
@@ -603,6 +633,8 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
   // — this check never softens into "something like it appeared".
   const haystack = text.replace(/[\u2500-\u257F|\u00A0]/g, " ").replace(/\s+/g, " ");
   const found = lines.map((line) => ({ line, found: haystack.includes(line.trim().replace(/\s+/g, " ")) }));
+  const contiguityBound = dialogContiguityBound(state, note);
+  const dialogSpan = orderedDialogSpan(haystack, lines, contiguityBound);
   const anchor = haystack.indexOf("Approval required");
   const receipts = newReceipts(begin, end);
   const offers = receipts.filter((receipt) => receipt.decision === "INPUT_REQUIRED" &&
@@ -614,7 +646,7 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
   const childCalls = newRecords(begin, end).filter((record) => record.kind === "child-call");
   const exactChildCalls = childCalls.filter((record) => record.tool === GUARDED_TOOL && record.arguments?.note === note);
   return {
-    observed: correspondence.observed && found.length > 0 && found.every((entry) => entry.found) &&
+    observed: correspondence.observed && dialogSpan.observed &&
       (!requireElicitation || (answeredReceiptPairs.length > 0 && childCalls.length === 1 && exactChildCalls.length === 1)),
     facts: {
       recording: path.basename(castPath),
@@ -622,14 +654,16 @@ function observeApprovalShown(state, begin, end, castPath, note = NOTES.accept, 
       recording_read_error: readError,
       recorder_correspondence: correspondence,
       expected_dialog_lines: found,
+      dialog_contiguity_bound_characters: contiguityBound,
+      dialog_span: dialogSpan,
       exact_call_elicitation_receipt_pairs: answeredReceiptPairs,
       child_call_records_added: childCalls.length,
       exact_call_child_records_added: exactChildCalls.length,
       receipts: receipts.map((receipt) => ({ name: receipt.name, decision: receipt.decision, refusal: receipt.refusal })),
       dialog_rendered_by: "contract/renderer.cjs and contract/contract.cjs, read out of the installed pinned artifact",
-      screen_text_characters: haystack.length,
-      // Enough of the screen to see WHY a line was not matched, when one was not.
-      screen_excerpt: found.every((entry) => entry.found)
+      recording_text_characters: haystack.length,
+      // Enough of the recording to see WHY a line was not matched, when one was not.
+      recording_excerpt: found.every((entry) => entry.found)
         ? null
         : haystack.slice(Math.max(0, anchor < 0 ? 0 : anchor - 100), (anchor < 0 ? 0 : anchor) + 700),
     },
@@ -817,8 +851,8 @@ const STEPS = [
         `    Use the ${SERVER_NAME} tool ${GUARDED_TOOL} to append the note ${NOTES.decline}`,
         "",
         "When Seal's approval dialog appears: READ IT, then DECLINE.",
-        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
-        "last visible frame. Do this immediately after the answer.",
+        "Then leave with /exit immediately after the answer. The check reads the",
+        "raw recording, which retains the dialog if the client later repaints it.",
       ],
     },
     after: (state) => {
@@ -843,8 +877,8 @@ const STEPS = [
         "",
         "When Seal's approval dialog appears: READ IT — every line of the exact",
         "call must be visible — then ACCEPT.",
-        "Then leave with /exit. This is load-bearing: it keeps the dialog on the",
-        "last visible frame. Do this immediately after the answer.",
+        "Then leave with /exit immediately after the answer. The check reads the",
+        "raw recording, which retains the dialog if the client later repaints it.",
       ],
     },
     after: (state) => {

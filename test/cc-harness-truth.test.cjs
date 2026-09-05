@@ -11,6 +11,8 @@ const { createHash } = require("node:crypto");
 const ROOT = path.join(__dirname, "..");
 const HARNESS = path.join(ROOT, "harness", "claude-code", "cc-harness.cjs");
 const SYNTHETIC_CLIENT = path.join(ROOT, "harness", "claude-code", "synthetic-client.cjs");
+const { parseCast, rawCastOutputText } = require(path.join(ROOT, "harness", "claude-code", "terminal-renderer.cjs"));
+const REAL_ACCEPT_CAST = path.join(ROOT, "test", "fixtures", "rendercheck-accept.cast");
 
 function buildArtifact(workspace) {
   const out = path.join(workspace, "dist");
@@ -124,6 +126,56 @@ function completeSyntheticRun(harness, runDir) {
   runSyntheticStep(harness, runDir, "none", "");
 }
 
+function recorderDigest(file) {
+  const bytes = fs.readFileSync(file);
+  return { present: true, sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length };
+}
+
+function rewriteDeclineRecorder(harness, runDir, rewrite) {
+  const state = harness.loadState(runDir);
+  const outPath = path.join(runDir, "logs", "decline.typescript");
+  const timingPath = path.join(runDir, "logs", "decline.timing");
+  const castPath = path.join(runDir, "logs", "decline.cast");
+  const original = fs.readFileSync(outPath);
+  const headerBytes = original.subarray(0, 14).toString("utf8") === "Script started"
+    ? original.subarray(0, original.indexOf(0x0a) + 1)
+    : Buffer.alloc(0);
+  const rewritten = Buffer.from(rewrite(original.subarray(headerBytes.length).toString("utf8")), "utf8");
+  fs.writeFileSync(outPath, Buffer.concat([headerBytes, rewritten]));
+  fs.writeFileSync(timingPath, `O 0.000000 ${rewritten.length}\n`);
+  fs.writeFileSync(castPath, harness.castFromScript(outPath, timingPath, state.recordings.decline.conversion));
+  state.recordings.decline.typescript = recorderDigest(outPath);
+  state.recordings.decline.timing = recorderDigest(timingPath);
+  state.recordings.decline.cast = recorderDigest(castPath);
+  state.step_index = 1;
+  state.steps.decline.attempted = true;
+  harness.saveState(state);
+  return castPath;
+}
+
+function castOutput(castPath) {
+  return fs.readFileSync(castPath, "utf8").trimEnd().split("\n").slice(1)
+    .map((line) => JSON.parse(line))
+    .filter((event) => Array.isArray(event) && event[1] === "o")
+    .map((event) => String(event[2] ?? ""))
+    .join("");
+}
+
+test("the real Claude Code acceptance paint certifies after its note is rebuilt as decline", () => {
+  assert.equal(fs.existsSync(REAL_ACCEPT_CAST), true, `missing real cast: ${REAL_ACCEPT_CAST}`);
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-real-dialog-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  runSyntheticStep(harness, runDir, "activation", "");
+  runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  const realCast = rewriteDeclineRecorder(harness, runDir, () =>
+    castOutput(REAL_ACCEPT_CAST).replaceAll(harness.NOTES.accept, harness.NOTES.decline));
+  const observed = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "decline");
+  assert.equal(observed.facts.exact_call_dialog.recorder_correspondence.observed, true);
+  assert.equal(observed.facts.exact_call_dialog.dialog_span.observed, true, JSON.stringify(observed.facts));
+  assert.equal(observed.result, "OBSERVED", JSON.stringify(observed.facts));
+  assert.equal(rawCastOutputText(realCast).includes("Approval required"), true);
+});
+
 test("a hand-written dialog cast is not evidence from the recorded session", () => {
   const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-forged-cast-"));
   const { harness, runDir } = initSyntheticRun(workspace);
@@ -159,6 +211,108 @@ test("a hand-written dialog cast is not evidence from the recorded session", () 
       /CANNOT CERTIFY decline; decline: decline\.cast does not correspond to the recorder output/.test(error.message),
   );
   assert.equal(harness.loadState(runDir).step_index, 1);
+});
+
+test("approval evidence retains overwritten raw output but refuses absent, partial, scattered, backspace, ECH, and DCH dialogs", () => {
+  const overwriteWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-overwritten-dialog-"));
+  const { harness: overwriteHarness, runDir: overwriteRun } = initSyntheticRun(overwriteWorkspace);
+  runSyntheticStep(overwriteHarness, overwriteRun, "activation", "");
+  runSyntheticStep(overwriteHarness, overwriteRun, "decline", overwriteHarness.NOTES.decline);
+  const overwriteCast = rewriteDeclineRecorder(overwriteHarness, overwriteRun, (text) => `${text}\u001b[H\u001b[2JCalled notes (ctrl+o to expand)`);
+  const overwritten = overwriteHarness.observeAll(overwriteHarness.loadState(overwriteRun)).find((entry) => entry.case === "decline");
+  assert.equal(overwritten.result, "OBSERVED");
+  assert.equal(overwritten.facts.exact_call_dialog.recorder_correspondence.observed, true);
+  assert.equal(parseCast(overwriteCast).includes("Approval required"), false);
+  assert.equal(rawCastOutputText(overwriteCast).includes("Approval required"), true);
+
+  const absentWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-absent-dialog-"));
+  const { harness: absentHarness, runDir: absentRun } = initSyntheticRun(absentWorkspace);
+  runSyntheticStep(absentHarness, absentRun, "activation", "");
+  runSyntheticStep(absentHarness, absentRun, "decline", absentHarness.NOTES.decline);
+  const present = absentHarness.observeAll(absentHarness.loadState(absentRun)).find((entry) => entry.case === "decline");
+  const lines = present.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const absentCast = rewriteDeclineRecorder(absentHarness, absentRun, (text) => lines.reduce((out, line) => out.replaceAll(line, ""), text));
+  const absent = absentHarness.observeAll(absentHarness.loadState(absentRun)).find((entry) => entry.case === "decline");
+  assert.equal(absent.result, "NOT OBSERVED");
+  assert.equal(absent.facts.exact_call_dialog.recorder_correspondence.observed, true);
+  assert.equal(rawCastOutputText(absentCast).includes(lines[0]), false);
+  const absentRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", absentRun], { encoding: "utf8" });
+  assert.equal(absentRefusal.status, 1, `${absentRefusal.stdout}${absentRefusal.stderr}`);
+  assert.match(absentRefusal.stderr, /REFUSE step_cannot_certify: CANNOT CERTIFY decline; decline: the complete exact-call dialog is absent from decline\.cast/);
+
+  const partialWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-partial-dialog-"));
+  const { harness: partialHarness, runDir: partialRun } = initSyntheticRun(partialWorkspace);
+  runSyntheticStep(partialHarness, partialRun, "activation", "");
+  runSyntheticStep(partialHarness, partialRun, "decline", partialHarness.NOTES.decline);
+  const partialPresent = partialHarness.observeAll(partialHarness.loadState(partialRun)).find((entry) => entry.case === "decline");
+  const partialLines = partialPresent.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  rewriteDeclineRecorder(partialHarness, partialRun, (text) => text.replaceAll(partialLines[2], "").replaceAll(partialLines[3], ""));
+  const partial = partialHarness.observeAll(partialHarness.loadState(partialRun)).find((entry) => entry.case === "decline");
+  assert.equal(partial.result, "NOT OBSERVED");
+  assert.equal(partial.facts.exact_call_dialog.recorder_correspondence.observed, true);
+  assert.deepEqual(partial.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, false, false]);
+  const partialRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", partialRun], { encoding: "utf8" });
+  assert.equal(partialRefusal.status, 1, `${partialRefusal.stdout}${partialRefusal.stderr}`);
+  assert.match(partialRefusal.stderr, /REFUSE step_cannot_certify: CANNOT CERTIFY decline; decline: the complete exact-call dialog is absent from decline\.cast/);
+
+  const scatteredWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-scattered-dialog-"));
+  const { harness: scatteredHarness, runDir: scatteredRun } = initSyntheticRun(scatteredWorkspace);
+  runSyntheticStep(scatteredHarness, scatteredRun, "activation", "");
+  runSyntheticStep(scatteredHarness, scatteredRun, "decline", scatteredHarness.NOTES.decline);
+  const scatteredLines = scatteredHarness.observeAll(scatteredHarness.loadState(scatteredRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const scatteredCast = rewriteDeclineRecorder(scatteredHarness, scatteredRun, (text) => `${scatteredLines.reduce((out, line) => out.replaceAll(line, ""), text)}${scatteredLines.map((line) => `${line}\r\n${"unrelated terminal output ".repeat(20)}`).join("\r\n")}\u001b[2J`);
+  const scattered = scatteredHarness.observeAll(scatteredHarness.loadState(scatteredRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(scatteredCast).includes(scatteredLines[0]), true);
+  assert.deepEqual(scattered.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, true, true]);
+  assert.equal(scattered.facts.exact_call_dialog.dialog_span.observed, false);
+  assert.equal(scattered.result, "NOT OBSERVED");
+  const scatteredRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", scatteredRun], { encoding: "utf8" });
+  assert.equal(scatteredRefusal.status, 1, `${scatteredRefusal.stdout}${scatteredRefusal.stderr}`);
+
+  const erasedWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-erased-dialog-"));
+  const { harness: erasedHarness, runDir: erasedRun } = initSyntheticRun(erasedWorkspace);
+  runSyntheticStep(erasedHarness, erasedRun, "activation", "");
+  runSyntheticStep(erasedHarness, erasedRun, "decline", erasedHarness.NOTES.decline);
+  const erasedLines = erasedHarness.observeAll(erasedHarness.loadState(erasedRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const erasedCast = rewriteDeclineRecorder(erasedHarness, erasedRun, (text) => `${erasedLines.reduce((out, line) => out.replaceAll(line, ""), text)}${erasedLines.map((line) => [...line].map((char) => `${char}\b`).join("")).join("")}\u001b[2J`);
+  const erased = erasedHarness.observeAll(erasedHarness.loadState(erasedRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(erasedCast).includes(erasedLines[0]), false);
+  assert.equal(erased.result, "NOT OBSERVED");
+  const erasedRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", erasedRun], { encoding: "utf8" });
+  assert.equal(erasedRefusal.status, 1, `${erasedRefusal.stdout}${erasedRefusal.stderr}`);
+
+  const echWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-ech-dialog-"));
+  const { harness: echHarness, runDir: echRun } = initSyntheticRun(echWorkspace);
+  runSyntheticStep(echHarness, echRun, "activation", "");
+  runSyntheticStep(echHarness, echRun, "decline", echHarness.NOTES.decline);
+  const echLines = echHarness.observeAll(echHarness.loadState(echRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  rewriteDeclineRecorder(echHarness, echRun, (text) => `${echLines.reduce((out, line) => out.replaceAll(line, ""), text)}\u001b[1;1H${echLines.join("")}\u001b[1;1H\u001b[80X`);
+  const ech = echHarness.observeAll(echHarness.loadState(echRun)).find((entry) => entry.case === "decline");
+  assert.equal(ech.result, "NOT OBSERVED");
+  const echRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", echRun], { encoding: "utf8" });
+  assert.equal(echRefusal.status, 1, `${echRefusal.stdout}${echRefusal.stderr}`);
+
+  const dchWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-dch-dialog-"));
+  const { harness: dchHarness, runDir: dchRun } = initSyntheticRun(dchWorkspace);
+  runSyntheticStep(dchHarness, dchRun, "activation", "");
+  runSyntheticStep(dchHarness, dchRun, "decline", dchHarness.NOTES.decline);
+  const dchLines = dchHarness.observeAll(dchHarness.loadState(dchRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  rewriteDeclineRecorder(dchHarness, dchRun, (text) => `${dchLines.reduce((out, line) => out.replaceAll(line, ""), text)}\u001b[1;1H${dchLines.join("")}\u001b[1;1H\u001b[80P`);
+  const dch = dchHarness.observeAll(dchHarness.loadState(dchRun)).find((entry) => entry.case === "decline");
+  assert.equal(dch.result, "NOT OBSERVED");
+  const dchRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", dchRun], { encoding: "utf8" });
+  assert.equal(dchRefusal.status, 1, `${dchRefusal.stdout}${dchRefusal.stderr}`);
+
+  const cursorWorkspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-cursor-dialog-"));
+  const { harness: cursorHarness, runDir: cursorRun } = initSyntheticRun(cursorWorkspace);
+  runSyntheticStep(cursorHarness, cursorRun, "activation", "");
+  runSyntheticStep(cursorHarness, cursorRun, "decline", cursorHarness.NOTES.decline);
+  const cursorLines = cursorHarness.observeAll(cursorHarness.loadState(cursorRun)).find((entry) => entry.case === "decline").facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.line);
+  const cursorCast = rewriteDeclineRecorder(cursorHarness, cursorRun, (text) => `${cursorLines.reduce((out, line) => out.replaceAll(line, ""), text)}${cursorLines.map((line, index) => `\u001b[${index + 1};1H${line}`).join("")}`);
+  const cursor = cursorHarness.observeAll(cursorHarness.loadState(cursorRun)).find((entry) => entry.case === "decline");
+  assert.equal(rawCastOutputText(cursorCast).includes(cursorLines[0]), true);
+  assert.equal(cursor.facts.exact_call_dialog.dialog_span.observed, true);
+  assert.equal(cursor.result, "OBSERVED");
 });
 
 test("finish refuses before writing when any declared case lacks positive evidence", () => {

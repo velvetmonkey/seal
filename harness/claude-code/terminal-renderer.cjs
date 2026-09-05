@@ -146,6 +146,7 @@ class Screen {
       case "H": case "f": this.y = Math.max(0, Math.min(this.height - 1, (values[0] || 1) - 1)); this.x = Math.max(0, Math.min(this.width, (values[1] || 1) - 1)); break;
       case "J": if ((values[0] || 0) === 2 || (values[0] || 0) === 3) this.clearScreen(); else if ((values[0] || 0) === 0) this.clearLine(this.y, this.x); else { for (let y = 0; y < this.y; y += 1) this.clearLine(y); this.clearLine(this.y, 0, this.x); } break;
       case "K": if ((values[0] || 0) === 2) this.clearLine(this.y); else if ((values[0] || 0) === 1) this.clearLine(this.y, 0, this.x); else this.clearLine(this.y, this.x); break;
+      case "X": this.clearLine(this.y, this.x, this.x + first - 1); break;
       case "P": { const count = Math.min(first, this.width - this.x); this.cells[this.y].splice(this.x, count); this.cells[this.y].push(...Array(count).fill(" ")); break; }
       case "@": { const count = Math.min(first, this.width - this.x); this.cells[this.y].splice(this.x, 0, ...Array(count).fill(" ")); this.cells[this.y].splice(this.width, count); break; }
       case "s": this.saved = { x: this.x, y: this.y }; break;
@@ -165,7 +166,7 @@ class Screen {
       case "T": this.scrollDown(first); break;
       case "h": case "l": break;
       case "m": break;
-      // Handled CSI: A B e C a D E F G ` d H f J K P @ r S T s u.
+      // Handled CSI: A B e C a D E F G ` d H f J K X P @ r S T s u.
       // Ignored CSI final bytes are unsupported rendering operations. CSI c
       // requests device attributes. CSI q changes cursor style. CSI m changes
       // attributes only. Private-mode h/l is ignored because the copied real
@@ -260,6 +261,133 @@ function parseCast(castPath) {
     .replaceAll(INTERNAL_SESSION_ID, "[REDACTED-SESSION-ID]");
 }
 
+// Read displayed terminal-output history rather than terminal state. Unlike
+// parseCast, this retains a completed paint which was later overwritten in
+// place. The pending paint is a Screen: this keeps the history erasure rules
+// identical to Screen.csiCommand. In particular EL only clears cells at or
+// after the cursor, while ECH and DCH clear/delete cells at the cursor.
+// Thus `x\b` is not evidence for `x`, while a completed dialog remains evidence
+// after a later screen clear. Cursor-only CSI commands do not break history,
+// because a TUI can paint one displayed dialog at several cursor addresses.
+function rawCastOutputText(castPath) {
+  const lines = fs.readFileSync(castPath, "utf8").split("\n").filter((line) => line.trim() !== "");
+  if (lines.length === 0) throw new Error("cast is empty");
+  JSON.parse(lines[0]);
+  const header = JSON.parse(lines[0]);
+  let output = "";
+  for (const line of lines.slice(1)) {
+    const event = JSON.parse(line);
+    if (Array.isArray(event) && event[1] === "o") output += String(event[2] ?? "");
+  }
+  const screen = new Screen(Number(header.width) || 80, Number(header.height) || 24);
+  const history = [];
+  const dirty = Array.from({ length: screen.height }, () => Array(screen.width).fill(false));
+  let state = "text";
+  let csi = "";
+
+  const commit = () => {
+    for (let y = 0; y < screen.height; y += 1) {
+      const row = dirty[y];
+      const first = row.indexOf(true);
+      if (first === -1) continue;
+      const last = row.lastIndexOf(true);
+      history.push(screen.cells[y].slice(first, last + 1).join(""));
+      row.fill(false);
+    }
+  };
+  const clearDirty = (y, from, to) => {
+    for (let x = Math.max(0, from); x <= Math.min(screen.width - 1, to); x += 1) dirty[y][x] = false;
+  };
+  const scrollUp = (count = 1) => {
+    for (let step = 0; step < count; step += 1) {
+      dirty.splice(screen.scrollTop, 1);
+      dirty.splice(screen.scrollBottom, 0, Array(screen.width).fill(false));
+    }
+    screen.scrollUp(count);
+  };
+  const scrollDown = (count = 1) => {
+    for (let step = 0; step < count; step += 1) {
+      dirty.splice(screen.scrollBottom, 1);
+      dirty.splice(screen.scrollTop, 0, Array(screen.width).fill(false));
+    }
+    screen.scrollDown(count);
+  };
+  const lineFeed = () => {
+    if (screen.y === screen.scrollBottom) scrollUp();
+    else if (screen.y < screen.height - 1) screen.y += 1;
+  };
+  const csiCommand = (command) => {
+    const values = screen.params(csi);
+    const first = values[0] || 1;
+    if (command === "J") {
+      if ((values[0] || 0) === 2 || (values[0] || 0) === 3) for (const row of dirty) row.fill(false);
+      else if ((values[0] || 0) === 0) clearDirty(screen.y, screen.x, screen.width - 1);
+      else { for (let y = 0; y < screen.y; y += 1) dirty[y].fill(false); clearDirty(screen.y, 0, screen.x); }
+    } else if (command === "K") {
+      if ((values[0] || 0) === 2) dirty[screen.y].fill(false);
+      else if ((values[0] || 0) === 1) clearDirty(screen.y, 0, screen.x);
+      else clearDirty(screen.y, screen.x, screen.width - 1);
+    } else if (command === "X") clearDirty(screen.y, screen.x, screen.x + first - 1);
+    else if (command === "P") {
+      const count = Math.min(first, screen.width - screen.x);
+      dirty[screen.y].splice(screen.x, count);
+      dirty[screen.y].push(...Array(count).fill(false));
+    } else if (command === "@") {
+      const count = Math.min(first, screen.width - screen.x);
+      dirty[screen.y].splice(screen.x, 0, ...Array(count).fill(false));
+      dirty[screen.y].splice(screen.width, count);
+    }
+    if (command === "S") scrollUp(first);
+    else if (command === "T") scrollDown(first);
+    else screen.csiCommand(command, csi);
+  };
+  for (const char of output) {
+    const code = char.codePointAt(0);
+    if (state === "osc") {
+      if (char === "\u0007") state = "text";
+      else if (char === "\u001b") state = "osc-st";
+      continue;
+    }
+    if (state === "osc-st") {
+      state = char === "\\" ? "text" : "osc";
+      continue;
+    }
+    if (state === "csi") {
+      csi += char;
+      if (code >= 0x40 && code <= 0x7e) {
+        csiCommand(char);
+        state = "text";
+        csi = "";
+      }
+      continue;
+    }
+    if (state === "escape") {
+      if (char === "[") { state = "csi"; csi = ""; }
+      else if (char === "]") state = "osc";
+      else if (char === "7") { screen.saved = { x: screen.x, y: screen.y }; state = "text"; }
+      else if (char === "8") { screen.x = screen.saved.x; screen.y = screen.saved.y; state = "text"; }
+      else state = "text";
+      continue;
+    }
+    if (char === "\u001b") { state = "escape"; continue; }
+    if (code === 0x9b) { state = "csi"; csi = ""; continue; }
+    if (code === 0x9d) { state = "osc"; continue; }
+    if (code === 0x08) { screen.x = Math.max(0, screen.x - 1); dirty[screen.y][screen.x] = false; continue; }
+    if (code === 0x0a) { commit(); history.push("\n"); lineFeed(); continue; }
+    if (code === 0x0d) { commit(); screen.x = 0; continue; }
+    if (code === 0x09) { screen.x = Math.min(screen.width, screen.x + (8 - (screen.x % 8))); continue; }
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    if (screen.x >= screen.width) { screen.x = 0; lineFeed(); }
+    screen.put(char);
+    dirty[screen.y][Math.max(0, screen.x - 1)] = true;
+  }
+  commit();
+  return history.join("")
+    .replace(SESSION_URL, "[REDACTED-SESSION-URL]")
+    .replace(SESSION_ID, "[REDACTED-SESSION-ID]")
+    .replace(UUID, "[REDACTED-SESSION-ID]");
+}
+
 function renderCast(castPath) {
   const screen = parseScreen(castPath);
   const visible = screen.text()
@@ -275,4 +403,4 @@ function renderCast(castPath) {
   return `${header} Content that the terminal overwrote before it scrolled is not present. This is NOT a record of the whole session. It is derived from the raw recording ${require("node:path").basename(castPath)}.\n${visible}\n`;
 }
 
-module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, renderCast, rendererIdentity };
+module.exports = { RENDERER_IDENTITY, RENDERER_RESULT, parseCast, rawCastOutputText, renderCast, rendererIdentity };
