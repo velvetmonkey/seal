@@ -12,9 +12,10 @@ of that checker, not a claim that a receipt makes an outside event true.
   refusal, schema, canonical-value rules, field commitments, and a signature
   against the SUPPLIED key. It establishes that the receipt has the canonical
   parsed value signed by that key, not that the key is trusted.
-- **REPLAY** loads the identified kernel and configuration inputs, recomputes,
-  and compares. It establishes decision reproduction under the named inputs,
-  not authority or occurrence.
+- **REPLAY** loads the receipt's recorded inputs, recomputes with the verifier's
+  local kernel, and compares its verdict with the recorded verdict. It
+  establishes that those verdicts agree under those inputs, not that the
+  verifier used the original kernel, nor authority or occurrence.
 - **VERIFY** applies a NAMED profile to the available evidence and trust inputs,
   then emits a row-by-row report. It is never a synonym for “everything here is
   true”. No receipt-only profile may claim that the downstream effect occurred.
@@ -37,7 +38,7 @@ by the shipped verifier. It is checked in CI against `format()`.
 ```output
 Document structure       VALID
 Signature and bindings   UNVERIFIED
-Kernel decision          REPRODUCED
+Verifier-local verdict   REPRODUCED
 Authority key            NOT ESTABLISHED
 Event occurrence         NOT ESTABLISHED
                          ------------------
@@ -47,8 +48,8 @@ REPLAY    available
 VERIFY    UNVERIFIED
 ```
 
-The five rows are independent: structure, signature and bindings, kernel
-decision, authority key, and event occurrence. In particular, `REPLAY` does not
+The five rows are independent: structure, signature and bindings, Verifier-local
+verdict, authority key, and event occurrence. In particular, `REPLAY` does not
 establish authority, and no row establishes occurrence.
 
 ## Run it

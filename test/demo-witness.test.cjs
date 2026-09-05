@@ -69,7 +69,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.match(run.out, /Protected-server call count: still 1/);
   assert.match(run.out, /New Seal decisions: 0/);
   assert.match(run.out, /Seal did not observe or authorise this write\./);
-  assert.match(run.out, /The separately landed v2 checker replays the recorded kernel decision and reports five rows; a signature alone cannot establish that the event happened\./);
+  assert.match(run.out, /The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened\./);
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
   const expectedPayloadRoot = path.join(__dirname, "..");
   assert.ok(run.out.includes(`Run: (cd ${JSON.stringify(expectedPayloadRoot)} && node checker/seal-receipt-v2.mjs`), "demo must enter its exact payload root before naming the v2 checker path");
@@ -108,7 +108,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
 
   // Output discipline: no verification claims anywhere.
   assert.doesNotMatch(run.out, new RegExp(["PASS", "VERIFIED"].join(" ")));
-  assert.doesNotMatch(run.out, /verif/i);
+  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", ""), /verif/i);
 });
 
 test("demo checker route control rejects an absent path and a receipt-version mismatch", () => {

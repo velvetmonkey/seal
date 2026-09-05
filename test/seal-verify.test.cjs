@@ -36,7 +36,7 @@ test("seal verify exits successfully only for a signed receipt and the correct k
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /Document structure       VALID/);
   assert.match(result.out, /Signature and bindings   VALID/);
-  assert.match(result.out, /Kernel decision          REPRODUCED/);
+  assert.match(result.out, /Verifier-local verdict   REPRODUCED/);
   assert.match(result.out, /VERIFY    VERIFIED/);
 
   const wrong = crypto.generateKeyPairSync("ed25519").publicKey

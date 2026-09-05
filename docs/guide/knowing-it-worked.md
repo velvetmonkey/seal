@@ -4,9 +4,8 @@ Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a
 receipt that has been altered. The producer and checker obey the fixed member
-order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches the kernel through
-Seal's decision runner, not the producer's assembler. This page walks all three
-from real runs.
+order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches only its local WASM
+kernel, not the producer's assembler. This page walks all three from real runs.
 
 ## The approval prompt, line by line
 
@@ -136,8 +135,8 @@ This signed example is from `seal demo`:
 For the canonical meaning of receipt operations and their trust ceiling, see
 [Receipt operations](../reference/receipt-operations.md). The independently
 landed v2 checker reads the document, validates its commitments, and replays
-its exact inputs through the WASM kernel. Supply a public key you already trust
-if you also want the signature row checked.
+its exact inputs through the checker's local WASM kernel. Supply a public key
+you already trust if you also want the signature row checked.
 
 ```bash
 $ node checker/seal-receipt-v2.mjs receipt-…-0002-ALLOW.json --pubkey "$(cat receipt-signer.pub)"
@@ -146,7 +145,7 @@ $ node checker/seal-receipt-v2.mjs receipt-…-0002-ALLOW.json --pubkey "$(cat r
 ```output
 Document structure       VALID
 Signature and bindings   VALID
-Kernel decision          REPRODUCED
+Verifier-local verdict   REPRODUCED
 Authority key            UNPINNED / CALLER-SUPPLIED
 Event occurrence         NOT ESTABLISHED
                          ------------------
