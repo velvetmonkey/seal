@@ -117,7 +117,7 @@ function evaluateSelection(selection, args, rawFrame) {
   const actual = args[predicate.argument];
   if (predicate.operator === "~") {
     if (typeof actual !== "string") return { gate: true, label, detail: `predicate does not apply because argument ${predicate.argument} is not a string` };
-    return actual.startsWith(predicate.prefix) && actual.endsWith(predicate.suffix)
+    return actual.length >= predicate.prefix.length + predicate.suffix.length && actual.startsWith(predicate.prefix) && actual.endsWith(predicate.suffix)
       ? { gate: true, label, detail: "predicate matched" }
       : { gate: false };
   }
