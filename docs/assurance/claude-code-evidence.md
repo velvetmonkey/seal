@@ -63,6 +63,14 @@ elicitation, or declines to fall back.
 
 ### Run conditions, pinned and recorded
 
+- Node.js 20 or later, and util-linux's `script` command. Confirm both before
+  starting; `script` records each terminal session that the harness checks:
+
+  ```bash
+  $ node --version
+  $ node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+  $ script --version
+  ```
 - One frozen Seal artifact, identified by SHA-256, byte length **and** the
   installed-tree digest the installer records.
 - One exact Claude Code version, plus the SHA-256 of the client executable.
@@ -132,18 +140,48 @@ How each one is established from files rather than from the operator's memory:
 
 ## Running the acceptance walk
 
+First download one published Linux x86-64 artifact and the `SHA256SUMS` asset
+attached to that same GitHub release. Set `SEAL_VERSION` to the release being
+accepted. These commands obtain the frozen artifact and set the digest and
+length used by `init`; they also verify that the downloaded bytes match the
+release's checksum record.
+
 ```bash
-$ node harness/claude-code/cc-harness.cjs init --artifact ./seal-vX.Y.Z-linux-x64 --sha256 <digest> --bytes <length> --run-dir /tmp/cc-acceptance
-$ node harness/claude-code/cc-harness.cjs next --run-dir /tmp/cc-acceptance
+$ read -r -p 'Published release tag (for example vX.Y.Z): ' SEAL_VERSION
+$ test -n "$SEAL_VERSION"
+$ SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64"
+$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT"
+$ read -r SEAL_SHA256 SEAL_BYTES named < <(awk -v name="$SEAL_ARTIFACT" '$3 == name { print; exit }' SHA256SUMS)
+$ test "$named" = "$SEAL_ARTIFACT"
+$ sha256sum "$SEAL_ARTIFACT" > artifact.sha256
+$ read -r actual_sha256 _ < artifact.sha256
+$ test "$actual_sha256" = "$SEAL_SHA256"
+$ test "$(wc -c < "$SEAL_ARTIFACT")" = "$SEAL_BYTES"
+$ chmod +x "$SEAL_ARTIFACT"
+```
+
+Choose a new, empty run directory. `mkdir` below both creates it and makes the
+empty-directory requirement explicit; do not reuse a directory from an earlier
+run. The harness creates its clean temporary `HOME`, XDG directories, and
+project beneath that run directory.
+
+```bash
+$ run_dir="$PWD/cc-acceptance"
+$ mkdir "$run_dir"
+$ node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir"
+$ node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
 
 `next` is the whole run: it takes the machine readings, prints what the human
-must do, launches the recorded session, and stops. Repeat it until it says the
-run is complete; the last step writes the pack under `<run-dir>/pack`. To write
-it straight into a checkout instead, name the destination:
+must do, launches the recorded session, and stops. Repeat it for each prompted
+stage through `unprotect`. When its final prompt offers the finishing step, do
+**not** run a final `next`: `finish --out` below replaces that final `next` and
+writes the pack straight into the current checkout. (Without `--out`, that
+final `next` writes the pack under `<run-dir>/pack`.)
 
 ```bash
-$ node harness/claude-code/cc-harness.cjs finish --run-dir /tmp/cc-acceptance --out .
+$ node harness/claude-code/cc-harness.cjs finish --run-dir "$run_dir" --out .
 ```
 
 Run it in a terminal at least
@@ -169,14 +207,22 @@ Two cautions for the operator:
       <seal-artifact-sha256>/
         manifest.json
         rendered-transcript.txt
+        rendered-transcript-activation.txt
+        rendered-transcript-decline.txt
+        rendered-transcript-missing-launcher.txt
         proxy.jsonl
         child.jsonl
         before-after.json
         approvals.journal
         receipts/
         snapshots.json
-        rendered-transcript-<case>.txt
 ```
+
+There are rendered transcripts only for the four recorded terminal sessions:
+`rendered-transcript.txt` is the `accept` session, while the suffixed files
+above are respectively the `activation`, `decline`, and `missing_launcher`
+sessions. The other four cases are established from the fixture, proxy,
+approval, and state records, so they have no rendered transcript file.
 
 The evidence contract is `seal.claude-code-evidence/v2`. The identifier lives
 in `manifest.json.manifest`. The harness writes it in
@@ -262,10 +308,28 @@ Code version. Until such a pack exists and verifies, the row reads
 drives the entire harness with a scripted stand-in
 ([`harness/claude-code/synthetic-client.cjs`](../../harness/claude-code/synthetic-client.cjs))
 so the instrument itself is exercised on every CI run: the real artifact is
-installed, `seal protect` runs, the real proxy gates a real fixture, and the
-checker is shown accepting and refusing. It proves the harness works. It proves
-nothing about Claude Code — a stand-in that declines to fall back declines
-because it was written to.
+installed, `seal protect` runs, and the real proxy gates a real fixture. Its
+`--run-dir` must be empty when opened; the runner creates its artifact and
+stand-in inputs in the sibling directory `<run-dir>-inputs`. For example:
+
+```bash
+$ synthetic_run_dir="$PWD/synthetic-acceptance"
+$ mkdir "$synthetic_run_dir"
+$ node harness/claude-code/synthetic-run.cjs --run-dir "$synthetic_run_dir"
+```
+
+The synthetic runner prints one `Check it:` command for the pack it wrote. It
+does not run the checker itself. Run these two commands to show both outcomes:
+the first accepts the synthetic pack only with the explicit opt-in, and the
+second intentionally refuses it without that opt-in.
+
+```bash
+$ node scripts/check-cc-evidence.mjs "$synthetic_run_dir/pack/evidence/claude-code" --allow-synthetic
+$ node scripts/check-cc-evidence.mjs "$synthetic_run_dir/pack/evidence/claude-code"
+```
+
+It proves the harness works. It proves nothing about Claude Code — a stand-in
+that declines to fall back declines because it was written to.
 
 The four labels below remain useful warnings, but release refusal no longer
 derives realness from them. The fixture hashes the actual files named by live
