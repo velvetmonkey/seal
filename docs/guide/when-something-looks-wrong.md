@@ -103,7 +103,7 @@ gate, which pins both.
 
 ### `response_malformed`
 
-The approval answer did not have the expected shape — for example an accept
+The approval answer did not have the expected shape — for example, an accept
 with no readable approve value. Usually a client defect rather than a user
 action. Call again; if it repeats, the client is not returning the form
 faithfully.
