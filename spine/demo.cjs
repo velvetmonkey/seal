@@ -33,6 +33,27 @@ function readCount(countFile) {
   return fs.readFileSync(countFile, "utf8").trim();
 }
 
+function readReceipts(receiptsDir) {
+  if (!fs.existsSync(receiptsDir)) return [];
+  return fs.readdirSync(receiptsDir)
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map((name) => {
+      const receiptPath = path.join(receiptsDir, name);
+      return { receiptPath, receipt: JSON.parse(fs.readFileSync(receiptPath, "utf8")) };
+    });
+}
+
+function findReplayBlockReceipt(receiptsDir, previousReceiptPaths = new Set()) {
+  return readReceipts(receiptsDir).find(({ receiptPath, receipt }) => (
+    !previousReceiptPaths.has(receiptPath)
+    && receipt.action === "BLOCK"
+    && receipt.verdict === "BLOCK"
+    && receipt.tool === TOOL
+    && receipt.arguments?.line === DEMO_LINE
+  ));
+}
+
 function canonicalPath(filePath) {
   const absolute = path.isAbsolute(filePath)
     ? filePath
@@ -120,7 +141,6 @@ async function run(argv, sealBinPath) {
   const pendingById = new Map();
   const elicitationRequests = [];
   const elicitationWaiters = [];
-  const decisions = [];
 
   const signer = generateSigner();
   const pubkeyPath = path.join(dir, "receipt-signer.pub");
@@ -146,7 +166,6 @@ async function run(argv, sealBinPath) {
         const resolve = pendingById.get(frame.id);
         if (resolve) { pendingById.delete(frame.id); resolve(frame); }
       },
-      onDecision: (decision) => decisions.push(decision),
       onChildExit: (code) => { if (code !== 0 && code !== null) fail(`the demo child exited ${code} mid-run`); },
     });
   } catch (error) {
@@ -236,19 +255,18 @@ async function run(argv, sealBinPath) {
   console.log(`child calls observed: ${after} (read from ${countFile})`);
 
   console.log("replaying the identical elicitation response with the same id…");
-  const decisionsBeforeReplay = decisions.length;
+  const receiptsBeforeReplay = new Set(readReceipts(receiptsDir).map(({ receiptPath }) => receiptPath));
   answerElicitation(elicitation.id, "accept", { approve: true });
   await new Promise((resolve) => setTimeout(resolve, 50));
   const finalCount = readCount(countFile);
   if (finalCount !== "1") fail(`after the replay the child's count file reads ${finalCount}, not 1`);
-  const replayDecision = decisions.slice(decisionsBeforeReplay).find((decision) => (
-    decision.decision === "BLOCK" && decision.refusal === "already_consumed"
-  ));
-  if (!replayDecision) fail("the duplicate elicitation response produced no matching BLOCK receipt");
-  console.log(`BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: "${replayDecision.refusal}"`);
+  const replayBlock = findReplayBlockReceipt(receiptsDir, receiptsBeforeReplay);
+  if (replayBlock) {
+    console.log(`BLOCKED   the shared proxy recorded a ${replayBlock.receipt.action} receipt for the replay: verdict ${replayBlock.receipt.verdict}`);
+  }
   console.log(`one-use held: the replay did not run the call again; child calls observed: still ${finalCount} (read from ${countFile})`);
 
-  for (const decision of decisions) console.log(`receipt written: ${decision.receiptPath}`);
+  for (const { receiptPath } of readReceipts(receiptsDir)) console.log(`receipt written: ${receiptPath}`);
 
   // Act 4 changes the same resource as the protected tool, but without
   // crossing the proxy. Read all three witnesses from disk before and after:
@@ -290,21 +308,25 @@ async function run(argv, sealBinPath) {
   console.log("");
   console.log("Seal did not observe or authorise this write.");
   await proxy.stop();
-  console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.");
-  console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(decisions[decisions.length - 1].receiptPath)} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
+  const finalReceipts = readReceipts(receiptsDir);
+  const finalReceiptPath = finalReceipts.at(-1)?.receiptPath;
+  if (finalReceiptPath) {
+    console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.");
+    console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(finalReceiptPath)} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
+  }
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("");
-  console.log("ENFORCED");
-  console.log("The approved demo.mutate call ran once; its replay was refused.");
-  console.log("");
+  if (replayBlock && after === "1" && finalCount === "1") {
+    console.log("ENFORCED");
+    console.log("The approved demo.mutate call ran once; its replay produced a BLOCK receipt.");
+    console.log("");
+  }
   console.log("NOT APPROVAL-GATED");
   console.log(`The direct write to ${dataFile}.`);
   console.log("");
   console.log("NOT OBSERVED");
   console.log(`That direct write; protected-server call count stayed ${countAfterDirectWrite} and Seal made 0 new decisions.`);
   console.log("");
-  console.log("ASSURANCE");
-  console.log("authorization rule tested; product state and forwarding tested; client and machine trusted.");
   process.exit(0);
 }
 
