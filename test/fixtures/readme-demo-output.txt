@@ -14,8 +14,8 @@ child calls observed: still 0 (read from /home/monkey/scratch/runner-temp/tty-de
 Approve? [y/N] y
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
-replaying the identical retry with the same requestState…
-BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+replaying the identical elicitation response with the same id…
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: "already_consumed"
 one-use held: the replay did not run the call again; child calls observed: still 1 (read from /home/monkey/scratch/runner-temp/tty-demo/child/data.txt.count)
 receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867994562-610297-0001-INPUT_REQUIRED.json
 receipt written: /home/monkey/scratch/runner-temp/tty-demo/receipts/receipt-1787867995050-610297-0002-ALLOW.json

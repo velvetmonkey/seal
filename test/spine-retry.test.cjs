@@ -180,7 +180,8 @@ test("seal demo: input_required, approve once, replay refused, then direct write
   assert.match(run.out, /child calls observed: 1/);
   assert.match(run.out, /still 1/);
   assert.match(run.out, /one-use held/);
-  assert.match(run.out, /already_consumed/);
+  assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: "already_consumed"/);
+  assert.doesNotMatch(run.out, /the shared proxy refused the replay: "approval refused: already_consumed"/);
 
   const receiptPaths = [...run.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
   assert.equal(receiptPaths.length, 3, `expected 3 receipts\n${run.out}`);
@@ -232,7 +233,7 @@ test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
   const code = await run.exit;
   assert.equal(code, 0, `${run.out}\n${run.err}`);
   assert.deepEqual(Buffer.from(run.err), Buffer.from(""));
-  assert.match(run.out, /BLOCKED   the shared proxy refused the replay/);
+  assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
 });
 
 // --- protected path ---------------------------------------------------------

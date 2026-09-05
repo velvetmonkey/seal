@@ -120,7 +120,7 @@ async function run(argv, sealBinPath) {
   const pendingById = new Map();
   const elicitationRequests = [];
   const elicitationWaiters = [];
-  const receiptPaths = [];
+  const decisions = [];
 
   const signer = generateSigner();
   const pubkeyPath = path.join(dir, "receipt-signer.pub");
@@ -146,7 +146,7 @@ async function run(argv, sealBinPath) {
         const resolve = pendingById.get(frame.id);
         if (resolve) { pendingById.delete(frame.id); resolve(frame); }
       },
-      onDecision: ({ receiptPath }) => receiptPaths.push(receiptPath),
+      onDecision: (decision) => decisions.push(decision),
       onChildExit: (code) => { if (code !== 0 && code !== null) fail(`the demo child exited ${code} mid-run`); },
     });
   } catch (error) {
@@ -236,14 +236,19 @@ async function run(argv, sealBinPath) {
   console.log(`child calls observed: ${after} (read from ${countFile})`);
 
   console.log("replaying the identical elicitation response with the same id…");
+  const decisionsBeforeReplay = decisions.length;
   answerElicitation(elicitation.id, "accept", { approve: true });
   await new Promise((resolve) => setTimeout(resolve, 50));
   const finalCount = readCount(countFile);
   if (finalCount !== "1") fail(`after the replay the child's count file reads ${finalCount}, not 1`);
-  console.log('BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed"');
+  const replayDecision = decisions.slice(decisionsBeforeReplay).find((decision) => (
+    decision.decision === "BLOCK" && decision.refusal === "already_consumed"
+  ));
+  if (!replayDecision) fail("the duplicate elicitation response produced no matching BLOCK receipt");
+  console.log(`BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: "${replayDecision.refusal}"`);
   console.log(`one-use held: the replay did not run the call again; child calls observed: still ${finalCount} (read from ${countFile})`);
 
-  for (const receiptPath of receiptPaths) console.log(`receipt written: ${receiptPath}`);
+  for (const decision of decisions) console.log(`receipt written: ${decision.receiptPath}`);
 
   // Act 4 changes the same resource as the protected tool, but without
   // crossing the proxy. Read all three witnesses from disk before and after:
@@ -286,7 +291,7 @@ async function run(argv, sealBinPath) {
   console.log("Seal did not observe or authorise this write.");
   await proxy.stop();
   console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.");
-  console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(receiptPaths[receiptPaths.length - 1])} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
+  console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(decisions[decisions.length - 1].receiptPath)} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("");
   console.log("ENFORCED");
