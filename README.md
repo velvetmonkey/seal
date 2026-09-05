@@ -25,7 +25,11 @@ Download and verify the published release asset, install it under `~/.local`, th
 the command on your current shell's `PATH`:
 
 <!-- generated from published release; do not edit -->
+Run this block directly in Bash. `set -euo pipefail` exits that shell on a failed
+check or pipeline; do not source it or wrap it in an `if`, `&&`, or `||` condition.
+
 ```bash
+set -euo pipefail
 SEAL_VERSION=v0.2.1
 artifact_name="seal-v0.2.1-linux-x64"
 artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd"
@@ -36,10 +40,14 @@ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSIO
 curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64"
 if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; else sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; fi
 test "$sums_actual" = "$sums_sha256"
-read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" '$3 == name' "$sums_name")
-test "$expected_name" = "$artifact_name" && test "$expected_digest" = "$artifact_sha256" && test "$expected_bytes" = "$artifact_bytes"
+checksum_entry="$(awk -v name="$artifact_name" '$3 == name' "$sums_name")"
+read -r expected_digest expected_bytes expected_name <<< "$checksum_entry"
+test "$expected_name" = "$artifact_name"
+test "$expected_digest" = "$artifact_sha256"
+test "$expected_bytes" = "$artifact_bytes"
 if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk '{print $1}')"; else actual_digest="$(sha256sum "$artifact_name" | awk '{print $1}')"; fi
-test "$actual_digest" = "$artifact_sha256" && test "$(wc -c < "$artifact_name" | tr -d ' ')" = "$artifact_bytes"
+test "$actual_digest" = "$artifact_sha256"
+actual_bytes="$(wc -c < "$artifact_name" | tr -d ' ')"; test "$actual_bytes" = "$artifact_bytes"
 chmod +x "$expected_name"
 ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 export PATH="$HOME/.local/bin:$PATH"

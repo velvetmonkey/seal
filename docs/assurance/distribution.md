@@ -19,14 +19,23 @@ an absent or empty root file is the defined between-releases state.
 
 There is no signing-key ceremony. Download the binary and the `SHA256SUMS`
 asset attached to the same release, then supply that asset's `--sha256` (and
-optionally `--bytes`) values. Without that pin the installer refuses.
+optionally `--bytes`) values. The shell checks below verify the bytes before
+execution; without that pin the installer also refuses.
 
 ## Install
 
+Run this block directly in Bash. `set -euo pipefail` exits that shell on a failed
+check or pipeline; do not source it or wrap it in an `if`, `&&`, or `||` condition.
+
 ```bash
-$ read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
-$ chmod +x "$SEAL_ARTIFACT"
-$ "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix ~/.local
+set -euo pipefail
+read -r SEAL_SHA256 SEAL_BYTES SEAL_ARTIFACT < SHA256SUMS
+if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$SEAL_ARTIFACT" | awk '{print $1}')"; else actual_digest="$(sha256sum "$SEAL_ARTIFACT" | awk '{print $1}')"; fi
+test "$actual_digest" = "$SEAL_SHA256"
+actual_bytes="$(wc -c < "$SEAL_ARTIFACT" | tr -d ' ')"
+test "$actual_bytes" = "$SEAL_BYTES"
+chmod +x "$SEAL_ARTIFACT"
+"./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix ~/.local
 ```
 
 On any other platform the installer prints `UNSUPPORTED PLATFORM` and

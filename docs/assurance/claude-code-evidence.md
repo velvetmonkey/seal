@@ -149,19 +149,25 @@ release; if accepting an older release, enter that release's tag from the
 length used by `init`; they also verify that the downloaded bytes match the
 release's checksum record.
 
+Run this block directly in Bash. `set -euo pipefail` exits that shell on a failed
+check or pipeline; do not source it or wrap it in an `if`, `&&`, or `||` condition.
+
 ```bash
-$ read -r -p 'Published release tag (for example vX.Y.Z): ' SEAL_VERSION
-$ test -n "$SEAL_VERSION"
-$ SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64"
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
-$ curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT"
-$ read -r SEAL_SHA256 SEAL_BYTES named < <(awk -v name="$SEAL_ARTIFACT" '$3 == name { print; exit }' SHA256SUMS)
-$ test "$named" = "$SEAL_ARTIFACT"
-$ sha256sum "$SEAL_ARTIFACT" > artifact.sha256
-$ read -r actual_sha256 _ < artifact.sha256
-$ test "$actual_sha256" = "$SEAL_SHA256"
-$ test "$(wc -c < "$SEAL_ARTIFACT")" = "$SEAL_BYTES"
-$ chmod +x "$SEAL_ARTIFACT"
+set -euo pipefail
+read -r -p 'Published release tag (for example vX.Y.Z): ' SEAL_VERSION
+test -n "$SEAL_VERSION"
+SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT"
+checksum_entry="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print; exit }' SHA256SUMS)"
+read -r SEAL_SHA256 SEAL_BYTES named <<< "$checksum_entry"
+test "$named" = "$SEAL_ARTIFACT"
+sha256sum "$SEAL_ARTIFACT" > artifact.sha256
+read -r actual_sha256 _ < artifact.sha256
+test "$actual_sha256" = "$SEAL_SHA256"
+actual_bytes="$(wc -c < "$SEAL_ARTIFACT")"
+test "$actual_bytes" = "$SEAL_BYTES"
+chmod +x "$SEAL_ARTIFACT"
 ```
 
 Choose a new, empty run directory. `mkdir` below both creates it and makes the
