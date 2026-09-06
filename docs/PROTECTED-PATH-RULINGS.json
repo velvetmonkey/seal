@@ -1,12 +1,12 @@
 {
   "version": 1,
   "ruling": {
-    "base": "517e212f280d188631d1219bc223008cd097ffae",
+    "base": "858d2cd9ddcd89e5f3a716d21d7043ca42537ca6",
     "author": "velvetmonkey",
-    "date": "2026-09-05",
-    "scope": "Ben ruled on 2026-09-05 at 15:28, in his words: \"228 - merge\". This ruling authorises two protected paths. test/fixtures/readme-demo-checker-output.txt changes by one line, replacing the label \"Kernel decision\" with \"Verifier-local verdict\", leaving the verdict word REPRODUCED unchanged. test/fixtures/readme-demo-output.txt is BYTE-IDENTICAL to main; commit a745591 touched it and commit 0153576 reverted it, and the gate reports the touch because it walks every commit in the range. I observed the checker-output diff against origin/main as exactly one insertion and one deletion with only that label changed, and I observed zero output bytes from the demo-output diff against origin/main. I also derived matching demo-output blobs be528188bb8458b31a864e955559414e9ab29507 for HEAD and origin/main, and verified that a745591 changed that blob to e3aef9abec7d58637b77e66d5946b2d713d3fb40 before 0153576 restored be528188bb8458b31a864e955559414e9ab29507.",
+    "date": "2026-09-06",
+    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"do it\". PR 236 ships the pin-history ledger that PROVENANCE.txt already promises. RE-RECORDED at 11:34 after the branch was brought up to date with main. Main protection sets strict=true, so a branch must be current before it can merge, and updating the branch MOVED the merge-base from c69f62f8 to 858d2cd9, which correctly invalidated the previous record. A ruling binds the merge-base by design, so it cannot outlive a rebase. TWO protected artifacts appear and they are NOT equal in kind. FIRST, wasm-spike/verified/pin-history.json is the real change Ben approved: a 55-line ledger recording each assurance-kit commit with its kernel sha256 and its status. SECOND, test/fixtures/readme-demo-checker-output.txt is a TOUCH AND REVERT with ZERO net change; I re-read its blob AFTER the update and it is still 91368ba4838472067d3d80ec2f74cef4d196bbd5 on both origin/main and this head, so the two remain byte-identical. It must appear here because the checker requires the recorded file set to equal the reported set exactly. I verified the new merge-base and both blob digests on disk before writing.",
     "retires": [
-      "The 2026-09-04 ruling on test/fixtures/rendercheck-accept.cast, base 9ccbcf58b6ef4c1e9f185cf31ed6ccea7faf24be, which landed on main as c57f26d1b9f24093f088c138e3cd1b4e674c24a5 with the exact recorded blob and no longer applies to any open change."
+      "The 2026-09-06 11:31 record on this same branch, base c69f62f8, superseded when the branch was brought up to date with main and the merge-base moved to 858d2cd9."
     ],
     "files": [
       {
@@ -14,8 +14,8 @@
         "blob": "91368ba4838472067d3d80ec2f74cef4d196bbd5"
       },
       {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "be528188bb8458b31a864e955559414e9ab29507"
+        "path": "wasm-spike/verified/pin-history.json",
+        "blob": "4ab4877c3a8077d832e07fc98395992d3a1ebcb8"
       }
     ]
   }
