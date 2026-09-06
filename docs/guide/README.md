@@ -76,6 +76,8 @@ command: /home/you/.local/bin/seal
 tree: 13e2b2a8b1e6301b2e3562e3bf6bcee78da8cb9302e12a41a1261ae08fef9f72
 ```
 
+The command above verifies the co-published `SHA256SUMS` before checking the installer.
+
 The installer refuses to run without the `--sha256` pin, on purpose: you are
 telling it which bytes you meant to install. Make sure `~/.local/bin` is on
 your `PATH`, then run `seal demo` once — it walks the whole approve-once,

@@ -289,7 +289,14 @@ test("repin refuses two role markers before one fence and names both markers", (
     encoding: "utf8",
   });
   assert.equal(repin.status, 1, repin.stdout + repin.stderr);
-  assert.match(repin.stderr, /REFUSE role_marker_ambiguous: docs\/guide\/README\.md:54 and docs\/guide\/README\.md:55 precede fenced block at docs\/guide\/README\.md:56/);
+  const attackedLines = attacked.split("\n");
+  const markerLine = attackedLines.indexOf("**Seal installed-tree pin role:** `published-asset`") + 1;
+  assert.ok(markerLine > 0, "published-asset marker must be present");
+  assert.equal(attackedLines[markerLine], "<!-- Seal installed-tree pin role: fresh-build -->");
+  assert.equal(attackedLines[markerLine + 1], "```output");
+  assert.ok(repin.stderr.includes(
+    `REFUSE role_marker_ambiguous: docs/guide/README.md:${markerLine} and docs/guide/README.md:${markerLine + 1} precede fenced block at docs/guide/README.md:${markerLine + 2}`,
+  ), repin.stderr);
   assert.match(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 
