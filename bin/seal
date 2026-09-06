@@ -342,6 +342,19 @@ function unprotectCommand(args) {
   });
 }
 
+function recoverCommand(args) {
+  requireProtectSupportedPlatform();
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
+  if (args.length !== 1 || args[0] !== "--archive") {
+    throw new protection.ProtectionError("usage", "usage: seal recover --archive; stop Claude Code first; this archives incompatible state and removes Seal's owned local override, leaving the route outside Seal");
+  }
+  const result = protection.recover({ projectRoot: process.cwd(), env: process.env });
+  console.log(`Archived incompatible protection state: ${result.archivePath}`);
+  console.log("Existing approval journal, receipts and signing keys were retained.");
+  for (const line of protection.protectionBoundary({ ...result.previousState, state: "UNPROTECTED" }, process.cwd())) console.log(line);
+  console.log("Next: review the archived server and tool selections, then run seal protect SERVER TOOL [TOOL...] in this project. Restart Claude Code and run seal status.");
+}
+
 function doctorCommand() {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const result = protection.doctor(process.env);
@@ -360,6 +373,7 @@ async function main() {
   if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
+  if (command === "recover") return recoverCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
@@ -371,7 +385,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal recover --archive    archive incompatible state and remove Seal's owned local override\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
 if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {

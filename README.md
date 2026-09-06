@@ -138,6 +138,28 @@ seal unprotect db
 The command removes Seal's local override and reports that the sealed MCP route
 is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
+### Recover after an upgrade
+
+If Seal reports `incompatible_state`, stop Claude Code and run this in the
+affected project:
+
+```bash
+seal recover --archive
+```
+
+Recovery requires explicit `--archive` and refuses compatible or absent state.
+It saves the exact old state to the printed `state.json.recovered-…` path before
+removing Seal's local override, using the same ownership checks as unprotect.
+It refuses a live recorded session or a replaced override. The project
+`.mcp.json`, approval journal, receipts and signing keys are retained. Recovery
+runs locally with the current Seal binary and the installed Claude CLI; it
+does not download anything. If removal fails, the old state and archive remain.
+
+The route is now outside Seal. Review the archived server, tools and predicates,
+then run `seal protect SERVER TOOL [TOOL...]` with your chosen selections.
+Restart Claude Code and use `seal status` to check activation. Recovery does not
+reuse the incompatible state as current protection or restore protection by itself.
+
 ## Guarantees and non-guarantees
 
 Seal is a formally anchored authorization gate for selected MCP `tools/call`

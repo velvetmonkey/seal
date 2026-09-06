@@ -38,7 +38,9 @@ function sealVersion() {
 
 class ProtectionError extends Error {
   constructor(code, message) {
-    super(message);
+    super(code === "incompatible_state"
+      ? `${message}; stop Claude Code, then run \`seal recover --archive\` in this project to archive the incompatible state and remove Seal's owned local override before protecting again`
+      : message);
     this.code = code;
     this.refusal = true;
   }
@@ -1077,6 +1079,71 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   return { beforeHash: before, afterHash: after, statePath, previousState: state };
 }
 
+function recover({ projectRoot = process.cwd(), env = process.env }) {
+  const root = realProjectRoot(projectRoot);
+  const statePath = statePathFor(root, env);
+  // Recovery may inspect incompatible bytes, but must never activate them or
+  // rewrite their version to make them pass readState.
+  const requireIncompatible = () => {
+    try { readState(statePath); } catch (error) {
+      if (error.code === "incompatible_state") return;
+      throw error;
+    }
+    throw new ProtectionError("recovery_not_needed", "state is compatible or absent; seal recover --archive only recovers incompatible state; no state or configuration was changed");
+  };
+  requireIncompatible();
+  const lock = acquireProjectLock(root, env);
+  try {
+    requireIncompatible();
+    const bytes = fs.readFileSync(statePath);
+    const state = JSON.parse(bytes.toString("utf8"));
+    if (!state || state.projectRoot !== root || state.projectId !== projectId(root) ||
+        typeof state.serverName !== "string" || state.serverName.length === 0) {
+      throw new ProtectionError("recovery_state_invalid", "cannot establish the incompatible state's project and server ownership; no state or configuration was changed");
+    }
+    if (lockOwnerIsLive(state.lease)) {
+      throw new ProtectionError("active_claude_session", "stop the Claude Code session using this project before running seal recover --archive");
+    }
+    const current = currentLocalOverride(root, state.serverName, env);
+    // Reuse the unprotect ownership check verbatim for any existing override.
+    // An absent override requires no configuration mutation.
+    if (current !== null) assertSealOwnedLocalOverride(state, root, state.serverName, env);
+    const assertUnchanged = () => {
+      if (!fs.readFileSync(statePath).equals(bytes)) {
+        throw new ProtectionError("recovery_state_changed", "stored state changed during recovery; retry after stopping Claude Code");
+      }
+    };
+    const archivePath = `${statePath}.recovered-${crypto.randomUUID()}`;
+    // Preserve the exact record durably before attempting removal. On failure
+    // both the original and archive remain available for inspection and retry.
+    const archiveFd = fs.openSync(archivePath, "wx", 0o600);
+    try {
+      fs.writeFileSync(archiveFd, bytes);
+      fs.fsyncSync(archiveFd);
+    } finally {
+      fs.closeSync(archiveFd);
+    }
+    const directoryFd = fs.openSync(path.dirname(statePath), "r");
+    try { fs.fsyncSync(directoryFd); } finally { fs.closeSync(directoryFd); }
+    assertUnchanged();
+    if (current !== null) {
+      assertSealOwnedLocalOverride(state, root, state.serverName, env);
+      const remove = runClaude(["mcp", "remove", "--scope", "local", state.serverName], env, root);
+      if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, state.serverName))) {
+        throw new ProtectionError("claude_remove_failed", `recovery retained state and archive ${archivePath}; Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
+      }
+    }
+    if (currentLocalOverride(root, state.serverName, env) !== null) {
+      throw ownershipRefusal("local_override_drifted", `local override remains; recovery retained state and archive ${archivePath}`);
+    }
+    assertUnchanged();
+    fs.unlinkSync(statePath);
+    return { archivePath, previousState: state };
+  } finally {
+    lock.release();
+  }
+}
+
 function markDrifted(statePath, state, gotDigest) {
   const next = { ...state, state: STATES.DRIFTED, drift: { expected: state.projectServerDigest, got: gotDigest, at: new Date().toISOString() } };
   writeState(statePath, next);
@@ -1247,6 +1314,7 @@ module.exports = {
   projectId,
   readProjectServer,
   readState,
+  recover,
   receiptKeyPaths,
   realProjectRoot,
   statePathFor,
