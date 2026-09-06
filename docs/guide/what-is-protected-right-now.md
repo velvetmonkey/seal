@@ -192,7 +192,7 @@ Most recent: unavailable because the project receipt directory could not be reso
 The state file is damaged (here it was deliberately corrupted; JSON parser
 wording depends on Node). Status exits 1 because it could not read the stored
 state, so it cannot establish the protected tool list or routing. The recovery
-command handles incompatible schema or binary versions; it refuses malformed
+command handles unsupported schemas; it refuses malformed
 JSON and leaves those bytes untouched.
 
 ```output
@@ -225,16 +225,17 @@ A related message you can see here:
 
 ```output
 Stored protection state: could not be read
-Protection detail: stored protection state is from another binary version; stop Claude Code, then run `seal recover --archive` in this project to archive the incompatible state and remove Seal's owned local override before protecting again
+Protection detail: stored protection state has schema "seal.protect/v99", not seal.protect/v1; stop Claude Code, then run `seal recover --archive` in this project to archive the incompatible state and remove Seal's owned local override before protecting again
 Protected tool list: unreadable because the stored protection state could not be read
 MCP routing: unknown because the stored protection state could not be read
 Receipts: unavailable (receipt directory could not be resolved from broken protection state)
 Most recent: unavailable because the project receipt directory could not be resolved
 ```
 
-The state was written by a different Seal version than the one answering.
-`seal protect` and `seal unprotect` refuse with `incompatible_state` rather
-than reinterpret another binary's records. Status exits 1 and reports the
+The state declares a schema this Seal binary cannot interpret.
+`seal protect` and `seal unprotect` refuse with `incompatible_state` for an
+unsupported schema. The version that created a supported state does not
+cause a refusal. Status exits 1 and reports the
 refusal without claiming that the tool list is absent or the server is unrouted.
 
 ## The Runtime line

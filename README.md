@@ -138,10 +138,11 @@ seal unprotect db
 The command removes Seal's local override and reports that the sealed MCP route
 is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
-### Recover after an upgrade
+### Recover incompatible state
 
-If Seal reports `incompatible_state`, stop Claude Code and run this in the
-affected project:
+Seal accepts stored state with a schema it can read, regardless of the Seal
+version that created it. If Seal reports `incompatible_state` for an unsupported
+schema, stop Claude Code and run this in the affected project:
 
 ```bash
 seal recover --archive
