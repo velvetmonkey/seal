@@ -103,8 +103,11 @@ of this page is for.
 
 ## Checking a receipt afterwards
 
-When the gate can write its receipt directory, every decision — the prompt
-being offered, an allowed call, a refusal — writes one JSON file. `seal status`
+When the gate can write its receipt directory, a kernel decision — the prompt
+being offered, an allowed call, a kernel BLOCK — writes one JSON file. If the
+kernel produced no result, Seal still refuses the call and keeps serving, but
+it writes no receipt: a signed receipt cannot claim a decision the kernel did
+not make. `seal status`
 shows where they live and which is newest. A receipt records what the gate
 decided and about what. Both `seal demo` and the protected Claude Code path
 write signed receipts. The demo generates a temporary key for its run; the

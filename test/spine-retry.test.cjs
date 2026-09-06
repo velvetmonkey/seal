@@ -687,6 +687,205 @@ test("a non-integer argument is refused without taking down the protected server
   assert.equal(await run.exit, 0, run.err);
 });
 
+function blockedReceipts(dir) {
+  return fs.readdirSync(path.join(dir, "receipts"))
+    .map((name) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", name), "utf8")));
+}
+
+async function refuseShapeThenServe(t, label, writeCall) {
+  const dir = testTmpdir(`seal-value-shape-${label}-`);
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+  initialize(proxy);
+  await responseFor(90);
+  writeCall(proxy);
+  const refused = await responseFor(1);
+  assert.equal(refused.result.isError, true, `${label}: ${JSON.stringify(refused)}`);
+  assert.match(refused.result.content[0].text, /approval refused:/);
+  assert.equal(readCount(`${dataFile}.count`), "0", label);
+  assert.equal(proxy.exitCode, null, `proxy exited under ${label}: ${run.err}`);
+  const beforeFollow = blockedReceipts(dir);
+  assert.ok(beforeFollow.length >= 1, `${label}: expected a refusal receipt`);
+  assert.equal(
+    beforeFollow.filter((body) => body.action === "ALLOW" || body.verdict === "ALLOW").length,
+    0,
+    `${label}: refused call recorded as ALLOW`,
+  );
+  proxy.stdin.write(JSON.stringify({ ...callParams(`after ${label}`), id: 2 }) + "\n");
+  const elicitation = await requestFor("elicitation/create");
+  answer(proxy, elicitation, "accept", { approve: true });
+  const flowed = await responseFor(2);
+  assert.ok(!flowed.result.isError, `${label} follow-up: ${JSON.stringify(flowed)}`);
+  assert.equal(readCount(`${dataFile}.count`), "1", label);
+  assert.equal(proxy.exitCode, null, `proxy exited after ${label} follow-up: ${run.err}`);
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+  return { refused, receipts: beforeFollow };
+}
+
+for (const shape of [
+  {
+    label: "unsafe-integer",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: Number.MAX_SAFE_INTEGER + 1 } },
+      }) + "\n");
+    },
+    pattern: /integer outside the safe canonical range/,
+  },
+  {
+    label: "nested-decimal",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: { nested: 1.5 } } },
+      }) + "\n");
+    },
+    pattern: /no canonical form/,
+  },
+  {
+    label: "decimal-array",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: [1.5, 2.5] } },
+      }) + "\n");
+    },
+    pattern: /no canonical form/,
+  },
+  {
+    label: "nonfinite-1e400",
+    write(proxy) {
+      proxy.stdin.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":1e400}}}\n');
+    },
+    pattern: /no canonical form|non-finite number/,
+  },
+]) {
+  test(`a ${shape.label} argument is refused without taking down the protected server`, async (t) => {
+    const { refused } = await refuseShapeThenServe(t, shape.label, shape.write);
+    assert.match(refused.result.content[0].text, /unrenderable_effect/);
+    assert.match(refused.result.content[0].text, shape.pattern);
+  });
+}
+
+test("a very long argument string is refused without taking down the protected server", async (t) => {
+  const dir = testTmpdir("seal-value-shape-long-string-");
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+  initialize(proxy);
+  await responseFor(90);
+  const receiptsBefore = blockedReceipts(dir);
+  proxy.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: { name: "demo.mutate", arguments: { line: "x".repeat(100000) } },
+  }) + "\n");
+  const refused = await responseFor(1);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  assert.match(refused.result.content[0].text, /approval refused: unrenderable_effect/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  assert.equal(proxy.exitCode, null, `proxy exited under long-string: ${run.err}`);
+  const receiptsAfterFault = blockedReceipts(dir);
+  assert.equal(
+    receiptsAfterFault.length,
+    receiptsBefore.length,
+    `kernel fault minted a receipt: ${JSON.stringify(receiptsAfterFault)}`,
+  );
+  assert.equal(
+    receiptsAfterFault.filter((body) => body.action || body.verdict || body.kernel_inputs || body.replay).length,
+    0,
+    "synthetic verdict fields present after a kernel fault with no kernel result",
+  );
+  proxy.stdin.write(JSON.stringify({ ...callParams("after long-string"), id: 2 }) + "\n");
+  const elicitation = await requestFor("elicitation/create");
+  answer(proxy, elicitation, "accept", { approve: true });
+  const flowed = await responseFor(2);
+  assert.ok(!flowed.result.isError, `long-string follow-up: ${JSON.stringify(flowed)}`);
+  assert.equal(readCount(`${dataFile}.count`), "1");
+  assert.equal(proxy.exitCode, null, `proxy exited after long-string follow-up: ${run.err}`);
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
+
+test("a kernel crash on retry refuses without minting a receipt and keeps serving", async (t) => {
+  const dir = testTmpdir("seal-retry-kernel-fault-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  const receiptsDir = path.join(dir, "receipts");
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir,
+    terminalWidth: 200000,
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const countFile = `${dataFile}.count`;
+  const started = Date.now();
+  while (!fs.existsSync(countFile)) {
+    if (Date.now() - started > 5000) assert.fail("demo-server did not start");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const waitFor = async (predicate, ms = 35000) => {
+    const deadline = Date.now() + ms;
+    while (!frames.find(predicate)) {
+      if (Date.now() >= deadline) assert.fail(JSON.stringify(frames.slice(-5)));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return frames.find(predicate);
+  };
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  await waitFor((frame) => frame.id === 90 && !frame.method);
+  const receiptsBefore = blockedReceipts(dir);
+  proxy.write(JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: { name: "demo.mutate", arguments: { line: "x".repeat(100000) } },
+  }));
+  const elicitation = await waitFor((frame) => frame.method === "elicitation/create");
+  proxy.write(JSON.stringify({
+    jsonrpc: "2.0",
+    id: elicitation.id,
+    result: { action: "accept", content: { approve: true } },
+  }));
+  const refused = await waitFor((frame) => frame.id === 1 && frame.result);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  assert.match(refused.result.content[0].text, /approval refused: kernel_execution_refused/);
+  assert.equal(readCount(countFile), "0");
+  const receiptsAfterFault = blockedReceipts(dir);
+  assert.equal(
+    receiptsAfterFault.length,
+    receiptsBefore.length,
+    `retry kernel fault minted a receipt: ${JSON.stringify(receiptsAfterFault)}`,
+  );
+  proxy.write(JSON.stringify({ ...callParams("after retry kernel fault"), id: 2 }));
+  const followElicitation = await waitFor((frame) => frame.method === "elicitation/create" && frame.id !== elicitation.id);
+  proxy.write(JSON.stringify({
+    jsonrpc: "2.0",
+    id: followElicitation.id,
+    result: { action: "accept", content: { approve: true } },
+  }));
+  const flowed = await waitFor((frame) => frame.id === 2 && frame.result);
+  assert.ok(!flowed.result.isError, `retry-fault follow-up: ${JSON.stringify(flowed)}`);
+  assert.equal(readCount(countFile), "1");
+});
+
+test("canonical refuses bigint as an unsupported receipt type", () => {
+  const { canonical, ReceiptRefusal } = require("../spine/receipt-v2.cjs");
+  assert.throws(
+    () => canonical(1n),
+    (error) => error instanceof ReceiptRefusal
+      && error.code === "receipt_value_malformed"
+      && error.message === "receipt value has unsupported type bigint",
+  );
+});
+
 test("a receipt-writer ReceiptRefusal still escapes write and does not elicit", async (t) => {
   const receiptsMod = require("../spine/receipts.cjs");
   const { ReceiptRefusal } = require("../spine/receipt-v2.cjs");

@@ -111,15 +111,33 @@ function createApprovalContract({
 
   function receiptFor({ tool, args, accepted = false }) {
     const kernelNow = Math.floor(now() / 1000);
-    return kernelAdapter.authorize({
-      epoch: 1,
-      issuedTool: tool,
-      issuedArgs: args ?? {},
-      retryTool: tool,
-      retryArgs: args ?? {},
-      accepted,
-      now: kernelNow,
-    }).receipt_record;
+    try {
+      return kernelAdapter.authorize({
+        epoch: 1,
+        issuedTool: tool,
+        issuedArgs: args ?? {},
+        retryTool: tool,
+        retryArgs: args ?? {},
+        accepted,
+        now: kernelNow,
+      }).receipt_record;
+    } catch (error) {
+      // The kernel produced no result. retryUnlocked already returns a
+      // Node-side refusal with no receipt for this failure; minting a
+      // signed BLOCK here would claim a decision the kernel did not make.
+      if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
+        const timing = error.kernel_timing_timestamps === undefined ? undefined : {
+          kernel_timing_timestamps: error.kernel_timing_timestamps,
+          kernel_timing_ms: error.kernel_timing_ms,
+          kernel_timing_active_phase: error.kernel_timing_active_phase,
+          kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
+          kernel_timing_lifecycle: error.kernel_timing_lifecycle,
+          kernel_timing_unmeasured: error.kernel_timing_unmeasured,
+        };
+        return refuse(error.code, error.message, timing);
+      }
+      return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, error.message);
+    }
   }
 
   // Persist a status transition BEFORE it takes effect in memory: an append
