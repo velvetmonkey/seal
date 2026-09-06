@@ -29,6 +29,38 @@ test("release recovers a draft and refuses a published release", () => {
   assert.match(create, /gh release upload "\$GITHUB_REF_NAME" "\$\{upload_missing\[@\]\}"/);
 });
 
+// Two outcomes that used to be one. A wrong configuration is a 200 whose body
+// names no reviewer or lets administrators bypass review; that throws and the
+// test fails. An undetermined configuration is GitHub not reached, or reached
+// and declining to answer; the body then carries no protection rules to judge,
+// so the test reports network_unproven (the test/dist-pin.test.cjs convention)
+// instead of calling the configuration wrong.
+//
+// Undetermined, and why:
+//   socket error, DNS failure, timeout   the request never completed
+//   response stream error                the body never completed
+//   HTTP 403                             GitHub's primary rate limit answers 403 "rate limit
+//                                        exceeded" (observed twice on 2026-09-06); any 403 is
+//                                        GitHub refusing to answer, not a statement about the rules
+//   HTTP 429                             secondary rate limit, a throttle
+//   HTTP 5xx                             GitHub's own fault; nothing about this repository
+// Kept as failures, and why:
+//   HTTP 404 on velvetmonkey/seal        the environment is absent, which is a wrong configuration
+//                                        (a fork with no environment still skips, below)
+//   every other status, 3xx included     not a transport fault and never observed; failing is the
+//                                        side that cannot hide a wrong configuration
+//   200 with an unparsable body          GitHub answered; an unreadable answer stays loud
+function undeterminedStatus(statusCode) {
+  return statusCode === 403 || statusCode === 429 || (statusCode >= 500 && statusCode <= 599);
+}
+
+function undeterminedError(reason, statusCode) {
+  const error = new Error(`could not determine release-publish environment state: ${reason}`);
+  error.undetermined = true;
+  if (statusCode !== undefined) error.statusCode = statusCode;
+  return error;
+}
+
 function getEnvironment(repo, environment) {
   const apiPath = `/repos/${repo}/environments/${encodeURIComponent(environment)}`;
   return new Promise((resolve, reject) => {
@@ -44,14 +76,16 @@ function getEnvironment(repo, environment) {
       response.setEncoding("utf8");
       response.on("data", (chunk) => { payload += chunk; });
       response.on("error", (error) => {
-        reject(new Error(`REFUSE cannot read release-publish environment: response error: ${error.message}`));
+        reject(undeterminedError(`response error: ${error.message}`));
       });
       response.on("end", () => {
         if (response.statusCode !== 200) {
-          const prefix = response.statusCode === 403 || response.statusCode === 429
-            ? "REFUSE could not determine release-publish environment state"
-            : "REFUSE cannot read release-publish environment";
-          const error = new Error(`${prefix}: HTTP ${response.statusCode} ${response.statusMessage}\n${payload}`);
+          if (undeterminedStatus(response.statusCode)) {
+            const body = payload.trim().replace(/\s+/g, " ");
+            reject(undeterminedError(`HTTP ${response.statusCode} ${response.statusMessage} ${body}`, response.statusCode));
+            return;
+          }
+          const error = new Error(`REFUSE cannot read release-publish environment: HTTP ${response.statusCode} ${response.statusMessage}\n${payload}`);
           error.statusCode = response.statusCode;
           reject(error);
           return;
@@ -67,7 +101,7 @@ function getEnvironment(repo, environment) {
       request.destroy(new Error("timeout after 10000ms"));
     });
     request.on("error", (error) => {
-      reject(new Error(`REFUSE cannot read release-publish environment: network error: ${error.message}`));
+      reject(undeterminedError(`network error: ${error.message}`));
     });
   });
 }
@@ -82,6 +116,10 @@ test("live release-publish environment requires a named reviewer and forbids adm
   } catch (error) {
     if (error.statusCode === 404 && repo !== "velvetmonkey/seal") {
       t.skip(`SKIP ${repo} has no ${environment} environment`);
+      return;
+    }
+    if (error.undetermined) {
+      t.skip(`network_unproven: ${error.message}; ${repo}/${environment} was not read, so it was not judged`);
       return;
     }
     throw error;
