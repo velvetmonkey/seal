@@ -308,6 +308,119 @@ test("protect names install-time refusals", () => {
   assert.match(result.out, /incompatible_state/);
 });
 
+test("explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect", () => {
+  for (const mismatch of ["sealVersion", "schema"]) {
+    const root = testTmpdir(`seal-recover-${mismatch}-`);
+    const project = path.join(root, "project");
+    const home = path.join(root, "home");
+    fs.mkdirSync(project);
+    fs.mkdirSync(home);
+    const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+    const projectBytes = writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+    assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+    const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+    const healthy = fs.readFileSync(file);
+    const config = fs.readFileSync(path.join(home, ".claude.json"));
+    const entries = fs.readdirSync(path.dirname(file));
+    const refused = run(project, home, ["recover", "--archive"], env);
+    assert.notEqual(refused.code, 0, refused.out);
+    assert.match(refused.out, /recovery_not_needed/);
+    assert.deepEqual(fs.readFileSync(file), healthy);
+    assert.deepEqual(fs.readFileSync(path.join(home, ".claude.json")), config);
+    assert.deepEqual(fs.readdirSync(path.dirname(file)), entries);
+    const old = { ...JSON.parse(healthy), [mismatch]: mismatch === "sealVersion" ? "0.2.0" : "seal.protect/v0" };
+    const bytes = JSON.stringify(old, null, 2) + "\n";
+    fs.writeFileSync(file, bytes);
+    for (const args of [["status"], ["protect", "db", "demo.mutate"], ["unprotect", "db"]]) {
+      assert.match(run(project, home, args, env).out, /seal recover --archive/);
+    }
+    const implicit = run(project, home, ["recover"], env);
+    assert.notEqual(implicit.code, 0, implicit.out);
+    assert.equal(fs.readFileSync(file, "utf8"), bytes);
+    const journal = fs.readFileSync(old.storePath);
+    const receipts = fs.readdirSync(old.receiptsDir);
+    const recovered = run(project, home, ["recover", "--archive"], env);
+    assert.equal(recovered.code, 0, recovered.out);
+    const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+    assert.ok(archive, recovered.out);
+    assert.equal(fs.readFileSync(archive, "utf8"), bytes);
+    assert.equal(fs.statSync(archive).mode & 0o777, 0o600);
+    assert.equal(fs.existsSync(file), false);
+    assert.deepEqual(fs.readFileSync(old.storePath), journal);
+    assert.deepEqual(fs.readdirSync(old.receiptsDir), receipts);
+    assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), projectBytes);
+    assert.match(run(project, home, ["status"], env).out, /outside Seal/);
+    assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+    assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
+    assert.equal(fs.readFileSync(archive, "utf8"), bytes);
+    const unprotected = { ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" };
+    fs.writeFileSync(file, JSON.stringify(unprotected));
+    const absentOverride = run(project, home, ["recover", "--archive"], env);
+    assert.equal(absentOverride.code, 0, absentOverride.out);
+    const absentState = run(project, home, ["recover", "--archive"], env);
+    assert.notEqual(absentState.code, 0, absentState.out);
+    assert.match(absentState.out, /recovery_not_needed/);
+  }
+});
+
+test("recovery refuses live leases and replaced overrides without archiving or changing state", () => {
+  const root = testTmpdir("seal-recover-refusals-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const old = { ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" };
+  const configPath = path.join(home, ".claude.json");
+  for (const reason of ["active_claude_session", "local_override_drifted"]) {
+    const state = reason === "active_claude_session"
+      ? { ...old, lease: { pid: process.pid, startWitness: processStartWitness(process.pid) } } : old;
+    fs.writeFileSync(file, JSON.stringify(state));
+    if (reason === "local_override_drifted") {
+      const config = JSON.parse(fs.readFileSync(configPath));
+      config.projects[project].mcpServers.db.command = "developer-replacement";
+      fs.writeFileSync(configPath, JSON.stringify(config));
+    }
+    const bytes = fs.readFileSync(file), configBytes = fs.readFileSync(configPath);
+    const entries = fs.readdirSync(path.dirname(file));
+    const result = run(project, home, ["recover", "--archive"], env);
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, new RegExp(reason));
+    assert.deepEqual(fs.readFileSync(file), bytes);
+    assert.deepEqual(fs.readFileSync(configPath), configBytes);
+    assert.deepEqual(fs.readdirSync(path.dirname(file)), entries);
+  }
+});
+
+test("recovery retains incompatible state and its archive if Claude removal fails, then retries", () => {
+  const root = testTmpdir("seal-recover-remove-failure-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const bytes = JSON.stringify({ ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" });
+  fs.writeFileSync(file, bytes);
+  const config = fs.readFileSync(path.join(home, ".claude.json"));
+  const refused = run(project, home, ["recover", "--archive"], { PATH: path.dirname(process.execPath) });
+  assert.notEqual(refused.code, 0, refused.out);
+  assert.match(refused.out, /claude_remove_failed/);
+  assert.equal(fs.readFileSync(file, "utf8"), bytes);
+  assert.deepEqual(fs.readFileSync(path.join(home, ".claude.json")), config);
+  const archives = fs.readdirSync(path.dirname(file)).filter((name) => name.startsWith("state.json.recovered-"));
+  assert.equal(archives.length, 1);
+  assert.equal(fs.readFileSync(path.join(path.dirname(file), archives[0]), "utf8"), bytes);
+  const retried = run(project, home, ["recover", "--archive"], env);
+  assert.equal(retried.code, 0, retried.out);
+  assert.equal(fs.readdirSync(path.dirname(file)).filter((name) => name.startsWith("state.json.recovered-")).length, 2);
+});
+
 test("proxy activation promotes pending, and live project drift refuses before child delivery", async () => {
   const root = testTmpdir("seal-protect3b-drift-");
   const project = path.join(root, "project");
