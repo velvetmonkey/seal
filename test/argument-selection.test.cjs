@@ -70,6 +70,23 @@ test("the one-wildcard string pattern gates a matching call", () => {
   });
 });
 
+test("a one-wildcard string pattern keeps its fixed parts disjoint", () => {
+  const cases = [
+    ['ab*bc', "abc", false],
+    ['ab*bc', "abbc", true],
+    ['ab*bc', "abXYbc", true],
+    ['delete_*', "delete_all", true],
+    ['*_all', "delete_all", true],
+    ['*', "anything", true],
+  ];
+  for (const [pattern, actual, expected] of cases) {
+    const predicate = `line~${JSON.stringify(pattern)}`;
+    const selection = normalizeToolSelection({ name: "db.mutate", predicate });
+    const raw = JSON.stringify({ jsonrpc: "2.0", params: { arguments: { line: actual } } });
+    assert.equal(evaluateSelection(selection, { line: actual }, raw).gate, expected, `${pattern} against ${actual}`);
+  }
+});
+
 test("a malformed stored predicate gates fail closed", async (t) => {
   const run = session({ name: "db.mutate", predicate: "operation=[" });
   t.after(() => run.close());
