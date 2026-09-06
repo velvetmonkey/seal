@@ -163,7 +163,7 @@ const REVIEWED_GUIDES = [
   },
   {
     file: "docs/guide/what-is-protected-right-now.md", // CLAIM-COVERAGE: docs/guide/what-is-protected-right-now.md#protected-now
-    sha256: "9a46a9b19c6facb4b8c88dac483937607c0205b769d457f433622a31edab767b",
+    sha256: "94910776986f58b7a3570b86a64169bbe5e80e84fb8e47a31fcf653f7127db60",
     claims: [
       "Producer output and the kernel replay path now share the one `seal.receipt/v2` envelope.",
       "`seal status` reads its `action`, kernel `verdict`, and exact kernel `now`; `seal verify` validates and replays that same file.",
