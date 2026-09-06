@@ -66,9 +66,9 @@ function protectedStatusPrefix(statePath) {
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
 
-function brokenStatusWithReceipt(detail, receiptDir) {
+function brokenStatusWithReceipt(detail, receiptDir, statePath) {
   return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
-    "Sealed MCP route: BROKEN\n" +
+    `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
     "\n" +
     "Gated through this route:\n" +
     "  unknown: stored protection state has no protected tool list\n" +
@@ -183,8 +183,8 @@ test("status reads a recorded receipt directory when the protection state has no
   });
 
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir));
+  assert.equal(result.code, 1, result.out);
+  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir, statePath));
 });
 
 test("status does not count files from a receipt directory named by refused protection state", () => {
@@ -207,7 +207,7 @@ test("status does not count files from a receipt directory named by refused prot
   });
 
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
+  assert.equal(result.code, 1, result.out);
   assert.doesNotMatch(result.out, new RegExp(`^Receipts: 2 stored in ${receiptDir}$`, "m"));
   assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
 });
@@ -223,8 +223,8 @@ test("status does not invent a receipt directory when protection state is unread
   fs.writeFileSync(statePath, "garbage{");
 
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Sealed MCP route: BROKEN$/m);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^Stored protection state: could not be read$/m);
   assert.match(result.out, /^Protection detail: stored protection state is unreadable:/m);
   assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
   assert.match(result.out, /^Most recent: unavailable because the project receipt directory could not be resolved$/m);
