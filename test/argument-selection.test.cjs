@@ -156,3 +156,62 @@ test("argument-shape evasion attempts all gate", (t) => {
   }
   t.diagnostic(`COUNT: ${attempts.length}`);
 });
+
+test("bare tool selections inspect duplicate keys before returning", () => {
+  const selection = normalizeToolSelection("db.mutate");
+  for (const raw of [
+    '{"params":{"name":"db.mutate","name":"db.read","arguments":{}}}',
+    '{"params":{"name":"db.read","name":"db.mutate","arguments":{}}}',
+    '{"params":{"name":"db.mutate","arguments":{"x":1,"\\u0078":2}}}',
+  ]) {
+    assert.deepEqual(evaluateSelection(selection, {}, raw), {
+      gate: true, label: "db.mutate", detail: "duplicate JSON object key",
+    });
+  }
+  assert.match(evaluateSelection(selection, {}, '{').detail, /argument inspection failed/);
+  assert.equal(evaluateSelection(selection, {}, '{"params":{"name":"db.mutate","arguments":{}}}').detail,
+    "bare tool name selects all calls");
+});
+
+test("both duplicate name orders are refused before the child and normal traffic is preserved", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-duplicate-order-"));
+  const capture = path.join(dir, "child.jsonl");
+  fs.writeFileSync(capture, "");
+  const storePath = path.join(dir, "approvals.journal");
+  createJournal(storePath);
+  const frames = [];
+  const child = `const fs = require('node:fs');
+    require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+      fs.appendFileSync(${JSON.stringify(capture)}, line + '\\n');
+      const frame = JSON.parse(line);
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: frame.id,
+        result: { content: [{ type: 'text', text: line }] } }) + '\\n');
+    });`;
+  const proxy = createProxy({ guardSelections: ["db.mutate"], storePath,
+    receiptsDir: path.join(dir, "receipts"), childArgv: [process.execPath, "-e", child],
+    onClientLine: line => frames.push(JSON.parse(line)) });
+  t.after(async () => { await proxy.stop(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const init = '{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"capabilities":{"elicitation":{}}}}';
+  proxy.write(init);
+  await waitFor(frames, frame => frame.id === "init");
+  for (const [id, names] of [
+    ["guarded-first", '"name":"db.mutate","name":"db.read"'],
+    ["unguarded-first", '"name":"db.read","name":"db.mutate"'],
+  ]) {
+    proxy.write(`{"jsonrpc":"2.0","id":"${id}","method":"tools/call","params":{${names},"arguments":{}}}`);
+    const response = await waitFor(frames, frame => frame.id === id);
+    assert.equal(response.result.isError, true);
+    assert.match(response.result.content[0].text, /response_malformed — duplicate JSON object key/);
+    t.diagnostic(`${id}: ${response.result.content[0].text}`);
+  }
+  assert.equal(frames.some(frame => frame.method === "elicitation/create"), false);
+  proxy.write('{"jsonrpc":"2.0","id":"normal-guarded","method":"tools/call","params":{"name":"db.mutate","arguments":{}}}');
+  const prompt = await waitFor(frames, frame => frame.method === "elicitation/create");
+  assert.match(prompt.params.message, /Selection predicate: db\.mutate \(bare tool name selects all calls\)/);
+  const unguarded = '{"jsonrpc":"2.0","id":"normal-unguarded","method":"tools/call","params":{"name":"db.read","arguments":{}}}';
+  proxy.write(unguarded);
+  const response = await waitFor(frames, frame => frame.id === "normal-unguarded");
+  assert.equal(response.result.content[0].text, unguarded);
+  assert.equal(fs.readFileSync(capture, "utf8"), `${init}\n${unguarded}\n`);
+  t.diagnostic("child raw capture contains only initialize and the unchanged normal unguarded frame");
+});
