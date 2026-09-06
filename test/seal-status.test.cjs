@@ -207,7 +207,7 @@ test("status does not count files from a receipt directory named by refused prot
   });
 
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
+  assert.equal(result.code, 1, result.out);
   assert.doesNotMatch(result.out, new RegExp(`^Receipts: 2 stored in ${receiptDir}$`, "m"));
   assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
 });
@@ -223,8 +223,8 @@ test("status does not invent a receipt directory when protection state is unread
   fs.writeFileSync(statePath, "garbage{");
 
   const result = run(["status"], root, "", project);
-  assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Sealed MCP route: BROKEN$/m);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /^Stored protection state: could not be read$/m);
   assert.match(result.out, /^Protection detail: stored protection state is unreadable:/m);
   assert.match(result.out, /^Receipts: unavailable \(receipt directory could not be resolved from broken protection state\)$/m);
   assert.match(result.out, /^Most recent: unavailable because the project receipt directory could not be resolved$/m);

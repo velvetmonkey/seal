@@ -742,3 +742,46 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
   assert.match(status.out, /^  demo\.mutate$/m);
   assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
 });
+
+test("status reports refused state without inventing absent tools or unrouted servers", () => {
+  const root = testTmpdir("seal-status-refusal-truth-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const healthy = fs.readFileSync(file, "utf8");
+  const override = fs.readFileSync(fakeLocalOverridePath(root), "utf8");
+  const before = run(project, home, ["status"], env);
+  assert.equal(before.code, 0, before.out);
+  assert.match(before.out, /^Sealed MCP route db: PENDING RESTART /m);
+
+  for (const fields of [{ sealVersion: "0.2.0" }, { schema: "seal.protect/v0" }, null]) {
+    const bytes = fields ? JSON.stringify({ ...JSON.parse(healthy), ...fields }) : "garbage{";
+    fs.writeFileSync(file, bytes);
+    let refusal;
+    assert.throws(() => readState(file), (error) => { refusal = error; return true; });
+    if (fields) {
+      assert.deepEqual(JSON.parse(bytes).guardTools, ["demo.mutate"]);
+      assert.equal(JSON.parse(bytes).localOverride.installed, true);
+    }
+    const result = run(project, home, ["status"], env);
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.out, /^Stored protection state: could not be read$/m);
+    assert.ok(result.out.includes(`Protection detail: ${refusal.message}\n`), result.out);
+    assert.match(result.out, /seal recover --archive/);
+    assert.match(result.out, /^Protected tool list: unreadable because the stored protection state could not be read$/m);
+    assert.match(result.out, /^MCP routing: unknown because the stored protection state could not be read$/m);
+    assert.doesNotMatch(result.out, /stored protection state has no protected tool list/);
+    assert.doesNotMatch(result.out, /configured MCP servers not routed through this Seal wrapper/);
+    assert.doesNotMatch(result.out, /^Sealed MCP route|^Gated through this route:|^Not controlled:/m);
+    assert.equal(fs.readFileSync(file, "utf8"), bytes);
+    assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
+  }
+  fs.writeFileSync(file, healthy);
+  assert.deepEqual(run(project, home, ["status"], env), before);
+});

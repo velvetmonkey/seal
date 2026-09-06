@@ -52,8 +52,10 @@ function status() {
       : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
 
   let receiptDir;
+  let stateRead = false;
   try {
     const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
+    stateRead = true;
     if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
@@ -85,6 +87,19 @@ function status() {
         const { state } = protection.stateWithProject(process.cwd(), process.env);
         printFailureGuidance("status", error, { serverName: state?.serverName }, (line) => console.log(line));
       } catch {}
+      process.exitCode = 1;
+      return;
+    }
+    if (!stateRead) {
+      console.log("Stored protection state: could not be read");
+      console.log(`Protection detail: ${error.message}`);
+      console.log("Protected tool list: unreadable because the stored protection state could not be read");
+      console.log("MCP routing: unknown because the stored protection state could not be read");
+      if (!error.message.includes("seal recover --archive")) {
+        console.log("Recovery command for incompatible state: stop Claude Code, then run `seal recover --archive` in this project");
+      }
+      console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
+      console.log("Most recent: unavailable because the project receipt directory could not be resolved");
       process.exitCode = 1;
       return;
     }
