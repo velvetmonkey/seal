@@ -1,12 +1,12 @@
 {
   "version": 1,
   "ruling": {
-    "base": "517e212f280d188631d1219bc223008cd097ffae",
+    "base": "c69f62f81e903c8b13eeeff78dc165e17a38487b",
     "author": "velvetmonkey",
-    "date": "2026-09-05",
-    "scope": "Ben ruled on 2026-09-05 at 15:28, in his words: \"228 - merge\". This ruling authorises two protected paths. test/fixtures/readme-demo-checker-output.txt changes by one line, replacing the label \"Kernel decision\" with \"Verifier-local verdict\", leaving the verdict word REPRODUCED unchanged. test/fixtures/readme-demo-output.txt is BYTE-IDENTICAL to main; commit a745591 touched it and commit 0153576 reverted it, and the gate reports the touch because it walks every commit in the range. I observed the checker-output diff against origin/main as exactly one insertion and one deletion with only that label changed, and I observed zero output bytes from the demo-output diff against origin/main. I also derived matching demo-output blobs be528188bb8458b31a864e955559414e9ab29507 for HEAD and origin/main, and verified that a745591 changed that blob to e3aef9abec7d58637b77e66d5946b2d713d3fb40 before 0153576 restored be528188bb8458b31a864e955559414e9ab29507.",
+    "date": "2026-09-06",
+    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"do it\". PR 236 ships the pin-history ledger that PROVENANCE.txt already promises. TWO protected artifacts appear in the range and they are NOT equal in kind. FIRST, wasm-spike/verified/pin-history.json is the real change Ben approved: a 55-line ledger recording each assurance-kit commit with its kernel sha256 and its status. SECOND, test/fixtures/readme-demo-checker-output.txt is a TOUCH AND REVERT with ZERO net change. I verified that on disk: its blob is 91368ba4838472067d3d80ec2f74cef4d196bbd5 on origin/main AND at this head, so the two are byte-identical, and git diff between them prints nothing. The gate reports it only because it walks every commit in the range rather than the net tree, which is deliberate so an add-then-delete cannot disappear from review. It must appear in this record because the checker requires the recorded file set to equal the changed set exactly. CORRECTION I OWE BEN: I told him PR 236 needed ONE protected-path ruling. Two artifacts are reported. Only one of them actually changes, and I checked that before writing this rather than after.",
     "retires": [
-      "The 2026-09-04 ruling on test/fixtures/rendercheck-accept.cast, base 9ccbcf58b6ef4c1e9f185cf31ed6ccea7faf24be, which landed on main as c57f26d1b9f24093f088c138e3cd1b4e674c24a5 with the exact recorded blob and no longer applies to any open change."
+      "The 2026-09-05 ruling on test/fixtures/readme-demo-checker-output.txt and test/fixtures/readme-demo-output.txt, base 517e212f280d188631d1219bc223008cd097ffae. That ruling covered a different base and a different branch."
     ],
     "files": [
       {
@@ -14,8 +14,8 @@
         "blob": "91368ba4838472067d3d80ec2f74cef4d196bbd5"
       },
       {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "be528188bb8458b31a864e955559414e9ab29507"
+        "path": "wasm-spike/verified/pin-history.json",
+        "blob": "4ab4877c3a8077d832e07fc98395992d3a1ebcb8"
       }
     ]
   }
