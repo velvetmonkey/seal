@@ -323,10 +323,10 @@ override whose definition matches its recorded ownership proof.
 
 ### `incompatible_state`
 
-The recorded state was written by a different Seal version (or an unknown
-schema). Seal refuses to reinterpret another binary's records. Re-run with
-the version that wrote it, or unprotect with that version and protect again
-with this one.
+The recorded state has a schema this Seal binary cannot interpret. Seal
+accepts the supported `seal.protect/v1` spellings, including older single-tool
+records; the creating binary's `sealVersion` is provenance, not a compatibility
+gate. Unsupported schemas still refuse.
 
 The current binary also provides an explicit recovery command: stop Claude
 Code and run `seal recover --archive` in the affected project. It preserves
