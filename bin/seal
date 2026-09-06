@@ -285,6 +285,8 @@ async function verify(args) {
   let text;
   try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
+  const runtime = inspectRuntime();
+  if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
   const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
   const result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
   result.ok = result.validate && result.signature && result.replay;

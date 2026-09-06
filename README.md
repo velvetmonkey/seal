@@ -177,7 +177,7 @@ The proof-bearing source rebuilds the exact kernel bytes the downloadable produc
 Follow that source binding through [Reproducible kernel](docs/reproduce.md).
 
 The separately implemented verifier replays the recorded inputs through the
-WASM kernel and reports its checks separately.
+verifier's local WASM kernel and reports its checks separately.
 
 | Surface | Current shipped assurance status |
 | --- | --- |
