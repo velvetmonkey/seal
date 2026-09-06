@@ -5,9 +5,13 @@ The native macOS process-start witness helper is release-produced, not independe
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
-short form is the same install without the named refusals spelled out. Use
-this page when you want every check to fail closed in the shell, before the
-binary runs.
+short form uses the same shell gate. In every install command below, a failed
+checksum comparison prevents both `chmod` and execution of the artifact.
+The commands use POSIX syntax for `sh`, `dash`, `bash`, and `zsh`. Copy each
+whole command, including its continuation backslashes and `&&` operators;
+there is no shell-option preamble. The release version is a separate assignment;
+omitting it cannot remove the verification gate. Each continuation starts with
+`&&`, so copying a continuation alone produces a syntax error.
 
 The digest comparison below is *your* check, with the OS SHA-256 tool,
 against the `SHA256SUMS` asset attached to the same GitHub release. That is
@@ -22,17 +26,33 @@ answer "did I download the bytes the release named?" They do not answer
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.2.1
-artifact_name="seal-v0.2.1-linux-x64"; artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd"; artifact_bytes=6214316
-checker_name="seal-receipt-v2.mjs"; checker_sha256="41bc5d7d7e4476cc9c312ca04dfb343b373b41e8f4aae7855d18693b8b99f18f"; checker_bytes=10133
-sums_name="SHA256SUMS"; sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name"
-curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name"
-if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then sums_actual="$(sha256sum "$sums_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi; test "$sums_actual" = "$sums_sha256"
-read -r expected_digest expected_bytes expected_name < <(awk -v name="$artifact_name" '$3 == name' "$sums_name"); test "$expected_name" = "$artifact_name"; test "$expected_digest" = "$artifact_sha256"; test "$expected_bytes" = "$artifact_bytes"
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "$artifact_name" | awk '{print $1}')"; fi; test "$actual_digest" = "$artifact_sha256"; test "$(wc -c < "$artifact_name" | tr -d ' ')" = "$artifact_bytes"
-read -r checker_sum checker_count checker_entry < <(awk -v name="$checker_name" '$3 == name' "$sums_name"); test "$checker_entry" = "$checker_name"; test "$checker_sum" = "$checker_sha256"; test "$checker_count" = "$checker_bytes"; if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name" | awk '{print $1}')"; else checker_actual="$(sha256sum "$checker_name" | awk '{print $1}')"; fi; test "$checker_actual" = "$checker_sha256"; test "$(wc -c < "$checker_name" | tr -d ' ')" = "$checker_bytes"
-chmod +x "$expected_name"; ./"$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
+artifact_name="seal-v0.2.1-linux-x64" \
+&& artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd" \
+&& artifact_bytes=6214316 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0" \
+&& checker_name="seal-receipt-v2.mjs" \
+&& checker_sha256="41bc5d7d7e4476cc9c312ca04dfb343b373b41e8f4aae7855d18693b8b99f18f" \
+&& checker_bytes=10133 \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \
+&& test "${actual_digest%% *}" = "$artifact_sha256" \
+&& actual_bytes="$(wc -c < "$artifact_name")" \
+&& test "$actual_bytes" -eq "$artifact_bytes" \
+&& checker_record="$(awk -v name="$checker_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$checker_record" = "$checker_sha256 $checker_bytes $checker_name" \
+&& if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name")"; else checker_actual="$(sha256sum "$checker_name")"; fi \
+&& test "${checker_actual%% *}" = "$checker_sha256" \
+&& checker_count="$(wc -c < "$checker_name")" \
+&& test "$checker_count" -eq "$checker_bytes" \
+&& chmod +x "$artifact_name" \
+&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local
 ```
 Success prints `installed seal 0.2.1 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
@@ -92,16 +112,17 @@ It selects the artifact label from Node's running architecture and uses the
 SHA-256 utility shipped by macOS when GNU `sha256sum` is absent:
 
 ```bash
-platform="darwin-$(node -p 'process.arch')"
-node scripts/build-dist.cjs --platform "$platform" --out dist
-read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS
-if [ "$expected_name" != "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" ]; then echo "SHA256SUMS names an unexpected artifact: $expected_name" >&2; exit 1; fi
-if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "dist/$expected_name" | awk '{print $1}')"; elif command -v sha256sum >/dev/null 2>&1; then actual_digest="$(sha256sum "dist/$expected_name" | awk '{print $1}')"; else echo "no SHA-256 tool found (need shasum or sha256sum)" >&2; exit 1; fi
-if [ "$actual_digest" != "$expected_digest" ]; then echo "artifact digest does not match SHA256SUMS" >&2; exit 1; fi
-actual_bytes="$(wc -c < "dist/$expected_name" | tr -d ' ')"
-if [ "$actual_bytes" != "$expected_bytes" ]; then echo "artifact byte count does not match SHA256SUMS" >&2; exit 1; fi
-chmod +x "dist/$expected_name"
-./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
+platform="darwin-$(node -p 'process.arch')" \
+&& node scripts/build-dist.cjs --platform "$platform" --out dist \
+&& read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS \
+&& test "$expected_name" = "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" \
+&& test -n "$expected_digest" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "dist/$expected_name")"; else actual_digest="$(sha256sum "dist/$expected_name")"; fi \
+&& test "${actual_digest%% *}" = "$expected_digest" \
+&& actual_bytes="$(wc -c < "dist/$expected_name")" \
+&& test "$actual_bytes" -eq "$expected_bytes" \
+&& chmod +x "dist/$expected_name" \
+&& ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix ~/.local
 ```
 
 This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI.

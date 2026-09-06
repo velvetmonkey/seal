@@ -5,6 +5,7 @@ const path = require("node:path");
 
 const ROOT = process.env.SEAL_PINMANIFEST_ROOT || path.join(__dirname, "..");
 const MANIFEST = "scripts/installed-tree-pin-sites.json";
+const RULING_DOCUMENT = "docs/PINMANIFEST-RULINGS.json";
 
 function git(args) {
   return spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" });
@@ -70,6 +71,32 @@ function resolveCommit(ref, label) {
   return result.stdout.trim();
 }
 
+// CLAIM-COVERAGE: docs/PINMANIFEST-RULINGS.json
+function exactRuling(mergeBase, head, changedPaths) {
+  const record = git(["show", `${head}:${RULING_DOCUMENT}`]);
+  if (record.status !== 0) return null;
+  let ruling;
+  try {
+    ruling = JSON.parse(record.stdout);
+  } catch {
+    return null;
+  }
+  const detail = ruling?.ruling;
+  if (!detail || detail.base !== mergeBase || !Array.isArray(detail.files) || detail.files.length === 0) return null;
+  const recorded = detail.files.map((file) => file?.path).sort();
+  if (new Set(recorded).size !== recorded.length
+    || detail.files.some((file) => !file || typeof file.path !== "string"
+      || typeof file.blob !== "string" || !/^[0-9a-f]{40}$/.test(file.blob)
+      || file.path !== MANIFEST)) return null;
+  const actual = [...changedPaths].sort();
+  if (actual.length !== recorded.length || actual.some((value, index) => value !== recorded[index])) return null;
+  for (const file of detail.files) {
+    const actualBlob = git(["rev-parse", "--verify", `${head}:${file.path}`]);
+    if (actualBlob.status !== 0 || actualBlob.stdout.trim() !== file.blob) return null;
+  }
+  return detail;
+}
+
 const options = parseArgs(process.argv.slice(2));
 if (!options) {
   usage();
@@ -82,7 +109,15 @@ if (!options) {
     if (result.error) {
       fail(`could not compare ${MANIFEST} between base ref "${options.base}" and head ref "${requestedHead}": ${result.error.trim()}`);
     } else if (result.changed) {
-      fail(`${MANIFEST} changed between ${options.base} and ${requestedHead}.`, diffDetail([base, head]));
+      const mergeBase = git(["merge-base", base, head]);
+      const ruling = mergeBase.status === 0
+        ? exactRuling(mergeBase.stdout.trim(), head, [MANIFEST])
+        : null;
+      if (ruling) {
+        process.stdout.write(`PINMANIFEST REVIEW OK: recorded human ruling for ${ruling.base}: ${MANIFEST}.\n`);
+      } else {
+        fail(`${MANIFEST} changed between ${options.base} and ${requestedHead}.`, diffDetail([base, head]));
+      }
     } else {
       process.stdout.write(`PINMANIFEST REVIEW OK: ${MANIFEST} unchanged between ${options.base} and ${requestedHead}.\n`);
     }

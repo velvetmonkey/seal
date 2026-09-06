@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "ruling": {
+    "base": "dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4",
+    "author": "velvetmonkey",
+    "date": "2026-09-06",
+    "scope": "Ben approved PR 245 on 2026-09-05, in his words: \"Approve\". This is the FIRST use of the pin-manifest review door that PR 249 added, merged to main as dba60d3d. THE CHANGE: scripts/installed-tree-pin-sites.json declares where installed-tree pins live. Its declared sites had drifted from the built artifacts, so assertion 269 failed and blocked four pull requests. This corrects the declared sites to match. I verified the merge-base and the blob digest on disk before writing this record.",
+    "retires": [
+      "The empty placeholder record shipped with PR 249, which recorded no ruling."
+    ],
+    "files": [
+      {
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "14d5ee0bb69e1935320bc390d225cd5193bbd4ff"
+      }
+    ]
+  }
+}

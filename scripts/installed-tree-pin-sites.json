@@ -1,7 +1,7 @@
 [
-  { "file": "docs/guide/README.md", "line": 57, "column": 33, "kind": "store", "role": "published-asset" },
-  { "file": "docs/guide/README.md", "line": 59, "column": 1, "kind": "tree", "role": "published-asset" },
-  { "file": "docs/start/install.md", "line": 44, "column": 33, "kind": "store", "role": "published-asset" },
-  { "file": "docs/start/install.md", "line": 46, "column": 1, "kind": "tree", "role": "published-asset" },
-  { "file": "docs/start/install.md", "line": 68, "column": 1, "kind": "tree", "role": "fresh-build" }
+  { "file": "docs/guide/README.md", "line": 74, "column": 33, "kind": "store", "role": "published-asset" },
+  { "file": "docs/guide/README.md", "line": 76, "column": 1, "kind": "tree", "role": "published-asset" },
+  { "file": "docs/start/install.md", "line": 64, "column": 33, "kind": "store", "role": "published-asset" },
+  { "file": "docs/start/install.md", "line": 66, "column": 1, "kind": "tree", "role": "published-asset" },
+  { "file": "docs/start/install.md", "line": 88, "column": 1, "kind": "tree", "role": "fresh-build" }
 ]
