@@ -544,6 +544,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp("(?<=published GitHub release `)v" + SEMVER + "(?=`)"), tag, "published release identity"],
     ]),
     replacePublishedSurface("docs/guide/README.md", [
+      [/^Download and independently verify the pinned Linux x86-64 release, then install\.(?: Fetch .* from the same release\.)?$/m, `Download and independently verify the pinned Linux x86-64 release, then install. Fetch the release's \`${manifest.checksums.name}\` asset from the same release.`, "published checksum asset provenance"],
       [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
       [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
       [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],

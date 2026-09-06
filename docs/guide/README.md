@@ -43,7 +43,7 @@ $ claude --version
 2.1.233 (Claude Code)
 ```
 
-Download and independently verify the pinned Linux x86-64 release, then install.
+Download and independently verify the pinned Linux x86-64 release, then install. Fetch the release's `SHA256SUMS` asset from the same release.
 Copy the whole POSIX command, including the backslashes and `&&` operators.
 For other supported platforms, see the [install guide](../start/install.md):
 
