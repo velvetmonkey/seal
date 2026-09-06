@@ -1,12 +1,12 @@
 {
   "version": 1,
   "ruling": {
-    "base": "c69f62f81e903c8b13eeeff78dc165e17a38487b",
+    "base": "858d2cd9ddcd89e5f3a716d21d7043ca42537ca6",
     "author": "velvetmonkey",
     "date": "2026-09-06",
-    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"do it\". PR 236 ships the pin-history ledger that PROVENANCE.txt already promises. TWO protected artifacts appear in the range and they are NOT equal in kind. FIRST, wasm-spike/verified/pin-history.json is the real change Ben approved: a 55-line ledger recording each assurance-kit commit with its kernel sha256 and its status. SECOND, test/fixtures/readme-demo-checker-output.txt is a TOUCH AND REVERT with ZERO net change. I verified that on disk: its blob is 91368ba4838472067d3d80ec2f74cef4d196bbd5 on origin/main AND at this head, so the two are byte-identical, and git diff between them prints nothing. The gate reports it only because it walks every commit in the range rather than the net tree, which is deliberate so an add-then-delete cannot disappear from review. It must appear in this record because the checker requires the recorded file set to equal the changed set exactly. CORRECTION I OWE BEN: I told him PR 236 needed ONE protected-path ruling. Two artifacts are reported. Only one of them actually changes, and I checked that before writing this rather than after.",
+    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"do it\". PR 236 ships the pin-history ledger that PROVENANCE.txt already promises. RE-RECORDED at 11:34 after the branch was brought up to date with main. Main protection sets strict=true, so a branch must be current before it can merge, and updating the branch MOVED the merge-base from c69f62f8 to 858d2cd9, which correctly invalidated the previous record. A ruling binds the merge-base by design, so it cannot outlive a rebase. TWO protected artifacts appear and they are NOT equal in kind. FIRST, wasm-spike/verified/pin-history.json is the real change Ben approved: a 55-line ledger recording each assurance-kit commit with its kernel sha256 and its status. SECOND, test/fixtures/readme-demo-checker-output.txt is a TOUCH AND REVERT with ZERO net change; I re-read its blob AFTER the update and it is still 91368ba4838472067d3d80ec2f74cef4d196bbd5 on both origin/main and this head, so the two remain byte-identical. It must appear here because the checker requires the recorded file set to equal the reported set exactly. I verified the new merge-base and both blob digests on disk before writing.",
     "retires": [
-      "The 2026-09-05 ruling on test/fixtures/readme-demo-checker-output.txt and test/fixtures/readme-demo-output.txt, base 517e212f280d188631d1219bc223008cd097ffae. That ruling covered a different base and a different branch."
+      "The 2026-09-06 11:31 record on this same branch, base c69f62f8, superseded when the branch was brought up to date with main and the merge-base moved to 858d2cd9."
     ],
     "files": [
       {
