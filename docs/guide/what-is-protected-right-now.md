@@ -185,7 +185,6 @@ Stored protection state: could not be read
 Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{" is not valid JSON
 Protected tool list: unreadable because the stored protection state could not be read
 MCP routing: unknown because the stored protection state could not be read
-Recovery command for incompatible state: stop Claude Code, then run `seal recover --archive` in this project
 Receipts: unavailable (receipt directory could not be resolved from broken protection state)
 Most recent: unavailable because the project receipt directory could not be resolved
 ```

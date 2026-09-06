@@ -773,7 +773,8 @@ test("status reports refused state without inventing absent tools or unrouted se
     assert.equal(result.code, 1, result.out);
     assert.match(result.out, /^Stored protection state: could not be read$/m);
     assert.ok(result.out.includes(`Protection detail: ${refusal.message}\n`), result.out);
-    assert.match(result.out, /seal recover --archive/);
+    if (fields) assert.match(result.out, /seal recover --archive/);
+    else assert.doesNotMatch(result.out, /seal recover --archive/);
     assert.match(result.out, /^Protected tool list: unreadable because the stored protection state could not be read$/m);
     assert.match(result.out, /^MCP routing: unknown because the stored protection state could not be read$/m);
     assert.doesNotMatch(result.out, /stored protection state has no protected tool list/);
@@ -784,4 +785,83 @@ test("status reports refused state without inventing absent tools or unrouted se
   }
   fs.writeFileSync(file, healthy);
   assert.deepEqual(run(project, home, ["status"], env), before);
+});
+
+test("status preserves known route facts across seven damaged state shapes and offers actionable recovery", () => {
+  const root = testTmpdir("seal-status-seven-states-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}`, GIT_CEILING_DIRECTORIES: root };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const configPath = path.join(project, ".mcp.json");
+  const config = JSON.parse(fs.readFileSync(configPath));
+  config.mcpServers.cache = { command: "cache-server" };
+  fs.writeFileSync(configPath, JSON.stringify(config));
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const healthy = fs.readFileSync(file, "utf8");
+  const override = fs.readFileSync(fakeLocalOverridePath(root), "utf8");
+  const missingTools = JSON.parse(healthy);
+  delete missingTools.guardTools;
+  delete missingTools.guardTool;
+  const cases = [
+    ["incompatible-version", JSON.stringify({ ...JSON.parse(healthy), sealVersion: "0.2.0" })],
+    ["malformed", "garbage{"],
+    ["empty", ""],
+    ["truncated", healthy.slice(0, -5)],
+    ["missing-tools", JSON.stringify(missingTools)],
+    ["mode-000", healthy],
+    ["wrong-schema", JSON.stringify({ ...JSON.parse(healthy), schema: "seal.protect/v0" })],
+  ];
+  function recorded(name, args) {
+    const result = run(project, home, args, env);
+    fs.writeFileSync(path.join(root, `${name}.out`), result.out);
+    fs.writeFileSync(path.join(root, `${name}.exit`), `${result.code}\n`);
+    return {
+      code: Number(fs.readFileSync(path.join(root, `${name}.exit`), "utf8")),
+      out: fs.readFileSync(path.join(root, `${name}.out`), "utf8"),
+    };
+  }
+  for (const [name, bytes] of cases) {
+    fs.writeFileSync(file, bytes);
+    if (name === "mode-000") fs.chmodSync(file, 0o000);
+    let result;
+    try { result = recorded(name, ["status"]); }
+    finally { fs.chmodSync(file, 0o600); }
+    assert.equal(result.code, 1, result.out);
+    if (name === "missing-tools") {
+      assert.ok(result.out.includes(`Sealed MCP route db: PENDING RESTART (${file})\n`), result.out);
+      assert.match(result.out, /^  unknown: stored protection state has no protected tool list$/m);
+      assert.match(result.out, /^  configured MCP servers not routed through this Seal wrapper: cache$/m);
+      assert.match(result.out, /^Protection detail: stored protection state has no protected tool list$/m);
+      assert.doesNotMatch(result.out, /BROKEN|cache, db/);
+    } else {
+      assert.match(result.out, /^Stored protection state: could not be read$/m);
+      assert.match(result.out, /^Protected tool list: unreadable because the stored protection state could not be read$/m);
+      assert.match(result.out, /^MCP routing: unknown because the stored protection state could not be read$/m);
+      assert.doesNotMatch(result.out, /^Sealed MCP route|^Gated through this route:|^Not controlled:/m);
+    }
+    if (name === "incompatible-version" || name === "wrong-schema") assert.match(result.out, /seal recover --archive/);
+    else assert.doesNotMatch(result.out, /seal recover --archive/);
+    assert.equal(fs.readFileSync(file, "utf8"), bytes);
+    assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
+  }
+  fs.writeFileSync(file, "garbage{");
+  const malformed = recorded("recover-malformed", ["recover", "--archive"]);
+  assert.equal(malformed.code, 1, malformed.out);
+  assert.match(malformed.out, /state_broken/);
+  assert.equal(fs.readFileSync(file, "utf8"), "garbage{");
+  assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
+  const incompatible = cases[0][1];
+  fs.writeFileSync(file, incompatible);
+  const recovered = recorded("recover-incompatible-version", ["recover", "--archive"]);
+  assert.equal(recovered.code, 0, recovered.out);
+  const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+  assert.ok(archive, recovered.out);
+  assert.equal(fs.readFileSync(archive, "utf8"), incompatible);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(JSON.parse(fs.readFileSync(fakeLocalOverridePath(root))).projects[project].mcpServers.db, undefined);
+  console.log(`Seven-state evidence: ${root}`);
 });

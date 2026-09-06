@@ -53,9 +53,15 @@ function status() {
 
   let receiptDir;
   let stateRead = false;
+  let storedState;
+  let stateRoot;
+  let statePath;
   try {
     const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
     stateRead = true;
+    storedState = state;
+    stateRoot = root;
+    statePath = filePath;
     if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
@@ -95,16 +101,15 @@ function status() {
       console.log(`Protection detail: ${error.message}`);
       console.log("Protected tool list: unreadable because the stored protection state could not be read");
       console.log("MCP routing: unknown because the stored protection state could not be read");
-      if (!error.message.includes("seal recover --archive")) {
-        console.log("Recovery command for incompatible state: stop Claude Code, then run `seal recover --archive` in this project");
-      }
       console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
       console.log("Most recent: unavailable because the project receipt directory could not be resolved");
       process.exitCode = 1;
       return;
     }
     if (receiptDir === undefined && typeof error.receiptDir === "string") receiptDir = error.receiptDir;
-    for (const line of protection.protectionBoundary({ state: "BROKEN", brokenReason: error.message }, process.cwd())) console.log(line);
+    // A later interpretation failure does not erase facts from the successful read.
+    process.exitCode = 1;
+    for (const line of protection.protectionBoundary(storedState, stateRoot, statePath)) console.log(line);
     console.log(`Protection detail: ${error.message}`);
     if (receiptDir === undefined) {
       console.log("Receipts: unavailable (receipt directory could not be resolved from broken protection state)");
