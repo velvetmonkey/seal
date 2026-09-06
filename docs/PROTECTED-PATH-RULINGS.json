@@ -1,17 +1,22 @@
 {
   "version": 1,
   "ruling": {
-    "base": "858d2cd9ddcd89e5f3a716d21d7043ca42537ca6",
+    "base": "7470c7fffe93831066eca726ced767e42dbd863e",
     "author": "velvetmonkey",
     "date": "2026-09-06",
-    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"do it\". PR 236 ships the pin-history ledger that PROVENANCE.txt already promises. RE-RECORDED at 11:34 after the branch was brought up to date with main. Main protection sets strict=true, so a branch must be current before it can merge, and updating the branch MOVED the merge-base from c69f62f8 to 858d2cd9, which correctly invalidated the previous record. A ruling binds the merge-base by design, so it cannot outlive a rebase. TWO protected artifacts appear and they are NOT equal in kind. FIRST, wasm-spike/verified/pin-history.json is the real change Ben approved: a 55-line ledger recording each assurance-kit commit with its kernel sha256 and its status. SECOND, test/fixtures/readme-demo-checker-output.txt is a TOUCH AND REVERT with ZERO net change; I re-read its blob AFTER the update and it is still 91368ba4838472067d3d80ec2f74cef4d196bbd5 on both origin/main and this head, so the two remain byte-identical. It must appear here because the checker requires the recorded file set to equal the reported set exactly. I verified the new merge-base and both blob digests on disk before writing.",
+    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"approved\". PR 249 gives the installed-tree pin manifest gate the human review its own name promises. THE DEFECT: scripts/check-installed-tree-pin-manifest-review.cjs was a pure refusal. It called fail() whenever scripts/installed-tree-pin-sites.json differed between base and head, with no override, no waiver and no ruling document anywhere in the file, so a check named 'installed-tree pin manifest human review' could not accept a human review. It measured whether a file changed, not whether a person approved the change. THE FIX INVENTS NOTHING: it copies the exact-ruling pattern already live on main in scripts/check-protected-paths.cjs, which reads a ruling from the head commit and accepts only when the ruling binds the computed merge-base AND the exact 40-hex blob of every named file, so a ruling cannot outlive the content it approved. EVIDENCE: 41 targeted tests pass and all three required negative cases return exit 1, being no ruling, wrong blob and stale base. RE-RECORDED at 11:47 for the SECOND time. The first record used base 16e5f8c3. Main then moved twice, and main sets strict=true, so the branch had to take main before it could merge. Merging main CONFLICTED on this very file, because the ruling document holds ONE ruling and PR 236 had already written its own here. That is a real limitation of the mechanism and it is recorded on the roadmap, not hidden. THREE protected artifacts now appear in the range and they are NOT equal in kind. The two real changes are scripts/check-installed-tree-pin-manifest-review.cjs and test/installed-tree-pin-manifest-review.test.cjs. The third, wasm-spike/verified/pin-history.json, arrived through the merge and is ALREADY ON MAIN via PR 236; I verified its blob is 4ab4877c3a8077d832e07fc98395992d3a1ebcb8 on both origin/main and this head, and the net diff for that file against main is zero lines. It must appear here because the checker walks every commit in the range rather than the net tree, which is deliberate so an add-then-delete cannot disappear from review.",
     "retires": [
-      "The 2026-09-06 11:31 record on this same branch, base c69f62f8, superseded when the branch was brought up to date with main and the merge-base moved to 858d2cd9."
+      "The 2026-09-06 11:24 record on this branch, base 16e5f8c333c9d079d1041a955763006b28832ce5, superseded when main moved and the branch took main.",
+      "The 2026-09-06 11:34 record from PR 236, base 858d2cd9ddcd89e5f3a716d21d7043ca42537ca6, which merged to main as 7470c7ff and no longer applies to any open change."
     ],
     "files": [
       {
-        "path": "test/fixtures/readme-demo-checker-output.txt",
-        "blob": "91368ba4838472067d3d80ec2f74cef4d196bbd5"
+        "path": "scripts/check-installed-tree-pin-manifest-review.cjs",
+        "blob": "a1084ecf0039e1d127daee0321a0fe4e8837e92a"
+      },
+      {
+        "path": "test/installed-tree-pin-manifest-review.test.cjs",
+        "blob": "141b4191d46e0e3238b13e0d64cf360c1c977538"
       },
       {
         "path": "wasm-spike/verified/pin-history.json",

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "ruling": {
+    "base": "",
+    "author": "",
+    "date": "",
+    "scope": "No human ruling is recorded. Ben records an approval here with the exact merge-base commit and the head blob of scripts/installed-tree-pin-sites.json. The checker reads this document from the head commit; empty files authorise nothing.",
+    "retires": [],
+    "files": []
+  }
+}
