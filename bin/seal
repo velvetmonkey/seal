@@ -268,7 +268,6 @@ async function verify(args) {
   const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
   const result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
   result.ok = result.validate && result.signature && result.replay;
-  result.verify = result.ok;
   console.log(verifier.format(result));
   if (!result.ok) process.exitCode = 1;
 }

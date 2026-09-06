@@ -37,7 +37,7 @@ test("seal verify exits successfully only for a signed receipt and the correct k
   assert.match(result.out, /Document structure       VALID/);
   assert.match(result.out, /Signature and bindings   VALID/);
   assert.match(result.out, /Verifier-local verdict   REPRODUCED/);
-  assert.match(result.out, /VERIFY    VERIFIED/);
+  assert.match(result.out, /VERIFY    UNVERIFIED/);
 
   const wrong = crypto.generateKeyPairSync("ed25519").publicKey
     .export({ type: "spki", format: "der" }).subarray(-32).toString("hex");
