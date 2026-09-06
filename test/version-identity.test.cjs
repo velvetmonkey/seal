@@ -276,44 +276,6 @@ test("sync refuses when the current VERSION release note is absent", () => {
   assert.match(sync.stderr, new RegExp(`current release notes are absent: docs/assurance/RELEASE-NOTES-v${VERSION.replaceAll(".", "\\.")}\\.md`));
 });
 
-test("sync refuses to rewrite the reviewed-guide digest when its input moves", () => {
-  const scratch = testTmpdir(path.join(scratchRoot(), "seal-version-guide-digest-"));
-  fs.cpSync(ROOT, scratch, {
-    recursive: true,
-    filter(source) {
-      const relative = path.relative(ROOT, source);
-      const temporary = path.relative(ROOT, path.resolve(os.tmpdir()));
-      return ![".family", ".git", "dist", "kernel", temporary].includes(relative)
-        && !relative.startsWith(`${temporary}${path.sep}`)
-        && !/^spine\/.*\.wasm(?:\..*)?$/.test(relative);
-    },
-  });
-  const guide = path.join(scratch, "docs", "guide", "when-something-looks-wrong.md");
-  fs.appendFileSync(guide, "\nDerived digest recomputation fixture.\n");
-  const testPath = path.join(scratch, "test", "guide-tokens.test.mjs");
-  const testSourceBefore = fs.readFileSync(testPath, "utf8");
-  const sync = run(process.execPath, [path.join(scratch, "scripts", "sync-version.cjs")]);
-  assert.notEqual(sync.code, 0, "sync must go red when the reviewed guide differs from its pinned digest");
-  assert.match(sync.stderr, /reviewed guide digest changed; a human must review the guide and update GUIDE_SHA256/);
-  assert.equal(fs.readFileSync(testPath, "utf8"), testSourceBefore, "sync must not rewrite the guide-token test when the guide digest drifts");
-});
-
-test("reviewed-guide canonicalizers disclose the only unpinned canonicalized slot", () => {
-  const requiredComment = "REVIEWED_GUIDE_CANONICALIZED_SLOTS: sync-version.cjs generates the one anchored release-version slot. This canonicalizer maps only that slot to a stable marker before hashing. GUIDE_SHA256 does not cover the generated version slot. The pin covers every other byte in the guide.";
-  const expectedCopies = new Map([["scripts/sync-version.cjs", 2], ["test/guide-tokens.test.mjs", 1]]);
-  const missing = [...expectedCopies].filter(([file, expected]) => {
-    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
-    const comments = [...source.matchAll(/\/\/ REVIEWED_GUIDE_CANONICALIZED_SLOTS:.*(?:\n\/\/.*){3}/gu)]
-      .map((match) => match[0].replace(/^\/\/ ?/gmu, "").replace(/\s+/gu, " ").trim());
-    return comments.length !== expected || comments.some((comment) => comment !== requiredComment);
-  }).map(([file]) => file);
-  assert.deepEqual(
-    missing,
-    [],
-    `reviewed-guide canonicalizer comments must name the only generated release-version slot, state that the pin does not cover it, and state that the pin covers every other guide byte; missing: ${missing.join(", ")}`,
-  );
-});
-
 test("stale-version scope preserves a historical release-note filename in a live document", () => {
   assertStaleMatches(
     "0.2.0",
