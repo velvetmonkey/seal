@@ -1,13 +1,12 @@
 {
   "version": 1,
   "ruling": {
-    "base": "7470c7fffe93831066eca726ced767e42dbd863e",
+    "base": "dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4",
     "author": "velvetmonkey",
     "date": "2026-09-06",
-    "scope": "Ben ruled on 2026-09-06 at 11:07, in his words: \"approved\". PR 249 gives the installed-tree pin manifest gate the human review its own name promises. THE DEFECT: scripts/check-installed-tree-pin-manifest-review.cjs was a pure refusal. It called fail() whenever scripts/installed-tree-pin-sites.json differed between base and head, with no override, no waiver and no ruling document anywhere in the file, so a check named 'installed-tree pin manifest human review' could not accept a human review. It measured whether a file changed, not whether a person approved the change. THE FIX INVENTS NOTHING: it copies the exact-ruling pattern already live on main in scripts/check-protected-paths.cjs, which reads a ruling from the head commit and accepts only when the ruling binds the computed merge-base AND the exact 40-hex blob of every named file, so a ruling cannot outlive the content it approved. EVIDENCE: 41 targeted tests pass and all three required negative cases return exit 1, being no ruling, wrong blob and stale base. RE-RECORDED at 11:47 for the SECOND time. The first record used base 16e5f8c3. Main then moved twice, and main sets strict=true, so the branch had to take main before it could merge. Merging main CONFLICTED on this very file, because the ruling document holds ONE ruling and PR 236 had already written its own here. That is a real limitation of the mechanism and it is recorded on the roadmap, not hidden. THREE protected artifacts now appear in the range and they are NOT equal in kind. The two real changes are scripts/check-installed-tree-pin-manifest-review.cjs and test/installed-tree-pin-manifest-review.test.cjs. The third, wasm-spike/verified/pin-history.json, arrived through the merge and is ALREADY ON MAIN via PR 236; I verified its blob is 4ab4877c3a8077d832e07fc98395992d3a1ebcb8 on both origin/main and this head, and the net diff for that file against main is zero lines. It must appear here because the checker walks every commit in the range rather than the net tree, which is deliberate so an add-then-delete cannot disappear from review.",
+    "scope": "Ben approved PR 245 on 2026-09-05, in his words: \"Approve\", and reaffirmed it on 2026-09-06 at 11:07 when he approved PR 249 specifically to unblock it, saying of 245 that there was nothing new to decide. PR 245 corrects the installed-tree pin-sites manifest so assertion 269, 'declared installed-tree sites found by git grep match built artifacts', stops failing. That single assertion was blocking PR 250, PR 251 and PR 244 as well as this branch. FIVE protected artifacts are reported and they are NOT equal in kind. TWO are this branch's real work: scripts/installed-tree-pin-sites.json at blob 14d5ee0bb69e1935320bc390d225cd5193bbd4ff, and test/installed-tree-pin.test.cjs at blob 29c7031cc5a2fd0e8ee65d3f6f51cd22c2b4d64c. THREE arrived when the branch was brought up to date with main and are BYTE-IDENTICAL to main; I compared each blob against origin/main myself before writing this: scripts/check-installed-tree-pin-manifest-review.cjs and test/installed-tree-pin-manifest-review.test.cjs came from PR 249, and wasm-spike/verified/pin-history.json came from PR 236. They must appear here because the checker walks every commit in the range rather than the net tree, which is deliberate so an add-then-delete cannot disappear from review. I verified the merge-base and all five blob digests on disk.",
     "retires": [
-      "The 2026-09-06 11:24 record on this branch, base 16e5f8c333c9d079d1041a955763006b28832ce5, superseded when main moved and the branch took main.",
-      "The 2026-09-06 11:34 record from PR 236, base 858d2cd9ddcd89e5f3a716d21d7043ca42537ca6, which merged to main as 7470c7ff and no longer applies to any open change."
+      "The 2026-09-06 ruling from PR 249, base 7470c7fffe93831066eca726ced767e42dbd863e, which merged to main as dba60d3d and no longer applies to any open change."
     ],
     "files": [
       {
@@ -15,8 +14,16 @@
         "blob": "a1084ecf0039e1d127daee0321a0fe4e8837e92a"
       },
       {
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "14d5ee0bb69e1935320bc390d225cd5193bbd4ff"
+      },
+      {
         "path": "test/installed-tree-pin-manifest-review.test.cjs",
         "blob": "141b4191d46e0e3238b13e0d64cf360c1c977538"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "29c7031cc5a2fd0e8ee65d3f6f51cd22c2b4d64c"
       },
       {
         "path": "wasm-spike/verified/pin-history.json",
