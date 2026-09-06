@@ -122,34 +122,21 @@ function createApprovalContract({
         now: kernelNow,
       }).receipt_record;
     } catch (error) {
-      // A kernel crash here used to escape proxy.write and take the
-      // protected server down. retryUnlocked already converts the same
-      // failure into a per-call refusal; receipt emission must too.
-      const code = error instanceof KernelAuthorizationError || typeof error?.code === "string"
-        ? error.code
-        : REFUSALS.KERNEL_EXECUTION_REFUSED;
-      return {
-        tool,
-        arguments: args ?? {},
-        now: kernelNow,
-        kernel_config: {
-          epoch: 1,
-          safety: {
-            approval: { control_file: "product-adapter", ttl_seconds: 120 },
-            tools: [{
-              name: tool,
-              mode: "guarded",
-              match: { type: "always" },
-              target: [{ full_arguments: true }],
-            }],
-          },
-          temporal: { policies: [] },
-        },
-        granted_capabilities: [],
-        kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" },
-        verdict: "BLOCK",
-        reason: `${code}: ${error.message}`,
-      };
+      // The kernel produced no result. retryUnlocked already returns a
+      // Node-side refusal with no receipt for this failure; minting a
+      // signed BLOCK here would claim a decision the kernel did not make.
+      if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
+        const timing = error.kernel_timing_timestamps === undefined ? undefined : {
+          kernel_timing_timestamps: error.kernel_timing_timestamps,
+          kernel_timing_ms: error.kernel_timing_ms,
+          kernel_timing_active_phase: error.kernel_timing_active_phase,
+          kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
+          kernel_timing_lifecycle: error.kernel_timing_lifecycle,
+          kernel_timing_unmeasured: error.kernel_timing_unmeasured,
+        };
+        return refuse(error.code, error.message, timing);
+      }
+      return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, error.message);
     }
   }
 
