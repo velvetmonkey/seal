@@ -261,7 +261,9 @@ Three states:
 - `Runtime: present …` — every file status inspected matches its pinned hash.
 - `Runtime: integrity check failed … (kernel/wasm/seal.js hash mismatch;
   runtime bytes do not match the published runtime)` — a hash mismatch in
-  whichever runtime directory status inspected, adjacent or cached.
+  whichever runtime directory status inspected, adjacent or cached. For an
+  adjacent-runtime hash mismatch: Status does not fall back to the cache
+  after this failure; repair the verified installation.
 
 ## The Receipts lines
 
