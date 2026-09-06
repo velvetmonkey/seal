@@ -305,23 +305,21 @@ authoritative, and the retry must be issued by the current lease holder.
 
 The `claude mcp add` step reported failure, and Seal recorded the state as
 `BROKEN` with that reason. Because the external command may have made a
-partial change, check Claude Code's local override before recovery. The
-message carries Claude Code's own error; fix that (permissions,
-configuration) first. Then recover — this is currently awkward, found and
-recorded as a product finding: `seal protect` refuses (`already_protected`)
-and `seal unprotect` refuses too if there is no override to remove
-(`claude_remove_failed`). The recovery that worked in a real run: re-create
-the override by hand with `claude mcp add --scope local <server> --
-<anything>`, then run `seal unprotect <server>`, which removes it and returns
-the project to `- outside Seal`.
+partial change, stop Claude Code and inspect the actual local override before
+changing it by hand. This failed install left no recorded proof that Seal owns
+an installed override, so `seal unprotect <server>` refuses with
+`no_seal_owned_override`. Creating an arbitrary replacement does not supply
+that ownership proof and cannot make this unprotect path complete. Use Claude
+Code's error and the override you actually find to decide what manual cleanup
+is needed.
 
 ### `claude_remove_failed`
 
 The `claude mcp remove` step failed during unprotect — most simply because
-the local override was already removed by hand. Exercised for real: the fix
-is to re-add a local override for the server name (see
-`claude_install_failed` above) so the removal has something to remove, then
-unprotect again.
+Claude Code could not remove the local override. Stop Claude Code and inspect
+the actual override and Claude Code's error before making any manual change.
+Do not create an arbitrary replacement: Seal removes only the installed
+override whose definition matches its recorded ownership proof.
 
 ### `incompatible_state`
 
