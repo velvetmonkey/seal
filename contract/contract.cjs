@@ -111,15 +111,46 @@ function createApprovalContract({
 
   function receiptFor({ tool, args, accepted = false }) {
     const kernelNow = Math.floor(now() / 1000);
-    return kernelAdapter.authorize({
-      epoch: 1,
-      issuedTool: tool,
-      issuedArgs: args ?? {},
-      retryTool: tool,
-      retryArgs: args ?? {},
-      accepted,
-      now: kernelNow,
-    }).receipt_record;
+    try {
+      return kernelAdapter.authorize({
+        epoch: 1,
+        issuedTool: tool,
+        issuedArgs: args ?? {},
+        retryTool: tool,
+        retryArgs: args ?? {},
+        accepted,
+        now: kernelNow,
+      }).receipt_record;
+    } catch (error) {
+      // A kernel crash here used to escape proxy.write and take the
+      // protected server down. retryUnlocked already converts the same
+      // failure into a per-call refusal; receipt emission must too.
+      const code = error instanceof KernelAuthorizationError || typeof error?.code === "string"
+        ? error.code
+        : REFUSALS.KERNEL_EXECUTION_REFUSED;
+      return {
+        tool,
+        arguments: args ?? {},
+        now: kernelNow,
+        kernel_config: {
+          epoch: 1,
+          safety: {
+            approval: { control_file: "product-adapter", ttl_seconds: 120 },
+            tools: [{
+              name: tool,
+              mode: "guarded",
+              match: { type: "always" },
+              target: [{ full_arguments: true }],
+            }],
+          },
+          temporal: { policies: [] },
+        },
+        granted_capabilities: [],
+        kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" },
+        verdict: "BLOCK",
+        reason: `${code}: ${error.message}`,
+      };
+    }
   }
 
   // Persist a status transition BEFORE it takes effect in memory: an append

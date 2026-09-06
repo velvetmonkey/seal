@@ -687,6 +687,111 @@ test("a non-integer argument is refused without taking down the protected server
   assert.equal(await run.exit, 0, run.err);
 });
 
+function blockedReceipts(dir) {
+  return fs.readdirSync(path.join(dir, "receipts"))
+    .map((name) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", name), "utf8")));
+}
+
+async function refuseShapeThenServe(t, label, writeCall) {
+  const dir = testTmpdir(`seal-value-shape-${label}-`);
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+  initialize(proxy);
+  await responseFor(90);
+  writeCall(proxy);
+  const refused = await responseFor(1);
+  assert.equal(refused.result.isError, true, `${label}: ${JSON.stringify(refused)}`);
+  assert.match(refused.result.content[0].text, /approval refused:/);
+  assert.equal(readCount(`${dataFile}.count`), "0", label);
+  assert.equal(proxy.exitCode, null, `proxy exited under ${label}: ${run.err}`);
+  const beforeFollow = blockedReceipts(dir);
+  assert.ok(beforeFollow.length >= 1, `${label}: expected a refusal receipt`);
+  assert.equal(
+    beforeFollow.filter((body) => body.action === "ALLOW" || body.verdict === "ALLOW").length,
+    0,
+    `${label}: refused call recorded as ALLOW`,
+  );
+  proxy.stdin.write(JSON.stringify({ ...callParams(`after ${label}`), id: 2 }) + "\n");
+  const elicitation = await requestFor("elicitation/create");
+  answer(proxy, elicitation, "accept", { approve: true });
+  const flowed = await responseFor(2);
+  assert.ok(!flowed.result.isError, `${label} follow-up: ${JSON.stringify(flowed)}`);
+  assert.equal(readCount(`${dataFile}.count`), "1", label);
+  assert.equal(proxy.exitCode, null, `proxy exited after ${label} follow-up: ${run.err}`);
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+  return { refused, receipts: beforeFollow };
+}
+
+for (const shape of [
+  {
+    label: "unsafe-integer",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: Number.MAX_SAFE_INTEGER + 1 } },
+      }) + "\n");
+    },
+    pattern: /integer outside the safe canonical range/,
+  },
+  {
+    label: "nested-decimal",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: { nested: 1.5 } } },
+      }) + "\n");
+    },
+    pattern: /no canonical form/,
+  },
+  {
+    label: "decimal-array",
+    write(proxy) {
+      proxy.stdin.write(JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: [1.5, 2.5] } },
+      }) + "\n");
+    },
+    pattern: /no canonical form/,
+  },
+  {
+    label: "nonfinite-1e400",
+    write(proxy) {
+      proxy.stdin.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":1e400}}}\n');
+    },
+    pattern: /no canonical form|non-finite number/,
+  },
+]) {
+  test(`a ${shape.label} argument is refused without taking down the protected server`, async (t) => {
+    const { refused } = await refuseShapeThenServe(t, shape.label, shape.write);
+    assert.match(refused.result.content[0].text, /unrenderable_effect/);
+    assert.match(refused.result.content[0].text, shape.pattern);
+  });
+}
+
+test("a very long argument string is refused without taking down the protected server", async (t) => {
+  const { refused, receipts } = await refuseShapeThenServe(t, "long-string", (proxy) => {
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: "demo.mutate", arguments: { line: "x".repeat(100000) } },
+    }) + "\n");
+  });
+  assert.match(refused.result.content[0].text, /approval refused: unrenderable_effect/);
+  assert.ok(receipts.every((body) => body.action === "BLOCK"));
+});
+
+test("canonical refuses bigint as an unsupported receipt type", () => {
+  const { canonical, ReceiptRefusal } = require("../spine/receipt-v2.cjs");
+  assert.throws(
+    () => canonical(1n),
+    (error) => error instanceof ReceiptRefusal
+      && error.code === "receipt_value_malformed"
+      && error.message === "receipt value has unsupported type bigint",
+  );
+});
+
 test("a receipt-writer ReceiptRefusal still escapes write and does not elicit", async (t) => {
   const receiptsMod = require("../spine/receipts.cjs");
   const { ReceiptRefusal } = require("../spine/receipt-v2.cjs");
