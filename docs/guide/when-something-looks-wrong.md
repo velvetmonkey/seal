@@ -328,6 +328,37 @@ schema). Seal refuses to reinterpret another binary's records. Re-run with
 the version that wrote it, or unprotect with that version and protect again
 with this one.
 
+The current binary also provides an explicit recovery command: stop Claude
+Code and run `seal recover --archive` in the affected project. It preserves
+the exact incompatible state at the printed archive path before removing
+Seal's owned local override. The route is then outside Seal; review the
+archived server, tools and predicates and run `seal protect SERVER TOOL
+[TOOL...]` with your chosen selections. Restart Claude Code and run
+`seal status` to check activation. Recovery works locally without downloading
+another binary, using the installed Claude CLI when an override needs removal.
+
+### `recovery_not_needed`
+
+`seal recover --archive` found compatible state or no state. Recovery is only
+for incompatible state; it made no state or configuration changes. Run
+`seal status` to inspect the current route. To remove compatible protection,
+stop Claude Code and run `seal unprotect SERVER`.
+
+### `recovery_state_invalid`
+
+The incompatible state does not establish this project's identity and server
+name. Recovery refuses to guess ownership and made no state or configuration
+changes. Inspect the recorded state and the actual Claude Code local override
+before deciding what manual repair is needed; do not invent ownership metadata.
+
+### `recovery_state_changed`
+
+The stored state changed while recovery was in progress. Stop Claude Code and
+other commands changing this project's protection, then retry
+`seal recover --archive`. The archive already written is retained. Recovery
+may have removed the owned override before detecting the change, so inspect
+the actual override and state before restarting the client.
+
 ## As Claude Code starts the protected server
 
 Printed by the wrapper on stderr, visible in Claude Code's MCP logs as
