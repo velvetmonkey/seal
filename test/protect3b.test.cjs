@@ -302,15 +302,15 @@ test("protect names install-time refusals", () => {
   writeProject(incompatibleProject, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "incompatible-data.txt")] });
   const incompatibleState = statePathFor(incompatibleProject, { XDG_DATA_HOME: path.join(home, ".local", "share") });
   fs.mkdirSync(path.dirname(incompatibleState), { recursive: true });
-  fs.writeFileSync(incompatibleState, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
+  fs.writeFileSync(incompatibleState, JSON.stringify({ schema: "seal.protect/v99", sealVersion: "0.0.0", state: "PENDING RESTART" }));
   result = run(incompatibleProject, home, ["protect", "db", "demo.mutate"], env);
   assert.notEqual(result.code, 0);
   assert.match(result.out, /incompatible_state/);
 });
 
 test("explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect", () => {
-  for (const mismatch of ["sealVersion", "schema"]) {
-    const root = testTmpdir(`seal-recover-${mismatch}-`);
+  for (const mismatch of ["seal.protect/v99", "seal.protect/v0"]) {
+    const root = testTmpdir(`seal-recover-${mismatch.split("/").pop()}-`);
     const project = path.join(root, "project");
     const home = path.join(root, "home");
     fs.mkdirSync(project);
@@ -328,7 +328,7 @@ test("explicit recovery archives incompatible bytes, preserves evidence, and per
     assert.deepEqual(fs.readFileSync(file), healthy);
     assert.deepEqual(fs.readFileSync(path.join(home, ".claude.json")), config);
     assert.deepEqual(fs.readdirSync(path.dirname(file)), entries);
-    const old = { ...JSON.parse(healthy), [mismatch]: mismatch === "sealVersion" ? "0.2.0" : "seal.protect/v0" };
+    const old = { ...JSON.parse(healthy), schema: mismatch };
     const bytes = JSON.stringify(old, null, 2) + "\n";
     fs.writeFileSync(file, bytes);
     for (const args of [["status"], ["protect", "db", "demo.mutate"], ["unprotect", "db"]]) {
@@ -353,7 +353,7 @@ test("explicit recovery archives incompatible bytes, preserves evidence, and per
     assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
     assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
     assert.equal(fs.readFileSync(archive, "utf8"), bytes);
-    const unprotected = { ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" };
+    const unprotected = { ...JSON.parse(fs.readFileSync(file)), schema: "seal.protect/v99" };
     fs.writeFileSync(file, JSON.stringify(unprotected));
     const absentOverride = run(project, home, ["recover", "--archive"], env);
     assert.equal(absentOverride.code, 0, absentOverride.out);
@@ -373,7 +373,7 @@ test("recovery refuses live leases and replaced overrides without archiving or c
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
-  const old = { ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" };
+  const old = { ...JSON.parse(fs.readFileSync(file)), schema: "seal.protect/v99" };
   const configPath = path.join(home, ".claude.json");
   for (const reason of ["active_claude_session", "local_override_drifted"]) {
     const state = reason === "active_claude_session"
@@ -405,7 +405,7 @@ test("recovery retains incompatible state and its archive if Claude removal fail
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
   assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
   const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
-  const bytes = JSON.stringify({ ...JSON.parse(fs.readFileSync(file)), sealVersion: "0.2.0" });
+  const bytes = JSON.stringify({ ...JSON.parse(fs.readFileSync(file)), schema: "seal.protect/v99" });
   fs.writeFileSync(file, bytes);
   const config = fs.readFileSync(path.join(home, ".claude.json"));
   const refused = run(project, home, ["recover", "--archive"], { PATH: path.dirname(process.execPath) });
@@ -760,7 +760,7 @@ test("status reports refused state without inventing absent tools or unrouted se
   assert.equal(before.code, 0, before.out);
   assert.match(before.out, /^Sealed MCP route db: PENDING RESTART /m);
 
-  for (const fields of [{ sealVersion: "0.2.0" }, { schema: "seal.protect/v0" }, null]) {
+  for (const fields of [{ schema: "seal.protect/v99" }, { schema: "seal.protect/v0" }, null]) {
     const bytes = fields ? JSON.stringify({ ...JSON.parse(healthy), ...fields }) : "garbage{";
     fs.writeFileSync(file, bytes);
     let refusal;
@@ -807,7 +807,7 @@ test("status preserves known route facts across seven damaged state shapes and o
   delete missingTools.guardTools;
   delete missingTools.guardTool;
   const cases = [
-    ["incompatible-version", JSON.stringify({ ...JSON.parse(healthy), sealVersion: "0.2.0" })],
+    ["incompatible-schema", JSON.stringify({ ...JSON.parse(healthy), schema: "seal.protect/v99" })],
     ["malformed", "garbage{"],
     ["empty", ""],
     ["truncated", healthy.slice(0, -5)],
@@ -843,7 +843,7 @@ test("status preserves known route facts across seven damaged state shapes and o
       assert.match(result.out, /^MCP routing: unknown because the stored protection state could not be read$/m);
       assert.doesNotMatch(result.out, /^Sealed MCP route|^Gated through this route:|^Not controlled:/m);
     }
-    if (name === "incompatible-version" || name === "wrong-schema") assert.match(result.out, /seal recover --archive/);
+    if (name === "incompatible-schema" || name === "wrong-schema") assert.match(result.out, /seal recover --archive/);
     else assert.doesNotMatch(result.out, /seal recover --archive/);
     assert.equal(fs.readFileSync(file, "utf8"), bytes);
     assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
@@ -856,7 +856,7 @@ test("status preserves known route facts across seven damaged state shapes and o
   assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
   const incompatible = cases[0][1];
   fs.writeFileSync(file, incompatible);
-  const recovered = recorded("recover-incompatible-version", ["recover", "--archive"]);
+  const recovered = recorded("recover-incompatible-schema", ["recover", "--archive"]);
   assert.equal(recovered.code, 0, recovered.out);
   const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
   assert.ok(archive, recovered.out);

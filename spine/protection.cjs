@@ -9,6 +9,11 @@ const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 
 const STATE_SCHEMA = "seal.protect/v1";
+// Compatibility belongs to the format, not the creating binary's release.
+// Keep readers for every schema we can interpret when the writer advances.
+const STATE_READERS = Object.freeze({
+  "seal.protect/v1": readStateV1,
+});
 const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 30000;
 const STATES = Object.freeze({
   UNPROTECTED: "UNPROTECTED",
@@ -295,12 +300,21 @@ function readState(statePath) {
     if (error.code === "ENOENT") return null;
     throw new ProtectionError("state_broken", `stored protection state is unreadable: ${error.message}`);
   }
-  if (!state || typeof state !== "object" || state.schema !== STATE_SCHEMA) {
-    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${STATE_SCHEMA}`);
+  const reader = state && typeof state === "object" && !Array.isArray(state) &&
+    typeof state.schema === "string" && Object.hasOwn(STATE_READERS, state.schema) && STATE_READERS[state.schema];
+  if (!reader) {
+    throw new ProtectionError("incompatible_state", `stored protection state has schema ${JSON.stringify(state?.schema ?? "absent")}, not ${Object.keys(STATE_READERS).join(" or ")}`);
   }
-  if (state.sealVersion !== sealVersion()) {
-    throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
-  }
+  return reader(state);
+}
+
+function readStateV1(state) {
+  // Early v1 records used guardTool. Later v1 records use guardTools and
+  // optionally guardPredicates. protectedToolSelections treats absent
+  // predicates as whole-tool protection; ownership checks accept the older
+  // localOverride without claudeProjectRoot. Preserve those interpretations
+  // and leave damaged-field diagnostics to the consumers that can report
+  // the remaining known route facts. sealVersion is creation provenance only.
   if (state.guardTools === undefined && typeof state.guardTool === "string" && state.guardTool.length > 0) {
     return { ...state, guardTools: [state.guardTool] };
   }
@@ -983,9 +997,6 @@ async function protect({
   const statePath = statePathFor(root, env);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED) {
-    if (existing.sealVersion && existing.sealVersion !== sealVersion()) {
-      throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
-    }
     throw new ProtectionError("already_protected", `project is already ${existing.state}`);
   }
   const project = readProjectServer(root, serverName);
@@ -1063,9 +1074,6 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   const statePath = statePathFor(root, env);
   const state = readState(statePath);
   assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
-  if (state && state.sealVersion && state.sealVersion !== sealVersion()) {
-    throw new ProtectionError("incompatible_state", "stored protection state is from another binary version");
-  }
   if (lockOwnerIsLive(state?.lease)) {
     throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
   }
@@ -1083,7 +1091,7 @@ function recover({ projectRoot = process.cwd(), env = process.env }) {
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env);
   // Recovery may inspect incompatible bytes, but must never activate them or
-  // rewrite their version to make them pass readState.
+  // rewrite their schema to make them pass readState.
   const requireIncompatible = () => {
     try { readState(statePath); } catch (error) {
       if (error.code === "incompatible_state") return;
