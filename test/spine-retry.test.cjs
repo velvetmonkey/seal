@@ -45,6 +45,31 @@ function duplicateKeyControlEvidence({ baseline, countFile, dataFile, receiptsDi
   ].join("\n");
 }
 
+function proxyReplyDropPreload(controlDir) {
+  const preload = path.join(controlDir, "drop-proxy-reply.cjs");
+  fs.writeFileSync(preload, `
+const readline = require("node:readline");
+const createInterface = readline.createInterface;
+readline.createInterface = function(...args) {
+  const input = createInterface.apply(this, args);
+  const emit = input.emit;
+  input.emit = function(event, line, ...rest) {
+    if (event === "line") {
+      try {
+        const frame = JSON.parse(line);
+        if (frame.id === 3 && frame.result && !frame.result.isError) return false;
+      } catch {}
+    }
+    return emit.call(this, event, line, ...rest);
+  };
+  return input;
+}
+`);
+  return {
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preload}`].filter(Boolean).join(" "),
+  };
+}
+
 function attach(child) {
   const state = { out: "", err: "", exit: new Promise((resolve) => child.once("close", (code) => resolve(code))), kill: () => { try { child.kill("SIGKILL"); } catch {} } };
   child.stdout.setEncoding("utf8");
@@ -180,12 +205,19 @@ test("seal demo: input_required, approve once, replay refused, then direct write
   assert.match(run.out, /child calls observed: 1/);
   assert.match(run.out, /still 1/);
   assert.match(run.out, /one-use held/);
-  assert.match(run.out, /already_consumed/);
+  assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK/);
+  assert.doesNotMatch(run.out, /the shared proxy refused the replay: "approval refused: already_consumed"/);
+  assert.doesNotMatch(run.out, /already_consumed/);
 
   const receiptPaths = [...run.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
   assert.equal(receiptPaths.length, 3, `expected 3 receipts\n${run.out}`);
-  const decisions = receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")).action);
+  const receipts = receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")));
+  const decisions = receipts.map((receipt) => receipt.action);
   assert.deepEqual(decisions, ["INPUT_REQUIRED", "ALLOW", "BLOCK"]);
+  const blockReceipt = receipts.find((receipt) => receipt.action === "BLOCK");
+  assert.equal(blockReceipt.verdict, "BLOCK");
+  assert.equal(blockReceipt.tool, "demo.mutate");
+  assert.equal(blockReceipt.arguments.line, "seal demo wrote this line");
 
   assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", ""), /verif/i);
   const data = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8");
@@ -208,6 +240,7 @@ test("seal demo: declining sends a decline retry; child stays at 0", async (t) =
   assert.equal(readCount(countFile), "0");
   assert.match(run.out, /DECLINED/);
   assert.match(run.out, /nothing was approved/);
+  assert.doesNotMatch(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
 });
 
 test("seal demo prints the active kernel phase for blocked workers", async (t) => {
@@ -232,7 +265,80 @@ test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
   const code = await run.exit;
   assert.equal(code, 0, `${run.out}\n${run.err}`);
   assert.deepEqual(Buffer.from(run.err), Buffer.from(""));
-  assert.match(run.out, /BLOCKED   the shared proxy refused the replay/);
+  assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
+});
+
+test("seal demo suppresses the approved reply line when the proxy reply path is physically broken", async (t) => {
+  const dir = testTmpdir("seal-cli-proxy-reply-drop-");
+  const controlDir = testTmpdir("seal-cli-proxy-reply-drop-control-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
+    env: { ...process.env, ...proxyReplyDropPreload(controlDir) },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  const countFile = path.join(dir, "child", "data.txt.count");
+  const started = Date.now();
+  while (!fs.existsSync(countFile) || readCount(countFile) !== "1") {
+    if (Date.now() - started > 5000) assert.fail(`timed out waiting for the child call\n${run.out}\n${run.err}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  run.kill();
+  await run.exit;
+  assert.doesNotMatch(run.out, /child replied through the shared proxy:/);
+  assert.equal(readCount(countFile), "1", "the child ran even though its reply was withheld from the proxy");
+});
+
+test("seal demo prints the approved reply observed through the proxy", async (t) => {
+  const dir = testTmpdir("seal-cli-proxy-reply-observed-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+  const code = await run.exit;
+  assert.equal(code, 0, `${run.out}\n${run.err}`);
+  assert.match(run.out, /child replied through the shared proxy: "demo server: appended 26 bytes to data\.txt; total tool calls: 1"/);
+});
+
+test("seal demo derives the replay BLOCK line from the receipt file", async (t) => {
+  const dir = testTmpdir("seal-cli-block-receipt-delete-");
+  const receiptsDir = path.join(dir, "receipts");
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], { stdio: ["pipe", "pipe", "pipe"] });
+  const run = attach(child);
+  t.after(run.kill);
+  await run.waitFor(/Approve\? \[y\/N\]/);
+  child.stdin.write("y\n");
+
+  const started = Date.now();
+  let deleted = false;
+  while (!deleted) {
+    if (Date.now() - started > 5000) assert.fail(`no BLOCK receipt appeared\n${run.out}\n${run.err}`);
+    if (fs.existsSync(receiptsDir)) {
+      const block = fs.readdirSync(receiptsDir).find((name) => name.endsWith("-BLOCK.json"));
+      if (block) {
+        fs.unlinkSync(path.join(receiptsDir, block));
+        deleted = true;
+        break;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  const code = await run.exit;
+  assert.equal(code, 0, `${run.out}\n${run.err}`);
+  assert.doesNotMatch(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
+  assert.match(run.out, /one-use held: the replay did not run the call again/);
+  const receiptPaths = [...run.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
+  assert.equal(receiptPaths.length, 2, run.out);
+  assert.deepEqual(receiptPaths.map((p) => JSON.parse(fs.readFileSync(p, "utf8")).action), ["INPUT_REQUIRED", "ALLOW"]);
 });
 
 // --- protected path ---------------------------------------------------------

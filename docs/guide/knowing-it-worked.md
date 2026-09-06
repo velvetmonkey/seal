@@ -38,7 +38,7 @@ Approve, and the call runs — once:
 delete_all_notes first call: input_required; approval message shown to the user:
     (the prompt above)
 retry with accept: notes.txt deleted
-identical retry replayed: REFUSED -> approval refused: already_consumed — this one-use approval has already been consumed
+identical retry replayed: BLOCK receipt -> verdict BLOCK
 ```
 
 The same approval presented a second time did not run the tool a second time.
@@ -70,8 +70,8 @@ Approve? [y/N] y
 ```output
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from …/child/data.txt.count)
-replaying the identical retry with the same requestState…
-BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+replaying the identical elicitation response with the same id…
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
 one-use held: the replay did not run the call again; child calls observed: still 1
 ```
 
@@ -96,8 +96,8 @@ or bookkeeping damage: if the gate cannot prove the approval is the one it
 issued, it refuses. Every token you can see, with its cause and remedy, is in
 [When something looks wrong](when-something-looks-wrong.md).
 
-A refusal that *should* worry you is one you cannot explain — an
-`already_consumed` when you never approved anything, say. That is the moment
+A refusal that *should* worry you is one you cannot explain — a BLOCK receipt
+when you never approved anything, say. That is the moment
 to read the receipt and see what was actually decided, which is what the rest
 of this page is for.
 

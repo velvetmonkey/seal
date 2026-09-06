@@ -1,33 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "c5c01c064c96ad87b18caa6438522f75e69048b6",
+    "base": "d8f5198bf48191339cb412b5fa83bfc7de3392fc",
     "author": "velvetmonkey",
     "date": "2026-09-06",
-    "scope": "PR 252 changes NO protected artifact. Its only file is test/release-publish-gate.test.cjs, which is not a protected path. ALL FIVE artifacts reported below are BYTE-IDENTICAL to origin/main; I compared every blob myself before writing this record. They appear only because the branch was brought up to date with a MERGE commit, and the checker walks every commit with `git log -m`, which diffs a merge against EVERY parent. So each file main gained since the branch diverged is reported as changed even though the net diff is zero. THE LESSON, recorded so it is not repeated: bring a branch up to date with `gh pr update-branch --rebase` BEFORE any merge commit exists. Once a merge commit is present, --rebase reports 'already up-to-date' and does nothing, and a ruling becomes the only non-destructive way forward. WHAT 252 ACTUALLY DOES: test/release-publish-gate.test.cjs reached api.github.com from inside the product suite, so a rate limit or a dropped connection reported the SAME result as a misconfigured repository. It failed four times on 2026-09-06, each time with Node 20 and Node 22 disagreeing on an identical tree. This separates the two outcomes. grok-4.6 frisked fable CROSS-FAMILY: wrong-config-cases 7, wrong-config-all-failed yes, undetermined-set-too-wide no, lines-deleted 6, other-tests-touched 0.",
+    "scope": "PR 244 changes ONE protected artifact, test/fixtures/readme-demo-output.txt, and Ben approved that file changing on 2026-09-06 at 11:07, in answer to the question 'may test/fixtures/readme-demo-output.txt change, for PR 244?'. He answered yes. WHAT THE BRANCH DOES: `seal demo` printed a child reply that it REBUILT from the data file on disk, so the transcript asserted an event the demo had not observed. spine/proxy.cjs now forwards the child's real stdout line and the demo prints only what it saw. The recorded output must therefore move, which is why this ruling exists. WHY THIS BRANCH AND NOT PR 227: a forensic lane on a separate seat ran both demos and scored files-227-correct 0, files-244-correct 3; PR 227 still carries childReplyFromDataFile(dataFile), which reconstructs the very line the fix exists to stop reconstructing. PR 227 is closed with that evidence. THREE CONCERNS I RAISED AGAINST THIS FIXTURE AND THEN MEASURED, all three withdrawn, recorded so they are not re-raised: (1) The fixture bakes the path /home/monkey/scratch/demoline3/work, a lane worktree. Withdrawn: the only consumer is test/readme-demo-transcript-guard.test.cjs, and scripts/readme-demo-transcript-guard.mjs line 67 rewrites every /home, /tmp and /var path to <volatile-path> before comparing, so no check ever reads it. Main's fixture already carries machine-specific paths of the same kind. (2) The demo's ASSURANCE block, 'authorization rule tested; product state and forwarding tested; client and machine trusted.', is deleted from spine/demo.cjs. Withdrawn: it is a declared retirement under the standing rule 'proven means strict' of 2026-08-27, and test/authorization-status-surfaces.test.cjs locks its ABSENCE with a physical tamper control that goes red when the sentence is re-added. (3) The transcript guard's replay assertion changed from requiring already_consumed to requiring verdict BLOCK, which looked like a weakened assertion. Withdrawn: test/spine-retry.test.cjs line 209 asserts the demo output must NOT contain already_consumed, because that reason string was reconstructed rather than observed. The load-bearing property, that the replay did not run the call again, is still asserted by name through 'child calls observed: still 1'. MECHANICS: the branch was brought up to date with `gh pr update-branch --rebase` BEFORE this ruling was written, so the merge base is current main d8f5198b and exactly one protected file is reported. Contrast the PR 252 ruling it retires, which had to enumerate five byte-identical files because a merge commit already existed.",
     "retires": [
-      "The 2026-09-06 ruling from PR 245, base dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4, which merged to main as c5c01c06 and no longer applies to any open change."
+      "The 2026-09-06 ruling from PR 252, base c5c01c064c96ad87b18caa6438522f75e69048b6, which merged to main as 6c79c9fd5debdee83a8d4bcebbb2b3017ca27c8c and no longer applies to any open change."
     ],
     "files": [
       {
-        "path": "scripts/check-installed-tree-pin-manifest-review.cjs",
-        "blob": "a1084ecf0039e1d127daee0321a0fe4e8837e92a"
-      },
-      {
-        "path": "scripts/installed-tree-pin-sites.json",
-        "blob": "14d5ee0bb69e1935320bc390d225cd5193bbd4ff"
-      },
-      {
-        "path": "test/installed-tree-pin-manifest-review.test.cjs",
-        "blob": "141b4191d46e0e3238b13e0d64cf360c1c977538"
-      },
-      {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "29c7031cc5a2fd0e8ee65d3f6f51cd22c2b4d64c"
-      },
-      {
-        "path": "wasm-spike/verified/pin-history.json",
-        "blob": "4ab4877c3a8077d832e07fc98395992d3a1ebcb8"
+        "path": "test/fixtures/readme-demo-output.txt",
+        "blob": "ea8c7486e4797a41fda7e9ad5f2ca641b1640ba4"
       }
     ]
   }
