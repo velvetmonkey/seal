@@ -1,6 +1,8 @@
 # What is protected right now
 
-You should never have to remember what you protected. `seal status`, run in
+Keep the complete `seal protect` selection when it includes an argument
+predicate: status and the undo suggested by `seal unprotect` display only tool
+names. `seal status`, run in
 the project directory, answers from the recorded state; `seal doctor` states
 the one assumption approvals rest on. This page shows every line and every
 state those two commands can print, from real runs.
@@ -129,9 +131,9 @@ Not controlled:
 Protection lease: pid 4127 generation 6
 ```
 
-A live Claude Code session is running the wrapper right now. Calls to the
-guarded names stop at the approval prompt; tools outside the declared set on
-that server flow through.
+The recorded Seal wrapper lease is live; this does not establish which client
+is using it or whether [Claude Code selected the override and rendered
+approval](../assurance/claude-code-evidence.md#the-release-gating-client-matrix).
 
 Status reports only observable lease facts. A live pid and generation identify
 the current holder as `ACTIVE`; a dead pid is `STALE` and recoverable by the
@@ -248,18 +250,19 @@ than reinterpret another binary's records.
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 ```
 
-The runtime is a pinned, hash-checked component that only `seal verify`
-loads, and it is downloaded on demand the first time `seal verify` needs it.
+The runtime is pinned and hash-checked beside the command, and both protected-call
+authorization and `seal verify` load it there. Status checks that adjacent
+runtime first and consults its cache fallback only when the adjacent runtime is
+absent.
 Three states:
 
-- `Runtime: absent … (kernel/wasm/seal.js is unavailable)` — not downloaded
-  yet. **This is the normal state of a fresh install** and affects nothing
-  but `seal verify`.
-- `Runtime: present …` — cached and every file matches its pinned hash.
+- `Runtime: absent … (kernel/wasm/seal.js is unavailable)` — neither the
+  adjacent runtime nor status's cache fallback is available.
+- `Runtime: present …` — every file status inspected matches its pinned hash.
 - `Runtime: integrity check failed … (kernel/wasm/seal.js hash mismatch;
-  cached bytes do not match the published runtime)` — the cached copy does
-  not match what was published. Seal will not use it; delete the cache
-  directory (`~/.cache/seal`) and let `seal verify` re-download.
+  runtime bytes do not match the published runtime)` — the adjacent runtime
+  does not match what was published. Status does not fall back to the cache
+  after this failure; repair the verified installation.
 
 ## The Receipts lines
 
