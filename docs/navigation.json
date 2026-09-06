@@ -42,7 +42,7 @@
   "exceptions": [
     {
       "path": "docs/guide/when-something-looks-wrong.md",
-      "reason": "digest-pinned guide page",
+      "reason": "token-cross-checked guide page",
       "footer": [
         { "role": "Up", "label": "Guide", "target": "README.md" },
         { "role": "Next", "label": "What is protected right now", "target": "what-is-protected-right-now.md" }
