@@ -45,29 +45,28 @@ function duplicateKeyControlEvidence({ baseline, countFile, dataFile, receiptsDi
   ].join("\n");
 }
 
-function demoDataReadTamperPreload(mode, dataFile, controlDir) {
-  const preload = path.join(controlDir, `demo-data-${mode}.cjs`);
+function proxyReplyDropPreload(controlDir) {
+  const preload = path.join(controlDir, "drop-proxy-reply.cjs");
   fs.writeFileSync(preload, `
-const fs = require("node:fs");
-const target = process.env.SEAL_TEST_DEMO_DATA_FILE;
-const mode = process.env.SEAL_TEST_DEMO_DATA_READ_TAMPER;
-if (target && mode && process.argv.includes("demo")) {
-  const realReadFileSync = fs.readFileSync;
-  let tampered = false;
-  fs.readFileSync = function(filePath, ...args) {
-    if (!tampered && String(filePath) === target) {
-      tampered = true;
-      if (mode === "delete") fs.unlinkSync(target);
-      else if (mode === "corrupt") fs.writeFileSync(target, "seal demo wrote this corrupted line\\n");
+const readline = require("node:readline");
+const createInterface = readline.createInterface;
+readline.createInterface = function(...args) {
+  const input = createInterface.apply(this, args);
+  const emit = input.emit;
+  input.emit = function(event, line, ...rest) {
+    if (event === "line") {
+      try {
+        const frame = JSON.parse(line);
+        if (frame.id === 3 && frame.result && !frame.result.isError) return false;
+      } catch {}
     }
-    return realReadFileSync.apply(this, [filePath, ...args]);
+    return emit.call(this, event, line, ...rest);
   };
+  return input;
 }
 `);
   return {
     NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preload}`].filter(Boolean).join(" "),
-    SEAL_TEST_DEMO_DATA_FILE: dataFile,
-    SEAL_TEST_DEMO_DATA_READ_TAMPER: mode,
   };
 }
 
@@ -269,35 +268,35 @@ test("seal demo ordinary BLOCK keeps its stderr bytes unchanged", async (t) => {
   assert.match(run.out, /BLOCKED   the shared proxy recorded a BLOCK receipt for the replay/);
 });
 
-test("seal demo suppresses the approved reply line when the child's data record is deleted", async (t) => {
-  const dir = testTmpdir("seal-cli-data-record-delete-");
-  const dataFile = path.join(dir, "child", "data.txt");
-  const controlDir = testTmpdir("seal-cli-data-record-delete-control-");
+test("seal demo suppresses the approved reply line when the proxy reply path is physically broken", async (t) => {
+  const dir = testTmpdir("seal-cli-proxy-reply-drop-");
+  const controlDir = testTmpdir("seal-cli-proxy-reply-drop-control-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
-    env: { ...process.env, ...demoDataReadTamperPreload("delete", dataFile, controlDir) },
+    env: { ...process.env, ...proxyReplyDropPreload(controlDir) },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const run = attach(child);
   t.after(run.kill);
   await run.waitFor(/Approve\? \[y\/N\]/);
   child.stdin.write("y\n");
-  await run.waitFor(/child calls observed: 1/);
+  const countFile = path.join(dir, "child", "data.txt.count");
+  const started = Date.now();
+  while (!fs.existsSync(countFile) || readCount(countFile) !== "1") {
+    if (Date.now() - started > 5000) assert.fail(`timed out waiting for the child call\n${run.out}\n${run.err}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   run.kill();
   await run.exit;
   assert.doesNotMatch(run.out, /child replied through the shared proxy:/);
-  assert.match(run.out, /child calls observed: 1/);
+  assert.equal(readCount(countFile), "1", "the child ran even though its reply was withheld from the proxy");
 });
 
-test("seal demo derives the approved reply line from the child's data record", async (t) => {
-  const dir = testTmpdir("seal-cli-data-record-corrupt-");
-  const dataFile = path.join(dir, "child", "data.txt");
-  const controlDir = testTmpdir("seal-cli-data-record-corrupt-control-");
+test("seal demo prints the approved reply observed through the proxy", async (t) => {
+  const dir = testTmpdir("seal-cli-proxy-reply-observed-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  t.after(() => fs.rmSync(controlDir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [SEAL, "demo", "--dir", dir], {
-    env: { ...process.env, ...demoDataReadTamperPreload("corrupt", dataFile, controlDir) },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const run = attach(child);
@@ -306,8 +305,7 @@ test("seal demo derives the approved reply line from the child's data record", a
   child.stdin.write("y\n");
   const code = await run.exit;
   assert.equal(code, 0, `${run.out}\n${run.err}`);
-  assert.match(run.out, /child replied through the shared proxy: "demo server: appended 36 bytes to data\.txt; total tool calls: 1"/);
-  assert.doesNotMatch(run.out, /child replied through the shared proxy: "demo server: appended 26 bytes to data\.txt; total tool calls: 1"/);
+  assert.match(run.out, /child replied through the shared proxy: "demo server: appended 26 bytes to data\.txt; total tool calls: 1"/);
 });
 
 test("seal demo derives the replay BLOCK line from the receipt file", async (t) => {
