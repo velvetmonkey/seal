@@ -206,6 +206,7 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
   assert.match(workflow, /::error::main kept moving while release documentation PR #\$pr_number was refreshed/);
 });
 
+// CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
 test("generated install prose is bound to published installer observations", () => {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
     cwd: ROOT, encoding: 'utf8', timeout: 180000,

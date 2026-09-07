@@ -1,5 +1,6 @@
 {
   "files": {
+    "scripts/check-install-prose.mjs": { "coveredBy": ["test/release-docs.test.mjs#install-prose-observations"] },
     ".github/workflows/kernel-reproduce.yml": { "allowlistReason": "This workflow is a scheduled reproducibility instrument; its claims are exercised by the hosted CI job rather than a repository-local product check." },
     "Host/AuthorityFrontierBridge.lean": { "allowlistReason": "This imported Lean source is proof input whose theorem claims are checked by the pinned Lean build, not by the claim-bearing prose inventory." },
     "kernel-source/SealV2/ResponseTransport.lean": { "allowlistReason": "This imported Lean source is proof input whose theorem claims are checked by the pinned Lean build, not by the claim-bearing prose inventory." },
