@@ -279,7 +279,11 @@ test("ACTIVE lease commit refuses a helper replacement after the witness gate", 
     let replaced = false;
     fs.writeFileSync = (target, data, options) => {
       const result = originalWriteFileSync(target, data, options);
-      if (!replaced && target === temporary) {
+      const writesTemporary = target === temporary ||
+        (typeof target === "number" && fs.existsSync(temporary) &&
+          fs.fstatSync(target).ino === fs.statSync(temporary).ino &&
+          fs.fstatSync(target).dev === fs.statSync(temporary).dev);
+      if (!replaced && writesTemporary) {
         replaced = true;
         writeHelper(ctx);
       }
@@ -303,6 +307,60 @@ test("ACTIVE lease commit refuses a helper replacement after the witness gate", 
     assert.equal(stored.lease, null);
     assert.equal(fs.existsSync(temporary), false, "the uncommitted temporary state must be removed");
     console.log(`stored-state=${stored.state} stored-lease=${stored.lease} temporary-exists=${fs.existsSync(temporary)}`);
+
+    const active = await loaded.protection.activationLease(statePath, env);
+    assert.equal(active.state, "ACTIVE");
+    assert.equal(active.lease.startWitness, "1750000000.123456");
+    assert.equal(loaded.protection.lockOwnerIsLive(active.lease), true);
+    const definition = { type: "stdio", command: "/seal", args: ["__proxy", "--protect-state", statePath], env: {} };
+    const gitRoot = childProcess.spawnSync("git", ["-C", project, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+    const localRoot = gitRoot.status === 0 ? fs.realpathSync(gitRoot.stdout.trim()) : project;
+    active.localOverride = {
+      installed: true, scope: "local", serverName: "db", projectRoot: project,
+      claudeProjectRoot: localRoot, projectId: active.projectId, definition,
+    };
+    fs.writeFileSync(path.join(ctx.root, ".claude.json"), JSON.stringify({
+      projects: { [localRoot]: { mcpServers: { db: definition } } },
+    }));
+    assert.equal(loaded.protection.protectionView(active, project, { ...env, HOME: ctx.root }).state, "ACTIVE");
+    const projectLock = loaded.protection.acquireProjectLock(project, env);
+    assert.throws(() => loaded.protection.acquireProjectLock(project, env),
+      (error) => error.code === "proxy_lease_active");
+    projectLock.release();
+    const journal = require(path.join(ctx.root, "spine", "store.cjs")).openJournal(storePath);
+    assert.equal(journal.withLock(() => {
+      const owner = JSON.parse(fs.readFileSync(`${storePath}.lock`, "utf8"));
+      assert.equal(loaded.protection.lockOwnerIsLive(owner), true);
+      return "live journal owner";
+    }), "live journal owner");
+    assert.equal(loaded.protection.beforeForwardFromState(statePath, active.leaseToken)().ok, true);
+    await assert.rejects(loaded.protection.activationLease(statePath, env),
+      (error) => error.code === "proxy_lease_active");
+    console.log("healthy Darwin live lease=ACTIVE; matching owner accepted; second starter=proxy_lease_active");
+
+    const tampered = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    tampered.lease.generation += 1;
+    fs.writeFileSync(statePath, JSON.stringify(tampered) + "\n");
+    assert.equal(loaded.protection.beforeForwardFromState(statePath, active.leaseToken)().refusal,
+      "lease_generation_mismatch");
+    console.log("persisted generation physically altered; old owner=lease_generation_mismatch");
+
+    tampered.lease.startWitness = null;
+    tampered.localOverride = active.localOverride;
+    fs.writeFileSync(statePath, JSON.stringify(tampered) + "\n");
+    assert.equal(loaded.protection.protectionView(tampered, project, { ...env, HOME: ctx.root }).state, "STALE");
+    const recovered = await loaded.protection.activationLease(statePath, env);
+    assert.equal(recovered.lease.generation, tampered.lease.generation + 1);
+    assert.equal(recovered.lease.startWitness, "1750000000.123456");
+    const nullOwner = JSON.stringify({ pid: process.pid, startWitness: null }) + "\n";
+    fs.writeFileSync(loaded.protection.lockPathFor(project, env), nullOwner);
+    const recoveredLock = loaded.protection.acquireProjectLock(project, env);
+    assert.equal(recoveredLock.recovered, true);
+    recoveredLock.release();
+    fs.writeFileSync(`${storePath}.lock`, nullOwner);
+    journal.withLock(() => assert.equal(
+      JSON.parse(fs.readFileSync(`${storePath}.lock`, "utf8")).startWitness, "1750000000.123456"));
+    console.log("persisted null witness with healthy source: status=STALE; activation/project-lock/journal-lock=recovered with fresh witness");
   });
 });
 

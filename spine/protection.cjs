@@ -398,9 +398,17 @@ function writeState(statePath, state, { beforeCommit } = {}) {
   fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
   const temporary = `${statePath}.tmp-${process.pid}`;
   try {
-    fs.writeFileSync(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+    const fd = fs.openSync(temporary, "w", 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(state, null, 2) + "\n");
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     if (beforeCommit) beforeCommit();
     fs.renameSync(temporary, statePath);
+    const directoryFd = fs.openSync(path.dirname(statePath), "r");
+    try { fs.fsyncSync(directoryFd); } finally { fs.closeSync(directoryFd); }
   } catch (error) {
     try { fs.unlinkSync(temporary); } catch (unlinkError) {
       if (unlinkError.code !== "ENOENT") error.cleanupError = unlinkError;
