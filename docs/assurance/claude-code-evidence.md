@@ -106,6 +106,21 @@ also name the file-backed facts that support the observation.
 The test renders this table from the harness cases. The test rejects a document
 that differs from that rendering.
 
+For `approval_shown`, "complete exact-call dialog" means the complete set of
+strings derived from the installed artifact: its first three message lines
+(excluding a standalone generic `Approval required` title, if present), schema
+title, and full schema description. The current renderer supplies the tool,
+argument value, and scope in those first three lines for `append_note`; its
+description repeats the argument and full scope, including TTL, and adds
+`Outside Seal: Bash, network, subprocesses, other tools and servers.`
+
+The historical Claude Code 2.1.251 frame paints `Tool: append_note`, a bare
+`Arguments:` label, the schema title `Approve one run: append_note`, and the old
+description `Arguments: note: seal-accepted-note. Scope: at most one run.` It
+folds the other three message lines as `… (+3 more lines)`. That unchanged
+recording establishes the painted channels, but cannot certify the new wording;
+the exact-client acceptance row remains untested.
+
 How each one is established from files rather than from the operator's memory:
 
 - **activation** — the fixture's `start` record carries its process ancestry.
@@ -116,12 +131,15 @@ How each one is established from files rather than from the operator's memory:
 - **negotiation** — the proxy's own receipts: an `INPUT_REQUIRED` receipt and a
   later receipt carrying the same approval correlation, with the matching
   `issued` and `consumed` entries in the fsynced approval journal.
-- **approval_shown** — the dialog text is rendered by the **installed
-  artifact's own** `contract/renderer.cjs`, and every line of it is looked for
-  in the terminal recording. The cast must also match its recorder-written
+- **approval_shown** — the **installed artifact's own** renderer supplies the
+  first three message lines and its contract supplies the schema title and
+  description. The harness looks for those strings together in the recording,
+  including the full description's scope, TTL, and boundary for the current
+  artifact. Its permitted span is derived from the complete source message plus
+  schema title and description. The cast must also match its recorder-written
   digest and be the deterministic asciicast conversion of the same session's
   raw output and advanced timing files. A substituted text-only cast therefore
-  refuses even if it contains every expected dialog line.
+  refuses even if it contains every expected string.
 - **before_approval / accept / decline** — child-call records counted out of
   the append-only log, plus the effect digest, which is computed three ways
   that must agree: by the fixture as it wrote the file, by the harness from the

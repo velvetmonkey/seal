@@ -177,25 +177,23 @@ matching entry.
 
 ### `BROKEN`
 
-`BROKEN` means the recorded state itself cannot be trusted. Two real forms:
+A failed state read is reported separately from a readable `BROKEN` record.
+Two real forms:
 
 ```output
-Sealed MCP route: BROKEN
-
-Gated through this route:
-  unknown: stored protection state has no protected tool list
-
-Not controlled:
-  Bash and subprocesses outside this MCP route
-  direct resource access outside this MCP route
-  other clients
-  other MCP servers not routed through this Seal wrapper
-  other uncontrolled routes can also exist
-Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{
+Stored protection state: could not be read
+Protection detail: stored protection state is unreadable: Unexpected token 'g', "garbage{" is not valid JSON
+Protected tool list: unreadable because the stored protection state could not be read
+MCP routing: unknown because the stored protection state could not be read
+Receipts: unavailable (receipt directory could not be resolved from broken protection state)
+Most recent: unavailable because the project receipt directory could not be resolved
 ```
 
-The state file is damaged (here it was deliberately corrupted). Seal refuses
-to guess what it used to say.
+The state file is damaged (here it was deliberately corrupted; JSON parser
+wording depends on Node). Status exits 1 because it could not read the stored
+state, so it cannot establish the protected tool list or routing. The recovery
+command handles unsupported schemas; it refuses malformed
+JSON and leaves those bytes untouched.
 
 ```output
 Sealed MCP route notes: BROKEN (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
@@ -225,24 +223,22 @@ finish. The working recovery, exercised for real, is in
 
 A related message you can see here:
 
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+
 ```output
-Sealed MCP route: BROKEN
-
-Gated through this route:
-  unknown: stored protection state has no protected tool list
-
-Not controlled:
-  Bash and subprocesses outside this MCP route
-  direct resource access outside this MCP route
-  other clients
-  other MCP servers not routed through this Seal wrapper
-  other uncontrolled routes can also exist
-Protection detail: stored protection state is from another binary version
+Stored protection state: could not be read
+Protection detail: stored protection state has schema "seal.protect/v99", not seal.protect/v1; stop Claude Code, then run `seal recover --archive` in this project to archive the incompatible state and remove Seal's owned local override before protecting again
+Protected tool list: unreadable because the stored protection state could not be read
+MCP routing: unknown because the stored protection state could not be read
+Receipts: unavailable (receipt directory could not be resolved from broken protection state)
+Most recent: unavailable because the project receipt directory could not be resolved
 ```
 
-The state was written by a different Seal version than the one answering.
-`seal protect` and `seal unprotect` refuse with `incompatible_state` rather
-than reinterpret another binary's records.
+The state declares a schema this Seal binary cannot interpret.
+`seal protect` and `seal unprotect` refuse with `incompatible_state` for an
+unsupported schema. The version that created a supported state does not
+cause a refusal. Status exits 1 and reports the
+refusal without claiming that the tool list is absent or the server is unrouted.
 
 ## The Runtime line
 

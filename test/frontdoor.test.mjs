@@ -144,7 +144,7 @@ test("README claim: Seal holds one exact call and permits at most one execution"
     });
   }, claim); // CLAIM-COVERAGE: README.md#readme
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
-  assert.match(output, /BLOCKED.*already_consumed/s, claim);
+  assert.match(output, /BLOCKED\s+the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK[\s\S]*one-use held:[^\n]*child calls observed: still 1/, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);
 });
 

@@ -7,38 +7,63 @@ receipt that has been altered. The producer and checker obey the fixed member
 order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches only its local WASM
 kernel, not the producer's assembler. This page walks all three from real runs.
 
-## The approval prompt, line by line
+## What Seal sends and Claude Code paints
 
 When a healthy gate receives a fresh protected call it can render, it holds
-the call before forwarding and sends this approval request (captured from a
-live gated call):
+the call before forwarding. For `append_note` with `note: seal-accepted-note`, the current renderer sends
+this four-line message body (generated from the renderer, not a new client recording):
 
 ```output
-Approval required
-Tool: delete_all_notes
-Arguments:
-  (none)
+Tool: append_note; Approval required
+  note: seal-accepted-note
 Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 Outside Seal: Bash, network, subprocesses, other tools and servers.
 ```
 
+The tool and argument values lead the message; the generic approval title shares
+the tool line instead of occupying a painted slot. All information from the
+previous six-line body remains available to clients that paint the whole message.
+The approve field's description also carries the complete arguments, full scope
+and TTL, and the boundary:
+
+```output
+Arguments: note: seal-accepted-note. Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min. Outside Seal: Bash, network, subprocesses, other tools and servers.
+```
+
+The repository's historical Claude Code 2.1.251 recording paints three message
+lines and the schema description. It predates this layout and shows the old text:
+
+```output
+  MCP server “notes” requests your input
+  Approval required
+  Tool: append_note
+  Arguments:
+  … (+3 more lines)
+  ❯ * Approve one run: append_note: ☐
+        Arguments: note: seal-accepted-note. Scope: at most one run.
+    Accept    Decline
+```
+
+The current request puts the boundary and TTL into that recorded painted schema
+channel; a fresh human acceptance run must still confirm the new text's layout
+on the exact client.
+
 - **Tool** and **Arguments** are the entire effect, exactly as parsed. When a
   tool takes arguments, each one is printed; what you approve is that exact
-  combination and nothing else. If the full effect cannot fit on screen, Seal
-  refuses to ask rather than truncate it — a boundary the terminal hides is
-  not one you approved.
-- **Scope** is the contract: your approval covers this parsed call only, can
-  be used at most once, and lapses after 2 minutes.
-- **Outside Seal** is the honesty line, printed every time: the gate does not
-  see Bash, the network, subprocesses, or any other tool or server.
+  combination and nothing else. Argument values now start on message line two,
+  and the schema description repeats every argument even when later message
+  lines are folded.
+- **Scope** in both channels states that approval covers this parsed call only,
+  can be used at most once, and lapses after 2 minutes by default.
+- **Outside Seal** appears in both the message body and schema description:
+  the gate does not see Bash, the network, subprocesses, or any other tool or server.
 
 Approve, and the call runs — once:
 
 ```output
-delete_all_notes first call: input_required; approval message shown to the user:
-    (the prompt above)
+delete_all_notes first call: input_required; four-line approval message sent to the client
 retry with accept: notes.txt deleted
-identical retry replayed: REFUSED -> approval refused: already_consumed — this one-use approval has already been consumed
+identical retry replayed: BLOCK receipt -> verdict BLOCK
 ```
 
 The same approval presented a second time did not run the tool a second time.
@@ -59,7 +84,7 @@ every count printed is read back from that server's own count file:
 ```output
 child calls observed: 0 (read from …/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
-    (the six-line prompt)
+    (the four-line approval message plus the Selection predicate line)
 child calls observed: still 0 … — approval shown, nothing executed
 ```
 
@@ -70,15 +95,15 @@ Approve? [y/N] y
 ```output
 child replied through the shared proxy: "demo server: appended 26 bytes to data.txt; total tool calls: 1"
 child calls observed: 1 (read from …/child/data.txt.count)
-replaying the identical retry with the same requestState…
-BLOCKED   the shared proxy refused the replay: "approval refused: already_consumed — this one-use approval has already been consumed"
+replaying the identical elicitation response with the same id…
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
 one-use held: the replay did not run the call again; child calls observed: still 1
 ```
 
 Zero before approval, one after, still one after the replay. The demo then
 ends by writing a file *without* crossing the gate and showing that Seal
-emitted nothing for it — the same "gate, not sandbox" boundary the prompt
-states.
+emitted nothing for it — the "gate, not sandbox" boundary stated in this
+guide.
 
 ## What a refusal means
 
@@ -96,15 +121,18 @@ or bookkeeping damage: if the gate cannot prove the approval is the one it
 issued, it refuses. Every token you can see, with its cause and remedy, is in
 [When something looks wrong](when-something-looks-wrong.md).
 
-A refusal that *should* worry you is one you cannot explain — an
-`already_consumed` when you never approved anything, say. That is the moment
+A refusal that *should* worry you is one you cannot explain — a BLOCK receipt
+when you never approved anything, say. That is the moment
 to read the receipt and see what was actually decided, which is what the rest
 of this page is for.
 
 ## Checking a receipt afterwards
 
-When the gate can write its receipt directory, every decision — the prompt
-being offered, an allowed call, a refusal — writes one JSON file. `seal status`
+When the gate can write its receipt directory, a kernel decision — the prompt
+being offered, an allowed call, a kernel BLOCK — writes one JSON file. If the
+kernel produced no result, Seal still refuses the call and keeps serving, but
+it writes no receipt: a signed receipt cannot claim a decision the kernel did
+not make. `seal status`
 shows where they live and which is newest. A receipt records what the gate
 decided and about what. Both `seal demo` and the protected Claude Code path
 write signed receipts. The demo generates a temporary key for its run; the

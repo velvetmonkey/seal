@@ -587,7 +587,7 @@ function expectedDialogLines(state, note) {
   if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
     refuse("dialog_unrenderable", "the pinned artifact approval schema has no title or description");
   }
-  return [...rendered.lines.slice(1, 3), approve.title, approve.description];
+  return [...rendered.lines.slice(0, 3).filter((line) => line !== "Approval required"), approve.title, approve.description];
 }
 
 function dialogContiguityBound(state, note) {
@@ -598,7 +598,10 @@ function dialogContiguityBound(state, note) {
   // This is the installed renderer's complete source dialog, normalized in
   // exactly the same way as the recording. It is the permitted span, rather
   // than a hand-picked allowance for unrelated terminal output.
-  return rendered.message.replace(/\s+/g, " ").length;
+  // Include the schema channel now carrying the full scope and boundary.
+  // The bound is derived from the actual requested text, not a larger constant.
+  return [rendered.message, ...expectedDialogLines(state, note).slice(-2)]
+    .join(" ").replace(/\s+/g, " ").length;
 }
 
 function orderedDialogSpan(haystack, lines, bound) {

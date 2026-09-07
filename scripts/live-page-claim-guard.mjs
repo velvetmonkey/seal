@@ -21,9 +21,9 @@ const PAGE_RELATIVE = process.env.LIVE_CLAIM_GUARD_PAGE_RELATIVE ?? "docs/start/
 const PAGE = process.env.LIVE_CLAIM_GUARD_PAGE ?? process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, PAGE_RELATIVE);
 const CLAIM_SITES = resolve(ROOT, "scripts/live-page-claim-sites.json");
 const PIN = Object.freeze({
-  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "0edfc3d44a5e10f2805e18a59fcd2b0438f2bb59",
-  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "12198"),
-  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "7af9e3360e42c2e36b5eec352b2e359c9bf215a39821ab79921194e0d5594269",
+  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "dc9104079564238c07034c9279a86995c12af92b",
+  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "13239"),
+  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "15724dc88f55520138edfc993048cfadd40e9f365efaa3c72ce8f3b1bfd7a348",
 });
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;

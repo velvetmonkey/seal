@@ -1,24 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// The approval-dialog renderer, fixed to the addendum's SIX-line format
-// inside the MEASURED Claude Code v2.1.251 envelope. The client gave 150
-// message cells at 156 columns and 274 message cells at 280 columns. The
-// measured usable width is terminal width - 6. Schema titles steal lines:
+// Claude Code 2.1.251 paints three message lines, then folds the rest, and
+// separately paints the approve schema description. Put tool and argument
+// values first; retain all six-line-body information, including both boundary
+// lines, for clients that paint the whole message. The generic approval title
+// shares the tool line: it does not earn a painted slot of its own.
 //
-//   Approval required
-//   Tool: <tool>
-//   Arguments:
-//     <key>: <value>
-//   Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
-//   Outside Seal: Bash, network, subprocesses, other tools and servers.
-//
-// When something changed, the caller REPLACES the first line (e.g.
-// `CHANGED: table staging_customers → customers`) via `firstLine` — it never
-// adds one. History, frequency and coverage never appear here; they belong
-// to `seal status`.
-//
-// If the complete effect, scope and outside-Seal line do not fit in SEVEN
-// lines, REFUSE interactive approval. The effect is never truncated to keep
-// the button, because a boundary the terminal hides is not stated.
+// Keep the seven-line total budget: the recorded fold provides no evidence
+// for increasing it. Folding two ceremony lines into the useful content frees
+// two argument lines without increasing either the vertical or width budget.
+// The measured usable width remains terminal width - 6. Never truncate.
 const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
@@ -66,7 +56,7 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   }
 
   const scopeLine = `Scope: ${SCOPE_RULE}; ${formatTtl(ttlMs)}.`;
-  const lines = [firstLine, `Tool: ${tool}`, "Arguments:", ...argLines, scopeLine, OUTSIDE_LINE];
+  const lines = [`Tool: ${tool}; ${firstLine}`, ...argLines, scopeLine, OUTSIDE_LINE];
 
   for (const line of lines) {
     if (displayWidth(line) > usable) {
@@ -76,10 +66,10 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   if (lines.length > MESSAGE_LINE_CAP) {
     return {
       ok: false,
-      reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; the envelope shows ${MESSAGE_LINE_CAP} and hides the rest without any indicator`,
+      reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; Seal permits ${MESSAGE_LINE_CAP}; interactive approval is refused rather than truncated`,
     };
   }
-  return { ok: true, message: lines.join("\n"), lines, argLines };
+  return { ok: true, message: lines.join("\n"), lines, argLines, scopeLine, outsideLine: OUTSIDE_LINE };
 }
 
 module.exports = { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };

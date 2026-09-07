@@ -151,6 +151,12 @@ function createProxy(options) {
       args: frame.params?.arguments ?? {},
       accepted: false,
     });
+    if (receipt && receipt.kind === "refuse") {
+      // Kernel produced no result. Do not mint a receipt for a decision
+      // that did not happen; the caller still answers the client.
+      decisionSink({ decision: action, refusal: extra?.refusal || receipt.refusal });
+      return null;
+    }
     // Canonicalise the caller's arguments only. A ReceiptRefusal here is the
     // integer rule refusing 1.5; the writer has not been asked yet. receipts.emit
     // stays outside this catch so a writer refusal still stops the run.
@@ -163,6 +169,10 @@ function createProxy(options) {
         args: {},
         accepted: false,
       });
+      if (receipt && receipt.kind === "refuse") {
+        decisionSink({ decision: action, refusal: extra?.refusal || receipt.refusal });
+        return null;
+      }
     }
     const receiptPath = receipts.emit(receipt, action);
     decisionSink({ decision: action, refusal: extra?.refusal, receiptPath });
@@ -244,7 +254,20 @@ function createProxy(options) {
       const detail = detailOverride || decision.detail;
       const receiptExtra = { refusal, detail };
       receiptExtra.approvalRequest = approvalRequest;
-      emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
+      if (decision.receipt) {
+        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
+      } else if (
+        refusal === "kernel_execution_refused"
+        || refusal === "kernel_integrity_refused"
+        || refusal === "kernel_manifest_refused"
+        || refusal === "kernel_output_refused"
+      ) {
+        // retryUnlocked already refused with no receipt. Calling receiptFor
+        // again would re-enter the kernel that just produced nothing.
+        decisionSink({ decision: "BLOCK", refusal });
+      } else {
+        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
+      }
       respond(frame.id, refusalResult(refusal, detail, decision.timing));
       if (decision.timing) {
         const error = new Error(detail);

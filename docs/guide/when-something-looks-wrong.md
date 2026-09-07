@@ -143,12 +143,15 @@ detail and report it.
 
 ### `unrenderable_effect`
 
-Seal refused to *ask* for approval, because the complete effect could not be
-shown honestly — an argument line too wide for the terminal, more lines
-than the approval dialog can display without hiding some, or an argument
-with no canonical form (a non-integer number such as `1.5`). Seal never
-truncates an effect to keep the Approve button, and it does not take the
-protected server down to refuse a value the receipt writer will not seal.
+Seal refused to *ask* for approval because the effect exceeded Seal's own
+rendering rules — an argument line was too wide, the message needed more
+lines than Seal permits, or an argument had no canonical form (a non-integer
+number such as `1.5`). Passing those rules does not guarantee that the client
+paints every message-body line: in the recorded Claude Code 2.1.251 dialog it
+folds three of six lines and still paints the Accept button. The current schema
+description carries every argument, the full scope with TTL, and the outside-Seal
+boundary in the channel that recording paints; the new layout is not yet recorded.
+Seal does not take the protected server down to refuse a value the receipt writer will not seal.
 The tool call is refused; nothing ran. If you control the arguments, make
 them smaller or integral; otherwise this tool's calls cannot be
 interactively approved.
@@ -323,10 +326,12 @@ override whose definition matches its recorded ownership proof.
 
 ### `incompatible_state`
 
-The recorded state was written by a different Seal version (or an unknown
-schema). Seal refuses to reinterpret another binary's records. Re-run with
-the version that wrote it, or unprotect with that version and protect again
-with this one.
+The recorded state has a schema this Seal binary cannot interpret. Seal
+accepts the supported `seal.protect/v1` spellings, including older single-tool
+records; the creating binary's `sealVersion` is provenance, not a compatibility
+gate. Unsupported schemas still refuse.
+
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
 
 The current binary also provides an explicit recovery command: stop Claude
 Code and run `seal recover --archive` in the affected project. It preserves

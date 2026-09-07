@@ -138,10 +138,13 @@ seal unprotect db
 The command removes Seal's local override and reports that the sealed MCP route
 is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
-### Recover after an upgrade
+### Recover incompatible state
 
-If Seal reports `incompatible_state`, stop Claude Code and run this in the
-affected project:
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+
+Seal accepts stored state with a schema it can read, regardless of the Seal
+version that created it. If Seal reports `incompatible_state` for an unsupported
+schema, stop Claude Code and run this in the affected project:
 
 ```bash
 seal recover --archive
@@ -176,7 +179,7 @@ The proof-bearing source rebuilds the exact kernel bytes the downloadable produc
 Follow that source binding through [Reproducible kernel](docs/reproduce.md).
 
 The separately implemented verifier replays the recorded inputs through the
-WASM kernel and reports its checks separately.
+verifier's local WASM kernel and reports its checks separately.
 
 | Surface | Current shipped assurance status |
 | --- | --- |

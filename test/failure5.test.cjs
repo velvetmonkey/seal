@@ -228,18 +228,19 @@ test("4b missing protected-server binary: protect refuses before recording state
   assertUntouched(ctx, before, "deleted child binary");
 });
 
-test("5a incompatible state (version): message names the version, not the schema", () => {
+test("5a supported schema with any sealVersion reaches the normal already-protected path", () => {
   const ctx = setup("f5-incompat-ver-");
   const statePath = statePathFor(ctx.project, ctx.env);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify({ schema: "seal.protect/v1", sealVersion: "0.0.0", state: "PENDING RESTART" }));
   const before = snapshot(ctx);
   const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
-  assert.notEqual(result.code, 0);
-  assert.match(result.out, /incompatible_state/);
-  assert.match(result.out, /stored protection state is from another binary version/);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /already_protected.*project is already PENDING RESTART/);
+  assert.doesNotMatch(result.out, /incompatible_state/);
+  assert.doesNotMatch(result.out, /from another binary version/);
   assert.doesNotMatch(result.out, /has schema/);
-  assertUntouched(ctx, before, "incompatible version");
+  assertUntouched(ctx, before, "supported schema with another version");
 });
 
 test("5b incompatible state (schema): message names the schema, not a version", () => {

@@ -99,3 +99,38 @@ test("verify refuses a tampered producer receipt", () => {
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /commitment_mismatch/);
 });
+
+test("verify refuses a changed local kernel before reporting a verdict", () => {
+  const real = realReceipt();
+  const tree = path.join(real.dir, "verifier");
+  const source = path.resolve(__dirname, "..");
+  for (const entry of ["bin", "spine", "scripts", "checker", "contract", "runtime", "runtime-manifest.json", "package.json", "VERSION"]) {
+    fs.cpSync(path.join(source, entry), path.join(tree, entry), { recursive: true });
+  }
+  const { spawnSync } = require("node:child_process");
+  const verify = () => spawnSync(process.execPath, [path.join(tree, "bin/seal"), "verify", real.receipt, "--pubkey", real.publicKey], {
+    encoding: "utf8", env: { ...process.env, SEAL_CACHE_DIR: path.join(real.dir, "empty-cache") },
+  });
+  const honest = verify();
+  assert.equal(honest.status, 0, honest.stdout + honest.stderr);
+  assert.match(honest.stdout, /Verifier-local verdict   REPRODUCED/);
+
+  for (const relative of ["kernel/wasm/seal.wasm", "kernel/wasm/seal.js"]) {
+    const target = path.join(tree, "runtime", relative);
+    const pinned = fs.readFileSync(target);
+    try {
+      // A valid WASM custom section changes the binary without breaking replay.
+      // A JS comment likewise preserves execution, so replay failure cannot
+      // accidentally satisfy this integrity-refusal regression.
+      fs.appendFileSync(target, relative.endsWith(".wasm")
+        ? Buffer.from([0, 2, 1, 120]) : "\n// changed local glue\n");
+      const changed = verify();
+      assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+      assert.match(changed.stderr, /local kernel runtime integrity check failed/);
+      assert.ok(changed.stderr.includes(`${relative} hash mismatch`), changed.stderr);
+      assert.doesNotMatch(changed.stdout + changed.stderr, /REPRODUCED|Document structure/);
+    } finally {
+      fs.writeFileSync(target, pinned);
+    }
+  }
+});
