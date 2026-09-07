@@ -201,7 +201,7 @@ function createApprovalContract({
             approve: {
               type: "boolean",
               title: `Approve one run: ${tool}`,
-              description: `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. Scope: at most one run.`,
+              description: `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. ${rendered.scopeLine} ${rendered.outsideLine}`,
             },
           },
           required: ["approve"],

@@ -161,18 +161,21 @@ function castOutput(castPath) {
     .join("");
 }
 
-test("the real Claude Code acceptance paint certifies after its note is rebuilt as decline", () => {
+test("the historical Claude Code paint cannot certify the current approval description", () => {
   assert.equal(fs.existsSync(REAL_ACCEPT_CAST), true, `missing real cast: ${REAL_ACCEPT_CAST}`);
   const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-real-dialog-"));
   const { harness, runDir } = initSyntheticRun(workspace);
   runSyntheticStep(harness, runDir, "activation", "");
   runSyntheticStep(harness, runDir, "decline", harness.NOTES.decline);
+  const current = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "decline");
+  assert.equal(current.facts.exact_call_dialog.dialog_span.observed, true, JSON.stringify(current.facts));
+  assert.equal(current.result, "OBSERVED", JSON.stringify(current.facts));
   const realCast = rewriteDeclineRecorder(harness, runDir, () =>
     castOutput(REAL_ACCEPT_CAST).replaceAll(harness.NOTES.accept, harness.NOTES.decline));
   const observed = harness.observeAll(harness.loadState(runDir)).find((entry) => entry.case === "decline");
   assert.equal(observed.facts.exact_call_dialog.recorder_correspondence.observed, true);
-  assert.equal(observed.facts.exact_call_dialog.dialog_span.observed, true, JSON.stringify(observed.facts));
-  assert.equal(observed.result, "OBSERVED", JSON.stringify(observed.facts));
+  assert.equal(observed.facts.exact_call_dialog.dialog_span.observed, false, JSON.stringify(observed.facts));
+  assert.equal(observed.result, "NOT OBSERVED", JSON.stringify(observed.facts));
   assert.equal(rawCastOutputText(realCast).includes("Approval required"), true);
 });
 
@@ -250,7 +253,7 @@ test("approval evidence retains overwritten raw output but refuses absent, parti
   const partial = partialHarness.observeAll(partialHarness.loadState(partialRun)).find((entry) => entry.case === "decline");
   assert.equal(partial.result, "NOT OBSERVED");
   assert.equal(partial.facts.exact_call_dialog.recorder_correspondence.observed, true);
-  assert.deepEqual(partial.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, false, false]);
+  assert.deepEqual(partial.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, false, false, false]);
   const partialRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", partialRun], { encoding: "utf8" });
   assert.equal(partialRefusal.status, 1, `${partialRefusal.stdout}${partialRefusal.stderr}`);
   assert.match(partialRefusal.stderr, /REFUSE step_cannot_certify: CANNOT CERTIFY decline; decline: the complete exact-call dialog is absent from decline\.cast/);
@@ -263,7 +266,7 @@ test("approval evidence retains overwritten raw output but refuses absent, parti
   const scatteredCast = rewriteDeclineRecorder(scatteredHarness, scatteredRun, (text) => `${scatteredLines.reduce((out, line) => out.replaceAll(line, ""), text)}${scatteredLines.map((line) => `${line}\r\n${"unrelated terminal output ".repeat(20)}`).join("\r\n")}\u001b[2J`);
   const scattered = scatteredHarness.observeAll(scatteredHarness.loadState(scatteredRun)).find((entry) => entry.case === "decline");
   assert.equal(rawCastOutputText(scatteredCast).includes(scatteredLines[0]), true);
-  assert.deepEqual(scattered.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, true, true]);
+  assert.deepEqual(scattered.facts.exact_call_dialog.expected_dialog_lines.map((entry) => entry.found), [true, true, true, true, true]);
   assert.equal(scattered.facts.exact_call_dialog.dialog_span.observed, false);
   assert.equal(scattered.result, "NOT OBSERVED");
   const scatteredRefusal = spawnSync(process.execPath, [HARNESS, "next", "--run-dir", scatteredRun], { encoding: "utf8" });

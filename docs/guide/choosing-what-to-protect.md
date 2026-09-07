@@ -136,10 +136,11 @@ This is most of the answer, and it is deliberate.
   approval.
 - **Every other server in the project.** Seal reads the project configuration
   to find the selected server, but does not change the other servers' entries.
-- **Everything that is not this server's MCP traffic.** Seal's six-line
-  message body names the boundary as `Outside Seal: Bash, network,
+- **Everything that is not this server's MCP traffic.** Seal's message
+  body and approve schema description name the boundary as `Outside Seal: Bash, network,
   subprocesses, other tools and servers.` In the recorded Claude Code 2.1.251
-  dialog, the client folds that message-body line instead of painting it.
+  dialog, the client folds that message-body line instead of painting it. That
+  recording predates the boundary in the schema description, a channel it paints.
   If the same effect can be reached by a route that does not pass through the
   gate — Claude Code writing the file directly, a shell command, another
   server — Seal does not see it and does not claim to. `seal demo` ends by

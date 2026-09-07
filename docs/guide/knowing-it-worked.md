@@ -10,21 +10,28 @@ kernel, not the producer's assembler. This page walks all three from real runs.
 ## What Seal sends and Claude Code paints
 
 When a healthy gate receives a fresh protected call it can render, it holds
-the call before forwarding. For the call in the repository's Claude Code
-2.1.251 recording, Seal sends this six-line message body:
+the call before forwarding. For `append_note` with `note: seal-accepted-note`, the current renderer sends
+this four-line message body (generated from the renderer, not a new client recording):
 
 ```output
-Approval required
-Tool: append_note
-Arguments:
+Tool: append_note; Approval required
   note: seal-accepted-note
 Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 Outside Seal: Bash, network, subprocesses, other tools and servers.
 ```
 
-The client paints only the first three message-body lines and folds the other
-three. It separately paints the schema description, which carries the
-argument and its one-run scope:
+The tool and argument values lead the message; the generic approval title shares
+the tool line instead of occupying a painted slot. All information from the
+previous six-line body remains available to clients that paint the whole message.
+The approve field's description also carries the complete arguments, full scope
+and TTL, and the boundary:
+
+```output
+Arguments: note: seal-accepted-note. Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min. Outside Seal: Bash, network, subprocesses, other tools and servers.
+```
+
+The repository's historical Claude Code 2.1.251 recording paints three message
+lines and the schema description. It predates this layout and shows the old text:
 
 ```output
   MCP server “notes” requests your input
@@ -37,19 +44,19 @@ argument and its one-run scope:
     Accept    Decline
 ```
 
+The current request puts the boundary and TTL into that recorded painted schema
+channel; a fresh human acceptance run must still confirm the new text's layout
+on the exact client.
+
 - **Tool** and **Arguments** are the entire effect, exactly as parsed. When a
   tool takes arguments, each one is printed; what you approve is that exact
-  combination and nothing else. In this recording the argument value reaches
-  the screen through the schema description, not through the folded message
-  body.
-- **Scope** in the six-line message body states that approval covers this
-  parsed call only, can be used at most once, and lapses after 2 minutes. The
-  recorded client folds that line; its painted schema description states only
-  `Scope: at most one run.`
-- **Outside Seal** is the message-body boundary: the gate does not see Bash,
-  the network, subprocesses, or any other tool or server. The recorded client
-  folds that line, so this guide states the limitation directly rather than
-  claiming that the client paints it.
+  combination and nothing else. Argument values now start on message line two,
+  and the schema description repeats every argument even when later message
+  lines are folded.
+- **Scope** in both channels states that approval covers this parsed call only,
+  can be used at most once, and lapses after 2 minutes by default.
+- **Outside Seal** appears in both the message body and schema description:
+  the gate does not see Bash, the network, subprocesses, or any other tool or server.
 
 Approve, and the call runs — once:
 
