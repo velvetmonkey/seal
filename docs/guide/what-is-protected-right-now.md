@@ -223,6 +223,8 @@ finish. The working recovery, exercised for real, is in
 
 A related message you can see here:
 
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+
 ```output
 Stored protection state: could not be read
 Protection detail: stored protection state has schema "seal.protect/v99", not seal.protect/v1; stop Claude Code, then run `seal recover --archive` in this project to archive the incompatible state and remove Seal's owned local override before protecting again
