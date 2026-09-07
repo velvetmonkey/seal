@@ -71,8 +71,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
   assert.match(run.out, /Seal did not observe or authorise this write\./);
   assert.match(run.out, /The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened\./);
   assert.doesNotMatch(run.out, /separate external checker/, "demo must not call the checker external");
-  const expectedPayloadRoot = path.join(__dirname, "..");
-  assert.ok(run.out.includes(`Run: (cd ${JSON.stringify(expectedPayloadRoot)} && node checker/seal-receipt-v2.mjs`), "demo must enter its exact payload root before naming the v2 checker path");
+  assert.match(run.out, /Run: seal verify ".+" --pubkey "\$\(cat ".+"\)"/, "demo must print the installed receipt verification command with its receipt and key");
   assert.doesNotMatch(run.out, /same release page/, "demo must not promise an unpublished release asset");
   assert.doesNotMatch(run.out, /https:\/\/velvetmonkey\.github\.io\/seal-check\//, "demo must not advertise the incompatible browser checker");
 
@@ -108,7 +107,7 @@ test("Act 4: the protected resource changes while the server count and Seal deci
 
   // Output discipline: no verification claims anywhere.
   assert.doesNotMatch(run.out, new RegExp(["PASS", "VERIFIED"].join(" ")));
-  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", ""), /verif/i);
+  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", "").replace(/^  Run: seal verify /m, "  Run: seal "), /verif/i);
 });
 
 test("demo checker route control rejects an absent path and a receipt-version mismatch", () => {
@@ -129,7 +128,7 @@ test("demo checker route control rejects an absent path and a receipt-version mi
   assert.notEqual(throwing.status, 0, throwing.stdout + throwing.stderr);
   assert.match(throwing.stderr, /FAIL demo checker route: named checker failed with exit 1:/);
 
-  const tampered = demo.out.replace("checker/seal-receipt-v2.mjs", "checker/does-not-exist.mjs");
+  const tampered = demo.out.replace("seal verify", "node checker/does-not-exist.mjs");
   fs.writeFileSync(outputFile, tampered);
   const red = spawnSync(process.execPath, [control, outputFile, ROOT], { encoding: "utf8" });
   assert.notEqual(red.status, 0, red.stdout + red.stderr);
@@ -138,7 +137,7 @@ test("demo checker route control rejects an absent path and a receipt-version mi
   const fixtureRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-route-version-"));
   fs.mkdirSync(path.join(fixtureRoot, "checker"));
   fs.writeFileSync(path.join(fixtureRoot, "checker", "seal-receipt-v1.mjs"), 'if (receipt.receipt !== "seal.spine/v1") throw new Error("unknown format");\n');
-  fs.writeFileSync(outputFile, demo.out.replace("checker/seal-receipt-v2.mjs", "checker/seal-receipt-v1.mjs"));
+  fs.writeFileSync(outputFile, demo.out.replace("seal verify", "node checker/seal-receipt-v1.mjs"));
   const mismatch = spawnSync(process.execPath, [control, outputFile, fixtureRoot], { encoding: "utf8" });
   assert.notEqual(mismatch.status, 0, mismatch.stdout + mismatch.stderr);
   assert.match(mismatch.stderr, /FAIL demo checker route: receipt version mismatch: demo emits seal_receipt="v2" \(v2\); checker\/seal-receipt-v1\.mjs accepts receipt="seal\.spine\/v1" \(v1\)/);

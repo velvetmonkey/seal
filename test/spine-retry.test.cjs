@@ -219,7 +219,7 @@ test("seal demo: input_required, approve once, replay refused, then direct write
   assert.equal(blockReceipt.tool, "demo.mutate");
   assert.equal(blockReceipt.arguments.line, "seal demo wrote this line");
 
-  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", ""), /verif/i);
+  assert.doesNotMatch(run.out.replace("The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.", "").replace(/^  Run: seal verify /m, "  Run: seal "), /verif/i);
   const data = fs.readFileSync(path.join(dir, "child", "data.txt"), "utf8");
   assert.deepEqual(data.split("\n").filter(Boolean), [
     "seal demo wrote this line",

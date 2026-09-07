@@ -312,7 +312,7 @@ async function run(argv, sealBinPath) {
   const finalReceiptPath = finalReceipts.at(-1)?.receiptPath;
   if (finalReceiptPath) {
     console.log("receipts are claims, not proofs. The separately landed v2 checker replays the recorded inputs through its verifier-local kernel, compares its result to the recorded verdict, and reports five rows; a signature alone cannot establish that the event happened.");
-    console.log(`  Run: (cd ${JSON.stringify(path.join(__dirname, ".."))} && node checker/seal-receipt-v2.mjs ${JSON.stringify(finalReceiptPath)} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})")`);
+    console.log(`  Run: seal verify ${JSON.stringify(finalReceiptPath)} --pubkey "$(cat ${JSON.stringify(pubkeyPath)})"`);
   }
   console.log("  Note: that key is the very one this demo used to sign the receipt, so checking against it proves only self-consistency — a hostile sealer could sign its own. To prove anything, supply a key you obtained from a source you already trust.");
   console.log("");

@@ -12,6 +12,8 @@ if (!outputFile) {
 
 const output = fs.readFileSync(outputFile, "utf8");
 const checkerRoutes = [...output.matchAll(/\bnode\s+((?:checker\/[A-Za-z0-9._/-]+\.mjs)|(?:[A-Za-z0-9._/-]*seal-receipt[A-Za-z0-9._/-]*\.mjs))\b/g)].map((match) => match[1]);
+// The public receipt command imports this shipped checker from its payload root.
+for (const match of output.matchAll(/^  Run: seal verify /gm)) checkerRoutes.push("checker/seal-receipt-v2.mjs");
 const receiptPaths = [...output.matchAll(/^receipt written: (.+)$/gm)].map((match) => match[1]);
 const publicKeyPaths = [...output.matchAll(/--pubkey\s+"\$\(cat\s+"([^"]+)"\)"/g)].map((match) => match[1]);
 

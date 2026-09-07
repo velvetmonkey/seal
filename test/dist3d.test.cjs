@@ -457,6 +457,6 @@ process.exit(2);
   ], { cwd: built.out });
   assert.equal(checked.code, 0, checked.out);
   assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
-  assert.match(out, new RegExp(`Run: \\(cd "${store.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}" && node checker/seal-receipt-v2\\.mjs`));
+  assert.match(out, /Run: seal verify ".+" --pubkey "\$\(cat ".+"\)"/);
   assert.doesNotMatch(out, /same release page/, "installed demo must not promise an unpublished release asset");
 });
