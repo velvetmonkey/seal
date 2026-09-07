@@ -241,3 +241,44 @@ test("install prose check rejects falsification, deletion and unreviewed additio
     assert.match(result.stderr, /FAIL install prose: (claim 07|unreviewed generated install prose)/);
   }
 });
+
+
+// CLAIM-COVERAGE: test/release-docs.test.mjs#outside-claim-controls
+test("outside install claims require review in both documents without taxing non-claims", () => {
+  const docs = testTmpdir(path.join(os.tmpdir(), 'seal-prose-outside-'));
+  fs.mkdirSync(path.join(docs, 'docs/start'), { recursive: true });
+  const originals = Object.fromEntries(['docs/start/install.md', 'README.md'].map(file =>
+    [file, fs.readFileSync(path.join(ROOT, file), 'utf8')]));
+  const marker = '<!-- end generated release docs -->';
+  const run = () => spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 180000,
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined, SEAL_INSTALL_PROSE_ROOT: docs },
+  });
+  const reset = () => {
+    for (const [file, original] of Object.entries(originals)) fs.writeFileSync(path.join(docs, file), original);
+  };
+  for (const file of Object.keys(originals)) {
+    for (const sentence of [
+      'Seal installs safely even when the checksum comparison fails.',
+      'Seal teleports every downloaded artifact.',
+      'Seal always installs safely\neven when the checksum comparison fails.',
+    ]) {
+      for (const markerAt of ['first', 'last']) {
+        reset();
+        const original = originals[file];
+        const at = (markerAt === 'first' ? original.indexOf(marker) : original.lastIndexOf(marker)) + marker.length;
+        fs.writeFileSync(path.join(docs, file), original.slice(0, at) + '\n' + sentence + '\n' + original.slice(at));
+        const result = run();
+        assert.equal(result.status, 1, result.stdout + result.stderr);
+        assert.ok(result.stderr.includes(`${file}: unreviewed outside install prose needs a claim and observable: ${sentence.replace(/\s+/g, ' ')}`), result.stderr);
+      }
+    }
+  }
+  reset();
+  for (const [file, original] of Object.entries(originals)) {
+    fs.writeFileSync(path.join(docs, file), original.replace(marker,
+      marker + '\n\n## More information\n\nContinue to the next page.\n'));
+  }
+  const clean = run();
+  assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+});

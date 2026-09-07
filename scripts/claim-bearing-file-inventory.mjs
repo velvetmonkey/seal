@@ -49,21 +49,7 @@ const EXCLUDED_BINARY_SUFFIXES = new Map([
   [".wasm", "WebAssembly binary bytes"],
 ]);
 
-let bad = false;
-function fail(message) { console.error(`FAIL  ${message}`); bad = true; }
-function trackedFiles() {
-  try {
-    return execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean).sort();
-  } catch (error) {
-    fail(`cannot enumerate tracked files: ${error.message}`);
-    return [];
-  }
-}
-function excludedBinaryReason(path) {
-  if (EXCLUDED_BINARY_PATHS.has(path)) return EXCLUDED_BINARY_PATHS.get(path);
-  return [...EXCLUDED_BINARY_SUFFIXES].find(([suffix]) => path.endsWith(suffix))?.[1];
-}
-function carriesClaim(text, path) {
+export function carriesClaim(text, path) {
   // A code-shaped text file contributes only its human-language comments and
   // sentence-like string literals.  This is syntax-shaped rather than
   // extension-shaped: a .js claim is seen, while identifiers such as
@@ -87,6 +73,22 @@ function carriesClaim(text, path) {
     || (PRODUCT_ENTITY.test(sentence) && ASSERTION.test(sentence)
       && (!codeShaped || /\b(?:every|all|only|never|always|browser|human|operator|user)\b/i.test(unit)));
   });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+let bad = false;
+function fail(message) { console.error(`FAIL  ${message}`); bad = true; }
+function trackedFiles() {
+  try {
+    return execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean).sort();
+  } catch (error) {
+    fail(`cannot enumerate tracked files: ${error.message}`);
+    return [];
+  }
+}
+function excludedBinaryReason(path) {
+  if (EXCLUDED_BINARY_PATHS.has(path)) return EXCLUDED_BINARY_PATHS.get(path);
+  return [...EXCLUDED_BINARY_SUFFIXES].find(([suffix]) => path.endsWith(suffix))?.[1];
 }
 function readText(path) {
   const bytes = readFileSync(resolve(ROOT, path));
@@ -249,3 +251,4 @@ for (const path of inventory) {
 }
 checkMandatoryBindings();
 process.exit(bad ? 1 : 0);
+}

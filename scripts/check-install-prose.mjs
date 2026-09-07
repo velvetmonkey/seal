@@ -9,13 +9,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import tempRoot from './temp-root.cjs';
+import { carriesClaim } from './claim-bearing-file-inventory.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCS_ROOT = process.env.SEAL_INSTALL_PROSE_ROOT || ROOT;
 const normalize = text => text.replace(/\s+/g, ' ').trim();
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const flip = value => (value[0] === '0' ? '1' : '0') + value.slice(1);
-const regions = text => [...text.matchAll(/<!-- generated from published release; do not edit -->([\s\S]*?)<!-- end generated release docs -->/g)].map(m => m[1]);
+const generatedRegion = /<!-- generated from published release; do not edit -->([\s\S]*?)<!-- end generated release docs -->/g;
+const regions = text => [...text.matchAll(generatedRegion)].map(m => m[1]);
 
 // Each entry names the executable observation below, or explicitly admits the
 // limit. Sentence 14 was corrected after the published installer accepted an
@@ -42,9 +44,62 @@ const claims = [
   ['19', 'checker corruption and no checker execution', 'The downloaded checker is only checked against `SHA256SUMS`; from a source checkout, run `node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.'],
 ];
 
+// Reuse the inventory's product-entity/predicate definition, in Markdown mode.
+// Join wrapped prose before classifying; examples and structural lines are not
+// sentences. The generated region retains its stronger, exhaustive accounting.
+const outsideClaims = text => text.replace(generatedRegion, '\n\n')
+  .replace(/```[^\n]*\n[\s\S]*?```/g, '\n\n')
+  .replace(/^\s*(?:#{1,6}\s.*|<p[^\n]*|\[!\[[^\n]*)$/gm, '')
+  .split(/\n\s*\n/).flatMap(paragraph => normalize(paragraph).split(/(?<=[.!?])\s+/))
+  .map(sentence => sentence.replace(/^(?:>\s*|[-*]\s+|\*+)/, '').replace(/\*+$/, '').trim())
+  .filter(sentence => carriesClaim(sentence, 'README.md'));
+
+// Independently reviewed outside sentences use the same ID/observable/wording
+// vocabulary as the release roster. Observations in other product tests run in
+// the full suite; limits remain explicit instead of claiming a local proof.
+const outsideReviews = {
+  'docs/start/install.md': [
+    ['37', 'test/dist3d.test.cjs: fresh distribution build output', 'A build of this checkout (not the published release asset) writes `dist/seal-v<identity>-linux-x64`.'],
+    ['20', 'test/dist3d.test.cjs: built artifact payload; UNPROVABLE here: hash algorithm across every payload', "The installed tree is exactly the regular payload files named by the artifact's payload manifest (a fresh build includes `checker/seal-receipt-v2.mjs` for `seal verify`)."],
+  ],
+  'README.md': [
+    ['21', 'test/frontdoor.test.mjs: README exact-call demo', 'Seal is a local approval boundary for AI-agent tool calls.'],
+    ['22', 'test/frontdoor.test.mjs: README exact-call demo', 'Seal decides whether that exact call may cross the boundary.'],
+    ['23', 'UNPROVABLE: full Protect execution on all named hosts (claim 01)', 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.'],
+    ['24', 'test/frontdoor.test.mjs#readme: approval, replay refusal, child count', 'Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.'],
+    ['25', 'test/protect3b.test.cjs: protect and unprotect leave project .mcp.json byte-identical by hash', "The command removes Seal's local override and reports that the sealed MCP route is outside Seal."],
+    ['26', 'UNPROVABLE here: command absence in the historical published release', '`seal recover` is not in the currently published release, v0.2.1.'],
+    ['27', 'test/protect3b.test.cjs: stored schema compatibility and explicit recovery', 'Seal accepts stored state with a schema it can read, regardless of the Seal version that created it.'],
+    ['28', 'test/protect3b.test.cjs: explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect', 'If Seal reports `incompatible_state` for an unsupported schema, stop Claude Code and run this in the affected project:'],
+    ['29', 'test/protect3b.test.cjs: exact archive bytes and recovery ownership refusals', "It saves the exact old state to the printed `state.json.recovered-…` path before removing Seal's local override, using the same ownership checks as unprotect."],
+    ['30', 'UNPROVABLE here: exhaustive absence of downloads; recovery tests exercise the local fake Claude CLI', 'Recovery runs locally with the current Seal binary and the installed Claude CLI; it does not download anything.'],
+    ['31', 'test/protect3b.test.cjs: recovery status is outside Seal', 'The route is now outside Seal.'],
+    ['32', 'test/protect3b.test.cjs: fresh protect after recovery', 'Review the archived server, tools and predicates, then run `seal protect SERVER TOOL [TOOL...]` with your chosen selections.'],
+    ['33', 'test/readme-protect-state-witness.test.cjs: restart and activation status', 'Restart Claude Code and use `seal status` to check activation.'],
+    ['34', 'UNPROVABLE here: formal anchoring; no Lean build is performed by this guard', 'Seal is a formally anchored authorization gate for selected MCP `tools/call` effects.'],
+    ['35', 'UNPROVABLE: product-category and human-judgement limits are not byte observables', 'Seal is not an agent framework, a sandbox, an IAM platform, a policy language, a general AI safety product, or a replacement for human judgement.'],
+    ['36', 'test/frontdoor.test.mjs: exact-call demo and outside-boundary effect', 'Seal protects selected calls that pass through its boundary.'],
+  ],
+};
+
+function checkOutsideClaims(file, text) {
+  const sentences = outsideClaims(text);
+  const reviews = outsideReviews[file];
+  for (const sentence of sentences) {
+    assert.ok(reviews.some(([, observable, raw]) => observable && raw === sentence),
+      `${file}: unreviewed outside install prose needs a claim and observable: ${sentence}`);
+  }
+  for (const [id, observable, sentence] of reviews) {
+    assert.equal(sentences.filter(actual => actual === sentence).length, 1,
+      `claim ${id} wording changed or absent; evidence required: ${observable}; expected: ${sentence}`);
+  }
+}
+
 async function main() {
   const install = fs.readFileSync(path.join(DOCS_ROOT, 'docs/start/install.md'), 'utf8');
   const readme = fs.readFileSync(path.join(DOCS_ROOT, 'README.md'), 'utf8');
+  checkOutsideClaims('docs/start/install.md', install);
+  checkOutsideClaims('README.md', readme);
   const parts = regions(install);
   assert.equal(parts.length, 2, 'install generated-region population');
   const readmeParts = regions(readme);
