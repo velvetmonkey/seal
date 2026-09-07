@@ -28,13 +28,6 @@ function replace(file, expression, replacement) {
   if (after !== before) fs.writeFileSync(target, after);
 }
 
-function replaceIfPresent(file, expression, replacement) {
-  const target = path.join(ROOT, file);
-  const before = fs.readFileSync(target, "utf8");
-  const after = before.replace(expression, replacement);
-  if (after !== before) fs.writeFileSync(target, after);
-}
-
 const packagePath = path.join(ROOT, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 packageJson.version = version;
@@ -52,20 +45,11 @@ for (const file of ["docs/assurance/distribution.md", "docs/assurance/index.html
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 
-// These are release claims addressed to readers, but do not carry the "Seal"
-// prefix. Keep their version identity in step with VERSION as well.
-for (const file of [path.join("docs", "guide", "when-something-looks-wrong.md")]) {
-  replace(file, /(?<!seal-)\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/g, (match) => match.endsWith(".md") ? match : `v${version}`);
-}
+// Only the unsupported-platform paragraph describes the current source here.
+// The earlier recovery caveat names the published release and stays historical.
+replace("docs/guide/when-something-looks-wrong.md",
+  /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?=\. Seal supports install, demo and receipt checking)/m,
+  `v${version}`);
 
-// An artifact filename carries the product identity, not the release version
-// alone: a build that is not the tag says so in its own name. A version bump
-// re-versions the name and leaves the commit it identifies alone.
-const ARTIFACT_NAME = /seal-v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?-linux-x64/g;
-function renameArtifact(match) {
-  const development = match.match(/-dev\.g([0-9a-f]{7,40})-linux-x64$/);
-  return development ? `seal-v${version}-dev.g${development[1]}-linux-x64` : `seal-v${version}-linux-x64`;
-}
-// Download instructions derive the artifact name from the checksum asset from
-// the same release, so these guides intentionally have no versioned filename.
-replaceIfPresent("docs/assurance/distribution.md", ARTIFACT_NAME, renameArtifact);
+// Distribution download filenames, checksums and checker routes describe the
+// published assets; generate-release-docs.mjs owns them after publication.

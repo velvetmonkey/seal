@@ -5,7 +5,6 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match(/^SEAL_VERSION=v([^\s]+)$/m)?.[1]; assert.ok(PUBLISHED_VERSION, "README must declare the published release identity");
-const CURRENT_VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
 ];
@@ -35,9 +34,7 @@ test("each scoped document carries its exact scope signpost", () => {
   // CLAIM-COVERAGE: docs/assurance/architecture.md#architecture
   // CLAIM-COVERAGE: docs/archive/WHAT-SEAL-IS.md#what-seal-is
   const expectedBlocks = new Map([
-    ...FAMILY_PRODUCT_FILES.map((name) => [name, name === "archive/TRUTH-BOX.md"
-      ? scopeBlock(FAMILY_PRODUCT_SCOPE, name, `docs/assurance/RELEASE-NOTES-v${CURRENT_VERSION}.md`, CURRENT_VERSION)
-      : scopeBlock(FAMILY_PRODUCT_SCOPE, name)]),
+    ...FAMILY_PRODUCT_FILES.map((name) => [name, scopeBlock(FAMILY_PRODUCT_SCOPE, name)]),
     ["assurance/architecture.md", scopeBlock(PRODUCT_THEN_FAMILY_SCOPE, "assurance/architecture.md", "release evidence")],
     ["archive/WHAT-SEAL-IS.md", scopeBlock(POSITION_PAPER_SCOPE, "archive/WHAT-SEAL-IS.md")],
   ]);

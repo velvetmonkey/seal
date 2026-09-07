@@ -18,6 +18,7 @@ const { testTmpdir } = tempRoot;
 const ROOT = resolve(import.meta.dirname, "..");
 const SEAL = resolve(ROOT, "bin", "seal");
 const VERSION = readFileSync(resolve(ROOT, "VERSION"), "utf8").trim();
+const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match(/^SEAL_VERSION=v([^\s]+)$/m)[1];
 const INDEX = readFileSync(resolve(ROOT, "docs", "assurance", "index.html"), "utf8");
 const ARCHITECTURE = readFileSync(resolve(ROOT, "docs/assurance/architecture.md"), "utf8");
 const SOURCES = [
@@ -243,7 +244,7 @@ test("README installer check executes the command without restoring the installe
   const artifact = join(dir, "fixture-installer");
   const tree = "a".repeat(64);
   writeFileSync(readmePath, readFileSync(resolve(ROOT, "README.md"), "utf8"));
-  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal ${VERSION} linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
+  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal ${PUBLISHED_VERSION} linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
   const env = {
     ...process.env,
     SEAL_INSTALL_TRANSCRIPT_README: readmePath,

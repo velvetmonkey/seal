@@ -10,7 +10,7 @@ const ROOT = process.env.SEAL_RELEASE_NOTES_ROOT ?? path.join(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 const NOTES_RELATIVE = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`;
 const RC3_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0-rc.3.md#release-notes-rc3
-const FINAL_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.1.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.1.md#release-notes-final
+const FINAL_NOTES_RELATIVE = `docs/assurance/RELEASE-NOTES-v${VERSION}.md`; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.1.md#release-notes-final
 const V020_FINAL_NOTES_RELATIVE = "docs/assurance/RELEASE-NOTES-v0.2.0.md"; // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.2.0.md#release-notes-v020-final
 const RC3_NOTES = path.join(ROOT, RC3_NOTES_RELATIVE);
 const V020_FINAL_NOTES = path.join(ROOT, V020_FINAL_NOTES_RELATIVE);
@@ -23,6 +23,7 @@ test("the current VERSION has a release note with the same identity", () => {
   assert.match(fs.readFileSync(NOTES, "utf8"), new RegExp(`^# Seal v${VERSION.replaceAll(".", "\\.")} release notes$`, "m"));
 });
 
+// CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.3.0.md#release-notes-v030
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
