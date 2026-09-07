@@ -64,7 +64,7 @@ function assembleReceipt(record, action) {
 
 function sealReceipt(signer, record, action) {
   const body = assembleReceipt(record, action);
-  if (!signer) return body;
+  if (!signer) throw new ReceiptRefusal("receipt_signer_absent", "receipt signer is required");
   return {
     ...body,
     signature: {

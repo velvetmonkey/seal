@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
-const { canonical, sealReceipt } = require("../spine/receipt-v2.cjs");
+const { canonical, generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
 
 async function writeKernelReceipt(_cacheRoot, dataHome) {
   const tool = "db.execute";
@@ -23,7 +23,7 @@ async function writeKernelReceipt(_cacheRoot, dataHome) {
   const receiptDir = path.join(dataHome, "seal", "receipts");
   fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
   const receipt = path.join(receiptDir, `receipt-${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}.json`);
-  fs.writeFileSync(receipt, canonical(sealReceipt(null, record, "ALLOW")), { mode: 0o600 });
+  fs.writeFileSync(receipt, canonical(sealReceipt(generateSigner(), record, "ALLOW")), { mode: 0o600 });
   return receipt;
 }
 

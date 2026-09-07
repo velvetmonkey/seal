@@ -18,6 +18,7 @@ const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
 const { createProxy } = require("../spine/proxy.cjs");
+const { generateSigner } = require("../spine/receipt-v2.cjs");
 const { createJournal } = require("../spine/store.cjs");
 
 // Match the repository's existing path.relative(ROOT, ...) convention used by
@@ -420,6 +421,7 @@ test("a top-level batch is refused as one frame and never reaches the child", as
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -458,6 +460,7 @@ test("a duplicate-key frame is refused before it can reach the child", async (t)
   const dataFile = path.join(dir, "data.txt");
   createJournal(storePath);
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -495,6 +498,7 @@ test("all duplicate-key frame shapes refuse with a checker-valid ambiguous recei
     const dataFile = path.join(dir, "data.txt");
     createJournal(storePath);
     const proxy = createProxy({
+      signer: generateSigner(),
       guardTool: "demo.mutate",
       storePath,
       receiptsDir: path.join(dir, "receipts"),
@@ -528,6 +532,7 @@ test("duplicate-key gate controls preserve guarded, unguarded, and ordinary fram
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -834,6 +839,7 @@ test("a kernel crash on retry refuses without minting a receipt and keeps servin
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir,
@@ -891,6 +897,19 @@ test("a kernel crash on retry refuses without minting a receipt and keeps servin
   assert.equal(readCount(countFile), "1");
 });
 
+test("receipt sealing and proxy construction refuse an absent signer", () => {
+  const { sealReceipt, ReceiptRefusal } = require("../spine/receipt-v2.cjs");
+  const record = { tool: "demo.mutate", arguments: {}, kernel_config: {} };
+  const refusesSigner = (error) => error instanceof ReceiptRefusal
+    && error.code === "receipt_signer_absent" && error.refusal === true;
+  for (const signer of [null, undefined]) {
+    assert.throws(() => sealReceipt(signer, record, "BLOCK"), refusesSigner);
+    // Refuse before opening a journal or spawning a child, even if other
+    // required options are absent too.
+    assert.throws(() => createProxy({ signer }), refusesSigner);
+  }
+});
+
 test("canonical refuses bigint as an unsupported receipt type", () => {
   const { canonical, ReceiptRefusal } = require("../spine/receipt-v2.cjs");
   assert.throws(
@@ -930,6 +949,7 @@ test("a receipt-writer ReceiptRefusal still escapes write and does not elicit", 
   createJournal(storePath);
   const frames = [];
   const proxy = createProxyInjected({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -1016,6 +1036,7 @@ test("receipt correlations refuse loudly at capacity without orphaning live appr
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate",
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -1064,6 +1085,7 @@ test("an unanswered capable client times out to cancelled", async (t) => {
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardTool: "demo.mutate", storePath, receiptsDir: path.join(dir, "receipts"),
     ttlMs: 25,
     childArgv: [process.execPath, SEAL, "__demo-server", path.join(dir, "data.txt")],

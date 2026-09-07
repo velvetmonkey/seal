@@ -6,6 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { createProxy } = require("../spine/proxy.cjs");
+const { generateSigner } = require("../spine/receipt-v2.cjs");
 const { createJournal } = require("../spine/store.cjs");
 const { evaluateSelection, normalizeToolSelection } = require("../spine/tool-selection.cjs");
 
@@ -29,6 +30,7 @@ function session(selection) {
   createJournal(storePath);
   const frames = [];
   const proxy = createProxy({
+    signer: generateSigner(),
     guardSelections: [selection],
     storePath,
     receiptsDir: path.join(dir, "receipts"),
@@ -187,7 +189,7 @@ test("both duplicate name orders are refused before the child and normal traffic
       process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: frame.id,
         result: { content: [{ type: 'text', text: line }] } }) + '\\n');
     });`;
-  const proxy = createProxy({ guardSelections: ["db.mutate"], storePath,
+  const proxy = createProxy({ signer: generateSigner(), guardSelections: ["db.mutate"], storePath,
     receiptsDir: path.join(dir, "receipts"), childArgv: [process.execPath, "-e", child],
     onClientLine: line => frames.push(JSON.parse(line)) });
   t.after(async () => { await proxy.stop(); fs.rmSync(dir, { recursive: true, force: true }); });
