@@ -61,7 +61,7 @@ on the exact client.
 Approve, and the call runs — once:
 
 ```output
-delete_all_notes first call: input_required; six-line approval message sent to the client
+delete_all_notes first call: input_required; four-line approval message sent to the client
 retry with accept: notes.txt deleted
 identical retry replayed: BLOCK receipt -> verdict BLOCK
 ```
@@ -84,7 +84,7 @@ every count printed is read back from that server's own count file:
 ```output
 child calls observed: 0 (read from …/child/data.txt.count)
 INPUT REQUIRED  the proxy holds this call's approval; the contract's message:
-    (the six-line prompt)
+    (the four-line approval message plus the Selection predicate line)
 child calls observed: still 0 … — approval shown, nothing executed
 ```
 
