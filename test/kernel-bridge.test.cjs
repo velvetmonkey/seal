@@ -62,10 +62,28 @@ function proxyHarness(t, env = {}) {
   const receipts = path.join(dir, "receipts");
   const data = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", store]);
+  // Use real project binding, activation, discovery and receipt signing. The
+  // caller owns the journal, including intentionally absent or damaged stores.
+  const protection = require("../spine/protection.cjs");
+  const proxyEnv = { ...process.env, ...env, XDG_DATA_HOME: path.join(dir, "data-home") };
+  const projectRoot = path.join(dir, "project");
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".mcp.json"), JSON.stringify({
+    mcpServers: { demo: { command: process.execPath, args: [SEAL, "__demo-server", data] } },
+  }));
+  const project = protection.readProjectServer(projectRoot, "demo");
+  const statePath = protection.statePathFor(projectRoot, proxyEnv);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(statePath, JSON.stringify({
+    schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
+    projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
+    projectServerDigest: project.serverDigest, guardTools: [TOOL],
+    storePath: store, receiptsDir: receipts,
+    childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
+  }), { mode: 0o600 });
   const child = spawn(process.execPath, [
-    SEAL, "__proxy", "--guard", TOOL, "--store", store, "--receipts", receipts,
-    "--", process.execPath, SEAL, "__demo-server", data,
-  ], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    SEAL, "__proxy", "--protect-state", statePath,
+  ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { try { child.kill("SIGKILL"); } catch {} });
   let out = "", err = "";
   child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");

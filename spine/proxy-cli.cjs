@@ -88,8 +88,9 @@ async function run(argv) {
         process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
         process.exit(1);
       }
-      const prefix = error instanceof ProtectionError ? error.code : "startup failed";
-      process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
+      const prefix = error instanceof StoreError ? "seal __proxy"
+        : `seal __proxy: ${error instanceof ProtectionError ? error.code : "startup failed"}`;
+      process.stderr.write(`${prefix}: ${error.message}\n`);
       process.exit(1);
     }
   }

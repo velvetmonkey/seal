@@ -127,10 +127,28 @@ async function runBrokenProtected(productRoot, dir) {
   const dataFile = path.join(dir, "child", "data.txt");
   const seal = path.join(productRoot, "bin", "seal");
   execFileSync(process.execPath, [seal, "__proxy", "--init-store", "--store", store]);
+  // Use real project binding, activation, discovery and receipt signing. The
+  // caller owns the journal, including intentionally absent or damaged stores.
+  const protection = require(path.join(productRoot, "spine", "protection.cjs"));
+  const proxyEnv = { ...process.env, XDG_DATA_HOME: path.join(dir, "data-home") };
+  const projectRoot = path.join(dir, "project");
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".mcp.json"), JSON.stringify({
+    mcpServers: { demo: { command: process.execPath, args: [seal, "__demo-server", dataFile] } },
+  }));
+  const project = protection.readProjectServer(projectRoot, "demo");
+  const statePath = protection.statePathFor(projectRoot, proxyEnv);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(statePath, JSON.stringify({
+    schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
+    projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
+    projectServerDigest: project.serverDigest, guardTools: ["demo.mutate"],
+    storePath: store, receiptsDir: receipts,
+    childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
+  }), { mode: 0o600 });
   const proxy = spawn(process.execPath, [
-    seal, "__proxy", "--guard", "demo.mutate", "--store", store,
-    "--receipts", receipts, "--", process.execPath, seal, "__demo-server", dataFile,
-  ], { stdio: ["pipe", "pipe", "pipe"] });
+    seal, "__proxy", "--protect-state", statePath,
+  ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(proxy);
   proxy.stdin.write(JSON.stringify({
     jsonrpc: "2.0", id: 90, method: "initialize",

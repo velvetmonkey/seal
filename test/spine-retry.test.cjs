@@ -347,13 +347,28 @@ test("seal demo derives the replay BLOCK line from the receipt file", async (t) 
 
 function spawnProxy(dir, dataFile, extra = {}) {
   const storePath = extra.storePath || path.join(dir, "approvals.journal");
+  // Use real project binding, activation, discovery and receipt signing. The
+  // caller owns the journal, including intentionally absent or damaged stores.
+  const protection = require("../spine/protection.cjs");
+  const proxyEnv = { ...process.env, XDG_DATA_HOME: path.join(dir, "data-home") };
+  const projectRoot = path.join(dir, "project");
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".mcp.json"), JSON.stringify({
+    mcpServers: { demo: { command: process.execPath, args: [SEAL, "__demo-server", dataFile] } },
+  }));
+  const project = protection.readProjectServer(projectRoot, "demo");
+  const statePath = protection.statePathFor(projectRoot, proxyEnv);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(statePath, JSON.stringify({
+    schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
+    projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
+    projectServerDigest: project.serverDigest, guardTools: ["demo.mutate"],
+    storePath: storePath, receiptsDir: extra.receiptsDir || path.join(dir, "receipts"),
+    childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
+  }), { mode: 0o600 });
   const proxy = spawn(process.execPath, [
-    SEAL, "__proxy",
-    "--guard", "demo.mutate",
-    "--store", storePath,
-    "--receipts", extra.receiptsDir || path.join(dir, "receipts"),
-    "--", process.execPath, SEAL, "__demo-server", dataFile,
-  ], { stdio: ["pipe", "pipe", "pipe"] });
+    SEAL, "__proxy", "--protect-state", statePath,
+  ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(proxy);
   const responses = [];
   let buffered = "";
