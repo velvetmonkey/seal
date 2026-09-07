@@ -20,7 +20,7 @@ function isolatedTree(t) {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-darwin-readiness-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ["spine", "scripts", "runtime"]) fs.mkdirSync(path.join(root, directory));
-  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
+  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/store.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
     fs.copyFileSync(path.join(ROOT, relative), path.join(root, relative));
   }
   return {
@@ -255,6 +255,8 @@ test("ACTIVE lease commit refuses a helper replacement after the witness gate", 
     const env = { XDG_DATA_HOME: dataHome };
     const statePath = loaded.protection.statePathFor(project, env);
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    const storePath = path.join(path.dirname(statePath), "approvals.journal");
+    require(path.join(ctx.root, "spine", "store.cjs")).createJournal(storePath);
     fs.writeFileSync(statePath, JSON.stringify({
       schema: "seal.protect/v1",
       sealVersion: fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim(),
@@ -268,6 +270,7 @@ test("ACTIVE lease commit refuses a helper replacement after the witness gate", 
       childArgv: projectServer.childArgv,
       childEnv: projectServer.childEnv,
       discoveryTimeoutMs: 5000,
+      storePath,
       lease: null,
     }, null, 2) + "\n");
 
