@@ -49,7 +49,7 @@ function createProxy(options) {
     guardTool,        // legacy direct-call spelling for one selected tool
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
-    signer,           // optional receipt-sealing keypair (V11-RECEIPT-01)
+    signer,           // required receipt-sealing keypair (V11-RECEIPT-01)
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
@@ -62,6 +62,7 @@ function createProxy(options) {
     elicitationTimeoutMs = ttlMs ?? DEFAULT_ELICITATION_TIMEOUT_MS,
     receiptCorrelationCapacity = DEFAULT_RECEIPT_CORRELATION_CAPACITY,
   } = options;
+  if (!signer) throw new ReceiptRefusal("receipt_signer_absent", "receipt signer is required");
   const hasSelections = Array.isArray(guardSelections);
   const selectedTools = hasSelections ? guardSelections
     : Array.isArray(guardTools) ? guardTools.map((name) => ({ name, predicate: null }))

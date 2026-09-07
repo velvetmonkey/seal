@@ -127,6 +127,12 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   const receiptPath = path.join(ctx.receiptsDir, receiptName);
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
   assert.equal(receipt.signature.algorithm, "ed25519", "signer was dropped before receipt emission");
+  const { signature, ...body } = receipt;
+  const verify = require("node:crypto").verify(null,
+    Buffer.from(require("../spine/receipt-v2.cjs").canonical(body), "utf8"),
+    loadReceiptSigner(ctx.env).publicKey, Buffer.from(signature.value, "hex"));
+  console.log(`verify:${verify}`);
+  assert.equal(verify, true, "protected-path receipt signature must verify");
 
   const keys = receiptKeyPaths(ctx.env);
   assert.equal(fs.statSync(keys.directory).mode & 0o777, 0o700);
