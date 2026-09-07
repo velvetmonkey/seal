@@ -159,7 +159,7 @@ How each one is established from files rather than from the operator's memory:
 ## Running the acceptance walk
 
 Use this procedure and the harness from current `main`, even when accepting an
-older artifact; the v0.2.1 tag of this page predates the `SEAL_VERSION` prompt.
+older artifact; tagged copies of this page can predate the `SEAL_VERSION` prompt.
 Do not check out the artifact tag to follow this walk.
 
 First download one published Linux x86-64 artifact and the `SHA256SUMS` asset
