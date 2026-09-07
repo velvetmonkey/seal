@@ -37,7 +37,7 @@ async function run(argv) {
     parsed = parseArgs(argv);
   } catch (error) {
     process.stderr.write(`seal __proxy: ${error.message}\n`);
-    process.stderr.write("usage: seal __proxy --guard TOOL --store FILE --receipts DIR -- CMD [ARGS...]\n       seal __proxy --protect-state FILE\n       seal __proxy --init-store --store FILE\n");
+    process.stderr.write("usage: seal __proxy --protect-state FILE\n       seal __proxy --init-store --store FILE\n");
     process.exit(2);
   }
   const { options, childArgv } = parsed;
@@ -52,6 +52,11 @@ async function run(argv) {
     }
     process.stdout.write(`approval store initialised: ${options.storePath}\n`);
     process.exit(0);
+  }
+
+  if (!options.protectState) {
+    process.stderr.write("seal __proxy: legacy invocation without a receipt signer is refused; use --protect-state FILE\n");
+    process.exit(2);
   }
 
   let proxyOptions = { ...options, childArgv };
@@ -83,8 +88,9 @@ async function run(argv) {
         process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
         process.exit(1);
       }
-      const prefix = error instanceof ProtectionError ? error.code : "startup failed";
-      process.stderr.write(`seal __proxy: ${prefix}: ${error.message}\n`);
+      const prefix = error instanceof StoreError ? "seal __proxy"
+        : `seal __proxy: ${error instanceof ProtectionError ? error.code : "startup failed"}`;
+      process.stderr.write(`${prefix}: ${error.message}\n`);
       process.exit(1);
     }
   }

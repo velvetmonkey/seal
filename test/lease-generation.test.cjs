@@ -30,6 +30,7 @@ function setupLeaseState() {
   const projectServer = readProjectServer(project, "db");
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  createJournal(path.join(path.dirname(statePath), "approvals.journal"));
   fs.writeFileSync(statePath, JSON.stringify({
     schema: "seal.protect/v1",
     sealVersion: requireMatchingVersion(),

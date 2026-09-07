@@ -1195,6 +1195,9 @@ async function activationLease(statePath, env = process.env) {
       markDrifted(statePath, state, got);
       throw new ProtectionError("drifted", "project server drifted before proxy activation");
     }
+    // Validate before discovery starts the guarded server. Load lazily because
+    // the journal also uses protection's lock helpers; createProxy checks again.
+    require("./store.cjs").openJournal(state.storePath);
     let toolNames;
     try {
       toolNames = await listServerTools({
