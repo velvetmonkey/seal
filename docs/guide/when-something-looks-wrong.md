@@ -148,9 +148,10 @@ rendering rules — an argument line was too wide, the message needed more
 lines than Seal permits, or an argument had no canonical form (a non-integer
 number such as `1.5`). Passing those rules does not guarantee that the client
 paints every message-body line: in the recorded Claude Code 2.1.251 dialog it
-folds three of six lines and still paints the Accept button. The argument is
-still painted through the schema description. Seal does not take the
-protected server down to refuse a value the receipt writer will not seal.
+folds three of six lines and still paints the Accept button. The current schema
+description carries every argument, the full scope with TTL, and the outside-Seal
+boundary in the channel that recording paints; the new layout is not yet recorded.
+Seal does not take the protected server down to refuse a value the receipt writer will not seal.
 The tool call is refused; nothing ran. If you control the arguments, make
 them smaller or integral; otherwise this tool's calls cannot be
 interactively approved.

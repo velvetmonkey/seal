@@ -604,7 +604,7 @@ test("real elicitation accept flows once and duplicate or unmatched responses do
   assert.match(request.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
   assert.deepEqual(request.params.requestedSchema, {
     type: "object",
-    properties: { approve: { type: "boolean", title: "Approve one run: demo.mutate", description: "Arguments: line: \"approved correlation\". Scope: at most one run." } },
+    properties: { approve: { type: "boolean", title: "Approve one run: demo.mutate", description: "Arguments: line: \"approved correlation\". Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min. Outside Seal: Bash, network, subprocesses, other tools and servers." } },
     required: ["approve"],
   });
   assert.equal(readCount(`${dataFile}.count`), "0");

@@ -112,7 +112,9 @@ sandbox. It controls the path through it — Claude Code calling that one tool
 of that one server — and only that path. Bash, the network, subprocesses, and
 every other tool and server are outside it. In the recorded Claude Code
 2.1.251 dialog, the client folds the message-body line that states this
-boundary; the fold does not bring those other paths inside Seal.
+boundary; the fold does not bring those other paths inside Seal. The current
+renderer also puts that boundary in the schema description, a channel that
+recording paints; the new layout still needs a fresh client acceptance run.
 
 Previous: [Evaluator walk](../start/evaluator-walk.md).
 Up: [Documentation map](../README.md).

@@ -237,19 +237,19 @@ function assertInsideEnvelope(rendered, terminalWidth = 80) {
 test("the approval message is the fixed dialog and fits the envelope", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
   assertInsideEnvelope(rendered);
-  assert.equal(rendered.lines[0], "Approval required");
-  assert.equal(rendered.lines[1], "Tool: demo.mutate");
-  assert.equal(rendered.lines[2], "Arguments:");
-  assert.equal(rendered.lines[3], `  line: ${canonicalString(ARGS.line)}`);
-  assert.match(rendered.lines[4], /^Scope: this parsed call \(key order, 1\/1\.0 match\); at most one run; 2 min\.$/);
-  assert.equal(rendered.lines[5], "Outside Seal: Bash, network, subprocesses, other tools and servers.");
-  assert.equal(rendered.lines.length, 6);
+  assert.deepEqual(rendered.lines, [
+    "Tool: demo.mutate; Approval required",
+    `  line: ${canonicalString(ARGS.line)}`,
+    "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.",
+    "Outside Seal: Bash, network, subprocesses, other tools and servers.",
+  ]);
+  assert.equal(rendered.lines.length, 4);
 });
 
 test("every fixed approval message line fits the measured default width", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
   assert.ok(rendered.ok, rendered.reason);
-  for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[4], rendered.lines[5]]) {
+  for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[3]]) {
     assert.ok(displayWidth(line) <= 74, `fixed line exceeds 74 columns: ${line}`);
   }
 });
@@ -271,8 +271,11 @@ test("the approval schema description derives from the actual argument lines", (
   assert.deepEqual(rendered.argLines, ["  alpha: \"value with space\"", "  zeta: 7"]);
   assert.equal(
     opened.elicitationParams.requestedSchema.properties.approve.description,
-    "Arguments: alpha: \"value with space\"; zeta: 7. Scope: at most one run.",
+    "Arguments: alpha: \"value with space\"; zeta: 7. Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min. Outside Seal: Bash, network, subprocesses, other tools and servers.",
   );
+  const customTtl = createApprovalContract({ ttlMs: 90000 }).begin({ tool: TOOL, args });
+  assert.equal(customTtl.elicitationParams.requestedSchema.properties.approve.description,
+    opened.elicitationParams.requestedSchema.properties.approve.description.replace("2 min.", "90 s."));
 });
 
 test("the approval schema description ignores non-argument message lines", () => {
@@ -301,15 +304,15 @@ test("the approval schema description ignores non-argument message lines", () =>
   const args = { line: "shifted shape" };
   const rendered = shiftedRenderer.renderApprovalMessage(TOOL, args);
   const opened = createShiftedApprovalContract().begin({ tool: TOOL, args });
-  const description = `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. Scope: at most one run.`;
+  const description = `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min. Outside Seal: Bash, network, subprocesses, other tools and servers.`;
   assert.equal(opened.elicitationParams.requestedSchema.properties.approve.description, description);
 });
 
 test("a CHANGED first line replaces, never adds", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS, { firstLine: "CHANGED: line fixture → other" });
   assertInsideEnvelope(rendered);
-  assert.equal(rendered.lines[0], "CHANGED: line fixture → other");
-  assert.equal(rendered.lines.length, 6);
+  assert.equal(rendered.lines[0], "Tool: demo.mutate; CHANGED: line fixture → other");
+  assert.equal(rendered.lines.length, 4);
 });
 
 test("an effect that cannot be shown completely is refused, not truncated — and begin() refuses to offer it", async (t) => {
@@ -322,6 +325,15 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   const decision = contract.begin({ tool: TOOL, args: bigArgs });
   assert.equal(decision.kind, "refuse");
   assert.equal(decision.refusal, REFUSALS.UNRENDERABLE);
+  assert.equal(child.count(), "0");
+  const atLimit = renderApprovalMessage(TOOL, { a: 1, b: 2, c: 3, d: 4 });
+  assertInsideEnvelope(atLimit);
+  assert.equal(atLimit.lines.length, MESSAGE_LINE_CAP);
+  const overLimit = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4, e: 5 } });
+  assert.equal(overLimit.kind, "refuse");
+  assert.equal(overLimit.refusal, REFUSALS.UNRENDERABLE);
+  assert.match(overLimit.detail, /need 8 lines; Seal permits 7/);
+  assert.equal(overLimit.elicitationParams, undefined);
   assert.equal(child.count(), "0");
 });
 
