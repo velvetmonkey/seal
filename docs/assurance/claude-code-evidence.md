@@ -158,12 +158,16 @@ How each one is established from files rather than from the operator's memory:
 
 ## Running the acceptance walk
 
+Use this procedure and the harness from current `main`, even when accepting an
+older artifact; the v0.2.1 tag of this page predates the `SEAL_VERSION` prompt.
+Do not check out the artifact tag to follow this walk.
+
 First download one published Linux x86-64 artifact and the `SHA256SUMS` asset
 attached to that same GitHub release. Set `SEAL_VERSION` to the release tag being
-accepted: run `gh release view --repo velvetmonkey/seal --json tagName -q .tagName`
-with the GitHub CLI and enter the printed tag at the prompt below for the latest
-release; if accepting an older release, enter that release's tag from the
-[published releases](https://github.com/velvetmonkey/seal/releases) instead. These commands obtain the frozen artifact and set the digest and
+accepted, chosen explicitly from the
+[published releases](https://github.com/velvetmonkey/seal/releases).
+Enter that exact tag at the prompt below, including when accepting an older
+release; do not substitute the latest release. These commands obtain the frozen artifact and set the digest and
 length used by `init`; they also verify that the downloaded bytes match the
 release's checksum record.
 
@@ -194,6 +198,8 @@ printf '%s' 'Published release tag (for example vX.Y.Z): ' \
 && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
 
+**At the finishing prompt, run `finish --out .`, not another `next`.**
+
 `next` is the whole run: it takes the machine readings, prints what the human
 must do, launches the recorded session, and stops. Repeat it for each prompted
 stage through `unprotect`. When its final prompt offers the finishing step, do
@@ -209,13 +215,40 @@ Run it in a terminal at least
 80 columns wide — the approval dialog is measured at 80, and a narrower
 terminal would wrap the effect out of the recording.
 
+Before starting a recorded session, read these operator instructions:
+
+- In the fresh harness project, accept the project's `.mcp.json` server when
+  prompted. Project-scope `notes` names the fixture Node command; local-scope
+  `notes` must name Seal's `__proxy`. The two entries are expected: the local
+  override is the protected route. In `/mcp`, confirm that local `notes` is
+  connected; a connected project fixture alone does not establish activation.
+- If Claude Code says MCP choices apply only to this session because the
+  workspace is not trusted, explicitly trust this disposable harness workspace
+  if you want those choices to persist. Otherwise reaccept and verify them in
+  each recorded session across the six steps; do not assume they persisted.
+- **Before issuing either the decline or accept instruction, press Shift-Tab
+  until the status says `manual mode on`, and verify it in each session,
+  because an automatic answer compromises the human approval origin.**
+  Claude Code 2.1.233 was observed starting with `auto mode on`; do not let the
+  client answer the elicitation automatically.
+
 Two cautions for the operator:
 
-1. Claude Code starts in a fresh `HOME` and may ask you to sign in. Do that in
-   the first recorded session **before** anything else, or sign in beforehand:
-   the raw recording is a verbatim capture of your terminal, and anything you type
-   into it is in the run directory. The pack carries a rendered transcript. Read
-   `rendered-transcript.txt` before publishing it.
+1. Claude Code starts in the fresh `HOME` at `<run-dir>/home` and may ask you
+   to sign in. In the first session, use `/login` and complete the interactive
+   OAuth flow **before** the activation instructions. Confirm that the TUI is
+   signed in: `claude auth status` alone was observed succeeding while the TUI
+   still reported `Login expired`.
+   If preparing authentication beforehand, use the same harness HOME and project
+   (`<run-dir>/project`). Preserve
+   `projects[<absolute-harness-project>].mcpServers.notes` in
+   `<run-dir>/home/.claude.json` exactly as `seal protect` wrote it during `init`.
+   Do not copy a full operator `~/.claude.json` over that file. If transferring
+   OAuth credentials, merge only the authentication data and retain that project
+   entry; a credentials-only copy still requires confirmation in the TUI.
+   The raw recording is a verbatim capture of your terminal, including login
+   input, and stays in the run directory. The pack carries a rendered transcript.
+   Read `rendered-transcript.txt` before publishing it.
 2. The installed store is read-only by design. `chmod -R u+w` the run directory
    before deleting it.
 
