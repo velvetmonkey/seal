@@ -331,6 +331,8 @@ accepts the supported `seal.protect/v1` spellings, including older single-tool
 records; the creating binary's `sealVersion` is provenance, not a compatibility
 gate. Unsupported schemas still refuse.
 
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+
 The current binary also provides an explicit recovery command: stop Claude
 Code and run `seal recover --archive` in the affected project. It preserves
 the exact incompatible state at the printed archive path before removing

@@ -140,6 +140,8 @@ is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
 ### Recover incompatible state
 
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+
 Seal accepts stored state with a schema it can read, regardless of the Seal
 version that created it. If Seal reports `incompatible_state` for an unsupported
 schema, stop Claude Code and run this in the affected project:
