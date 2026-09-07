@@ -7,36 +7,54 @@ receipt that has been altered. The producer and checker obey the fixed member
 order in `docs/SEAL-RECEIPT-V2.md`; the checker reaches only its local WASM
 kernel, not the producer's assembler. This page walks all three from real runs.
 
-## The approval prompt, line by line
+## What Seal sends and Claude Code paints
 
 When a healthy gate receives a fresh protected call it can render, it holds
-the call before forwarding and sends this approval request (captured from a
-live gated call):
+the call before forwarding. For the call in the repository's Claude Code
+2.1.251 recording, Seal sends this six-line message body:
 
 ```output
 Approval required
-Tool: delete_all_notes
+Tool: append_note
 Arguments:
-  (none)
+  note: seal-accepted-note
 Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.
 Outside Seal: Bash, network, subprocesses, other tools and servers.
 ```
 
+The client paints only the first three message-body lines and folds the other
+three. It separately paints the schema description, which carries the
+argument and its one-run scope:
+
+```output
+  MCP server “notes” requests your input
+  Approval required
+  Tool: append_note
+  Arguments:
+  … (+3 more lines)
+  ❯ * Approve one run: append_note: ☐
+        Arguments: note: seal-accepted-note. Scope: at most one run.
+    Accept    Decline
+```
+
 - **Tool** and **Arguments** are the entire effect, exactly as parsed. When a
   tool takes arguments, each one is printed; what you approve is that exact
-  combination and nothing else. If the full effect cannot fit on screen, Seal
-  refuses to ask rather than truncate it — a boundary the terminal hides is
-  not one you approved.
-- **Scope** is the contract: your approval covers this parsed call only, can
-  be used at most once, and lapses after 2 minutes.
-- **Outside Seal** is the honesty line, printed every time: the gate does not
-  see Bash, the network, subprocesses, or any other tool or server.
+  combination and nothing else. In this recording the argument value reaches
+  the screen through the schema description, not through the folded message
+  body.
+- **Scope** in the six-line message body states that approval covers this
+  parsed call only, can be used at most once, and lapses after 2 minutes. The
+  recorded client folds that line; its painted schema description states only
+  `Scope: at most one run.`
+- **Outside Seal** is the message-body boundary: the gate does not see Bash,
+  the network, subprocesses, or any other tool or server. The recorded client
+  folds that line, so this guide states the limitation directly rather than
+  claiming that the client paints it.
 
 Approve, and the call runs — once:
 
 ```output
-delete_all_notes first call: input_required; approval message shown to the user:
-    (the prompt above)
+delete_all_notes first call: input_required; six-line approval message sent to the client
 retry with accept: notes.txt deleted
 identical retry replayed: BLOCK receipt -> verdict BLOCK
 ```
@@ -77,8 +95,8 @@ one-use held: the replay did not run the call again; child calls observed: still
 
 Zero before approval, one after, still one after the replay. The demo then
 ends by writing a file *without* crossing the gate and showing that Seal
-emitted nothing for it — the same "gate, not sandbox" boundary the prompt
-states.
+emitted nothing for it — the "gate, not sandbox" boundary stated in this
+guide.
 
 ## What a refusal means
 

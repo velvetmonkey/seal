@@ -143,11 +143,13 @@ detail and report it.
 
 ### `unrenderable_effect`
 
-Seal refused to *ask* for approval, because the complete effect could not be
-shown honestly — an argument line too wide for the terminal, more lines
-than the approval dialog can display without hiding some, or an argument
-with no canonical form (a non-integer number such as `1.5`). Seal never
-truncates an effect to keep the Approve button, and it does not take the
+Seal refused to *ask* for approval because the effect exceeded Seal's own
+rendering rules — an argument line was too wide, the message needed more
+lines than Seal permits, or an argument had no canonical form (a non-integer
+number such as `1.5`). Passing those rules does not guarantee that the client
+paints every message-body line: in the recorded Claude Code 2.1.251 dialog it
+folds three of six lines and still paints the Accept button. The argument is
+still painted through the schema description. Seal does not take the
 protected server down to refuse a value the receipt writer will not seal.
 The tool call is refused; nothing ran. If you control the arguments, make
 them smaller or integral; otherwise this tool's calls cannot be

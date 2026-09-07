@@ -106,6 +106,14 @@ also name the file-backed facts that support the observation.
 The test renders this table from the harness cases. The test rejects a document
 that differs from that rendering.
 
+For `approval_shown`, "complete exact-call dialog" means the complete set of
+strings that this control requires, not every line in the renderer's six-line
+message body. The required painted strings are `Tool: append_note`,
+`Arguments:`, the schema title `Approve one run: append_note`, and the schema
+description `Arguments: note: seal-accepted-note. Scope: at most one run.` The
+recorded frame folds the remaining three message-body lines as
+`… (+3 more lines)`.
+
 How each one is established from files rather than from the operator's memory:
 
 - **activation** — the fixture's `start` record carries its process ancestry.
@@ -116,12 +124,15 @@ How each one is established from files rather than from the operator's memory:
 - **negotiation** — the proxy's own receipts: an `INPUT_REQUIRED` receipt and a
   later receipt carrying the same approval correlation, with the matching
   `issued` and `consumed` entries in the fsynced approval journal.
-- **approval_shown** — the dialog text is rendered by the **installed
-  artifact's own** `contract/renderer.cjs`, and every line of it is looked for
-  in the terminal recording. The cast must also match its recorder-written
+- **approval_shown** — the **installed artifact's own**
+  `contract/renderer.cjs` supplies the `Tool:` and `Arguments:` labels, while
+  its contract supplies the schema title and description. The harness looks
+  for those four strings in the terminal recording; it does not look for the
+  folded argument-value, Scope, or Outside Seal message-body lines. The cast
+  must also match its recorder-written
   digest and be the deterministic asciicast conversion of the same session's
   raw output and advanced timing files. A substituted text-only cast therefore
-  refuses even if it contains every expected dialog line.
+  refuses even if it contains all four expected strings.
 - **before_approval / accept / decline** — child-call records counted out of
   the append-only log, plus the effect digest, which is computed three ways
   that must agree: by the fixture as it wrote the file, by the harness from the
