@@ -91,6 +91,9 @@ async function main() {
       const response = await fetch(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`, { signal: AbortSignal.timeout(30000) });
       assert.ok(response.ok, `cannot fetch published ${name}: HTTP ${response.status}`);
       fs.writeFileSync(path.join(assets, name), Buffer.from(await response.arrayBuffer()), { mode: 0o644 });
+      // The suite uses umask 077. Give the refusal experiment an explicit
+      // non-executable starting mode, independent of the caller's umask.
+      fs.chmodSync(path.join(assets, name), 0o644);
     }));
     for (const [name, pin] of [[names[0], 'artifact_sha256'], [names[1], 'checker_sha256'], [names[2], 'sums_sha256']]) {
       assert.equal(digest(fs.readFileSync(path.join(assets, name))), value(pin), `published ${name} digest`);
@@ -108,7 +111,7 @@ async function main() {
       fs.mkdirSync(bin);
       // Transport only: serve already authenticated published bytes locally.
       // Hash tools, comparisons, chmod, and the artifact run for real.
-      fs.writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nfor arg do url="$arg"; done\nname=${url##*/}\ncp "$PROBE_ASSETS/$name" "$name"\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nfor arg do url="$arg"; done\nname=${url##*/}\ncp -p "$PROBE_ASSETS/$name" "$name"\n', { mode: 0o755 });
       const chmod = spawnSync('sh', ['-c', 'command -v chmod'], { encoding: 'utf8' }).stdout.trim();
       fs.writeFileSync(path.join(bin, 'chmod'), `#!/bin/sh\nprintf called > chmod-called\nexec '${chmod}' "$@"\n`, { mode: 0o755 });
       fs.writeFileSync(path.join(bin, 'node'), `#!/bin/sh\nprintf '%s\\n' "$*" >> node-called\nexec '${process.execPath}' "$@"\n`, { mode: 0o755 });

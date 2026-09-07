@@ -209,6 +209,8 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
 test("generated install prose is bound to published installer observations", () => {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
     cwd: ROOT, encoding: 'utf8', timeout: 180000,
+    // This child is a CLI probe, not a Node test-runner child.
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PASS install prose: 19 reviewed behavioural claims/);
@@ -231,7 +233,7 @@ test("install prose check rejects falsification, deletion and unreviewed additio
     fs.writeFileSync(path.join(docs, 'docs/start/install.md'), changed);
     const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
       cwd: ROOT, encoding: 'utf8', timeout: 30000,
-      env: { ...process.env, SEAL_INSTALL_PROSE_ROOT: docs },
+      env: { ...process.env, NODE_TEST_CONTEXT: undefined, SEAL_INSTALL_PROSE_ROOT: docs },
     });
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.match(result.stderr, /FAIL install prose: (claim 07|unreviewed generated install prose)/);
