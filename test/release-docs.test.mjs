@@ -229,6 +229,7 @@ test("install prose check rejects falsification, deletion and unreviewed additio
     original.replace(claim, ''),
     original.replace('## Verify, then install', 'The installer sends your files to the publisher.\n\n## Verify, then install'),
     original.replace('publishes `seal-', 'publishes no `seal-'),
+    original.replace('## Verify, then install', '## Install, then verify'),
   ]) {
     fs.writeFileSync(path.join(docs, 'docs/start/install.md'), changed);
     const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {

@@ -61,7 +61,8 @@ async function main() {
   // Facts retain their independent published-release checks. Remove only their
   // entire known sentence shapes; never discard an arbitrary line of prose.
   let prose = normalize(parts.join('\n').replace(/```[^\n]*\n[\s\S]*?```/g, '')
-    .replace(/^#+ .*$/gm, '')
+    .replace(`# Install Seal ${tag}`, '')
+    .replace('## Verify, then install', '')
     .replace(/The \[v[^\]]+ release\]\([^)]*\) publishes `[^`]+`(?:, `[^`]+`)*, and `[^`]+`; its tag resolves to commit \[\x60[0-9a-f]{40}\x60\]\([^)]*\)\./g, '')
     .replace(/Its `release-manifest\.json` uses schema `seal\.release\/v\d+`\./g, '')
     .replace(/The tree hash of the published v[^ ]+ asset is pinned here:/g, '')
