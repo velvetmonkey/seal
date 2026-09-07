@@ -205,3 +205,39 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
   assert.doesNotMatch(workflow, /git push origin HEAD:main/);
   assert.match(workflow, /::error::main kept moving while release documentation PR #\$pr_number was refreshed/);
 });
+
+// CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
+test("generated install prose is bound to published installer observations", () => {
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 180000,
+    // This child is a CLI probe, not a Node test-runner child.
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PASS install prose: 19 reviewed behavioural claims/);
+});
+
+
+test("install prose check rejects falsification, deletion and unreviewed additions", () => {
+  const docs = testTmpdir(path.join(os.tmpdir(), 'seal-prose-negative-'));
+  fs.mkdirSync(path.join(docs, 'docs/start'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'README.md'), path.join(docs, 'README.md'));
+  const original = fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8');
+  const claim = 'checksum comparison prevents both';
+  assert.ok(original.includes(claim), 'negative control must modify the actual sentence');
+  for (const changed of [
+    original.replace(claim, 'checksum comparison still runs both'),
+    original.replace(claim, ''),
+    original.replace('## Verify, then install', 'The installer sends your files to the publisher.\n\n## Verify, then install'),
+    original.replace('publishes `seal-', 'publishes no `seal-'),
+    original.replace('## Verify, then install', '## Install, then verify'),
+  ]) {
+    fs.writeFileSync(path.join(docs, 'docs/start/install.md'), changed);
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+      cwd: ROOT, encoding: 'utf8', timeout: 30000,
+      env: { ...process.env, NODE_TEST_CONTEXT: undefined, SEAL_INSTALL_PROSE_ROOT: docs },
+    });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /FAIL install prose: (claim 07|unreviewed generated install prose)/);
+  }
+});

@@ -15,8 +15,8 @@ omitting it cannot remove the verification gate. Each continuation starts with
 
 The digest comparison below is *your* check, with the OS SHA-256 tool,
 against the `SHA256SUMS` asset attached to the same GitHub release. That is
-not the installer checking itself. The `--sha256` / `--bytes` flags are a
-second pin the installer demands and will refuse without. Together they
+not the installer checking itself. The `--sha256` flag is a
+second pin the installer demands and will refuse without. The optional `--bytes` flag adds a length check. Together they
 answer "did I download the bytes the release named?" They do not answer
 "is the publisher honest?"
 
