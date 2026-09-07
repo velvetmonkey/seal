@@ -110,8 +110,9 @@ Read these in order the first time; each one stands alone afterwards.
 One honest sentence to carry into all four pages: Seal is a gate, not a
 sandbox. It controls the path through it — Claude Code calling that one tool
 of that one server — and only that path. Bash, the network, subprocesses, and
-every other tool and server are outside it, and the approval prompt says so
-every time.
+every other tool and server are outside it. In the recorded Claude Code
+2.1.251 dialog, the client folds the message-body line that states this
+boundary; the fold does not bring those other paths inside Seal.
 
 Previous: [Evaluator walk](../start/evaluator-walk.md).
 Up: [Documentation map](../README.md).
