@@ -114,6 +114,7 @@ rewriteRoleMarkedPins("README.md", [
   [/^(\/\S*\/dist\/)seal-v[^ /]+-linux-x64$/m, `$1${artifact}`],
 ]);
 rewriteRoleMarkedPins("docs/guide/README.md");
+rewriteRoleMarkedPins("docs/start/install.md");
 
 if (refusals.length > 0) {
   process.stderr.write(`${refusals.join("\n")}\n`);
