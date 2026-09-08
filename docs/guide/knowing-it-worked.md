@@ -132,8 +132,11 @@ When the gate can write its receipt directory, a kernel decision — the prompt
 being offered, an allowed call, a kernel BLOCK — writes one JSON file. If the
 kernel produced no result, Seal still refuses the call and keeps serving, but
 it writes no receipt: a signed receipt cannot claim a decision the kernel did
-not make. `seal status`
-shows where they live and which is newest. A receipt records what the gate
+not make. Inside a protected project, `seal status` shows where they live
+and which is newest; in any other directory, including a `seal demo`
+directory, it prints `Receipts: unavailable outside a protected project` and
+names no receipt, so the demo's receipts are found from the `receipt written:`
+lines in its own output. A receipt records what the gate
 decided and about what. Both `seal demo` and the protected Claude Code path
 write signed receipts. The demo generates a temporary key for its run; the
 protected path creates or reuses a machine-local key. In either case, the
@@ -217,9 +220,12 @@ allowed call records `human_present: "unknown"` rather than claiming
 otherwise.
 
 If you want the boundary demonstrated rather than described, run `seal demo`
-and read its scope witness; it ends with the honest summary this guide keeps
-returning to: Seal is a gate, not a sandbox — it controls the path through
-it, and only that path.
+and read its scope witness; once you approve its one call it ends with three
+labelled blocks, `ENFORCED`, `NOT APPROVAL-GATED` and `NOT OBSERVED`, whose
+last line reports that the direct write left the protected-server call count
+unchanged and Seal made 0 new decisions, which is the honest summary this
+guide keeps returning to, measured rather than stated: Seal is a gate, not a
+sandbox — it controls the path through it, and only that path.
 
 Previous: [Choosing what to protect](choosing-what-to-protect.md).
 Up: [Guide](README.md).
