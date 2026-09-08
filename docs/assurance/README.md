@@ -23,9 +23,9 @@ the Node CLI this repository ships.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
    v0.2.0 was withdrawn before publication. Its record remains historical at
    [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md).
-   The v0.3.0 candidate record is
+   The v0.3.0 release record is
    [assurance/RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
-   The record prepared with the release tree is
+   The historical record prepared with the v0.2.1 release tree is
    [assurance/RELEASE-NOTES-v0.2.1.md](RELEASE-NOTES-v0.2.1.md). Generated
    current-release routes stay tied to published facts and are updated by the
    post-publication documentation workflow.

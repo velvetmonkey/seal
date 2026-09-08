@@ -48,12 +48,12 @@ Copy the whole POSIX command, including the backslashes and `&&` operators.
 For other supported platforms, see the [install guide](../start/install.md):
 
 ```bash
-SEAL_VERSION=v0.2.1
-artifact_name="seal-v0.2.1-linux-x64" \
-&& artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd" \
-&& artifact_bytes=6214316 \
+SEAL_VERSION=v0.3.0
+artifact_name="seal-v0.3.0-linux-x64" \
+&& artifact_sha256="93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b" \
+&& artifact_bytes=6247615 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0" \
+&& sums_sha256="55f26a95c5aed564545ae35a409b7ea73ca4f1d9f7cf67311a9d79215e3563e3" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
