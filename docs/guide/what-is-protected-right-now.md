@@ -237,7 +237,7 @@ local-scope absence diagnostic before it will finish. The working recovery, exer
 
 A related message you can see here:
 
-> `seal recover --archive` ships in v0.3.0, the release this guide installs. Stop Claude Code first. With a compatible or absent state it refuses with `recovery_not_needed` and changes nothing; with an incompatible state it copies the record to a printed `state.json.recovered-…` archive, removes Seal's owned local override, and leaves the route outside Seal for you to protect again. It archives the record; it does not repair it.
+> `seal recover --archive` ships in the release this guide's install block installs. Stop Claude Code first. With a compatible or absent state it refuses with `recovery_not_needed` and changes nothing; with an incompatible state it copies the record to a printed `state.json.recovered-…` archive, removes Seal's owned local override, and leaves the route outside Seal for you to protect again. It archives the record; it does not repair it.
 
 ```output
 Stored protection state: could not be read
