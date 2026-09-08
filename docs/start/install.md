@@ -156,4 +156,4 @@ This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native m
 
 Previous: [Start](README.md).
 Up: [Start](README.md).
-Next: [Evaluator walk](evaluator-walk.md).
+Next: Published-release install: [Choosing what to protect](../guide/choosing-what-to-protect.md); source build: [Evaluator walk](evaluator-walk.md).
