@@ -311,7 +311,9 @@ exactly the kind of silent change Seal exists to prevent.
 
 The proxy's durable lease generation changed while it was evaluating an
 approval. Seal rechecks the proxy's lease immediately before consuming the approval
-and refuses without consuming it if that check fails.
+and refuses without consuming it if that check fails, but after that check passes
+and the approval is consumed, a lease mismatch at the subsequent pre-forward check
+refuses the forward with the approval's one use already spent.
 
 ### `claude_install_failed`
 
