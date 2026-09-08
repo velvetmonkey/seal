@@ -26,7 +26,40 @@ const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-c
 const BANNED = ["PASS" + " VERIFIED"];
 const INDEPENDENCE = "independent";
 const ALLOWED_NEGATED_PROVENANCE = "The native macOS process-start witness helper is release-produced, not independently reproduced.";
-const POSITIVE_INDEPENDENCE_CLAIM = /\bindependent(?:ly)?\b/i;
+// A claim of arm's-length verification names an act: "independently verify",
+// "independent check", "verified independently", "independent third party".
+// The bare word alone is not a claim; "independent directories" and
+// "independent state" describe separate storage, so the scan binds the word to
+// a verification act (either order; the adverb may sit after the act) and lets
+// at most two connector words sit between them.
+const VERIFICATION_ACT = [
+  "verif(?:y|ies|ied|ying|ication|ier|iers)",
+  "reproduc(?:e|es|ed|ing|tion|ible)",
+  "re-?deriv(?:e|es|ed|ing|ation)",
+  "check(?:s|ed|ing|er|ers)?",
+  "audit(?:s|ed|ing|or|ors)?",
+  "review(?:s|ed|ing|er|ers)?",
+  "confirm(?:s|ed|ing|ation)?",
+  "validat(?:e|es|ed|ing|ion|or|ors)",
+  "attest(?:s|ed|ing|ation)?",
+  "certif(?:y|ies|ied|ication)",
+  "corroborat(?:e|es|ed|ion)",
+  "assess(?:es|ed|ing|ment|or|ors)?",
+  "examin(?:e|es|ed|ing|ation)",
+  "inspect(?:s|ed|ing|ion|or|ors)?",
+  "scrutin(?:y|ised|ized)",
+  "third[ -]?part(?:y|ies)",
+  "part(?:y|ies)",
+  "outsiders?",
+  "outside",
+  "external(?:ly)?",
+  "arm'?s[ -]length",
+].join("|");
+const CLAIM_CONNECTOR = "(?:[ \\t,]+(?:and|or|also|then|fully|truly|genuinely|already|been|be|by|a|an|the|its|our|their)){0,2}";
+const POSITIVE_INDEPENDENCE_CLAIM = new RegExp(
+  `\\b(?:${INDEPENDENCE}(?:ly)?${CLAIM_CONNECTOR}[ \\t,-]+(?:re-?)?(?:${VERIFICATION_ACT})|(?:${VERIFICATION_ACT})[ \\t,]+${INDEPENDENCE}ly)\\b`,
+  "i",
+);
 const DOC_BANNED_CLAIMS = [
   {
     label: "two-checker independence claim",
