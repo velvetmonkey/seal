@@ -1,7 +1,7 @@
 # Choosing what to protect
 
 Seal protects a declared set of tools on one MCP server per project. This page
-about making that choice well, and about what `seal protect` does and — just
+is about making that choice well, and about what `seal protect` does and — just
 as important — what it leaves alone.
 
 ## The judgement call
@@ -27,7 +27,7 @@ single winner.
     "notes": {
       "type": "stdio",
       "command": "node",
-      "args": ["/home/you/project/notes-server.cjs"]
+      "args": ["/home/monkey/scratch/choosefix/walk/project/notes-server.cjs"]
     }
   }
 }
@@ -46,34 +46,36 @@ Two constraints to know before you choose:
 
 ## What `seal protect` does
 
-Run it in the project directory, naming the server and the complete tool set:
+Run it in the project directory, naming the server and the complete tool set.
+For the `notes` server declared above, `append_note` adds one line to the notes
+file and `delete_all_notes` empties it; by the question above, only the second
+warrants the gate, so the set is one tool:
 
 ```bash
-$ seal protect db demo.mutate demo.erase
+$ seal protect notes delete_all_notes
 ```
 
 ```output
-Project .mcp.json hash before protect: 3b4703e3d8c33826df5926e5409547e0aff4b54fb58c634277f45ced003cb8e9
-Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+Project .mcp.json hash before protect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
+Sealed MCP route notes: PENDING RESTART (/home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json)
 
 Gated through this route:
-  demo.mutate
-  demo.erase
+  delete_all_notes
 
 Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  configured MCP servers not routed through this Seal wrapper: cache
+  other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json
+Protection scope: 1 other tool NOT APPROVAL-GATED (they pass through Seal): append_note
+State: /home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
+  To clear protection for every guarded tool on server notes, including guarded tools: delete_all_notes, stop Claude Code, then run `seal unprotect notes`.
 ```
 
 Exit code: `0`.
@@ -82,14 +84,16 @@ When other tools are not approval-gated, `protect` reports their total,
 naming at most 20 and counting the rest.
 
 The same server cannot be extended by running `protect` again; the second
-command was refused:
+command was refused. The refusal is written to stderr, and stdout is empty:
 
 ```bash
-$ seal protect db demo.mutate demo.erase
+$ seal protect notes delete_all_notes
 ```
 
 ```output
 seal: REFUSE already_protected: project is already PENDING RESTART
+Next:
+  Run `seal status` to see the current protection before changing it.
 ```
 
 Exit code: `1`.
@@ -102,7 +106,7 @@ The three user-visible changes are:
    the changed server until you look at it.
 2. **Seal asked Claude Code for a local override**: it ran
    `claude mcp add --scope local`, so that in this project, for you only,
-   the name `db` now starts Seal's wrapper, and the wrapper starts your
+   the name `notes` now starts Seal's wrapper, and the wrapper starts your
    real server behind the gate. Local scope is private to your machine — it
    is not written to `.mcp.json` and teammates never see it.
 3. **It printed the hash of your `.mcp.json`** so you can see it was not
@@ -153,9 +157,9 @@ $ seal unprotect notes
 ```
 
 ```output
-Project .mcp.json hash before unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
-Project .mcp.json hash after unprotect: 524bf3d4181dcf010cd7ecd27a19014c5f648326e9e690f2413ff3c5d24f7023
-Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Project .mcp.json hash before unprotect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
+Project .mcp.json hash after unprotect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
+Sealed MCP route notes: - outside Seal (/home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json)
 
 Gated through this route:
   none
@@ -166,6 +170,11 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
+Next:
+  1. Run `seal status`.
+  2. Confirm the sealed MCP route is outside Seal.
+Undo:
+  Run `seal protect notes delete_all_notes`.
 ```
 
 The local override is removed; when the before and after hashes match, they
