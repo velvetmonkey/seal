@@ -2,19 +2,28 @@
 
 ## First: is your project's gate up?
 
-Run this in **the project you want protected**, after restarting Claude Code
-there as directed by [Choosing what to protect](choosing-what-to-protect.md):
+Run this at **the root of the project you want protected** — the directory
+containing its `.mcp.json`, where you ran `seal protect` — after restarting
+Claude Code there as directed by [Choosing what to protect](choosing-what-to-protect.md).
+Status reads the current directory, not its parents: an `outside Seal` / `none`
+reading from a subdirectory does not mean the project has no gate. Return to
+that project root and repeat the check before applying the readings below:
 
 ```bash
 $ seal status
+$ seal doctor
 ```
 
 Read the route and tool list, not just the command's exit code. Status can
-exit successfully while reporting that no gate is present.
+exit successfully while reporting that no gate is present. Also read doctor
+in the same shell environment: if it refuses, protection is not confirmed even
+when status reports ACTIVE. In particular, status does not detect
+`SEAL_ELICITATION_AUTO_RESPONSE`; doctor refuses that configuration.
 
 - **Protected through the reported route:** `Runtime: present`, the intended
   `Sealed MCP route` is `ACTIVE`, and every tool you intend to guard appears
-  under `Gated through this route`. An ACTIVE lease reports a live wrapper;
+  under `Gated through this route`, and doctor does not refuse. An ACTIVE lease
+  reports a live wrapper;
   it does not establish which client is using it. Confirm Claude Code selected
   that override and presents approval for the intended tool before relying on
   that client's calls being protected.
@@ -222,7 +231,12 @@ landed v2 checker reads the document, validates its commitments, and replays
 its exact inputs through the checker's local WASM kernel. Supply a public key
 you already trust if you also want the signature row checked.
 
-For the demo you just ran, copy its complete `Run: (cd ... && node ...)`
+If you answered `N` (the default), the demo prints `demo stopped; nothing was
+approved and the child received 0 calls` followed by the count-file path. It
+prints no checker command for that path. Run `seal demo` again and answer `y`
+to exercise the harmless demo call and its blocked replay before continuing.
+
+For the approved demo run, copy its complete `Run: (cd ... && node ...)`
 command. It enters the installed store that contains the checker and checks
 the existing `-0003-BLOCK.json` receipt from the blocked replay. The ALLOW
 example above illustrates the receipt's contents; it is not the printed
