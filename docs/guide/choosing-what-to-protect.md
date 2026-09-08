@@ -200,10 +200,6 @@ Unprotect asks Claude Code to remove only Seal's local override. It does not
 delete `~/.claude.json` or backups under `~/.claude/backups/`. Those files
 remain until you or Claude Code remove them.
 
-Previous: [Guide](README.md).
-Up: [Guide](README.md).
-Next: [Knowing it worked](knowing-it-worked.md).
-
 ## Several servers in one project
 
 Run `seal protect SERVER TOOL [TOOL...]` once for each server and its complete
@@ -227,3 +223,7 @@ the operation finishes. The lock is not held during a running proxy session,
 so two activated servers can gate calls concurrently with independent leases.
 For incompatible state in a project with several records, select the route
 with `seal recover --archive SERVER`; recovery of the other routes is separate.
+
+Previous: [Guide](README.md).
+Up: [Guide](README.md).
+Next: [Knowing it worked](knowing-it-worked.md).
