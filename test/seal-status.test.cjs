@@ -61,7 +61,7 @@ function protectedStatusPrefix(statePath) {
     "Next:\n" +
     "  1. Restart Claude Code in this project.\n" +
     "  2. Run `seal status`.\n" +
-    "  3. Confirm the sealed MCP route is ACTIVE.\n" +
+    "  3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.\n" +
     "Undo:\n" +
     "  To clear protection for every guarded tool on server db, including guarded tools: write, stop Claude Code, then run `seal unprotect db`.\n";
 }
