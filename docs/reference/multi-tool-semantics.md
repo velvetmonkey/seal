@@ -1,8 +1,14 @@
 # Multi-tool protection semantics
 
-This document records the behavior shipped at commit
-`466be4a5d423ad763c7325263f1d014311c95879`. It answers the four questions in
-roadmap section 15.4 from the product code and from commands run on 2026-08-22.
+The original state-machine observations and source line references below come
+from commit `466be4a5d423ad763c7325263f1d014311c95879` and commands run on
+2026-08-22, answering the four questions in roadmap section 15.4. The status
+rendering described here was rechecked on 2026-09-08 using the published Linux
+x86-64 artifact from source commit `af3324bdf121b048d310629b18405986f8e01dca`, SHA-256
+`93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b`, as pinned in the
+[install guide at the captured revision](https://github.com/velvetmonkey/seal/blob/bc3544819addee11df2ebd6490f49c23bc40684a/docs/start/install.md),
+for one tool, several tools, two configured servers, and repeated
+protect invocations; it supersedes that commit’s braced rendering.
 It does not propose implementation work or decide the boxpol question.
 
 ## 1. Additive or declared as a set?
@@ -39,18 +45,23 @@ seal: REFUSE already_protected: project is already PENDING RESTART
 exit 1
 ```
 
-The doubled `db.db.execute_sql` is not a transcription error: the server name is
-`db` and this test server advertises a tool whose full name is
-`db.execute_sql`.
+This test server advertises the full tool name `db.execute_sql`. The indented
+line prints that declared name alone; it does not prepend the server name `db`.
 
 ## 2. What does `seal status` show per tool?
 
-**Answer.** `seal status` shows one shared server state followed by the guarded
-tool names—`server.tool` for one or `server.{tool, tool}` for several—not an
-independent state or lease for each tool.
+**Answer.** For a protected route, `seal status` shows one shared server state
+and, under `Gated through this route:`, each guarded tool’s declared name alone
+on its own two-space-indented line, whether one tool or several were declared.
+The tools share one state and one lease. A project has one protected route:
+with two configured servers, a second `seal protect` for the other server
+refuses, and status lists that server under `Not controlled`. A second protect
+for the same server also refuses; neither invocation adds to the guarded set.
 
-**Evidence.** `bin/seal:58-74` obtains one protection view, formats all names
-beside `view.state`, and prints the one `view.lease`; `spine/protection.cjs:12-19`
+**Evidence.** In that captured release, `bin/seal` obtains one
+protection view, prints the
+route state followed by the indented guarded names, and prints the one
+`view.lease`; `spine/protection.cjs:12-19`
 defines the six shared state values.
 
 **Observation.** After protecting three advertised tools:
@@ -206,16 +217,19 @@ with the omitted tool named when its state exposed only two guarded members.
 - `README.md:7-9`, `docs/guide/README.md:3,94`, and
   `docs/README.md:74-75` describe one protected tool. That is narrower than the
   shipped named-set behavior.
-- `docs/guide/what-is-protected-right-now.md:23-29` says the protection line is
-  `server.tool` and does not document the shipped `server.{tool, tool}` form.
+- `docs/guide/what-is-protected-right-now.md:21-29` documents the protection
+  route followed by each guarded tool name on its own indented line, which
+  matches the shipped multi-tool status format.
 - Roadmap section 17.10, lines 11418-11425, says disappearance after protect is
   open. Current `spine/protection.cjs:794-818` implements the activation-time
   re-check and whole-server `BROKEN` result. The troubleshooting guide at
   `docs/guide/when-something-looks-wrong.md:349-354` agrees with the current code,
   although it describes the guarded tool in the singular.
-- Roadmap section 17.10 labels the status behavior “per tool.” Its example of
-  the braces format matches the code, but the code supplies one shared state and
-  one shared lease, not independent per-tool status values.
+- Roadmap section 17.10 labels the status behavior “per tool.” Its braces
+  example matched `bin/seal` at `v0.2.0-rc.3`; it no longer matches the shipped
+  code, which prints one route heading and one indented tool name per line.
+  The code supplies one shared state and one shared lease, not independent
+  per-tool status values.
 
 ## UNVERIFIED
 

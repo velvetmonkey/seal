@@ -95,7 +95,10 @@ Not controlled:
 
 The gate is installed but no running Claude Code session has picked it up
 yet. Calls made before the restart are **not** gated. Restart Claude Code in
-this project. You will see `STALE`, with a detail line, after a session ends:
+this project to load the local override. The state becomes `ACTIVE` when the
+Seal wrapper starts; if Claude Code shows `Select login method`, sign in first
+so the interactive session can start it. You will see `STALE`, with a detail
+line, after a session ends:
 
 ```output
 Sealed MCP route notes: STALE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
@@ -227,7 +230,7 @@ because the external command failed, check Claude Code's local override before
 assuming it made no partial change.
 
 What to do about that record is honest but currently not smooth:
-`seal status` prints only `REFUSED no_seal_owned_override` and exits 1,
+`seal status` prints its Runtime line and then only `REFUSED no_seal_owned_override`, and exits 1,
 `seal protect` refuses (`already_protected: project is already BROKEN`) and
 `seal unprotect` refuses with `no_seal_owned_override`. Unprotect accepts an
 absent Claude Code override only when the recorded Seal ownership checks pass,
