@@ -342,7 +342,7 @@ accepts the supported `seal.protect/v1` spellings, including older single-tool
 records; the creating binary's `sealVersion` is provenance, not a compatibility
 gate. Unsupported schemas still refuse.
 
-> Seal v0.3.0 includes `seal recover`. It requires exactly one argument, `--archive`.
+> Seal includes `seal recover`. It requires exactly one argument, `--archive`.
 
 The current binary also provides an explicit recovery command: stop Claude
 Code and run `seal recover --archive` in the affected project. It preserves
