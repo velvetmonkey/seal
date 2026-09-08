@@ -18,7 +18,7 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
-Sealed MCP route db: PENDING RESTART (/tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/state.json)
+Sealed MCP route db: PENDING RESTART (/home/monkey/scratch/multiserver/home/data/seal/projects/02a372233b91435a486924d1d5539612/servers/db/state.json)
 
 Gated through this route:
   demo.mutate
@@ -28,26 +28,26 @@ Not controlled:
   Bash and subprocesses outside this MCP route
   direct resource access outside this MCP route
   other clients
-  configured MCP servers not routed through this Seal wrapper: cache
+  other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
-  3. Confirm the sealed MCP route is ACTIVE.
+  3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
 Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /tmp/statusclaim-real-MdoUGT/home/.local/share/seal/projects/774d6ffe237e31bd44aec6f90753c037/receipts
+Receipts: 0 stored in /home/monkey/scratch/multiserver/home/data/seal/projects/02a372233b91435a486924d1d5539612/servers/db/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 
 Exit code: `0`.
 
-Three parts, always in this order:
+The Runtime line prints once, followed by Protection and Receipts for each stored server record:
 
 - **Runtime** — the pinned kernel runtime installed beside the command, which
   `seal verify` uses; a cache copy is only a fallback. Its presence does
   not decide whether your project is protected; see below.
-- **Protection** — this project's one shared server state with the state file
+- **Protection** — each server's shared protection state with the state file
   path in parentheses on the route line, then each guarded tool name on its
   own indented line under `Gated through this route:`. There is one
   lease for the server, not one lease per tool.
@@ -73,9 +73,11 @@ Not controlled:
   other uncontrolled routes can also exist
 ```
 
-No gate in this project, so no calls are intercepted. This is also what you
-see after a clean `seal unprotect`; its state record and past receipts can
-still remain on disk.
+With no server records, this means no gate in this project. After
+`seal unprotect SERVER`, status names that server as outside Seal; its state
+record and past receipts can remain on disk. Other server records still
+report their own protection. The examples below use retained legacy state
+paths; new server records use `projects/<id>/servers/<server-name>/state.json`.
 
 ### `PENDING RESTART`
 
@@ -142,7 +144,7 @@ approval](../assurance/claude-code-evidence.md#the-release-gating-client-matrix)
 
 Status reports only observable lease facts. A live pid and generation identify
 the current holder as `ACTIVE`; a dead pid is `STALE` and recoverable by the
-next wrapper, which takes the next generation. A second starter is refused at
+next wrapper, which takes the next generation. A second starter for the same server is refused at
 startup with the holder pid and generation; that transient event is not a
 project status and does not persist a conflict mode.
 
@@ -219,7 +221,7 @@ Protection detail: protected_server_initialize_failed: configured server input f
 The gate was installed, but when the wrapper started it could not bring up
 the configured server, so it recorded `BROKEN` with the refusal token and
 reason kept as the detail. Status exits 0 here because the record itself was
-readable. `seal protect` refuses (`already_protected: project is already
+readable. `seal protect` refuses (`already_protected: server "notes" is already
 BROKEN`); `seal unprotect notes` completes and returns the route to outside
 Seal, because the recorded Seal ownership checks pass.
 
@@ -230,8 +232,9 @@ because the external command failed, check Claude Code's local override before
 assuming it made no partial change.
 
 What to do about that record is honest but currently not smooth:
-`seal status` prints its Runtime line and then only `REFUSED no_seal_owned_override`, and exits 1,
-`seal protect` refuses (`already_protected: project is already BROKEN`) and
+`seal status` reports `REFUSED no_seal_owned_override` for that record, continues
+through any other server records, and exits 1,
+`seal protect` refuses (`already_protected: server "notes" is already BROKEN`) and
 `seal unprotect` refuses with `no_seal_owned_override`. Unprotect accepts an
 absent Claude Code override only when the recorded Seal ownership checks pass,
 and still requires no live lease and successful removal or Claude Code's exact
@@ -317,7 +320,7 @@ and exact kernel `now`; `seal verify` validates and replays that same file.
 
 ## `seal doctor`
 
-`seal status` tells you which MCP route is sealed; `seal doctor` tells you what the
+`seal status` tells you which MCP routes are sealed; `seal doctor` tells you what the
 approval itself rests on:
 
 ```bash

@@ -1,6 +1,6 @@
 # Choosing what to protect
 
-Seal protects a declared set of tools on one MCP server per project. This page
+Seal protects a declared set of tools on each selected MCP server in a project. This page
 is about making that choice well, and about what `seal protect` does and — just
 as important — what it leaves alone.
 
@@ -68,8 +68,8 @@ $ seal protect demo demo.mutate demo.erase
 ```
 
 ```output
-Project .mcp.json hash before protect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
-Sealed MCP route demo: PENDING RESTART (/home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json)
+Project .mcp.json hash before protect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
+Sealed MCP route demo: PENDING RESTART (/home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
 
 Gated through this route:
   demo.mutate
@@ -82,11 +82,11 @@ Not controlled:
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json
+State: /home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
-  3. Confirm the sealed MCP route is ACTIVE.
+  3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
 Undo:
   To clear protection for every guarded tool on server demo, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect demo`.
 ```
@@ -104,7 +104,7 @@ $ seal protect demo demo.mutate demo.erase
 ```
 
 ```output
-seal: REFUSE already_protected: project is already PENDING RESTART
+seal: REFUSE already_protected: server "demo" is already PENDING RESTART
 Next:
   Run `seal status` to see the current protection before changing it.
 ```
@@ -169,9 +169,9 @@ $ seal unprotect demo
 ```
 
 ```output
-Project .mcp.json hash before unprotect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
-Project .mcp.json hash after unprotect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
-Sealed MCP route demo: - outside Seal (/home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json)
+Project .mcp.json hash before unprotect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
+Project .mcp.json hash after unprotect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
+Sealed MCP route demo: - outside Seal (/home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
 
 Gated through this route:
   none
@@ -203,3 +203,27 @@ remain until you or Claude Code remove them.
 Previous: [Guide](README.md).
 Up: [Guide](README.md).
 Next: [Knowing it worked](knowing-it-worked.md).
+
+## Several servers in one project
+
+Run `seal protect SERVER TOOL [TOOL...]` once for each server and its complete
+selection. `seal status` prints each stored server's route, tools, lease and
+receipts. `seal unprotect SERVER` removes only that server's override; the
+other servers keep their gates. A configured server without an override is
+named under the other wrappers' `Not controlled` lists. Those lists describe
+each wrapper's boundary, even when another Seal wrapper protects that server.
+
+New records live at `projects/<id>/servers/<encoded-server-name>/state.json`.
+Server names are encoded as single directory components. Existing records at
+`projects/<id>/state.json` are included on every read and stay authoritative
+there: this compatibility migration leaves the original override, live wrapper,
+approval journal and receipts in place. It performs no one-shot move or copy.
+An upgrade therefore needs no re-protect operation for an existing server.
+
+The lock remains per project. It serializes activation, recovery and the
+configuration-writing part of protect/unprotect, then releases. A concurrent
+operation refuses with `proxy_lease_active` and the owner's PID; retry after
+the operation finishes. The lock is not held during a running proxy session,
+so two activated servers can gate calls concurrently with independent leases.
+For incompatible state in a project with several records, select the route
+with `seal recover --archive SERVER`; recovery of the other routes is separate.

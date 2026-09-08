@@ -295,11 +295,24 @@ before trusting status or asking Seal to remove the override.
 Seal has no stored ownership proof for this server's local override, so it
 will not remove or reinterpret that override.
 
+### `server_required`
+
+Several server records exist, so `seal recover --archive` cannot choose one.
+Run `seal recover --archive SERVER` for the intended incompatible record.
+
+### `duplicate_server_state`
+
+The same server has both a legacy project record and a new server record.
+Seal refuses to choose between two state histories. Stop the wrappers and
+resolve which record and installed override are authoritative before retrying;
+Seal has not copied, deleted or combined either history.
+
 ### `already_protected`
 
-This project already has recorded protection (the message names its state,
-e.g. `project is already PENDING RESTART`). One gate per project: unprotect
-first if you want to protect a different tool.
+The requested server already has recorded protection (the message names the
+server and its state, e.g. `server "db" is already PENDING RESTART`). To change
+that server's tool set, unprotect it first. Protecting another server in the
+same project leaves the first server protected.
 
 ### `active_claude_session`
 
