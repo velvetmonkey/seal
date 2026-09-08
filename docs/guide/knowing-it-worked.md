@@ -18,9 +18,9 @@ exit successfully while reporting that no gate is present.
   it does not establish which client is using it. Confirm Claude Code selected
   that override and presents approval for the intended tool before relying on
   that client's calls being protected.
-- **NOT protected:** `Sealed MCP route: - outside Seal` or `Gated through this
-  route: none`. Stop here: this project has no gate. Protect the intended server
+- **NOT protected:** `Sealed MCP route: - outside Seal` or `Gated through this route: none`. Stop here: this project has no gate. Protect the intended server
   and complete tool set, restart Claude Code, and repeat this check.
+  Read `Not controlled:` for the routes outside this gate’s scope.
 - **Protection not confirmed:** `PENDING RESTART`, `STALE`, `DRIFTED`, `BROKEN`,
   an unreadable state, a missing or mismatched runtime, a missing intended tool,
   or a failed status command. Stop and follow
@@ -33,6 +33,13 @@ Sealed MCP route: - outside Seal
 
 Gated through this route:
   none
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  configured MCP servers not routed through this Seal wrapper: demo
+  other uncontrolled routes can also exist
 ```
 
 That is **NOT protected**, even if the demo, receipt checker and doctor below
