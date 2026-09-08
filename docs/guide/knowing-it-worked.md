@@ -1,5 +1,63 @@
 # Knowing it worked
 
+## First: is your project's gate up?
+
+Run this at **the root of the project you want protected** — the directory
+containing its `.mcp.json`, where you ran `seal protect` — after restarting
+Claude Code there as directed by [Choosing what to protect](choosing-what-to-protect.md).
+Status reads the current directory, not its parents: an `outside Seal` / `none`
+reading from a subdirectory does not mean the project has no gate. Return to
+that project root and repeat the check before applying the readings below:
+
+```bash
+$ seal status
+$ seal doctor
+```
+
+Read the route and tool list, not just the command's exit code. Status can
+exit successfully while reporting that no gate is present. Also read doctor
+in the same shell environment: if it refuses, protection is not confirmed even
+when status reports ACTIVE. In particular, status does not detect
+`SEAL_ELICITATION_AUTO_RESPONSE`; doctor refuses that configuration.
+
+- **Protected through the reported route:** `Runtime: present`, the intended
+  `Sealed MCP route` is `ACTIVE`, and every tool you intend to guard appears
+  under `Gated through this route`, and doctor does not refuse. An ACTIVE lease
+  reports a live wrapper;
+  it does not establish which client is using it. Confirm Claude Code selected
+  that override and presents approval for the intended tool before relying on
+  that client's calls being protected.
+- **NOT protected:** `Sealed MCP route: - outside Seal` or `Gated through this route: none`. Stop here: this project has no gate. Protect the intended server
+  and complete tool set, restart Claude Code, and repeat this check.
+  Read `Not controlled:` for the routes outside this gate’s scope.
+- **Protection not confirmed:** `PENDING RESTART`, `STALE`, `DRIFTED`, `BROKEN`,
+  an unreadable state, a missing or mismatched runtime, a missing intended tool,
+  or a failed status command. Stop and follow
+  [What is protected right now](what-is-protected-right-now.md) before proceeding.
+
+For example, after unprotecting the demo project, status reports:
+
+```output
+Sealed MCP route: - outside Seal
+
+Gated through this route:
+  none
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  configured MCP servers not routed through this Seal wrapper: demo
+  other uncontrolled routes can also exist
+```
+
+That is **NOT protected**, even if the demo, receipt checker and doctor below
+all produce their expected output. Other servers listed as not routed through
+this wrapper, Bash, network access and subprocesses remain outside its scope.
+A previous receipt is not evidence that the project's gate is up now.
+
+## What the following evidence shows
+
 Trust here is not a feeling; it is three things you can look at. The approval
 prompt shows the exact call before it runs. A refusal shows the gate holding.
 A receipt records what was decided, and a separate-process checker refuses a
@@ -79,7 +137,11 @@ retry again after the decline: REFUSED -> approval refused: terminally_declined 
 You do not have to take the paragraph above on faith, and you do not need a
 protected project to see it. `seal demo` runs the same gate against a
 harmless built-in server that counts every call it actually receives, and
-every count printed is read back from that server's own count file:
+every count printed is read back from that server's own count file.
+It creates a separate temporary directory: it proves the demo gate holds its
+own call and blocks its replay. It does **not** test your project's routing or
+show that your project is protected; it succeeds even after you unprotect that
+project. Keep the project-status result above separate from this demonstration:
 
 ```output
 child calls observed: 0 (read from …/child/data.txt.count)
@@ -169,9 +231,27 @@ landed v2 checker reads the document, validates its commitments, and replays
 its exact inputs through the checker's local WASM kernel. Supply a public key
 you already trust if you also want the signature row checked.
 
+If you answered `N` (the default), the demo prints `demo stopped; nothing was
+approved and the child received 0 calls` followed by the count-file path. It
+prints no checker command for that path. Run `seal demo` again and answer `y`
+to exercise the harmless demo call and its blocked replay before continuing.
+
+For the approved demo run, copy its complete `Run: (cd ... && node ...)`
+command. It enters the installed store that contains the checker and checks
+the existing `-0003-BLOCK.json` receipt from the blocked replay. The ALLOW
+example above illustrates the receipt's contents; it is not the printed
+checker's target.
+
+Equivalently, set `SEAL_STORE` to the absolute directory after `cd` in that
+printed command, `SEAL_DEMO_DIR` to the printed temporary demo directory, and
+`SEAL_BLOCK_RECEIPT` to the full BLOCK receipt path. With those values from
+**your run**, this works from the demo directory or your project:
+
 ```bash
-$ node checker/seal-receipt-v2.mjs receipt-…-0002-ALLOW.json --pubkey "$(cat receipt-signer.pub)"
+$ (cd "$SEAL_STORE" && node checker/seal-receipt-v2.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")")
 ```
+
+The checker exits 0 and prints:
 
 ```output
 Document structure       VALID
@@ -186,11 +266,15 @@ REPLAY    available
 VERIFY    UNVERIFIED
 ```
 
-Change the arguments without repairing their commitment and the checker refuses:
+Save a copy of that BLOCK receipt as `tampered-receipt.json` in
+`SEAL_DEMO_DIR`. Change its `arguments.line` value to `tampered`, without
+repairing the commitment. Check the copy with the same installed checker:
 
 ```bash
-$ node checker/seal-receipt-v2.mjs tampered-receipt.json --pubkey "$(cat receipt-signer.pub)"
+$ (cd "$SEAL_STORE" && node checker/seal-receipt-v2.mjs "$SEAL_DEMO_DIR/tampered-receipt.json" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")")
 ```
+
+The checker exits 1 and prints:
 
 ```output
 REFUSE commitment_mismatch: arguments commitment mismatch
