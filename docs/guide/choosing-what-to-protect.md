@@ -69,7 +69,7 @@ $ seal protect demo demo.mutate demo.erase
 
 ```output
 Project .mcp.json hash before protect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
-Sealed MCP route demo: PENDING RESTART (/home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
+Sealed MCP route demo: PENDING RESTART (/home/you/.local/share/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
 
 Gated through this route:
   demo.mutate
@@ -82,7 +82,7 @@ Not controlled:
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json
+State: /home/you/.local/share/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
@@ -171,7 +171,7 @@ $ seal unprotect demo
 ```output
 Project .mcp.json hash before unprotect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
 Project .mcp.json hash after unprotect: ee4ddc490173e87d0b347f3eac86e041042f2c48f4230fe5f3036fd809f68c1c
-Sealed MCP route demo: - outside Seal (/home/monkey/scratch/multiserver/home/data/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
+Sealed MCP route demo: - outside Seal (/home/you/.local/share/seal/projects/b74bc86b66b5e27d972ab304ef2298e9/servers/demo/state.json)
 
 Gated through this route:
   none

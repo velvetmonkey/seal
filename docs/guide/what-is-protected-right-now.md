@@ -18,7 +18,7 @@ $ seal status
 
 ```output
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
-Sealed MCP route db: PENDING RESTART (/home/monkey/scratch/multiserver/home/data/seal/projects/02a372233b91435a486924d1d5539612/servers/db/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/f245ca9632a2147b4c4f6cbb08d8f8da/servers/db/state.json)
 
 Gated through this route:
   demo.mutate
@@ -36,7 +36,7 @@ Next:
   3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
 Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /home/monkey/scratch/multiserver/home/data/seal/projects/02a372233b91435a486924d1d5539612/servers/db/receipts
+Receipts: 0 stored in /home/you/.local/share/seal/projects/f245ca9632a2147b4c4f6cbb08d8f8da/servers/db/receipts
 Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
 ```
 
@@ -45,8 +45,8 @@ Exit code: `0`.
 The Runtime line prints once, followed by Protection and Receipts for each stored server record:
 
 - **Runtime** — the pinned kernel runtime installed beside the command, which
-  `seal verify` uses; a cache copy is only a fallback. Its presence does
-  not decide whether your project is protected; see below.
+  `seal verify` uses. Its presence does not decide whether your project is
+  protected; see below.
 - **Protection** — each server's shared protection state with the state file
   path in parentheses on the route line, then each guarded tool name on its
   own indented line under `Gated through this route:`. There is one
@@ -267,19 +267,17 @@ Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 ```
 
 The runtime is pinned and hash-checked beside the command, and both protected-call
-authorization and `seal verify` load it there. Status checks that adjacent
-runtime first and consults its cache fallback only when the adjacent runtime is
-absent.
-Three states:
+authorization and `seal verify` load it there. The installed `seal` command
+judges every stored file against its install record before it runs any
+subcommand, status included, so a damaged runtime is refused before any Runtime
+line can print. Two forms, both from real runs:
 
-- `Runtime: absent … (kernel/wasm/seal.js is unavailable)` — neither the
-  adjacent runtime nor status's cache fallback is available.
 - `Runtime: present …` — every file status inspected matches its pinned hash.
-- `Runtime: integrity check failed … (kernel/wasm/seal.js hash mismatch;
-  runtime bytes do not match the published runtime)` — a hash mismatch in
-  whichever runtime directory status inspected, adjacent or cached. For an
-  adjacent-runtime hash mismatch: Status does not fall back to the cache
-  after this failure; repair the verified installation.
+- `REFUSE artifact_digest_mismatch: installed file digest mismatch:
+  runtime/kernel/wasm/seal.js` — printed instead of any status output, with
+  exit code 1, when a stored runtime file no longer matches the install record.
+  A missing file is refused the same way as `REFUSE artifact_missing: installed
+  file missing: runtime/kernel/wasm/seal.js`. Repair the verified installation.
 
 ## The Receipts lines
 
