@@ -77,10 +77,14 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 30000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
-The current install payload excludes `seal-receipt-v2.mjs`. Download the sibling
+The current install payload includes `seal-receipt-v2.mjs`. Download the sibling
 [`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.3.0/seal-receipt-v2.mjs)
-only to verify it against the `SHA256SUMS` asset attached to that same release.
-Run `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout instead.
+to verify its digest against the `SHA256SUMS` asset attached to that same release.
+The sibling is not standalone: it imports the kernel decision runner from the
+Seal tree. Run `node checker/seal-receipt-v2.mjs RECEIPT` from the installed
+store at `prefix/lib/seal/store/<tree>/`; the checker is at
+`checker/seal-receipt-v2.mjs` within that tree. Its presence establishes neither
+authority nor event occurrence.
 The launcher never searches `PATH` for another `seal`.
 The checker implements receipt canonicalisation and signature checking itself
 with the same Node crypto platform as the producer, but imports Seal's kernel
