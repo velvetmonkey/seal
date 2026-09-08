@@ -1,13 +1,17 @@
 # When something looks wrong
 
-Every refusal Seal prints carries a token — a fixed `snake_case` name for
-what happened. This page lists every token the product can emit, grouped by
-where you meet it, with the cause and the way out. A test in this repository
-(`test/guide-tokens.test.mjs`) checks this page against the source in both
-directions, so a token you hit is on this page, and a token on this page
-exists in the code.
+Seal prints tokened refusals — a token is a fixed `snake_case` name for
+what happened — and un-tokened errors such as `seal: usage: seal verify PATH`. This page lists the tokens selected by the source patterns in
+`test/guide-tokens.test.mjs`, grouped by where you meet them, with the cause
+and the way out. A test in this repository
+(`test/guide-tokens.test.mjs`) compares the token headings with tokens matched
+by its configured source patterns, which omit some emitted tokens, including
+`client_elicitation_unsupported`, `receipt_correlation_capacity_exceeded`,
+and `receipt_signer_absent`.
 
-Refusals arrive in one of four shapes:
+Refusal output includes the four shapes below, plus un-tokened `seal: <message>`
+errors, `seal: REFUSE <token>: <message>` protection errors, and
+`REFUSED <token>` lines with a separate message when supplied:
 
 - as the protected tool's error result in Claude Code:
   `approval refused: <token> — <detail>`
@@ -55,8 +59,8 @@ referenced that cancelled request. Make a fresh call.
 
 ### `expired`
 
-More than 2 minutes passed between the prompt appearing and the approval
-arriving, so the window closed. Exercised for real: after a 125-second wait
+More than 2 minutes passed between Seal issuing the approval handle and
+evaluating the retry, so the window closed. Exercised for real: after a 125-second wait
 the retry was refused with `expired — the approval window closed before the
 retry arrived`. Approval expiry follows the local wall clock. Call again and
 answer within the window.
@@ -167,8 +171,11 @@ status` will show `DRIFTED`; the ways out are on
 
 The recorded protection state file disappeared while the wrapper was
 running (exercised by removing it mid-session). Seal fails closed: nothing
-forwards without the record. If you deleted Seal's data directory, unprotect
-and protect again; if you did not, find out what did.
+forwards without the record. If you deleted Seal's data directory, `seal unprotect` refuses with
+`no_seal_owned_override` because its ownership proof is gone; stop Claude
+Code, inspect the server's local override and remove it manually only after
+confirming it is the Seal wrapper, then protect again; if you did not delete
+the directory, find out what did.
 
 ### `protected_server_missing`
 
@@ -194,14 +201,16 @@ The shipped checks always name one (`project_server_drifted`,
 
 ## Running `seal protect` and `seal unprotect`
 
-Minted in `spine/protection.cjs`; printed as `seal: <token>: <message>`.
+Minted in `spine/protection.cjs`; `ProtectionError` instances print as
+`seal: REFUSE <token>: <message>`, while ownership refusals print
+`REFUSED <token>` with a separate message when supplied.
 
 ### `usage`
 
 Arguments missing: `seal protect SERVER TOOL` and `seal unprotect SERVER`
-need their names. (The printed line currently reads
-`seal: usage: usage: seal protect SERVER TOOL` — the doubled word is a known
-cosmetic defect, not a deeper problem.)
+need their names. (Running `seal protect` without arguments prints
+`seal: REFUSE usage: usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~"PATTERN"] [TOOL...]`
+and exits with code 1.)
 
 ### `project_server_absent`
 
@@ -301,8 +310,10 @@ exactly the kind of silent change Seal exists to prevent.
 ### `lease_generation_mismatch`
 
 The proxy's durable lease generation changed while it was evaluating an
-approval. Seal refuses at the consume boundary; the journal remains
-authoritative, and the retry must be issued by the current lease holder.
+approval. Seal rechecks the proxy's lease immediately before consuming the approval
+and refuses without consuming it if that check fails, but after that check passes
+and the approval is consumed, a lease mismatch at the subsequent pre-forward check
+refuses the forward with the approval's one use already spent.
 
 ### `claude_install_failed`
 
@@ -331,7 +342,7 @@ accepts the supported `seal.protect/v1` spellings, including older single-tool
 records; the creating binary's `sealVersion` is provenance, not a compatibility
 gate. Unsupported schemas still refuse.
 
-> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+> Seal includes `seal recover`. It requires exactly one argument, `--archive`.
 
 The current binary also provides an explicit recovery command: stop Claude
 Code and run `seal recover --archive` in the affected project. It preserves
