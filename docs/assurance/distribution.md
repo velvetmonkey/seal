@@ -3,16 +3,18 @@
 Seal v0.3.0.
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other platforms are not supported.
-It ships **one** installable artifact, for **Linux x86-64**.
+It ships **three** installable artifacts, for **Linux x86-64**, **macOS x64**, and **macOS arm64**.
 
-## The artifact
+## The artifacts
 
-`scripts/build-dist.cjs` writes `dist/seal-v<identity>-linux-x64`, where the
-identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
-otherwise `<version>-dev.g<commit>` — see
-[VERSION-IDENTITY.md](version-identity.md). That file
-is the installer and the payload. The published pin lives in the `SHA256SUMS`
-release asset alongside the artifact (digest and byte length). The repository
+`scripts/build-dist.cjs` writes one of the three installable artifacts per
+run, `dist/seal-v<identity>-<platform>`, for `linux-x64` (the default) or, via
+`--platform`, `darwin-x64` or `darwin-arm64`; a Darwin build also needs the
+matching release runner's `--macos-helper`. The identity is the bare
+`<version>` only when HEAD is exactly tag `v<version>` and otherwise
+`<version>-dev.g<commit>` — see [VERSION-IDENTITY.md](version-identity.md).
+Each file is the installer and the payload. The published pins live in the
+`SHA256SUMS` release asset alongside the artifacts (digest and byte length). The repository
 root intentionally has no hand-maintained copy. `test/dist-pin.test.cjs`
 refuses a root entry for an artifact that is not a published release, while
 an absent or empty root file is the defined between-releases state.
@@ -28,12 +30,12 @@ Copy the whole POSIX command, including its backslashes and `&&` operators.
 A failed comparison skips both `chmod` and execution.
 
 ```bash
-SEAL_VERSION=v0.2.1
-artifact_name="seal-v0.2.1-linux-x64" \
-&& artifact_sha256="4063ea160b1e8cea8f0ca0c87453484a7827bf0cbfb9ac1179888814e490b9dd" \
-&& artifact_bytes=6214316 \
+SEAL_VERSION=v0.3.0
+artifact_name="seal-v0.3.0-linux-x64" \
+&& artifact_sha256="93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b" \
+&& artifact_bytes=6247615 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="79054c0c63d1c70ca5b1e9d0c1d5670a947f49d7abeded441ad742b392ee19c0" \
+&& sums_sha256="55f26a95c5aed564545ae35a409b7ea73ca4f1d9f7cf67311a9d79215e3563e3" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -75,10 +77,14 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 30000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
-The current install payload excludes `seal-receipt-v2.mjs`. Download the sibling
+The current install payload includes `seal-receipt-v2.mjs`. Download the sibling
 [`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.3.0/seal-receipt-v2.mjs)
-only to verify it against the `SHA256SUMS` asset attached to that same release.
-Run `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout instead.
+to verify its digest against the `SHA256SUMS` asset attached to that same release.
+The sibling is not standalone: it imports the kernel decision runner from the
+Seal tree. Run `node checker/seal-receipt-v2.mjs RECEIPT` from the installed
+store at `prefix/lib/seal/store/<tree>/`; the checker is at
+`checker/seal-receipt-v2.mjs` within that tree. Its presence establishes neither
+authority nor event occurrence.
 The launcher never searches `PATH` for another `seal`.
 The checker implements receipt canonicalisation and signature checking itself
 with the same Node crypto platform as the producer, but imports Seal's kernel

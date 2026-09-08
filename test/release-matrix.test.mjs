@@ -130,7 +130,7 @@ test("the release manifest binds all platforms and publication rewrites every re
       new RegExp(`\\[The \\x60${checkerName.replaceAll(".", "\\.")}\\x60 release asset\\]\\(https://github\\.com/velvetmonkey/seal/releases/download/v${VERSION.replaceAll(".", "\\.")}/${checkerName.replaceAll(".", "\\.")}\\)`),
     );
     const distribution = fs.readFileSync(path.join(docsRoot, "docs", "assurance", "distribution.md"), "utf8");
-    assert.match(distribution, new RegExp(`current install payload excludes \\x60${checkerName.replaceAll(".", "\\.")}\\x60`));
+    assert.match(distribution, new RegExp(`current install payload includes \\x60${checkerName.replaceAll(".", "\\.")}\\x60`));
     assert.match(
       distribution,
       new RegExp(`\\[\\x60${checkerName.replaceAll(".", "\\.")}\\x60 release asset\\]\\(https://github\\.com/velvetmonkey/seal/releases/download/v${VERSION.replaceAll(".", "\\.")}/${checkerName.replaceAll(".", "\\.")}\\)`),
