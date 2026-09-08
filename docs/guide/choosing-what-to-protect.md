@@ -128,10 +128,11 @@ The three user-visible changes are:
 Claude Code writes `~/.claude.json` and a backup under `~/.claude/backups/`.
 Seal invokes Claude Code but writes neither file.
 
-`PENDING RESTART` means the gate is installed but not yet standing: Claude
-Code only picks up the override when it starts. Restart Claude Code in this
-project and the state becomes `ACTIVE`. Until then, calls to the server go
-through Claude Code's existing connection, exactly as before.
+`PENDING RESTART` means the gate is installed but not yet standing: restart
+Claude Code in this project to load the local override. The state becomes
+`ACTIVE` when the Seal wrapper starts; if Claude Code shows `Select login
+method`, sign in first so the interactive session can start it. Until then,
+calls to the server go through Claude Code's existing connection, exactly as before.
 
 ## What it leaves alone
 
