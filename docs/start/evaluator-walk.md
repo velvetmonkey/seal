@@ -69,6 +69,8 @@ The landing page has **zero `<button>` controls**.
 See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and
 [LIMITATIONS.md](../archive/LIMITATIONS.md) for the family-level claims block.
 
+On Linux x86-64, first [build and install this checkout](install.md#build-and-install-this-checkout-on-linux-x86-64).
+
 Previous: [Install](install.md).
 Up: [Start](README.md).
 Next: [Guide](../guide/README.md).

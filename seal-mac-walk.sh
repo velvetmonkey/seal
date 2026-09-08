@@ -128,7 +128,7 @@ if [ "$AFTER_RESTART" -eq 1 ]; then
   RECEIPT='SKIPPED (after-restart mode checks only route activation)'
   WITNESS='SKIPPED (the first run already reported witness readiness)'
   PROTECT='SKIPPED (protect is first-run work; after-restart mode only observes it)'
-  say 'After-restart check: this command does not start Claude Code; it reports the state Claude Code actually left behind.'
+  say 'After-restart check: this command does not start Claude Code; it checks the route while that Claude Code session is running.'
   (cd "$WORK/project" && run_capture status-after-restart "$SEAL" status)
   code=$?
   expected_active_route='Sealed MCP route db:'
@@ -272,7 +272,7 @@ if [ "$?" -eq 0 ]; then PROTECT=PASS; else PROTECT=FAIL; gatekeeper_note "$WORK/
 say ''
 say 'NEXT: Restart Claude Code using the temporary configuration and project:'
 say "  $WORK/start-claude-code.sh"
-say 'Close that Claude Code session after it has started the db MCP route, then run:'
+say 'Keep that Claude Code session running after it starts the db MCP route; in another terminal run:'
 say "  $0 --after-restart $WORK"
-say 'The follow-up checks the actual status output for ACTIVE; it does not claim activation merely because protect succeeded.'
+say "The follow-up checks for ACTIVE while Claude Code runs this project's wrapper; status reports STALE after the session exits."
 finish 0

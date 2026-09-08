@@ -85,7 +85,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: ccd45efbb6b97d701ba6c068a17cbcb89f17d9343bf7e397a34aa1470606ce25
+tree: a27db6743643f467d439a176c9ed4973c19aa51a67562991f7881d6cfb7eacc7
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
@@ -104,6 +104,33 @@ spaces><path><newline>`. Concatenate those lines without another separator and
 SHA-256 the resulting UTF-8 byte sequence. That final digest is the
 installed-tree hash. The same definition applies to a published asset; its
 payload manifest, rather than this checkout, selects its file set.
+
+## Build and install this checkout on Linux x86-64
+
+For the [source-build evaluator walk](evaluator-walk.md), run this from the
+checkout root with Node 20+ on Linux x86-64. It builds the artifact, checks
+its SHA-256 digest and byte count, and installs under this checkout's
+`dist/local` directory:
+
+```bash
+platform="linux-$(node -p 'process.arch')" \
+&& node scripts/build-dist.cjs --platform "$platform" --out dist \
+&& read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS \
+&& test "$expected_name" = "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" \
+&& test -n "$expected_digest" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "dist/$expected_name")"; else actual_digest="$(sha256sum "dist/$expected_name")"; fi \
+&& test "${actual_digest%% *}" = "$expected_digest" \
+&& actual_bytes="$(wc -c < "dist/$expected_name")" \
+&& test "$actual_bytes" -eq "$expected_bytes" \
+&& chmod +x "dist/$expected_name" \
+&& ./"dist/$expected_name" --sha256 "$expected_digest" --bytes "$expected_bytes" --prefix "$PWD/dist/local"
+```
+
+Add this installation to PATH in the same shell before following the walk:
+
+```bash
+$ export PATH="$PWD/dist/local/bin:$PATH"
+```
 
 ## Build and install this checkout on macOS
 
