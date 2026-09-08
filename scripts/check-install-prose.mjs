@@ -68,7 +68,7 @@ const outsideReviews = {
     ['23', 'UNPROVABLE: full Protect execution on all named hosts (claim 01)', 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.'],
     ['24', 'test/frontdoor.test.mjs#readme: approval, replay refusal, child count', 'Seal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.'],
     ['25', 'test/protect3b.test.cjs: protect and unprotect leave project .mcp.json byte-identical by hash', "The command removes Seal's local override and reports that the sealed MCP route is outside Seal."],
-    ['26', 'UNPROVABLE here: command absence in the historical published release', '`seal recover` is not in the currently published release, v0.2.1.'],
+    ['26', 'test/protect3b.test.cjs: explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect', '`seal recover --archive` is available in Seal v0.3.0.'],
     ['27', 'test/protect3b.test.cjs: stored schema compatibility and explicit recovery', 'Seal accepts stored state with a schema it can read, regardless of the Seal version that created it.'],
     ['28', 'test/protect3b.test.cjs: explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect', 'If Seal reports `incompatible_state` for an unsupported schema, stop Claude Code and run this in the affected project:'],
     ['29', 'test/protect3b.test.cjs: exact archive bytes and recovery ownership refusals', "It saves the exact old state to the printed `state.json.recovered-…` path before removing Seal's local override, using the same ownership checks as unprotect."],
