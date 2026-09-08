@@ -15,8 +15,6 @@ declaration: `seal protect db demo.mutate demo.erase`. `seal status` reports
 that one server protection as `db.{demo.mutate, demo.erase}`; use the operating
 guide for the setup and state details.
 
-On Linux x86-64, first [build and install this checkout](install.md#build-and-install-this-checkout-on-linux-x86-64).
-
 ## After `seal demo`
 
 The demo prints `demo directory: <path> (remains after the demo
@@ -70,6 +68,8 @@ The landing page has **zero `<button>` controls**.
 
 See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and
 [LIMITATIONS.md](../archive/LIMITATIONS.md) for the family-level claims block.
+
+On Linux x86-64, first [build and install this checkout](install.md#build-and-install-this-checkout-on-linux-x86-64).
 
 Previous: [Install](install.md).
 Up: [Start](README.md).

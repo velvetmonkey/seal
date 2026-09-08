@@ -129,7 +129,7 @@ platform="linux-$(node -p 'process.arch')" \
 Add this installation to PATH in the same shell before following the walk:
 
 ```bash
-export PATH="$PWD/dist/local/bin:$PATH"
+$ export PATH="$PWD/dist/local/bin:$PATH"
 ```
 
 ## Build and install this checkout on macOS
