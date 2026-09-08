@@ -68,6 +68,25 @@ if (!SUPPORTED_PLATFORMS.has(record.platform) || record.platform !== host.id) {
 const storeRoot = path.join(prefix, record.store);
 if (!storeRoot.startsWith(prefix)) refuse("install_record_malformed", "store path escapes the prefix");
 
+// The installer copies these payload bytes verbatim to prefix/bin/seal.
+// This detects drift, not replacement of this check or its writable record.
+const launcherEntry = Array.isArray(record.files)
+  ? record.files.find((file) => file && file.path === "scripts/seal-launch.cjs")
+  : null;
+if (!launcherEntry || !/^[0-9a-f]{64}$/.test(launcherEntry.sha256) ||
+    !Number.isSafeInteger(launcherEntry.bytes) || launcherEntry.bytes < 0) {
+  refuse("install_record_malformed", "install record has no valid launcher digest");
+}
+let launcherBytes;
+try {
+  launcherBytes = fs.readFileSync(__filename);
+} catch (error) {
+  refuse("launcher_unreadable", `cannot read installed launcher: ${error.message}`);
+}
+if (launcherBytes.length !== launcherEntry.bytes || sha256Hex(launcherBytes) !== launcherEntry.sha256) {
+  refuse("launcher_digest_mismatch", "installed launcher digest does not match the install record");
+}
+
 for (const file of record.files || []) {
   const full = path.join(storeRoot, file.path);
   let stat;
