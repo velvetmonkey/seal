@@ -49,7 +49,7 @@ For other supported platforms, see the [install guide](../start/install.md):
 
 ```bash
 SEAL_VERSION=v0.3.0
-artifact_name="seal-${SEAL_VERSION}-linux-x64" \
+artifact_name="seal-v0.3.0-linux-x64" \
 && artifact_sha256="93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b" \
 && artifact_bytes=6247615 \
 && sums_name="SHA256SUMS" \
@@ -74,9 +74,6 @@ installed seal 0.3.0 linux-x64
 store: /home/you/.local/lib/seal/store/ccd45efbb6b97d701ba6c068a17cbcb89f17d9343bf7e397a34aa1470606ce25
 command: /home/you/.local/bin/seal
 tree: ccd45efbb6b97d701ba6c068a17cbcb89f17d9343bf7e397a34aa1470606ce25
-Next:
-  export PATH=/home/you/.local/bin:$PATH
-  seal demo
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
