@@ -584,6 +584,17 @@ Before running anything, the installed launcher checks the whole store
 against its install record. The `artifact_*` tokens above are its refusals
 too. Minted in `scripts/seal-launch.cjs`.
 
+### `launcher_digest_mismatch`
+
+The installed launcher's bytes differ from its entry in
+`lib/seal/install.json`. Restore a complete pinned installation; do not
+change the recorded digest to match the changed file.
+
+### `launcher_unreadable`
+
+The installed launcher cannot read its own file. Check its file permissions
+or restore a complete pinned installation.
+
 ### `install_record_missing`
 
 `lib/seal/install.json` is gone from the install prefix. The launcher
