@@ -140,7 +140,7 @@ is outside Seal. The project `.mcp.json` remains byte-for-byte unchanged.
 
 ### Recover incompatible state
 
-> `seal recover --archive` is available in Seal v0.3.0. It archives incompatible protection state and removes Seal’s owned local override, leaving the route outside Seal.
+> Seal includes `seal recover`. It archives incompatible protection state and removes Seal’s owned local override, leaving the route outside Seal.
 
 Seal accepts stored state with a schema it can read, regardless of the Seal
 version that created it. If Seal reports `incompatible_state` for an unsupported

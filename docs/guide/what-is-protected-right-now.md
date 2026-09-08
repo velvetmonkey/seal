@@ -223,7 +223,7 @@ finish. The working recovery, exercised for real, is in
 
 A related message you can see here:
 
-> `seal recover --archive` is available in Seal v0.3.0. It archives incompatible protection state and removes Seal’s owned local override, leaving the route outside Seal.
+> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
 
 ```output
 Stored protection state: could not be read

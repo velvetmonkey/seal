@@ -3,7 +3,7 @@
 Seal v0.3.0.
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other platforms are not supported.
-It ships **one** installable artifact, for **Linux x86-64**.
+It ships **three** installable artifacts, for **Linux x86-64**, **macOS x64**, and **macOS arm64**.
 
 ## The artifact
 
