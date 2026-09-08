@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,12 +13,13 @@ const { testTmpdir } = tempRoot;
 
 async function withIsolatedRepository(body) {
   const root = testTmpdir("seal-status-boundaries-");
-  for (const directory of ["bin", "runtime", "docs"]) {
-    fs.cpSync(path.join(ROOT, directory), path.join(root, directory), { recursive: true });
-  }
+  const archive = path.join(root, "source.tar");
+  execFileSync("git", [
+    "archive", "--format=tar", `--output=${archive}`, "HEAD",
+    "bin", "runtime", "docs", "scripts/check-authorization-status-boundaries.mjs",
+  ], { cwd: ROOT });
+  execFileSync("tar", ["-xf", archive, "-C", root]);
   const checker = path.join(root, "scripts", "check-authorization-status-boundaries.mjs");
-  fs.mkdirSync(path.dirname(checker), { recursive: true });
-  fs.copyFileSync(path.join(ROOT, "scripts", "check-authorization-status-boundaries.mjs"), checker);
   try {
     const { authorizationStatusBoundaryFailures } = await import(pathToFileURL(checker).href);
     return await body({ root, seal: path.join(root, "bin", "seal"), authorizationStatusBoundaryFailures });
