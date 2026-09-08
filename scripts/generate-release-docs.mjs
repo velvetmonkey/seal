@@ -507,8 +507,6 @@ function publishedSurfaceChanges(manifest) {
   const releaseNotes = `RELEASE-NOTES-${tag}.md`;
   const historicalLimitationsLabel = `“What Seal does not cover” in assurance/${HISTORICAL_LIMITATIONS_NOTES}`;
   const version = tag.slice(1);
-  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
-    ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const checkerUrl = `https://github.com/${REPOSITORY}/releases/download/${tag}/${manifest.checker.name}`;
   const notePattern = new RegExp(`RELEASE-NOTES-v${SEMVER}\\.md`);
   const archiveScopeFiles = [
@@ -524,7 +522,7 @@ function publishedSurfaceChanges(manifest) {
       [notePattern, releaseNotes, "published release-note route"],
     ])),
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
-      [notePattern, `RELEASE-NOTES-v${sourceVersion}.md`, "source-version release-note route"],
+      [notePattern, releaseNotes, "published release-note route"],
     ]),
     replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],

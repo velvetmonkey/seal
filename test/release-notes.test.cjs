@@ -18,11 +18,12 @@ const V020_FINAL_NOTES = path.join(ROOT, V020_FINAL_NOTES_RELATIVE);
 const NOTES = path.join(ROOT, NOTES_RELATIVE);
 
 test("the current VERSION has a release note with the same identity", () => {
-  assert.equal(NOTES_RELATIVE, FINAL_NOTES_RELATIVE);
+  assert.ok(fs.existsSync(NOTES), `current release notes exist: ${NOTES_RELATIVE}`);
   assert.equal(path.basename(NOTES), `RELEASE-NOTES-v${VERSION}.md`);
   assert.match(fs.readFileSync(NOTES, "utf8"), new RegExp(`^# Seal v${VERSION.replaceAll(".", "\\.")} release notes$`, "m"));
 });
 
+// CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.3.0.md#release-notes-v030
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   const notes = fs.readFileSync(NOTES, "utf8");
 
@@ -48,11 +49,16 @@ test("rc.3 release-note identity and platform boundary remain immutable", () => 
   assert.doesNotMatch(notes, /supports Linux x86-64 and macOS x64\/arm64/);
 });
 
-test("v0.2.0 release-note identity and platform boundary remain immutable", () => {
+test("v0.2.0 and v0.2.1 release-note identities and platform boundaries remain immutable", () => {
   const notes = fs.readFileSync(V020_FINAL_NOTES, "utf8");
   assert.match(notes, /^# Seal v0\.2\.0 release notes$/m);
   assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
   assert.doesNotMatch(notes, /Protect is not supported on macOS yet\./);
+
+  const finalNotes = fs.readFileSync(path.join(ROOT, FINAL_NOTES_RELATIVE), "utf8");
+  assert.match(finalNotes, /^# Seal v0\.2\.1 release notes$/m);
+  assert.match(finalNotes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.doesNotMatch(finalNotes, /Protect is not supported on macOS yet\./);
 });
 
 test("replacement rc.3 citations retain their specific evidence", () => {

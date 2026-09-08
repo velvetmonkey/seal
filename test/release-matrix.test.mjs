@@ -12,6 +12,8 @@ const { testTmpdir } = tempRoot;
 
 const ROOT = path.join(import.meta.dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
+const PUBLISHED_VERSION = fs.readFileSync(path.join(ROOT, "README.md"), "utf8").match(/^SEAL_VERSION=v([^\s]+)$/m)[1];
+const PUBLISHED_NOTES = `RELEASE-NOTES-v${PUBLISHED_VERSION}.md`;
 const FINAL_NOTES = `RELEASE-NOTES-v${VERSION}.md`;
 const FINAL_NOTES_PATTERN = FINAL_NOTES.replaceAll(".", "\\.");
 const HELPER_PROVENANCE = "release-produced, not independ" + "ently reproduced";
@@ -92,7 +94,7 @@ test("the release manifest binds all platforms and publication rewrites every re
     fs.cpSync(path.join(ROOT, "docs"), path.join(docsRoot, "docs"), { recursive: true });
     const mismatchPath = path.join(docsRoot, "docs", "archive", "AUTHORIZATION-MESH.md");
     const mismatch = fs.readFileSync(mismatchPath, "utf8").replace(
-      `[docs/assurance/${FINAL_NOTES}](../assurance/${FINAL_NOTES})`,
+      `[docs/assurance/${PUBLISHED_NOTES}](../assurance/${PUBLISHED_NOTES})`,
       `[docs/assurance/${FINAL_NOTES}](../assurance/RELEASE-NOTES-v0.2.0-rc.3.md)`,
     );
     assert.match(
