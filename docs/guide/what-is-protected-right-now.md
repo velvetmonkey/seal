@@ -4,8 +4,9 @@ Keep the complete `seal protect` selection when it includes an argument
 predicate: status and the undo suggested by `seal unprotect` display only tool
 names. `seal status`, run in
 the project directory, answers from the recorded state; `seal doctor` states
-the one assumption approvals rest on. This page shows every line and every
-state those two commands can print, from real runs.
+the one assumption approvals rest on. This page shows protection states and receipt summaries from real runs;
+status also reports receipt paths that are not directories and individual
+unreadable receipts, whose output is not shown here.
 
 ## Reading `seal status`
 
@@ -45,9 +46,9 @@ Three parts, always in this order:
 
 - **Runtime** — a cached component that `seal verify` uses. Its presence does
   not decide whether your project is protected; see below.
-- **Protection** — this project's one shared server state, then the guarded
-  names: `server.tool` for one tool or `server.{tool, tool}` for several,
-  followed by the path of the state file the answer came from. There is one
+- **Protection** — this project's one shared server state with the state file
+  path in parentheses on the route line, then each guarded tool name on its
+  own indented line under `Gated through this route:`. There is one
   lease for the server, not one lease per tool.
 - **Receipts** — how many decision records exist and which one was written
   last. Receipts are covered properly in
@@ -158,8 +159,9 @@ Not controlled:
 Protection detail: project .mcp.json server changed since protect; forwarding refused
 ```
 
-The `notes` entry in `.mcp.json` is no longer the entry you protected — its
-command, args, or env changed. Seal will not forward anything to a server it
+The `notes` entry in `.mcp.json` is no longer the entry you protected — the
+digest of its whole server object changed, including any extra members, not
+only command, args, or env. Seal will not forward anything to a server it
 did not show you, so the whole server is refused until you act. Two honest
 ways out:
 
@@ -217,8 +219,9 @@ check Claude Code's local override before assuming it made no partial change.
 
 What to do about `BROKEN` is honest but currently not smooth:
 `seal protect` refuses (`already_protected: project is already BROKEN`) and
-`seal unprotect` needs the Claude Code override to exist before it will
-finish. The working recovery, exercised for real, is in
+`seal unprotect` accepts an absent Claude Code override if the recorded Seal
+ownership checks pass, but still requires no live lease and successful removal
+or Claude Code's exact local-scope absence diagnostic before it will finish. The working recovery, exercised for real, is in
 [when-something-looks-wrong](when-something-looks-wrong.md#claude_install_failed).
 
 A related message you can see here:
@@ -327,8 +330,10 @@ REFUSED
 REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed
 ```
 
-If you see that, an auto-response signal is set in your environment; remove it
-before trusting any approval prompt in that session. If you do not see it,
+If you see that, `SEAL_ELICITATION_AUTO_RESPONSE` or
+`CLAUDE_ELICITATION_AUTO_RESPONSE` is nonempty, or the Claude settings file
+has a nonempty `Elicitation` or `ElicitationResult` hook array; remove the
+detected signal or hooks before trusting any approval prompt in that session. If you do not see it,
 Seal has not established whether Claude Code itself can answer elicitation
 requests automatically.
 
