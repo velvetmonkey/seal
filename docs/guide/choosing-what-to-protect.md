@@ -21,13 +21,76 @@ file, while `demo.erase` truncates it. They are different risks; naming both
 when both need approval is the point of choosing a set rather than selecting a
 single winner.
 
+The worked example on this page uses a project with one server, `notes`: a
+small stdio MCP server with two tools. To follow along, make an empty project
+directory and save this file in it as `notes-server.cjs`:
+
+```javascript
+// notes-server.cjs: a minimal stdio MCP server with two tools.
+const fs = require("node:fs");
+const path = require("node:path");
+const readline = require("node:readline");
+
+const NOTES = path.join(__dirname, "notes.txt");
+const TOOLS = [
+  {
+    name: "append_note",
+    description: "Append one line to notes.txt",
+    inputSchema: { type: "object", properties: { line: { type: "string" } }, required: ["line"] },
+  },
+  {
+    name: "delete_all_notes",
+    description: "Empty notes.txt",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
+function send(message) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\n");
+}
+
+function call(name, args) {
+  if (name === "append_note") {
+    fs.appendFileSync(NOTES, `${args.line}\n`);
+    return "appended one line to notes.txt";
+  }
+  if (name === "delete_all_notes") {
+    fs.writeFileSync(NOTES, "");
+    return "emptied notes.txt";
+  }
+  return `unknown tool: ${name}`;
+}
+
+readline.createInterface({ input: process.stdin }).on("line", (line) => {
+  if (!line.trim()) return;
+  const { id, method, params = {} } = JSON.parse(line);
+  if (method === "initialize") {
+    send({ id, result: {
+      protocolVersion: params.protocolVersion || "2025-06-18",
+      capabilities: { tools: {} },
+      serverInfo: { name: "notes", version: "0.1.0" },
+    } });
+  } else if (method === "tools/list") {
+    send({ id, result: { tools: TOOLS } });
+  } else if (method === "tools/call") {
+    const text = call(params.name, params.arguments || {});
+    send({ id, result: { content: [{ type: "text", text }] } });
+  } else if (id !== undefined) {
+    send({ id, error: { code: -32601, message: `unknown method: ${method}` } });
+  }
+});
+```
+
+Then declare it in `.mcp.json` beside it. The `args` path is relative to the
+project directory:
+
 ```json
 {
   "mcpServers": {
     "notes": {
       "type": "stdio",
       "command": "node",
-      "args": ["/home/monkey/scratch/choosefix/walk/project/notes-server.cjs"]
+      "args": ["./notes-server.cjs"]
     }
   }
 }
@@ -56,8 +119,8 @@ $ seal protect notes delete_all_notes
 ```
 
 ```output
-Project .mcp.json hash before protect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
-Sealed MCP route notes: PENDING RESTART (/home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json)
+Project .mcp.json hash before protect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
+Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json)
 
 Gated through this route:
   delete_all_notes
@@ -69,7 +132,7 @@ Not controlled:
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 1 other tool NOT APPROVAL-GATED (they pass through Seal): append_note
-State: /home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json
+State: /home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
@@ -157,9 +220,9 @@ $ seal unprotect notes
 ```
 
 ```output
-Project .mcp.json hash before unprotect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
-Project .mcp.json hash after unprotect: 98f6a9de1a730b65ac4e460cf80d1e4c39fd363002799209336d1349c54e8d30
-Sealed MCP route notes: - outside Seal (/home/monkey/scratch/choosefix/walk/runs/run1/home/.local/share/seal/projects/632eb55d096ea7eb80ff2423c952bdb5/state.json)
+Project .mcp.json hash before unprotect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
+Project .mcp.json hash after unprotect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
+Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json)
 
 Gated through this route:
   none
