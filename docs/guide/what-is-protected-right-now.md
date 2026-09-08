@@ -44,7 +44,8 @@ Exit code: `0`.
 
 Three parts, always in this order:
 
-- **Runtime** — a cached component that `seal verify` uses. Its presence does
+- **Runtime** — the pinned kernel runtime installed beside the command, which
+  `seal verify` uses; a cache copy is only a fallback. Its presence does
   not decide whether your project is protected; see below.
 - **Protection** — this project's one shared server state with the state file
   path in parentheses on the route line, then each guarded tool name on its
@@ -209,24 +210,34 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection detail: simulated: cannot write local config
+Protection detail: protected_server_initialize_failed: configured server input failed during initialize: write EPIPE
 ```
 
-`seal protect` got halfway: it recorded the state, then the
-`claude mcp add` step failed, and the failure reason is kept as the detail.
-Seal did not finish installing the gate; because the external command failed,
-check Claude Code's local override before assuming it made no partial change.
+The gate was installed, but when the wrapper started it could not bring up
+the configured server, so it recorded `BROKEN` with the refusal token and
+reason kept as the detail. Status exits 0 here because the record itself was
+readable. `seal protect` refuses (`already_protected: project is already
+BROKEN`); `seal unprotect notes` completes and returns the route to outside
+Seal, because the recorded Seal ownership checks pass.
 
-What to do about `BROKEN` is honest but currently not smooth:
+When instead the `claude mcp add` step fails during `seal protect`, the record
+is `BROKEN` with Claude Code's error as its reason, but it carries no proof
+that Seal owns an installed override. Seal did not finish installing the gate;
+because the external command failed, check Claude Code's local override before
+assuming it made no partial change.
+
+What to do about that record is honest but currently not smooth:
+`seal status` prints only `REFUSED no_seal_owned_override` and exits 1,
 `seal protect` refuses (`already_protected: project is already BROKEN`) and
-`seal unprotect` accepts an absent Claude Code override if the recorded Seal
-ownership checks pass, but still requires no live lease and successful removal
-or Claude Code's exact local-scope absence diagnostic before it will finish. The working recovery, exercised for real, is in
+`seal unprotect` refuses with `no_seal_owned_override`. Unprotect accepts an
+absent Claude Code override only when the recorded Seal ownership checks pass,
+and still requires no live lease and successful removal or Claude Code's exact
+local-scope absence diagnostic before it will finish. The working recovery, exercised for real, is in
 [when-something-looks-wrong](when-something-looks-wrong.md#claude_install_failed).
 
 A related message you can see here:
 
-> `seal recover` is not in the currently published release, v0.2.1. It is on `main` and will be included in the next release.
+> `seal recover --archive` ships in v0.3.0, the release this guide installs. Stop Claude Code first. With a compatible or absent state it refuses with `recovery_not_needed` and changes nothing; with an incompatible state it copies the record to a printed `state.json.recovered-…` archive, removes Seal's owned local override, and leaves the route outside Seal for you to protect again. It archives the record; it does not repair it.
 
 ```output
 Stored protection state: could not be read
@@ -267,8 +278,8 @@ Three states:
 ## The Receipts lines
 
 ```output
-Receipts: 1 stored in /home/you/.local/share/seal/projects/guide-example/receipts
-Most recent (by write time): APPROVE at receipt time 2026-08-16T12:00:00.000Z (approved.json)
+Receipts: 1 stored in /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+Most recent (by write time): ALLOW at receipt time 1788884426 (receipt-1788884427239-231060-0002-ALLOW.json)
 ```
 
 "Most recent (by write time)" is exactly that: the newest receipt file, not a
@@ -283,9 +294,11 @@ Receipts: 0 stored in …/seal/receipts (directory does not exist)
 Most recent: no receipt yet (receipt directory is missing)
 ```
 
-On a fresh install before the first demo or protected call, nothing has yet
-been decided, and status looks like this. A missing directory by itself does
-not prove that history: an earlier receipt directory may have been removed.
+This is a protected project whose recorded receipt directory is missing.
+`seal protect` created that directory, so its absence means something removed
+it since, and earlier receipts may have gone with it. Outside a protected
+project, status prints `Receipts: unavailable outside a protected project`
+instead.
 
 ```output
 Receipts: unavailable in …/seal/receipts (directory cannot be read)
