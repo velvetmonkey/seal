@@ -212,7 +212,7 @@ function protectGuidance(serverName, guardTools = []) {
     next: [
       "1. Restart Claude Code in this project.",
       "2. Run `seal status`.",
-      "3. Confirm the sealed MCP route is ACTIVE.",
+      "3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.",
     ],
     undo: [`To clear protection for every guarded tool on server ${shellWord(serverName)}${guarded}, stop Claude Code, then run \`seal unprotect ${shellWord(serverName)}\`.`],
   };
