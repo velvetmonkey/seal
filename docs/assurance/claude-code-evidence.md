@@ -185,28 +185,7 @@ Read the sign-in, MCP-scope, workspace-trust, and manual-mode instructions
 below before executing this block.
 
 ```bash
-printf '%s' 'Published release tag (for example vX.Y.Z): ' \
-&& read -r SEAL_VERSION \
-&& test -n "$SEAL_VERSION" \
-&& SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64" \
-&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" \
-&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" \
-&& SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" \
-&& SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" \
-&& test -n "$SEAL_SHA256" \
-&& if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi \
-&& test "${actual_sha256%% *}" = "$SEAL_SHA256" \
-&& actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" \
-&& test "$actual_bytes" -eq "$SEAL_BYTES" \
-&& chmod +x "$SEAL_ARTIFACT" \
-&& printf '%s' 'New absolute run directory outside every Git tree: ' \
-&& read -r run_dir \
-&& case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac \
-&& mkdir "$run_dir" \
-&& command -v git >/dev/null \
-&& if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi \
-&& node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" \
-&& node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
+printf '%s' 'Published release tag (for example vX.Y.Z): ' && read -r SEAL_VERSION && test -n "$SEAL_VERSION" && SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" && SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" && SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" && test -n "$SEAL_SHA256" && if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi && test "${actual_sha256%% *}" = "$SEAL_SHA256" && actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" && test "$actual_bytes" -eq "$SEAL_BYTES" && chmod +x "$SEAL_ARTIFACT" && printf '%s' 'New absolute run directory outside every Git tree: ' && read -r run_dir && case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac && mkdir "$run_dir" && command -v git >/dev/null && if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi && node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
 
 **At the finishing prompt, run `finish --out .`, not another `next`.**
