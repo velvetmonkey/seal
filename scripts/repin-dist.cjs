@@ -9,7 +9,7 @@ const { releaseArtifactName } = require("./product-identity.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const dist = path.join(ROOT, "dist");
-const STORE_HASH = /(?:\btree:?\s+|\/store\/)[0-9a-f]{64}\b/g;
+const STORE_HASH = /(\btree:?\s+|\/store\/)[0-9a-f]{64}\b/g;
 const ROLE_MARKER = /^(?:\*\*Seal installed-tree pin role:\*\* `([A-Za-z0-9][A-Za-z0-9-]*)`|<!-- Seal installed-tree pin role: ([A-Za-z0-9][A-Za-z0-9-]*) -->)$/;
 const MARKED_FENCE =
   /^((?:(?:\*\*Seal installed-tree pin role:\*\* `[A-Za-z0-9][A-Za-z0-9-]*`|<!-- Seal installed-tree pin role: [A-Za-z0-9][A-Za-z0-9-]* -->)\r?\n)+)(```[^\n]*\r?\n)([\s\S]*?)(^```\s*$)/gm;
@@ -82,8 +82,7 @@ function rewriteRoleMarkedPins(file, outsideReplacements = []) {
       const updatedBody = body
         .replace(/^sha256 [0-9a-f]+$/gm, `sha256 ${sha256}`)
         .replace(/^bytes \d+$/gm, `bytes ${bytes}`)
-        .replace(/^tree:? [0-9a-f]+$/gm, `tree ${meta.treeSha256}`)
-        .replace(/\/store\/[0-9a-f]+/g, `/store/${meta.treeSha256}`);
+        .replace(STORE_HASH, (_match, prefix) => `${prefix}${meta.treeSha256}`);
       return `${markerLines}${opening}${updatedBody}${closing}`;
     },
   );
