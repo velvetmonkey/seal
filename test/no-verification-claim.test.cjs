@@ -31,10 +31,18 @@ const ALLOWED_NEGATED_PROVENANCE = "The native macOS process-start witness helpe
 // The bare word alone is not a claim; "independent directories" and
 // "independent state" describe separate storage, so the scan binds the word to
 // a verification act (either order; the adverb may sit after the act) and lets
-// at most two connector words sit between them.
+// at most two connector tokens (including hyphenated adjectives) sit between them.
+// This is a bounded vocabulary control, not a complete natural-language claim
+// recogniser: other independence words, longer padding and unlisted acts can
+// still escape. Keep the corpus below when extending or changing the pattern.
 const VERIFICATION_ACT = [
   "verif(?:y|ies|ied|ying|ication|ier|iers)",
   "reproduc(?:e|es|ed|ing|tion|ible)",
+  "replay(?:s|ed|ing)?",
+  "hash(?:es|ed|ing)?",
+  "prov(?:e|es|ed|ing|en)",
+  "match(?:es|ed|ing)?",
+  "compar(?:e|es|ed|ing|ison|isons)",
   "re-?deriv(?:e|es|ed|ing|ation)",
   "check(?:s|ed|ing|er|ers)?",
   "audit(?:s|ed|ing|or|ors)?",
@@ -55,9 +63,9 @@ const VERIFICATION_ACT = [
   "external(?:ly)?",
   "arm'?s[ -]length",
 ].join("|");
-const CLAIM_CONNECTOR = "(?:[ \\t,]+(?:and|or|also|then|fully|truly|genuinely|already|been|be|by|a|an|the|its|our|their)){0,2}";
+const CLAIM_CONNECTOR = "(?:[ \\t,]+(?:and|or|also|then|fully|truly|genuinely|cryptographically|already|been|be|by|a|an|the|its|our|their|[-A-Za-z]+(?:-[A-Za-z]+)+)){0,2}";
 const POSITIVE_INDEPENDENCE_CLAIM = new RegExp(
-  `\\b(?:${INDEPENDENCE}(?:ly)?${CLAIM_CONNECTOR}[ \\t,-]+(?:re-?)?(?:${VERIFICATION_ACT})|(?:${VERIFICATION_ACT})[ \\t,]+${INDEPENDENCE}ly)\\b`,
+  `\\b(?:${INDEPENDENCE}(?:ly)?${CLAIM_CONNECTOR}[ \\t,-]+(?:re-?)?(?:${VERIFICATION_ACT})|(?:${VERIFICATION_ACT})${CLAIM_CONNECTOR}[ \\t,]+${INDEPENDENCE}ly)\\b`,
   "i",
 );
 const DOC_BANNED_CLAIMS = [
@@ -150,6 +158,47 @@ function scanDocs(dir, claims, hits) {
   }
   return scanned;
 }
+
+// The first eight positives are the cold frisk's actual plants, including the
+// original defect with minimal padding. These fixtures measure known coverage;
+// an unseen paraphrase still needs a human reviewer to identify and add it.
+const MUST_FLAG_CLAIMS = [
+  "seal verify PATH     independently, byte-for-byte, verify a saved receipt",
+  "seal verify PATH     independently replay a saved receipt",
+  "Each receipt is verified, fully independently, of this binary.",
+  "Every receipt is independently and cryptographically verified.",
+  "seal verify PATH     independent, byte-for-byte verification of a saved receipt",
+  "seal verify PATH     independently verify a saved receipt",
+  "independent verification of a saved receipt",
+  "The published checker independently cross-checks the kernel receipt.",
+  "independently hash a saved receipt",
+  "independently prove a saved receipt",
+  "independently match a saved receipt",
+  "independently compare a saved receipt",
+  "The receipt was replayed independently.",
+  "The receipt was hashed independently.",
+  "The receipt was proven independently.",
+  "The receipt was matched independently.",
+  "The receipt was compared independently.",
+];
+const MUST_NOT_FLAG_CLAIMS = [
+  "New servers use independent directories. Never copy a live record: two writable copies would split the lease and approval history.",
+  "multiple servers have independent state, simultaneous live gates and receipts; removing one preserves the other",
+  "independent directories",
+  "independent state",
+  "independent leases",
+  "independent processes",
+  "independent state is checked per server",
+  "independent test fixtures per server",
+  "independent of the cache directory",
+  ALLOWED_NEGATED_PROVENANCE,
+];
+
+test("verification-claim paraphrase corpus preserves both polarities", () => {
+  const missed = MUST_FLAG_CLAIMS.filter(text => !hasPositiveIndependentReproductionClaim(text));
+  const falsePositives = MUST_NOT_FLAG_CLAIMS.filter(hasPositiveIndependentReproductionClaim);
+  assert.deepEqual({ missed, falsePositives }, { missed: [], falsePositives: [] });
+});
 
 test("no banned verification claim survives in product surfaces or docs/", () => {
   const hits = [];
