@@ -5,14 +5,16 @@ Seal supports install, demo, receipt checking and Protect on Linux x86-64 and ma
 Windows, Linux ARM and other platforms are not supported.
 It ships **three** installable artifacts, for **Linux x86-64**, **macOS x64**, and **macOS arm64**.
 
-## The artifact
+## The artifacts
 
-`scripts/build-dist.cjs` writes `dist/seal-v<identity>-linux-x64`, where the
-identity is the bare `<version>` only when HEAD is exactly tag `v<version>` and
-otherwise `<version>-dev.g<commit>` — see
-[VERSION-IDENTITY.md](version-identity.md). That file
-is the installer and the payload. The published pin lives in the `SHA256SUMS`
-release asset alongside the artifact (digest and byte length). The repository
+`scripts/build-dist.cjs` writes one of the three installable artifacts per
+run, `dist/seal-v<identity>-<platform>`, for `linux-x64` (the default) or, via
+`--platform`, `darwin-x64` or `darwin-arm64`; a Darwin build also needs the
+matching release runner's `--macos-helper`. The identity is the bare
+`<version>` only when HEAD is exactly tag `v<version>` and otherwise
+`<version>-dev.g<commit>` — see [VERSION-IDENTITY.md](version-identity.md).
+Each file is the installer and the payload. The published pins live in the
+`SHA256SUMS` release asset alongside the artifacts (digest and byte length). The repository
 root intentionally has no hand-maintained copy. `test/dist-pin.test.cjs`
 refuses a root entry for an artifact that is not a published release, while
 an absent or empty root file is the defined between-releases state.

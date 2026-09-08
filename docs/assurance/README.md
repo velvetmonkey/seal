@@ -29,7 +29,7 @@ the Node CLI this repository ships.
    [assurance/RELEASE-NOTES-v0.2.1.md](RELEASE-NOTES-v0.2.1.md). Generated
    current-release routes stay tied to published facts and are updated by the
    post-publication documentation workflow.
-5. [assurance/distribution.md](distribution.md) — what the one installable artifact is,
+5. [assurance/distribution.md](distribution.md) — what the three installable artifacts are,
    how the SHA-256 pin works, and the named refusals the installer and
    launcher give you instead of silent failure.
 6. [assurance/version-identity.md](version-identity.md) — why a build off a release tag
@@ -69,10 +69,12 @@ the Node CLI this repository ships.
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
 5. [The `seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.3.0/seal-receipt-v2.mjs) — the
-   receipt checker is a sibling asset published with the release, not in the
-   installed payload. Download it with the binary only to verify both against
-   that release's `SHA256SUMS` asset. To check a receipt, run
-   `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout.
+   receipt checker is a sibling asset published with the release and is also
+   inside the installed payload as `checker/seal-receipt-v2.mjs`, byte for
+   byte. Download it with the binary to verify both against that release's
+   `SHA256SUMS` asset. To check a receipt, run
+   `node checker/seal-receipt-v2.mjs RECEIPT` from a source checkout or from
+   the installed store.
    The checker implements receipt canonicalisation and signature checking itself
    with the same Node crypto platform as the producer, but imports Seal's kernel
    decision runner for decision replay; read [what
