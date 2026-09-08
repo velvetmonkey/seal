@@ -3,8 +3,11 @@
 The original state-machine observations and source line references below come
 from commit `466be4a5d423ad763c7325263f1d014311c95879` and commands run on
 2026-08-22, answering the four questions in roadmap section 15.4. The status
-rendering described here was rechecked with the release installed by the guide
-on 2026-09-08 for one tool, several tools, two configured servers, and repeated
+rendering described here was rechecked on 2026-09-08 using the published Linux
+x86-64 artifact from source commit `af3324bdf121b048d310629b18405986f8e01dca`, SHA-256
+`93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b`, as pinned in the
+[install guide at the captured revision](https://github.com/velvetmonkey/seal/blob/bc3544819addee11df2ebd6490f49c23bc40684a/docs/start/install.md),
+for one tool, several tools, two configured servers, and repeated
 protect invocations; it supersedes that commit’s braced rendering.
 It does not propose implementation work or decide the boxpol question.
 
@@ -55,7 +58,7 @@ with two configured servers, a second `seal protect` for the other server
 refuses, and status lists that server under `Not controlled`. A second protect
 for the same server also refuses; neither invocation adds to the guarded set.
 
-**Evidence.** In the release installed by the guide, `bin/seal` obtains one
+**Evidence.** In that captured release, `bin/seal` obtains one
 protection view, prints the
 route state followed by the indented guarded names, and prints the one
 `view.lease`; `spine/protection.cjs:12-19`
