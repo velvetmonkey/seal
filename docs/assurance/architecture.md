@@ -1,6 +1,6 @@
 > Scope: This document describes the Node CLI shipped by this repository first, then the Seal family assurance lineage.
 > The state machine is TESTED.
-> For the truth about what you installed, read [release evidence](RELEASE-NOTES-v0.2.1.md) and the [README](../../README.md).
+> For the truth about what you installed, read [release evidence](RELEASE-NOTES-v0.3.0.md) and the [README](../../README.md).
 
 # Architecture
 
