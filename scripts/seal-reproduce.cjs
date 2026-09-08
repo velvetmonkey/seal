@@ -112,6 +112,7 @@ function parseBuildPinnedArguments(argv) {
   let tag;
   let output;
   let sourceRoot;
+  let manifestPath;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--output") {
@@ -124,6 +125,11 @@ function parseBuildPinnedArguments(argv) {
       if (!value || value.startsWith("--")) refuse("--source needs a value");
       sourceRoot = path.resolve(value);
       index += 1;
+    } else if (token === "--manifest") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) refuse("--manifest needs a value");
+      manifestPath = path.resolve(value);
+      index += 1;
     } else if (token.startsWith("--")) {
       refuse(`unknown option: ${token}`);
     } else if (tag === undefined) {
@@ -133,10 +139,10 @@ function parseBuildPinnedArguments(argv) {
     }
   }
   if (!tag) {
-    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>]");
+    refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>] [--manifest <path>]");
   }
   if (!TAG_PATTERN.test(tag)) refuse(`release tag is invalid: ${tag}`);
-  return { tag, output: output ? path.resolve(output) : null, sourceRoot };
+  return { tag, output: output ? path.resolve(output) : null, sourceRoot, manifestPath };
 }
 
 function validateRequest(parsed) {
@@ -300,7 +306,8 @@ function releaseCommit(tag, source, work, operations) {
   const manifestFile = path.join(work, "release-manifest.json");
   const fetchManifest = operations.downloadManifest || download;
   const url = `https://github.com/velvetmonkey/seal/releases/download/${encodeURIComponent(tag)}/release-manifest.json`;
-  fetchManifest(url, manifestFile);
+  if (operations.manifestPath) fs.copyFileSync(operations.manifestPath, manifestFile);
+  else fetchManifest(url, manifestFile);
   let manifest;
   try { manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")); }
   catch (error) { refuse(`cannot read release manifest for ${tag}: ${error.message}`); }
@@ -448,11 +455,11 @@ function executeBuildPinned(argv, deps = DEFAULT_DEPS) {
     parsed = parseBuildPinnedArguments(argv);
     refusePreImportTag(parsed.tag);
     if (!parsed.output) {
-      refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>]");
+      refuse("usage: node scripts/seal-reproduce.cjs build-pinned-kernel <tag> --output <path> [--source <path>] [--manifest <path>]");
     }
     work = fs.mkdtempSync(path.join(os.tmpdir(), "seal-rebuild-pinned-"));
     if (pathWithin(work, ROOT) || work === ROOT) refuse(`work directory must be outside the source checkout: ${work}`);
-    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work, { sourceRoot: parsed.sourceRoot });
+    const rebuiltKernel = deps.buildPinnedKernel(parsed.tag, work, { sourceRoot: parsed.sourceRoot, manifestPath: parsed.manifestPath });
     fs.copyFileSync(rebuiltKernel, parsed.output);
     return { tag: parsed.tag, output: parsed.output, sourcePath: SOURCE_PROVENANCE.get(rebuiltKernel)?.source_path ?? null, exitCode: 0, error: null };
   } catch (error) {

@@ -269,11 +269,18 @@ jobs:
 
   rebuild-kernel:
     name: Build the pinned Lean kernel once
+    needs: release
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Download the draft release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/kernel-manifest"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern release-manifest.json --dir "$RUNNER_TEMP/kernel-manifest"
       - name: Rebuild the kernel from its tag-pinned Lean source
-        run: node scripts/seal-reproduce.cjs build-pinned-kernel "$GITHUB_REF_NAME" --output "$RUNNER_TEMP/rebuilt-seal.wasm"
+        run: node scripts/seal-reproduce.cjs build-pinned-kernel "$GITHUB_REF_NAME" --output "$RUNNER_TEMP/rebuilt-seal.wasm" --manifest "$RUNNER_TEMP/kernel-manifest/release-manifest.json"
       - uses: actions/upload-artifact@v4
         with:
           name: fresh-rebuilt-kernel
