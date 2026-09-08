@@ -21,76 +21,25 @@ file, while `demo.erase` truncates it. They are different risks; naming both
 when both need approval is the point of choosing a set rather than selecting a
 single winner.
 
-The worked example on this page uses a project with one server, `notes`: a
-small stdio MCP server with two tools. To follow along, make an empty project
-directory and save this file in it as `notes-server.cjs`:
+The worked example on this page uses the demo server Seal already ships. Make
+an empty project directory, enter it, and create the data file the demo server
+uses:
 
-```javascript
-// notes-server.cjs: a minimal stdio MCP server with two tools.
-const fs = require("node:fs");
-const path = require("node:path");
-const readline = require("node:readline");
-
-const NOTES = path.join(__dirname, "notes.txt");
-const TOOLS = [
-  {
-    name: "append_note",
-    description: "Append one line to notes.txt",
-    inputSchema: { type: "object", properties: { line: { type: "string" } }, required: ["line"] },
-  },
-  {
-    name: "delete_all_notes",
-    description: "Empty notes.txt",
-    inputSchema: { type: "object", properties: {} },
-  },
-];
-
-function send(message) {
-  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\n");
-}
-
-function call(name, args) {
-  if (name === "append_note") {
-    fs.appendFileSync(NOTES, `${args.line}\n`);
-    return "appended one line to notes.txt";
-  }
-  if (name === "delete_all_notes") {
-    fs.writeFileSync(NOTES, "");
-    return "emptied notes.txt";
-  }
-  return `unknown tool: ${name}`;
-}
-
-readline.createInterface({ input: process.stdin }).on("line", (line) => {
-  if (!line.trim()) return;
-  const { id, method, params = {} } = JSON.parse(line);
-  if (method === "initialize") {
-    send({ id, result: {
-      protocolVersion: params.protocolVersion || "2025-06-18",
-      capabilities: { tools: {} },
-      serverInfo: { name: "notes", version: "0.1.0" },
-    } });
-  } else if (method === "tools/list") {
-    send({ id, result: { tools: TOOLS } });
-  } else if (method === "tools/call") {
-    const text = call(params.name, params.arguments || {});
-    send({ id, result: { content: [{ type: "text", text }] } });
-  } else if (id !== undefined) {
-    send({ id, error: { code: -32601, message: `unknown method: ${method}` } });
-  }
-});
+```bash
+$ mkdir choosing-demo && cd choosing-demo
+$ : > demo-data.txt
 ```
 
-Then declare it in `.mcp.json` beside it. The `args` path is relative to the
-project directory:
+Then declare the shipped server in `.mcp.json`. The data-file path is relative
+to the project directory:
 
 ```json
 {
   "mcpServers": {
-    "notes": {
+    "demo": {
       "type": "stdio",
-      "command": "node",
-      "args": ["./notes-server.cjs"]
+      "command": "seal",
+      "args": ["__demo-server", "./demo-data.txt"]
     }
   }
 }
@@ -110,20 +59,21 @@ Two constraints to know before you choose:
 ## What `seal protect` does
 
 Run it in the project directory, naming the server and the complete tool set.
-For the `notes` server declared above, `append_note` adds one line to the notes
-file and `delete_all_notes` empties it; by the question above, only the second
-warrants the gate, so the set is one tool:
+For the `demo` server declared above, `demo.mutate` appends to the demo data
+file and `demo.erase` empties it. Both warrant the gate, so name the complete
+set:
 
 ```bash
-$ seal protect notes delete_all_notes
+$ seal protect demo demo.mutate demo.erase
 ```
 
 ```output
-Project .mcp.json hash before protect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
-Sealed MCP route notes: PENDING RESTART (/home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json)
+Project .mcp.json hash before protect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
+Sealed MCP route demo: PENDING RESTART (/home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json)
 
 Gated through this route:
-  delete_all_notes
+  demo.mutate
+  demo.erase
 
 Not controlled:
   Bash and subprocesses outside this MCP route
@@ -131,14 +81,14 @@ Not controlled:
   other clients
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
-Protection scope: 1 other tool NOT APPROVAL-GATED (they pass through Seal): append_note
-State: /home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json
+Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
+State: /home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
   3. Confirm the sealed MCP route is ACTIVE.
 Undo:
-  To clear protection for every guarded tool on server notes, including guarded tools: delete_all_notes, stop Claude Code, then run `seal unprotect notes`.
+  To clear protection for every guarded tool on server demo, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect demo`.
 ```
 
 Exit code: `0`.
@@ -150,7 +100,7 @@ The same server cannot be extended by running `protect` again; the second
 command was refused. The refusal is written to stderr, and stdout is empty:
 
 ```bash
-$ seal protect notes delete_all_notes
+$ seal protect demo demo.mutate demo.erase
 ```
 
 ```output
@@ -169,7 +119,7 @@ The three user-visible changes are:
    the changed server until you look at it.
 2. **Seal asked Claude Code for a local override**: it ran
    `claude mcp add --scope local`, so that in this project, for you only,
-   the name `notes` now starts Seal's wrapper, and the wrapper starts your
+   the name `demo` now starts Seal's wrapper, and the wrapper starts your
    real server behind the gate. Local scope is private to your machine — it
    is not written to `.mcp.json` and teammates never see it.
 3. **It printed the hash of your `.mcp.json`** so you can see it was not
@@ -192,15 +142,13 @@ This is most of the answer, and it is deliberate.
 - **When an ACTIVE wrapper or session is running for a healthy, non-drifted
   gate, every other tool on the protected server flows through the gate
   unasked.** From a live run against
-  the protected `notes` server:
+  the protected `demo` server:
 
   ```output
-  tools/list through the proxy: append_note, delete_all_notes
-  append_note (not the guarded tool): appended one line to notes.txt
+  tools/list through the proxy: demo.mutate, demo.erase
   ```
 
-  `append_note` ran with no prompt. Only `delete_all_notes` waits for
-  approval.
+  Both tools wait for approval because both are guarded.
 - **Every other server in the project.** Seal reads the project configuration
   to find the selected server, but does not change the other servers' entries.
 - **Everything that is not this server's MCP traffic.** Seal's message
@@ -216,13 +164,13 @@ This is most of the answer, and it is deliberate.
 ## Taking the gate down
 
 ```bash
-$ seal unprotect notes
+$ seal unprotect demo
 ```
 
 ```output
-Project .mcp.json hash before unprotect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
-Project .mcp.json hash after unprotect: 1453b736ee20247577d0fd7cca650498d24d0e62ece823063e4194153e3d1fa1
-Sealed MCP route notes: - outside Seal (/home/you/.local/share/seal/projects/e6ecce9c04a6e4bb737b3da40d07e72d/state.json)
+Project .mcp.json hash before unprotect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
+Project .mcp.json hash after unprotect: a50c151d48ff6d62d289b4955fd9263064900c168ab29d6bcf4226f33a8ec804
+Sealed MCP route demo: - outside Seal (/home/you/.local/share/seal/projects/d0d1ec22360c433212ef525dd7f2bb4b/state.json)
 
 Gated through this route:
   none
@@ -237,7 +185,7 @@ Next:
   1. Run `seal status`.
   2. Confirm the sealed MCP route is outside Seal.
 Undo:
-  Run `seal protect notes delete_all_notes`.
+  Run `seal protect demo demo.mutate demo.erase`.
 ```
 
 The local override is removed; when the before and after hashes match, they
