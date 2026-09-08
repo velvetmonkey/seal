@@ -70,10 +70,10 @@ artifact_name="seal-v0.2.1-linux-x64" \
 
 **Seal installed-tree pin role:** `published-asset`
 ```output
-installed seal 0.2.1 linux-x64
-store: /home/you/.local/lib/seal/store/13e2b2a8b1e6301b2e3562e3bf6bcee78da8cb9302e12a41a1261ae08fef9f72
+installed seal 0.3.0 linux-x64
+store: /home/you/.local/lib/seal/store/ccd45efbb6b97d701ba6c068a17cbcb89f17d9343bf7e397a34aa1470606ce25
 command: /home/you/.local/bin/seal
-tree: 13e2b2a8b1e6301b2e3562e3bf6bcee78da8cb9302e12a41a1261ae08fef9f72
+tree: ccd45efbb6b97d701ba6c068a17cbcb89f17d9343bf7e397a34aa1470606ce25
 ```
 
 The installer refuses to run without the `--sha256` pin, on purpose: you are
