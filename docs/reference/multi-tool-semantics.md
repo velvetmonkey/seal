@@ -46,8 +46,8 @@ The doubled `db.db.execute_sql` is not a transcription error: the server name is
 ## 2. What does `seal status` show per tool?
 
 **Answer.** `seal status` shows one shared server state followed by the guarded
-tool names—`server.tool` for one or `server.{tool, tool}` for several—not an
-independent state or lease for each tool.
+tool names—`server.tool` for one, or each `server.tool` on its own indented
+line for several—not an independent state or lease for each tool.
 
 **Evidence.** `bin/seal:58-74` obtains one protection view, formats all names
 beside `view.state`, and prints the one `view.lease`; `spine/protection.cjs:12-19`
@@ -206,8 +206,9 @@ with the omitted tool named when its state exposed only two guarded members.
 - `README.md:7-9`, `docs/guide/README.md:3,94`, and
   `docs/README.md:74-75` describe one protected tool. That is narrower than the
   shipped named-set behavior.
-- `docs/guide/what-is-protected-right-now.md:23-29` says the protection line is
-  `server.tool` and does not document the shipped `server.{tool, tool}` form.
+- `docs/guide/what-is-protected-right-now.md:23-29` documents the protection
+  route followed by each guarded `server.tool` on its own indented line, which
+  matches the shipped multi-tool status format.
 - Roadmap section 17.10, lines 11418-11425, says disappearance after protect is
   open. Current `spine/protection.cjs:794-818` implements the activation-time
   re-check and whole-server `BROKEN` result. The troubleshooting guide at

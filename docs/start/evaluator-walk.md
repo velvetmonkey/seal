@@ -12,8 +12,8 @@ assembler or canonicaliser.
 
 For the product's named-set capability, protect both bundled demo tools in one
 declaration: `seal protect db demo.mutate demo.erase`. `seal status` reports
-that one server protection as `db.{demo.mutate, demo.erase}`; use the operating
-guide for the setup and state details.
+that one server protection with `demo.mutate` and `demo.erase` on separate indented lines
+under `Gated through this route:`; use the operating guide for the setup and state details.
 
 ## After `seal demo`
 
