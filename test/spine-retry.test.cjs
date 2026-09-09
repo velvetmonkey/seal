@@ -1079,6 +1079,54 @@ test("receipt correlations refuse loudly at capacity without orphaning live appr
   assert.match(reopened.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
 });
 
+for (const answer of [
+  { label: "a negative accept", result: { action: "accept", content: { approve: false } } },
+  { label: "an accept with no approval value", result: { action: "accept", content: {} } },
+]) test(`a completed elicitation with ${answer.label} releases correlation capacity`, async (t) => {
+  const dir = testTmpdir("seal-elicit-completion-capacity-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  let clock = 1700000000000;
+  createJournal(storePath);
+  const frames = [];
+  const proxy = createProxy({
+    signer: generateSigner(),
+    guardTool: "demo.mutate",
+    storePath,
+    receiptsDir: path.join(dir, "receipts"),
+    receiptCorrelationCapacity: 1,
+    now: () => clock,
+    elicitationTimeoutMs: 2000000,
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const waitFor = async (predicate) => {
+    const deadline = Date.now() + 5000;
+    while (!frames.find(predicate)) {
+      if (Date.now() >= deadline) assert.fail(JSON.stringify(frames));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return frames.find(predicate);
+  };
+
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  await waitFor((frame) => frame.id === 90 && frame.result);
+  proxy.write(JSON.stringify({ ...callParams("non-affirmative answer"), id: 1 }));
+  const elicitation = await waitFor((frame) => frame.method === "elicitation/create");
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: elicitation.id, result: answer.result }));
+  const refused = await waitFor((frame) => frame.id === 1 && frame.result);
+  assert.equal(refused.result.isError, true, JSON.stringify(refused));
+  assert.match(refused.result.content[0].text, /response_malformed/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+
+  clock += 1000000;
+  proxy.write(JSON.stringify({ ...callParams("capacity must reopen"), id: 2 }));
+  const reopened = await waitFor((frame) => frame.method === "elicitation/create" && frame.id !== elicitation.id);
+  assert.match(reopened.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+});
+
 test("an unanswered capable client times out to cancelled", async (t) => {
   const dir = testTmpdir("seal-elicit-timeout-");
   const storePath = path.join(dir, "approvals.journal");

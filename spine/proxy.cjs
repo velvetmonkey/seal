@@ -294,22 +294,33 @@ function createProxy(options) {
   function completeElicitation(frame) {
     const pending = pendingElicitations.get(frame.id);
     if (!pending) return false;
-    pendingElicitations.delete(frame.id);
-    clearTimeout(pending.timer);
     const answer = frame.result && typeof frame.result === "object"
       ? frame.result
       : { action: "cancel" };
     const detail = frame.error
       ? `the client rejected elicitation/create: ${frame.error.message || "no error message"}`
       : undefined;
-    finishGuarded(
-      pending.frame,
-      pending.requestState,
-      pending.correlation,
-      { approval: answer },
-      detail,
-    );
-    rememberCompletedElicitation(frame.id, pending);
+    // Keep the pending entry and timer until retry has settled. A completed
+    // elicitation is one client answer, even when its shape cannot authorize
+    // the request, so its correlation capacity must be released on every
+    // outcome rather than only on contract-terminal outcomes.
+    try {
+      finishGuarded(
+        pending.frame,
+        pending.requestState,
+        pending.correlation,
+        { approval: answer },
+        detail,
+      );
+    } finally {
+      // `finishGuarded` may throw after a kernel timing refusal. Cleanup is
+      // deliberately unconditional so no processed answer can strand the
+      // pending entry, its timer, or its capacity reservation.
+      pendingElicitations.delete(frame.id);
+      clearTimeout(pending.timer);
+      discardReceiptCorrelation(pending.requestState);
+      rememberCompletedElicitation(frame.id, pending);
+    }
     return true;
   }
 
