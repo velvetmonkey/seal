@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import navigation from './navigation.json' with { type: 'json' };
-import { pageSlug } from './prepare-content.mjs';
+import { pageSlug, siteDescription } from './prepare-content.mjs';
 import { siteUrl } from './site-url.mjs';
 
 const site = siteUrl();
@@ -13,7 +13,7 @@ export default defineConfig({
   base: site.pathname.replace(/\/$/, '') || '/',
   integrations: [starlight({
     title: 'Seal',
-    description: 'Seal is a local approval boundary for AI-agent tool calls.',
+    description: siteDescription,
     components: { Header: './src/components/Header.astro' },
     sidebar: [
       item(navigation.root),
