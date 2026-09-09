@@ -152,19 +152,21 @@ function statusRecord(recordPath, readError) {
     return;
   }
 
-  const population = receiptPopulation.inspectReceiptDirectory(receiptDir);
-  if (population.receiptFiles.length === 0) {
-    if (population.nonMatchingFiles.length === 0) {
+  const receiptEntries = entries.filter((entry) =>
+    (entry.isFile() || entry.isSymbolicLink()) && receiptPopulation.RECEIPT_NAME.test(entry.name));
+  const nonMatchingFiles = entries.filter((entry) =>
+    (entry.isFile() || entry.isSymbolicLink()) && !receiptPopulation.RECEIPT_NAME.test(entry.name));
+  if (receiptEntries.length === 0) {
+    if (nonMatchingFiles.length === 0) {
       console.log("Receipts: no receipt files observed (receipt directory has no receipt-shaped files)");
     } else {
-      console.log(`Receipts: no receipt files observed (${population.nonMatchingFiles.length} non-receipt files ignored)`);
+      console.log(`Receipts: no receipt files observed (${nonMatchingFiles.length} non-receipt files ignored)`);
     }
     console.log(receiptPopulation.unknownLine());
     console.log("Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)");
     return;
   }
-  console.log(`Receipts: ${population.receiptFiles.length} receipt files observed in ${receiptDir}; sequence gaps found: ${population.gaps.length}; completeness UNKNOWN (receipt filenames are not signed)`);
-  for (const gap of population.gaps) console.log(`Receipt gap: pid ${gap.pid} missing sequence ${gap.sequence}`);
+  console.log(`Receipts: ${receiptEntries.length} receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)`);
   const observed = [];
   for (const entry of entries) {
     const target = path.join(receiptDir, entry.name);

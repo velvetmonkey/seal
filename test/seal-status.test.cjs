@@ -80,7 +80,7 @@ function brokenStatusWithReceipt(detail, receiptDir, statePath) {
     "  other MCP servers not routed through this Seal wrapper\n" +
     "  other uncontrolled routes can also exist\n" +
     `Protection detail: ${detail}\n` +
-    `Receipts: 1 receipt files observed in ${receiptDir}; sequence gaps found: 0; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
     "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n";
 }
 
@@ -163,7 +163,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 1 receipt files observed in ${receiptDir}; sequence gaps found: 0; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
     "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n");
 });
 
@@ -352,6 +352,17 @@ test("receipt reader exposes a removed middle receipt as a sequence gap", () => 
   assert.match(result, /Receipt gap: pid 77 missing sequence 2/);
   fs.renameSync(quarantined, original);
   assert.doesNotMatch(execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }), /Receipt gap:/);
+});
+
+test("receipt reader reports multiple gaps in pid and sequence order", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-multi-gap-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const sequence of [1, 3, 5]) fs.writeFileSync(path.join(receipts, `receipt-1000-77-${String(sequence).padStart(4, "0")}-INDEPENDENT_CASE.json`), "{}\n");
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt gap: pid 77 missing sequence 2\nReceipt gap: pid 77 missing sequence 4/);
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {
