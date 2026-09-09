@@ -349,7 +349,7 @@ test("receipt reader exposes a removed middle receipt as a sequence gap", () => 
   let result;
   try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
   catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
-  assert.match(result, /Receipt gap: pid 77 missing sequence 2/);
+  assert.match(result, /Receipt gap: pid 77 missing sequences 2 through 2/);
   fs.renameSync(quarantined, original);
   assert.doesNotMatch(execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }), /Receipt gap:/);
 });
@@ -362,7 +362,27 @@ test("receipt reader reports multiple gaps in pid and sequence order", () => {
   let result;
   try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
   catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
-  assert.match(result, /Receipt gap: pid 77 missing sequence 2\nReceipt gap: pid 77 missing sequence 4/);
+  assert.match(result, /Receipt gap: pid 77 missing sequences 2 through 2\nReceipt gap: pid 77 missing sequences 4 through 4/);
+});
+
+test("receipt reader rejects unsafe and non-canonical filename numbers visibly", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-rejected-numbers-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  const names = [
+    "receipt-1.5-77-0001-A.json",
+    "receipt-1-77--1-A.json",
+    "receipt-1-77-001-A.json",
+    "receipt-01-77-0001-A.json",
+    "receipt-9007199254740992-77-0001-A.json",
+    `receipt-${"9".repeat(100)}-77-0001-A.json`,
+  ];
+  for (const name of names) fs.writeFileSync(path.join(receipts, name), "{}\n");
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt files rejected: 6/);
+  for (const name of names) assert.match(result, new RegExp(`Receipt file rejected: ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {
