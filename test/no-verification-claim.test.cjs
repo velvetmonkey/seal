@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Docs guard (TC-2026-08-14-01): checks labelled claims throughout docs/.
+// Re-deriving our own receipt is not arm's-length verification; VERIFIED is
+// scoped to the caller-supplied key, receipt bindings, and replay.
 // README and the existing verify/help output assertions remain below. Emitted
 // product lines are checked elsewhere by the claim channel (PR #295, which
 // must land before this retirement).
