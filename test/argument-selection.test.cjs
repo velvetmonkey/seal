@@ -218,8 +218,8 @@ test("both duplicate name orders are refused before the child and normal traffic
   t.diagnostic("child raw capture contains only initialize and the unchanged normal unguarded frame");
 });
 
-test("the final proxy presentation includes predicate text inside the physical envelope", async (t) => {
-  const { displayWidth, MESSAGE_LINE_CAP, WIDTH_MARGIN } = require('../contract/renderer.cjs');
+test("the final proxy presentation includes predicate text inside the logical message envelope", async (t) => {
+  const { MESSAGE_LINE_CAP } = require('../contract/renderer.cjs');
   const run = session('db.mutate');
   t.after(() => run.close());
   await waitFor(run.frames, (frame) => frame.id === 'init');
@@ -227,8 +227,7 @@ test("the final proxy presentation includes predicate text inside the physical e
   run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'long-legitimate', method: 'tools/call', params: { name: 'db.mutate', arguments: args } }));
   const prompt = await waitFor(run.frames, (frame) => frame.method === 'elicitation/create');
   const lines = prompt.params.message.split('\n');
-  assert.ok(lines.length <= MESSAGE_LINE_CAP, `final physical lines: ${lines.length}`);
-  for (const line of lines) assert.ok(displayWidth(line) <= 80 - WIDTH_MARGIN, line);
+  assert.ok(lines.length <= MESSAGE_LINE_CAP, `final logical lines: ${lines.length}`);
   assert.match(prompt.params.message, /Selection predicate: db\.mutate \(bare tool name selects all calls\)/);
   assert.ok(prompt.params.message.includes('café: "first\\nsecond"'));
   assert.ok(prompt.params.message.includes('客户: customers'));

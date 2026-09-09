@@ -15,7 +15,7 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
-const { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth } = require("../contract/renderer.cjs");
+const { renderApprovalMessage, MESSAGE_LINE_CAP } = require("../contract/renderer.cjs");
 const { canonicalString, sha256Hex } = require("../contract/canonical.cjs");
 const { canonical, generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
 
@@ -224,15 +224,11 @@ test("separate one-use grants for the same effect have distinct signed receipt b
 
 // --- the rendering envelope, measured --------------------------------------
 
-function assertInsideEnvelope(rendered, terminalWidth = 80) {
+function assertInsideEnvelope(rendered) {
   assert.ok(rendered.ok, rendered.reason);
   assert.deepEqual(rendered.lines, rendered.message.split("\n"));
   assert.ok(rendered.lines.length <= MESSAGE_LINE_CAP,
     `rendered message has ${rendered.lines.length} lines; the envelope is ${MESSAGE_LINE_CAP}`);
-  for (const line of rendered.lines) {
-    assert.ok(displayWidth(line) <= terminalWidth - WIDTH_MARGIN,
-      `line exceeds usable width ${terminalWidth - WIDTH_MARGIN}: ${line}`);
-  }
 }
 
 test("the approval message is the fixed dialog and fits the envelope", () => {
@@ -247,22 +243,12 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines.length, 4);
 });
 
-test("every fixed approval message line fits the measured default width", () => {
-  const rendered = renderApprovalMessage(TOOL, ARGS);
-  assert.ok(rendered.ok, rendered.reason);
-  for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[3]]) {
-    assert.ok(displayWidth(line) <= 74, `fixed line exceeds 74 columns: ${line}`);
+test("the envelope promises logical message lines, not client-specific visible rows", () => {
+  const rendered = renderApprovalMessage(TOOL, { line: "x".repeat(400) });
+  assertInsideEnvelope(rendered);
+  for (const width of [80, 60, 40, 120]) {
+    assert.equal(renderApprovalMessage(TOOL, { line: "x".repeat(400) }, { terminalWidth: width }).ok, true);
   }
-});
-
-// The current Scope line has one column of headroom in the 74-column envelope.
-test("the rendered Scope line fits the measured 74-column envelope", () => {
-  const rendered = renderApprovalMessage(TOOL, ARGS);
-  assert.ok(rendered.ok, rendered.reason);
-  const scopeLine = rendered.lines.find((line) => line.startsWith("Scope: "));
-  assert.ok(scopeLine, "rendered approval message must include a Scope line");
-  assert.ok(displayWidth(scopeLine) <= 80 - WIDTH_MARGIN,
-    `Scope line exceeds the default envelope of ${80 - WIDTH_MARGIN} columns: ${scopeLine}`);
 });
 
 test("the approval schema description derives from the actual argument lines", () => {
@@ -320,12 +306,10 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   const child = await startChild(t);
   const bigArgs = { line: "x".repeat(400) };
   const rendered = renderApprovalMessage(TOOL, bigArgs);
-  assert.equal(rendered.ok, false);
-  assert.match(rendered.reason, /hides the rest without any indicator|truncation would hide/);
+  assert.equal(rendered.ok, true, rendered.reason);
   const contract = createApprovalContract();
   const decision = contract.begin({ tool: TOOL, args: bigArgs });
-  assert.equal(decision.kind, "refuse");
-  assert.equal(decision.refusal, REFUSALS.UNRENDERABLE);
+  assert.equal(decision.kind, "input_required");
   assert.equal(child.count(), "0");
   const atLimit = renderApprovalMessage(TOOL, { a: 1, b: 2, c: 3, d: 4 });
   assertInsideEnvelope(atLimit);
@@ -338,16 +322,11 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   assert.equal(child.count(), "0");
 });
 
-test("a terminal too narrow for the fixed lines refuses instead of overflowing", () => {
-  const rendered = renderApprovalMessage(TOOL, ARGS, { terminalWidth: 40 });
-  assert.equal(rendered.ok, false);
-});
-
 test("every offered message obeys the envelope across argument sizes", () => {
   for (let n = 1; n <= 300; n += 7) {
     const rendered = renderApprovalMessage(TOOL, { line: "y".repeat(n) });
     if (rendered.ok) assertInsideEnvelope(rendered);
-    else assert.match(rendered.reason, /lines|columns/);
+    else assert.match(rendered.reason, /lines/);
   }
 });
 
@@ -415,7 +394,7 @@ test("presentation preserves JSON scalar types while keeping ordinary strings re
   assert.equal(renderApprovalMessage(TOOL, { table: 'customers' }).argLines[0], '  table: customers');
 });
 
-test("presentation escapes names and invisible values without changing legitimate effects", () => {
+test("presentation escapes bidi controls but preserves shaping characters", () => {
   const { renderName } = require('../contract/renderer.cjs');
   for (const ch of ['\n', '\r', '\t', '\x1b', '\x7f', '\u0085', '\u061c', '\u200e', '\u202e', '\u2066', '\u2028', '\u2029']) {
     const name = `a${ch}b`;
@@ -434,4 +413,15 @@ test("presentation escapes names and invisible values without changing legitimat
   assert.ok(rendered.message.includes('café: "first\\nsecond"'));
   assert.ok(rendered.message.includes('客户: customers'));
   assert.equal(createApprovalContract().begin({ tool: '工具', args }).kind, 'input_required');
+  const persian = 'می‌روم';
+  const indic = 'क्‍ष';
+  const emoji = '👩‍💻';
+  for (const name of [persian, indic]) {
+    assert.equal(renderName(name), name);
+    assert.ok(renderApprovalMessage(name, { name }).message.includes(name));
+  }
+  assert.ok(renderApprovalMessage(TOOL, { emoji }).message.includes(emoji));
+  for (const ch of ['\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069']) {
+    assert.ok(!renderName(`a${ch}b`).includes(ch), `bidi control ${JSON.stringify(ch)} must be escaped`);
+  }
 });

@@ -7,25 +7,18 @@
 //
 // Keep the seven-line total budget: the recorded fold provides no evidence
 // for increasing it. Folding two ceremony lines into the useful content frees
-// two argument lines without increasing either the vertical or width budget.
-// The measured usable width remains terminal width - 6. Never truncate.
+// two argument lines without increasing the logical-message-line budget.
+// Clients own wrapping, folding and horizontal presentation, so this renderer
+// cannot truthfully turn a terminal-width guess into a visible-row promise.
+// Never truncate.
 const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
-const WIDTH_MARGIN = 6;
+const CONTEXT_CHARACTER_CAP = 160;
 const SCOPE_RULE = "this parsed call (key order, 1/1.0 match); at most one run";
 const OUTSIDE_LINE = "Outside Seal: Bash, network, subprocesses, other tools and servers.";
 const JSON_SCALAR = /^(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)$/;
 const BARE_VALUE = /^[A-Za-z0-9_.\/:@-]+$/;
-
-// Conservative display width: printable ASCII counts 1, everything else 2.
-// Canonical JSON has already escaped control characters, so nothing rendered
-// here is invisible.
-function displayWidth(text) {
-  let width = 0;
-  for (const ch of text) width += ch.codePointAt(0) <= 0x7e && ch.codePointAt(0) >= 0x20 ? 1 : 2;
-  return width;
-}
 
 function formatTtl(ttlMs) {
   return ttlMs % 60000 === 0 ? `${ttlMs / 60000} min` : `${Math.round(ttlMs / 1000)} s`;
@@ -40,67 +33,53 @@ function renderValue(value) {
   return escapeInvisible(canonicalString(value));
 }
 
-// Escape controls, line/paragraph separators and Unicode format characters
-// (including bidi marks, overrides and isolates). Preserve visible Unicode.
+// Escape controls and separators, plus the exact Unicode bidi controls that
+// can reorder the following text: ALM, LRM/RLM, embeddings, overrides and
+// isolates. ZWNJ and ZWJ are deliberately not here: they shape Persian,
+// Indic text and emoji without reordering or hiding their neighbours.
 function escapeInvisible(text) {
-  return text.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu,
+  return text.replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/gu,
     (ch) => ch.split("").map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`).join(""));
 }
 
 function renderName(name) {
   // Quoting delimiters also distinguishes a literal backslash escape from
   // the escaped character, without quoting ordinary international names.
-  return !/^[\p{L}\p{M}\p{N}_.\/@-]+$/u.test(name)
+  return !/^[\p{L}\p{M}\p{N}\u200c\u200d_.\/@-]+$/u.test(name)
     ? escapeInvisible(JSON.stringify(name)) : name;
 }
 
-function measureApprovalMessage(message, { terminalWidth = 80 } = {}) {
-  const usable = terminalWidth - WIDTH_MARGIN;
-  if (usable < 20) return { ok: false, reason: `terminal width ${terminalWidth} leaves no usable message width` };
+function measureApprovalMessage(message) {
   const lines = message.split(/\r\n|[\n\r\u0085\u2028\u2029]/u);
-  for (const line of lines) {
-    if (displayWidth(line) > usable) {
-      return { ok: false, reason: `a line does not fit ${usable} columns and truncation would hide the effect: ${line.slice(0, 40)}…` };
-    }
-  }
   if (lines.length > MESSAGE_LINE_CAP) {
     return { ok: false, reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; Seal permits ${MESSAGE_LINE_CAP}; interactive approval is refused rather than truncated` };
   }
   return { ok: true, message, lines };
 }
 
-// Compose the proxy's explanation before enforcing the same envelope. Wrap
-// prose at spaces, and share argument rows only when the extra context needs
-// room. Every character of every argument remains present.
-function appendApprovalContext(message, context, { terminalWidth = 80 } = {}) {
-  const usable = terminalWidth - WIDTH_MARGIN;
-  const contextLines = [];
-  let row = "";
-  for (const word of escapeInvisible(context).split(" ")) {
-    if (row && displayWidth(`${row} ${word}`) > usable) {
-      contextLines.push(row);
-      row = word;
-    } else row = row ? `${row} ${word}` : word;
+// Compose the proxy's explanation before enforcing the same envelope. Its
+// independently countable character cap keeps predicate prose bounded without
+// claiming a client-specific width; every admitted character remains present.
+function appendApprovalContext(message, context) {
+  const escapedContext = escapeInvisible(context);
+  if (Array.from(escapedContext).length > CONTEXT_CHARACTER_CAP) {
+    return { ok: false, reason: `appended approval context needs ${Array.from(escapedContext).length} characters; Seal permits ${CONTEXT_CHARACTER_CAP}` };
   }
-  contextLines.push(row);
+  const contextLines = escapedContext.split(/\r\n|[\n\r\u0085\u2028\u2029]/u);
   const lines = [...message.split("\n"), ...contextLines];
   while (lines.length > MESSAGE_LINE_CAP) {
     const index = lines.findIndex((line, i) => line.startsWith("  ") &&
-      lines[i + 1]?.startsWith("  ") &&
-      displayWidth(`${line}; ${lines[i + 1].slice(2)}`) <= usable);
+      lines[i + 1]?.startsWith("  "));
     if (index < 0) break;
     lines.splice(index, 2, `${lines[index]}; ${lines[index + 1].slice(2)}`);
   }
-  return measureApprovalMessage(lines.join("\n"), { terminalWidth });
+  return measureApprovalMessage(lines.join("\n"));
 }
 
-function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000, firstLine = "Approval required" } = {}) {
+function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approval required" } = {}) {
   if (typeof tool !== "string" || tool.length === 0) {
     return { ok: false, reason: "tool name is not a non-empty string" };
   }
-  const usable = terminalWidth - WIDTH_MARGIN;
-  if (usable < 20) return { ok: false, reason: `terminal width ${terminalWidth} leaves no usable message width` };
-
   let argLines;
   try {
     const names = Object.keys(args ?? {}).sort((a, b) => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")));
@@ -114,9 +93,9 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   const scopeLine = `Scope: ${SCOPE_RULE}; ${formatTtl(ttlMs)}.`;
   const lines = [`Tool: ${renderName(tool)}; ${firstLine}`, ...argLines, scopeLine, OUTSIDE_LINE];
 
-  const measured = measureApprovalMessage(lines.join("\n"), { terminalWidth });
+  const measured = measureApprovalMessage(lines.join("\n"));
   if (!measured.ok) return measured;
   return { ...measured, argLines, scopeLine, outsideLine: OUTSIDE_LINE };
 }
 
-module.exports = { renderApprovalMessage, measureApprovalMessage, appendApprovalContext, renderName, escapeInvisible, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };
+module.exports = { renderApprovalMessage, measureApprovalMessage, appendApprovalContext, renderName, escapeInvisible, MESSAGE_LINE_CAP, CONTEXT_CHARACTER_CAP };
