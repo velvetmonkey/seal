@@ -236,7 +236,7 @@ test("5a supported schema with any sealVersion reaches the normal already-protec
   const before = snapshot(ctx);
   const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
   assert.equal(result.code, 1, result.out);
-  assert.match(result.out, /already_protected.*project is already PENDING RESTART/);
+  assert.match(result.out, /already_protected.*server "db" is already PENDING RESTART/);
   assert.doesNotMatch(result.out, /incompatible_state/);
   assert.doesNotMatch(result.out, /from another binary version/);
   assert.doesNotMatch(result.out, /has schema/);

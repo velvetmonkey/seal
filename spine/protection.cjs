@@ -236,8 +236,44 @@ function projectDirectory(projectRoot, env = process.env) {
   return path.join(dataHome(env), "seal", "projects", projectId(projectRoot));
 }
 
-function statePathFor(projectRoot, env = process.env) {
-  return path.join(projectDirectory(projectRoot, env), "state.json");
+// Compatibility migration: legacy records remain authoritative at their original
+// path so installed overrides and already-running wrappers keep the same file,
+// journal and receipts. New servers use independent directories. Never copy a
+// live record: two writable copies would split the lease and approval history.
+function statePathsFor(projectRoot, env = process.env) {
+  const directory = projectDirectory(projectRoot, env);
+  const legacy = path.join(directory, "state.json");
+  const paths = fs.existsSync(legacy) ? [legacy] : [];
+  let servers;
+  try { servers = fs.readdirSync(path.join(directory, "servers"), { withFileTypes: true }); }
+  catch (error) { if (error.code === "ENOENT") return paths; throw error; }
+  for (const server of servers.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!server.isDirectory()) continue;
+    const file = path.join(directory, "servers", server.name, "state.json");
+    if (fs.existsSync(file)) paths.push(file);
+  }
+  return paths;
+}
+
+function statePathFor(projectRoot, env = process.env, serverName) {
+  const directory = projectDirectory(projectRoot, env);
+  const legacy = path.join(directory, "state.json");
+  if (serverName === undefined) {
+    const paths = statePathsFor(projectRoot, env);
+    if (paths.length > 1) throw new ProtectionError("server_required", "multiple server records exist; specify the server name");
+    return paths[0] || legacy;
+  }
+  // Encode names as single path components, including dot-only names.
+  const component = encodeURIComponent(serverName).replaceAll(".", "%2E");
+  const route = path.join(directory, "servers", component, "state.json");
+  const old = readState(legacy);
+  // A nameless legacy record cannot safely be assigned to a different route.
+  // Preserve the existing refusal instead of treating it as absent.
+  if (old && (!old.serverName || old.serverName === serverName)) {
+    if (fs.existsSync(route)) throw new ProtectionError("duplicate_server_state", `both legacy and server state exist for "${serverName}"; no state was changed`);
+    return legacy;
+  }
+  return route;
 }
 
 function mcpJsonPath(projectRoot) {
@@ -892,6 +928,8 @@ function requireProcessStartWitness(pid, situation = "live process") {
   return requireProcessStartWitnessBinding(pid, situation).witness;
 }
 
+// Deliberately project-wide: activation, recovery and config mutations must not
+// race. Held only during those operations, never for a proxy session or call.
 function lockPathFor(projectRoot, env = process.env) {
   return path.join(projectDirectory(projectRoot, env), "proxy.lock");
 }
@@ -940,8 +978,7 @@ function acquireProjectLock(projectRoot, env = process.env) {
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
       if (lockOwnerIsLive(existing, "project-lock owner")) {
-        const state = readState(statePathFor(projectRoot, env));
-        const generation = state?.lease?.generation ?? "unknown";
+        const generation = "unknown";
         throw new ProtectionError(
           "proxy_lease_active",
           `active lease holder pid ${existing.pid}, generation ${generation}; retry after that session exits`,
@@ -1002,10 +1039,10 @@ async function protect({
   requireHumanApprovalOrigin(env);
   requireProtectReadiness(env);
   const root = realProjectRoot(projectRoot);
-  const statePath = statePathFor(root, env);
+  const statePath = statePathFor(root, env, serverName);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED) {
-    throw new ProtectionError("already_protected", `project is already ${existing.state}`);
+    throw new ProtectionError("already_protected", `server "${serverName}" is already ${existing.state}`);
   }
   const project = readProjectServer(root, serverName);
   assertNoLocalOverride(serverName, root, env);
@@ -1027,77 +1064,97 @@ async function protect({
     );
   }
 
-  const directory = path.dirname(statePath);
-  const storePath = path.join(directory, "approvals.journal");
-  const receiptsDir = path.join(directory, "receipts");
-  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  if (!fs.existsSync(storePath)) fs.writeFileSync(storePath, "", { mode: 0o600 });
-  fs.mkdirSync(receiptsDir, { recursive: true, mode: 0o700 });
+  const lock = acquireProjectLock(root, env);
+  try {
+    const latest = readState(statePath);
+    if (latest && latest.state !== STATES.UNPROTECTED) {
+      throw new ProtectionError("already_protected", `server "${serverName}" is already ${latest.state}`);
+    }
+    assertNoLocalOverride(serverName, root, env);
+    const directory = path.dirname(statePath);
+    const storePath = path.join(directory, "approvals.journal");
+    const receiptsDir = path.join(directory, "receipts");
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (!fs.existsSync(storePath)) fs.writeFileSync(storePath, "", { mode: 0o600 });
+    fs.mkdirSync(receiptsDir, { recursive: true, mode: 0o700 });
 
-  const state = {
-    schema: STATE_SCHEMA,
-    sealVersion: sealVersion(),
-    state: STATES.PENDING_RESTART,
-    projectRoot: root,
-    projectId: projectId(root),
-    serverName,
-    guardTools: requestedTools,
-    guardPredicates: requestedSelections
-      .filter((selection) => selection.predicate !== null)
-      .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),
-    mcpJsonPath: project.filePath,
-    mcpJsonHashAtProtect: project.hash,
-    projectServerDigest: project.serverDigest,
-    projectServer: project.server,
-    childArgv: project.childArgv,
-    childEnv: project.childEnv,
-    discoveryTimeoutMs: timeoutMs,
-    storePath,
-    receiptsDir,
-    protectedAt: new Date().toISOString(),
-    lease: null,
-  };
-  state.localOverride = installedLocalOverride({ root, serverName, sealBin, statePath });
-  writeState(statePath, state);
+    const state = {
+      schema: STATE_SCHEMA,
+      sealVersion: sealVersion(),
+      state: STATES.PENDING_RESTART,
+      projectRoot: root,
+      projectId: projectId(root),
+      serverName,
+      guardTools: requestedTools,
+      guardPredicates: requestedSelections
+        .filter((selection) => selection.predicate !== null)
+        .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),
+      mcpJsonPath: project.filePath,
+      mcpJsonHashAtProtect: project.hash,
+      projectServerDigest: project.serverDigest,
+      projectServer: project.server,
+      childArgv: project.childArgv,
+      childEnv: project.childEnv,
+      discoveryTimeoutMs: timeoutMs,
+      storePath,
+      receiptsDir,
+      protectedAt: new Date().toISOString(),
+      lease: null,
+    };
+    state.localOverride = installedLocalOverride({ root, serverName, sealBin, statePath });
+    writeState(statePath, state);
 
-  const install = runClaude([
-    "mcp", "add", "--scope", "local", serverName,
-    "--", sealBin, "__proxy", "--protect-state", statePath,
-  ], env, root);
-  if (install.error || install.code !== 0) {
-    writeState(statePath, { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() });
-    throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}`);
-  }
-  const installedState = {
-    ...state,
-    localOverride: { ...state.localOverride, installed: true, installedAt: new Date().toISOString() },
-  };
-  writeState(statePath, installedState);
-  return { statePath, beforeHash: project.hash, state: installedState, toolNames };
+    const install = runClaude([
+      "mcp", "add", "--scope", "local", serverName,
+      "--", sealBin, "__proxy", "--protect-state", statePath,
+    ], env, root);
+    if (install.error || install.code !== 0) {
+      writeState(statePath, { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() });
+      throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}`);
+    }
+    const installedState = {
+      ...state,
+      localOverride: { ...state.localOverride, installed: true, installedAt: new Date().toISOString() },
+    };
+    writeState(statePath, installedState);
+    return { statePath, beforeHash: project.hash, state: installedState, toolNames };
+  } finally { lock.release(); }
 }
 
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
   const root = realProjectRoot(projectRoot);
-  const statePath = statePathFor(root, env);
-  const state = readState(statePath);
-  assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
-  if (lockOwnerIsLive(state?.lease)) {
-    throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
-  }
-  const before = readProjectConfig(root).hash;
-  const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root);
-  if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, serverName))) {
-    throw new ProtectionError("claude_remove_failed", `Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
-  }
-  const after = readProjectConfig(root).hash;
-  if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after });
-  return { beforeHash: before, afterHash: after, statePath, previousState: state };
+  const statePath = statePathFor(root, env, serverName);
+  const lock = acquireProjectLock(root, env);
+  try {
+    const state = readState(statePath);
+    assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
+    if (lockOwnerIsLive(state?.lease)) {
+      throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
+    }
+    const before = readProjectConfig(root).hash;
+    const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root);
+    if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, serverName))) {
+      throw new ProtectionError("claude_remove_failed", `Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
+    }
+    const after = readProjectConfig(root).hash;
+    if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after });
+    return { beforeHash: before, afterHash: after, statePath, previousState: state };
+  } finally { lock.release(); }
 }
 
-function recover({ projectRoot = process.cwd(), env = process.env }) {
+function recoveryStatePath(root, env, serverName) {
+  const legacy = path.join(projectDirectory(root, env), "state.json");
+  if (fs.existsSync(legacy)) {
+    const old = JSON.parse(fs.readFileSync(legacy, "utf8"));
+    if (old?.serverName === serverName) return legacy;
+  }
+  return path.join(projectDirectory(root, env), "servers", encodeURIComponent(serverName).replaceAll(".", "%2E"), "state.json");
+}
+
+function recover({ serverName, projectRoot = process.cwd(), env = process.env }) {
   const root = realProjectRoot(projectRoot);
-  const statePath = statePathFor(root, env);
+  const statePath = serverName === undefined ? statePathFor(root, env) : recoveryStatePath(root, env, serverName);
   // Recovery may inspect incompatible bytes, but must never activate them or
   // rewrite their schema to make them pass readState.
   const requireIncompatible = () => {
@@ -1114,7 +1171,8 @@ function recover({ projectRoot = process.cwd(), env = process.env }) {
     const bytes = fs.readFileSync(statePath);
     const state = JSON.parse(bytes.toString("utf8"));
     if (!state || state.projectRoot !== root || state.projectId !== projectId(root) ||
-        typeof state.serverName !== "string" || state.serverName.length === 0) {
+        typeof state.serverName !== "string" || state.serverName.length === 0 ||
+        (serverName !== undefined && state.serverName !== serverName)) {
       throw new ProtectionError("recovery_state_invalid", "cannot establish the incompatible state's project and server ownership; no state or configuration was changed");
     }
     if (lockOwnerIsLive(state.lease)) {
@@ -1337,6 +1395,7 @@ module.exports = {
   receiptKeyPaths,
   realProjectRoot,
   statePathFor,
+  statePathsFor,
   stateWithProject,
   unprotect,
 };

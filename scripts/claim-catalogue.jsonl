@@ -44,3 +44,4 @@
 {"id":"authored-20","kind":"pinned","file":"scripts/generate-release-docs.mjs","text":"Download and independently verify the pinned Linux x86-64 release, then install.","sha256":"cacf73385279380b566a7716f9ae7d4f429a0af320710946bc461f34faf4568e"}
 {"id":"authored-21","kind":"pinned","file":"test-support/runtime-fixture/src/verify.cjs","text":"`seal verify <receipt.json>` — independent decision-receipt verification.","sha256":"f65d933893813a3ca2dfae4cce599cbfd803f70769b4810726a79f9bde82a89d"}
 {"id":"authored-22","kind":"pinned","file":"scripts/check-install-prose.mjs","text":"This is an independently reviewed claim roster, not generator output.","sha256":"037e19058dbafe5edbd4a81c8de96f7f1e35c1be9366315263072b1580ec53c0"}
+{"id":"help-recover-server","kind":"emitted","text":"seal recover --archive [SERVER] archive incompatible state and remove Seal's owned local override","sha256":"36dba9357bdb3daf43f8a18d57b1292534ae1894adf3b924b907067e75991292"}
