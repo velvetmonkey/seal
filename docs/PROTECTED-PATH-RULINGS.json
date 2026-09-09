@@ -1,17 +1,18 @@
 {
   "version": 1,
   "ruling": {
-    "base": "ee337d0a9558c29aad20cdfef3287f65c66e55bc",
-    "author": "velvetmonkey",
-    "date": "2026-09-07",
-    "scope": "PR 253 reports ONE protected artifact, test/fixtures/readme-demo-output.txt, and the file DID NOT CHANGE. Its blob on this head is ea8c7486e4797a41fda7e9ad5f2ca641b1640ba4, which is byte-identical to the blob on main. Ben ruled this at 2026-09-07 15:36, in answer to the question whether to take the sanctioned ruling door for PR 253. He answered yes.  WHY THE CHECK REFUSES A FILE NOBODY EDITED, measured and reproduced on disk 2026-09-07 15:35. The Monkey cleared this branch's BEHIND state at 15:22 with `gh pr update-branch`, which creates a MERGE commit, 56e93f838cfbcb773907ef47e4c8fb3e5c998f09. scripts/check-protected-paths.cjs line 139 walks the range with `git log -m --format= --name-status -z <mergeBase>..<head>`. The -m flag diffs a merge commit against EVERY parent. So the merge reports this fixture as Modified against the BRANCH-side parent, because main had changed it and the branch had not. No commit authored on this branch touches the file, and `git diff origin/main <head> -- <that path>` is empty. Sibling pull request 263, on the SAME merge base ee337d0a, passes the identical check, because main changed no protected file relative to its branch side.  WHY NOT REBASE INSTEAD, which is the mechanic the retired PR 244 ruling recommends. `gh pr update-branch 253 --rebase` was attempted at 15:38 and returned `PR branch already up-to-date`. The merge had already levelled the branch, so the rebase path refuses to act and cannot remove the merge commit. That is why this ruling exists rather than a clean range.  WHY THE CHECKER IS NOT BEING CHANGED. The per-commit walk is deliberate and its own comment says so: a net tree diff alone erases an add-then-delete sequence. Relaxing it to ignore a zero-net merge would also stop it catching a protected fixture that is introduced, consumed by a generator or a test, and deleted before the head. That property is worth more than the cost of this entry.  THE STANDING LESSON, recorded so it is not rediscovered. On a repository carrying a commit-range guard, a merge-from-base is NOT a free operation, because it injects every base-side change into the range. Clear a BEHIND state with --rebase BEFORE a merge commit exists, or expect to owe a ruling.",
+    "base": "f28f71001485cf071c0189294d4c4b4cbb946c9c",
+    "author": "Ben",
+    "date": "2026-09-09",
+    "scope": "Ben ruled on 2026-09-09 at 13:11 with the exact words \"yes of course\", in answer to the question whether to authorise the two-line claim-channel step in PR 295. The authorised change in .github/workflows/ci.yml adds the step named \"Closed CLI channel and pinned authored catalogue\" and its command \"node --test test/claim-channel.test.cjs\". This records Ben's human decision; the lane only records the exact merge-base, protected-path set and Git blobs derived after the final payload commit and rebase.",
     "retires": [
-      "The 2026-09-06 ruling from PR 244, base d8f5198bf48191339cb412b5fa83bfc7de3392fc, which is now on main and no longer applies to any open change."
+      "The 2026-09-06 ruling from PR 244, base d8f5198bf48191339cb412b5fa83bfc7de3392fc, which is now on main and no longer applies to any open change.",
+      "The 2026-09-07 ruling from PR 253, base ee337d0a9558c29aad20cdfef3287f65c66e55bc, which was verified to be an ancestor of origin/main on 2026-09-09 and no longer describes this candidate range."
     ],
     "files": [
       {
-        "path": "test/fixtures/readme-demo-output.txt",
-        "blob": "ea8c7486e4797a41fda7e9ad5f2ca641b1640ba4"
+        "path": ".github/workflows/ci.yml",
+        "blob": "4609ec0ced4ad5cdb9b3ea055c45e455d9cda025"
       }
     ]
   }

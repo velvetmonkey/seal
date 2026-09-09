@@ -298,6 +298,8 @@ jobs:
       - run: node scripts/claims-drift-family.mjs
       - name: Banned verification claims must not return (README included)
         run: node --test --test-name-pattern 'no banned verification claim' test/no-verification-claim.test.cjs
+      - name: Closed CLI channel and pinned authored catalogue
+        run: node --test test/claim-channel.test.cjs
       - name: README install pin must match published release asset
         run: node --test test/dist-pin.test.cjs
       - name: README installer success transcript must match published release asset
