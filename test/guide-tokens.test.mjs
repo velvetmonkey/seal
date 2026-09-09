@@ -151,13 +151,13 @@ test("every refusal token the guide documents exists in the source", () => {
   );
 });
 
-// These assertions require a nonempty claim inventory for each guide and each
-// listed claim exactly once after whitespace normalization.
-// what-is-protected-right-now.md additionally has a whole-file digest: every
-// byte change fails and calls for human review, including an added sentence.
-// when-something-looks-wrong.md has no digest: a new sentence added beside a
-// reviewed claim is not checked here. Its refusal-token inventory is checked
-// separately above.
+// The claim check requires a nonempty inventory for each guide and each listed
+// claim exactly once after whitespace normalization.
+// For what-is-protected-right-now.md, the whole-file digest binds first: any
+// byte change fails, including whitespace-only edits and added sentences, before
+// claim whitespace normalization can run on the changed file.
+// when-something-looks-wrong.md has no digest: a new sentence beside a reviewed
+// claim is not checked here; its refusal-token inventory is checked above.
 // Neither claim retention nor byte identity certifies that either guide is true.
 const REVIEWED_GUIDES = [
   {
