@@ -404,8 +404,11 @@ the next generation. The same token also names a project lock held by another
 Seal operation: a `seal protect`, `seal unprotect` or `seal recover` run, or
 another wrapper's own record check or lease commit. That refusal says `retry
 after that operation finishes`; tool discovery runs outside the lock, and a
-starting wrapper waits up to 5000ms for the lock before refusing. This is a
-transient start event, not a persisted project status.
+starting wrapper waits up to 3200ms for each lock acquisition before refusing.
+At that bound the message names a lock-acquisition timeout and the unfinished
+operation, which may be waiting for a slow subprocess; it does not establish
+that another session owns a live lease. This is a transient start event, not a
+persisted project status.
 
 ### `activation_state_changed`
 

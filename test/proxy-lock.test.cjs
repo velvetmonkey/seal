@@ -221,3 +221,72 @@ test("two starters for the same server in the same window: exactly one takes the
   assert.equal(stored.lease.generation, 1);
   assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "no startup lock survives the race");
 });
+
+// Keep a real protect operation in its synchronous Claude subprocess while a
+// different protected route starts. The shim installs the requested override;
+// only its latency is controlled, so a tiny lock budget must break the first case.
+async function protectWhileStarting(t, delayMs, expectTimeout) {
+  const ctx = pendingServers(["alpha"]);
+  const config = JSON.parse(fs.readFileSync(path.join(ctx.project, ".mcp.json"), "utf8"));
+  config.mcpServers.beta = config.mcpServers.alpha;
+  fs.writeFileSync(path.join(ctx.project, ".mcp.json"), JSON.stringify(config));
+  const bin = path.join(ctx.root, "bin");
+  const home = path.join(ctx.root, "home");
+  fs.mkdirSync(bin);
+  fs.mkdirSync(home);
+  const marker = path.join(ctx.root, "claude-add-started");
+  fs.writeFileSync(path.join(bin, "claude"), `#!/usr/bin/env node
+    const fs = require("node:fs"), path = require("node:path");
+    const args = process.argv.slice(2);
+    if (args[1] === "get") process.exit(1);
+    if (args[1] !== "add") process.exit(2);
+    fs.writeFileSync(${JSON.stringify(marker)}, String(process.pid));
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${delayMs});
+    const split = args.indexOf("--");
+    fs.writeFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json"), JSON.stringify({
+      projects: { [process.cwd()]: { mcpServers: { [args[4]]: {
+        type: "stdio", command: args[split + 1], args: args.slice(split + 2), env: {}
+      } } } }
+    }));
+  `);
+  fs.chmodSync(path.join(bin, "claude"), 0o755);
+  const env = { ...process.env, ...ctx.env, HOME: home, CLAUDE_CONFIG_DIR: home,
+    PATH: `${bin}${path.delimiter}${process.env.PATH}`, GIT_CEILING_DIRECTORIES: ctx.root };
+  const protector = spawn(process.execPath, [path.join(__dirname, "../bin/seal"), "protect", "beta", "demo.mutate"],
+    { cwd: ctx.project, env, stdio: ["ignore", "pipe", "pipe"] });
+  const protectorExit = waitForExit(protector);
+  let protectOutput = "";
+  protector.stdout.on("data", (chunk) => { protectOutput += chunk; });
+  protector.stderr.on("data", (chunk) => { protectOutput += chunk; });
+  t.after(() => { if (protector.exitCode === null) protector.kill("SIGKILL"); });
+  const deadline = Date.now() + 10000;
+  while (!fs.existsSync(marker)) {
+    assert.equal(protector.exitCode, null, protectOutput);
+    assert.ok(Date.now() < deadline, "protect must enter Claude add");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const before = fs.readFileSync(ctx.states.alpha);
+  const starter = startActivation(ctx.states.alpha, env);
+  t.after(() => starter.release());
+  const [result] = await settle([starter]);
+  if (expectTimeout) {
+    assert.equal(result.code, 1, starter.output());
+    assert.equal(starter.output(), `REFUSED proxy_lease_active\ntimed out after waiting 3200ms to acquire the project lock held by pid ${protector.pid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes\n`);
+    assert.deepEqual(fs.readFileSync(ctx.states.alpha), before, "timed-out starter writes no route state");
+    assert.equal(lockOwnerIsLive(JSON.parse(fs.readFileSync(lockPathFor(ctx.project, env)))), true);
+  } else {
+    assert.equal(result.code, 0, starter.output());
+    assert.equal(starter.output(), `ACTIVE ${starter.pid} 1\n`);
+  }
+  assert.equal((await protectorExit).code, 0, protectOutput);
+  assert.equal(readState(statePathFor(ctx.project, env, "beta")).state, "PENDING RESTART");
+  assert.equal(fs.existsSync(lockPathFor(ctx.project, env)), false);
+}
+
+test("activation waits through a legitimate protect subprocess within the measured lock budget", async (t) => {
+  await protectWhileStarting(t, 300, false);
+});
+
+test("a slow protect subprocess crosses the lock budget with a truthful timeout and no starter writes", async (t) => {
+  await protectWhileStarting(t, 6500, true);
+});

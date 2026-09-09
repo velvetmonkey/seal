@@ -1247,13 +1247,12 @@ function markBroken(statePath, state, error) {
   return next;
 }
 
-// Activation holds the project lock only for short synchronous sections, so a
-// live holder is another such section or a protect/unprotect/recover run: it
-// finishes within moments. Two servers entering activation in the same
-// millisecond are serialised by a bounded wait rather than refused. Once the
-// bound is reached the holder is named and the sentence stays true: it is an
-// operation to wait for, not a session to exit.
-const ACTIVATION_LOCK_WAIT_MS = 5000;
+// Activation waits for project-lock acquisition, not for tool discovery or a
+// live lease to end. Ten real Claude mcp add/remove invocations on this host
+// measured 578.24–1023.33ms (median 825.57ms). 3200ms is 3.13x that maximum:
+// room for protect's in-lock get plus add and scheduling/filesystem overhead.
+// This is a retry budget, not a guarantee that the holder finishes within it.
+const ACTIVATION_LOCK_WAIT_MS = 3200;
 const ACTIVATION_LOCK_POLL_MS = 25;
 
 async function acquireProjectLockWaiting(projectRoot, env, waitMs = ACTIVATION_LOCK_WAIT_MS) {
@@ -1266,7 +1265,7 @@ async function acquireProjectLockWaiting(projectRoot, env, waitMs = ACTIVATION_L
       if (Date.now() - started >= waitMs) {
         throw new ProtectionError(
           "proxy_lease_active",
-          `project lock still held by pid ${error.lockHolderPid} for another Seal operation on this project after waiting ${waitMs}ms; retry after that operation finishes`,
+          `timed out after waiting ${waitMs}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,
         );
       }
       await new Promise((resolve) => setTimeout(resolve, ACTIVATION_LOCK_POLL_MS));
