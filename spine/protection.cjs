@@ -978,11 +978,15 @@ function acquireProjectLock(projectRoot, env = process.env) {
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
       if (lockOwnerIsLive(existing, "project-lock owner")) {
-        const generation = "unknown";
-        throw new ProtectionError(
+        // A live lock owner is a Seal operation in progress, not a lease: it
+        // finishes and releases, so the sentence must not tell the user to
+        // wait for a session to exit.
+        const refusal = new ProtectionError(
           "proxy_lease_active",
-          `active lease holder pid ${existing.pid}, generation ${generation}; retry after that session exits`,
+          `project lock held by pid ${existing.pid} for another Seal operation on this project; retry after that operation finishes`,
         );
+        refusal.lockHolderPid = existing.pid;
+        throw refusal;
       }
       try {
         fs.unlinkSync(filePath);
@@ -1243,20 +1247,103 @@ function markBroken(statePath, state, error) {
   return next;
 }
 
+// Activation holds the project lock only for short synchronous sections, so a
+// live holder is another such section or a protect/unprotect/recover run: it
+// finishes within moments. Two servers entering activation in the same
+// millisecond are serialised by a bounded wait rather than refused. Once the
+// bound is reached the holder is named and the sentence stays true: it is an
+// operation to wait for, not a session to exit.
+const ACTIVATION_LOCK_WAIT_MS = 5000;
+const ACTIVATION_LOCK_POLL_MS = 25;
+
+async function acquireProjectLockWaiting(projectRoot, env, waitMs = ACTIVATION_LOCK_WAIT_MS) {
+  const started = Date.now();
+  for (;;) {
+    try {
+      return acquireProjectLock(projectRoot, env);
+    } catch (error) {
+      if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
+      if (Date.now() - started >= waitMs) {
+        throw new ProtectionError(
+          "proxy_lease_active",
+          `project lock still held by pid ${error.lockHolderPid} for another Seal operation on this project after waiting ${waitMs}ms; retry after that operation finishes`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, ACTIVATION_LOCK_POLL_MS));
+    }
+  }
+}
+
+async function withProjectLock(projectRoot, env, body) {
+  const lock = await acquireProjectLockWaiting(projectRoot, env);
+  try {
+    return body(lock);
+  } finally {
+    lock.release();
+  }
+}
+
+function refuseLiveLease(state) {
+  if (lockOwnerIsLive(state.lease)) {
+    throw new ProtectionError(
+      "proxy_lease_active",
+      `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
+    );
+  }
+}
+
+// The record fields tool discovery and the lease commit depend on. Discovery
+// runs outside the project lock, so a record whose inputs changed meanwhile is
+// not activated on the strength of that discovery.
+function activationInputs(state) {
+  return JSON.stringify({
+    projectRoot: state.projectRoot,
+    serverName: state.serverName,
+    projectServerDigest: state.projectServerDigest,
+    childArgv: state.childArgv,
+    childEnv: state.childEnv,
+    storePath: state.storePath,
+    receiptsDir: state.receiptsDir,
+    selections: protectedToolSelections(state),
+    discoveryTimeoutMs: state.discoveryTimeoutMs,
+  });
+}
+
+// Discovery failed outside the lock. The record is marked BROKEN only when it
+// is still the record preflight validated and no other session has taken a
+// live lease on it meanwhile: a loser's failure must never null a live lease.
+// Returns the error the caller should raise.
+async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error) {
+  let lock;
+  try {
+    lock = await acquireProjectLockWaiting(projectRoot, env);
+  } catch {
+    return error;
+  }
+  try {
+    const state = readState(statePath);
+    if (!state) return error;
+    refuseLiveLease(state);
+    if (activationInputs(state) === activationInputs(validated)) markBroken(statePath, state, error);
+    return error;
+  } catch (outcome) {
+    return outcome instanceof ProtectionError && outcome.code === "proxy_lease_active" ? outcome : error;
+  } finally {
+    lock.release();
+  }
+}
+
 async function activationLease(statePath, env = process.env) {
   requireHumanApprovalOrigin(env);
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
-  const lock = acquireProjectLock(initial.projectRoot, env);
-  try {
+  const projectRoot = initial.projectRoot;
+  // Preflight under the project lock: a live lease, a missing command or a
+  // drifted server refuses before the guarded server is started.
+  const preflight = await withProjectLock(projectRoot, env, (lock) => {
     const state = readState(statePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
-    if (lockOwnerIsLive(state.lease)) {
-      throw new ProtectionError(
-        "proxy_lease_active",
-        `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
-      );
-    }
+    refuseLiveLease(state);
     const childCommand = state.childArgv && state.childArgv[0];
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
@@ -1269,18 +1356,41 @@ async function activationLease(statePath, env = process.env) {
     // Validate before discovery starts the guarded server. Load lazily because
     // the journal also uses protection's lock helpers; createProxy checks again.
     require("./store.cjs").openJournal(state.storePath);
-    let toolNames;
-    try {
-      toolNames = await listServerTools({
-        childArgv: state.childArgv,
-        childEnv: state.childEnv,
-        projectRoot: state.projectRoot,
-        env,
-        timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
-      });
-    } catch (error) {
-      markBroken(statePath, state, error);
-      throw error;
+    return { state, recovered: lock.recovered };
+  });
+  // Tool discovery starts the guarded server and can take up to the discovery
+  // timeout. It runs outside the project lock, as protect's own discovery
+  // does, so another server activating in the same window is not refused for
+  // a lock that is only a startup in progress. The lease is committed under
+  // the lock below, after the record is validated again.
+  let toolNames;
+  try {
+    toolNames = await listServerTools({
+      childArgv: preflight.state.childArgv,
+      childEnv: preflight.state.childEnv,
+      projectRoot,
+      env,
+      timeoutMs: preflight.state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+    });
+  } catch (error) {
+    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error);
+  }
+  return await withProjectLock(projectRoot, env, (lock) => {
+    const state = readState(statePath);
+    if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+    // The loser of a same-server race meets the winner's committed lease here
+    // and is refused with the winner's real pid and generation.
+    refuseLiveLease(state);
+    if (state.state === STATES.UNPROTECTED || activationInputs(state) !== activationInputs(preflight.state)) {
+      throw new ProtectionError(
+        "activation_state_changed",
+        `protection state changed during tool discovery (now ${state.state}); no lease was taken; run seal status`,
+      );
+    }
+    const got = currentDigestForState(state);
+    if (got !== state.projectServerDigest) {
+      markDrifted(statePath, state, got);
+      throw new ProtectionError("drifted", "project server drifted before proxy activation");
     }
     const guardedTools = protectedToolNames(state);
     const vanishedTools = guardedTools.filter((name) => !toolNames.includes(name));
@@ -1311,14 +1421,10 @@ async function activationLease(statePath, env = process.env) {
     writeState(statePath, next, {
       beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
     });
-    lock.release();
     Object.defineProperty(next, "leaseToken", { value: next.lease });
-    Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+    Object.defineProperty(next, "lockRecovered", { value: preflight.recovered || lock.recovered });
     return next;
-  } catch (error) {
-    lock.release();
-    throw error;
-  }
+  });
 }
 
 function beforeForwardFromState(statePath, leaseToken) {

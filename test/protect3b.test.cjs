@@ -977,7 +977,7 @@ test("the project lock refuses a concurrent operation on another server without 
   try {
     const other = run(ctx.project, ctx.home, ["protect", "beta", "demo.mutate"], ctx.env);
     assert.equal(other.code, 1); assert.match(other.out, /proxy_lease_active/);
-    assert.match(other.out, new RegExp(`active lease holder pid ${process.pid}`));
+    assert.match(other.out, new RegExp(`project lock held by pid ${process.pid} for another Seal operation on this project; retry after that operation finishes`));
     assert.deepEqual(fs.readFileSync(file), before);
     assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env, "beta")), false);
   } finally { lock.release(); }
