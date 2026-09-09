@@ -13,7 +13,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { sha256Hex } = require('../spine/receipt-v2.cjs');
-const { capture, normalize, pinnedText } = require('../scripts/claim-channel.cjs');
+const { capture, normalize, pinnedText, productRoutes } = require('../scripts/claim-channel.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const entries = fs.readFileSync(path.join(ROOT, 'scripts/claim-catalogue.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
 assert.equal(new Set(entries.map(e => e.id)).size, entries.length, 'duplicate catalogue ID');
@@ -30,16 +30,20 @@ test('every captured CLI line has exact text and product digest membership', () 
   assert.ok(members.length > 0, 'emitted catalogue is empty');
   assert.equal(new Set(members.map(e => e.text)).size, members.length, 'duplicate emitted member');
   const surfaces = capture();
+  const routes = productRoutes();
   for (const surface of ['help', 'verify-no-key', 'verify-caller-key']) {
-    assert.deepEqual(surfaces.filter(s => s.surface === surface).map(s => s.condition).sort(),
-      ['pipe-configured', 'pipe-plain', 'pty-configured', 'pty-plain'], `${surface}: required observation missing`);
+    for (const route of routes[surface === 'help' ? 'help' : 'verify']) {
+      assert.deepEqual(surfaces.filter(s => s.surface === surface && s.route === route).map(s => s.condition).sort(),
+        ['pipe-configured', 'pipe-plain', 'pty-configured', 'pty-plain'], `${surface}/${route ?? '<bare>'}: required observation missing`);
+    }
   }
-  for (const { surface, condition, lines } of surfaces) for (const text of lines) {
+  for (const [surface, found] of Object.entries(routes)) console.log(`ROUTES ${surface} ${found.length} ${JSON.stringify(found)}`);
+  for (const { surface, route, condition, lines } of surfaces) for (const text of lines) {
     // Absence is red inside the channel, even when no claim word occurs.
     assert.ok(members.some(e => e.text === text && e.sha256 === sha256Hex(text)),
-      `ABSENCE IS RED INSIDE THE CHANNEL: ${surface}/${condition}: ${JSON.stringify(text)}`);
+      `ABSENCE IS RED INSIDE THE CHANNEL: ${surface}/${route ?? '<bare>'}/${condition}: ${JSON.stringify(text)}`);
   }
-  for (const { surface, condition, lines } of surfaces) console.log(`CAPTURE ${surface} ${condition} LINES ${lines.length}`);
+  for (const { surface, route, condition, lines } of surfaces) console.log(`CAPTURE ${surface} ${route ?? '<bare>'} ${condition} LINES ${lines.length}`);
   console.log(`SURFACES ${new Set(surfaces.map(s => s.surface)).size} CONDITIONS ${surfaces.length} LINES CAPTURED ${surfaces.reduce((n, s) => n + s.lines.length, 0)} CATALOGUE EMITTED ${members.length}`);
 });
 
