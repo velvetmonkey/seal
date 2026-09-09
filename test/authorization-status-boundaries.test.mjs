@@ -13,12 +13,21 @@ const { testTmpdir } = tempRoot;
 
 async function withIsolatedRepository(body) {
   const root = testTmpdir("seal-status-boundaries-");
-  const archive = path.join(root, "source.tar");
-  execFileSync("git", [
-    "archive", "--format=tar", `--output=${archive}`, "HEAD",
-    "bin", "runtime", "docs", "scripts/check-authorization-status-boundaries.mjs",
-  ], { cwd: ROOT });
-  execFileSync("tar", ["-xf", archive, "-C", root]);
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd: ROOT,
+    encoding: "buffer",
+  }).toString("utf8").split("\0").filter(Boolean);
+  for (const file of files) {
+    const source = path.join(ROOT, file);
+    const destination = path.join(root, file);
+    const stat = fs.lstatSync(source);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    if (stat.isSymbolicLink()) fs.symlinkSync(fs.readlinkSync(source), destination);
+    else if (stat.isFile()) {
+      fs.copyFileSync(source, destination);
+      fs.chmodSync(destination, stat.mode & 0o7777);
+    }
+  }
   const checker = path.join(root, "scripts", "check-authorization-status-boundaries.mjs");
   try {
     const { authorizationStatusBoundaryFailures } = await import(pathToFileURL(checker).href);
