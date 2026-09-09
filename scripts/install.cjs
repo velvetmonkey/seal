@@ -249,7 +249,23 @@ function main() {
   const recordPath = path.join(prefix, "lib", "seal", "install.json");
   const launchPath = path.join(prefix, "bin", "seal");
 
-  readVerifiedExistingInstall(recordPath, launchPath, manifest.platform);
+  const previous = readVerifiedExistingInstall(recordPath, launchPath, manifest.platform);
+  // Preserve first-creation ownership across upgrades. Never infer ownership
+  // merely because a pre-existing file happens to contain the same bytes.
+  const owned = new Map((previous?.ownership?.paths || []).map(entry => [entry.path, entry]));
+  const remember = (target, kind, data) => {
+    const relative = path.relative(prefix, target);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return;
+    const old = owned.get(relative);
+    const present = lstatOrAbsent(target);
+    if (present?.isSymbolicLink()) refuse("existing_install_untrusted", `symbolic link at install target: ${target}`);
+    if (!present || old) owned.set(relative, { path: relative, kind, ...(data ? { sha256: sha256Hex(data) } : {}) });
+    if (target !== prefix) remember(path.dirname(target), "directory");
+  };
+  for (const file of files) remember(path.join(storeRoot, file.path), "file", file.data);
+  const launchPayload = files.find(file => file.path === "scripts/seal-launch.cjs");
+  if (launchPayload) remember(launchPath, "file", launchPayload.data);
+  remember(recordPath, "file");
 
   for (const file of files) {
     if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
@@ -273,6 +289,8 @@ function main() {
     treeSha256: manifest.treeSha256,
     store: storeRel,
     files: manifest.files,
+    ownership: { schema: "seal.created-paths/v1", paths: [...owned.values()] },
+    routes: previous?.routes || [],
   };
   writeFileDeep(recordPath, `${JSON.stringify(record, null, 2)}\n`, 0o444);
 

@@ -110,3 +110,250 @@ test("installed launcher rejects changed bytes and accepts restoration and prefi
     assert.equal(launch().code, 0);
   }
 });
+
+// Product uninstall exercises the built installer and installed dispatcher.
+let uninstallArtifact;
+function uninstallBox() {
+  uninstallArtifact ||= buildArtifact();
+  const root = testTmpdir(path.join(SCRATCH_ROOT, 'uninstall-'));
+  const home = path.join(root, 'home');
+  const project = path.join(root, 'project');
+  const prefix = path.join(root, 'prefix');
+  const stubBin = path.join(root, 'client-bin');
+  for (const dir of [home, project, stubBin]) fs.mkdirSync(dir);
+  assert.equal(run('git', ['init', '-q', project]).code, 0);
+  const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: home, XDG_DATA_HOME: path.join(home, 'data'), PATH: `${stubBin}${path.delimiter}${process.env.PATH}` };
+  const config = path.join(home, '.claude.json');
+  const server = path.join(root, 'server.cjs');
+  fs.writeFileSync(server, `require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+    const q = JSON.parse(line); if (q.id === undefined) return;
+    const result = q.method === 'initialize' ? {protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'test',version:'1'}} : q.method === 'tools/list' ? {tools:[{name:'inspect',inputSchema:{type:'object',properties:{}}}]} : {content:[]};
+    console.log(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));
+  });\n`);
+  const projectBytes = JSON.stringify({ mcpServers: { warehouse: { command: process.execPath, args: [server] } } }, null, 2) + '\n';
+  fs.writeFileSync(path.join(project, '.mcp.json'), projectBytes);
+  fs.writeFileSync(config, JSON.stringify({ theme: 'foreign', mcpServers: { foreign: {command:'foreign-server'} } }) + '\n');
+  fs.writeFileSync(path.join(stubBin, 'claude'), `#!/usr/bin/env node
+const fs=require('node:fs'), path=require('node:path');
+const file=path.join(process.env.CLAUDE_CONFIG_DIR,'.claude.json');
+const config=JSON.parse(fs.readFileSync(file)); const a=process.argv.slice(2); const name=a[4];
+if(a[1]==='get') {const present=config.projects?.[process.cwd()]?.mcpServers?.[a[2]]; console.log(present?'  Scope: Local config (private)':'  Scope: Project config (shared)'); process.exit(0);}
+config.projects ||= {}; config.projects[process.cwd()] ||= {}; const servers=config.projects[process.cwd()].mcpServers ||= {};
+if(a[1]==='add') {const at=a.indexOf('--');servers[name]={type:'stdio',command:a[at+1],args:a.slice(at+2),env:{}};}
+else if(a[1]==='remove') {delete servers[name];} else process.exit(2);
+fs.writeFileSync(file,JSON.stringify(config,null,2)+'\\n');
+`, { mode: 0o755 });
+  const invoke = (argv, options = {}) => {
+    const result = spawnSync(process.execPath, [path.join(prefix, 'bin/seal'), ...argv], { cwd: options.project || project, env: { ...env, ...options.env }, input: options.input ?? '', encoding: 'utf8', timeout: 20000 });
+    return { code: result.status, out: (result.stdout || '') + (result.stderr || '') };
+  };
+  const installed = install(uninstallArtifact, prefix);
+  assert.equal(installed.code, 0, installed.stderr);
+  const protectedResult = invoke(['protect', 'warehouse', 'inspect']);
+  assert.equal(protectedResult.code, 0, protectedResult.out);
+  const recordPath = path.join(prefix, 'lib/seal/install.json');
+  const record = () => JSON.parse(fs.readFileSync(recordPath));
+  const statePath = record().routes[0].statePath;
+  return { root, home, project, prefix, env, config, projectBytes, invoke, statePath, recordPath, record };
+}
+function assertUninstallRouteRestored(box) {
+  const config = JSON.parse(fs.readFileSync(box.config));
+  assert.equal(config.projects?.[box.project]?.mcpServers?.warehouse, undefined, 'uninstall left a shadowing Seal MCP entry');
+  assert.equal(fs.readFileSync(path.join(box.project, '.mcp.json'), 'utf8'), box.projectBytes);
+  assert.equal(config.theme, 'foreign');
+  assert.equal(config.mcpServers.foreign.command, 'foreign-server');
+}
+
+test('uninstall leaves no shadowing MCP entry and catches physical reinsertion', () => {
+  const box = uninstallBox();
+  const original = JSON.parse(fs.readFileSync(box.config));
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(result.code, 0, result.out);
+  assertUninstallRouteRestored(box);
+  assert.equal(fs.existsSync(path.join(box.prefix, 'bin/seal')), false);
+  const clean = fs.readFileSync(box.config);
+  const sha = bytes => require('node:crypto').createHash('sha256').update(bytes).digest('hex');
+  const tampered = JSON.parse(clean);
+  tampered.projects[box.project].mcpServers.warehouse = original.projects[box.project].mcpServers.warehouse;
+  fs.writeFileSync(box.config, JSON.stringify(tampered));
+  assert.throws(() => assertUninstallRouteRestored(box), /shadowing Seal MCP entry/);
+  fs.writeFileSync(box.config, clean);
+  assert.equal(sha(fs.readFileSync(box.config)), sha(clean));
+  console.log(`physical reinsertion detected; restored config sha256 ${sha(clean)}`);
+});
+
+test('uninstall cancellation and EOF change no prefix or config bytes', () => {
+  const box = uninstallBox();
+  const before = fs.readFileSync(box.recordPath);
+  const config = fs.readFileSync(box.config);
+  for (const input of ['n\n', '']) {
+    const result = box.invoke(['uninstall'], { input });
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /Remove file:/);
+    assert.match(result.out, /Uninstall cancelled/);
+    assert.deepEqual(fs.readFileSync(box.recordPath), before);
+    assert.deepEqual(fs.readFileSync(box.config), config);
+    assert.equal(fs.existsSync(path.join(box.prefix, 'lib/seal/lifecycle.lock')), false);
+  }
+});
+
+test('uninstall preserves a foreign file inside its store and shared prefix directories', () => {
+  const box = uninstallBox();
+  const foreign = path.join(box.prefix, box.record().store, 'spine', 'foreign-notes.txt');
+  fs.writeFileSync(foreign, 'another tool owns this');
+  const result = box.invoke(['uninstall'], { input: 'y\n' });
+  assert.equal(result.code, 0, result.out);
+  assert.equal(fs.readFileSync(foreign, 'utf8'), 'another tool owns this');
+  assertUninstallRouteRestored(box);
+});
+
+for (const problem of ['malformed', 'unreadable', 'edited route']) test(`uninstall refuses ${problem} client config before removing payload`, () => {
+  const box = uninstallBox();
+  if (problem === 'malformed') fs.writeFileSync(box.config, '{');
+  else if (problem === 'unreadable') fs.chmodSync(box.config, 0o000);
+  else {
+    const config = JSON.parse(fs.readFileSync(box.config));
+    config.projects[box.project].mcpServers.warehouse.args.push('--foreign-edit');
+    fs.writeFileSync(box.config, JSON.stringify(config));
+  }
+  const before = fs.readFileSync(box.recordPath);
+  const result = box.invoke(['uninstall'], { input: 'y\n' });
+  assert.notEqual(result.code, 0, result.out);
+  assert.deepEqual(fs.readFileSync(box.recordPath), before);
+  assert.equal(box.invoke(['--version']).code, 0);
+  if (problem === 'unreadable') fs.chmodSync(box.config, 0o600);
+});
+
+test('uninstall removes every recorded project in different client configs', () => {
+  const box = uninstallBox();
+  const second = path.join(box.root, 'second');
+  const client = path.join(box.root, 'second-client');
+  fs.mkdirSync(second); fs.mkdirSync(client);
+  assert.equal(run('git', ['init', '-q', second]).code, 0);
+  fs.writeFileSync(path.join(second, '.mcp.json'), box.projectBytes);
+  fs.writeFileSync(path.join(client, '.claude.json'), '{}\n');
+  const env = { CLAUDE_CONFIG_DIR: client };
+  assert.equal(box.invoke(['protect', 'warehouse', 'inspect'], { project: second, env }).code, 0);
+  // Removing just one project's protection must retain the other route.
+  const unprotect = box.invoke(['unprotect', 'warehouse']);
+  assert.equal(unprotect.code, 0, unprotect.out);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(client, '.claude.json'))).projects[second].mcpServers.warehouse);
+  const result = box.invoke(['uninstall'], { input: 'y\n' });
+  assert.equal(result.code, 0, result.out);
+  assertUninstallRouteRestored(box);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(client, '.claude.json'))).projects[second].mcpServers.warehouse, undefined);
+});
+
+test('uninstall refuses a live wrapper lease and the wrapper still answers', async () => {
+  const box = uninstallBox();
+  const { spawn } = require('node:child_process');
+  const child = spawn(process.execPath, [path.join(box.prefix, 'bin/seal'), '__proxy', '--protect-state', box.statePath], { cwd: box.project, env: box.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const lines = require('node:readline').createInterface({ input: child.stdout });
+  const responses = [];
+  let stderr = '';
+  child.stderr.on('data', b => { stderr += b; });
+  lines.on('line', line => responses.push(JSON.parse(line)));
+  const waitFor = async id => {
+    const deadline = Date.now() + 10000;
+    while (!responses.some(r => r.id === id)) {
+      assert.ok(Date.now() < deadline, `wrapper response timed out: ${stderr}`);
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  };
+  try {
+    child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2024-11-05',capabilities:{elicitation:{}},clientInfo:{name:'test',version:'1'}}})+'\n');
+    await waitFor(1);
+    const result = box.invoke(['uninstall'], { input: 'yes\n' });
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, /active wrapper/);
+    child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list',params:{}})+'\n');
+    await waitFor(2);
+    assert.ok(responses.find(r => r.id === 2).result.tools.some(t => t.name === 'inspect'));
+  } finally {
+    lines.close(); child.stdin.end();
+    await new Promise(resolve => child.exitCode !== null ? resolve() : child.once('exit', resolve));
+  }
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(result.code, 0, result.out);
+});
+
+test('uninstall twice is a missing command, and reinstall can protect again', () => {
+  const box = uninstallBox();
+  const first = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(first.code, 0, first.out);
+  const second = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.notEqual(second.code, 0);
+  assert.match(second.out, /MODULE_NOT_FOUND/);
+  assertUninstallRouteRestored(box);
+  const installed = install(uninstallArtifact, box.prefix);
+  assert.equal(installed.code, 0, installed.stderr);
+  const protectedAgain = box.invoke(['protect', 'warehouse', 'inspect']);
+  assert.equal(protectedAgain.code, 0, protectedAgain.out);
+});
+
+test('uninstall preserves unrelated client edits made after protect', () => {
+  const box = uninstallBox();
+  const config = JSON.parse(fs.readFileSync(box.config));
+  config.afterInstall = { chosenByUser: true };
+  config.projects[box.project].mcpServers.other = { command: 'another-tool' };
+  fs.writeFileSync(box.config, JSON.stringify(config));
+  const result = box.invoke(['uninstall'], { input: 'y\n' });
+  assert.equal(result.code, 0, result.out);
+  const after = JSON.parse(fs.readFileSync(box.config));
+  assert.deepEqual(after.afterInstall, { chosenByUser: true });
+  assert.equal(after.projects[box.project].mcpServers.other.command, 'another-tool');
+});
+
+test('uninstall detects config changes made after its removal preview', async () => {
+  const box = uninstallBox();
+  const { spawn } = require('node:child_process');
+  const child = spawn(process.execPath, [path.join(box.prefix, 'bin/seal'), 'uninstall'], { cwd: box.project, env: box.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  let out = '';
+  child.stdout.on('data', b => { out += b; });
+  let changed = false;
+  child.stderr.on('data', b => {
+    out += b;
+    if (!changed && out.includes('Confirm uninstall?')) {
+      changed = true;
+      const config = JSON.parse(fs.readFileSync(box.config));
+      config.concurrentEdit = 'retained';
+      fs.writeFileSync(box.config, JSON.stringify(config));
+      child.stdin.end('yes\n');
+    }
+  });
+  const code = await new Promise(resolve => child.once('exit', resolve));
+  assert.equal(changed, true, out);
+  assert.notEqual(code, 0, out);
+  assert.match(out, /files changed after preview/);
+  assert.equal(box.invoke(['--version']).code, 0);
+  assert.equal(JSON.parse(fs.readFileSync(box.config)).concurrentEdit, 'retained');
+});
+
+test('uninstall refuses payload symlink replacement and retains its foreign target', () => {
+  const box = uninstallBox();
+  const original = path.join(box.prefix, box.record().store, 'NOTICE');
+  const foreign = path.join(box.root, 'foreign-notice');
+  fs.writeFileSync(foreign, fs.readFileSync(original));
+  fs.chmodSync(path.dirname(original), 0o755);
+  fs.unlinkSync(original);
+  fs.symlinkSync(foreign, original);
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /symbolic link/);
+  assert.ok(fs.existsSync(foreign));
+});
+
+test('uninstall refuses a route subsequently owned by a different installation', () => {
+  const box = uninstallBox();
+  assert.equal(box.invoke(['unprotect', 'warehouse']).code, 0);
+  const second = path.join(box.root, 'other-prefix');
+  assert.equal(install(uninstallArtifact, second).code, 0);
+  const protectedAgain = spawnSync(process.execPath, [path.join(second, 'bin/seal'), 'protect', 'warehouse', 'inspect'], { cwd: box.project, env: box.env, encoding: 'utf8' });
+  assert.equal(protectedAgain.status, 0, protectedAgain.stderr);
+  const config = fs.readFileSync(box.config);
+  const state = fs.readFileSync(box.statePath);
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.notEqual(result.code, 0, result.out);
+  assert.deepEqual(fs.readFileSync(box.config), config);
+  assert.deepEqual(fs.readFileSync(box.statePath), state);
+});
