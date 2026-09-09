@@ -154,6 +154,10 @@ platform="darwin-$(node -p 'process.arch')" \
 
 This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI.
 
+If you installed the published release, continue with
+[Choosing what to protect](../guide/choosing-what-to-protect.md). If you built
+and installed this checkout, continue with the [Evaluator walk](evaluator-walk.md).
+
 Previous: [Start](README.md).
 Up: [Start](README.md).
 Next: [Evaluator walk](evaluator-walk.md).
