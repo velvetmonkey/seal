@@ -151,8 +151,14 @@ test("every refusal token the guide documents exists in the source", () => {
   );
 });
 
-// These reviewed claims move from guide-claims.test.mjs. The token inventory
-// alone does not retain their explanatory prose or protect the second guide.
+// These assertions require a nonempty claim inventory for each guide and each
+// listed claim exactly once after whitespace normalization.
+// what-is-protected-right-now.md additionally has a whole-file digest: every
+// byte change fails and calls for human review, including an added sentence.
+// when-something-looks-wrong.md has no digest: a new sentence added beside a
+// reviewed claim is not checked here. Its refusal-token inventory is checked
+// separately above.
+// Neither claim retention nor byte identity certifies that either guide is true.
 const REVIEWED_GUIDES = [
   {
     file: "docs/guide/when-something-looks-wrong.md", // CLAIM-COVERAGE: docs/guide/when-something-looks-wrong.md#looks-wrong
