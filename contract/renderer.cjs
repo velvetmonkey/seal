@@ -14,6 +14,7 @@
 const { canonicalString } = require("./canonical.cjs");
 
 const MESSAGE_LINE_CAP = 7;
+const MESSAGE_CHARACTER_CAP = 16384;
 const CONTEXT_CHARACTER_CAP = 160;
 const SCOPE_RULE = "this parsed call (key order, 1/1.0 match); at most one run";
 const OUTSIDE_LINE = "Outside Seal: Bash, network, subprocesses, other tools and servers.";
@@ -51,6 +52,10 @@ function renderName(name) {
 
 function measureApprovalMessage(message) {
   const lines = message.split(/\r\n|[\n\r\u0085\u2028\u2029]/u);
+  const characters = Array.from(message).length;
+  if (characters > MESSAGE_CHARACTER_CAP) {
+    return { ok: false, reason: `the complete approval needs ${characters} characters; Seal permits ${MESSAGE_CHARACTER_CAP}` };
+  }
   if (lines.length > MESSAGE_LINE_CAP) {
     return { ok: false, reason: `the complete effect, scope and outside-Seal line need ${lines.length} lines; Seal permits ${MESSAGE_LINE_CAP}; interactive approval is refused rather than truncated` };
   }
@@ -98,4 +103,4 @@ function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approv
   return { ...measured, argLines, scopeLine, outsideLine: OUTSIDE_LINE };
 }
 
-module.exports = { renderApprovalMessage, measureApprovalMessage, appendApprovalContext, renderName, escapeInvisible, MESSAGE_LINE_CAP, CONTEXT_CHARACTER_CAP };
+module.exports = { renderApprovalMessage, measureApprovalMessage, appendApprovalContext, renderName, escapeInvisible, MESSAGE_LINE_CAP, MESSAGE_CHARACTER_CAP, CONTEXT_CHARACTER_CAP };

@@ -330,6 +330,13 @@ test("every offered message obeys the envelope across argument sizes", () => {
   }
 });
 
+test("a message beyond the countable character envelope is refused before transport", () => {
+  const { MESSAGE_CHARACTER_CAP } = require('../contract/renderer.cjs');
+  const rendered = renderApprovalMessage(TOOL, { line: "x".repeat(MESSAGE_CHARACTER_CAP) });
+  assert.equal(rendered.ok, false);
+  assert.match(rendered.reason, /characters; Seal permits/);
+});
+
 // --- the two lifetimes and the hash-only journal (spine2 addendum) ----------
 
 const { createJournal, openJournal } = require("../spine/store.cjs");
