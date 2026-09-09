@@ -1,7 +1,7 @@
 {
   "version": 1,
   "ruling": {
-    "base": "c2359d92b5e4cff5a6de0483f24f41670d1bc904",
+    "base": "f28f71001485cf071c0189294d4c4b4cbb946c9c",
     "author": "Ben",
     "date": "2026-09-09",
     "scope": "Ben ruled on 2026-09-09 at 13:11 with the exact words \"yes of course\", in answer to the question whether to authorise the two-line claim-channel step in PR 295. The authorised change in .github/workflows/ci.yml adds the step named \"Closed CLI channel and pinned authored catalogue\" and its command \"node --test test/claim-channel.test.cjs\". This records Ben's human decision; the lane only records the exact merge-base, protected-path set and Git blobs derived after the final payload commit and rebase.",
