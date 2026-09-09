@@ -246,7 +246,6 @@ function failureGuidance(command, error, context = {}) {
       return ["Fix the configured MCP server's startup and tools/list response. If it is only slow, retry protect with a larger timeout."];
     }
   }
-  if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
   if (command === "unprotect") {
     if (code === "active_claude_session") return ["Stop the Claude Code session using this server, then retry unprotect."];
     if (code === "claude_remove_failed") return ["Make Claude Code's claude command available and able to remove the local override, then retry unprotect."];

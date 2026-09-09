@@ -186,12 +186,18 @@ test('uninstall cancellation and EOF change no prefix or config bytes', () => {
   const box = uninstallBox();
   const before = fs.readFileSync(box.recordPath);
   const config = fs.readFileSync(box.config);
+  const snapshot = directory => fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).map(entry => {
+    const file = path.join(directory, entry.name);
+    return [entry.name, entry.isDirectory() ? snapshot(file) : fs.readFileSync(file).toString('base64')];
+  });
+  const prefixBefore = snapshot(box.prefix);
   for (const input of ['n\n', '']) {
     const result = box.invoke(['uninstall'], { input });
     assert.equal(result.code, 0, result.out);
     assert.match(result.out, /Remove file:/);
     assert.match(result.out, /Uninstall cancelled/);
     assert.deepEqual(fs.readFileSync(box.recordPath), before);
+    assert.deepEqual(snapshot(box.prefix), prefixBefore);
     assert.deepEqual(fs.readFileSync(box.config), config);
     assert.equal(fs.existsSync(path.join(box.prefix, 'lib/seal/lifecycle.lock')), false);
   }
@@ -219,6 +225,7 @@ for (const problem of ['malformed', 'unreadable', 'edited route']) test(`uninsta
   const before = fs.readFileSync(box.recordPath);
   const result = box.invoke(['uninstall'], { input: 'y\n' });
   assert.notEqual(result.code, 0, result.out);
+  assert.equal(result.out.trim().split('\n').length, 1, 'a refusal must not re-enter uninstall through failure guidance');
   assert.deepEqual(fs.readFileSync(box.recordPath), before);
   assert.equal(box.invoke(['--version']).code, 0);
   if (problem === 'unreadable') fs.chmodSync(box.config, 0o600);

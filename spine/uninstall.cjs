@@ -76,7 +76,7 @@ function plan(install, env = process.env) {
   const { prefix, root, recordPath } = install;
   const recordBytes = regular(recordPath);
   const record = JSON.parse(recordBytes);
-  if (record.ownership?.schema !== 'seal.created-paths/v1' || !record.ownership.paths.some(e => e.path === 'bin/seal') || !record.ownership.paths.some(e => e.path === 'lib/seal/install.json')) fail('this install has no creation ledger; reinstall into a fresh prefix before removing its files');
+  if (record.ownership?.schema !== 'seal.created-paths/v1' || !record.ownership.paths.some(e => e.path === 'bin/seal') || !record.ownership.paths.some(e => e.path === 'lib/seal/install.json')) fail('this install has no creation ledger; automatic file removal cannot establish ownership');
   const snapshots = new Map([[recordPath, recordBytes]]);
   const configPaths = new Set([path.resolve(env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir(), '.claude.json')]);
   const routes = [...(record.routes || [])];
@@ -171,6 +171,10 @@ async function run(args, ask, env = process.env) {
   const preview = plan(install, env);
   console.log('Uninstall this Seal installation from every recorded project.');
   for (const config of preview.configs) for (const change of config.changes) console.log(`Remove MCP entry: ${JSON.stringify({ file: config.file, scope: change.scope, server: change.name })}`);
+  console.log(`Temporary file (create then remove): ${JSON.stringify(path.join(install.prefix, 'lib/seal/lifecycle.lock'))}`);
+  for (const file of [...preview.configs.filter(c => c.changes.length).map(c => c.file), ...preview.states.keys()]) {
+    console.log(`Temporary file (create then remove): ${JSON.stringify(`${file}.seal-uninstall-${process.pid}`)}`);
+  }
   for (const file of preview.states.keys()) console.log(`Clear protection state: ${JSON.stringify(file)}`);
   for (const file of preview.files) console.log(`Remove file: ${JSON.stringify(file)}`);
   for (const dir of preview.dirs) console.log(`Remove directory if empty: ${JSON.stringify(dir)}`);
