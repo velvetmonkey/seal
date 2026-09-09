@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Stage one routes every non-empty line actually emitted by CLI help and the
+// Execution conditions and uncovered routes are specified in claim-channel.cjs.
+// Stage one routes every non-empty line captured from CLI help and the
 // reachable seal verify result templates, with and without a caller key.
 // It also checks the recorded authored spans exactly once at their pinned files.
 // It does NOT route README or docs prose outside those pinned spans. Error and
@@ -23,17 +24,23 @@ for (const entry of entries) {
   assert.equal(entry.sha256, sha256Hex(entry.text), `catalogue digest: ${entry.id}`);
 }
 
+// CLAIM-COVERAGE: scripts/claim-catalogue.jsonl#catalogue-membership
 test('every captured CLI line has exact text and product digest membership', () => {
   const members = entries.filter(e => e.kind === 'emitted');
   assert.ok(members.length > 0, 'emitted catalogue is empty');
   assert.equal(new Set(members.map(e => e.text)).size, members.length, 'duplicate emitted member');
   const surfaces = capture();
-  for (const { surface, lines } of surfaces) for (const text of lines) {
+  for (const surface of ['help', 'verify-no-key', 'verify-caller-key']) {
+    assert.deepEqual(surfaces.filter(s => s.surface === surface).map(s => s.condition).sort(),
+      ['pipe-configured', 'pipe-plain', 'pty-configured', 'pty-plain'], `${surface}: required observation missing`);
+  }
+  for (const { surface, condition, lines } of surfaces) for (const text of lines) {
     // Absence is red inside the channel, even when no claim word occurs.
     assert.ok(members.some(e => e.text === text && e.sha256 === sha256Hex(text)),
-      `ABSENCE IS RED INSIDE THE CHANNEL: ${surface}: ${JSON.stringify(text)}`);
+      `ABSENCE IS RED INSIDE THE CHANNEL: ${surface}/${condition}: ${JSON.stringify(text)}`);
   }
-  console.log(`SURFACES ${surfaces.length} LINES CAPTURED ${surfaces.reduce((n, s) => n + s.lines.length, 0)} CATALOGUE EMITTED ${members.length}`);
+  for (const { surface, condition, lines } of surfaces) console.log(`CAPTURE ${surface} ${condition} LINES ${lines.length}`);
+  console.log(`SURFACES ${new Set(surfaces.map(s => s.surface)).size} CONDITIONS ${surfaces.length} LINES CAPTURED ${surfaces.reduce((n, s) => n + s.lines.length, 0)} CATALOGUE EMITTED ${members.length}`);
 });
 
 test('authored catalogue members occur exactly once at their recorded files', () => {
@@ -47,4 +54,11 @@ test('authored catalogue members occur exactly once at their recorded files', ()
     assert.equal(count, 1, `${entry.id}: wording absent or duplicated at ${entry.file}`);
   }
   console.log(`CATALOGUE PINNED ${pinned.length}`);
+});
+
+test('presentation normalization preserves textual changes and terminal controls', () => {
+  assert.equal(normalize('\x1b[1mknown line\x1b[0m\u00a0'), 'known line');
+  assert.equal(normalize('known\u00a0line'), 'known\u00a0line');
+  assert.equal(normalize('known line\x1b[2K\rnew claim'), 'known line\x1b[2K\rnew claim');
+  assert.equal(normalize('an un\x1b[1mcatalogued\x1b[0m claim'), 'an uncatalogued claim');
 });

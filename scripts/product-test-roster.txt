@@ -7,6 +7,7 @@ test/cc-fixture.test.cjs
 test/cc-harness-truth.test.cjs
 test/cli-next-steps.test.cjs
 test/claim-bearing-file-inventory.test.mjs
+test/claim-channel.test.cjs
 test/claims-drift.test.mjs
 test/container-check.test.cjs
 test/coldwalk-fixes.test.cjs
