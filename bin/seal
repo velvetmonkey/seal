@@ -51,13 +51,24 @@ function status() {
       ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
       : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
 
+  let paths;
+  try { paths = protection.statePathsFor(process.cwd(), process.env); }
+  catch (error) { statusRecord(undefined, error); return; }
+  for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
+}
+
+function statusRecord(recordPath, readError) {
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let receiptDir;
   let stateRead = false;
   let storedState;
   let stateRoot;
   let statePath;
   try {
-    const { root, filePath, state } = protection.stateWithProject(process.cwd(), process.env);
+    if (readError) throw readError;
+    const root = fs.realpathSync(process.cwd());
+    const filePath = recordPath;
+    const state = filePath ? protection.readState(filePath) : null;
     stateRead = true;
     storedState = state;
     stateRoot = root;
@@ -65,9 +76,9 @@ function status() {
     if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
     const view = protection.protectionView(state, root, process.env);
     if (!view || view.state === "UNPROTECTED") {
-      for (const line of protection.protectionBoundary({ state: "UNPROTECTED" }, root)) console.log(line);
-      console.log("Receipts: unavailable outside a protected project");
-      console.log("Most recent: no project receipt directory is recorded");
+      for (const line of protection.protectionBoundary({ state: "UNPROTECTED", serverName: state?.serverName }, root, filePath)) console.log(line);
+      console.log(state?.serverName ? "Receipts: unavailable for this route outside Seal" : "Receipts: unavailable outside a protected project");
+      console.log(state?.serverName ? "Most recent: this route is outside Seal" : "Most recent: no project receipt directory is recorded");
       return;
     } else {
       const guarded = protection.protectedToolNames(view);
@@ -90,7 +101,7 @@ function status() {
       console.log(`REFUSED ${error.code}`);
       if (error.message) console.log(error.message);
       try {
-        const { state } = protection.stateWithProject(process.cwd(), process.env);
+        const state = recordPath ? protection.readState(recordPath) : null;
         printFailureGuidance("status", error, { serverName: state?.serverName }, (line) => console.log(line));
       } catch {}
       process.exitCode = 1;
@@ -367,10 +378,10 @@ function unprotectCommand(args) {
 function recoverCommand(args) {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
-  if (args.length !== 1 || args[0] !== "--archive") {
-    throw new protection.ProtectionError("usage", "usage: seal recover --archive; stop Claude Code first; this archives incompatible state and removes Seal's owned local override, leaving the route outside Seal");
+  if ((args.length !== 1 && args.length !== 2) || args[0] !== "--archive") {
+    throw new protection.ProtectionError("usage", "usage: seal recover --archive [SERVER]; stop Claude Code first; this archives incompatible state and removes Seal's owned local override, leaving the route outside Seal");
   }
-  const result = protection.recover({ projectRoot: process.cwd(), env: process.env });
+  const result = protection.recover({ serverName: args[1], projectRoot: process.cwd(), env: process.env });
   console.log(`Archived incompatible protection state: ${result.archivePath}`);
   console.log("Existing approval journal, receipts and signing keys were retained.");
   for (const line of protection.protectionBoundary({ ...result.previousState, state: "UNPROTECTED" }, process.cwd())) console.log(line);
@@ -407,7 +418,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal recover --archive    archive incompatible state and remove Seal's owned local override\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal recover --archive [SERVER] archive incompatible state and remove Seal's owned local override\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
 if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {

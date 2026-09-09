@@ -103,7 +103,7 @@ and leaves the project `.mcp.json` unchanged. It ends with:
 
 ```output
 Project .mcp.json hash before protect: aacdd2ef4696c853be3fffab5519e6ee5ff1a351c0da6c982b21650d4d349e05
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/95ffc5a78f71ccf96af17b0df98a56dc/state.json)
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/02a372233b91435a486924d1d5539612/servers/db/state.json)
 
 Gated through this route:
   demo.mutate
@@ -116,7 +116,7 @@ Not controlled:
   other MCP servers not routed through this Seal wrapper
   other uncontrolled routes can also exist
 Protection scope: 0 other tools NOT APPROVAL-GATED (they pass through Seal)
-State: /home/you/.local/share/seal/projects/95ffc5a78f71ccf96af17b0df98a56dc/state.json
+State: /home/you/.local/share/seal/projects/02a372233b91435a486924d1d5539612/servers/db/state.json
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.

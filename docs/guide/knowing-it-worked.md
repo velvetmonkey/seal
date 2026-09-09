@@ -27,7 +27,7 @@ when status reports ACTIVE. In particular, status does not detect
   it does not establish which client is using it. Confirm Claude Code selected
   that override and presents approval for the intended tool before relying on
   that client's calls being protected.
-- **NOT protected:** `Sealed MCP route: - outside Seal` or `Gated through this route: none`. Stop here: this project has no gate. Protect the intended server
+- **NOT protected through that route:** `Sealed MCP route: - outside Seal` or `Gated through this route: none`. Other server records may still report a gate. Protect the intended server
   and complete tool set, restart Claude Code, and repeat this check.
   Read `Not controlled:` for the routes outside this gate’s scope.
 - **Protection not confirmed:** `PENDING RESTART`, `STALE`, `DRIFTED`, `BROKEN`,

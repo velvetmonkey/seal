@@ -1,7 +1,7 @@
 # The Seal operating guide
 
-Seal puts one approval gate in front of a named set of tools on one MCP server in one
-project. When a healthy gate can show a fresh approval request for that tool,
+Seal puts an approval gate in front of a named set of tools on each selected MCP
+server in a project. When a healthy gate can show a fresh approval request for that tool,
 you see exactly what would run, and the call waits for approval — once, and
 only once. In a healthy, non-drifted wrapper, other tools keep working as if
 Seal were not there; drift, missing state, or a server-start failure refuses
@@ -108,9 +108,9 @@ Read these in order the first time; each one stands alone afterwards.
    refusal token Seal can print, what caused it, and what to do next.
 
 One honest sentence to carry into all four pages: Seal is a gate, not a
-sandbox. It controls the path through it — Claude Code calling that one tool
-of that one server — and only that path. Bash, the network, subprocesses, and
-every other tool and server are outside it. In the recorded Claude Code
+sandbox. Each wrapper controls its selected calls on its named server.
+Bash, the network, subprocesses, and calls outside those selected routes
+remain outside its gate. In the recorded Claude Code
 2.1.251 dialog, the client folds the message-body line that states this
 boundary; the fold does not bring those other paths inside Seal. The current
 renderer also puts that boundary in the schema description, a channel that

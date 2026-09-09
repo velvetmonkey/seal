@@ -865,3 +865,147 @@ test("status preserves known route facts across seven damaged state shapes and o
   assert.equal(JSON.parse(fs.readFileSync(fakeLocalOverridePath(root))).projects[project].mcpServers.db, undefined);
   console.log(`Seven-state evidence: ${root}`);
 });
+
+function multiServerProject() {
+  const root = testTmpdir("seal-multiserver-");
+  const project = path.join(root, "project"), home = path.join(root, "home");
+  fs.mkdirSync(project); fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { ...process.env, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const servers = Object.fromEntries(["alpha", "beta"].map((name) => [name, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, `${name}.txt`)] }]));
+  fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: servers }) + "\n");
+  return { root, project, home, env };
+}
+
+async function multiServerProxy(ctx, name) {
+  const file = statePathFor(ctx.project, ctx.env, name);
+  const child = spawn(SEAL, ["__proxy", "--protect-state", file], { cwd: ctx.project, env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
+  let stderr = ""; child.stderr.on("data", (bytes) => { stderr += bytes; });
+  const messages = [], waiting = [];
+  const lines = readline.createInterface({ input: child.stdout });
+  lines.on("line", (line) => { const value = JSON.parse(line); if (waiting.length) waiting.shift()(value); else messages.push(value); });
+  const next = () => messages.length ? Promise.resolve(messages.shift()) : new Promise((resolve) => waiting.push(resolve));
+  const send = (message) => child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\n");
+  const closed = new Promise((resolve) => child.once("close", resolve));
+  await waitForState(file, "ACTIVE", 5000);
+  send({ id: 90, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } } });
+  assert.equal((await next()).id, 90);
+  return {
+    async gatedCall() {
+      const state = readState(file), before = fs.readdirSync(state.receiptsDir);
+      send({ id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "must not run" } } });
+      const request = await next();
+      assert.equal(request.method, "elicitation/create");
+      send({ id: request.id, result: { action: "decline" } });
+      const result = await next();
+      assert.equal(result.id, 1); assert.equal(result.result.isError, true);
+      assert.match(result.result.content[0].text, /declined/);
+      const receipts = fs.readdirSync(state.receiptsDir).filter((name) => !before.includes(name));
+      assert.ok(receipts.length > 0, stderr);
+      for (const receipt of receipts) assert.equal(JSON.parse(fs.readFileSync(path.join(state.receiptsDir, receipt))).verdict, "BLOCK");
+      assert.equal(fs.readFileSync(path.join(ctx.root, `${name}.txt.count`), "utf8"), "0\n");
+    },
+    async close() { child.stdin.end(); assert.equal(await closed, 0, stderr); },
+  };
+}
+
+test("multiple servers have independent state, simultaneous live gates and receipts; removing one preserves the other", async () => {
+  const ctx = multiServerProject();
+  const before = fs.readFileSync(path.join(ctx.project, ".mcp.json"));
+  assert.equal(run(ctx.project, ctx.home, ["protect", "alpha", "demo.mutate"], ctx.env).code, 0);
+  const firstFile = statePathFor(ctx.project, ctx.env, "alpha");
+  const firstBytes = fs.readFileSync(firstFile);
+  assert.match(firstFile, /\/servers\/alpha\/state.json$/);
+  const single = run(ctx.project, ctx.home, ["status"], ctx.env);
+  assert.match(single.out, /configured MCP servers not routed through this Seal wrapper: beta/);
+  assert.equal(run(ctx.project, ctx.home, ["protect", "beta", "demo.mutate"], ctx.env).code, 0);
+  assert.deepEqual(fs.readFileSync(firstFile), firstBytes);
+  const secondFile = statePathFor(ctx.project, ctx.env, "beta");
+  assert.notEqual(readState(firstFile).storePath, readState(secondFile).storePath);
+  assert.notEqual(readState(firstFile).receiptsDir, readState(secondFile).receiptsDir);
+  const duplicate = run(ctx.project, ctx.home, ["protect", "beta", "demo.erase"], ctx.env);
+  assert.equal(duplicate.code, 1); assert.match(duplicate.out, /server "beta" is already PENDING RESTART/);
+  const alpha = await multiServerProxy(ctx, "alpha");
+  const beta = await multiServerProxy(ctx, "beta");
+  try {
+    const status = run(ctx.project, ctx.home, ["status"], ctx.env);
+    assert.equal(status.code, 0, status.out);
+    assert.match(status.out, /Sealed MCP route alpha: ACTIVE/);
+    assert.match(status.out, /Sealed MCP route beta: ACTIVE/);
+    await Promise.all([alpha.gatedCall(), beta.gatedCall()]);
+    await alpha.close();
+    assert.equal(run(ctx.project, ctx.home, ["unprotect", "alpha"], ctx.env).code, 0);
+    assert.equal(readState(firstFile).state, "UNPROTECTED");
+    assert.equal(readState(secondFile).state, "ACTIVE");
+    const overrides = JSON.parse(fs.readFileSync(fakeLocalOverridePath(ctx.root))).projects[ctx.project].mcpServers;
+    assert.equal(overrides.alpha, undefined); assert.ok(overrides.beta);
+    await beta.gatedCall();
+  } finally { await beta.close(); }
+  assert.deepEqual(fs.readFileSync(path.join(ctx.project, ".mcp.json")), before);
+});
+
+test("legacy state remains authoritative alongside a new server, including its installed override and gated call", async () => {
+  const ctx = multiServerProject();
+  assert.equal(run(ctx.project, ctx.home, ["protect", "alpha", "demo.mutate"], ctx.env).code, 0);
+  const route = statePathFor(ctx.project, ctx.env, "alpha");
+  const legacy = path.join(require("../spine/protection.cjs").projectDirectory(ctx.project, ctx.env), "state.json");
+  const state = readState(route);
+  state.localOverride.definition.args = ["__proxy", "--protect-state", legacy];
+  fs.writeFileSync(route, JSON.stringify(state) + "\n");
+  fs.renameSync(route, legacy);
+  const configPath = fakeLocalOverridePath(ctx.root), config = JSON.parse(fs.readFileSync(configPath));
+  config.projects[ctx.project].mcpServers.alpha.args = state.localOverride.definition.args;
+  fs.writeFileSync(configPath, JSON.stringify(config) + "\n");
+  const bytes = fs.readFileSync(legacy);
+  assert.equal(run(ctx.project, ctx.home, ["status"], ctx.env).code, 0);
+  assert.deepEqual(fs.readFileSync(legacy), bytes, "compatibility read must not rewrite a legacy record");
+  assert.equal(run(ctx.project, ctx.home, ["protect", "beta", "demo.mutate"], ctx.env).code, 0);
+  assert.equal(statePathFor(ctx.project, ctx.env, "alpha"), legacy);
+  assert.deepEqual(fs.readFileSync(legacy), bytes);
+  const proxy = await multiServerProxy(ctx, "alpha");
+  try { await proxy.gatedCall(); } finally { await proxy.close(); }
+  const missing = { ...ctx.env, XDG_DATA_HOME: path.join(ctx.root, "missing") };
+  assert.match(execFileSync(SEAL, ["status"], { cwd: ctx.project, env: missing, encoding: "utf8" }), /Sealed MCP route: - outside Seal/);
+  assert.match(run(ctx.project, ctx.home, ["status"], ctx.env).out, /Sealed MCP route alpha: STALE/);
+});
+
+test("the project lock refuses a concurrent operation on another server without changing either route", () => {
+  const ctx = multiServerProject();
+  assert.equal(run(ctx.project, ctx.home, ["protect", "alpha", "demo.mutate"], ctx.env).code, 0);
+  const file = statePathFor(ctx.project, ctx.env, "alpha"), before = fs.readFileSync(file);
+  const lock = require("../spine/protection.cjs").acquireProjectLock(ctx.project, ctx.env);
+  try {
+    const other = run(ctx.project, ctx.home, ["protect", "beta", "demo.mutate"], ctx.env);
+    assert.equal(other.code, 1); assert.match(other.out, /proxy_lease_active/);
+    assert.match(other.out, new RegExp(`active lease holder pid ${process.pid}`));
+    assert.deepEqual(fs.readFileSync(file), before);
+    assert.equal(fs.existsSync(statePathFor(ctx.project, ctx.env, "beta")), false);
+  } finally { lock.release(); }
+  assert.equal(run(ctx.project, ctx.home, ["protect", "beta", "demo.mutate"], ctx.env).code, 0);
+});
+
+test("server storage names cannot traverse directories or collide through encoding", () => {
+  const ctx = multiServerProject();
+  const { projectDirectory } = require("../spine/protection.cjs");
+  const base = path.join(projectDirectory(ctx.project, ctx.env), "servers");
+  const files = ["..", "../alpha", "alpha/beta", "alpha%2Fbeta"].map((name) => statePathFor(ctx.project, ctx.env, name));
+  assert.equal(new Set(files).size, 4);
+  for (const file of files) assert.equal(path.dirname(path.dirname(file)), base);
+});
+
+test("status continues past a broken server record and server-selected recovery preserves the other record", () => {
+  const ctx = multiServerProject();
+  for (const name of ["alpha", "beta"]) assert.equal(run(ctx.project, ctx.home, ["protect", name, "demo.mutate"], ctx.env).code, 0);
+  const alpha = statePathFor(ctx.project, ctx.env, "alpha"), beta = statePathFor(ctx.project, ctx.env, "beta");
+  const original = readState(alpha), survivor = fs.readFileSync(beta);
+  fs.writeFileSync(alpha, JSON.stringify({ ...original, schema: "seal.protect/future" }) + "\n");
+  const status = run(ctx.project, ctx.home, ["status"], ctx.env);
+  assert.equal(status.code, 1); assert.match(status.out, /Stored protection state: could not be read/);
+  assert.match(status.out, /Sealed MCP route beta: PENDING RESTART/);
+  const ambiguous = run(ctx.project, ctx.home, ["recover", "--archive"], ctx.env);
+  assert.equal(ambiguous.code, 1); assert.match(ambiguous.out, /server_required/);
+  const recovered = run(ctx.project, ctx.home, ["recover", "--archive", "alpha"], ctx.env);
+  assert.equal(recovered.code, 0, recovered.out);
+  assert.deepEqual(fs.readFileSync(beta), survivor);
+  assert.equal(fs.existsSync(alpha), false);
+});
