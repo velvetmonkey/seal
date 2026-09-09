@@ -9,6 +9,7 @@ const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
+const receiptPopulation = require(path.join(path.resolve(__dirname, ".."), "spine", "receipt-population.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
 const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
@@ -142,7 +143,7 @@ function statusRecord(recordPath, readError) {
   }
   catch (error) {
     if (error.code === "ENOENT") {
-      console.log(`Receipts: 0 stored in ${receiptDir} (directory does not exist)`);
+      console.log(`Receipts: no receipt files observed in ${receiptDir} (directory does not exist)`);
       console.log("Most recent: no receipt yet (receipt directory is missing)");
       return;
     }
@@ -151,12 +152,21 @@ function statusRecord(recordPath, readError) {
     return;
   }
 
-  const candidates = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink());
-  console.log(`Receipts: ${candidates.length} stored in ${receiptDir}`);
-  if (candidates.length === 0) {
-    console.log("Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)");
+  const receiptEntries = entries.filter((entry) =>
+    (entry.isFile() || entry.isSymbolicLink()) && receiptPopulation.RECEIPT_NAME.test(entry.name));
+  const nonMatchingFiles = entries.filter((entry) =>
+    (entry.isFile() || entry.isSymbolicLink()) && !receiptPopulation.RECEIPT_NAME.test(entry.name));
+  if (receiptEntries.length === 0) {
+    if (nonMatchingFiles.length === 0) {
+      console.log("Receipts: no receipt files observed (receipt directory has no receipt-shaped files)");
+    } else {
+      console.log(`Receipts: no receipt files observed (${nonMatchingFiles.length} non-receipt files ignored)`);
+    }
+    console.log(receiptPopulation.unknownLine());
+    console.log("Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)");
     return;
   }
+  console.log(`Receipts: ${receiptEntries.length} receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)`);
   const observed = [];
   for (const entry of entries) {
     const target = path.join(receiptDir, entry.name);
@@ -190,6 +200,14 @@ function statusRecord(recordPath, readError) {
   // replay refusal), so an unqualified "Most recent: BLOCK" could be misread
   // as "the run was blocked" when the approved call actually ran.
   console.log(`Most recent (by write time): ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
+}
+function receiptCommand(args) {
+  if (args.length !== 1) throw new Error("usage: seal receipts DIRECTORY");
+  const directory = path.resolve(args[0]);
+  let stat;
+  try { stat = fs.statSync(directory); } catch { throw new Error(`cannot inspect receipt directory: ${directory}`); }
+  if (!stat.isDirectory()) throw new Error(`receipt path is not a directory: ${directory}`);
+  return receiptPopulation.run(directory);
 }
 function shellWord(value) {
   return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
@@ -407,6 +425,7 @@ async function main() {
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
   if (command === "recover") return recoverCommand(process.argv.slice(3));
+  if (command === "receipts") return receiptCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
@@ -418,6 +437,7 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
+  console.log("  seal receipts DIRECTORY  inspect receipt filename sequences for observed gaps");
   console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal recover --archive [SERVER] archive incompatible state and remove Seal's owned local override\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
 }
 if (require.main === module) main().catch((error) => {

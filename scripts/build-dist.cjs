@@ -31,6 +31,7 @@ const PAYLOAD_PATHS = [
   "spine/proxy-cli.cjs",
   "spine/presentation.cjs",
   "spine/receipts.cjs",
+  "spine/receipt-population.cjs",
   "spine/receipt-v2.cjs",
   "spine/store.cjs",
   "spine/tool-selection.cjs",

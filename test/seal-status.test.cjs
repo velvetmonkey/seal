@@ -80,8 +80,8 @@ function brokenStatusWithReceipt(detail, receiptDir, statePath) {
     "  other MCP servers not routed through this Seal wrapper\n" +
     "  other uncontrolled routes can also exist\n" +
     `Protection detail: ${detail}\n` +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n";
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n";
 }
 
 test("status finds the shipped kernel runtime with an empty cache", () => {
@@ -153,7 +153,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  fs.writeFileSync(path.join(receiptDir, "receipt-1786896000000-123-0001-APPROVE.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
@@ -163,8 +163,8 @@ test("status reads the protected project's recorded receipt directory", () => {
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n");
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n");
 });
 
 test("status reads a recorded receipt directory when the protection state has no protected tool list", () => {
@@ -175,7 +175,7 @@ test("status reads a recorded receipt directory when the protection state has no
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  fs.writeFileSync(path.join(receiptDir, "receipt-1786896000000-123-0001-APPROVE.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
@@ -248,8 +248,9 @@ test("status says an existing empty receipt directory has no recorded decision",
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 0 stored in ${receiptDir}\n` +
-    "Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)\n");
+    "Receipts: no receipt files observed (receipt directory has no receipt-shaped files)\n" +
+    "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
+    "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
 });
 
 test("status names a missing receipt directory as no receipt yet", () => {
@@ -267,7 +268,7 @@ test("status names a missing receipt directory as no receipt yet", () => {
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 0 stored in ${receiptDir} (directory does not exist)\n` +
+    `Receipts: no receipt files observed in ${receiptDir} (directory does not exist)\n` +
     "Most recent: no receipt yet (receipt directory is missing)\n");
 });
 
@@ -332,9 +333,36 @@ test("status names receipt files when none can be parsed", () => {
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Receipt unreadable: not-a-receipt.json (missing v2 verdict or kernel time)\n" +
-    "Most recent: receipt files exist, but none could be read as a receipt\n");
+    "Receipts: no receipt files observed (1 non-receipt files ignored)\n" +
+    "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
+    "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
+});
+
+test("receipt reader exposes a removed middle receipt as a sequence gap", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-gap-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const sequence of [1, 2, 3]) fs.writeFileSync(path.join(receipts, `receipt-1000-77-${String(sequence).padStart(4, "0")}-INDEPENDENT_CASE.json`), "{}\n");
+  const original = path.join(receipts, "receipt-1000-77-0002-INDEPENDENT_CASE.json");
+  const quarantined = path.join(root, "removed-receipt.json");
+  fs.renameSync(original, quarantined);
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt gap: pid 77 missing sequence 2/);
+  fs.renameSync(quarantined, original);
+  assert.doesNotMatch(execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }), /Receipt gap:/);
+});
+
+test("receipt reader reports multiple gaps in pid and sequence order", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-multi-gap-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const sequence of [1, 3, 5]) fs.writeFileSync(path.join(receipts, `receipt-1000-77-${String(sequence).padStart(4, "0")}-INDEPENDENT_CASE.json`), "{}\n");
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt gap: pid 77 missing sequence 2\nReceipt gap: pid 77 missing sequence 4/);
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {
