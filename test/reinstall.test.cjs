@@ -364,3 +364,12 @@ test('uninstall refuses a route subsequently owned by a different installation',
   assert.deepEqual(fs.readFileSync(box.config), config);
   assert.deepEqual(fs.readFileSync(box.statePath), state);
 });
+
+test('a cached installed module refuses mutations after its installation is removed', () => {
+  const box = uninstallBox();
+  const loaded = require(path.join(box.prefix, box.record().store, 'spine/uninstall.cjs'));
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(result.code, 0, result.out);
+  assert.throws(() => loaded.installLock(), /installation was removed/);
+  assertUninstallRouteRestored(box);
+});

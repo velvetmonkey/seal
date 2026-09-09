@@ -28,10 +28,17 @@ function inside(prefix, relative) {
 function installation(root = path.resolve(__dirname, '..')) {
   const prefix = path.resolve(root, '../../../..');
   const recordPath = path.join(prefix, 'lib/seal/install.json');
-  if (!stat(recordPath)) return null;
+  const installedLayout = path.dirname(root) === path.join(prefix, 'lib/seal/store') && /^[0-9a-f]{64}$/.test(path.basename(root));
+  if (!stat(recordPath)) {
+    if (installedLayout) fail('installation was removed; this operation cannot continue');
+    return null;
+  }
   const record = JSON.parse(regular(recordPath));
   const recordedRoot = path.resolve(prefix, record.store) === root || record.ownership?.paths?.some(entry => entry.path === path.relative(prefix, path.join(root, 'bin/seal')));
-  if (record.schema !== 'seal.install/v1' || !recordedRoot || path.dirname(root) !== path.join(prefix, 'lib/seal/store')) return null;
+  if (record.schema !== 'seal.install/v1' || !recordedRoot || !installedLayout) {
+    if (installedLayout) fail('installed payload is no longer registered; this operation cannot continue');
+    return null;
+  }
   return { prefix, root, recordPath, record };
 }
 // Shared by all installed project mutations, including activation. A crashed
