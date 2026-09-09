@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-// Regression guard (TC-2026-08-14-01): the product binary must never claim an
-// arm's-length verification. Our binary re-deriving our own receipt is not an
-// outside check; its VERIFIED verdict is scoped to the caller-supplied key,
-// receipt bindings, and replay rather than arm's-length verification.
-//
-// One exact, subject-bearing negated provenance sentence is permitted. An
-// allowlist entry that does not name its subject is a skeleton key: a control
-// that cannot tell what a sentence is about cannot tell whether it is true.
-// Positive product-reproduction prose remains forbidden.
+// Docs guard (TC-2026-08-14-01): checks labelled claims throughout docs/.
+// README and the existing verify/help output assertions remain below. Emitted
+// product lines are checked elsewhere by the claim channel (PR #295, which
+// must land before this retirement).
+// Claims in comments and test titles in bin/, spine/, contract/ and test/ are
+// checked by NOTHING: a genuine "independently verified" claim there gets no
+// automated routing. The claim channel reads emitted lines, not source prose.
+// Ben ruled the source scan retired on 2026-09-09; this file no longer guards
+// the source tree. No replacement control covers that residual gap.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -25,8 +25,6 @@ const ARTIFACT = `seal-v${PUBLISHED_VERSION}-linux-x64`;
 const ARTIFACT_CLAIM_CHECK = path.join(ROOT, "scripts", "check-readme-artifact-claim.cjs");
 const BANNED = ["PASS" + " VERIFIED"];
 const INDEPENDENCE = "independent";
-const ALLOWED_NEGATED_PROVENANCE = "The native macOS process-start witness helper is release-produced, not independently reproduced.";
-const POSITIVE_INDEPENDENCE_CLAIM = /\bindependent(?:ly)?\b/i;
 const DOC_BANNED_CLAIMS = [
   {
     label: "two-checker independence claim",
@@ -75,29 +73,6 @@ function isTemporaryDirectory(directory) {
   return path.resolve(directory) === path.resolve(os.tmpdir());
 }
 
-function hasPositiveIndependentReproductionClaim(text) {
-  return POSITIVE_INDEPENDENCE_CLAIM.test(text.replace(ALLOWED_NEGATED_PROVENANCE, ""));
-}
-
-function scan(dir, hits) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory() && isTemporaryDirectory(full)) continue;
-    if (entry.isDirectory()) { scan(full, hits); continue; }
-    if (!entry.isFile()) continue;
-    const text = fs.readFileSync(full, "utf8");
-    for (const needle of BANNED) {
-      // Skip this guard's own fragment definition (it never forms the literal).
-      if (full === __filename) continue;
-      if (text.includes(needle)) hits.push(`${path.relative(ROOT, full)}: ${needle}`);
-    }
-    if (full !== __filename && hasPositiveIndependentReproductionClaim(text)) {
-      hits.push(`${path.relative(ROOT, full)}: positive independently reproduced claim`);
-    }
-  }
-}
-
 function scanDocs(dir, claims, hits) {
   let scanned = 0;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -118,34 +93,19 @@ function scanDocs(dir, claims, hits) {
   return scanned;
 }
 
-test("no banned verification claim survives in product surfaces or docs/", () => {
+test("no banned verification claim survives in README or labelled docs/ claims", () => {
   const hits = [];
-  for (const dir of ["bin", "spine", "contract", "test"]) scan(path.join(ROOT, dir), hits);
   const readme = path.join(ROOT, "README.md");
   const text = fs.readFileSync(readme, "utf8");
   for (const needle of BANNED) {
     if (text.includes(needle)) hits.push(`README.md: ${needle}`);
   }
-  // Keep the original broad product-surface bans above. Docs use the broader
-  // word legitimately in unrelated historical and design material,
+  // Docs use the broader word legitimately in historical and design material,
   // so scan every docs/ file for the receipt-verification claims at issue.
   // This is a semantic scope, not a path exemption: no docs file is skipped.
   const scanned = scanDocs(path.join(ROOT, "docs"), DOC_BANNED_CLAIMS, hits);
   assert.ok(scanned > 0, "docs claim scan examined no files");
   assert.deepEqual(hits, [], `banned verification claims found:\n${hits.join("\n")}`);
-});
-
-test("only one exact subject-bearing native-helper provenance sentence is allowed", () => {
-  assert.equal(hasPositiveIndependentReproductionClaim(ALLOWED_NEGATED_PROVENANCE), false);
-  console.log(`SILENT exact negated provenance: ${ALLOWED_NEGATED_PROVENANCE}`);
-  const falseWasm = "The WASM kernel is release-produced, not independently reproduced.";
-  assert.equal(hasPositiveIndependentReproductionClaim(falseWasm), true);
-  console.log(`RED false different-subject provenance: ${falseWasm}`);
-  const doubled = `${ALLOWED_NEGATED_PROVENANCE}${ALLOWED_NEGATED_PROVENANCE}`;
-  assert.equal(hasPositiveIndependentReproductionClaim(doubled), true);
-  console.log(`RED doubled permitted sentence: ${doubled}`);
-  assert.equal(hasPositiveIndependentReproductionClaim("independently reproduced"), true);
-  console.log("RED positive provenance: independently reproduced");
 });
 
 test("no stale doctor or kernel allocation claim survives in docs/", () => {
