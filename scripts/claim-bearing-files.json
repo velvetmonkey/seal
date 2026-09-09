@@ -1,5 +1,6 @@
 {
   "files": {
+    "scripts/claim-catalogue.jsonl": { "coveredBy": ["test/claim-channel.test.cjs#catalogue-membership"] },
     "test/release-docs.test.mjs": { "coveredBy": ["test/release-docs.test.mjs#outside-claim-controls"] },
     "scripts/check-install-prose.mjs": { "coveredBy": ["test/release-docs.test.mjs#install-prose-observations"] },
     ".github/workflows/kernel-reproduce.yml": { "allowlistReason": "This workflow is a scheduled reproducibility instrument; its claims are exercised by the hosted CI job rather than a repository-local product check." },
