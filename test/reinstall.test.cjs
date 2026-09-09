@@ -79,3 +79,34 @@ test("installer refuses a physically unwritable launcher parent", () => {
   assert.notEqual(refused.code, 0, `${refused.stdout}${refused.stderr}`);
   assert.match(refused.stderr, /^REFUSE install_parent_unwritable:/m);
 });
+
+test("installed launcher rejects changed bytes and accepts restoration and prefix changes", () => {
+  const built = buildArtifact();
+  for (const name of ["fresh", "different prefix"]) {
+    const prefix = path.join(built.out, name);
+    const installed = install(built, prefix);
+    assert.equal(installed.code, 0, `${installed.stdout}${installed.stderr}`);
+    const launcher = path.join(prefix, "bin", "seal");
+    const original = fs.readFileSync(launcher);
+    const launch = () => run(process.execPath, [launcher, "--version"]);
+    assert.equal(launch().stdout.trim(), VERSION);
+    fs.chmodSync(launcher, 0o755);
+    // Equal length mutation proves the digest check, not just the byte count.
+    const changed = Buffer.from(original);
+    const offset = changed.indexOf("SPDX");
+    assert.ok(offset >= 0);
+    changed[offset] = "X".charCodeAt(0);
+    fs.writeFileSync(launcher, changed);
+    const refused = launch();
+    assert.equal(refused.code, 1);
+    assert.match(refused.stderr, /^REFUSE launcher_digest_mismatch:/m);
+    assert.equal(refused.stdout, "");
+    fs.writeFileSync(launcher, original);
+    const restored = launch();
+    assert.equal(restored.code, 0, restored.stderr);
+    assert.equal(restored.stdout.trim(), VERSION);
+    const reinstalled = install(built, prefix);
+    assert.equal(reinstalled.code, 0, reinstalled.stderr);
+    assert.equal(launch().code, 0);
+  }
+});

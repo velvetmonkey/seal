@@ -39,9 +39,9 @@ Check the last one first:
 $ claude --version
 ```
 
-```output
-2.1.233 (Claude Code)
-```
+It should print the installed Claude Code version.
+
+
 
 Download and independently verify the pinned Linux x86-64 release, then install. Fetch the release's `SHA256SUMS` asset from the same release.
 Copy the whole POSIX command, including the backslashes and `&&` operators.

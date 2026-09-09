@@ -85,7 +85,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: a27db6743643f467d439a176c9ed4973c19aa51a67562991f7881d6cfb7eacc7
+tree: 09e61866de56d30058424709b9e2addb9ccb77f18cceba826e63fbac9570c3ba
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
@@ -153,6 +153,10 @@ platform="darwin-$(node -p 'process.arch')" \
 ```
 
 This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI.
+
+If you installed the published release, continue with
+[Choosing what to protect](../guide/choosing-what-to-protect.md). If you built
+and installed this checkout, continue with the [Evaluator walk](evaluator-walk.md).
 
 Previous: [Start](README.md).
 Up: [Start](README.md).
