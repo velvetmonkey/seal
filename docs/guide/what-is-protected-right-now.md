@@ -266,11 +266,21 @@ refusal without claiming that the tool list is absent or the server is unrouted.
 Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
 ```
 
-The runtime is pinned and hash-checked beside the command, and both protected-call
-authorization and `seal verify` load it there. The installed `seal` command
-judges every stored file against its install record before it runs any
-subcommand, status included, so a damaged runtime is refused before any Runtime
-line can print. Two forms, both from real runs:
+The pinned runtime is installed beside the command, where both protected-call
+authorization and `seal verify` load it. The installed launcher at
+`prefix/bin/seal` judges every stored file against its install record before
+it dispatches `seal status` or `seal verify`, so a damaged runtime is refused
+before status can print a Runtime line.
+
+### The limit, stated plainly
+
+`seal protect` registers the wrapper at
+`prefix/lib/seal/store/<tree>/bin/seal`, bypassing the installed launcher.
+A protected call does not re-check `runtime/kernel/wasm/seal.js` against its
+pinned hash; a wrapper started with changed `seal.js` bytes can still reach
+`ACTIVE`, authorize the call and write an `ALLOW` receipt.
+
+Two forms through the installed launcher, both from real runs:
 
 - `Runtime: present …` — every file status inspected matches its pinned hash.
 - `REFUSE artifact_digest_mismatch: installed file digest mismatch:
