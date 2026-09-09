@@ -1032,6 +1032,11 @@ async function protect({
       : "usage: seal protect SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
   }
   const requestedTools = [...new Set(requestedSelections.map((selection) => selection.name))];
+  // A bare selection dominates predicates for that tool. The stored format
+  // reconstructs names without predicate entries as whole-tool protection.
+  const wholeTools = new Set(requestedSelections
+    .filter((selection) => selection.predicate === null)
+    .map((selection) => selection.name));
   const paddedName = requestedTools.find((name) => name.trim() !== name);
   if (paddedName !== undefined) {
     throw new ProtectionError("usage", `protected tool name has surrounding whitespace: ${JSON.stringify(paddedName)}`);
@@ -1087,7 +1092,7 @@ async function protect({
       serverName,
       guardTools: requestedTools,
       guardPredicates: requestedSelections
-        .filter((selection) => selection.predicate !== null)
+        .filter((selection) => selection.predicate !== null && !wholeTools.has(selection.name))
         .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),
       mcpJsonPath: project.filePath,
       mcpJsonHashAtProtect: project.hash,
