@@ -226,6 +226,7 @@ test("separate one-use grants for the same effect have distinct signed receipt b
 
 function assertInsideEnvelope(rendered, terminalWidth = 80) {
   assert.ok(rendered.ok, rendered.reason);
+  assert.deepEqual(rendered.lines, rendered.message.split("\n"));
   assert.ok(rendered.lines.length <= MESSAGE_LINE_CAP,
     `rendered message has ${rendered.lines.length} lines; the envelope is ${MESSAGE_LINE_CAP}`);
   for (const line of rendered.lines) {
@@ -389,4 +390,48 @@ test("consumed survives a restart; pending does not (connection epoch)", async (
   const stale = await attempt(b, child, { tool: TOOL, args: ARGS, requestState: pendingState, inputResponses: ACCEPT });
   assert.equal(stale.refusal, REFUSALS.RESTART_INVALIDATED, "a pending continuation must not survive a restart");
   assert.equal(child.count(), "1", "neither refusal may touch the child");
+});
+
+test("presentation measurement counts physical rows, including hidden line separators", () => {
+  const { measureApprovalMessage } = require('../contract/renderer.cjs');
+  for (const separator of ['\n', '\r', '\r\n', '\u0085', '\u2028', '\u2029']) {
+    const measured = measureApprovalMessage(Array(8).fill('a').join(separator));
+    assert.equal(measured.ok, false, `8 physical rows separated by ${JSON.stringify(separator)}`);
+    assert.match(measured.reason, /need 8 lines/);
+  }
+});
+
+test("presentation preserves JSON scalar types while keeping ordinary strings readable", () => {
+  for (const value of [100, 0, -1, true, false, null]) {
+    const string = createApprovalContract().begin({ tool: TOOL, args: { amount: String(value) } });
+    const scalar = createApprovalContract().begin({ tool: TOOL, args: { amount: value } });
+    assert.notEqual(string.elicitationParams.message, scalar.elicitationParams.message);
+    assert.notEqual(string.elicitationParams.requestedSchema.properties.approve.description,
+      scalar.elicitationParams.requestedSchema.properties.approve.description);
+  }
+  for (const value of ['100', '1e2', '-0', 'true', 'false', 'null']) {
+    assert.equal(renderApprovalMessage(TOOL, { amount: value }).argLines[0], `  amount: ${JSON.stringify(value)}`);
+  }
+  assert.equal(renderApprovalMessage(TOOL, { table: 'customers' }).argLines[0], '  table: customers');
+});
+
+test("presentation escapes names and invisible values without changing legitimate effects", () => {
+  const { renderName } = require('../contract/renderer.cjs');
+  for (const ch of ['\n', '\r', '\t', '\x1b', '\x7f', '\u0085', '\u061c', '\u200e', '\u202e', '\u2066', '\u2028', '\u2029']) {
+    const name = `a${ch}b`;
+    const opened = createApprovalContract().begin({ tool: name, args: { [name]: ch } });
+    assert.equal(opened.kind, 'input_required');
+    const params = opened.elicitationParams;
+    assert.ok(!params.message.includes(name), JSON.stringify(ch));
+    assert.ok(params.message.includes(renderName(name)));
+    assert.equal(params.requestedSchema.properties.approve.title, `Approve one run: ${renderName(name)}`);
+    assert.ok(!params.requestedSchema.properties.approve.description.includes(ch));
+    assert.notEqual(renderName(name), renderName(`a\\u${ch.codePointAt(0).toString(16).padStart(4, '0')}b`));
+  }
+  const args = { café: 'first\nsecond', 客户: 'customers', c: 3, d: 4 };
+  const rendered = renderApprovalMessage('工具', args);
+  assertInsideEnvelope(rendered);
+  assert.ok(rendered.message.includes('café: "first\\nsecond"'));
+  assert.ok(rendered.message.includes('客户: customers'));
+  assert.equal(createApprovalContract().begin({ tool: '工具', args }).kind, 'input_required');
 });
