@@ -84,7 +84,7 @@ function createProxy(options) {
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
-  const contract = createApprovalContract({ store: journal, now, ttlMs, projectId, serverId: serverName, leaseFence });
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, projectId, serverId: serverName, leaseFence });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
   // This identifier exists only to join receipt records from this proxy
