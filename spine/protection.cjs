@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { performance } = require("node:perf_hooks");
 const { platformSupport } = require("./platform.cjs");
 const { helperPlatform } = require("../scripts/macos-helper.cjs");
 const { spawn, spawnSync } = require("node:child_process");
@@ -1255,26 +1256,31 @@ function markBroken(statePath, state, error) {
 const ACTIVATION_LOCK_WAIT_MS = 3200;
 const ACTIVATION_LOCK_POLL_MS = 25;
 
-async function acquireProjectLockWaiting(projectRoot, env, waitMs = ACTIVATION_LOCK_WAIT_MS) {
-  const started = Date.now();
-  for (;;) {
-    try {
-      return acquireProjectLock(projectRoot, env);
-    } catch (error) {
-      if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
-      if (Date.now() - started >= waitMs) {
-        throw new ProtectionError(
-          "proxy_lease_active",
-          `timed out after waiting ${waitMs}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,
-        );
+async function acquireProjectLockWaiting(projectRoot, env, wait = { elapsedMs: 0 }) {
+  const started = performance.now();
+  try {
+    for (;;) {
+      try {
+        return acquireProjectLock(projectRoot, env);
+      } catch (error) {
+        if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
+        const elapsedMs = performance.now() - started;
+        if (elapsedMs >= ACTIVATION_LOCK_WAIT_MS) {
+          throw new ProtectionError(
+            "proxy_lease_active",
+            `timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, ACTIVATION_LOCK_POLL_MS));
       }
-      await new Promise((resolve) => setTimeout(resolve, ACTIVATION_LOCK_POLL_MS));
     }
+  } finally {
+    wait.elapsedMs += performance.now() - started;
   }
 }
 
-async function withProjectLock(projectRoot, env, body) {
-  const lock = await acquireProjectLockWaiting(projectRoot, env);
+async function withProjectLock(projectRoot, env, body, wait) {
+  const lock = await acquireProjectLockWaiting(projectRoot, env, wait);
   try {
     return body(lock);
   } finally {
@@ -1312,10 +1318,10 @@ function activationInputs(state) {
 // is still the record preflight validated and no other session has taken a
 // live lease on it meanwhile: a loser's failure must never null a live lease.
 // Returns the error the caller should raise.
-async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error) {
+async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error, wait) {
   let lock;
   try {
-    lock = await acquireProjectLockWaiting(projectRoot, env);
+    lock = await acquireProjectLockWaiting(projectRoot, env, wait);
   } catch {
     return error;
   }
@@ -1337,6 +1343,9 @@ async function activationLease(statePath, env = process.env) {
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
   const projectRoot = initial.projectRoot;
+  // Sum only acquisition time across preflight and commit (or failure cleanup).
+  // Discovery and the locked bodies do not count as waiting for the lock.
+  const wait = { elapsedMs: 0 };
   // Preflight under the project lock: a live lease, a missing command or a
   // drifted server refuses before the guarded server is started.
   const preflight = await withProjectLock(projectRoot, env, (lock) => {
@@ -1356,7 +1365,7 @@ async function activationLease(statePath, env = process.env) {
     // the journal also uses protection's lock helpers; createProxy checks again.
     require("./store.cjs").openJournal(state.storePath);
     return { state, recovered: lock.recovered };
-  });
+  }, wait);
   // Tool discovery starts the guarded server and can take up to the discovery
   // timeout. It runs outside the project lock, as protect's own discovery
   // does, so another server activating in the same window is not refused for
@@ -1372,7 +1381,7 @@ async function activationLease(statePath, env = process.env) {
       timeoutMs: preflight.state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
-    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error);
+    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error, wait);
   }
   return await withProjectLock(projectRoot, env, (lock) => {
     const state = readState(statePath);
@@ -1423,7 +1432,7 @@ async function activationLease(statePath, env = process.env) {
     Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: preflight.recovered || lock.recovered });
     return next;
-  });
+  }, wait);
 }
 
 function beforeForwardFromState(statePath, leaseToken) {

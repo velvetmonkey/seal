@@ -8,6 +8,7 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const {
   acquireProjectLock,
+  activationLease,
   lockPathFor,
   lockOwnerIsLive,
   processStartWitness,
@@ -266,12 +267,18 @@ async function protectWhileStarting(t, delayMs, expectTimeout) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   const before = fs.readFileSync(ctx.states.alpha);
+  const started = performance.now();
   const starter = startActivation(ctx.states.alpha, env);
   t.after(() => starter.release());
   const [result] = await settle([starter]);
   if (expectTimeout) {
     assert.equal(result.code, 1, starter.output());
-    assert.equal(starter.output(), `REFUSED proxy_lease_active\ntimed out after waiting 3200ms to acquire the project lock held by pid ${protector.pid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes\n`);
+    const match = /timed out after waiting (\d+)ms/.exec(starter.output());
+    assert.ok(match, starter.output());
+    const reportedMs = Number(match[1]);
+    assert.ok(reportedMs >= 3200, "the full retry budget must expire");
+    assert.ok(reportedMs <= performance.now() - started, "reported wait cannot exceed the entire activation");
+    assert.equal(starter.output(), `REFUSED proxy_lease_active\ntimed out after waiting ${reportedMs}ms to acquire the project lock held by pid ${protector.pid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes\n`);
     assert.deepEqual(fs.readFileSync(ctx.states.alpha), before, "timed-out starter writes no route state");
     assert.equal(lockOwnerIsLive(JSON.parse(fs.readFileSync(lockPathFor(ctx.project, env)))), true);
   } else {
@@ -289,4 +296,63 @@ test("activation waits through a legitimate protect subprocess within the measur
 
 test("a slow protect subprocess crosses the lock budget with a truthful timeout and no starter writes", async (t) => {
   await protectWhileStarting(t, 6500, true);
+});
+
+
+test("two-loop activation refusal states the total measured lock wait", async (t) => {
+  const ctx = pendingServers(["alpha"]);
+  const lockPath = lockPathFor(ctx.project, ctx.env);
+  const before = fs.readFileSync(ctx.states.alpha);
+  const first = acquireProjectLock(ctx.project, ctx.env);
+  let second;
+  let phase = 0;
+  const attempts = [[], []];
+  const open = fs.openSync;
+  const unlink = fs.unlinkSync;
+  t.mock.method(fs, "openSync", function (file, flags, ...args) {
+    if (file === lockPath && flags === "wx" && phase < 2) attempts[phase].push(performance.now());
+    return open.call(this, file, flags, ...args);
+  });
+  // The first holder releases after a substantial preflight wait. Once
+  // preflight releases its own lock, install a second live holder before
+  // discovery completes. Neither acquisition nor its retry timer is stubbed.
+  let releasedFirst = false;
+  t.mock.method(fs, "unlinkSync", function (file) {
+    const result = unlink.call(this, file);
+    if (file === lockPath && releasedFirst && phase === 0) {
+      phase = 2; // exclude the holder's acquisition from waiter measurements
+      second = acquireProjectLock(ctx.project, ctx.env);
+      phase = 1;
+    }
+    return result;
+  });
+  const timer = setTimeout(() => {
+    first.release();
+    releasedFirst = true;
+  }, 600);
+  t.after(() => {
+    clearTimeout(timer);
+    phase = 2;
+    second?.release();
+    first.release();
+  });
+  const wallStarted = performance.now();
+  let refusal;
+  await assert.rejects(activationLease(ctx.states.alpha, ctx.env), (error) => {
+    refusal = error;
+    return error.code === "proxy_lease_active";
+  });
+  const wallMs = performance.now() - wallStarted;
+  assert.ok(attempts[0].length > 1, "preflight must retry");
+  assert.ok(attempts[1].length > 1, "commit must retry");
+  const measuredMs = attempts.reduce((total, times) => total + times.at(-1) - times[0], 0);
+  const match = /timed out after waiting (\d+)ms to acquire/.exec(refusal.message);
+  assert.ok(match, refusal.message);
+  const reportedMs = Number(match[1]);
+  t.diagnostic(JSON.stringify({ reportedMs, measuredMs, wallMs }));
+  assert.ok(Math.abs(reportedMs - measuredMs) < 75, `reported ${reportedMs}ms, independently measured ${measuredMs}ms across both loops`);
+  assert.ok(wallMs - reportedMs >= 700, "discovery time is excluded from lock wait");
+  assert.equal(refusal.message, `timed out after waiting ${reportedMs}ms to acquire the project lock held by pid ${process.pid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`);
+  assert.deepEqual(fs.readFileSync(ctx.states.alpha), before, "refusal writes no route state");
+  assert.equal(lockOwnerIsLive(JSON.parse(fs.readFileSync(lockPath))), true);
 });
