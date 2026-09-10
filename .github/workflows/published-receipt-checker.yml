@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Published receipt checker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  published-receipt-checker:
+    name: published receipt checker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # After publication, propose the new named tag in a reviewed PR and read
+      # this job's result before merging the bump. Never resolve latest here.
+      PUBLISHED_CHECKER_TAG: v0.3.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download the named public release without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/published-checker"
+          base="https://github.com/velvetmonkey/seal/releases/download/$PUBLISHED_CHECKER_TAG"
+          for asset in seal-receipt-v2.mjs SHA256SUMS; do
+            curl -q --fail --silent --show-error --location --connect-timeout 15 --max-time 120 \
+              "$base/$asset" -o "$RUNNER_TEMP/published-checker/$asset"
+          done
+      - name: Verify the downloaded checker before executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/published-checker" <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const dir = process.argv[2];
+          const asset = 'seal-receipt-v2.mjs';
+          const entries = readFileSync(`${dir}/SHA256SUMS`, 'utf8').trim().split(/\r?\n/)
+            .map(line => line.trim().split(/\s+/)).filter(fields => fields.at(-1) === asset);
+          if (entries.length !== 1 || entries[0].length !== 3
+            || !/^[0-9a-f]{64}$/.test(entries[0][0]) || !/^[0-9]+$/.test(entries[0][1])) {
+            throw new Error(`expected exactly one valid SHA256SUMS entry for ${asset}`);
+          }
+          const expected = entries[0][0];
+          const actual = createHash('sha256').update(readFileSync(`${dir}/${asset}`)).digest('hex');
+          if (actual !== expected) {
+            console.error(`::error::${asset} digest mismatch: published ${expected}, downloaded ${actual}`);
+            process.exit(1);
+          }
+          console.log(`${asset} verified: published ${expected}, downloaded ${actual}`);
+          JS
+      - name: Build and install the current receipt producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/published-receipt-dist"
+          prefix="$RUNNER_TEMP/published-receipt-prefix"
+          node scripts/build-dist.cjs --out "$dist"
+          read -r digest bytes artifact < "$dist/SHA256SUMS"
+          "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix"
+          test -x "$prefix/bin/seal"
+      - name: Place the published checker in the documented installed store
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/published-receipt-prefix"
+          store="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")"
+          cp -a "$store" "$RUNNER_TEMP/published-checker-store"
+          checker="$RUNNER_TEMP/published-checker-store/checker/seal-receipt-v2.mjs"
+          test -f "$checker"
+          chmod u+w "$checker"
+          cp "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$checker"
+          node --input-type=module - "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$checker" <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const digest = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+          const downloaded = digest(process.argv[2]);
+          const executing = digest(process.argv[3]);
+          if (executing !== downloaded) {
+            console.error(`::error::executing checker digest mismatch: downloaded ${downloaded}, executing ${executing}`);
+            process.exit(1);
+          }
+          console.log(`executing checker verified: downloaded ${downloaded}, executing ${executing}`);
+          JS
+      - name: Check a real signed receipt and the demo tamper case
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          demo_dir="$RUNNER_TEMP/published-receipt-demo"
+          printf 'y\n' > "$RUNNER_TEMP/published-demo-input"
+          "$RUNNER_TEMP/published-receipt-prefix/bin/seal" demo --dir "$demo_dir" \
+            < "$RUNNER_TEMP/published-demo-input"
+          receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
+          pubkey="$demo_dir/receipt-signer.pub"
+          test -n "$receipt"
+          test -f "$pubkey"
+          checker="$RUNNER_TEMP/published-checker-store/checker/seal-receipt-v2.mjs"
+          evidence_checker=".github/workflows/receipt-check-evidence.mjs"
+          challenge="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          accept_result="$RUNNER_TEMP/published-accept-$challenge.json"
+          tamper_result="$RUNNER_TEMP/published-tamper-$challenge.json"
+          tampered="$RUNNER_TEMP/published-tampered-receipt.json"
+          node -e '
+            const fs = require("node:fs");
+            const [source, target] = process.argv.slice(1);
+            const receipt = JSON.parse(fs.readFileSync(source, "utf8"));
+            receipt.action = "ALLOW";
+            fs.writeFileSync(target, JSON.stringify(receipt));
+          ' "$receipt" "$tampered"
+          # Run both cases even when the accept case refuses, preserving each
+          # observation. Validation below must accept neither an execution
+          # error nor an unrelated refusal as successful tamper evidence.
+          set +e
+          node "$evidence_checker" check "$checker" "$receipt" "$pubkey" "$challenge" "$accept_result"
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-accept.exit"
+          node "$evidence_checker" check "$checker" "$tampered" "$pubkey" "$challenge" "$tamper_result"
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-tamper.exit"
+          # Preserve the checker's own refusal text, which the harness records
+          # only as an evidence code. These diagnostics cannot make the gate pass.
+          node "$checker" "$receipt" --pubkey "$(cat "$pubkey")"
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-accept-diagnostic.exit"
+          node "$checker" "$tampered" --pubkey "$(cat "$pubkey")"
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-tamper-diagnostic.exit"
+          set -e
+          cat "$accept_result" "$tamper_result"
+          node "$evidence_checker" validate "$receipt" "$tampered" "$challenge" "$accept_result" "$tamper_result"
+          test "$(cat "$RUNNER_TEMP/published-accept.exit")" -eq 0
+          test "$(cat "$RUNNER_TEMP/published-tamper.exit")" -eq 1
+          test "$(cat "$RUNNER_TEMP/published-accept-diagnostic.exit")" -eq 0
+          test "$(cat "$RUNNER_TEMP/published-tamper-diagnostic.exit")" -eq 1
+      - name: Assert the published sibling refuses without its runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          demo_dir="$RUNNER_TEMP/published-receipt-demo"
+          receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
+          test -n "$receipt"
+          test ! -e "$RUNNER_TEMP/runtime"
+          set +e
+          node "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$receipt" \
+            --pubkey "$(cat "$demo_dir/receipt-signer.pub")" > "$RUNNER_TEMP/published-standalone.log" 2>&1
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-standalone.exit"
+          set -e
+          cat "$RUNNER_TEMP/published-standalone.log"
+          test "$(cat "$RUNNER_TEMP/published-standalone.exit")" -eq 1
+          grep -q '^REFUSE ERR_MODULE_NOT_FOUND: Cannot find module .*runtime/kernel/decision-runner.cjs' \
+            "$RUNNER_TEMP/published-standalone.log"
