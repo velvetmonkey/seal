@@ -147,9 +147,9 @@ function printReachabilityObservation(protection, cwd, env) {
   console.log("Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)");
 
   let states = [];
-  try { states = protection.statePathsFor(cwd, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
-  catch (error) { console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
-  const ownedNames = new Set(states.map((state) => state.serverName));
+  let recordsError;
+  try { states = protection.statePathsFor(projectRoot, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
+  catch (error) { recordsError = error; console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
   const definitions = [];
   let unknown = false;
   for (const source of sources) {
@@ -163,17 +163,37 @@ function printReachabilityObservation(protection, cwd, env) {
   for (const entry of definitions) (byName.get(entry.name) || (byName.set(entry.name, []), byName.get(entry.name))).push(entry);
   console.log("Observed MCP definitions (scoped configuration facts; not a complete active inventory):");
   for (const [name, entries] of [...byName.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const disagree = entries.some((entry) => JSON.stringify(entry.definition) !== JSON.stringify(entries[0].definition));
+    const disagree = entries.some((entry) => protection.canonical(entry.definition) !== protection.canonical(entries[0].definition));
     const scopes = entries.map((entry) => entry.source).join(", ");
     if (disagree) console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has conflicting definitions across ${scopes}; scope shadowing and approval eligibility are unresolved`);
-    if (ownedNames.has(name) && entries.some((entry) => entry.source === "local")) {
-      const state = states.find((candidate) => candidate.serverName === name);
+    const local = entries.find((entry) => entry.source === "local");
+    const recorded = states.find((candidate) => candidate.serverName === name);
+    const wrapperLike = (definition) => Array.isArray(definition?.args) &&
+      definition.args.some((arg) => arg === "__proxy" || arg === "--protect-state");
+    if (recordsError || recorded || entries.some((entry) => wrapperLike(entry.definition))) {
       try {
-        const local = entries.find((entry) => entry.source === "local");
-        if (JSON.stringify(local.definition) !== JSON.stringify(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        if (recordsError) throw recordsError;
+        if (!local) throw new Error("no inspected local wrapper establishes ownership");
+        // A wrapper can have been installed from a child directory. Its record
+        // owns that installation root, while Claude selects the repository scope.
+        const args = local.definition?.args;
+        const recordPath = Array.isArray(args) && args[0] === "__proxy" &&
+          args[1] === "--protect-state" && args.length === 3 && typeof args[2] === "string"
+          ? path.resolve(projectRoot, args[2]) : null;
+        const state = recordPath ? protection.readState(recordPath) : recorded;
+        if (!state) throw new Error("installed wrapper protection record is unavailable");
+        if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        const installationRoot = state.projectRoot;
+        if (typeof installationRoot !== "string" ||
+            protection.claudeProjectRoot(installationRoot) !== projectRoot) throw new Error("installed wrapper project scope does not match the inspected project");
+        protection.assertSealOwnedLocalOverride(state, installationRoot, name, env);
         const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
         console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
       } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
+    } else if (entries.some(({ definition }) => !definition || typeof definition !== "object" ||
+        Array.isArray(definition) || !(typeof definition.command === "string" || typeof definition.url === "string"))) {
+      console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has no inspectable command or URL; ownership cannot be established`);
+      unknown = true;
     } else {
       console.log(`  UNBROKERED — Inspected ${entries[0].source} MCP entry ${JSON.stringify(name)} is configured without Seal; whether this client session can use it is UNKNOWN.`);
     }

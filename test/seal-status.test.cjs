@@ -521,3 +521,109 @@ test("status reports the kernel runtime as present when it is cached", async () 
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
 });
+
+function scopeOwnershipCase() {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-scope-ownership-"));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  const child = path.join(project, "src");
+  const outside = path.join(root, "outside");
+  const linked = path.join(root, "linked");
+  fs.mkdirSync(child);
+  fs.mkdirSync(outside);
+  fs.symlinkSync(project, linked, "dir");
+  const env = { XDG_DATA_HOME: path.join(root, ".local", "share"), CLAUDE_CONFIG_DIR: root };
+  const statePath = require("../spine/protection.cjs").statePathFor(project, env, "db");
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, { state: "PENDING RESTART", guardTool: "write" });
+  const configPath = path.join(root, ".claude.json");
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  const definition = config.projects[fs.realpathSync(project)].mcpServers.db;
+  const save = () => fs.writeFileSync(configPath, JSON.stringify(config));
+  const observe = (t, label, cwd = project) => {
+    const result = run(["status"], root, "", cwd, env);
+    t.diagnostic(`${label}: exit ${result.code}\n${result.out}`);
+    return result.out;
+  };
+  return { root, project, child, outside, linked, statePath, config, definition, save, observe };
+}
+
+test("status resolves wrapper ownership from every project directory", (t) => {
+  const c = scopeOwnershipCase();
+  for (const [label, cwd] of [["root", c.project], ["child", c.child], ["symlink", c.linked]]) {
+    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+  }
+  fs.writeFileSync(path.join(c.outside, ".mcp.json"), JSON.stringify({ mcpServers: { plain: { command: "ordinary-server" } } }));
+  assert.match(c.observe(t, "outside", c.outside), /  UNBROKERED — Inspected project MCP entry "plain" is configured without Seal/);
+});
+
+test("status compares object keys canonically in ownership and scope conflicts", (t) => {
+  const c = scopeOwnershipCase();
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.db = {
+    env: c.definition.env, args: c.definition.args, command: c.definition.command, type: c.definition.type,
+  };
+  c.save();
+  fs.writeFileSync(path.join(c.project, ".mcp.json"), JSON.stringify({ mcpServers: { db: c.definition } }));
+  const reordered = c.observe(t, "keys reordered");
+  assert.match(reordered, /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+  assert.doesNotMatch(reordered, /has conflicting definitions/);
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.db.args = [...c.definition.args].reverse();
+  c.save();
+  const array = c.observe(t, "array reordered");
+  assert.match(array, /has conflicting definitions/);
+  assert.match(array, /UNKNOWN — installed wrapper "db".*local definition does not match the installed wrapper/);
+  assert.doesNotMatch(array, /  BROKERED —/);
+});
+
+
+test("status refuses uncertain ownership and different wrappers", (t) => {
+  const c = scopeOwnershipCase();
+  const original = fs.readFileSync(c.statePath, "utf8");
+  const uncertain = (label, pattern) => {
+    const output = c.observe(t, label, c.child);
+    assert.match(output, pattern);
+    assert.doesNotMatch(output, /  (?:UNBROKERED|BROKERED) —/);
+  };
+  c.definition.command = "/different/seal";
+  c.save();
+  uncertain("different wrapper", /UNKNOWN — installed wrapper "db".*local definition does not match the installed wrapper/);
+  c.definition.command = "/seal";
+  c.save();
+  fs.renameSync(c.statePath, `${c.statePath}.saved`);
+  uncertain("missing record", /UNKNOWN — installed wrapper "db".*protection record is unavailable/);
+  fs.writeFileSync(c.statePath, "{");
+  uncertain("unreadable record", /UNKNOWN — installed wrapper "db".*stored protection state is unreadable/);
+  const state = JSON.parse(original);
+  state.localOverride.installed = false;
+  fs.writeFileSync(c.statePath, JSON.stringify(state));
+  uncertain("ownership not installed", /UNKNOWN — installed wrapper "db"/);
+  state.localOverride.installed = true;
+  state.projectRoot = c.outside;
+  fs.writeFileSync(c.statePath, JSON.stringify(state));
+  uncertain("wrong project scope", /UNKNOWN — installed wrapper "db".*project scope does not match/);
+  fs.writeFileSync(c.statePath, original);
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.plain = { command: "ordinary-server", args: [] };
+  c.save();
+  const restored = c.observe(t, "restored and truly unowned");
+  assert.match(restored, /  BROKERED — Local MCP entry "db"/);
+  assert.match(restored, /  UNBROKERED — Inspected local MCP entry "plain"/);
+});
+
+test("status follows a wrapper installed from a child into its Claude project scope", (t) => {
+  const c = scopeOwnershipCase();
+  const state = JSON.parse(fs.readFileSync(c.statePath, "utf8"));
+  const childState = require("../spine/protection.cjs").statePathFor(c.child, { XDG_DATA_HOME: path.join(c.root, ".local", "share") }, "db");
+  state.projectRoot = c.child;
+  state.projectId = projectId(c.child);
+  Object.assign(state.localOverride, { projectRoot: c.child, projectId: projectId(c.child), claudeProjectRoot: c.project });
+  state.localOverride.definition.args[2] = childState;
+  c.definition.args[2] = childState;
+  c.save();
+  fs.mkdirSync(path.dirname(childState), { recursive: true });
+  fs.writeFileSync(childState, JSON.stringify(state));
+  fs.unlinkSync(c.statePath);
+  for (const [label, cwd] of [["child installation from root", c.project], ["child installation from child", c.child], ["child installation from symlink", c.linked]]) {
+    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db"/);
+  }
+});
