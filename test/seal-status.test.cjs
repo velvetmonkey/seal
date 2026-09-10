@@ -141,7 +141,7 @@ test("status refuses an unsupported host before a null-witness lease liveness co
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
   assert.match(result.out, /^REFUSE unsupported_platform: this is plan9-mips$/m);
-  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:ACTIVE|STALE) /m);
+  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:(?:LEASE )?ACTIVE|STALE) /m);
   assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
 

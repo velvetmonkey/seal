@@ -688,7 +688,7 @@ test("protect refuses both auto-response hooks before creating protection state"
     const result = run(project, home, ["protect", "db", "demo.mutate"], env);
     assert.notEqual(result.code, 0, result.out);
     assert.match(result.out, /^seal: REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed$/m);
-    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|ACTIVE) /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|(?:LEASE )?ACTIVE) /m);
     assert.equal(fs.existsSync(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") })), false);
     assert.equal(fs.existsSync(fakeLocalOverridePath(root)), false);
   }
@@ -713,7 +713,7 @@ test("status renders a dead activation lease as STALE, not active", () => {
   assert.match(status.out, /^Sealed MCP route db: STALE /m);
   assert.match(status.out, /^  demo\.mutate$/m);
   assert.match(status.out, /previous wrapper lease is not live/);
-  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: (?:LEASE )?ACTIVE /m);
 });
 
 test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
@@ -757,7 +757,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
   assert.equal(status.code, 0, status.out);
   assert.match(status.out, /^Sealed MCP route db: STALE /m);
   assert.match(status.out, /^  demo\.mutate$/m);
-  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: (?:LEASE )?ACTIVE /m);
 });
 
 test("status reports refused state without inventing absent tools or unrouted servers", () => {

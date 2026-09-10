@@ -301,7 +301,7 @@ test("7 live session during protect: works by design as PENDING RESTART", () => 
     const result = runSeal(ctx, ["protect", "db", "demo.mutate"]);
     assert.equal(result.code, 0, result.out);
     assert.match(result.out, /PENDING RESTART/);
-    assert.doesNotMatch(result.out, /^Sealed MCP route .*: ACTIVE /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:LEASE )?ACTIVE /m);
     assertUntouched(ctx, before, "live protect");
   } finally {
     dummy.kill("SIGKILL");
