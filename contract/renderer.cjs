@@ -34,19 +34,22 @@ function renderValue(value) {
   return escapeInvisible(canonicalString(value));
 }
 
-// Escape controls and separators, plus the exact Unicode bidi controls that
-// can reorder the following text: ALM, LRM/RLM, embeddings, overrides and
-// isolates. ZWNJ and ZWJ are deliberately not here: they shape Persian,
-// Indic text and emoji without reordering or hiding their neighbours.
+// Escape Unicode controls, format characters, unassigned code points and
+// default-ignorables (including variation selectors), plus line separators.
+// Join controls are the deliberate exception: ZWNJ and ZWJ must remain literal
+// for Persian, Indic and emoji shaping. Decide membership by Unicode property,
+// including marks that would otherwise qualify for an unquoted name.
+const INVISIBLE = /(?![\u200c\u200d])[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\p{Cn}\p{Zl}\p{Zp}]/u;
 function escapeInvisible(text) {
-  return text.replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/gu,
-    (ch) => ch.split("").map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`).join(""));
+  return Array.from(text, (ch) => INVISIBLE.test(ch)
+    ? ch.split("").map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")
+    : ch).join("");
 }
 
 function renderName(name) {
   // Quoting delimiters also distinguishes a literal backslash escape from
   // the escaped character, without quoting ordinary international names.
-  return !/^[\p{L}\p{M}\p{N}\u200c\u200d_.\/@-]+$/u.test(name)
+  return INVISIBLE.test(name) || !/^[\p{L}\p{M}\p{N}\u200c\u200d_.\/@-]+$/u.test(name)
     ? escapeInvisible(JSON.stringify(name)) : name;
 }
 

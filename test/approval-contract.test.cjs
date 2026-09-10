@@ -432,3 +432,44 @@ test("presentation escapes bidi controls but preserves shaping characters", () =
     assert.ok(!renderName(`a${ch}b`).includes(ch), `bidi control ${JSON.stringify(ch)} must be escaped`);
   }
 });
+
+
+for (const [label, point] of [
+  ['format boundary', 0x206a], ['format successor', 0x206b],
+  ['ignorable combining mark', 0x034f], ['variation selector', 0xfe0f],
+  ['supplementary variation selector', 0xe0100], ['unassigned', 0x0378],
+]) {
+  test(`presentation identifies every name code point: ${label}`, () => {
+    const { renderName } = require('../contract/renderer.cjs');
+    const ch = String.fromCodePoint(point);
+    const name = `ab${ch}cd`;
+    const shown = renderName(name);
+    assert.ok(!shown.includes(ch), `U+${point.toString(16)} must be visibly escaped`);
+    assert.deepEqual(Array.from(JSON.parse(shown)), Array.from(name));
+    assert.notEqual(shown, renderName(JSON.stringify(name).slice(1, -1).replace(ch, `\\u${point.toString(16)}`)));
+  });
+}
+
+test('presentation enumerates the Unicode invisible population and preserves shaping', () => {
+  const { renderName } = require('../contract/renderer.cjs');
+  const population = /[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\p{Cn}\p{Zl}\p{Zp}]/u;
+  let count = 0;
+  let omitted = 0;
+  for (let point = 0; point <= 0x10ffff; point += 1) {
+    const ch = String.fromCodePoint(point);
+    if (point === 0x200c || point === 0x200d || !population.test(ch)) continue;
+    count += 1;
+    const name = `ab${ch}cd`;
+    const shown = renderName(name);
+    if (shown.includes(ch)) omitted += 1;
+    // Canonical JSON short escapes for controls are equally visible and exact.
+    assert.deepEqual(Array.from(JSON.parse(shown)), Array.from(name));
+  }
+  assert.ok(count > 0);
+  assert.equal(omitted, 0, `${omitted} of ${count} invisible code points remain literal`);
+  for (const name of ['می‌نویسم', 'अभिषेक', '👨‍👩‍👧‍👦']) {
+    const shown = renderName(name);
+    assert.equal(shown.startsWith('"') ? JSON.parse(shown) : shown, name);
+    assert.ok(shown.includes(name));
+  }
+});
