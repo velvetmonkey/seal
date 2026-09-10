@@ -24,20 +24,21 @@ function familyEnvironment() {
   const existing = FAMILY.every(([repo]) => existsSync(path.join(ROOT, ".family", repo)));
   if (existing) return { env: process.env, cleanup: () => {} };
 
-  assert.equal(existsSync(path.join(ROOT, ".family")), false, "partial .family tree is a named prerequisite finding");
-  const family = testTmpdir("seal-linkcheck-family-");
-  const cleanup = () => rmSync(family, { recursive: true, force: true });
+  const family = path.join(ROOT, ".family");
+  assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding");
+  const privateFamily = testTmpdir("seal-linkcheck-family-");
+  const cleanup = () => rmSync(privateFamily, { recursive: true, force: true });
   try {
     for (const [repo, branch] of FAMILY) {
       const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
-        `https://github.com/velvetmonkey/${repo}`, path.join(family, repo)], {
+        `https://github.com/velvetmonkey/${repo}`, path.join(privateFamily, repo)], {
         cwd: ROOT, encoding: "utf8",
       });
       assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
     }
     const env = { ...process.env };
     for (const [repo] of FAMILY) {
-      env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(family, repo);
+      env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(privateFamily, repo);
     }
     return { env, cleanup };
   } catch (error) {
