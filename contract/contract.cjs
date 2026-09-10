@@ -23,7 +23,7 @@
 // repeats this.
 const crypto = require("node:crypto");
 const { canonicalString, sha256Hex } = require("./canonical.cjs");
-const { renderApprovalMessage } = require("./renderer.cjs");
+const { renderApprovalMessage, renderName } = require("./renderer.cjs");
 const { createKernelAuthorizationAdapter, KernelAuthorizationError } = require("./kernel-authorization.cjs");
 
 const HANDLE_PATTERN = /^seal-rs1\.[0-9a-f]{64}$/;
@@ -200,7 +200,7 @@ function createApprovalContract({
           properties: {
             approve: {
               type: "boolean",
-              title: `Approve one run: ${tool}`,
+              title: `Approve one run: ${renderName(tool)}`,
               description: `Arguments: ${rendered.argLines.map((line) => line.trim()).join("; ")}. ${rendered.scopeLine} ${rendered.outsideLine}`,
             },
           },

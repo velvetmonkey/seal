@@ -217,3 +217,44 @@ test("both duplicate name orders are refused before the child and normal traffic
   assert.equal(fs.readFileSync(capture, "utf8"), `${init}\n${unguarded}\n`);
   t.diagnostic("child raw capture contains only initialize and the unchanged normal unguarded frame");
 });
+
+test("the final proxy presentation includes predicate text inside the logical message envelope", async (t) => {
+  const { MESSAGE_LINE_CAP } = require('../contract/renderer.cjs');
+  const run = session('db.mutate');
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === 'init');
+  const args = { café: 'first\nsecond', 客户: 'customers', c: 3, d: 4 };
+  run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'long-legitimate', method: 'tools/call', params: { name: 'db.mutate', arguments: args } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === 'elicitation/create');
+  const lines = prompt.params.message.split('\n');
+  assert.ok(lines.length <= MESSAGE_LINE_CAP, `final logical lines: ${lines.length}`);
+  assert.match(prompt.params.message, /Selection predicate: db\.mutate \(bare tool name selects all calls\)/);
+  assert.ok(prompt.params.message.includes('café: "first\\nsecond"'));
+  assert.ok(prompt.params.message.includes('客户: customers'));
+  assert.ok(prompt.params.message.includes('c: 3'));
+  assert.ok(prompt.params.message.includes('d: 4'));
+});
+
+test("predicate composition refuses an over-budget message before offering approval", async (t) => {
+  const run = session({ name: 'db.mutate', predicate: `operation="${'x'.repeat(100)}"` });
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === 'init');
+  run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'too-wide', method: 'tools/call', params: { name: 'db.mutate', arguments: { operation: 100 } } }));
+  const response = await waitFor(run.frames, (frame) => frame.id === 'too-wide');
+  assert.match(response.result.content[0].text, /unrenderable_effect/);
+  assert.equal(run.frames.some((frame) => frame.method === 'elicitation/create'), false);
+});
+
+test("predicate context quotes the tool name consistently with the approval", async (t) => {
+  const { renderName } = require('../contract/renderer.cjs');
+  for (const name of ['db.\u202emutate', 'db.\\u202emutate']) {
+    const run = session(name);
+    t.after(() => run.close());
+    await waitFor(run.frames, (frame) => frame.id === 'init');
+    run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'names', method: 'tools/call', params: { name, arguments: { amount: '100' } } }));
+    const prompt = await waitFor(run.frames, (frame) => frame.method === 'elicitation/create');
+    assert.ok(prompt.params.message.includes(`Selection predicate: ${renderName(name)}`));
+    assert.ok(prompt.params.message.includes(`Tool: ${renderName(name)}`));
+    assert.equal(prompt.params.message.includes('\u202e'), false);
+  }
+});

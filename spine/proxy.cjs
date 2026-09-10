@@ -20,6 +20,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 
+const { appendApprovalContext, renderName } = require("../contract/renderer.cjs");
 const { createApprovalContract } = require("../contract/contract.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
@@ -361,10 +362,16 @@ function createProxy(options) {
       return;
     }
     const requestState = decision.result.requestState;
-    decision.elicitationParams = {
-      ...decision.elicitationParams,
-      message: `${decision.elicitationParams.message}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
-    };
+    const selectionLabel = renderName(params.name) + matchedSelection.label.slice(params.name.length);
+    const measured = appendApprovalContext(decision.elicitationParams.message,
+      `Selection predicate: ${selectionLabel} (${matchedSelection.detail})`, { terminalWidth });
+    if (!measured.ok) {
+      contract.retry({ tool: params.name, args: params.arguments ?? {}, requestState,
+        inputResponses: { approval: { action: "cancel" } } });
+      blockForward(frame, "unrenderable_effect", measured.reason);
+      return;
+    }
+    decision.elicitationParams = { ...decision.elicitationParams, message: measured.message };
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });
     const elicitationId = newElicitationId();
