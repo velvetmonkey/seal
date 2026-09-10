@@ -3,3 +3,7 @@ dist/
 .tmp/
 *.log
 runtime/macos-process-start-witness
+docs/dist/
+docs/node_modules/
+docs/.astro/
+docs/src/content/docs/
