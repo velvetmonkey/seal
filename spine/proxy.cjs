@@ -354,17 +354,13 @@ function createProxy(options) {
       blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
       return;
     }
-    const decision = contract.begin({ tool: params.name, args: params.arguments ?? {} });
+    const decision = contract.begin({ tool: params.name, args: params.arguments ?? {}, selection: matchedSelection });
     if (decision.kind === "refuse") {
       emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
       respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
       return;
     }
     const requestState = decision.result.requestState;
-    decision.elicitationParams = {
-      ...decision.elicitationParams,
-      message: `${decision.elicitationParams.message}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
-    };
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });
     const elicitationId = newElicitationId();
