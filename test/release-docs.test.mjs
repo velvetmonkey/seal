@@ -214,7 +214,7 @@ test("generated install prose is bound to published installer observations", asy
   const preload = path.join(directory, 'fetch.mjs');
   // Record only this run's live responses; the checker still authenticates them.
   // Negative transport cases replay those exact bytes without extra downloads.
-  fs.writeFileSync(preload, String.raw`import fs from 'node:fs';
+  const preloadSource = String.raw`import fs from 'node:fs';
 import path from 'node:path';
 const directory = process.env.PROSE_FETCH_DIRECTORY;
 const mode = process.env.PROSE_FETCH_MODE;
@@ -226,8 +226,13 @@ globalThis.fetch = async (url, options) => {
   fs.writeFileSync(path.join(directory, 'counts.json'), JSON.stringify(counts));
   if (mode === 'record') {
     const response = await nativeFetch(url, options);
-    if (response.ok) fs.writeFileSync(path.join(directory, name), Buffer.from(await response.clone().arrayBuffer()));
-    return response;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (response.ok) fs.writeFileSync(path.join(directory, name), bytes);
+    const assertionResponse = new Response(bytes);
+    if (!bytes.equals(Buffer.from(await assertionResponse.arrayBuffer()))) {
+      throw new Error('recorded response bytes cannot be replayed as a fresh response');
+    }
+    return new Response(bytes);
   }
   if (name === process.env.PROSE_FETCH_TARGET) {
     if (mode === 'all-transient' || (['transient', 'transient-wrong'].includes(mode) && attempt === 1)) {
@@ -244,7 +249,10 @@ globalThis.fetch = async (url, options) => {
   if (['wrong-byte', 'transient-wrong'].includes(mode) && name === process.env.PROSE_FETCH_TARGET) bytes[0] ^= 1;
   return new Response(bytes);
 };
-`);
+`;
+  assert.doesNotMatch(preloadSource, /response\.clone\(\)\.arrayBuffer\(\)/,
+    'recording must consume the native response body exactly once');
+  fs.writeFileSync(preload, preloadSource);
   const run = mode => spawnSync(process.execPath, ['--import', preload, path.join(ROOT, 'scripts/check-install-prose.mjs')], {
     cwd: ROOT, encoding: 'utf8', timeout: 180000,
     env: { ...process.env, NODE_TEST_CONTEXT: undefined, PROSE_FETCH_DIRECTORY: directory, PROSE_FETCH_MODE: mode, PROSE_FETCH_TARGET: names[0] },
