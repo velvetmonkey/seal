@@ -13,7 +13,7 @@ const { requireMatchingVersion } = require("../spine/version.cjs");
 
 function writeOwnedState(root, project, statePath, fields) {
   const projectRoot = fs.realpathSync(project);
-  const definition = { type: "stdio", command: "/seal", args: ["__proxy", "--protect-state", statePath], env: {} };
+  const definition = { type: "stdio", command: CLI, args: ["__proxy", "--protect-state", statePath], env: {} };
   fs.writeFileSync(path.join(root, ".claude.json"), JSON.stringify({
     projects: { [projectRoot]: { mcpServers: { db: definition } } },
   }, null, 2) + "\n");
@@ -133,8 +133,40 @@ test("coverage only calls selected tools BROKERED behind a live Seal-owned wrapp
   let result = run(["coverage"], root, "", project);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /^Coverage enumeration is not proven complete\.$/m);
-  assert.match(result.out, /^BROKERED selected MCP tools on db: write — live Seal-owned wrapper lease; proxy gates selected tools\/call$/m);
+  assert.match(result.out, /^BROKERED selected MCP tools on db: write — inferred from a live lease and an owned override resolving to this Seal tree; no refusal probe was run$/m);
   assert.match(result.out, /^UNKNOWN network$/m);
+
+  assert.equal(result.out.split("\n")[0], "Coverage enumeration is not proven complete.");
+  assert.equal(result.out.match(/^(?:BROKERED|UNBROKERED|UNKNOWN) /gm).length, 13);
+  assert.equal(result.out.match(/^UNBROKERED /gm).length, 5);
+  assert.match(result.out, /^UNKNOWN server-to-client requests \(sampling\/createMessage\)/m);
+
+  // Change the actual installed owner and its matching record together, leaving
+  // the live lease intact: ownership of some Seal tree is insufficient.
+  const owned = JSON.parse(fs.readFileSync(statePath, "utf8"));
+  const foreign = path.join(root, "other-install", "bin", "seal");
+  fs.mkdirSync(path.dirname(foreign), { recursive: true });
+  fs.copyFileSync(CLI, foreign);
+  const setCommand = (command) => {
+    owned.localOverride.definition.command = command;
+    fs.writeFileSync(statePath, JSON.stringify(owned));
+    fs.writeFileSync(path.join(root, ".claude.json"), JSON.stringify({
+      projects: { [fs.realpathSync(project)]: { mcpServers: { db: owned.localOverride.definition } } },
+    }));
+  };
+  for (const command of [foreign, path.join(root, "missing-seal"), "seal"]) {
+    setCommand(command);
+    result = run(["coverage"], root, "", project);
+    assert.equal(result.code, 0, result.out);
+    assert.doesNotMatch(result.out, /^BROKERED /m);
+    assert.match(result.out, /^UNKNOWN selected MCP tools .*wrapper command does not resolve to this Seal tree/m);
+  }
+  const alias = path.join(root, "seal-alias");
+  fs.symlinkSync(CLI, alias);
+  setCommand(alias);
+  result = run(["coverage"], root, "", project);
+  assert.match(result.out, /^BROKERED selected MCP tools /m);
+  setCommand(CLI);
 
   // Plant the enforcement failure: the saved state remains, but its installed
   // wrapper no longer does.  Coverage must withdraw BROKERED rather than

@@ -60,7 +60,7 @@ function status() {
 
 // Coverage is an inventory of known routes, not a containment claim.  In
 // particular, a saved protect record is not enough: the wrapper must still be
-// Seal-owned and its lease must be live before selected tools are BROKERED.
+// owned by this tree and its lease must be live. This is inference, not a probe.
 function coverage() {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
@@ -81,8 +81,10 @@ function coverage() {
       const state = protection.readState(statePath);
       const view = protection.protectionView(state, process.cwd(), process.env);
       const tools = view.state === protection.STATES.UNPROTECTED ? [] : protection.protectedToolNames(view);
-      if (view.state === protection.STATES.ACTIVE) {
-        console.log(`BROKERED selected MCP tools on ${view.serverName}: ${tools.join(", ")} — live Seal-owned wrapper lease; proxy gates selected tools/call`);
+      if (view.state === protection.STATES.ACTIVE && !coverageWrapperIsThisTree(view)) {
+        console.log(`UNKNOWN selected MCP tools on ${view.serverName}: ${tools.join(", ")} — wrapper command does not resolve to this Seal tree; run coverage from the wrapper installation or reinstall protection with this binary`);
+      } else if (view.state === protection.STATES.ACTIVE) {
+        console.log(`BROKERED selected MCP tools on ${view.serverName}: ${tools.join(", ")} — inferred from a live lease and an owned override resolving to this Seal tree; no refusal probe was run`);
       } else {
         console.log(`UNKNOWN selected MCP tools on ${view.serverName || "unnamed route"}: ${tools.join(", ") || "none"} — protection state is ${view.state}, not a live wrapper lease`);
       }
@@ -92,6 +94,18 @@ function coverage() {
     }
   }
   coverageOutsideRoutes();
+}
+
+function coverageWrapperIsThisTree(view) {
+  const command = view.localOverride?.definition?.command;
+  // Protect installs an absolute executable path. Ambiguous PATH lookups or
+  // relative commands cannot establish which installation the client launches.
+  if (typeof command !== "string" || !path.isAbsolute(command)) return false;
+  try {
+    return fs.realpathSync(command) === fs.realpathSync(path.join(ROOT, "bin", "seal"));
+  } catch {
+    return false;
+  }
 }
 
 function coverageOutsideRoutes() {
@@ -109,6 +123,7 @@ function coverageOutsideRoutes() {
   console.log("UNKNOWN autonomous background effects");
   console.log("UNKNOWN non-tools/call methods");
   console.log("UNKNOWN unselected tools/call methods");
+  console.log("UNKNOWN server-to-client requests (sampling/createMessage) — wrapper relays server output without filtering; downstream effects were not established");
 }
 
 function statusRecord(recordPath, readError) {
