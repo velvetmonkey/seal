@@ -79,7 +79,7 @@ function renderServerLabel(serverName) {
   const label = typeof serverName === "string" && serverName.trim().length > 0
     ? JSON.stringify(serverName).replace(/[\u007f-\uffff]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`)
     : "unknown";
-  return `Server (configured route, not verified): ${label}`;
+  return `Server (configured route, identity not authenticated): ${label}`;
 }
 
 module.exports = { renderApprovalMessage, renderServerLabel, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };

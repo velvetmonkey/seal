@@ -365,7 +365,7 @@ function createProxy(options) {
     const requestState = decision.result.requestState;
     decision.elicitationParams = {
       ...decision.elicitationParams,
-      message: `${renderServerLabel(serverName)}\n${decision.elicitationParams.message}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
+      message: `${decision.elicitationParams.message}\n${renderServerLabel(serverName)}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
     };
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });

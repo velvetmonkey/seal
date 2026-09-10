@@ -256,7 +256,7 @@ test("every fixed approval message line fits the measured default width", () => 
 
 test("configured server labels preserve keys and escape misleading display characters", () => {
   const { renderServerLabel } = require("../contract/renderer.cjs");
-  const prefix = "Server (configured route, not verified): ";
+  const prefix = "Server (configured route, identity not authenticated): ";
   for (const value of [undefined, null, "", "   ", 42]) {
     assert.equal(renderServerLabel(value), `${prefix}unknown`);
   }
