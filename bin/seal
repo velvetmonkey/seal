@@ -59,11 +59,61 @@ function status() {
   for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
 }
 
-function statusJsonSource(filePath, label) {
+// JSON.parse validates syntax, but loses repeated object members. Walk the raw
+// tokens iteratively so deep unrelated metadata cannot overflow the JS stack.
+// Only MCP definitions and the keys selecting their scope affect this inventory.
+function statusDuplicateKeys(text, projectRoot) {
+  const stack = [];
+  const duplicates = new Set();
+  for (let i = 0; i < text.length;) {
+    const c = text[i];
+    const parent = stack[stack.length - 1];
+    if (c === '"') {
+      const start = i++;
+      while (i < text.length) {
+        if (text[i] === "\\") { i += 2; continue; }
+        if (text[i++] === '"') break;
+      }
+      if (parent?.object && parent.keyNext) {
+        const key = JSON.parse(text.slice(start, i));
+        parent.key = key;
+        parent.keyNext = false;
+        const relevant = parent.role === "definition" || parent.role === "servers"
+          || ((parent.role === "root" || parent.role === "local") && key === "mcpServers")
+          || (parent.role === "root" && projectRoot !== undefined && key === "projects")
+          || (parent.role === "projects" && key === projectRoot);
+        if (relevant) {
+          if (parent.keys.has(key)) duplicates.add(key);
+          parent.keys.add(key);
+        }
+      }
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      let role = "ignored";
+      if (!parent) role = "root";
+      else if (parent.role === "servers" || parent.role === "definition") role = "definition";
+      else if (parent.object) {
+        if ((parent.role === "root" || parent.role === "local") && parent.key === "mcpServers") role = "servers";
+        else if (parent.role === "root" && projectRoot !== undefined && parent.key === "projects") role = "projects";
+        else if (parent.role === "projects" && parent.key === projectRoot) role = "local";
+      }
+      stack.push({ object: c === "{", keyNext: c === "{", role, keys: new Set() });
+    } else if (c === "}" || c === "]") stack.pop();
+    else if (c === "," && parent?.object) parent.keyNext = true;
+    i++;
+  }
+  return [...duplicates];
+}
+
+function statusJsonSource(filePath, label, projectRoot) {
   try {
     const bytes = fs.readFileSync(filePath);
-    const parsed = JSON.parse(bytes.toString("utf8"));
+    const text = bytes.toString("utf8");
+    const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("top-level value is not an object");
+    const duplicates = statusDuplicateKeys(text, projectRoot);
+    if (duplicates.length) return { label, filePath, error: `source has ambiguous definitions of duplicate keys ${duplicates.map((key) => JSON.stringify(key)).join(", ")}; client selection is UNKNOWN` };
     return { label, filePath, parsed };
   } catch (error) {
     const reason = error.code === "ENOENT" ? "source is missing" : `source cannot be read or is malformed (${error.message})`;
@@ -74,11 +124,11 @@ function statusJsonSource(filePath, label) {
 function statusScopeSources(root, env) {
   const configDir = env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir();
   const configPath = path.join(configDir, ".claude.json");
-  const user = statusJsonSource(configPath, "user");
   const projectRoot = (() => {
     try { return fs.realpathSync(require("node:child_process").execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
     catch { return fs.realpathSync(root); }
   })();
+  const user = statusJsonSource(configPath, "user", projectRoot);
   const local = { label: "local", filePath: configPath };
   if (!user.error) local.parsed = user.parsed?.projects?.[projectRoot] || {};
   else local.error = user.error;

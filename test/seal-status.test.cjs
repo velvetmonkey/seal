@@ -106,6 +106,83 @@ test("status always labels observed scope context and incomplete boundaries", ()
   assert.match(result.out, /^Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN\.$/m);
 });
 
+test("status exposes duplicate MCP definitions without choosing a winner", (t) => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-duplicates-"));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  const projectRoot = fs.realpathSync(project);
+  const projectFile = path.join(project, ".mcp.json");
+  const userFile = path.join(root, ".claude.json");
+  const cleanProject = '{"mcpServers":{"same":{"command":"first"}}}';
+  const cleanUser = JSON.stringify({ mcpServers: {}, projects: { [projectRoot]: { mcpServers: {} } } });
+  const observe = (label) => {
+    const result = run(["status"], root, "", project, { CLAUDE_CONFIG_DIR: root });
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /^UNKNOWN — Client route completeness has not been established:/m);
+    assert.match(result.out, /^Scopes inspected: user, local, project /m);
+    t.diagnostic(`${label}: exit ${result.code}\n${result.out}`);
+    return result.out;
+  };
+  const reset = () => { fs.writeFileSync(userFile, cleanUser); fs.writeFileSync(projectFile, cleanProject); };
+  const ambiguous = (label, file, text, scope, key) => {
+    reset();
+    fs.writeFileSync(file, text);
+    const out = observe(label);
+    assert.ok(out.includes(`UNKNOWN — ${scope} MCP configuration source has ambiguous definitions of duplicate keys ${JSON.stringify(key)}; client selection is UNKNOWN: ${file}`), out);
+    assert.doesNotMatch(out, new RegExp(`Inspected ${scope} MCP entry`));
+    return out;
+  };
+  ambiguous("pair", projectFile, '{"mcpServers":{"same":{"command":"first"},"same":{"command":"second"}}}', "project", "same");
+  ambiguous("triple", projectFile, '{"mcpServers":{"same":1,"same":2,"same":3}}', "project", "same");
+  ambiguous("identical", projectFile, '{"mcpServers":{"same":{"command":"first"},"same":{"command":"first"}}}', "project", "same");
+  ambiguous("user", userFile, '{"mcpServers":{"same":1,"same":2}}', "user", "same");
+  ambiguous("local", userFile, `{"projects":{${JSON.stringify(projectRoot)}:{"mcpServers":{"same":1,"same":2}}}}`, "local", "same");
+  ambiguous("escaped key", projectFile, '{"mcpServers":{"same":1,"s\\u0061me":2}}', "project", "same");
+  ambiguous("duplicate container", projectFile, '{"mcpServers":{},"mcpServers":{"same":2}}', "project", "mcpServers");
+  ambiguous("duplicate definition field", projectFile, '{"mcpServers":{"same":{"command":"first","command":"second"}}}', "project", "command");
+  ambiguous("duplicate project selector", userFile, `{"projects":{${JSON.stringify(projectRoot)}:{},${JSON.stringify(projectRoot)}:{"mcpServers":{"same":2}}}}`, "local", projectRoot);
+  ambiguous("duplicate projects container", userFile, '{"projects":{},"projects":{}}', "local", "projects");
+  reset();
+  const clean = observe("clean after repair");
+  assert.doesNotMatch(clean, /ambiguous/);
+  assert.match(clean, /UNBROKERED — Inspected project MCP entry "same"/);
+  for (const value of ["null", "[]", "42", '"text"', "true"]) {
+    fs.writeFileSync(projectFile, value);
+    assert.match(observe(`non-object ${value}`), /top-level value is not an object/);
+  }
+  reset();
+  fs.writeFileSync(projectFile, '{"metadata":{"same":1,"same":2,"mcpServers":{"x":1,"x":2}},"mcpServers":{"same":{"command":"first"}}}');
+  assert.equal(observe("unrelated duplicates").replace(/^Observation time:.*$/m, ""), clean.replace(/^Observation time:.*$/m, ""));
+  fs.writeFileSync(userFile, '{"projects":{"other":{"mcpServers":{"x":1,"x":2}}},"mcpServers":{}}');
+  assert.doesNotMatch(observe("other project duplicates"), /ambiguous/);
+  reset();
+  const large = '{"metadata":"' + "x".repeat(8 * 1024 * 1024) + '","deep":' + "[".repeat(20000) + "0" + "]".repeat(20000) + ',"mcpServers":{"same":1,"same":2}}';
+  const start = performance.now();
+  ambiguous("large and deep", projectFile, large, "project", "same");
+  t.diagnostic(`large bytes ${Buffer.byteLength(large)}, elapsed ms ${performance.now() - start}`);
+  reset();
+  fs.unlinkSync(projectFile);
+  assert.match(observe("missing"), /project MCP configuration source is missing/);
+  fs.writeFileSync(projectFile, "{");
+  assert.match(observe("malformed"), /project MCP configuration source cannot be read or is malformed/);
+  fs.writeFileSync(projectFile, cleanProject);
+  fs.chmodSync(projectFile, 0);
+  try { assert.match(observe("unreadable"), /EACCES/); }
+  finally { fs.chmodSync(projectFile, 0o600); }
+  const { statePathFor } = require("../spine/protection.cjs");
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(root, ".local", "share") });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, { state: "PENDING RESTART", guardTool: "write", receiptsDir: path.dirname(statePath) });
+  const owned = fs.readFileSync(userFile, "utf8");
+  fs.writeFileSync(userFile, owned.replace('"mcpServers": {', '"mcpServers": {}, "mcpServers": {'));
+  assert.match(observe("owned ambiguous"), /source has ambiguous definitions/);
+  fs.writeFileSync(userFile, owned);
+  const repaired = observe("owned repaired");
+  assert.doesNotMatch(repaired, /ambiguous/);
+  assert.match(repaired, /BROKERED — Local MCP entry "db" matches Seal's installed wrapper; this wrapper gates write\./);
+});
+
 test("status reports ACTIVE and STALE from observable lease facts", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-lease-states-"));
   const project = path.join(root, "project");
