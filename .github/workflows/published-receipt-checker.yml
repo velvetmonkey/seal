@@ -68,6 +68,29 @@ jobs:
           read -r digest bytes artifact < "$dist/SHA256SUMS"
           "$dist/$artifact" --sha256 "$digest" --bytes "$bytes" --prefix "$prefix"
           test -x "$prefix/bin/seal"
+      - name: Place the published checker in the documented installed store
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/published-receipt-prefix"
+          store="$prefix/lib/seal/store/$(node -p "require('$prefix/lib/seal/install.json').treeSha256")"
+          cp -a "$store" "$RUNNER_TEMP/published-checker-store"
+          checker="$RUNNER_TEMP/published-checker-store/checker/seal-receipt-v2.mjs"
+          test -f "$checker"
+          chmod u+w "$checker"
+          cp "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$checker"
+          node --input-type=module - "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$checker" <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const digest = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+          const downloaded = digest(process.argv[2]);
+          const executing = digest(process.argv[3]);
+          if (executing !== downloaded) {
+            console.error(`::error::executing checker digest mismatch: downloaded ${downloaded}, executing ${executing}`);
+            process.exit(1);
+          }
+          console.log(`executing checker verified: downloaded ${downloaded}, executing ${executing}`);
+          JS
       - name: Check a real signed receipt and the demo tamper case
         shell: bash
         env:
@@ -82,7 +105,7 @@ jobs:
           pubkey="$demo_dir/receipt-signer.pub"
           test -n "$receipt"
           test -f "$pubkey"
-          checker="$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs"
+          checker="$RUNNER_TEMP/published-checker-store/checker/seal-receipt-v2.mjs"
           evidence_checker=".github/workflows/receipt-check-evidence.mjs"
           challenge="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
           accept_result="$RUNNER_TEMP/published-accept-$challenge.json"
@@ -116,3 +139,20 @@ jobs:
           test "$(cat "$RUNNER_TEMP/published-tamper.exit")" -eq 1
           test "$(cat "$RUNNER_TEMP/published-accept-diagnostic.exit")" -eq 0
           test "$(cat "$RUNNER_TEMP/published-tamper-diagnostic.exit")" -eq 1
+      - name: Assert the published sibling refuses without its runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          demo_dir="$RUNNER_TEMP/published-receipt-demo"
+          receipt="$(find "$demo_dir/receipts" -maxdepth 1 -type f -name '*-BLOCK.json' -print -quit)"
+          test -n "$receipt"
+          test ! -e "$RUNNER_TEMP/runtime"
+          set +e
+          node "$RUNNER_TEMP/published-checker/seal-receipt-v2.mjs" "$receipt" \
+            --pubkey "$(cat "$demo_dir/receipt-signer.pub")" > "$RUNNER_TEMP/published-standalone.log" 2>&1
+          printf '%s\n' "$?" > "$RUNNER_TEMP/published-standalone.exit"
+          set -e
+          cat "$RUNNER_TEMP/published-standalone.log"
+          test "$(cat "$RUNNER_TEMP/published-standalone.exit")" -eq 1
+          grep -q '^REFUSE ERR_MODULE_NOT_FOUND: Cannot find module .*runtime/kernel/decision-runner.cjs' \
+            "$RUNNER_TEMP/published-standalone.log"
