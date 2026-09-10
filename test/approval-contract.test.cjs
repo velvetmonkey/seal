@@ -172,6 +172,26 @@ test("decline is terminal: a later accept on the same state is refused distinctl
   assert.equal(child.count(), "0");
 });
 
+test("readable approve false is a truthful terminal decline", async (t) => {
+  const child = await startChild(t);
+  const storePath = path.join(testTmpdir("seal-negative-approval-"), "approvals.journal");
+  createJournal(storePath);
+  const contract = createApprovalContract({ store: openJournal(storePath) });
+  const state = freshPending(contract);
+  const decision = await attempt(contract, child, {
+    tool: TOOL, args: ARGS, requestState: state,
+    inputResponses: { approval: { action: "accept", content: { approve: false } } },
+  });
+  assert.equal(decision.detail, "the answer was accept with approve false; denial is terminal for this request");
+  assert.equal(decision.refusal, REFUSALS.DECLINED);
+  const events = fs.readFileSync(storePath, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(events.at(-1).type, "status");
+  assert.equal(events.at(-1).status, "declined");
+  const replay = await attempt(contract, child, { tool: TOOL, args: ARGS, requestState: state, inputResponses: ACCEPT });
+  assert.equal(replay.refusal, REFUSALS.TERMINALLY_DECLINED);
+  assert.equal(child.count(), "0");
+});
+
 test("malformed state and malformed answer refuse with their own names", async (t) => {
   const child = await startChild(t);
   const contract = createApprovalContract();

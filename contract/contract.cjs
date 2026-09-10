@@ -281,8 +281,15 @@ function createApprovalContract({
       setStatus(record, "cancelled");
       return refuse(REFUSALS.CANCELLED, "the answer was cancel");
     }
-    if (answer.action !== "accept" || answer.content?.approve !== true) {
-      return refuse(REFUSALS.RESPONSE_MALFORMED, "the answer is neither accept, decline, nor cancel with a readable approve value");
+    if (answer.action !== "accept") {
+      return refuse(REFUSALS.RESPONSE_MALFORMED, "the answer action is not accept, decline, or cancel");
+    }
+    if (answer.content?.approve === false) {
+      setStatus(record, "declined");
+      return refuse(REFUSALS.DECLINED, "the answer was accept with approve false; denial is terminal for this request");
+    }
+    if (answer.content?.approve !== true) {
+      return refuse(REFUSALS.RESPONSE_MALFORMED, "the accept answer has no boolean approve value");
     }
 
     const nodeAuthorized = contextMatches && toolMatches && argumentsMatch;
