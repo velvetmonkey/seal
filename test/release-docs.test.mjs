@@ -207,14 +207,72 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
 });
 
 // CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
-test("generated install prose is bound to published installer observations", () => {
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+test("generated install prose is bound to published installer observations", async (t) => {
+  const directory = testTmpdir(path.join(os.tmpdir(), 'seal-prose-fetch-'));
+  const names = ['artifact', 'checker', 'sums'].map(kind =>
+    fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8').match(new RegExp(kind + '_name="([^"]+)"'))[1]);
+  const preload = path.join(directory, 'fetch.mjs');
+  // Record only this run's live responses; the checker still authenticates them.
+  // Negative transport cases replay those exact bytes without extra downloads.
+  fs.writeFileSync(preload, String.raw`import fs from 'node:fs';
+import path from 'node:path';
+const directory = process.env.PROSE_FETCH_DIRECTORY;
+const mode = process.env.PROSE_FETCH_MODE;
+const nativeFetch = globalThis.fetch;
+const counts = {};
+globalThis.fetch = async (url, options) => {
+  const name = new URL(url).pathname.split('/').at(-1);
+  const attempt = counts[name] = (counts[name] || 0) + 1;
+  fs.writeFileSync(path.join(directory, 'counts.json'), JSON.stringify(counts));
+  if (mode === 'record') {
+    const response = await nativeFetch(url, options);
+    if (response.ok) fs.writeFileSync(path.join(directory, name), Buffer.from(await response.clone().arrayBuffer()));
+    return response;
+  }
+  if (name === process.env.PROSE_FETCH_TARGET) {
+    if (mode === 'all-transient' || (['transient', 'transient-wrong'].includes(mode) && attempt === 1)) {
+      throw new TypeError('fetch failed', { cause: Object.assign(new Error('socket reset by peer'), { code: 'UND_ERR_SOCKET' }) });
+    }
+    if (['404', '401', '501'].includes(mode)) return new Response(null, { status: Number(mode) });
+    if (mode === 'unknown') throw new TypeError('fixture programming error');
+    if (mode === 'body' && attempt === 1) return new Response(new ReadableStream({
+      start(controller) { controller.error(Object.assign(new Error('body reset'), { code: 'ECONNRESET' })); },
+    }));
+    if (mode === '503' && attempt === 1) return new Response(null, { status: 503 });
+  }
+  const bytes = fs.readFileSync(path.join(directory, name));
+  if (['wrong-byte', 'transient-wrong'].includes(mode) && name === process.env.PROSE_FETCH_TARGET) bytes[0] ^= 1;
+  return new Response(bytes);
+};
+`);
+  const run = mode => spawnSync(process.execPath, ['--import', preload, path.join(ROOT, 'scripts/check-install-prose.mjs')], {
     cwd: ROOT, encoding: 'utf8', timeout: 180000,
-    // This child is a CLI probe, not a Node test-runner child.
-    env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined, PROSE_FETCH_DIRECTORY: directory, PROSE_FETCH_MODE: mode, PROSE_FETCH_TARGET: names[0] },
   });
+  const result = run('record');
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /PASS install prose: 19 reviewed behavioural claims/);
+  for (const [mode, status, attempts, diagnostic] of [
+    ['transient', 0, 2, /PASS install prose:/],
+    ['all-transient', 1, 3, /UND_ERR_SOCKET/],
+    ['wrong-byte', 1, 1, /published .* digest/],
+    ['404', 1, 1, /HTTP 404/],
+    ['503', 0, 2, /PASS install prose:/],
+    ['body', 0, 2, /PASS install prose:/],
+    ['transient-wrong', 1, 2, /published .* digest/],
+    ['401', 1, 1, /HTTP 401/],
+    ['501', 1, 1, /HTTP 501/],
+    ['unknown', 1, 1, /fixture programming error/],
+  ]) {
+    await t.test(`install prose fetch ${mode}`, () => {
+      const checked = run(mode);
+      assert.equal(checked.status, status, checked.stdout + checked.stderr);
+      assert.match(checked.stdout + checked.stderr, diagnostic);
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, 'counts.json'), 'utf8')), {
+        [names[0]]: attempts, [names[1]]: 1, [names[2]]: 1,
+      });
+    });
+  }
 });
 
 
