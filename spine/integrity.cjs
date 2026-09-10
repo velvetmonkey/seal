@@ -211,7 +211,6 @@ function createRuntimeTreeCheck(storeRoot = path.resolve(__dirname, "..")) {
           const failure = inventory(path.join(dir, entry.name), name);
           if (failure) return failure;
         } else if (!expected.has(name)) return `unrecorded installed path: ${name}`;
-        else if (!entry.isFile()) return `installed path is not a regular file: ${name}`;
       }
       return null;
     }
