@@ -41,9 +41,6 @@ function projectHas(name) {
   try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
 }
 
-function withoutObservationTime(output) {
-  return output.replace(/^Observation time: .*$/m, "Observation time: <measured>");
-}
 if (args[0] !== "mcp") process.exit(2);
 if (args[1] === "get") {
   const name = args[2];
@@ -90,6 +87,10 @@ process.exit(2);
 `);
   fs.chmodSync(script, 0o755);
   return bin;
+}
+
+function withoutObservationTime(output) {
+  return output.replace(/^Observation time: .*$/m, "Observation time: <measured>");
 }
 
 function fakeLocalOverridePath(root) {
