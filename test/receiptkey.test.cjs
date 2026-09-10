@@ -13,6 +13,7 @@ const SCRATCH = process.env.RUNNER_TEMP
   ? path.join(process.env.RUNNER_TEMP, "receiptkey")
   : "/home/monkey/scratch/receiptkey";
 const { createJournal } = require("../spine/store.cjs");
+const { createProxy } = require("../spine/proxy.cjs");
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
 
 function fixture() {
@@ -143,6 +144,47 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   assert.match(checked.stdout, /Signature and bindings   VALID/);
   assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(checked.stdout, /Event occurrence         NOT ESTABLISHED/);
+});
+
+test("proxy threads distinct route identities into both approval journals", async (t) => {
+  const root = testTmpdir(path.join(SCRATCH, "route-identity-"));
+  const observed = [];
+  const proxies = [];
+  for (const route of [
+    { projectId: "project-alpha", serverName: "server-one" },
+    { projectId: "project-beta", serverName: "server-two" },
+  ]) {
+    const dir = path.join(root, route.serverName);
+    fs.mkdirSync(dir, { recursive: true });
+    const storePath = path.join(dir, "approvals.journal");
+    createJournal(storePath);
+    const proxy = createProxy({
+      signer: loadReceiptSigner({ XDG_DATA_HOME: path.join(dir, "keys") }),
+      guardTool: "demo.mutate",
+      storePath,
+      receiptsDir: path.join(dir, "receipts"),
+      childArgv: [process.execPath, path.join(ROOT, "contract", "fixtures", "counting-child.cjs"), path.join(dir, "data")],
+      projectId: route.projectId,
+      serverName: route.serverName,
+      onClientLine: () => {},
+    });
+    proxies.push(proxy);
+    proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } } }));
+    proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: { line: route.serverName } } }));
+    let issued;
+    for (let attempt = 0; attempt < 100 && !issued; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const lines = fs.readFileSync(storePath, "utf8").trim().split("\n").filter(Boolean);
+      issued = lines.map(JSON.parse).find((event) => event.type === "issued");
+    }
+    assert.ok(issued, `no issued event for ${route.serverName}`);
+    observed.push({ project_id: issued.project_id, server_id: issued.server_id });
+  }
+  t.after(() => { for (const proxy of proxies) proxy.stop(); });
+  assert.deepEqual(observed, [
+    { project_id: "project-alpha", server_id: "server-one" },
+    { project_id: "project-beta", server_id: "server-two" },
+  ]);
 });
 
 test("receipt key absence generates, while ambiguous private-key states refuse by name", () => {

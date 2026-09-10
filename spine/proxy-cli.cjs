@@ -67,6 +67,8 @@ async function run(argv) {
       if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
         guardSelections: protectedToolSelections(state),
+        projectId: state.projectId,
+        serverName: state.serverName,
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
@@ -83,6 +85,10 @@ async function run(argv) {
           return ok ? { ok: true } : { ok: false, detail: "this proxy no longer owns the active lease generation" };
         },
       };
+      if (typeof state.projectId !== "string" || state.projectId.length === 0 ||
+          typeof state.serverName !== "string" || state.serverName.length === 0) {
+        throw new ProtectionError("identity_absent", "protected state must name both projectId and serverName before proxy startup");
+      }
     } catch (error) {
       if (error instanceof ProtectionError && error.code === "proxy_lease_active") {
         process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
