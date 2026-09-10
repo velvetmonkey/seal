@@ -136,8 +136,15 @@ test("every emitted release identity derives from VERSION", () => {
   }
 
   const out = testTmpdir(path.join(os.tmpdir(), "seal-version-identity-"));
+  const packagePath = path.join(ROOT, "package.json");
+  const packageBytes = fs.readFileSync(packagePath);
+  const packageMtime = fs.statSync(packagePath, { bigint: true }).mtimeNs;
   const build = run(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", out]);
   assert.equal(build.code, 0, build.stderr);
+  assert.deepEqual(fs.readFileSync(packagePath), packageBytes, "build must not change shared package.json bytes");
+  // Even a byte-identical rewrite can expose a truncated file to concurrent copiers.
+  assert.equal(fs.statSync(packagePath, { bigint: true }).mtimeNs, packageMtime,
+    "build must not rewrite shared package.json, even with identical bytes");
   const artifact = path.join(out, builtName);
   assert.ok(fs.existsSync(artifact), build.stdout);
   const [digest, bytes, named] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
