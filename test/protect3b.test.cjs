@@ -896,6 +896,8 @@ async function multiServerProxy(ctx, name) {
       send({ id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: { line: "must not run" } } });
       const request = await next();
       assert.equal(request.method, "elicitation/create");
+      assert.equal(request.params.message.split("\n")[0], `Server (configured route, not verified): "${name}"`);
+      assert.equal(request.params.message.split("\n")[1], "Tool: demo.mutate; Approval required");
       send({ id: request.id, result: { action: "decline" } });
       const result = await next();
       assert.equal(result.id, 1); assert.equal(result.result.isError, true);

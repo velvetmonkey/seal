@@ -254,6 +254,21 @@ test("every fixed approval message line fits the measured default width", () => 
   }
 });
 
+test("configured server labels preserve keys and escape misleading display characters", () => {
+  const { renderServerLabel } = require("../contract/renderer.cjs");
+  const prefix = "Server (configured route, not verified): ";
+  for (const value of [undefined, null, "", "   ", 42]) {
+    assert.equal(renderServerLabel(value), `${prefix}unknown`);
+  }
+  for (const value of ["alpha", "beta", "unknown", "x".repeat(10000), 'a"\\\n\u001b\u202e\u200b\u00a0😀']) {
+    const line = renderServerLabel(value);
+    assert.match(line, /^[\x20-\x7e]+$/);
+    assert.equal(JSON.parse(line.slice(prefix.length)), value);
+  }
+  assert.notEqual(renderServerLabel("alpha"), renderServerLabel("beta"));
+  assert.notEqual(renderServerLabel("unknown"), renderServerLabel(undefined));
+});
+
 // The current Scope line has one column of headroom in the 74-column envelope.
 test("the rendered Scope line fits the measured 74-column envelope", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
