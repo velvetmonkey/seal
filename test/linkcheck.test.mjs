@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -26,19 +26,25 @@ function familyEnvironment() {
 
   const family = path.join(ROOT, ".family");
   assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding");
-  mkdirSync(family);
-  for (const [repo, branch] of FAMILY) {
-    const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
-      `https://github.com/velvetmonkey/${repo}`, path.join(family, repo)], {
-      cwd: ROOT, encoding: "utf8",
-    });
-    assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
+  const privateFamily = testTmpdir("seal-linkcheck-family-");
+  const cleanup = () => rmSync(privateFamily, { recursive: true, force: true });
+  try {
+    for (const [repo, branch] of FAMILY) {
+      const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
+        `https://github.com/velvetmonkey/${repo}`, path.join(privateFamily, repo)], {
+        cwd: ROOT, encoding: "utf8",
+      });
+      assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
+    }
+    const env = { ...process.env };
+    for (const [repo] of FAMILY) {
+      env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(privateFamily, repo);
+    }
+    return { env, cleanup };
+  } catch (error) {
+    cleanup();
+    throw error;
   }
-  const env = { ...process.env };
-  for (const [repo] of FAMILY) {
-    env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(family, repo);
-  }
-  return { env, cleanup: () => rmSync(family, { recursive: true, force: true }) };
 }
 
 function run(cwd = ROOT, env = process.env) {
