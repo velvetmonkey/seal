@@ -21,6 +21,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
+const { renderServerLabel } = require("../contract/renderer.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
@@ -53,6 +54,7 @@ function createProxy(options) {
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
+    serverName,       // configured route label; presentation only
     beforeForward,    // optional fail-closed live drift check
     leaseFence,       // optional durable lease-generation fence
     onClientLine,     // (line) => void — what the MCP client receives
@@ -363,7 +365,7 @@ function createProxy(options) {
     const requestState = decision.result.requestState;
     decision.elicitationParams = {
       ...decision.elicitationParams,
-      message: `${decision.elicitationParams.message}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
+      message: `${decision.elicitationParams.message}\n${renderServerLabel(serverName)}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
     };
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });

@@ -72,4 +72,14 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   return { ok: true, message: lines.join("\n"), lines, argLines, scopeLine, outsideLine: OUTSIDE_LINE };
 }
 
-module.exports = { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };
+// Route presentation is separate from effect rendering and its refusal budget.
+// Quote and escape every non-ASCII code unit, including invisible/bidi characters;
+// preserve the complete configured key rather than hiding a distinguishing suffix.
+function renderServerLabel(serverName) {
+  const label = typeof serverName === "string" && serverName.trim().length > 0
+    ? JSON.stringify(serverName).replace(/[\u007f-\uffff]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`)
+    : "unknown";
+  return `Server (configured route, identity not authenticated): ${label}`;
+}
+
+module.exports = { renderApprovalMessage, renderServerLabel, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth };
