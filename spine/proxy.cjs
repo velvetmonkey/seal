@@ -33,6 +33,15 @@ const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 const ELICITATION_ID_PATTERN = /^seal-elicitation\/v1\.[0-9a-f]{64}$/;
+const NO_KERNEL_RECEIPT_REFUSALS = new Set([
+  "runtime_tree_unknown",
+  "runtime_tree_fail",
+  "lease_generation_mismatch",
+  "kernel_execution_refused",
+  "kernel_integrity_refused",
+  "kernel_manifest_refused",
+  "kernel_output_refused",
+]);
 const TERMINAL_REFUSALS = new Set([
   "already_consumed",
   "terminally_declined",
@@ -148,6 +157,12 @@ function createProxy(options) {
   childOut.on("line", (line) => onClientLine(line));
 
   function emitReceipt(action, frame, extra, kernelReceipt) {
+    if (!kernelReceipt && action === "BLOCK" && NO_KERNEL_RECEIPT_REFUSALS.has(extra?.refusal)) {
+      // Shared by ordinary and duplicate responses, and every other refusal
+      // caller: never re-enter the kernel to sign a result it did not produce.
+      decisionSink({ decision: action, refusal: extra.refusal });
+      return null;
+    }
     let receipt = kernelReceipt || contract.receiptFor({
       tool: frame.params?.name,
       args: frame.params?.arguments ?? {},
@@ -256,23 +271,7 @@ function createProxy(options) {
       const detail = detailOverride || decision.detail;
       const receiptExtra = { refusal, detail };
       receiptExtra.approvalRequest = approvalRequest;
-      if (decision.receipt) {
-        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      } else if (
-        refusal === "runtime_tree_unknown"
-        || refusal === "runtime_tree_fail"
-        || refusal === "lease_generation_mismatch"
-        || refusal === "kernel_execution_refused"
-        || refusal === "kernel_integrity_refused"
-        || refusal === "kernel_manifest_refused"
-        || refusal === "kernel_output_refused"
-      ) {
-        // retryUnlocked already refused with no receipt. Calling receiptFor
-        // again would re-enter the kernel that just produced nothing.
-        decisionSink({ decision: "BLOCK", refusal });
-      } else {
-        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      }
+      emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
       respond(frame.id, refusalResult(refusal, detail, decision.timing));
       if (decision.timing) {
         const error = new Error(detail);
