@@ -117,6 +117,35 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
 
 });
 
+test("coverage only calls selected tools BROKERED behind a live Seal-owned wrapper", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-coverage-live-wrapper-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath),
+    lease: { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 8 },
+  });
+
+  let result = run(["coverage"], root, "", project);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Coverage enumeration is not proven complete\.$/m);
+  assert.match(result.out, /^BROKERED selected MCP tools on db: write — live Seal-owned wrapper lease; proxy gates selected tools\/call$/m);
+  assert.match(result.out, /^UNKNOWN network$/m);
+
+  // Plant the enforcement failure: the saved state remains, but its installed
+  // wrapper no longer does.  Coverage must withdraw BROKERED rather than
+  // report the stale record as protection.
+  fs.writeFileSync(path.join(root, ".claude.json"), "{}\n");
+  result = run(["coverage"], root, "", project);
+  assert.equal(result.code, 1, result.out);
+  assert.doesNotMatch(result.out, /^BROKERED /m);
+  assert.match(result.out, /^UNKNOWN selected MCP tools at .*wrapper enforcement could not be established:/m);
+});
+
 test("status refuses an unsupported host before a null-witness lease liveness comparison", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-non-linux-"));
   const project = path.join(root, "project");
