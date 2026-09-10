@@ -51,11 +51,86 @@ function status() {
     : runtime.state === "integrity check failed"
       ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
       : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+  printReachabilityObservation(protection, process.cwd(), process.env);
 
   let paths;
   try { paths = protection.statePathsFor(process.cwd(), process.env); }
   catch (error) { statusRecord(undefined, error); return; }
   for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
+}
+
+function statusJsonSource(filePath, label) {
+  try {
+    const bytes = fs.readFileSync(filePath);
+    const parsed = JSON.parse(bytes.toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("top-level value is not an object");
+    return { label, filePath, parsed };
+  } catch (error) {
+    const reason = error.code === "ENOENT" ? "source is missing" : `source cannot be read or is malformed (${error.message})`;
+    return { label, filePath, error: reason };
+  }
+}
+
+function statusScopeSources(root, env) {
+  const configDir = env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir();
+  const configPath = path.join(configDir, ".claude.json");
+  const user = statusJsonSource(configPath, "user");
+  const projectRoot = (() => {
+    try { return fs.realpathSync(require("node:child_process").execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
+    catch { return fs.realpathSync(root); }
+  })();
+  const local = { label: "local", filePath: configPath };
+  if (!user.error) local.parsed = user.parsed?.projects?.[projectRoot] || {};
+  else local.error = user.error;
+  const project = statusJsonSource(path.join(projectRoot, ".mcp.json"), "project");
+  return { configPath, projectRoot, sources: [user, local, project] };
+}
+
+function printReachabilityObservation(protection, cwd, env) {
+  const root = fs.realpathSync(cwd);
+  const { configPath, projectRoot, sources } = statusScopeSources(root, env);
+  console.log(`Observation project: ${projectRoot}`);
+  console.log("Observation client: Claude Code static configuration; effective client route UNKNOWN");
+  console.log(`Observation config: ${configPath}`);
+  console.log(`Observation time: ${new Date().toISOString()}`);
+  console.log("MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected");
+  console.log("Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)");
+
+  let states = [];
+  try { states = protection.statePathsFor(cwd, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
+  catch (error) { console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
+  const ownedNames = new Set(states.map((state) => state.serverName));
+  const definitions = [];
+  let unknown = false;
+  for (const source of sources) {
+    if (source.error) { console.log(`UNKNOWN — ${source.label} MCP configuration ${source.error}: ${source.filePath}`); unknown = true; continue; }
+    const servers = source.parsed?.mcpServers;
+    if (servers === undefined) { console.log(`UNKNOWN — ${source.label} MCP configuration has no inspectable mcpServers object`); unknown = true; continue; }
+    if (!servers || typeof servers !== "object" || Array.isArray(servers)) { console.log(`UNKNOWN — ${source.label} MCP configuration mcpServers is malformed`); unknown = true; continue; }
+    for (const [name, definition] of Object.entries(servers)) definitions.push({ source: source.label, name, definition });
+  }
+  const byName = new Map();
+  for (const entry of definitions) (byName.get(entry.name) || (byName.set(entry.name, []), byName.get(entry.name))).push(entry);
+  console.log("Observed MCP definitions (scoped configuration facts; not a complete active inventory):");
+  for (const [name, entries] of [...byName.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const disagree = entries.some((entry) => JSON.stringify(entry.definition) !== JSON.stringify(entries[0].definition));
+    const scopes = entries.map((entry) => entry.source).join(", ");
+    if (disagree) console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has conflicting definitions across ${scopes}; scope shadowing and approval eligibility are unresolved`);
+    if (ownedNames.has(name) && entries.some((entry) => entry.source === "local")) {
+      const state = states.find((candidate) => candidate.serverName === name);
+      try {
+        const local = entries.find((entry) => entry.source === "local");
+        if (JSON.stringify(local.definition) !== JSON.stringify(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
+        console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
+      } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
+    } else {
+      console.log(`  UNBROKERED — Inspected ${entries[0].source} MCP entry ${JSON.stringify(name)} is configured without Seal; whether this client session can use it is UNKNOWN.`);
+    }
+  }
+  if (definitions.length === 0 && !unknown) console.log("  UNKNOWN — no direct MCP definitions were observed");
+  console.log("UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.");
+  console.log("Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.");
 }
 
 function statusRecord(recordPath, readError) {

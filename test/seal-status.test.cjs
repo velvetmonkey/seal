@@ -45,6 +45,10 @@ function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
   } catch (error) { return { code: error.status, out: `${error.stdout || ""}${error.stderr || ""}` }; }
 }
 
+function withoutReachabilityObservation(output) {
+  return output.replace(/^Observation project:[\s\S]*?^Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN\.\n/m, "");
+}
+
 function protectedStatusPrefix(statePath) {
   return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
     `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
@@ -90,6 +94,16 @@ test("status finds the shipped kernel runtime with an empty cache", () => {
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
   assert.ok(!fs.existsSync(path.join(root, ".cache", "seal", "runtime")), "status must not create a cache as a side effect");
+});
+
+test("status always labels observed scope context and incomplete boundaries", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-observation-"));
+  const result = run(["status"], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Observation client: Claude Code static configuration; effective client route UNKNOWN$/m);
+  assert.match(result.out, /^Scopes inspected: user, local, project .*not a complete active inventory\)$/m);
+  assert.match(result.out, /^UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access\.$/m);
+  assert.match(result.out, /^Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN\.$/m);
 });
 
 test("status reports ACTIVE and STALE from observable lease facts", () => {
@@ -162,7 +176,7 @@ test("status reads the protected project's recorded receipt directory", () => {
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
     "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n");
 });
@@ -184,7 +198,7 @@ test("status reads a recorded receipt directory when the protection state has no
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 1, result.out);
-  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir, statePath));
+  assert.equal(withoutReachabilityObservation(result.out), brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir, statePath));
 });
 
 test("status does not count files from a receipt directory named by refused protection state", () => {
@@ -247,7 +261,7 @@ test("status says an existing empty receipt directory has no recorded decision",
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     "Receipts: no receipt files observed (receipt directory has no receipt-shaped files)\n" +
     "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
     "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
@@ -267,7 +281,7 @@ test("status names a missing receipt directory as no receipt yet", () => {
   });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: no receipt files observed in ${receiptDir} (directory does not exist)\n` +
     "Most recent: no receipt yet (receipt directory is missing)\n");
 });
@@ -289,7 +303,7 @@ test("status names an unreadable receipt directory and its permission action", (
   const result = run(["status"], root, "", project);
   fs.chmodSync(receiptDir, 0o700);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: unavailable in ${receiptDir} (directory cannot be read)\n` +
     "Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions\n");
 });
@@ -311,7 +325,7 @@ test("status names a receipt path that is not a directory as misconfigured", () 
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: unavailable in ${receiptDir} (path is not a directory)\n` +
     "Most recent: receipts cannot be stored because the receipt path is not a directory; check its configuration\n");
 });
@@ -332,7 +346,7 @@ test("status names receipt files when none can be parsed", () => {
   });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     "Receipts: no receipt files observed (1 non-receipt files ignored)\n" +
     "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
     "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
