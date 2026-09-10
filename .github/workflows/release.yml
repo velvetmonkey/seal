@@ -6,11 +6,7 @@ on:
     tags: ["v*.*.*"]
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: read
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   build-artifacts:
@@ -95,6 +91,9 @@ jobs:
   release:
     needs: build-artifacts
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -271,6 +270,8 @@ jobs:
     name: Build the pinned Lean kernel once
     needs: release
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Download the draft release manifest
@@ -301,6 +302,8 @@ jobs:
           - platform: darwin-x64
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -329,6 +332,10 @@ jobs:
     needs: verify-draft
     environment: release-publish
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Publish the verified draft
         env:
@@ -358,6 +365,9 @@ jobs:
     # can report or delay the follow-up commit, but cannot alter the release.
     needs: publish
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
