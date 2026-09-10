@@ -49,6 +49,6 @@
 {"id":"emitted-receipt-completeness","kind":"emitted","text":"Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)","sha256":"ea419df23f13691ab174830822e6c7609aaf80c09e9f7d405c18675354f3cb1b"}
 {"id":"emitted-receipt-gaps-zero","kind":"emitted","text":"Receipt gaps found: 0","sha256":"cf4b3729fc5368645dfa9f825b359d759c083735d2e089978d9a50e60541dbe1"}
 {"id":"emitted-receipt-reader-exit","kind":"emitted","text":"Receipt reader exit 1: one or more sequence gaps were found","sha256":"afda88fbddf7cbaa544604c3c0266beee39a97d3b09fe4532abf9765f45e88c2"}
-{"id":"emitted-receipt-gap-example","kind":"emitted","text":"Receipt gap: pid 2994986 missing sequence 2","sha256":"60e7d2cc2d37c8ba945108bc7440bca1b58c637e2862135c5d759dd4383a13c2"}
+{"id":"emitted-receipt-gap-example","kind":"emitted","text":"Receipt gap: pid 2994986 missing sequences 2 through 2","sha256":"4024309fb50c16be996376be3b5148c6967092c62ab6d3485b56153a6f795387"}
 {"id":"emitted-receipt-nonmatching","kind":"emitted","text":"Non-receipt files ignored: 1","sha256":"39aa83c9fb18758e7b18b81f7e31bdeccb400123d667fb676f93507dafe8f7ff"}
 {"id":"emitted-status-gap-route","kind":"emitted","text":"Receipts: receipt files observed; run `seal receipts DIRECTORY` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)","sha256":"b5d3349d8f6f8aca54a03bb81bb8d250fdfe4f2065472960f9aa02ee8a6bb0c9"}
