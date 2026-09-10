@@ -5,6 +5,7 @@
 // Private subcommand. `--init-store` creates the journal deliberately and
 // exits; a missing journal at gate time is a refusal, never an empty store.
 const readline = require("node:readline");
+const { createRuntimeTreeCheck } = require("./integrity.cjs");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
 const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
@@ -74,6 +75,8 @@ async function run(argv) {
         childEnv: state.childEnv,
         childCwd: state.projectRoot,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
+        runtimeTreeCheck: createRuntimeTreeCheck(),
+        onRuntimeObservation: (message) => process.stderr.write(`${message}\n`),
         leaseFence: () => {
           const current = require("./protection.cjs").readState(options.protectState);
           const lease = current?.lease;

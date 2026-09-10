@@ -110,7 +110,7 @@ function assertUntouched(ctx, before, label) {
 
 async function withProxy(ctx, fn) {
   const statePath = statePathFor(ctx.project, ctx.env);
-  const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
+  const proxy = spawn(process.execPath, [installedProxyPath(), "__proxy", "--protect-state", statePath], {
     cwd: ctx.project,
     env: { ...process.env, ...ctx.env },
     stdio: ["pipe", "pipe", "pipe"],
@@ -149,6 +149,23 @@ async function withProxy(ctx, fn) {
     try { proxy.stdin.end(); } catch {}
     await new Promise((resolve) => proxy.once("close", resolve));
   }
+}
+
+// Protected Accept requires an installer-produced anchor, even in tests.
+// Build/install a separate payload; never fabricate a source-checkout record.
+let installedProxy;
+function installedProxyPath() {
+  if (installedProxy) return installedProxy;
+  const out = testTmpdir("seal-proxy-runtime-install-");
+  const built = spawnSync(process.execPath, [path.join(__dirname, "../scripts/build-dist.cjs"), "--out", out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const prefix = path.join(out, "prefix");
+  const installed = spawnSync(path.join(out, name), ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], { encoding: "utf8" });
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib/seal/install.json"), "utf8"));
+  installedProxy = path.join(prefix, record.store, "bin/seal");
+  return installedProxy;
 }
 
 test("1 branch drift: named refusal, no forward, .mcp.json untouched by the refusal", () => {

@@ -54,6 +54,7 @@ function createProxy(options) {
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
     beforeForward,    // optional fail-closed live drift check
+    runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
@@ -82,7 +83,7 @@ function createProxy(options) {
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
-  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, leaseFence });
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, leaseFence, runtimeTreeCheck, onRuntimeObservation });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
   // This identifier exists only to join receipt records from this proxy
@@ -258,7 +259,10 @@ function createProxy(options) {
       if (decision.receipt) {
         emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
       } else if (
-        refusal === "kernel_execution_refused"
+        refusal === "runtime_tree_unknown"
+        || refusal === "runtime_tree_fail"
+        || refusal === "lease_generation_mismatch"
+        || refusal === "kernel_execution_refused"
         || refusal === "kernel_integrity_refused"
         || refusal === "kernel_manifest_refused"
         || refusal === "kernel_output_refused"

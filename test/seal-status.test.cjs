@@ -46,7 +46,7 @@ function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
 }
 
 function protectedStatusPrefix(statePath) {
-  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+  return `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.\n` +
     `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
     "\n" +
     "Gated through this route:\n" +
@@ -67,7 +67,7 @@ function protectedStatusPrefix(statePath) {
 }
 
 function brokenStatusWithReceipt(detail, receiptDir, statePath) {
-  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+  return `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.\n` +
     `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
     "\n" +
     "Gated through this route:\n" +
@@ -88,7 +88,7 @@ test("status finds the shipped kernel runtime with an empty cache", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
+  assert.match(result.out, new RegExp(`^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.$`, "m"));
   assert.ok(!fs.existsSync(path.join(root, ".cache", "seal", "runtime")), "status must not create a cache as a side effect");
 });
 
@@ -105,7 +105,7 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: liveLease });
   let result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Sealed MCP route db: ACTIVE /m);
+  assert.match(result.out, /^Sealed MCP route db: LEASE ACTIVE /m);
   assert.match(result.out, /^  write$/m);
   assert.match(result.out, /^Not controlled:$/m);
   assert.match(result.out, /^Protection lease: pid \d+ generation 3$/m);
@@ -372,8 +372,8 @@ test("status prefers the verified shipped runtime over a corrupt cache", () => {
   fs.writeFileSync(staged, "one corrupt staged byte\n");
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
-  assert.doesNotMatch(result.out, /^Runtime: integrity check failed /m);
+  assert.match(result.out, new RegExp(`^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.$`, "m"));
+  assert.doesNotMatch(result.out, /^Runtime at status check FAIL: integrity check failed /m);
 });
 
 const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
@@ -408,5 +408,5 @@ test("status reports the kernel runtime as present when it is cached", async () 
   fs.rmSync(receipt);
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
+  assert.match(result.out, /^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@/m);
 });

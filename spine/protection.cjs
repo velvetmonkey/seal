@@ -415,7 +415,7 @@ function notControlledEntries(state, projectRoot) {
 }
 
 function protectionBoundary(state, projectRoot, statePath) {
-  const printedState = state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
+  const printedState = state?.state === STATES.ACTIVE ? "LEASE ACTIVE" : state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
   const route = state?.serverName ? `Sealed MCP route ${state.serverName}: ${printedState}` : `Sealed MCP route: ${printedState}`;
   let gated;
   try {
@@ -423,7 +423,8 @@ function protectionBoundary(state, projectRoot, statePath) {
   } catch (error) {
     gated = [`unknown: ${error.message}`];
   }
-  const lines = [statePath ? `${route} (${statePath})` : route, "", "Gated through this route:"];
+  const location = statePath ? `${route} (${statePath})` : route;
+  const lines = [state?.state === STATES.ACTIVE ? `${location}; authorization runtime judgment is evaluated for each approval.` : location, "", "Gated through this route:"];
   for (const name of gated) lines.push(`  ${name}`);
   lines.push("", "Not controlled:");
   for (const name of notControlledEntries(state, projectRoot)) lines.push(`  ${name}`);
