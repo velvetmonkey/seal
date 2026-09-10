@@ -4,7 +4,10 @@
 // the matching release runner is release-produced, not independently reproduced.
 const fs = require("node:fs");
 const path = require("node:path");
-require("./sync-version.cjs");
+// Version synchronization is an explicit source-maintenance operation (and
+// remains package.json's prepack hook).  A build is a reader of the checked-in
+// candidate: requiring sync-version here used to rewrite package.json in the
+// shared tree while test files were copying that tree concurrently.
 const { packPayload, sha256Hex, SUPPORTED_PLATFORMS } = require("../spine/integrity.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 const { productIdentity, artifactName } = require("./product-identity.cjs");
