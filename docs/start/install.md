@@ -134,13 +134,15 @@ $ export PATH="$PWD/dist/local/bin:$PATH"
 
 ## Build and install this checkout on macOS
 
-The macOS CI lane runs this source-build ritual on a real `macos-latest` host.
-It selects the artifact label from Node's running architecture and uses the
+The macOS CI lane selects `macos-15` for `darwin-arm64` and `macos-15-intel` for `darwin-x64`.
+CI passes `--macos-helper` to include the matching native process-start witness helper in the payload.
+For this recipe, set `MACOS_HELPER` to the path of that helper from the matching release runner.
+The recipe selects the artifact label from Node's running architecture and uses the
 SHA-256 utility shipped by macOS when GNU `sha256sum` is absent:
 
 ```bash
 platform="darwin-$(node -p 'process.arch')" \
-&& node scripts/build-dist.cjs --platform "$platform" --out dist \
+&& node scripts/build-dist.cjs --platform "$platform" --macos-helper "$MACOS_HELPER" --out dist \
 && read -r expected_digest expected_bytes expected_name < dist/SHA256SUMS \
 && test "$expected_name" = "$(node scripts/product-identity.cjs --artifact-name | sed 's/-linux-x64$//')-$platform" \
 && test -n "$expected_digest" \
