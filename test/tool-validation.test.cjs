@@ -9,10 +9,12 @@ const readline = require("node:readline");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
+const { evaluateSelection, normalizeToolSelection } = require("../spine/tool-selection.cjs");
+
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
 const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
-const { protectedToolNames, readState, statePathFor } = require("../spine/protection.cjs");
+const { protectedToolNames, protectedToolSelections, readState, statePathFor } = require("../spine/protection.cjs");
 
 function setup(mode = "ok", source) {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-tool-validation-"));
@@ -23,11 +25,20 @@ function setup(mode = "ok", source) {
   const claude = path.join(bin, "claude");
   fs.writeFileSync(claude, `#!/usr/bin/env node
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
-const a=process.argv.slice(2), d=path.join(process.env.HOME,".claude-local"); fs.mkdirSync(d,{recursive:true});
-const f=path.join(d,crypto.createHash("sha256").update(process.cwd()+":"+a[a[1]==="add"?4:2]).digest("hex")+".json");
-if(a[1]==="get") process.exit(fs.existsSync(f)?0:1);
-if(a[1]==="add"){fs.writeFileSync(f,JSON.stringify(a));process.exit(0)}
-if(a[1]==="remove"){try{fs.unlinkSync(f)}catch{}process.exit(0)} process.exit(2);
+const a=process.argv.slice(2), f=path.join(process.env.HOME,".claude.json");
+const name=a[a[1]==="get"?2:4];
+const git=require("node:child_process").spawnSync("git",["rev-parse","--show-toplevel"],{encoding:"utf8"});
+const root=git.status===0?fs.realpathSync(git.stdout.trim()):process.cwd();
+const config=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};
+const servers=((config.projects ||= {})[root] ||= {}).mcpServers ||= {};
+if(a[1]==="get") process.exit(servers[name]?0:1);
+if(a[1]==="add"){
+  const split=a.indexOf("--");
+  servers[name]={type:"stdio",command:a[split+1],args:a.slice(split+2),env:{}};
+}else if(a[1]==="remove"){
+  delete servers[name];
+}else process.exit(2);
+fs.writeFileSync(f,JSON.stringify(config));
 `, { mode: 0o755 });
   const args = [SERVER, mode];
   if (source !== undefined) args.push(source);
@@ -42,7 +53,7 @@ function run(ctx, args) {
 
 function proxySession(ctx) {
   const statePath = statePathFor(ctx.project, ctx.env);
-  const proxy = spawn(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
+  const proxy = spawn(process.execPath, [installedProxyPath(), "__proxy", "--protect-state", statePath], {
     cwd: ctx.project,
     env: ctx.env,
     stdio: ["pipe", "pipe", "pipe"],
@@ -51,6 +62,7 @@ function proxySession(ctx) {
   const queued = [];
   const waiters = [];
   const elicitationIds = [];
+  const elicitationMessages = [];
   lines.on("line", (line) => {
     const frame = JSON.parse(line);
     const waiter = waiters.shift();
@@ -73,6 +85,7 @@ function proxySession(ctx) {
   return {
     proxy,
     elicitationIds,
+    elicitationMessages,
     async request(frame, action = "accept") {
       await ensureInitialized();
       proxy.stdin.write(JSON.stringify(frame) + "\n");
@@ -80,6 +93,7 @@ function proxySession(ctx) {
         const response = await nextFrame();
         if (response.method === "elicitation/create") {
           elicitationIds.push(response.id);
+          elicitationMessages.push(response.params.message);
           const result = action === "accept"
             ? { action, content: { approve: true } }
             : { action };
@@ -94,6 +108,23 @@ function proxySession(ctx) {
       await new Promise((resolve) => proxy.once("close", resolve));
     },
   };
+}
+
+// Protected Accept requires an installer-produced anchor, even in tests.
+// Build/install a separate payload; never fabricate a source-checkout record.
+let installedProxy;
+function installedProxyPath() {
+  if (installedProxy) return installedProxy;
+  const out = testTmpdir("seal-proxy-runtime-install-");
+  const built = spawnSync(process.execPath, [path.join(__dirname, "../scripts/build-dist.cjs"), "--out", out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const prefix = path.join(out, "prefix");
+  const installed = spawnSync(path.join(out, name), ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], { encoding: "utf8" });
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib/seal/install.json"), "utf8"));
+  installedProxy = path.join(prefix, record.store, "bin/seal");
+  return installedProxy;
 }
 
 test("protect refuses a misspelled tool and names every observed tool", () => {
@@ -339,4 +370,117 @@ test("activation becomes visibly BROKEN when the protected tool vanished", () =>
   assert.match(activated.out, /protected_tool_vanished/);
   assert.match(activated.out, /observed tools: db\.read/);
   assert.equal(readState(statePath).state, "BROKEN");
+});
+
+const mixedDelete = 'db.mutate?operation="delete"';
+const mixedDrop = 'db.mutate?operation="drop"';
+const mixedRead = 'db.read?operation="export"';
+for (const [label, inputs] of [
+  ["bare then predicate", ["db.mutate", mixedDelete]],
+  ["predicate then bare", [mixedDelete, "db.mutate"]],
+  ["bare with two predicates", [mixedDelete, "db.mutate", mixedDrop]],
+  ["two tools with only one mixed", [mixedDelete, mixedRead, "db.mutate"]],
+  ["same tool bare twice", ["db.mutate", "db.mutate"]],
+]) {
+  test(`mixedselect whole-tool round trip: ${label}`, async (t) => {
+    const ctx = setup("ok", "db.mutate,db.read");
+    const result = run(ctx, ["protect", "db", ...inputs]);
+    assert.equal(result.code, 0, result.out);
+    const statePath = statePathFor(ctx.project, ctx.env);
+    const state = readState(statePath);
+    const selections = protectedToolSelections(state);
+    const frame = { jsonrpc: "2.0", id: 41, method: "tools/call",
+      params: { name: "db.mutate", arguments: { operation: "update" } } };
+    const decisions = selections.filter(({ name }) => name === frame.params.name)
+      .map(selection => evaluateSelection(normalizeToolSelection(selection), frame.params.arguments, JSON.stringify(frame)));
+    t.diagnostic(`call=${JSON.stringify(frame)} selections=${JSON.stringify(selections)} evaluateSelection=${JSON.stringify(decisions)}`);
+    assert.equal(decisions.some(({ gate }) => gate), true, "adding a predicate must not ungate update after protect writes and reloads state");
+    assert.deepEqual(selections.filter(({ name }) => name === "db.mutate"), [{ name: "db.mutate", predicate: null }]);
+    if (inputs.includes(mixedRead)) {
+      assert.deepEqual(selections.filter(({ name }) => name === "db.read"), [{ name: "db.read", predicate: 'operation="export"' }]);
+    }
+    const session = proxySession(ctx);
+    try {
+      const refused = await session.request(frame, "decline");
+      assert.match(refused.result.content[0].text, /declined/);
+      assert.equal(session.elicitationIds.length, 1);
+      assert.match(session.elicitationMessages[0], /Selection predicate: db\.mutate \(bare tool name selects all calls\)/);
+      t.diagnostic(session.elicitationMessages[0].split("\n").at(-1));
+    } finally { await session.close(); }
+  });
+}
+
+test("mixedselect predicate-only selections keep their independent matches and prompt text", async (t) => {
+  const ctx = setup("ok", "db.mutate,db.read");
+  const result = run(ctx, ["protect", "db", mixedDelete, mixedDrop]);
+  assert.equal(result.code, 0, result.out);
+  const selections = protectedToolSelections(readState(statePathFor(ctx.project, ctx.env)));
+  assert.deepEqual(selections, [
+    { name: "db.mutate", predicate: 'operation="delete"' },
+    { name: "db.mutate", predicate: 'operation="drop"' },
+  ]);
+  const session = proxySession(ctx);
+  try {
+    for (const [id, operation] of [[51, "update"], [52, "delete"], [53, "drop"]]) {
+      const response = await session.request({ jsonrpc: "2.0", id, method: "tools/call",
+        params: { name: "db.mutate", arguments: { operation } } }, "decline");
+      assert.match(response.result.content[0].text, operation === "update" ? /CALLED db\.mutate/ : /declined/);
+      assert.equal(session.elicitationIds.length, id - 51);
+    }
+    assert.match(session.elicitationMessages[0], /Selection predicate: db\.mutate\?operation="delete" \(predicate matched\)/);
+    assert.match(session.elicitationMessages[1], /Selection predicate: db\.mutate\?operation="drop" \(predicate matched\)/);
+    t.diagnostic(session.elicitationMessages.map(message => message.split("\n").at(-1)).join("; "));
+  } finally { await session.close(); }
+});
+
+test("mixedselect legacy state interpretations survive serialization and readState", () => {
+  const ctx = setup("ok", "db.mutate,db.read");
+  const result = run(ctx, ["protect", "db", "db.mutate", mixedRead]);
+  assert.equal(result.code, 0, result.out);
+  const file = statePathFor(ctx.project, ctx.env);
+  const { guardPredicates, guardTools, ...common } = readState(file);
+  for (const [fields, expected] of [
+    [{ guardTool: "db.mutate" }, [{ name: "db.mutate", predicate: null }]],
+    [{ guardTools }, [{ name: "db.mutate", predicate: null }, { name: "db.read", predicate: null }]],
+    [{ guardTools, guardPredicates }, [{ name: "db.mutate", predicate: null }, { name: "db.read", predicate: 'operation="export"' }]],
+  ]) {
+    fs.writeFileSync(file, JSON.stringify({ ...common, ...fields }) + "\n");
+    assert.deepEqual(protectedToolSelections(readState(file)), expected);
+  }
+});
+
+test("mixedselect status, repeated protect, unprotect and archive preserve lifecycle meaning", (t) => {
+  const ctx = setup("ok", "db.mutate,db.read");
+  assert.equal(run(ctx, ["protect", "db", "db.mutate", mixedDelete, mixedRead]).code, 0);
+  const file = statePathFor(ctx.project, ctx.env);
+  const before = fs.readFileSync(file);
+  const status = run(ctx, ["status"]);
+  assert.equal(status.code, 0, status.out);
+  assert.match(status.out, /^  db\.mutate$/m);
+  assert.match(status.out, /^  db\.read$/m);
+  t.diagnostic(`status after mixed protect:\n${status.out.trim()}`);
+  const repeated = run(ctx, ["protect", "db", mixedDelete]);
+  assert.notEqual(repeated.code, 0);
+  assert.match(repeated.out, /already_protected/);
+  assert.deepEqual(fs.readFileSync(file), before);
+  const compatible = run(ctx, ["recover", "--archive"]);
+  assert.notEqual(compatible.code, 0);
+  assert.match(compatible.out, /recovery_not_needed/);
+  assert.deepEqual(fs.readFileSync(file), before);
+  const removed = run(ctx, ["unprotect", "db"]);
+  assert.equal(removed.code, 0, removed.out);
+  assert.equal(readState(file).state, "UNPROTECTED");
+  assert.deepEqual(protectedToolSelections(readState(file)), [
+    { name: "db.mutate", predicate: null }, { name: "db.read", predicate: 'operation="export"' },
+  ]);
+  assert.equal(run(ctx, ["protect", "db", "db.mutate", mixedDelete, mixedRead]).code, 0);
+  // Exercise recovery's incompatible-version route with the newly written selection payload.
+  fs.writeFileSync(file, JSON.stringify({ ...readState(file), schema: "seal.protection/future" }) + "\n");
+  const incompatibleBytes = fs.readFileSync(file);
+  const recovered = run(ctx, ["recover", "--archive"]);
+  assert.equal(recovered.code, 0, recovered.out);
+  const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+  assert.ok(archive, recovered.out);
+  assert.deepEqual(fs.readFileSync(archive), incompatibleBytes);
+  assert.equal(fs.existsSync(file), false);
 });

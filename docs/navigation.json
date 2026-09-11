@@ -41,6 +41,13 @@
   ],
   "exceptions": [
     {
+      "path": "docs/reference/cli.md",
+      "reason": "standalone public CLI contract",
+      "footer": [
+        { "role": "Up", "label": "Reference", "target": "README.md" }
+      ]
+    },
+    {
       "path": "docs/guide/when-something-looks-wrong.md",
       "reason": "token-cross-checked guide page",
       "footer": [

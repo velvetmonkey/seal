@@ -373,3 +373,56 @@ test('a cached installed module refuses mutations after its installation is remo
   assert.throws(() => loaded.installLock(), /installation was removed/);
   assertUninstallRouteRestored(box);
 });
+
+test("authorization rechecks the fixed installed tree and refuses without a kernel result", () => {
+  const built = buildArtifact();
+  const prefix = path.join(built.out, "runtime-check");
+  assert.equal(install(built, prefix).code, 0);
+  const recordPath = path.join(prefix, "lib/seal/install.json");
+  const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+  const root = path.join(prefix, record.store);
+  const { createRuntimeTreeCheck } = require("../spine/integrity.cjs");
+  const { createApprovalContract } = require("../contract/contract.cjs");
+  const check = createRuntimeTreeCheck(root);
+  let kernelCalls = 0;
+  const contract = createApprovalContract({ runtimeTreeCheck: check,
+    kernelAdapter: { authorize() { kernelCalls++; return { verdict: "ALLOW" }; } } });
+  function accept() {
+    const call = { tool: "write", args: { line: "runtime" } };
+    const requestState = contract.begin(call).result.requestState;
+    return contract.retry({ ...call, requestState,
+      inputResponses: { approval: { action: "accept", content: { approve: true } } } });
+  }
+  const file = path.join(root, "NOTICE");
+  const original = fs.readFileSync(file);
+  fs.chmodSync(file, 0o644);
+  try {
+    const bytes = Buffer.from(original); bytes[0] ^= 1;
+    fs.writeFileSync(file, bytes);
+    assert.equal(check().band, "FAIL");
+    const failed = accept();
+    assert.equal(failed.refusal, "runtime_tree_fail");
+    assert.equal(failed.receipt, undefined);
+    assert.equal(kernelCalls, 0);
+  } finally { fs.writeFileSync(file, original); fs.chmodSync(file, 0o444); }
+  fs.renameSync(recordPath, `${recordPath}.held`);
+  try {
+    assert.equal(check().band, "UNKNOWN");
+    const unknown = accept();
+    assert.equal(unknown.refusal, "runtime_tree_unknown");
+    assert.equal(unknown.receipt, undefined);
+    assert.equal(kernelCalls, 0);
+  } finally { fs.renameSync(`${recordPath}.held`, recordPath); }
+  assert.equal(accept().kind, "allow");
+  assert.equal(accept().kind, "allow");
+  assert.equal(kernelCalls, 2, "each clean approval enters the kernel");
+  fs.chmodSync(root, 0o755);
+  const extra = path.join(root, "unrecorded");
+  try {
+    fs.writeFileSync(extra, "not in the anchor");
+    assert.equal(check().band, "FAIL");
+    assert.equal(accept().refusal, "runtime_tree_fail");
+    assert.equal(kernelCalls, 2, "the next approval must recheck the tree");
+  } finally { fs.unlinkSync(extra); fs.chmodSync(root, 0o555); }
+  assert.equal(createRuntimeTreeCheck(ROOT)().band, "UNKNOWN");
+});

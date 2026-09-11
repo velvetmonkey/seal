@@ -45,8 +45,12 @@ function run(args, root, input = "", cwd = process.cwd(), extraEnv = {}) {
   } catch (error) { return { code: error.status, out: `${error.stdout || ""}${error.stderr || ""}` }; }
 }
 
+function withoutReachabilityObservation(output) {
+  return output.replace(/^Observation project:[\s\S]*?^Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN\.\n/m, "");
+}
+
 function protectedStatusPrefix(statePath) {
-  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+  return `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.\n` +
     `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
     "\n" +
     "Gated through this route:\n" +
@@ -67,7 +71,7 @@ function protectedStatusPrefix(statePath) {
 }
 
 function brokenStatusWithReceipt(detail, receiptDir, statePath) {
-  return `Runtime: present seal-assurance-kit@${manifest.commit}\n` +
+  return `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.\n` +
     `Sealed MCP route db: PENDING RESTART (${statePath})\n` +
     "\n" +
     "Gated through this route:\n" +
@@ -80,16 +84,103 @@ function brokenStatusWithReceipt(detail, receiptDir, statePath) {
     "  other MCP servers not routed through this Seal wrapper\n" +
     "  other uncontrolled routes can also exist\n" +
     `Protection detail: ${detail}\n` +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n";
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n";
 }
 
 test("status finds the shipped kernel runtime with an empty cache", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-shipped-runtime-"));
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
+  assert.match(result.out, new RegExp(`^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.$`, "m"));
   assert.ok(!fs.existsSync(path.join(root, ".cache", "seal", "runtime")), "status must not create a cache as a side effect");
+});
+
+test("status always labels observed scope context and incomplete boundaries", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-observation-"));
+  const result = run(["status"], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /^Observation client: Claude Code static configuration; effective client route UNKNOWN$/m);
+  assert.match(result.out, /^Scopes inspected: user, local, project .*not a complete active inventory\)$/m);
+  assert.match(result.out, /^UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access\.$/m);
+  assert.match(result.out, /^Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN\.$/m);
+});
+
+test("status exposes duplicate MCP definitions without choosing a winner", (t) => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-duplicates-"));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  const projectRoot = fs.realpathSync(project);
+  const projectFile = path.join(project, ".mcp.json");
+  const userFile = path.join(root, ".claude.json");
+  const cleanProject = '{"mcpServers":{"same":{"command":"first"}}}';
+  const cleanUser = JSON.stringify({ mcpServers: {}, projects: { [projectRoot]: { mcpServers: {} } } });
+  const observe = (label) => {
+    const result = run(["status"], root, "", project, { CLAUDE_CONFIG_DIR: root });
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /^UNKNOWN — Client route completeness has not been established:/m);
+    assert.match(result.out, /^Scopes inspected: user, local, project /m);
+    t.diagnostic(`${label}: exit ${result.code}\n${result.out}`);
+    return result.out;
+  };
+  const reset = () => { fs.writeFileSync(userFile, cleanUser); fs.writeFileSync(projectFile, cleanProject); };
+  const ambiguous = (label, file, text, scope, key) => {
+    reset();
+    fs.writeFileSync(file, text);
+    const out = observe(label);
+    assert.ok(out.includes(`UNKNOWN — ${scope} MCP configuration source has ambiguous definitions of duplicate keys ${JSON.stringify(key)}; client selection is UNKNOWN: ${file}`), out);
+    assert.doesNotMatch(out, new RegExp(`Inspected ${scope} MCP entry`));
+    return out;
+  };
+  ambiguous("pair", projectFile, '{"mcpServers":{"same":{"command":"first"},"same":{"command":"second"}}}', "project", "same");
+  ambiguous("triple", projectFile, '{"mcpServers":{"same":1,"same":2,"same":3}}', "project", "same");
+  ambiguous("identical", projectFile, '{"mcpServers":{"same":{"command":"first"},"same":{"command":"first"}}}', "project", "same");
+  ambiguous("user", userFile, '{"mcpServers":{"same":1,"same":2}}', "user", "same");
+  ambiguous("local", userFile, `{"projects":{${JSON.stringify(projectRoot)}:{"mcpServers":{"same":1,"same":2}}}}`, "local", "same");
+  ambiguous("escaped key", projectFile, '{"mcpServers":{"same":1,"s\\u0061me":2}}', "project", "same");
+  ambiguous("duplicate container", projectFile, '{"mcpServers":{},"mcpServers":{"same":2}}', "project", "mcpServers");
+  ambiguous("duplicate definition field", projectFile, '{"mcpServers":{"same":{"command":"first","command":"second"}}}', "project", "command");
+  ambiguous("duplicate project selector", userFile, `{"projects":{${JSON.stringify(projectRoot)}:{},${JSON.stringify(projectRoot)}:{"mcpServers":{"same":2}}}}`, "local", projectRoot);
+  ambiguous("duplicate projects container", userFile, '{"projects":{},"projects":{}}', "local", "projects");
+  reset();
+  const clean = observe("clean after repair");
+  assert.doesNotMatch(clean, /ambiguous/);
+  assert.match(clean, /UNBROKERED — Inspected project MCP entry "same"/);
+  for (const value of ["null", "[]", "42", '"text"', "true"]) {
+    fs.writeFileSync(projectFile, value);
+    assert.match(observe(`non-object ${value}`), /top-level value is not an object/);
+  }
+  reset();
+  fs.writeFileSync(projectFile, '{"metadata":{"same":1,"same":2,"mcpServers":{"x":1,"x":2}},"mcpServers":{"same":{"command":"first"}}}');
+  assert.equal(observe("unrelated duplicates").replace(/^Observation time:.*$/m, ""), clean.replace(/^Observation time:.*$/m, ""));
+  fs.writeFileSync(userFile, '{"projects":{"other":{"mcpServers":{"x":1,"x":2}}},"mcpServers":{}}');
+  assert.doesNotMatch(observe("other project duplicates"), /ambiguous/);
+  reset();
+  const large = '{"metadata":"' + "x".repeat(8 * 1024 * 1024) + '","deep":' + "[".repeat(20000) + "0" + "]".repeat(20000) + ',"mcpServers":{"same":1,"same":2}}';
+  const start = performance.now();
+  ambiguous("large and deep", projectFile, large, "project", "same");
+  t.diagnostic(`large bytes ${Buffer.byteLength(large)}, elapsed ms ${performance.now() - start}`);
+  reset();
+  fs.unlinkSync(projectFile);
+  assert.match(observe("missing"), /project MCP configuration source is missing/);
+  fs.writeFileSync(projectFile, "{");
+  assert.match(observe("malformed"), /project MCP configuration source cannot be read or is malformed/);
+  fs.writeFileSync(projectFile, cleanProject);
+  fs.chmodSync(projectFile, 0);
+  try { assert.match(observe("unreadable"), /EACCES/); }
+  finally { fs.chmodSync(projectFile, 0o600); }
+  const { statePathFor } = require("../spine/protection.cjs");
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(root, ".local", "share") });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, { state: "PENDING RESTART", guardTool: "write", receiptsDir: path.dirname(statePath) });
+  const owned = fs.readFileSync(userFile, "utf8");
+  fs.writeFileSync(userFile, owned.replace('"mcpServers": {', '"mcpServers": {}, "mcpServers": {'));
+  assert.match(observe("owned ambiguous"), /source has ambiguous definitions/);
+  fs.writeFileSync(userFile, owned);
+  const repaired = observe("owned repaired");
+  assert.doesNotMatch(repaired, /ambiguous/);
+  assert.match(repaired, /BROKERED — Local MCP entry "db" matches Seal's installed wrapper; this wrapper gates write\./);
 });
 
 test("status reports ACTIVE and STALE from observable lease facts", () => {
@@ -105,7 +196,7 @@ test("status reports ACTIVE and STALE from observable lease facts", () => {
   writeOwnedState(root, project, statePath, { state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath), lease: liveLease });
   let result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Sealed MCP route db: ACTIVE /m);
+  assert.match(result.out, /^Sealed MCP route db: LEASE ACTIVE /m);
   assert.match(result.out, /^  write$/m);
   assert.match(result.out, /^Not controlled:$/m);
   assert.match(result.out, /^Protection lease: pid \d+ generation 3$/m);
@@ -141,7 +232,7 @@ test("status refuses an unsupported host before a null-witness lease liveness co
   assert.equal(result.code, 1, result.out);
   assert.match(result.out, /^UNSUPPORTED PLATFORM$/m);
   assert.match(result.out, /^REFUSE unsupported_platform: this is plan9-mips$/m);
-  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:ACTIVE|STALE) /m);
+  assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:(?:LEASE )?ACTIVE|STALE) /m);
   assert.doesNotMatch(result.out, /^Protection lease:/m);
 });
 
@@ -153,7 +244,7 @@ test("status reads the protected project's recorded receipt directory", () => {
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  fs.writeFileSync(path.join(receiptDir, "receipt-1786896000000-123-0001-APPROVE.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
@@ -162,10 +253,83 @@ test("status reads the protected project's recorded receipt directory", () => {
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Most recent (by write time): APPROVE at receipt time 1786896000 (approved.json)\n");
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
+    `Receipts: 1 receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)\n` +
+    "Most recent (by write time): APPROVE at receipt time 1786896000 (receipt-1786896000000-123-0001-APPROVE.json)\n");
 });
+
+test("status latest receipt uses the counted validated filename population", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-latest-population-"));
+  const project = path.join(root, "project");
+  const dataHome = path.join(root, ".local", "share");
+  const receiptDir = path.join(root, "receipts");
+  const { statePathFor } = require("../spine/protection.cjs");
+  fs.mkdirSync(project);
+  fs.mkdirSync(receiptDir);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, {
+    state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+  });
+  const name = "receipt-1786896000000-123-0001-BLOCK.json";
+  fs.writeFileSync(path.join(receiptDir, name), JSON.stringify({ seal_receipt: "v2", verdict: "BLOCK", now: 200 }));
+  fs.utimesSync(path.join(receiptDir, name), 100, 100);
+  for (const ignored of ["backup.json", "receipt-01-123-0002-ALLOW.json", "receipt-9007199254740992-123-0003-ALLOW.json"]) {
+    fs.writeFileSync(path.join(receiptDir, ignored), JSON.stringify({ seal_receipt: "v2", verdict: "ALLOW", now: 100 }));
+    fs.utimesSync(path.join(receiptDir, ignored), 200, 200);
+    const result = run(["status"], root, "", project);
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /^Receipts: 1 receipt files observed /m);
+    assert.match(result.out, /^Most recent \(by write time\): BLOCK at receipt time 200 \(receipt-1786896000000-123-0001-BLOCK.json\)$/m);
+    assert.doesNotMatch(result.out, /^Receipt unreadable:/m);
+    const census = run(["receipts", receiptDir], root, "", project);
+    assert.match(census.out, /^Receipt files observed: 1 /m);
+  }
+});
+
+for (const kind of ["symlink", "unreadable", "invalid JSON"]) {
+  test(`status accounts for a ${kind} receipt in its validated population`, (t) => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-status-edge-"));
+    const project = path.join(root, "project");
+    const dataHome = path.join(root, ".local", "share");
+    const receiptDir = path.join(root, "receipts");
+    const { statePathFor } = require("../spine/protection.cjs");
+    fs.mkdirSync(project);
+    fs.mkdirSync(receiptDir);
+    const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    writeOwnedState(root, project, statePath, {
+      state: "PENDING RESTART", guardTool: "write", receiptsDir: receiptDir,
+    });
+    const name = "receipt-1786896000000-123-0001-BLOCK.json";
+    const target = path.join(receiptDir, name);
+    const bytes = JSON.stringify({ seal_receipt: "v2", verdict: "BLOCK", now: 200 });
+    if (kind === "symlink") {
+      fs.writeFileSync(path.join(root, "linked.json"), bytes);
+      fs.symlinkSync(path.join(root, "linked.json"), target);
+    } else {
+      fs.writeFileSync(target, kind === "invalid JSON" ? "{" : bytes);
+      if (kind === "unreadable") fs.chmodSync(target, 0o000);
+    }
+    try {
+      const result = run(["status"], root, "", project);
+      assert.equal(result.code, 0, result.out);
+      assert.match(result.out, /^Receipts: 1 receipt files observed /m);
+      assert.match(run(["receipts", receiptDir], root, "", project).out, /^Receipt files observed: 1 /m);
+      if (kind === "symlink") {
+        assert.match(result.out, /^Most recent \(by write time\): BLOCK at receipt time 200 /m);
+        assert.doesNotMatch(result.out, /^Receipt unreadable:/m);
+      } else {
+        assert.match(result.out, /^Receipt unreadable: receipt-1786896000000-123-0001-BLOCK.json /m);
+        assert.match(result.out, /^Most recent: receipt files exist, but none could be read as a receipt$/m);
+        if (kind === "unreadable") assert.match(result.out, /EACCES|unreadable/);
+      }
+      for (const line of result.out.split("\n").filter((line) => /^(Receipt|Most recent)/.test(line))) t.diagnostic(`${kind}: ${line}`);
+    } finally {
+      if (kind === "unreadable") fs.chmodSync(target, 0o600);
+    }
+  });
+}
 
 test("status reads a recorded receipt directory when the protection state has no protected tool list", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-broken-tools-readable-receipts-"));
@@ -175,7 +339,7 @@ test("status reads a recorded receipt directory when the protection state has no
   const { statePathFor } = require("../spine/protection.cjs");
   fs.mkdirSync(project);
   fs.mkdirSync(receiptDir, { recursive: true });
-  fs.writeFileSync(path.join(receiptDir, "approved.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
+  fs.writeFileSync(path.join(receiptDir, "receipt-1786896000000-123-0001-APPROVE.json"), JSON.stringify({ seal_receipt: "v2", action: "APPROVE", verdict: "ALLOW", now: 1786896000 }));
   const statePath = statePathFor(project, { XDG_DATA_HOME: dataHome });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   writeOwnedState(root, project, statePath, {
@@ -184,7 +348,7 @@ test("status reads a recorded receipt directory when the protection state has no
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 1, result.out);
-  assert.equal(result.out, brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir, statePath));
+  assert.equal(withoutReachabilityObservation(result.out), brokenStatusWithReceipt("stored protection state has no protected tool list", receiptDir, statePath));
 });
 
 test("status does not count files from a receipt directory named by refused protection state", () => {
@@ -247,9 +411,10 @@ test("status says an existing empty receipt directory has no recorded decision",
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 0 stored in ${receiptDir}\n` +
-    "Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)\n");
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
+    "Receipts: no receipt files observed (receipt directory has no receipt-shaped files)\n" +
+    "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
+    "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
 });
 
 test("status names a missing receipt directory as no receipt yet", () => {
@@ -266,8 +431,8 @@ test("status names a missing receipt directory as no receipt yet", () => {
   });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 0 stored in ${receiptDir} (directory does not exist)\n` +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
+    `Receipts: no receipt files observed in ${receiptDir} (directory does not exist)\n` +
     "Most recent: no receipt yet (receipt directory is missing)\n");
 });
 
@@ -288,7 +453,7 @@ test("status names an unreadable receipt directory and its permission action", (
   const result = run(["status"], root, "", project);
   fs.chmodSync(receiptDir, 0o700);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: unavailable in ${receiptDir} (directory cannot be read)\n` +
     "Most recent: receipts may exist, but the receipt directory cannot be read; check its permissions\n");
 });
@@ -310,7 +475,7 @@ test("status names a receipt path that is not a directory as misconfigured", () 
 
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
     `Receipts: unavailable in ${receiptDir} (path is not a directory)\n` +
     "Most recent: receipts cannot be stored because the receipt path is not a directory; check its configuration\n");
 });
@@ -331,10 +496,57 @@ test("status names receipt files when none can be parsed", () => {
   });
   const result = run(["status"], root, "", project);
   assert.equal(result.code, 0, result.out);
-  assert.equal(result.out, protectedStatusPrefix(statePath) +
-    `Receipts: 1 stored in ${receiptDir}\n` +
-    "Receipt unreadable: not-a-receipt.json (missing v2 verdict or kernel time)\n" +
-    "Most recent: receipt files exist, but none could be read as a receipt\n");
+  assert.equal(withoutReachabilityObservation(result.out), protectedStatusPrefix(statePath) +
+    "Receipts: no receipt files observed (1 non-receipt files ignored)\n" +
+    "Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)\n" +
+    "Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)\n");
+});
+
+test("receipt reader exposes a removed middle receipt as a sequence gap", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-gap-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const sequence of [1, 2, 3]) fs.writeFileSync(path.join(receipts, `receipt-1000-77-${String(sequence).padStart(4, "0")}-INDEPENDENT_CASE.json`), "{}\n");
+  const original = path.join(receipts, "receipt-1000-77-0002-INDEPENDENT_CASE.json");
+  const quarantined = path.join(root, "removed-receipt.json");
+  fs.renameSync(original, quarantined);
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt gap: pid 77 missing sequences 2 through 2/);
+  fs.renameSync(quarantined, original);
+  assert.doesNotMatch(execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }), /Receipt gap:/);
+});
+
+test("receipt reader reports multiple gaps in pid and sequence order", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-multi-gap-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const sequence of [1, 3, 5]) fs.writeFileSync(path.join(receipts, `receipt-1000-77-${String(sequence).padStart(4, "0")}-INDEPENDENT_CASE.json`), "{}\n");
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt gap: pid 77 missing sequences 2 through 2\nReceipt gap: pid 77 missing sequences 4 through 4/);
+});
+
+test("receipt reader rejects unsafe and non-canonical filename numbers visibly", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-rejected-numbers-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  const names = [
+    "receipt-1.5-77-0001-A.json",
+    "receipt-1-77--1-A.json",
+    "receipt-1-77-001-A.json",
+    "receipt-01-77-0001-A.json",
+    "receipt-9007199254740992-77-0001-A.json",
+    `receipt-${"9".repeat(100)}-77-0001-A.json`,
+  ];
+  for (const name of names) fs.writeFileSync(path.join(receipts, name), "{}\n");
+  let result;
+  try { result = execFileSync(process.execPath, [CLI, "receipts", receipts], { encoding: "utf8" }); }
+  catch (error) { result = `${error.stdout || ""}${error.stderr || ""}`; }
+  assert.match(result, /Receipt files rejected: 6/);
+  for (const name of names) assert.match(result, new RegExp(`Receipt file rejected: ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
 test("status prefers the verified shipped runtime over a corrupt cache", () => {
@@ -344,8 +556,8 @@ test("status prefers the verified shipped runtime over a corrupt cache", () => {
   fs.writeFileSync(staged, "one corrupt staged byte\n");
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, new RegExp(`^Runtime: present seal-assurance-kit@${manifest.commit}$`, "m"));
-  assert.doesNotMatch(result.out, /^Runtime: integrity check failed /m);
+  assert.match(result.out, new RegExp(`^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.$`, "m"));
+  assert.doesNotMatch(result.out, /^Runtime at status check FAIL: integrity check failed /m);
 });
 
 const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
@@ -380,5 +592,111 @@ test("status reports the kernel runtime as present when it is cached", async () 
   fs.rmSync(receipt);
   const result = run(["status"], root);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.out, /^Runtime: present seal-assurance-kit@/m);
+  assert.match(result.out, /^Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@/m);
+});
+
+function scopeOwnershipCase() {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-status-scope-ownership-"));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  const child = path.join(project, "src");
+  const outside = path.join(root, "outside");
+  const linked = path.join(root, "linked");
+  fs.mkdirSync(child);
+  fs.mkdirSync(outside);
+  fs.symlinkSync(project, linked, "dir");
+  const env = { XDG_DATA_HOME: path.join(root, ".local", "share"), CLAUDE_CONFIG_DIR: root };
+  const statePath = require("../spine/protection.cjs").statePathFor(project, env, "db");
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  writeOwnedState(root, project, statePath, { state: "PENDING RESTART", guardTool: "write" });
+  const configPath = path.join(root, ".claude.json");
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  const definition = config.projects[fs.realpathSync(project)].mcpServers.db;
+  const save = () => fs.writeFileSync(configPath, JSON.stringify(config));
+  const observe = (t, label, cwd = project) => {
+    const result = run(["status"], root, "", cwd, env);
+    t.diagnostic(`${label}: exit ${result.code}\n${result.out}`);
+    return result.out;
+  };
+  return { root, project, child, outside, linked, statePath, config, definition, save, observe };
+}
+
+test("status resolves wrapper ownership from every project directory", (t) => {
+  const c = scopeOwnershipCase();
+  for (const [label, cwd] of [["root", c.project], ["child", c.child], ["symlink", c.linked]]) {
+    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+  }
+  fs.writeFileSync(path.join(c.outside, ".mcp.json"), JSON.stringify({ mcpServers: { plain: { command: "ordinary-server" } } }));
+  assert.match(c.observe(t, "outside", c.outside), /  UNBROKERED — Inspected project MCP entry "plain" is configured without Seal/);
+});
+
+test("status compares object keys canonically in ownership and scope conflicts", (t) => {
+  const c = scopeOwnershipCase();
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.db = {
+    env: c.definition.env, args: c.definition.args, command: c.definition.command, type: c.definition.type,
+  };
+  c.save();
+  fs.writeFileSync(path.join(c.project, ".mcp.json"), JSON.stringify({ mcpServers: { db: c.definition } }));
+  const reordered = c.observe(t, "keys reordered");
+  assert.match(reordered, /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+  assert.doesNotMatch(reordered, /has conflicting definitions/);
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.db.args = [...c.definition.args].reverse();
+  c.save();
+  const array = c.observe(t, "array reordered");
+  assert.match(array, /has conflicting definitions/);
+  assert.match(array, /UNKNOWN — installed wrapper "db".*local definition does not match the installed wrapper/);
+  assert.doesNotMatch(array, /  BROKERED —/);
+});
+
+
+test("status refuses uncertain ownership and different wrappers", (t) => {
+  const c = scopeOwnershipCase();
+  const original = fs.readFileSync(c.statePath, "utf8");
+  const uncertain = (label, pattern) => {
+    const output = c.observe(t, label, c.child);
+    assert.match(output, pattern);
+    assert.doesNotMatch(output, /  (?:UNBROKERED|BROKERED) —/);
+  };
+  c.definition.command = "/different/seal";
+  c.save();
+  uncertain("different wrapper", /UNKNOWN — installed wrapper "db".*local definition does not match the installed wrapper/);
+  c.definition.command = "/seal";
+  c.save();
+  fs.renameSync(c.statePath, `${c.statePath}.saved`);
+  uncertain("missing record", /UNKNOWN — installed wrapper "db".*protection record is unavailable/);
+  fs.writeFileSync(c.statePath, "{");
+  uncertain("unreadable record", /UNKNOWN — installed wrapper "db".*stored protection state is unreadable/);
+  const state = JSON.parse(original);
+  state.localOverride.installed = false;
+  fs.writeFileSync(c.statePath, JSON.stringify(state));
+  uncertain("ownership not installed", /UNKNOWN — installed wrapper "db"/);
+  state.localOverride.installed = true;
+  state.projectRoot = c.outside;
+  fs.writeFileSync(c.statePath, JSON.stringify(state));
+  uncertain("wrong project scope", /UNKNOWN — installed wrapper "db".*project scope does not match/);
+  fs.writeFileSync(c.statePath, original);
+  c.config.projects[fs.realpathSync(c.project)].mcpServers.plain = { command: "ordinary-server", args: [] };
+  c.save();
+  const restored = c.observe(t, "restored and truly unowned");
+  assert.match(restored, /  BROKERED — Local MCP entry "db"/);
+  assert.match(restored, /  UNBROKERED — Inspected local MCP entry "plain"/);
+});
+
+test("status follows a wrapper installed from a child into its Claude project scope", (t) => {
+  const c = scopeOwnershipCase();
+  const state = JSON.parse(fs.readFileSync(c.statePath, "utf8"));
+  const childState = require("../spine/protection.cjs").statePathFor(c.child, { XDG_DATA_HOME: path.join(c.root, ".local", "share") }, "db");
+  state.projectRoot = c.child;
+  state.projectId = projectId(c.child);
+  Object.assign(state.localOverride, { projectRoot: c.child, projectId: projectId(c.child), claudeProjectRoot: c.project });
+  state.localOverride.definition.args[2] = childState;
+  c.definition.args[2] = childState;
+  c.save();
+  fs.mkdirSync(path.dirname(childState), { recursive: true });
+  fs.writeFileSync(childState, JSON.stringify(state));
+  fs.unlinkSync(c.statePath);
+  for (const [label, cwd] of [["child installation from root", c.project], ["child installation from child", c.child], ["child installation from symlink", c.linked]]) {
+    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db"/);
+  }
 });

@@ -9,6 +9,7 @@ const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
+const receiptPopulation = require(path.join(path.resolve(__dirname, ".."), "spine", "receipt-population.cjs"));
 
 const ROOT = path.resolve(__dirname, "..");
 const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
@@ -46,15 +47,160 @@ function status() {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
-    ? `Runtime: present seal-assurance-kit@${manifest.commit}`
+    ? `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.`
     : runtime.state === "integrity check failed"
-      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
-      : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+      ? `Runtime at status check FAIL: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
+      : `Runtime at status check UNKNOWN: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+  printReachabilityObservation(protection, process.cwd(), process.env);
 
   let paths;
   try { paths = protection.statePathsFor(process.cwd(), process.env); }
   catch (error) { statusRecord(undefined, error); return; }
   for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
+}
+
+// JSON.parse validates syntax, but loses repeated object members. Walk the raw
+// tokens iteratively so deep unrelated metadata cannot overflow the JS stack.
+// Only MCP definitions and the keys selecting their scope affect this inventory.
+function statusDuplicateKeys(text, projectRoot) {
+  const stack = [];
+  const duplicates = new Set();
+  for (let i = 0; i < text.length;) {
+    const c = text[i];
+    const parent = stack[stack.length - 1];
+    if (c === '"') {
+      const start = i++;
+      while (i < text.length) {
+        if (text[i] === "\\") { i += 2; continue; }
+        if (text[i++] === '"') break;
+      }
+      if (parent?.object && parent.keyNext) {
+        const key = JSON.parse(text.slice(start, i));
+        parent.key = key;
+        parent.keyNext = false;
+        const relevant = parent.role === "definition" || parent.role === "servers"
+          || ((parent.role === "root" || parent.role === "local") && key === "mcpServers")
+          || (parent.role === "root" && projectRoot !== undefined && key === "projects")
+          || (parent.role === "projects" && key === projectRoot);
+        if (relevant) {
+          if (parent.keys.has(key)) duplicates.add(key);
+          parent.keys.add(key);
+        }
+      }
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      let role = "ignored";
+      if (!parent) role = "root";
+      else if (parent.role === "servers" || parent.role === "definition") role = "definition";
+      else if (parent.object) {
+        if ((parent.role === "root" || parent.role === "local") && parent.key === "mcpServers") role = "servers";
+        else if (parent.role === "root" && projectRoot !== undefined && parent.key === "projects") role = "projects";
+        else if (parent.role === "projects" && parent.key === projectRoot) role = "local";
+      }
+      stack.push({ object: c === "{", keyNext: c === "{", role, keys: new Set() });
+    } else if (c === "}" || c === "]") stack.pop();
+    else if (c === "," && parent?.object) parent.keyNext = true;
+    i++;
+  }
+  return [...duplicates];
+}
+
+function statusJsonSource(filePath, label, projectRoot) {
+  try {
+    const bytes = fs.readFileSync(filePath);
+    const text = bytes.toString("utf8");
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("top-level value is not an object");
+    const duplicates = statusDuplicateKeys(text, projectRoot);
+    if (duplicates.length) return { label, filePath, error: `source has ambiguous definitions of duplicate keys ${duplicates.map((key) => JSON.stringify(key)).join(", ")}; client selection is UNKNOWN` };
+    return { label, filePath, parsed };
+  } catch (error) {
+    const reason = error.code === "ENOENT" ? "source is missing" : `source cannot be read or is malformed (${error.message})`;
+    return { label, filePath, error: reason };
+  }
+}
+
+function statusScopeSources(root, env) {
+  const configDir = env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir();
+  const configPath = path.join(configDir, ".claude.json");
+  const projectRoot = (() => {
+    try { return fs.realpathSync(require("node:child_process").execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
+    catch { return fs.realpathSync(root); }
+  })();
+  const user = statusJsonSource(configPath, "user", projectRoot);
+  const local = { label: "local", filePath: configPath };
+  if (!user.error) local.parsed = user.parsed?.projects?.[projectRoot] || {};
+  else local.error = user.error;
+  const project = statusJsonSource(path.join(projectRoot, ".mcp.json"), "project");
+  return { configPath, projectRoot, sources: [user, local, project] };
+}
+
+function printReachabilityObservation(protection, cwd, env) {
+  const root = fs.realpathSync(cwd);
+  const { configPath, projectRoot, sources } = statusScopeSources(root, env);
+  console.log(`Observation project: ${projectRoot}`);
+  console.log("Observation client: Claude Code static configuration; effective client route UNKNOWN");
+  console.log(`Observation config: ${configPath}`);
+  console.log(`Observation time: ${new Date().toISOString()}`);
+  console.log("MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected");
+  console.log("Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)");
+
+  let states = [];
+  let recordsError;
+  try { states = protection.statePathsFor(projectRoot, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
+  catch (error) { recordsError = error; console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
+  const definitions = [];
+  let unknown = false;
+  for (const source of sources) {
+    if (source.error) { console.log(`UNKNOWN — ${source.label} MCP configuration ${source.error}: ${source.filePath}`); unknown = true; continue; }
+    const servers = source.parsed?.mcpServers;
+    if (servers === undefined) { console.log(`UNKNOWN — ${source.label} MCP configuration has no inspectable mcpServers object`); unknown = true; continue; }
+    if (!servers || typeof servers !== "object" || Array.isArray(servers)) { console.log(`UNKNOWN — ${source.label} MCP configuration mcpServers is malformed`); unknown = true; continue; }
+    for (const [name, definition] of Object.entries(servers)) definitions.push({ source: source.label, name, definition });
+  }
+  const byName = new Map();
+  for (const entry of definitions) (byName.get(entry.name) || (byName.set(entry.name, []), byName.get(entry.name))).push(entry);
+  console.log("Observed MCP definitions (scoped configuration facts; not a complete active inventory):");
+  for (const [name, entries] of [...byName.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const disagree = entries.some((entry) => protection.canonical(entry.definition) !== protection.canonical(entries[0].definition));
+    const scopes = entries.map((entry) => entry.source).join(", ");
+    if (disagree) console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has conflicting definitions across ${scopes}; scope shadowing and approval eligibility are unresolved`);
+    const local = entries.find((entry) => entry.source === "local");
+    const recorded = states.find((candidate) => candidate.serverName === name);
+    const wrapperLike = (definition) => Array.isArray(definition?.args) &&
+      definition.args.some((arg) => arg === "__proxy" || arg === "--protect-state");
+    if (recordsError || recorded || entries.some((entry) => wrapperLike(entry.definition))) {
+      try {
+        if (recordsError) throw recordsError;
+        if (!local) throw new Error("no inspected local wrapper establishes ownership");
+        // A wrapper can have been installed from a child directory. Its record
+        // owns that installation root, while Claude selects the repository scope.
+        const args = local.definition?.args;
+        const recordPath = Array.isArray(args) && args[0] === "__proxy" &&
+          args[1] === "--protect-state" && args.length === 3 && typeof args[2] === "string"
+          ? path.resolve(projectRoot, args[2]) : null;
+        const state = recordPath ? protection.readState(recordPath) : recorded;
+        if (!state) throw new Error("installed wrapper protection record is unavailable");
+        if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        const installationRoot = state.projectRoot;
+        if (typeof installationRoot !== "string" ||
+            protection.claudeProjectRoot(installationRoot) !== projectRoot) throw new Error("installed wrapper project scope does not match the inspected project");
+        protection.assertSealOwnedLocalOverride(state, installationRoot, name, env);
+        const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
+        console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
+      } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
+    } else if (entries.some(({ definition }) => !definition || typeof definition !== "object" ||
+        Array.isArray(definition) || !(typeof definition.command === "string" || typeof definition.url === "string"))) {
+      console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has no inspectable command or URL; ownership cannot be established`);
+      unknown = true;
+    } else {
+      console.log(`  UNBROKERED — Inspected ${entries[0].source} MCP entry ${JSON.stringify(name)} is configured without Seal; whether this client session can use it is UNKNOWN.`);
+    }
+  }
+  if (definitions.length === 0 && !unknown) console.log("  UNKNOWN — no direct MCP definitions were observed");
+  console.log("UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.");
+  console.log("Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.");
 }
 
 function statusRecord(recordPath, readError) {
@@ -129,7 +275,7 @@ function statusRecord(recordPath, readError) {
     }
   }
 
-  let entries;
+  let population;
   try {
     const directory = fs.statSync(receiptDir);
     if (!directory.isDirectory()) {
@@ -138,11 +284,11 @@ function statusRecord(recordPath, readError) {
       return;
     }
     if ((directory.mode & 0o444) === 0) throw new Error("receipt directory is unreadable");
-    entries = fs.readdirSync(receiptDir, { withFileTypes: true });
+    population = receiptPopulation.inspectReceiptDirectory(receiptDir);
   }
   catch (error) {
     if (error.code === "ENOENT") {
-      console.log(`Receipts: 0 stored in ${receiptDir} (directory does not exist)`);
+      console.log(`Receipts: no receipt files observed in ${receiptDir} (directory does not exist)`);
       console.log("Most recent: no receipt yet (receipt directory is missing)");
       return;
     }
@@ -151,14 +297,22 @@ function statusRecord(recordPath, readError) {
     return;
   }
 
-  const candidates = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink());
-  console.log(`Receipts: ${candidates.length} stored in ${receiptDir}`);
-  if (candidates.length === 0) {
-    console.log("Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)");
+  // Count and select from the same filename-validated population as `seal receipts`.
+  const { receiptFiles: receiptEntries, nonMatchingFiles, rejectedFiles } = population;
+  for (const file of rejectedFiles) console.log(`Receipt file rejected: ${file.name} (${file.reason})`);
+  if (receiptEntries.length === 0) {
+    if (nonMatchingFiles.length === 0) {
+      console.log("Receipts: no receipt files observed (receipt directory has no receipt-shaped files)");
+    } else {
+      console.log(`Receipts: no receipt files observed (${nonMatchingFiles.length} non-receipt files ignored)`);
+    }
+    console.log(receiptPopulation.unknownLine());
+    console.log("Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)");
     return;
   }
+  console.log(`Receipts: ${receiptEntries.length} receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)`);
   const observed = [];
-  for (const entry of entries) {
+  for (const entry of receiptEntries) {
     const target = path.join(receiptDir, entry.name);
     let stat;
     try { stat = fs.statSync(target); } catch (error) {
@@ -190,6 +344,14 @@ function statusRecord(recordPath, readError) {
   // replay refusal), so an unqualified "Most recent: BLOCK" could be misread
   // as "the run was blocked" when the approved call actually ran.
   console.log(`Most recent (by write time): ${recent.verdict} at receipt time ${recent.now} (${recent.name})`);
+}
+function receiptCommand(args) {
+  if (args.length !== 1) throw new Error("usage: seal receipts DIRECTORY");
+  const directory = path.resolve(args[0]);
+  let stat;
+  try { stat = fs.statSync(directory); } catch { throw new Error(`cannot inspect receipt directory: ${directory}`); }
+  if (!stat.isDirectory()) throw new Error(`receipt path is not a directory: ${directory}`);
+  return receiptPopulation.run(directory);
 }
 function shellWord(value) {
   return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
@@ -408,6 +570,7 @@ async function main() {
   if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
   if (command === "recover") return recoverCommand(process.argv.slice(3));
+  if (command === "receipts") return receiptCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
@@ -419,7 +582,47 @@ async function main() {
   process.exitCode = command ? 2 : 0;
 }
 function printHelp() {
-  console.log("seal — the developer gate\n\n  seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]\n                         install a local Claude Code override for selected calls\n                         (server discovery timeout default: 30000ms per phase)\n  seal unprotect SERVER     remove the local override without touching .mcp.json\n  seal recover --archive [SERVER] archive incompatible state and remove Seal's owned local override\n  seal uninstall            preview and confirm removal of this installation\n  seal doctor               show approval-origin assumptions\n  seal demo                 show one exact call run once and its replay blocked\n  seal verify PATH          inspect a saved kernel receipt and re-derive its recorded decision\n  seal reproduce ARGS...    run the kernel comparison owner from a Seal source checkout\n  seal status               show this project's protection plus local runtime and receipt state\n\n  Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.");
+  console.log(`seal — the developer gate
+
+  seal protect [--timeout-ms MILLISECONDS] SERVER
+      TOOL[?ARG=SCALAR|?ARG~"PATTERN"] [TOOL...]
+      install a local Claude Code override for selected calls
+      (server discovery timeout: 1..2147483647ms; default 30000ms per phase)
+  seal unprotect SERVER
+      remove the local override without touching .mcp.json
+  seal recover --archive [SERVER]
+      archive incompatible state and remove Seal's owned local override
+  seal receipts DIRECTORY
+      inspect receipt filename sequences for observed gaps
+  seal uninstall            preview and confirm removal of this installation
+  seal doctor
+      show approval-origin assumptions
+  seal demo [--dir PATH]
+      show one exact call run once and its replay blocked
+  seal verify PATH [--pubkey HEX]
+      inspect a saved kernel receipt and re-derive its recorded decision
+  seal reproduce TAG [--source PATH] [--platform linux-x64]
+      [--authority same-authority|independent] [--authority-name NAME]
+      compare artifact kernel bytes from a Seal source checkout
+    seal reproduce build-pinned-kernel TAG --output PATH
+        [--source PATH] [--manifest PATH]
+        rebuild the selected kernel into PATH
+  seal status
+      show this project's protection plus local runtime and receipt state
+  seal --help, -h
+      show this help (also the default with no command)
+  seal --version, -V
+      show the matching product version
+
+  Exit codes: 0 success/reportable state;
+              1 refusal, failure or incomplete verification;
+              2 unknown command or arguments to status.
+  Unknown commands also print help.
+  Status exits 0 for an unprotected or stale route;
+  inspect its text to judge protection.
+  Flag ranges, argument details and per-command exits: docs/reference/cli.md.
+  Seal supports install, demo, receipt checking and Protect on Linux x86-64
+  and macOS x64/arm64.`);
 }
 if (require.main === module) main().catch((error) => {
   if (error.ownershipRefusal) {

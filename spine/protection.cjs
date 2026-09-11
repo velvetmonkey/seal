@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { performance } = require("node:perf_hooks");
 const { platformSupport } = require("./platform.cjs");
 const { helperPlatform } = require("../scripts/macos-helper.cjs");
 const { spawn, spawnSync } = require("node:child_process");
@@ -415,7 +416,7 @@ function notControlledEntries(state, projectRoot) {
 }
 
 function protectionBoundary(state, projectRoot, statePath) {
-  const printedState = state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
+  const printedState = state?.state === STATES.ACTIVE ? "LEASE ACTIVE" : state?.state === STATES.UNPROTECTED ? "- outside Seal" : (state?.state || STATES.BROKEN);
   const route = state?.serverName ? `Sealed MCP route ${state.serverName}: ${printedState}` : `Sealed MCP route: ${printedState}`;
   let gated;
   try {
@@ -423,7 +424,8 @@ function protectionBoundary(state, projectRoot, statePath) {
   } catch (error) {
     gated = [`unknown: ${error.message}`];
   }
-  const lines = [statePath ? `${route} (${statePath})` : route, "", "Gated through this route:"];
+  const location = statePath ? `${route} (${statePath})` : route;
+  const lines = [state?.state === STATES.ACTIVE ? `${location}; authorization runtime judgment is evaluated for each approval.` : location, "", "Gated through this route:"];
   for (const name of gated) lines.push(`  ${name}`);
   lines.push("", "Not controlled:");
   for (const name of notControlledEntries(state, projectRoot)) lines.push(`  ${name}`);
@@ -986,11 +988,15 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
       let existing;
       try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
       if (lockOwnerIsLive(existing, "project-lock owner")) {
-        const generation = "unknown";
-        throw new ProtectionError(
+        // A live lock owner is a Seal operation in progress, not a lease: it
+        // finishes and releases, so the sentence must not tell the user to
+        // wait for a session to exit.
+        const refusal = new ProtectionError(
           "proxy_lease_active",
-          `active lease holder pid ${existing.pid}, generation ${generation}; retry after that session exits`,
+          `project lock held by pid ${existing.pid} for another Seal operation on this project; retry after that operation finishes`,
         );
+        refusal.lockHolderPid = existing.pid;
+        throw refusal;
       }
       try {
         fs.unlinkSync(filePath);
@@ -1040,6 +1046,11 @@ async function protect({
       : "usage: seal protect SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
   }
   const requestedTools = [...new Set(requestedSelections.map((selection) => selection.name))];
+  // A bare selection dominates predicates for that tool. The stored format
+  // reconstructs names without predicate entries as whole-tool protection.
+  const wholeTools = new Set(requestedSelections
+    .filter((selection) => selection.predicate === null)
+    .map((selection) => selection.name));
   const paddedName = requestedTools.find((name) => name.trim() !== name);
   if (paddedName !== undefined) {
     throw new ProtectionError("usage", `protected tool name has surrounding whitespace: ${JSON.stringify(paddedName)}`);
@@ -1095,7 +1106,7 @@ async function protect({
       serverName,
       guardTools: requestedTools,
       guardPredicates: requestedSelections
-        .filter((selection) => selection.predicate !== null)
+        .filter((selection) => selection.predicate !== null && !wholeTools.has(selection.name))
         .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),
       mcpJsonPath: project.filePath,
       mcpJsonHashAtProtect: project.hash,
@@ -1247,20 +1258,110 @@ function markBroken(statePath, state, error) {
   return next;
 }
 
+// Activation waits for project-lock acquisition, not for tool discovery or a
+// live lease to end. Ten real Claude mcp add/remove invocations on this host
+// measured 578.24–1023.33ms (median 825.57ms). 3200ms is 3.13x that maximum:
+// room for protect's in-lock get plus add and scheduling/filesystem overhead.
+// This is a retry budget, not a guarantee that the holder finishes within it.
+const ACTIVATION_LOCK_WAIT_MS = 3200;
+const ACTIVATION_LOCK_POLL_MS = 25;
+
+async function acquireProjectLockWaiting(projectRoot, env, wait = { elapsedMs: 0 }) {
+  const started = performance.now();
+  try {
+    for (;;) {
+      try {
+        return acquireProjectLock(projectRoot, env);
+      } catch (error) {
+        if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
+        const elapsedMs = performance.now() - started;
+        if (elapsedMs >= ACTIVATION_LOCK_WAIT_MS) {
+          throw new ProtectionError(
+            "proxy_lease_active",
+            `timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, ACTIVATION_LOCK_POLL_MS));
+      }
+    }
+  } finally {
+    wait.elapsedMs += performance.now() - started;
+  }
+}
+
+async function withProjectLock(projectRoot, env, body, wait) {
+  const lock = await acquireProjectLockWaiting(projectRoot, env, wait);
+  try {
+    return body(lock);
+  } finally {
+    lock.release();
+  }
+}
+
+function refuseLiveLease(state) {
+  if (lockOwnerIsLive(state.lease)) {
+    throw new ProtectionError(
+      "proxy_lease_active",
+      `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
+    );
+  }
+}
+
+// The record fields tool discovery and the lease commit depend on. Discovery
+// runs outside the project lock, so a record whose inputs changed meanwhile is
+// not activated on the strength of that discovery.
+function activationInputs(state) {
+  return JSON.stringify({
+    projectRoot: state.projectRoot,
+    serverName: state.serverName,
+    projectServerDigest: state.projectServerDigest,
+    childArgv: state.childArgv,
+    childEnv: state.childEnv,
+    storePath: state.storePath,
+    receiptsDir: state.receiptsDir,
+    selections: protectedToolSelections(state),
+    discoveryTimeoutMs: state.discoveryTimeoutMs,
+  });
+}
+
+// Discovery failed outside the lock. The record is marked BROKEN only when it
+// is still the record preflight validated and no other session has taken a
+// live lease on it meanwhile: a loser's failure must never null a live lease.
+// Returns the error the caller should raise.
+async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error, wait) {
+  let lock;
+  try {
+    lock = await acquireProjectLockWaiting(projectRoot, env, wait);
+  } catch {
+    return error;
+  }
+  try {
+    const state = readState(statePath);
+    if (!state) return error;
+    refuseLiveLease(state);
+    if (activationInputs(state) === activationInputs(validated)) markBroken(statePath, state, error);
+    return error;
+  } catch (outcome) {
+    return outcome instanceof ProtectionError && outcome.code === "proxy_lease_active" ? outcome : error;
+  } finally {
+    lock.release();
+  }
+}
+
 async function activationLease(statePath, env = process.env) {
   requireHumanApprovalOrigin(env);
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
-  const lock = acquireProjectLock(initial.projectRoot, env);
-  try {
+  const projectRoot = initial.projectRoot;
+  // Sum only acquisition time across preflight and commit (or failure cleanup).
+  // Discovery and the locked bodies do not count as waiting for the lock.
+  const wait = { elapsedMs: 0 };
+  // Preflight under the project lock: a live lease, a missing command or a
+  // drifted server refuses before the guarded server is started.
+  const preflight = await withProjectLock(projectRoot, env, (lock) => {
     const state = readState(statePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
-    if (lockOwnerIsLive(state.lease)) {
-      throw new ProtectionError(
-        "proxy_lease_active",
-        `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
-      );
-    }
+    refuseLiveLease(state);
     const childCommand = state.childArgv && state.childArgv[0];
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
@@ -1273,18 +1374,41 @@ async function activationLease(statePath, env = process.env) {
     // Validate before discovery starts the guarded server. Load lazily because
     // the journal also uses protection's lock helpers; createProxy checks again.
     require("./store.cjs").openJournal(state.storePath);
-    let toolNames;
-    try {
-      toolNames = await listServerTools({
-        childArgv: state.childArgv,
-        childEnv: state.childEnv,
-        projectRoot: state.projectRoot,
-        env,
-        timeoutMs: state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
-      });
-    } catch (error) {
-      markBroken(statePath, state, error);
-      throw error;
+    return { state, recovered: lock.recovered };
+  }, wait);
+  // Tool discovery starts the guarded server and can take up to the discovery
+  // timeout. It runs outside the project lock, as protect's own discovery
+  // does, so another server activating in the same window is not refused for
+  // a lock that is only a startup in progress. The lease is committed under
+  // the lock below, after the record is validated again.
+  let toolNames;
+  try {
+    toolNames = await listServerTools({
+      childArgv: preflight.state.childArgv,
+      childEnv: preflight.state.childEnv,
+      projectRoot,
+      env,
+      timeoutMs: preflight.state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
+    });
+  } catch (error) {
+    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error, wait);
+  }
+  return await withProjectLock(projectRoot, env, (lock) => {
+    const state = readState(statePath);
+    if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+    // The loser of a same-server race meets the winner's committed lease here
+    // and is refused with the winner's real pid and generation.
+    refuseLiveLease(state);
+    if (state.state === STATES.UNPROTECTED || activationInputs(state) !== activationInputs(preflight.state)) {
+      throw new ProtectionError(
+        "activation_state_changed",
+        `protection state changed during tool discovery (now ${state.state}); no lease was taken; run seal status`,
+      );
+    }
+    const got = currentDigestForState(state);
+    if (got !== state.projectServerDigest) {
+      markDrifted(statePath, state, got);
+      throw new ProtectionError("drifted", "project server drifted before proxy activation");
     }
     const guardedTools = protectedToolNames(state);
     const vanishedTools = guardedTools.filter((name) => !toolNames.includes(name));
@@ -1315,14 +1439,10 @@ async function activationLease(statePath, env = process.env) {
     writeState(statePath, next, {
       beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
     });
-    lock.release();
     Object.defineProperty(next, "leaseToken", { value: next.lease });
-    Object.defineProperty(next, "lockRecovered", { value: lock.recovered });
+    Object.defineProperty(next, "lockRecovered", { value: preflight.recovered || lock.recovered });
     return next;
-  } catch (error) {
-    lock.release();
-    throw error;
-  }
+  }, wait);
 }
 
 function beforeForwardFromState(statePath, leaseToken) {
@@ -1378,6 +1498,9 @@ module.exports = {
   STATES,
   acquireProjectLock,
   activationLease,
+  assertSealOwnedLocalOverride,
+  canonical,
+  claudeProjectRoot,
   beforeForwardFromState,
   dataHome,
   doctor,
