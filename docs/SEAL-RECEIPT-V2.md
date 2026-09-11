@@ -96,6 +96,11 @@ remain readable by the updated checker. The kernel wire encoding may spell a
 fraction in scientific notation to satisfy its digit bound; this preserves the
 parsed value and does not change the arguments in the receipt or downstream call.
 
+Kernel approval targets use the pinned Lean 4.28 `Json.compress` rendering,
+including its Unicode scalar key ordering and string/number encoding. This is
+not RFC 8785 JCS. The JavaScript target encoder must match that kernel encoding;
+receipt commitments continue to use the separate canonicalization rule above.
+
 ## Verbs and trust result
 
 `READ` parses received bytes with duplicate and truncation checks. `VALIDATE`
