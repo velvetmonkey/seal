@@ -50,15 +50,18 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   if (typeof tool !== "string" || tool.length === 0) {
     return { ok: false, reason: "tool name is not a non-empty string" };
   }
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return { ok: false, reason: "arguments must be an explicitly supplied object" };
+  }
   const usable = terminalWidth - WIDTH_MARGIN;
   if (usable < 20) return { ok: false, reason: `terminal width ${terminalWidth} leaves no usable message width` };
 
   let argLines;
   try {
-    const names = Object.keys(args ?? {}).sort((a, b) => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")));
+    const names = Object.keys(args).sort((a, b) => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")));
     argLines = names.length === 0
       ? ["  (none)"]
-      : names.map((name) => `  ${renderName(name)}: ${renderValue((args ?? {})[name])}`);
+      : names.map((name) => `  ${renderName(name)}: ${renderValue(args[name])}`);
   } catch (error) {
     return { ok: false, reason: `arguments have no canonical rendering: ${error.message}` };
   }

@@ -456,7 +456,7 @@ async function verify(args) {
   if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
   if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
   let text;
-  try { text = fs.readFileSync(absolute, "utf8"); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
+  try { text = fs.readFileSync(absolute); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
   if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
   const runtime = inspectRuntime();
   if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);

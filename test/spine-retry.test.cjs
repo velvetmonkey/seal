@@ -1297,3 +1297,59 @@ test("unsupported platform returns unsupported, not a warning", async (t) => {
   assert.notEqual(code, 0);
   assert.match(run.err, /unsupported/);
 });
+
+for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", false], ["0", 0], ["[]", []], ["null", null], ["missing", undefined]]) {
+  test(`argshape CLI refuses ${label} before offering approval`, async (t) => {
+    const dir = testTmpdir("seal-argshape-");
+    const dataFile = path.join(dir, "data.txt");
+    execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+    const { proxy, run, responseFor, responses } = spawnProxy(dir, dataFile);
+    t.after(run.kill);
+    initialize(proxy);
+    await responseFor(90);
+    const params = { name: "demo.mutate" };
+    if (value !== undefined) params.arguments = value;
+    proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params }) + "\n");
+    const started = Date.now();
+    while (!responses.some(frame => frame.id === 1 || frame.method === "elicitation/create")) {
+      assert.ok(Date.now() - started < 15000, run.out + run.err);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    const offered = responses.find(frame => frame.method === "elicitation/create");
+    assert.equal(offered, undefined, `illegal ${label} offered to human: ${JSON.stringify(offered)}`);
+    const refused = await responseFor(1);
+    assert.equal(refused.result.isError, true, JSON.stringify(refused));
+    assert.match(refused.result.content[0].text, /unrenderable_effect/);
+    assert.equal(readCount(`${dataFile}.count`), "0");
+    proxy.stdin.end();
+    assert.equal(await run.exit, 0, run.err);
+  });
+}
+
+test("argshape CLI object displays nested values and its receipt verifies", async (t) => {
+  const dir = testTmpdir("seal-argshape-object-");
+  const dataFile = path.join(dir, "data.txt");
+  execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
+  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  t.after(run.kill);
+  initialize(proxy);
+  await responseFor(90);
+  const args = { value: 1, nested: [true, null, "é"] };
+  proxy.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "demo.mutate", arguments: args } }) + "\n");
+  const request = await requestFor("elicitation/create");
+  assert.match(request.params.message, /value: 1/);
+  assert.match(request.params.message, /nested: \[true,null,"é"\]/);
+  answer(proxy, request, "accept", { approve: true });
+  await responseFor(1);
+  assert.equal(readCount(`${dataFile}.count`), "1");
+  const receipts = path.join(dir, "receipts");
+  const file = path.join(receipts, fs.readdirSync(receipts).find(name => name.endsWith("-ALLOW.json")));
+  const signer = require("../spine/protection.cjs").loadReceiptSigner({ ...process.env, XDG_DATA_HOME: path.join(dir, "data-home") });
+  for (const command of [[SEAL, "verify"], [CHECKER]]) {
+    const checked = spawnSync(process.execPath, [...command, file, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    assert.match(checked.stdout, /Signature and bindings   VALID/);
+  }
+  proxy.stdin.end();
+  assert.equal(await run.exit, 0, run.err);
+});
