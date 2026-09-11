@@ -17,6 +17,7 @@ const { createProxy, StoreError } = require("./proxy.cjs");
 const { generateSigner } = require("./receipt-v2.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
+const { inspectReceiptDirectory } = require("./receipt-population.cjs");
 const { TOOL } = require("./demo-server.cjs");
 const { printKernelTiming } = require("./presentation.cjs");
 
@@ -35,8 +36,8 @@ function readCount(countFile) {
 
 function readReceipts(receiptsDir) {
   if (!fs.existsSync(receiptsDir)) return [];
-  return fs.readdirSync(receiptsDir)
-    .filter((name) => name.endsWith(".json"))
+  return inspectReceiptDirectory(receiptsDir).receiptFiles
+    .map(({ name }) => name)
     .sort()
     .map((name) => {
       const receiptPath = path.join(receiptsDir, name);
@@ -277,7 +278,7 @@ async function run(argv, sealBinPath) {
   }
   const dataBefore = fs.readFileSync(resolvedDataFile);
   const countBeforeDirectWrite = readCount(countFile);
-  const decisionsBeforeDirectWrite = fs.readdirSync(receiptsDir).length;
+  const decisionsBeforeDirectWrite = inspectReceiptDirectory(receiptsDir).receiptFiles.length;
   console.log("");
   console.log("OUTSIDE THE SEAL PATH");
   console.log("");
@@ -292,7 +293,7 @@ async function run(argv, sealBinPath) {
   }
   const dataAfter = fs.readFileSync(resolvedDataFile);
   const countAfterDirectWrite = readCount(countFile);
-  const decisionsAfterDirectWrite = fs.readdirSync(receiptsDir).length;
+  const decisionsAfterDirectWrite = inspectReceiptDirectory(receiptsDir).receiptFiles.length;
   if (dataAfter.equals(dataBefore)) {
     fail("the direct write did not change the demo data file; the witness would be false");
   }
