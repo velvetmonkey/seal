@@ -567,6 +567,7 @@ async function main() {
   if (command === "verify") return verify(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
+  if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
   if (command === "recover") return recoverCommand(process.argv.slice(3));
   if (command === "receipts") return receiptCommand(process.argv.slice(3));
@@ -593,6 +594,7 @@ function printHelp() {
       archive incompatible state and remove Seal's owned local override
   seal receipts DIRECTORY
       inspect receipt filename sequences for observed gaps
+  seal uninstall            preview and confirm removal of this installation
   seal doctor
       show approval-origin assumptions
   seal demo [--dir PATH]

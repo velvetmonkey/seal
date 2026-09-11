@@ -20,7 +20,7 @@ function isolatedTree(t) {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-darwin-readiness-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ["spine", "scripts", "runtime"]) fs.mkdirSync(path.join(root, directory));
-  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/store.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
+  for (const relative of ["spine/platform.cjs", "spine/protection.cjs", "spine/uninstall.cjs", "spine/store.cjs", "spine/version.cjs", "scripts/macos-helper.cjs", "VERSION", "package.json"]) {
     fs.copyFileSync(path.join(ROOT, relative), path.join(root, relative));
   }
   return {

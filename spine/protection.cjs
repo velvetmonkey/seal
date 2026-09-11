@@ -948,6 +948,14 @@ function leaseMatches(lease, token) {
 }
 
 function acquireProjectLock(projectRoot, env = process.env) {
+  const installationLock = require("./uninstall.cjs").installLock();
+  try {
+    const projectLock = acquireProjectLockOnly(projectRoot, env);
+    return { ...projectLock, release() { try { projectLock.release(); } finally { installationLock.release(); } } };
+  } catch (error) { installationLock.release(); throw error; }
+}
+
+function acquireProjectLockOnly(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
   const witness = requireProcessStartWitnessBinding(process.pid, "Seal's own witness at project-lock acquire");
   const owner = { pid: process.pid, startWitness: witness.witness };
@@ -1114,6 +1122,7 @@ async function protect({
     };
     state.localOverride = installedLocalOverride({ root, serverName, sealBin, statePath });
     writeState(statePath, state);
+    require("./uninstall.cjs").registerRoute(statePath, state, env);
 
     const install = runClaude([
       "mcp", "add", "--scope", "local", serverName,
