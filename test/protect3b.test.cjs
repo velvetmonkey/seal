@@ -40,6 +40,7 @@ function localServer(name) { return readConfig().projects?.[cwd]?.mcpServers?.[n
 function projectHas(name) {
   try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
 }
+
 if (args[0] !== "mcp") process.exit(2);
 if (args[1] === "get") {
   const name = args[2];
@@ -86,6 +87,10 @@ process.exit(2);
 `);
   fs.chmodSync(script, 0o755);
   return bin;
+}
+
+function withoutObservationTime(output) {
+  return output.replace(/^Observation time: .*$/m, "Observation time: <measured>");
 }
 
 function fakeLocalOverridePath(root) {
@@ -801,7 +806,8 @@ test("status reports refused state without inventing absent tools or unrouted se
     assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
   }
   fs.writeFileSync(file, healthy);
-  assert.deepEqual(run(project, home, ["status"], env), before);
+  const restored = run(project, home, ["status"], env);
+  assert.deepEqual({ ...restored, out: withoutObservationTime(restored.out) }, { ...before, out: withoutObservationTime(before.out) });
 });
 
 test("status preserves known route facts across seven damaged state shapes and offers actionable recovery", () => {
