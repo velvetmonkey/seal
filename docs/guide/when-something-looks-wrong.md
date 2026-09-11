@@ -163,15 +163,16 @@ detail and report it.
 
 Seal refused to *ask* for approval because the effect exceeded Seal's own
 rendering rules — an argument line was too wide, the message needed more
-lines than Seal permits, or an argument had no canonical form (a non-integer
-number such as `1.5`). Passing those rules does not guarantee that the client
+lines than Seal permits, or an argument had no canonical form (a non-finite
+number or one outside the supported numeric range). Decimals such as `1.5`,
+coordinates, and scientific notation are supported. Passing those rules does not guarantee that the client
 paints every message-body line: in the recorded Claude Code 2.1.251 dialog it
 folds three of six lines and still paints the Accept button. The current schema
 description carries every argument, the full scope with TTL, and the outside-Seal
 boundary in the channel that recording paints; the new layout is not yet recorded.
 Seal does not take the protected server down to refuse a value the receipt writer will not seal.
 The tool call is refused; nothing ran. If you control the arguments, make
-them smaller or integral; otherwise this tool's calls cannot be
+the complete message fit the display limits; otherwise this tool's calls cannot be
 interactively approved.
 
 ### `project_server_drifted`
@@ -492,14 +493,15 @@ named member and obtain a new valid receipt before you run the checker again.
 
 ### `number_not_canonical`
 
-The receipt contains a number that is not a finite safe integer. The v2
-canonical form permits only integers that JavaScript and the kernel can carry
-without rounding.
+The receipt contains a non-finite number or a value outside
+`[-9007199254740991,9007199254740991]`. Decimals are supported within that range
+and retain their parsed JSON numeric value. Integer-only fields, such as
+timestamps, keep their own validation rules.
 
 ### `value_not_canonical`
 
 Canonicalisation encountered a value outside JSON's null, boolean, string,
-safe-integer, array, and object forms. The checker does not coerce it.
+supported finite-number, array, and object forms. The checker does not coerce it.
 
 ### `inert_input`
 
@@ -672,7 +674,7 @@ ill-formed UTF-8, and duplicate names at any depth refuse here.
 ### `member_order` and `number_not_canonical`
 
 The envelope does not use the fixed v2 top-level order, or a number is not a
-finite safe integer. Object members inside values use ECMAScript own-property
+finite number in the supported range. Object members inside values use ECMAScript own-property
 enumeration order after parsing: integer-index keys come first in ascending
 numeric order, followed by other string keys in insertion order.
 

@@ -70,11 +70,14 @@ use JSON escaping, followed by `:`, and values use this same rule. Duplicate
 members at every object at every depth are malformed. Duplicate comparison is
 after JSON unescaping of the member name, so `"a"` and `"\\u0061"` collide.
 Numbers are checked by parsed value, not by the wire token: `1000.0` and
-`1e3` READ and parse as the safe integer `1000`, while `1.5` READs and then
-fails in `canonical()` with `number_not_canonical`. Canonical numeric output
-is finite, integral, and in the safe range
-`[-9007199254740991,9007199254740991]`; `NaN`, infinities, and unsafe values
-are rejected. Strings are UTF-8 JSON strings. On emission, JSON.stringify's
+`1e3` parse as `1000`, while `1.5000` parses as the number `1.5`. Decimals,
+negative fractions, and scientific notation are accepted, including in nested
+objects and arrays. Numeric output uses `JSON.stringify` on the parsed
+IEEE-754 binary64 value, with no additional rounding or conversion to a string;
+`-0` emits as `0`. Values must be finite and in
+`[-9007199254740991,9007199254740991]`; `NaN`, infinities, and values outside
+that range are rejected. Field-specific integer rules still apply, including
+the non-negative safe integer `now` field. Strings are UTF-8 JSON strings. On emission, JSON.stringify's
 lowercase `\\ud800` form is used for a lone surrogate; this is an emission
 rule, not a permission to receive ill-formed Unicode. A byte input with
 ill-formed UTF-8 is refused before JSON parsing. Whitespace outside strings
@@ -86,6 +89,12 @@ string keys in insertion order. Sorting would make the receipt arguments
 commitment and kernel `args_hash` different claims. The rule is a specification,
 not a shared implementation; vectors are the boundary.
 Seal uses this rule for the receipt arguments commitment.
+
+Receipts containing decimals require the checker from the same updated release.
+Previously accepted integer-only receipts retain their canonical bytes and
+remain readable by the updated checker. The kernel wire encoding may spell a
+fraction in scientific notation to satisfy its digit bound; this preserves the
+parsed value and does not change the arguments in the receipt or downstream call.
 
 ## Verbs and trust result
 
