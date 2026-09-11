@@ -13,7 +13,7 @@ const SEAL = path.join(__dirname, "..", "bin", "seal");
 
 test("seal demo without --dir or XDG_DATA_HOME keeps receipts out of scratch HOME's store", async () => {
   const home = testTmpdir(path.join(os.tmpdir(), "seal-demo-default-home-"));
-  const env = { ...process.env, HOME: home };
+  const env = { ...process.env, HOME: home, TMPDIR: home, TMP: home, TEMP: home };
   delete env.XDG_DATA_HOME;
 
   const child = spawn(process.execPath, [SEAL, "demo"], { env, stdio: ["pipe", "pipe", "pipe"] });
