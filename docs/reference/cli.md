@@ -71,6 +71,4 @@ path and first later `--pubkey` value, ignoring other trailing words; `unprotect
 uses only its first argument, and `doctor` ignores trailing arguments. These
 existing parsing rules do not add flags to those commands.
 
-Previous: [Reference](README.md).
 Up: [Reference](README.md).
-Next: [Receipt operations](receipt-operations.md).

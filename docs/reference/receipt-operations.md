@@ -64,6 +64,6 @@ The normative envelope and canonicalisation rules remain in
 [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md). This page owns the meaning of the
 four operational verbs and the trust ceiling of the shipped verifier.
 
-Previous: [CLI reference](cli.md).
+Previous: [Reference](README.md).
 Up: [Reference](README.md).
 Next: [Multi-tool semantics](multi-tool-semantics.md).
