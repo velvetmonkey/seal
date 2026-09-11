@@ -3,7 +3,6 @@
 | I came here to | Route |
 |---|---|
 | Try and use Seal | [Install](start/install.md), [Protect](guide/choosing-what-to-protect.md), [Operate](guide/what-is-protected-right-now.md), [Receipts](reference/receipt-operations.md) |
-| Look up a command | [CLI reference](reference/cli.md) |
 | Fix something | [Troubleshooting](guide/when-something-looks-wrong.md), [Refusal codes](guide/when-something-looks-wrong.md) |
 | Audit the claims | [Guarantees](assurance/RELEASE-NOTES-v0.3.0.md#what-seal-does-not-cover), [Architecture](assurance/architecture.md), [Reproducible kernel](reproduce.md), [Release provenance](guide/github-actions-provenance.md) |
 
