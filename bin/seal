@@ -275,7 +275,7 @@ function statusRecord(recordPath, readError) {
     }
   }
 
-  let entries;
+  let population;
   try {
     const directory = fs.statSync(receiptDir);
     if (!directory.isDirectory()) {
@@ -284,7 +284,7 @@ function statusRecord(recordPath, readError) {
       return;
     }
     if ((directory.mode & 0o444) === 0) throw new Error("receipt directory is unreadable");
-    entries = fs.readdirSync(receiptDir, { withFileTypes: true });
+    population = receiptPopulation.inspectReceiptDirectory(receiptDir);
   }
   catch (error) {
     if (error.code === "ENOENT") {
@@ -297,10 +297,9 @@ function statusRecord(recordPath, readError) {
     return;
   }
 
-  const receiptEntries = entries.filter((entry) =>
-    (entry.isFile() || entry.isSymbolicLink()) && receiptPopulation.RECEIPT_NAME.test(entry.name));
-  const nonMatchingFiles = entries.filter((entry) =>
-    (entry.isFile() || entry.isSymbolicLink()) && !receiptPopulation.RECEIPT_NAME.test(entry.name));
+  // Count and select from the same filename-validated population as `seal receipts`.
+  const { receiptFiles: receiptEntries, nonMatchingFiles, rejectedFiles } = population;
+  for (const file of rejectedFiles) console.log(`Receipt file rejected: ${file.name} (${file.reason})`);
   if (receiptEntries.length === 0) {
     if (nonMatchingFiles.length === 0) {
       console.log("Receipts: no receipt files observed (receipt directory has no receipt-shaped files)");
@@ -313,7 +312,7 @@ function statusRecord(recordPath, readError) {
   }
   console.log(`Receipts: ${receiptEntries.length} receipt files observed in ${receiptDir}; run \`seal receipts ${receiptDir}\` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)`);
   const observed = [];
-  for (const entry of entries) {
+  for (const entry of receiptEntries) {
     const target = path.join(receiptDir, entry.name);
     let stat;
     try { stat = fs.statSync(target); } catch (error) {
