@@ -47,10 +47,10 @@ function status() {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
-    ? `Runtime: present seal-assurance-kit@${manifest.commit}`
+    ? `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.`
     : runtime.state === "integrity check failed"
-      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
-      : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+      ? `Runtime at status check FAIL: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
+      : `Runtime at status check UNKNOWN: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
   printReachabilityObservation(protection, process.cwd(), process.env);
 
   let paths;

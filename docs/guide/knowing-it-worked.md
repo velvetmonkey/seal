@@ -20,8 +20,8 @@ in the same shell environment: if it refuses, protection is not confirmed even
 when status reports ACTIVE. In particular, status does not detect
 `SEAL_ELICITATION_AUTO_RESPONSE`; doctor refuses that configuration.
 
-- **Protected through the reported route:** `Runtime: present`, the intended
-  `Sealed MCP route` is `ACTIVE`, and every tool you intend to guard appears
+- **Protected through the reported route:** `Runtime at status check: kernel payload bytes matched …`, the intended
+  `Sealed MCP route` is `LEASE ACTIVE`, and every tool you intend to guard appears
   under `Gated through this route`, and doctor does not refuse. An ACTIVE lease
   reports a live wrapper;
   it does not establish which client is using it. Confirm Claude Code selected
