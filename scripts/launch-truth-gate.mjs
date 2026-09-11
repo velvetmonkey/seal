@@ -165,7 +165,7 @@ const umbrellaName = workflowName('umbrella workflow', umbrellaWorkflow);
 const frontDoorClaims = [
   'Seal is a local approval boundary for AI-agent tool calls.',
   'Claude can ask. Seal decides whether that exact call may cross the boundary.',
-  'Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED.',
+  'Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is not yet tested.',
 ];
 for (const claim of frontDoorClaims) {
   if (readme.split(claim).length - 1 !== 1) fail(`README must carry the canonical front-door sentence exactly once: ${claim}`);

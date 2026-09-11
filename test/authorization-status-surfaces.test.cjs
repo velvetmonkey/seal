@@ -18,11 +18,11 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const RETIRED_DEMO_STATUS = "authorization rule tested; product state and forwarding tested; client and machine trusted.";
-const EXPECTED_README_LINE = "Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED.";
+const EXPECTED_README_LINE = "Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is not yet tested.";
 
 function assertExactSurfaces(output, readme) {
   assert.doesNotMatch(output, new RegExp(RETIRED_DEMO_STATUS.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")), "seal demo must not print the retired authorization status sentence");
-  const readmeLine = readme.match(/^Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED\.$/mu)?.[0];
+  const readmeLine = readme.match(/^Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is not yet tested\.$/mu)?.[0];
   assert.equal(readmeLine, EXPECTED_README_LINE, "README must carry the strict shipped-assurance sentence");
 }
 

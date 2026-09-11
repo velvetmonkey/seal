@@ -168,7 +168,8 @@ function verifyStore(storeRoot, record) {
   return { ok: true, treeSha256: digest };
 }
 
-// Pin the install record for this wrapper lifetime; never adopt a replacement.
+// Pin every byte of the immutable install record for this wrapper lifetime.
+// Route mutations live in routes.json and never change this anchor.
 // Disk agreement is an observation, not proof of already-loaded module bytes.
 function createRuntimeTreeCheck(storeRoot = path.resolve(__dirname, "..")) {
   const recordPath = path.resolve(storeRoot, "..", "..", "install.json");
@@ -178,7 +179,7 @@ function createRuntimeTreeCheck(storeRoot = path.resolve(__dirname, "..")) {
     detail: `Runtime tree FAIL: ${reason}; authorization refused.` });
   let anchorBytes, anchor;
   try {
-    anchorBytes = fs.readFileSync(recordPath, "utf8");
+    anchorBytes = fs.readFileSync(recordPath);
     anchor = JSON.parse(anchorBytes);
     const prefix = path.resolve(recordPath, "..", "..", "..");
     if (anchor.schema !== "seal.install/v1" ||
@@ -197,8 +198,8 @@ function createRuntimeTreeCheck(storeRoot = path.resolve(__dirname, "..")) {
   } catch { return unknown; }
   return () => {
     let current;
-    try { current = fs.readFileSync(recordPath, "utf8"); } catch { return unknown(); }
-    if (current !== anchorBytes) return fail("install record changed since this wrapper started");
+    try { current = fs.readFileSync(recordPath); } catch { return unknown(); }
+    if (!current.equals(anchorBytes)) return fail("install record changed since this wrapper started");
     const checked = verifyStore(storeRoot, anchor);
     if (!checked.ok) return fail(checked.reason);
     // Include unrecorded entries: hashing only the manifest's list cannot

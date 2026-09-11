@@ -424,6 +424,21 @@ operation, which may be waiting for a slow subprocess; it does not establish
 that another session owns a live lease. This is a transient start event, not a
 persisted project status.
 
+### `installation_lock_active`
+
+Another Seal operation holds this installation's lifecycle lock. Startup waits
+up to 3200ms for each lock acquisition, then refuses with a message naming the
+installation lock and its live holder PID. Let that operation finish and retry.
+This does not mean another wrapper owns the route's session lease.
+
+### `installation_lock_invalid`
+
+Seal cannot validate or acquire the installation's lifecycle lock. A stale
+owner, malformed lock record or unavailable process-start witness requires
+inspection; startup does not remove the lock or wait out this refusal. Check
+the named lock and operation before retrying. A live PID with a different
+process-start witness is stale, even if that PID still exists.
+
 ### `activation_state_changed`
 
 The stored protection record changed while the wrapper was discovering the

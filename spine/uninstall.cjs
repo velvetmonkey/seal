@@ -43,30 +43,54 @@ function installation(root = path.resolve(__dirname, '..')) {
 }
 // Shared by all installed project mutations, including activation. A crashed
 // lock is a refusal requiring inspection, never permission to delete a file.
-function installLock(install = installation()) {
+function installLock(install = installation(), operation = 'uninstall') {
   if (!install) return { release() {} };
+  const { ProtectionError, processStartWitness, lockOwnerIsLive } = require('./protection.cjs');
+  const refuse = (code, reason) => { throw new ProtectionError(code, `${operation} refused: ${reason}`); };
   const file = path.join(install.prefix, 'lib/seal/lifecycle.lock');
-  let fd;
-  try { fd = fs.openSync(file, 'wx', 0o600); }
-  catch (e) { fail(`cannot acquire installation lock ${file}: ${e.code}; stop other Seal operations and inspect any leftover lock`); }
-  const identity = fs.fstatSync(fd);
-  fs.writeFileSync(fd, `${process.pid}\n`);
+  const owner = { pid: process.pid, startWitness: processStartWitness(process.pid) };
+  if (!owner.startWitness) refuse('installation_lock_invalid', 'cannot establish installation-lock process-start witness');
+  // Publish complete owner bytes atomically: a competing startup must never
+  // observe our newly created lock before its owner record has been written.
+  const temporary = `${file}.${process.pid}.${crypto.randomBytes(8).toString('hex')}`;
+  fs.writeFileSync(temporary, JSON.stringify(owner) + '\n', { flag: 'wx', mode: 0o600 });
+  const identity = fs.lstatSync(temporary);
+  try {
+    fs.linkSync(temporary, file);
+  } catch (error) {
+    if (error.code !== 'EEXIST') refuse('installation_lock_invalid', `cannot acquire installation lock ${file}: ${error.code}`);
+    let existing;
+    try {
+      const current = fs.lstatSync(file);
+      if (!current.isFile() || !(current.mode & 0o444)) throw new Error('not a readable regular file');
+      existing = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (!Number.isSafeInteger(existing.pid) || existing.pid <= 0 || typeof existing.startWitness !== 'string' || !existing.startWitness) throw new Error('invalid owner record');
+      if (!lockOwnerIsLive(existing, 'installation-lock owner')) throw new Error('stale owner');
+    } catch (invalid) {
+      // A holder can release between EEXIST and reading its record.
+      if (invalid.code === 'ENOENT') return installLock(install, operation);
+      refuse('installation_lock_invalid', `stale or invalid installation lock ${file}: ${invalid.message}; inspect the lock before retrying`);
+    }
+    const contention = new ProtectionError('installation_lock_active', `${operation} refused: installation lock held by pid ${existing.pid}; retry after that Seal operation finishes`);
+    contention.lockHolderPid = existing.pid;
+    throw contention;
+  } finally { fs.unlinkSync(temporary); }
   let released = false;
   return { release() {
     if (released) return;
     released = true;
-    fs.closeSync(fd);
     const current = stat(file);
     if (current?.ino === identity.ino && current.dev === identity.dev) fs.unlinkSync(file);
   } };
 }
-function writeRecord(install) {
-  const temporary = `${install.recordPath}.uninstall-${process.pid}`;
-  const fd = fs.openSync(temporary, 'wx', 0o600);
-  try { fs.writeFileSync(fd, JSON.stringify(install.record, null, 2) + '\n'); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
-  try { fs.renameSync(temporary, install.recordPath); }
-  catch (e) { fs.unlinkSync(temporary); throw e; }
+function routeRegistry(install) {
+  if (!install.record.routeRegistry) return { file: null, routes: install.record.routes || [] };
+  if (install.record.routeRegistry !== 'lib/seal/routes.json') fail('invalid route registry path');
+  const file = inside(install.prefix, install.record.routeRegistry);
+  const bytes = regular(file);
+  const registry = JSON.parse(bytes);
+  if (registry.schema !== 'seal.routes/v1' || !Array.isArray(registry.routes)) fail('invalid route registry');
+  return { file, bytes, routes: registry.routes };
 }
 // Called under the installation lock BEFORE Claude can write its override.
 function registerRoute(statePath, state, env) {
@@ -75,9 +99,10 @@ function registerRoute(statePath, state, env) {
   const route = { statePath, configPath: path.resolve(env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir(), '.claude.json'),
     projectRoot: state.localOverride.claudeProjectRoot, serverName: state.serverName,
     definition: state.localOverride.definition };
-  const routes = install.record.routes || [];
-  install.record.routes = [...routes.filter(r => r.statePath !== statePath), route];
-  writeRecord(install);
+  const registry = routeRegistry(install);
+  if (!registry.file) fail('route registration requires reinstalling Seal with a separate route registry');
+  const routes = [...registry.routes.filter(r => r.statePath !== statePath), route];
+  atomicReplace(registry.file, JSON.stringify({ schema: 'seal.routes/v1', routes }, null, 2) + '\n', registry.bytes);
 }
 function plan(install, env = process.env) {
   const { prefix, root, recordPath } = install;
@@ -86,7 +111,9 @@ function plan(install, env = process.env) {
   if (record.ownership?.schema !== 'seal.created-paths/v1' || !record.ownership.paths.some(e => e.path === 'bin/seal') || !record.ownership.paths.some(e => e.path === 'lib/seal/install.json')) fail('this install has no creation ledger; automatic file removal cannot establish ownership');
   const snapshots = new Map([[recordPath, recordBytes]]);
   const configPaths = new Set([path.resolve(env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir(), '.claude.json')]);
-  const routes = [...(record.routes || [])];
+  const registry = routeRegistry({ ...install, record });
+  if (registry.file) snapshots.set(registry.file, registry.bytes);
+  const routes = [...registry.routes];
   for (const route of routes) configPaths.add(route.configPath);
   const configs = [];
   const states = new Map();
@@ -145,7 +172,7 @@ function plan(install, env = process.env) {
       dirs.push(full);
     } else {
       const bytes = regular(full);
-      if (full !== recordPath && hash(bytes) !== entry.sha256) fail(`created file was edited: ${full}`);
+      if (full !== recordPath && full !== registry.file && hash(bytes) !== entry.sha256) fail(`created file was edited: ${full}`);
       snapshots.set(full, bytes);
       files.push(full);
     }

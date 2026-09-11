@@ -97,18 +97,36 @@ export function buildStepInput({ tool, args, approvals = [], now = 1000, votes =
 
 // Parse seal_decide output -> demo-friendly verdict.
 export function parseVerdict(raw, tool) {
-  const v = JSON.parse(raw);
-  if (v.error) return { verdict: "ERROR", reason: v.error, certs: [], tool };
-  if (v.route === "passthrough") return { verdict: "ALLOW", reason: "not a mediated tool call (passthrough)", certs: [], tool };
-  const audit = v.audit ? JSON.parse(v.audit) : { certs: [], verdict: v.route === "block" ? "deny" : "allow" };
-  const certs = (audit.certs || []).map((c) => ({ kernel: c.kernel, verdict: c.verdict, reason: c.reason, certHash: String(c.certHash) }));
-  const denied = certs.find((c) => c.verdict === "deny");
-  return {
-    verdict: v.route === "block" ? "DENY" : "ALLOW",
-    reason: denied ? `${denied.kernel} kernel: ${denied.reason}` : "every gating kernel allows",
-    deny_kernel: denied ? denied.kernel : null,
-    certs, tool,
-    // single representative cert for the determinism lane (the deny cert, else first)
-    certHash: (denied || certs[0] || {}).certHash || null,
-  };
+  const malformed = () => ({ verdict: "ERROR", reason: "unrecognised or malformed kernel output", certs: [], tool });
+  try {
+    if (typeof raw !== "string") return malformed();
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object" || Array.isArray(v)) return malformed();
+    if (Object.hasOwn(v, "error")) return { verdict: "ERROR", reason: typeof v.error === "string" && v.error ? v.error : "malformed kernel error", certs: [], tool };
+    if (!["passthrough", "forward", "block"].includes(v.route)) return malformed();
+    let audit = { certs: [], verdict: v.route === "block" ? "deny" : "allow" };
+    if (Object.hasOwn(v, "audit")) {
+      if (typeof v.audit !== "string" || v.route === "passthrough") return malformed();
+      audit = JSON.parse(v.audit);
+      if (!audit || typeof audit !== "object" || Array.isArray(audit) ||
+          audit.verdict !== (v.route === "forward" ? "allow" : "deny") ||
+          !Array.isArray(audit.certs) || audit.certs.some(c =>
+            !c || typeof c !== "object" || Array.isArray(c) ||
+            typeof c.kernel !== "string" || typeof c.reason !== "string" ||
+            typeof c.certHash !== "string" || !/^[0-9]+$/.test(c.certHash) ||
+            !["allow", "deny"].includes(c.verdict) ||
+            (v.route === "forward" && c.verdict !== "allow"))) return malformed();
+    }
+    if (v.route === "passthrough") return { verdict: "ALLOW", reason: "not a mediated tool call (passthrough)", certs: [], tool };
+    const certs = audit.certs.map((c) => ({ kernel: c.kernel, verdict: c.verdict, reason: c.reason, certHash: c.certHash }));
+    const denied = certs.find((c) => c.verdict === "deny");
+    return {
+      verdict: v.route === "forward" ? "ALLOW" : "DENY",
+      reason: denied ? `${denied.kernel} kernel: ${denied.reason}` : "every gating kernel allows",
+      deny_kernel: denied ? denied.kernel : null,
+      certs, tool,
+      // single representative cert for the determinism lane (the deny cert, else first)
+      certHash: (denied || certs[0] || {}).certHash || null,
+    };
+  } catch { return malformed(); }
 }

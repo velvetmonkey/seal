@@ -32,10 +32,29 @@ function buildStepInput({ tool, args, approvals, now, votes, grants, forecasts, 
 }
 
 function parseVerdict(raw) {
-  const result = JSON.parse(raw);
-  if (result.error) return "ERROR";
-  if (result.route === "passthrough") return "ALLOW";
-  return result.route === "block" ? "BLOCK" : "ALLOW";
+  try {
+    if (typeof raw !== "string") return "ERROR";
+    const result = JSON.parse(raw);
+    if (!result || typeof result !== "object" || Array.isArray(result)) return "ERROR";
+    if (Object.hasOwn(result, "error")) return "ERROR";
+    if (!["passthrough", "forward", "block"].includes(result.route)) return "ERROR";
+    // The judge validates supplied audit structure independently of the
+    // producer. A malformed or contradictory audit cannot grant permission.
+    if (Object.hasOwn(result, "audit")) {
+      if (typeof result.audit !== "string" || result.route === "passthrough") return "ERROR";
+      const audit = JSON.parse(result.audit);
+      if (!audit || typeof audit !== "object" || Array.isArray(audit) ||
+          audit.verdict !== (result.route === "forward" ? "allow" : "deny") ||
+          !Array.isArray(audit.certs) || audit.certs.some(c =>
+            !c || typeof c !== "object" || Array.isArray(c) ||
+            typeof c.kernel !== "string" || typeof c.reason !== "string" ||
+            typeof c.certHash !== "string" || !/^[0-9]+$/.test(c.certHash) ||
+            !["allow", "deny"].includes(c.verdict) ||
+            (result.route === "forward" && c.verdict !== "allow"))) return "ERROR";
+    }
+    if (result.route === "forward" || result.route === "passthrough") return "ALLOW";
+    return "BLOCK";
+  } catch { return "ERROR"; }
 }
 
 async function load() {
