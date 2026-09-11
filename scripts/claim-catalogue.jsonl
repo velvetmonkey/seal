@@ -66,3 +66,33 @@
 {"id":"emitted-cli-reference-12","kind":"emitted","text":"2 unknown command or arguments to status. Unknown commands also print help.","sha256":"3ca520bcf1daa40df297d64ac5099856dc5a03668c2568221babb5e19a6d446a"}
 {"id":"emitted-cli-reference-13","kind":"emitted","text":"Status exits 0 for an unprotected or stale route; inspect its text to judge protection.","sha256":"6bf3cf1a891e507022534d0c57f615a06bff04149c2ec2597afa1a94f92648ce"}
 {"id":"emitted-cli-reference-14","kind":"emitted","text":"Flag ranges, argument details and per-command exits: docs/reference/cli.md.","sha256":"21a7e3d96ba9dd2f909b2cfea4bad68c8e15d50f9e48caeb8a5d2a07fac2b04a"}
+{"id":"cli-help-round2-01","kind":"emitted","text":"seal protect [--timeout-ms MILLISECONDS] SERVER","sha256":"1f22431c233f7625e2e2cfbb71125f20d16d119de4dd2aad39606664efaac245"}
+{"id":"cli-help-round2-02","kind":"emitted","text":"TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]","sha256":"fdfacf7d82e3bc4afcf635544fe7c1f03dcf69aadb34186fe07f2d152cfcc9d5"}
+{"id":"cli-help-round2-03","kind":"emitted","text":"seal unprotect SERVER","sha256":"a5d454babbdc1f5ed5f585bff98e5939c61c7bee06419423c5a69705fc4df285"}
+{"id":"cli-help-round2-04","kind":"emitted","text":"remove the local override without touching .mcp.json","sha256":"239ef7a185635c045564f7914c807db71d0cae46f725f7f84f2c6264c4583d8b"}
+{"id":"cli-help-round2-05","kind":"emitted","text":"seal recover --archive [SERVER]","sha256":"bda80f1ada5475491dad2d94aa41499ff7c5d07fc5b4fe10a24a4b623f3f143f"}
+{"id":"cli-help-round2-06","kind":"emitted","text":"archive incompatible state and remove Seal's owned local override","sha256":"d8144798243ebe69fd8af7dc0bad2e4bef9fe55b527de97d0c7c9cee22c78090"}
+{"id":"cli-help-round2-07","kind":"emitted","text":"seal receipts DIRECTORY","sha256":"139461c07c3371d8aaaed3ea75572c2bc4d3bfc7ff792217559e2f64f478502a"}
+{"id":"cli-help-round2-08","kind":"emitted","text":"inspect receipt filename sequences for observed gaps","sha256":"7b4eda5a6674e1fb152e18a0d26c9fc9806d44a286a6c1e962577b562cb90e6c"}
+{"id":"cli-help-round2-09","kind":"emitted","text":"seal doctor","sha256":"8295c2f02a7def0506bc3baef2e30a34d7470f21d81e514263c0829c3d78e535"}
+{"id":"cli-help-round2-10","kind":"emitted","text":"show approval-origin assumptions","sha256":"1b813f5b56954a0c05f50ad98861515560ce0d82ee81ea090b4641cc86c93f63"}
+{"id":"cli-help-round2-11","kind":"emitted","text":"seal demo [--dir PATH]","sha256":"16187f27e7620420473bf9774c9bbedf588b2195b0e24b52cc938f4288d15c62"}
+{"id":"cli-help-round2-12","kind":"emitted","text":"show one exact call run once and its replay blocked","sha256":"4a5cbd501cb5c900736b33fd058c38e61b37094a0a0cdd380cfc99cdfa349ea7"}
+{"id":"cli-help-round2-13","kind":"emitted","text":"seal verify PATH [--pubkey HEX]","sha256":"8ffd15bff1b7df684a35e40f2edcab16fb0959df5472361f37763577f87ce12e"}
+{"id":"cli-help-round2-14","kind":"emitted","text":"inspect a saved kernel receipt and re-derive its recorded decision","sha256":"10b4b9d72f073b590e29b0c5fefdadf2bf387c60d770f5b5062a43774976a326"}
+{"id":"cli-help-round2-15","kind":"emitted","text":"seal reproduce build-pinned-kernel TAG --output PATH","sha256":"86be6b64bc7b16bfd3bc71f88c48a13c3b558fd56b937b5fbbddd0f336809195"}
+{"id":"cli-help-round2-16","kind":"emitted","text":"[--source PATH] [--manifest PATH]","sha256":"edd242936da666d33c9f24a5171e6e8b200691f43e3ef71dee83fb6478e8981f"}
+{"id":"cli-help-round2-17","kind":"emitted","text":"seal status","sha256":"8919b37ba5f4e91f7eebeb509525e5582ac4caabf95482266bfc367c59be4884"}
+{"id":"cli-help-round2-18","kind":"emitted","text":"show this project's protection plus local runtime and receipt state","sha256":"3ece0516dc51090b6baa4d9d21b78ff1e9906fbeecd4aad8b72655f909c098a8"}
+{"id":"cli-help-round2-19","kind":"emitted","text":"seal --help, -h","sha256":"010c10275ce0638b4ecc9f655b3d8a7980e7dd252feb9b2c76dcc9cb9dd5e72a"}
+{"id":"cli-help-round2-20","kind":"emitted","text":"show this help (also the default with no command)","sha256":"7366bee1e435f7e9673a9ea812192af2e643581775aeb32cd9b46f15b297ee6b"}
+{"id":"cli-help-round2-21","kind":"emitted","text":"seal --version, -V","sha256":"ea568cfaf193a59f51dd183bd16253242f05b591add440502a0ff2568ecbabdb"}
+{"id":"cli-help-round2-22","kind":"emitted","text":"show the matching product version","sha256":"33df3c0c9a90b8d8e7c87bbecbaa8b13bb4e8276a376f210afb2b771c5e93e91"}
+{"id":"cli-help-round2-23","kind":"emitted","text":"Exit codes: 0 success/reportable state;","sha256":"337bfe14461958001bdc807e483d138eab95b21f7ec6694303d7ddea98592df3"}
+{"id":"cli-help-round2-24","kind":"emitted","text":"1 refusal, failure or incomplete verification;","sha256":"501b4e4345c4d114528b7345cb1db5fd612fb8dc0f0863849b931e7e3514923a"}
+{"id":"cli-help-round2-25","kind":"emitted","text":"2 unknown command or arguments to status.","sha256":"cdade67bbe43a9ff498b93265b7fe23e381f456ceaf1bc7b73ef9714a6318013"}
+{"id":"cli-help-round2-26","kind":"emitted","text":"Unknown commands also print help.","sha256":"04a97ed58125d9f4e210ecfbf0f69e2e5232a0d2a694ab7c4c1b7320a16e3bd5"}
+{"id":"cli-help-round2-27","kind":"emitted","text":"Status exits 0 for an unprotected or stale route;","sha256":"e615f7d44a724359f2eb53fc4f2014ce48b2c21dfeadcac552a78f5214a8c45f"}
+{"id":"cli-help-round2-28","kind":"emitted","text":"inspect its text to judge protection.","sha256":"b2f46654d813e473bce0d6f0bfab7ecd25f8e0a4f79a1d2173d3cfdac938ae22"}
+{"id":"cli-help-round2-29","kind":"emitted","text":"Seal supports install, demo, receipt checking and Protect on Linux x86-64","sha256":"b06b13d5500eb49c2519c367a51a3205929b71d65186d526ba0a5d4dda5d7d97"}
+{"id":"cli-help-round2-30","kind":"emitted","text":"and macOS x64/arm64.","sha256":"49ab5aff77ab78ac59c291a646397739e570794df01cd07c442945b5e739e82a"}
