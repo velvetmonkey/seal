@@ -206,15 +206,7 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
   assert.match(workflow, /::error::main kept moving while release documentation PR #\$pr_number was refreshed/);
 });
 
-// CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
-test("generated install prose is bound to published installer observations", async (t) => {
-  const directory = testTmpdir(path.join(os.tmpdir(), 'seal-prose-fetch-'));
-  const names = ['artifact', 'checker', 'sums'].map(kind =>
-    fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8').match(new RegExp(kind + '_name="([^"]+)"'))[1]);
-  const preload = path.join(directory, 'fetch.mjs');
-  // Record only this run's live responses; the checker still authenticates them.
-  // Negative transport cases replay those exact bytes without extra downloads.
-  const preloadSource = String.raw`import fs from 'node:fs';
+const preloadSource = String.raw`import fs from 'node:fs';
 import path from 'node:path';
 const directory = process.env.PROSE_FETCH_DIRECTORY;
 const mode = process.env.PROSE_FETCH_MODE;
@@ -232,13 +224,23 @@ globalThis.fetch = async (url, options) => {
     if (!bytes.equals(Buffer.from(await assertionResponse.arrayBuffer()))) {
       throw new Error('recorded response bytes cannot be replayed as a fresh response');
     }
-    return new Response(bytes);
+    // Null-body statuses and network-error responses cannot take a byte body.
+    const replay = response.status === 0 ? Response.error() : new Response(
+      response.body === null ? null : bytes,
+      { status: response.status, statusText: response.statusText, headers: response.headers },
+    );
+    Object.defineProperties(replay, {
+      url: { value: response.url },
+      redirected: { value: response.redirected },
+    });
+    return replay;
   }
   if (name === process.env.PROSE_FETCH_TARGET) {
     if (mode === 'all-transient' || (['transient', 'transient-wrong'].includes(mode) && attempt === 1)) {
       throw new TypeError('fetch failed', { cause: Object.assign(new Error('socket reset by peer'), { code: 'UND_ERR_SOCKET' }) });
     }
     if (['404', '401', '501'].includes(mode)) return new Response(null, { status: Number(mode) });
+    if (mode === 'dns') throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' }) });
     if (mode === 'unknown') throw new TypeError('fixture programming error');
     if (mode === 'body' && attempt === 1) return new Response(new ReadableStream({
       start(controller) { controller.error(Object.assign(new Error('body reset'), { code: 'ECONNRESET' })); },
@@ -250,6 +252,91 @@ globalThis.fetch = async (url, options) => {
   return new Response(bytes);
 };
 `;
+
+function recordingFetch(directory, nativeFetch) {
+  const scope = { fetch: nativeFetch };
+  const source = preloadSource.replace(/^import .*;\n/gm, '');
+  new Function('fs', 'path', 'process', 'globalThis', source)(fs, path, {
+    env: { PROSE_FETCH_DIRECTORY: directory, PROSE_FETCH_MODE: 'record' },
+  }, scope);
+  return scope.fetch;
+}
+
+for (const redirected of [false, true]) {
+  test(`recorded response preserves ${redirected ? 'redirect URL and flag' : '404 status and headers'}`, async (t) => {
+    const directory = testTmpdir(path.join(os.tmpdir(), 'seal-record-metadata-'));
+    const server = http.createServer((request, response) => {
+      if (request.url === '/redirect') {
+        response.writeHead(302, { location: '/final' });
+        response.end();
+      } else {
+        response.writeHead(redirected ? 201 : 404, redirected ? 'Created' : 'Missing probe', {
+          'x-probe': 'present', 'content-type': 'text/plain',
+        });
+        response.end('probe body');
+      }
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    const url = `http://127.0.0.1:${server.address().port}/${redirected ? 'redirect' : 'missing'}`;
+    let original;
+    let reads = 0;
+    const recordedFetch = recordingFetch(directory, async (...args) => {
+      original = await fetch(...args);
+      const read = original.arrayBuffer.bind(original);
+      original.arrayBuffer = () => { reads += 1; return read(); };
+      return original;
+    });
+    const response = await recordedFetch(url);
+    if (!redirected) assert.equal(response.status, 404);
+    assert.equal(response.url, original.url);
+    assert.equal(response.status, original.status);
+    assert.equal(response.redirected, redirected);
+    assert.equal(response.statusText, original.statusText);
+    assert.deepEqual([...response.headers], [...original.headers]);
+    assert.equal(response.headers.get('x-probe'), 'present');
+    assert.equal(response.ok, redirected);
+    assert.equal(await response.text(), 'probe body');
+    assert.equal(reads, 1);
+    assert.equal(original.bodyUsed, true);
+    const cached = path.join(directory, redirected ? 'redirect' : 'missing');
+    assert.equal(fs.existsSync(cached), redirected);
+    if (redirected) assert.equal(fs.readFileSync(cached, 'utf8'), 'probe body');
+  });
+}
+
+test('recorded response handles empty, null and failed bodies', async () => {
+  const directory = testTmpdir(path.join(os.tmpdir(), 'seal-record-bodies-'));
+  for (const original of [new Response(''), ...[204, 205, 304].map(status => new Response(null, { status })), Response.error()]) {
+    const url = `https://example.invalid/status-${original.status}`;
+    const response = await recordingFetch(directory, async () => original)(url);
+    assert.equal(response.status, original.status);
+    assert.equal(response.statusText, original.statusText);
+    assert.deepEqual([...response.headers], [...original.headers]);
+    assert.equal(response.body === null, original.body === null);
+    assert.equal(await response.text(), '');
+    assert.equal(fs.existsSync(path.join(directory, `status-${original.status}`)), original.ok);
+  }
+  for (const bodyFailure of [false, true]) {
+    const failure = new Error(bodyFailure ? 'body failed' : 'fetch failed');
+    const recordedFetch = recordingFetch(directory, async () => {
+      if (!bodyFailure) throw failure;
+      return new Response(new ReadableStream({ start(controller) { controller.error(failure); } }));
+    });
+    await assert.rejects(recordedFetch('https://example.invalid/failure'), error => error === failure);
+    assert.equal(fs.existsSync(path.join(directory, 'failure')), false);
+  }
+});
+
+// CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
+test("generated install prose is bound to published installer observations", async (t) => {
+  const directory = testTmpdir(path.join(os.tmpdir(), 'seal-prose-fetch-'));
+  const names = ['artifact', 'checker', 'sums'].map(kind =>
+    fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8').match(new RegExp(kind + '_name="([^"]+)"'))[1]);
+  const preload = path.join(directory, 'fetch.mjs');
+  // Record only this run's live responses; the checker still authenticates them.
+  // Negative transport cases replay those exact bytes without extra downloads.
+
   assert.doesNotMatch(preloadSource, /response\.clone\(\)\.arrayBuffer\(\)/,
     'recording must consume the native response body exactly once');
   fs.writeFileSync(preload, preloadSource);
@@ -265,6 +352,7 @@ globalThis.fetch = async (url, options) => {
     ['all-transient', 1, 3, /UND_ERR_SOCKET/],
     ['wrong-byte', 1, 1, /published .* digest/],
     ['404', 1, 1, /HTTP 404/],
+    ['dns', 1, 3, /ENOTFOUND/],
     ['503', 0, 2, /PASS install prose:/],
     ['body', 0, 2, /PASS install prose:/],
     ['transient-wrong', 1, 2, /published .* digest/],
