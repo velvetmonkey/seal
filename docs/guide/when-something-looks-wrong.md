@@ -119,6 +119,20 @@ detail names the side that refused. Seal fails closed and does not consume or
 forward the call. Preserve the receipt and report the disagreement; retrying
 without understanding it is not a remedy.
 
+### `runtime_tree_fail`
+
+The installed files no longer match the fixed install record, an unrecorded
+file appeared, or the record changed after this wrapper started. The approval
+was refused. Reinstall and restart the protected session. Matching disk bytes
+at a check does not establish which bytes the process already loaded.
+
+### `runtime_tree_unknown`
+
+No trustworthy installed-tree record was available at the approval check.
+Missing or unreadable records and source-checkout wrappers cannot authorize
+protected calls. Complete a verified installation and restart the session;
+the wrapper never creates or adopts a replacement record during approval.
+
 ### `kernel_integrity_refused`
 
 The vendored WASM is missing, unreadable, or its SHA-256 does not match the
