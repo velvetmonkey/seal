@@ -11,7 +11,9 @@ const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 
 test("seal demo names the retained scratch directory and its recovery command", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-retained-test-"));
   const run = spawnSync(process.execPath, [SEAL, "demo"], {
+    env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root },
     cwd: ROOT,
     encoding: "utf8",
     input: "y\n",
