@@ -567,7 +567,7 @@ const { writeKernelReceipt } = require("../test-support/kernel-receipt.cjs");
 // user's durable store as empty after a demo run.
 test("END TO END: seal demo leaves status's durable receipt store untouched", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-status-e2e-"));
-  const demo = run(["demo"], root, "y\n");
+  const demo = run(["demo", "--dir", path.join(root, "seal-demo-status")], root, "y\n");
   assert.equal(demo.code, 0, demo.out);
 
   const receiptPaths = [...demo.out.matchAll(/^receipt written: (.+)$/gm)].map((m) => m[1]);
