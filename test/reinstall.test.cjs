@@ -153,7 +153,7 @@ fs.writeFileSync(file,JSON.stringify(config,null,2)+'\\n');
   assert.equal(protectedResult.code, 0, protectedResult.out);
   const recordPath = path.join(prefix, 'lib/seal/install.json');
   const record = () => JSON.parse(fs.readFileSync(recordPath));
-  const statePath = record().routes[0].statePath;
+  const statePath = require(path.join(prefix, record().store, "spine/protection.cjs")).statePathFor(project, env, "warehouse");
   return { root, home, project, prefix, env, config, projectBytes, invoke, statePath, recordPath, record };
 }
 function assertUninstallRouteRestored(box) {
@@ -425,4 +425,175 @@ test("authorization rechecks the fixed installed tree and refuses without a kern
     assert.equal(kernelCalls, 2, "the next approval must recheck the tree");
   } finally { fs.unlinkSync(extra); fs.chmodSync(root, 0o555); }
   assert.equal(createRuntimeTreeCheck(ROOT)().band, "UNKNOWN");
+});
+
+// Exercise the installed dispatcher, real approval/kernel path and lifecycle
+// lock together. The client shim only stands in for Claude's config writes.
+function installedSession(box, statePath) {
+  const { spawn } = require('node:child_process');
+  const child = spawn(process.execPath, [path.join(box.prefix, 'bin/seal'), '__proxy', '--protect-state', statePath],
+    { cwd: box.project, env: box.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const frames = [];
+  let stderr = '';
+  child.stderr.on('data', b => { stderr += b; });
+  const lines = require('node:readline').createInterface({ input: child.stdout });
+  lines.on('line', line => frames.push(JSON.parse(line)));
+  const send = frame => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...frame }) + '\n');
+  async function receive(predicate) {
+    const deadline = Date.now() + 15000;
+    for (;;) {
+      const at = frames.findIndex(predicate);
+      if (at >= 0) return frames.splice(at, 1)[0];
+      assert.equal(child.exitCode, null, stderr);
+      assert.ok(Date.now() < deadline, `installed session timed out: ${stderr}`);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+  return {
+    child, stderr: () => stderr,
+    async initialize() {
+      send({ id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 'assembly', version: '1' } } });
+      await receive(r => r.id === 1);
+    },
+    async approve(id) {
+      send({ id, method: 'tools/call', params: { name: 'inspect', arguments: {} } });
+      const prompt = await receive(r => r.method === 'elicitation/create');
+      send({ id: prompt.id, result: { action: 'accept', content: { approve: true } } });
+      return receive(r => r.id === id);
+    },
+    async stop() {
+      child.stdin.end();
+      await new Promise(resolve => child.exitCode !== null ? resolve() : child.once('exit', resolve));
+      lines.close();
+    },
+  };
+}
+
+function secondInstalledRoute(box) {
+  const config = JSON.parse(fs.readFileSync(path.join(box.project, '.mcp.json')));
+  config.mcpServers.second = config.mcpServers.warehouse;
+  fs.writeFileSync(path.join(box.project, '.mcp.json'), JSON.stringify(config));
+  const protectedResult = box.invoke(['protect', 'second', 'inspect']);
+  assert.equal(protectedResult.code, 0, protectedResult.out);
+  const installed = require(path.join(box.prefix, box.record().store, 'spine/protection.cjs'));
+  return installed.statePathFor(box.project, box.env, 'second');
+}
+
+test('installed assembly: register B while A runs, approve A, wait for installation lock, uninstall both', async t => {
+  const box = uninstallBox();
+  const a = installedSession(box, box.statePath);
+  let b;
+  try {
+    await a.initialize();
+    assert.ok(!(await a.approve(2)).result.isError, 'initial approval must ALLOW');
+    const anchor = fs.readFileSync(box.recordPath);
+    const stateB = secondInstalledRoute(box);
+    assert.deepEqual(fs.readFileSync(box.recordPath), anchor, "protect B must not rewrite any anchor byte");
+    await t.test('route registration preserves running authorization', async () => {
+      const result = await a.approve(3);
+      assert.ok(!result.result.isError, JSON.stringify(result));
+      console.log('ASSEMBLY route A approval after protect B: ALLOW');
+    });
+    await t.test('startup waits through a legitimate installation operation', async () => {
+      const lifecycle = require(path.join(box.prefix, box.record().store, 'spine/uninstall.cjs'));
+      const lock = lifecycle.installLock();
+      const timer = setTimeout(() => lock.release(), 500);
+      const started = performance.now();
+      try {
+        b = installedSession(box, stateB);
+        await b.initialize();
+        assert.ok(performance.now() - started >= 450, 'startup must wait for the holder');
+        console.log(`ASSEMBLY B startup waited ${Math.round(performance.now() - started)}ms and succeeded`);
+      } finally { clearTimeout(timer); lock.release(); }
+    });
+  } finally { await a.stop(); if (b) await b.stop(); }
+  const owned = box.record().ownership.paths.filter(e => e.kind === 'file');
+  const foreign = path.join(box.prefix, 'foreign.txt');
+  fs.writeFileSync(foreign, 'retain me');
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(result.code, 0, result.out);
+  for (const entry of owned) assert.equal(fs.existsSync(path.join(box.prefix, entry.path)), false, entry.path);
+  const config = JSON.parse(fs.readFileSync(box.config));
+  assert.deepEqual(config.projects[box.project].mcpServers, {});
+  assert.equal(config.mcpServers.foreign.command, 'foreign-server');
+  assert.equal(fs.readFileSync(foreign, 'utf8'), 'retain me');
+  console.log('ASSEMBLY uninstall removed every owned file and both routes; foreign file retained');
+});
+
+test('installed assembly negative controls: program and immutable record tampering refuse the next approval', async () => {
+  const box = uninstallBox();
+  const a = installedSession(box, box.statePath);
+  try {
+    await a.initialize();
+    assert.ok(!(await a.approve(2)).result.isError);
+    const program = path.join(box.prefix, box.record().store, 'spine/demo.cjs');
+    const bytes = fs.readFileSync(program);
+    fs.chmodSync(program, 0o644);
+    try {
+      const tampered = Buffer.from(bytes); tampered[0] ^= 1;
+      fs.writeFileSync(program, tampered);
+      const result = await a.approve(3);
+      assert.equal(result.result.isError, true);
+      assert.match(JSON.stringify(result), /runtime_tree_fail/);
+      console.log('ASSEMBLY one installed program byte changed: next approval runtime_tree_fail');
+    } finally { fs.writeFileSync(program, bytes); fs.chmodSync(program, 0o444); }
+    const anchor = fs.readFileSync(box.recordPath);
+    fs.chmodSync(box.recordPath, 0o644);
+    try {
+      // Even a semantically identical JSON record is a replacement of pinned bytes.
+      fs.writeFileSync(box.recordPath, Buffer.concat([anchor, Buffer.from(' ')]));
+      assert.match(JSON.stringify(await a.approve(4)), /runtime_tree_fail/);
+    } finally { fs.writeFileSync(box.recordPath, anchor); fs.chmodSync(box.recordPath, 0o444); }
+    assert.ok(!(await a.approve(5)).result.isError, 'restoring exact bytes permits the original anchor');
+  } finally { await a.stop(); }
+  assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
+});
+
+test('installed assembly negative controls: lock timeout, stale owner and invalid owner refuse startup without writes', async () => {
+  const box = uninstallBox();
+  const lifecycle = require(path.join(box.prefix, box.record().store, 'spine/uninstall.cjs'));
+  const { spawn } = require('node:child_process');
+  const lockPath = path.join(box.prefix, 'lib/seal/lifecycle.lock');
+  const state = fs.readFileSync(box.statePath);
+  async function refused() {
+    const started = performance.now();
+    const child = spawn(process.execPath, [path.join(box.prefix, 'bin/seal'), '__proxy', '--protect-state', box.statePath],
+      { cwd: box.project, env: box.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', b => { out += b; });
+    child.stderr.on('data', b => { out += b; });
+    const code = await new Promise(resolve => child.once('exit', resolve));
+    assert.equal(code, 1, out);
+    assert.match(out, /startup refused:/);
+    assert.doesNotMatch(out, /uninstall refused/);
+    assert.deepEqual(fs.readFileSync(box.statePath), state, 'refused startup must not alter route state');
+    return { out, elapsed: performance.now() - started };
+  }
+  const lock = lifecycle.installLock();
+  try {
+    const result = await refused();
+    assert.ok(result.elapsed >= 3200, result.out);
+    assert.match(result.out, /timed out after waiting \d+ms to acquire the installation lock held by pid/);
+    console.log(`ASSEMBLY timeout ${Math.round(result.elapsed)}ms: ${result.out.trim()}`);
+  } finally { lock.release(); }
+  for (const owner of ['invalid\n', JSON.stringify({ pid: process.pid, startWitness: 'wrong-start' })]) {
+    fs.writeFileSync(lockPath, owner, { flag: 'wx', mode: 0o600 });
+    try {
+      const result = await refused();
+      assert.match(result.out, /stale or invalid installation lock/);
+      assert.doesNotMatch(result.out, /timed out/);
+      assert.equal(fs.readFileSync(lockPath, 'utf8'), owner, 'invalid locks require inspection, never automatic removal');
+    } finally { fs.unlinkSync(lockPath); }
+  }
+  assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
+});
+
+test('reinstall preserves the separate mutable route registry', () => {
+  const box = uninstallBox();
+  const registryPath = path.join(box.prefix, 'lib/seal/routes.json');
+  const before = fs.readFileSync(registryPath);
+  assert.equal(install(uninstallArtifact, box.prefix).code, 0);
+  assert.deepEqual(fs.readFileSync(registryPath), before);
+  assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
+  assertUninstallRouteRestored(box);
 });

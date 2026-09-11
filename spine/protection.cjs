@@ -947,8 +947,8 @@ function leaseMatches(lease, token) {
     lease.startWitness === token.startWitness && lease.generation === token.generation;
 }
 
-function acquireProjectLock(projectRoot, env = process.env) {
-  const installationLock = require("./uninstall.cjs").installLock();
+function acquireProjectLock(projectRoot, env = process.env, operation) {
+  const installationLock = require("./uninstall.cjs").installLock(undefined, operation);
   try {
     const projectLock = acquireProjectLockOnly(projectRoot, env);
     return { ...projectLock, release() { try { projectLock.release(); } finally { installationLock.release(); } } };
@@ -1271,11 +1271,15 @@ async function acquireProjectLockWaiting(projectRoot, env, wait = { elapsedMs: 0
   try {
     for (;;) {
       try {
-        return acquireProjectLock(projectRoot, env);
+        return acquireProjectLock(projectRoot, env, "startup");
       } catch (error) {
-        if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
+        if (!(error instanceof ProtectionError) || !["proxy_lease_active", "installation_lock_active"].includes(error.code)) throw error;
         const elapsedMs = performance.now() - started;
         if (elapsedMs >= ACTIVATION_LOCK_WAIT_MS) {
+          if (error.code === "installation_lock_active") {
+            throw new ProtectionError("installation_lock_active",
+              `startup refused: timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the installation lock held by pid ${error.lockHolderPid}; retry after that Seal operation finishes`);
+          }
           throw new ProtectionError(
             "proxy_lease_active",
             `timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,
