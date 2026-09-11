@@ -47,15 +47,160 @@ function status() {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const runtime = inspectRuntime();
   console.log(runtime.present
-    ? `Runtime: present seal-assurance-kit@${manifest.commit}`
+    ? `Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@${manifest.commit}; per-authorization installed-tree and Node-floor judgments have not yet been observed.`
     : runtime.state === "integrity check failed"
-      ? `Runtime: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
-      : `Runtime: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+      ? `Runtime at status check FAIL: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
+      : `Runtime at status check UNKNOWN: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
+  printReachabilityObservation(protection, process.cwd(), process.env);
 
   let paths;
   try { paths = protection.statePathsFor(process.cwd(), process.env); }
   catch (error) { statusRecord(undefined, error); return; }
   for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
+}
+
+// JSON.parse validates syntax, but loses repeated object members. Walk the raw
+// tokens iteratively so deep unrelated metadata cannot overflow the JS stack.
+// Only MCP definitions and the keys selecting their scope affect this inventory.
+function statusDuplicateKeys(text, projectRoot) {
+  const stack = [];
+  const duplicates = new Set();
+  for (let i = 0; i < text.length;) {
+    const c = text[i];
+    const parent = stack[stack.length - 1];
+    if (c === '"') {
+      const start = i++;
+      while (i < text.length) {
+        if (text[i] === "\\") { i += 2; continue; }
+        if (text[i++] === '"') break;
+      }
+      if (parent?.object && parent.keyNext) {
+        const key = JSON.parse(text.slice(start, i));
+        parent.key = key;
+        parent.keyNext = false;
+        const relevant = parent.role === "definition" || parent.role === "servers"
+          || ((parent.role === "root" || parent.role === "local") && key === "mcpServers")
+          || (parent.role === "root" && projectRoot !== undefined && key === "projects")
+          || (parent.role === "projects" && key === projectRoot);
+        if (relevant) {
+          if (parent.keys.has(key)) duplicates.add(key);
+          parent.keys.add(key);
+        }
+      }
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      let role = "ignored";
+      if (!parent) role = "root";
+      else if (parent.role === "servers" || parent.role === "definition") role = "definition";
+      else if (parent.object) {
+        if ((parent.role === "root" || parent.role === "local") && parent.key === "mcpServers") role = "servers";
+        else if (parent.role === "root" && projectRoot !== undefined && parent.key === "projects") role = "projects";
+        else if (parent.role === "projects" && parent.key === projectRoot) role = "local";
+      }
+      stack.push({ object: c === "{", keyNext: c === "{", role, keys: new Set() });
+    } else if (c === "}" || c === "]") stack.pop();
+    else if (c === "," && parent?.object) parent.keyNext = true;
+    i++;
+  }
+  return [...duplicates];
+}
+
+function statusJsonSource(filePath, label, projectRoot) {
+  try {
+    const bytes = fs.readFileSync(filePath);
+    const text = bytes.toString("utf8");
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("top-level value is not an object");
+    const duplicates = statusDuplicateKeys(text, projectRoot);
+    if (duplicates.length) return { label, filePath, error: `source has ambiguous definitions of duplicate keys ${duplicates.map((key) => JSON.stringify(key)).join(", ")}; client selection is UNKNOWN` };
+    return { label, filePath, parsed };
+  } catch (error) {
+    const reason = error.code === "ENOENT" ? "source is missing" : `source cannot be read or is malformed (${error.message})`;
+    return { label, filePath, error: reason };
+  }
+}
+
+function statusScopeSources(root, env) {
+  const configDir = env.CLAUDE_CONFIG_DIR || env.HOME || os.homedir();
+  const configPath = path.join(configDir, ".claude.json");
+  const projectRoot = (() => {
+    try { return fs.realpathSync(require("node:child_process").execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
+    catch { return fs.realpathSync(root); }
+  })();
+  const user = statusJsonSource(configPath, "user", projectRoot);
+  const local = { label: "local", filePath: configPath };
+  if (!user.error) local.parsed = user.parsed?.projects?.[projectRoot] || {};
+  else local.error = user.error;
+  const project = statusJsonSource(path.join(projectRoot, ".mcp.json"), "project");
+  return { configPath, projectRoot, sources: [user, local, project] };
+}
+
+function printReachabilityObservation(protection, cwd, env) {
+  const root = fs.realpathSync(cwd);
+  const { configPath, projectRoot, sources } = statusScopeSources(root, env);
+  console.log(`Observation project: ${projectRoot}`);
+  console.log("Observation client: Claude Code static configuration; effective client route UNKNOWN");
+  console.log(`Observation config: ${configPath}`);
+  console.log(`Observation time: ${new Date().toISOString()}`);
+  console.log("MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected");
+  console.log("Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)");
+
+  let states = [];
+  let recordsError;
+  try { states = protection.statePathsFor(projectRoot, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
+  catch (error) { recordsError = error; console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
+  const definitions = [];
+  let unknown = false;
+  for (const source of sources) {
+    if (source.error) { console.log(`UNKNOWN — ${source.label} MCP configuration ${source.error}: ${source.filePath}`); unknown = true; continue; }
+    const servers = source.parsed?.mcpServers;
+    if (servers === undefined) { console.log(`UNKNOWN — ${source.label} MCP configuration has no inspectable mcpServers object`); unknown = true; continue; }
+    if (!servers || typeof servers !== "object" || Array.isArray(servers)) { console.log(`UNKNOWN — ${source.label} MCP configuration mcpServers is malformed`); unknown = true; continue; }
+    for (const [name, definition] of Object.entries(servers)) definitions.push({ source: source.label, name, definition });
+  }
+  const byName = new Map();
+  for (const entry of definitions) (byName.get(entry.name) || (byName.set(entry.name, []), byName.get(entry.name))).push(entry);
+  console.log("Observed MCP definitions (scoped configuration facts; not a complete active inventory):");
+  for (const [name, entries] of [...byName.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const disagree = entries.some((entry) => protection.canonical(entry.definition) !== protection.canonical(entries[0].definition));
+    const scopes = entries.map((entry) => entry.source).join(", ");
+    if (disagree) console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has conflicting definitions across ${scopes}; scope shadowing and approval eligibility are unresolved`);
+    const local = entries.find((entry) => entry.source === "local");
+    const recorded = states.find((candidate) => candidate.serverName === name);
+    const wrapperLike = (definition) => Array.isArray(definition?.args) &&
+      definition.args.some((arg) => arg === "__proxy" || arg === "--protect-state");
+    if (recordsError || recorded || entries.some((entry) => wrapperLike(entry.definition))) {
+      try {
+        if (recordsError) throw recordsError;
+        if (!local) throw new Error("no inspected local wrapper establishes ownership");
+        // A wrapper can have been installed from a child directory. Its record
+        // owns that installation root, while Claude selects the repository scope.
+        const args = local.definition?.args;
+        const recordPath = Array.isArray(args) && args[0] === "__proxy" &&
+          args[1] === "--protect-state" && args.length === 3 && typeof args[2] === "string"
+          ? path.resolve(projectRoot, args[2]) : null;
+        const state = recordPath ? protection.readState(recordPath) : recorded;
+        if (!state) throw new Error("installed wrapper protection record is unavailable");
+        if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        const installationRoot = state.projectRoot;
+        if (typeof installationRoot !== "string" ||
+            protection.claudeProjectRoot(installationRoot) !== projectRoot) throw new Error("installed wrapper project scope does not match the inspected project");
+        protection.assertSealOwnedLocalOverride(state, installationRoot, name, env);
+        const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
+        console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
+      } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
+    } else if (entries.some(({ definition }) => !definition || typeof definition !== "object" ||
+        Array.isArray(definition) || !(typeof definition.command === "string" || typeof definition.url === "string"))) {
+      console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has no inspectable command or URL; ownership cannot be established`);
+      unknown = true;
+    } else {
+      console.log(`  UNBROKERED — Inspected ${entries[0].source} MCP entry ${JSON.stringify(name)} is configured without Seal; whether this client session can use it is UNKNOWN.`);
+    }
+  }
+  if (definitions.length === 0 && !unknown) console.log("  UNKNOWN — no direct MCP definitions were observed");
+  console.log("UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.");
+  console.log("Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.");
 }
 
 function statusRecord(recordPath, readError) {
