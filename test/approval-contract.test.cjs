@@ -410,3 +410,60 @@ test("consumed survives a restart; pending does not (connection epoch)", async (
   assert.equal(stale.refusal, REFUSALS.RESTART_INVALIDATED, "a pending continuation must not survive a restart");
   assert.equal(child.count(), "1", "neither refusal may touch the child");
 });
+
+test("renderline preserves scalar types without quoting ordinary paths", () => {
+  for (const value of [100, 0, -1, true, false, null]) {
+    const string = renderApprovalMessage(TOOL, { amount: String(value) });
+    const scalar = renderApprovalMessage(TOOL, { amount: value });
+    assertInsideEnvelope(string);
+    assertInsideEnvelope(scalar);
+    assert.notEqual(string.message, scalar.message);
+    assert.equal(string.argLines[0], `  amount: ${JSON.stringify(String(value))}`);
+  }
+  assert.equal(renderApprovalMessage(TOOL, { path: "db.mutate" }).argLines[0], "  path: db.mutate");
+});
+
+test("renderline escapes names, nested values, controls and directional characters", () => {
+  for (const ch of ["\n", "\r", "\t", "\x1b", "\x7f", "\x85", "\u202e", "\u2066", "\u200f", "\u2028", "\u2029", "\u{e0001}"]) {
+    const rendered = renderApprovalMessage(`db${ch}mutate`, { [`a${ch}b`]: { [ch]: ch } }, { terminalWidth: 240 });
+    assertInsideEnvelope(rendered, 240);
+    assert.equal(rendered.lines.join("").includes(ch), false);
+    assert.equal(rendered.lines.length, rendered.message.split("\n").length);
+    const opened = createApprovalContract({ terminalWidth: 240 }).begin({ tool: `db${ch}mutate`, args: { [ch]: 1 } });
+    assert.equal(opened.kind, "input_required");
+    assert.equal(opened.elicitationParams.requestedSchema.properties.approve.title.includes(ch), false);
+  }
+  const hidden = renderApprovalMessage(TOOL, { ["x\n".repeat(10) + "x"]: 1 });
+  assertInsideEnvelope(hidden);
+  assert.equal(hidden.message.split("\n").length, 4);
+  assert.match(hidden.argLines[0], /\\n/);
+});
+
+test("renderline checks the physical final presentation including selection", () => {
+  const selection = { label: "db.mutate", detail: "selected" };
+  const contract = createApprovalContract();
+  const opened = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3 }, selection });
+  assert.equal(opened.kind, "input_required");
+  assert.equal(opened.elicitationParams.message.split("\n").length, 7);
+  assert.equal(opened.result.content[0].text, opened.elicitationParams.message);
+  const overflow = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4 }, selection });
+  assert.equal(overflow.refusal, REFUSALS.UNRENDERABLE);
+  assert.match(overflow.detail, /need 8 lines/);
+  assert.equal(contract.begin({ tool: TOOL, args: {}, selection: { label: "x".repeat(100), detail: "selected" } }).refusal, REFUSALS.UNRENDERABLE);
+});
+
+test("renderline second order values retain the canonical effect in approval receipts", () => {
+  for (const args of [{}, { a: { b: "100" } }, { a: ["100", 100] }, { a: '"100"' }, { a: "db.mutate" }]) {
+    const contract = createApprovalContract();
+    const opened = contract.begin({ tool: TOOL, args });
+    assert.equal(opened.kind, "input_required");
+    const allowed = contract.retry({ tool: TOOL, args, requestState: opened.result.requestState, inputResponses: ACCEPT });
+    assert.equal(allowed.kind, "allow");
+    assert.ok(allowed.receipt);
+    assert.deepEqual(allowed.receipt.arguments, args);
+    assert.equal(allowed.receipt.tool, TOOL);
+    assert.equal(renderApprovalMessage(allowed.receipt.tool, allowed.receipt.arguments).message, opened.elicitationParams.message);
+    assert.equal(opened.elicitationParams.message, renderApprovalMessage(TOOL, args).message);
+  }
+  assert.equal(createApprovalContract().begin({ tool: TOOL, args: { a: "x".repeat(10000) } }).refusal, REFUSALS.UNRENDERABLE);
+});

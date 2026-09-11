@@ -3,7 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync, spawn } = require("node:child_process");
+const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
@@ -40,6 +40,7 @@ function localServer(name) { return readConfig().projects?.[cwd]?.mcpServers?.[n
 function projectHas(name) {
   try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
 }
+
 if (args[0] !== "mcp") process.exit(2);
 if (args[1] === "get") {
   const name = args[2];
@@ -88,6 +89,10 @@ process.exit(2);
   return bin;
 }
 
+function withoutObservationTime(output) {
+  return output.replace(/^Observation time: .*$/m, "Observation time: <measured>");
+}
+
 function fakeLocalOverridePath(root) {
   return path.join(root, "home", ".claude.json");
 }
@@ -123,6 +128,23 @@ async function waitForFile(filePath, timeoutMs = 2000) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   assert.equal(fs.existsSync(filePath), true);
+}
+
+// Protected Accept requires an installer-produced anchor, even in tests.
+// Build/install a separate payload; never fabricate a source-checkout record.
+let installedProxy;
+function installedProxyPath() {
+  if (installedProxy) return installedProxy;
+  const out = testTmpdir("seal-proxy-runtime-install-");
+  const built = spawnSync(process.execPath, [path.join(__dirname, "../scripts/build-dist.cjs"), "--out", out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const prefix = path.join(out, "prefix");
+  const installed = spawnSync(path.join(out, name), ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], { encoding: "utf8" });
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib/seal/install.json"), "utf8"));
+  installedProxy = path.join(prefix, record.store, "bin/seal");
+  return installedProxy;
 }
 
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
@@ -435,7 +457,7 @@ test("proxy activation promotes pending, and live project drift refuses before c
   const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], { PATH: env.PATH });
   assert.equal(protectedRun.code, 0, protectedRun.out);
   const statePath = statePathFor(project, env);
-  const proxy = spawn(SEAL, ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(installedProxyPath(), ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
   try {
     const lines = readline.createInterface({ input: proxy.stdout, terminal: false });
     const nextLine = () => new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
@@ -671,7 +693,7 @@ test("protect refuses both auto-response hooks before creating protection state"
     const result = run(project, home, ["protect", "db", "demo.mutate"], env);
     assert.notEqual(result.code, 0, result.out);
     assert.match(result.out, /^seal: REFUSE elicitation_hook_configured: an auto-response hook is set; human approval origin cannot be assumed$/m);
-    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|ACTIVE) /m);
+    assert.doesNotMatch(result.out, /^Sealed MCP route .*: (?:PENDING RESTART|(?:LEASE )?ACTIVE) /m);
     assert.equal(fs.existsSync(statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") })), false);
     assert.equal(fs.existsSync(fakeLocalOverridePath(root)), false);
   }
@@ -696,7 +718,7 @@ test("status renders a dead activation lease as STALE, not active", () => {
   assert.match(status.out, /^Sealed MCP route db: STALE /m);
   assert.match(status.out, /^  demo\.mutate$/m);
   assert.match(status.out, /previous wrapper lease is not live/);
-  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: (?:LEASE )?ACTIVE /m);
 });
 
 test("status downgrades to STALE after a REAL wrapper lease exits naturally", () => {
@@ -740,7 +762,7 @@ test("status downgrades to STALE after a REAL wrapper lease exits naturally", ()
   assert.equal(status.code, 0, status.out);
   assert.match(status.out, /^Sealed MCP route db: STALE /m);
   assert.match(status.out, /^  demo\.mutate$/m);
-  assert.doesNotMatch(status.out, /^Sealed MCP route .*: ACTIVE /m);
+  assert.doesNotMatch(status.out, /^Sealed MCP route .*: (?:LEASE )?ACTIVE /m);
 });
 
 test("status reports refused state without inventing absent tools or unrouted servers", () => {
@@ -784,7 +806,8 @@ test("status reports refused state without inventing absent tools or unrouted se
     assert.equal(fs.readFileSync(fakeLocalOverridePath(root), "utf8"), override);
   }
   fs.writeFileSync(file, healthy);
-  assert.deepEqual(run(project, home, ["status"], env), before);
+  const restored = run(project, home, ["status"], env);
+  assert.deepEqual({ ...restored, out: withoutObservationTime(restored.out) }, { ...before, out: withoutObservationTime(before.out) });
 });
 
 test("status preserves known route facts across seven damaged state shapes and offers actionable recovery", () => {
@@ -930,8 +953,8 @@ test("multiple servers have independent state, simultaneous live gates and recei
   try {
     const status = run(ctx.project, ctx.home, ["status"], ctx.env);
     assert.equal(status.code, 0, status.out);
-    assert.match(status.out, /Sealed MCP route alpha: ACTIVE/);
-    assert.match(status.out, /Sealed MCP route beta: ACTIVE/);
+    assert.match(status.out, /Sealed MCP route alpha: LEASE ACTIVE/);
+    assert.match(status.out, /Sealed MCP route beta: LEASE ACTIVE/);
     await Promise.all([alpha.gatedCall(), beta.gatedCall()]);
     await alpha.close();
     assert.equal(run(ctx.project, ctx.home, ["unprotect", "alpha"], ctx.env).code, 0);

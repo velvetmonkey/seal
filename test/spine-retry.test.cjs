@@ -346,6 +346,23 @@ test("seal demo derives the replay BLOCK line from the receipt file", async (t) 
 // The test is the MCP client on `seal __proxy` stdio. It keeps tools/call
 // pending while it answers the proxy's server-to-client elicitation/create.
 
+// Protected Accept requires an installer-produced anchor, even in tests.
+// Build/install a separate payload; never fabricate a source-checkout record.
+let installedProxy;
+function installedProxyPath() {
+  if (installedProxy) return installedProxy;
+  const out = testTmpdir("seal-proxy-runtime-install-");
+  const built = spawnSync(process.execPath, [path.join(__dirname, "../scripts/build-dist.cjs"), "--out", out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const prefix = path.join(out, "prefix");
+  const installed = spawnSync(path.join(out, name), ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], { encoding: "utf8" });
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib/seal/install.json"), "utf8"));
+  installedProxy = path.join(prefix, record.store, "bin/seal");
+  return installedProxy;
+}
+
 function spawnProxy(dir, dataFile, extra = {}) {
   const storePath = extra.storePath || path.join(dir, "approvals.journal");
   // Use real project binding, activation, discovery and receipt signing. The
@@ -368,7 +385,7 @@ function spawnProxy(dir, dataFile, extra = {}) {
     childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });
   const proxy = spawn(process.execPath, [
-    SEAL, "__proxy", "--protect-state", statePath,
+    installedProxyPath(), "__proxy", "--protect-state", statePath,
   ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(proxy);
   const responses = [];
@@ -643,6 +660,77 @@ test("real elicitation accept flows once and duplicate or unmatched responses do
   assert.ok(!Object.hasOwn(receipt, "approvalRequest"));
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
+});
+
+test("duplicate acceptance after runtime-tree refusal cannot mint a kernel receipt", async (t) => {
+  const dir = testTmpdir("seal-duplicate-runtime-refusal-");
+  const storePath = path.join(dir, "approvals.journal");
+  const dataFile = path.join(dir, "data.txt");
+  const receiptsDir = path.join(dir, "receipts");
+  const root = path.dirname(path.dirname(installedProxyPath()));
+  const { createRuntimeTreeCheck } = require("../spine/integrity.cjs");
+  const runtimeTreeCheck = createRuntimeTreeCheck(root);
+  assert.equal(runtimeTreeCheck().band, "PASS", "use the real installer-produced anchor");
+  const payload = path.join(root, "NOTICE");
+  const original = fs.readFileSync(payload);
+  const originalMode = fs.statSync(payload).mode & 0o777;
+  t.after(() => { fs.writeFileSync(payload, original); fs.chmodSync(payload, originalMode); });
+  createJournal(storePath);
+  const frames = [];
+  const decisions = [];
+  const proxy = createProxy({
+    signer: generateSigner(), guardTool: "demo.mutate", storePath, receiptsDir,
+    runtimeTreeCheck,
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+    onDecision(decision) { decisions.push(decision); },
+  });
+  t.after(() => proxy.stop());
+  const waitFor = async (predicate) => {
+    const deadline = Date.now() + 5000;
+    while (!frames.some(predicate)) {
+      if (Date.now() >= deadline) assert.fail(JSON.stringify(frames));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return frames.find(predicate);
+  };
+  const receiptCount = () => fs.readdirSync(receiptsDir).filter(name => name.endsWith(".json")).length;
+  const events = () => fs.readFileSync(storePath, "utf8").trim().split("\n").map(JSON.parse);
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  await waitFor(frame => frame.id === 90 && frame.result);
+  proxy.write(JSON.stringify({ ...callParams("runtime refusal"), id: 1 }));
+  const elicitation = await waitFor(frame => frame.method === "elicitation/create");
+  assert.equal(receiptCount(), 1);
+  fs.chmodSync(payload, 0o644);
+  const changed = Buffer.from(original); changed[0] ^= 1;
+  fs.writeFileSync(payload, changed);
+  assert.equal(runtimeTreeCheck().band, "FAIL");
+  const accepting = JSON.stringify({ jsonrpc: "2.0", id: elicitation.id,
+    result: { action: "accept", content: { approve: true } } });
+  proxy.write(accepting);
+  const refused = await waitFor(frame => frame.id === 1 && frame.result);
+  assert.match(refused.result.content[0].text, /runtime_tree_fail/);
+  assert.equal(receiptCount(), 1);
+  const journalAfterRefusal = events();
+  proxy.write(accepting);
+  const afterDuplicate = receiptCount();
+  assert.deepEqual(events(), journalAfterRefusal, "duplicate refusal adds no journal event");
+  assert.deepEqual(decisions.slice(-2).map(d => [d.decision, d.refusal]),
+    [["BLOCK", "runtime_tree_fail"], ["BLOCK", "runtime_tree_fail"]]);
+  // Measure the next ordinary request before asserting the regression so the
+  // planted red run also records the second-order behavior.
+  proxy.write(JSON.stringify({ ...callParams("fresh after refusal"), id: 2 }));
+  await waitFor(frame => frame.method === "elicitation/create" && frame.id !== elicitation.id);
+  const afterNext = receiptCount();
+  const journalAfterNext = events();
+  t.diagnostic(JSON.stringify({ afterDuplicate, afterNext,
+    journal: journalAfterNext.map(event => ({ type: event.type, status: event.status })),
+    childCalls: readCount(`${dataFile}.count`) }));
+  assert.equal(journalAfterNext.filter(event => event.type === "issued").length, 2);
+  assert.equal(journalAfterNext.filter(event => event.type === "status").length, 0);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  assert.equal(afterDuplicate, 1, "duplicate runtime-tree refusal must not enter the kernel for a BLOCK receipt");
+  assert.equal(afterNext, 2, "fresh request adds only its INPUT_REQUIRED receipt");
 });
 
 for (const action of ["decline", "cancel"]) test(`real elicitation ${action} refuses and does not flow`, async (t) => {
