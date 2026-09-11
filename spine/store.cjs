@@ -91,9 +91,13 @@ function withFileLock(filePath, callback) {
         observed = fs.fstatSync(reader);
         existing = JSON.parse(fs.readFileSync(reader, "utf8"));
         if (!observed.isFile() || !Number.isSafeInteger(existing?.pid) || existing.pid <= 0 ||
-            typeof existing.startWitness !== "string" || !existing.startWitness) {
+            (existing.startWitness !== null &&
+             (typeof existing.startWitness !== "string" || !existing.startWitness))) {
           throw new StoreError("invalid approval journal lock owner");
         }
+        // A complete legacy record with an explicit null witness is stale:
+        // acquisition has always refused to create such an owner. Missing or
+        // truncated records above cannot authorize recovery.
         if (!lockOwnerIsLive(existing, "approval-journal-lock owner")) {
           // Elect exactly one reaper per stale inode. Retain this hard link:
           // deleting it would let a delayed reaper win again and unlink a new
