@@ -119,6 +119,20 @@ detail names the side that refused. Seal fails closed and does not consume or
 forward the call. Preserve the receipt and report the disagreement; retrying
 without understanding it is not a remedy.
 
+### `runtime_tree_fail`
+
+The installed files no longer match the fixed install record, an unrecorded
+file appeared, or the record changed after this wrapper started. The approval
+was refused. Reinstall and restart the protected session. Matching disk bytes
+at a check does not establish which bytes the process already loaded.
+
+### `runtime_tree_unknown`
+
+No trustworthy installed-tree record was available at the approval check.
+Missing or unreadable records and source-checkout wrappers cannot authorize
+protected calls. Complete a verified installation and restart the session;
+the wrapper never creates or adopts a replacement record during approval.
+
 ### `kernel_integrity_refused`
 
 The vendored WASM is missing, unreadable, or its SHA-256 does not match the
@@ -400,7 +414,26 @@ Another Seal proxy already owns this project's protected route. The second
 starter is refused with the holder pid and lease generation. Stop that
 session, or let it exit and retry; a crashed owner is recoverable when its
 PID and process-start witness are no longer live and the next holder takes
-the next generation. This is a transient start event, not a persisted project
+the next generation. The same token also names a project lock held by another
+Seal operation: a `seal protect`, `seal unprotect` or `seal recover` run, or
+another wrapper's own record check or lease commit. That refusal says `retry
+after that operation finishes`; tool discovery runs outside the lock, and a
+starting wrapper waits up to 3200ms for each lock acquisition before refusing.
+At that bound the message names a lock-acquisition timeout and the unfinished
+operation, which may be waiting for a slow subprocess; it does not establish
+that another session owns a live lease. This is a transient start event, not a
+persisted project status.
+
+### `activation_state_changed`
+
+The stored protection record changed while the wrapper was discovering the
+server's tools: the server was unprotected, or the command, environment,
+`.mcp.json` digest, journal, receipts directory, discovery timeout or
+protected selections it was validated against are no longer the ones stored.
+Discovery runs outside the project lock, so such a change is possible, and it
+is refused at the lease commit: no lease was taken and nothing was written.
+Run `seal status`, then restart Claude Code so a new wrapper validates the
+current record. This is a transient start event, not a persisted project
 status.
 
 ### `process_witness_unavailable`

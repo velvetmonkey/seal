@@ -1,5 +1,6 @@
 {
   "files": {
+    "docs/reference/cli.md": { "coveredBy": ["test/cli-next-steps.test.cjs#cli-reference"] },
     "scripts/claim-catalogue.jsonl": { "coveredBy": ["test/claim-channel.test.cjs#catalogue-membership"] },
     "test/release-docs.test.mjs": { "coveredBy": ["test/release-docs.test.mjs#outside-claim-controls"] },
     "scripts/check-install-prose.mjs": { "coveredBy": ["test/release-docs.test.mjs#install-prose-observations"] },

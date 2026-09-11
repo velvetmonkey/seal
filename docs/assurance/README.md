@@ -38,6 +38,8 @@ the Node CLI this repository ships.
 7. [assurance/architecture.md](architecture.md) — the shipped Node product path first,
   followed by the wider family assurance lineage.
 
+- [reference/cli.md](../reference/cli.md) — commands, flags, argument ranges and exit codes.
+
 - [start/README.md](../start/README.md) — the start section map.
 
 ## I want to know what it does not do

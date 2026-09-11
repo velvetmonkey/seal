@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, execFile, execFileSync } = require("node:child_process");
+const { spawn, spawnSync, execFile, execFileSync } = require("node:child_process");
 const { promisify } = require("node:util");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
@@ -22,6 +22,23 @@ const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 const execFileAsync = promisify(execFile);
+
+// Protected Accept requires an installer-produced anchor, even in tests.
+// Build/install a separate payload; never fabricate a source-checkout record.
+let installedProxy;
+function installedProxyPath() {
+  if (installedProxy) return installedProxy;
+  const out = testTmpdir("seal-proxy-runtime-install-");
+  const built = spawnSync(process.execPath, [path.join(__dirname, "../scripts/build-dist.cjs"), "--out", out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const prefix = path.join(out, "prefix");
+  const installed = spawnSync(path.join(out, name), ["--sha256", digest, "--bytes", bytes, "--prefix", prefix], { encoding: "utf8" });
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib/seal/install.json"), "utf8"));
+  installedProxy = path.join(prefix, record.store, "bin/seal");
+  return installedProxy;
+}
 
 test("the production kernel has one runtime location and the retired fixture path is absent", () => {
   assert.equal(DEFAULT_KERNEL_ROOT, path.join(ROOT, "runtime", "kernel"));
@@ -82,7 +99,7 @@ function proxyHarness(t, env = {}) {
     childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });
   const child = spawn(process.execPath, [
-    SEAL, "__proxy", "--protect-state", statePath,
+    installedProxyPath(), "__proxy", "--protect-state", statePath,
   ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { try { child.kill("SIGKILL"); } catch {} });
   let out = "", err = "";
