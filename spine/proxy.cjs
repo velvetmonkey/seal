@@ -294,15 +294,29 @@ function createProxy(options) {
     return decision;
   }
 
+  function elicitationAnswer(frame) {
+    const hasResult = Object.hasOwn(frame, "result");
+    const hasError = Object.hasOwn(frame, "error");
+    const validError = !hasError || (frame.error && typeof frame.error === "object"
+      && !Array.isArray(frame.error) && Number.isInteger(frame.error.code)
+      && typeof frame.error.message === "string");
+    const validEnvelope = frame.jsonrpc === "2.0"
+      && !Object.hasOwn(frame, "method") && hasResult !== hasError && validError;
+    const answer = validEnvelope && hasResult && frame.result && typeof frame.result === "object"
+      ? frame.result
+      : { action: "cancel" };
+    const detail = !validEnvelope
+      ? "malformed JSON-RPC response envelope: require jsonrpc 2.0, no method, and exactly one of result and a well-formed error"
+      : hasError
+        ? `the client rejected elicitation/create: ${frame.error.message}`
+        : undefined;
+    return { answer, detail };
+  }
+
   function completeElicitation(frame) {
     const pending = pendingElicitations.get(frame.id);
     if (!pending) return false;
-    const answer = frame.result && typeof frame.result === "object"
-      ? frame.result
-      : { action: "cancel" };
-    const detail = frame.error
-      ? `the client rejected elicitation/create: ${frame.error.message || "no error message"}`
-      : undefined;
+    const { answer, detail } = elicitationAnswer(frame);
     // Keep the pending entry and timer until retry has settled. A completed
     // elicitation is one client answer, even when its shape cannot authorize
     // the request, so its correlation capacity must be released on every
@@ -327,13 +341,29 @@ function createProxy(options) {
     return true;
   }
 
+  function cancelPendingRequest(requestId) {
+    let cancelled = false;
+    for (const [id, pending] of pendingElicitations) {
+      if (pending.frame.id !== requestId) continue;
+      cancelled = true;
+      pendingElicitations.delete(id);
+      clearTimeout(pending.timer);
+      discardReceiptCorrelation(pending.requestState);
+      // Do not retain a completed slot. The reserved elicitation ID namespace
+      // already absorbs late responses without retrying or forwarding them.
+      finishGuarded(pending.frame, pending.requestState, pending.correlation,
+        { approval: { action: "cancel" } }, "the client cancelled the original tool request");
+      onClientLine(JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled",
+        params: { requestId: id, reason: "the original tool request was cancelled" } }));
+    }
+    return cancelled;
+  }
+
   function refuseDuplicateElicitation(frame) {
     const completed = completedElicitations.get(frame.id);
     if (!completed) return false;
     completedElicitations.delete(frame.id);
-    const answer = frame.result && typeof frame.result === "object"
-      ? frame.result
-      : { action: "cancel" };
+    const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
     const params = completed.frame.params || {};
     const decision = contract.retry({
       tool: params.name,
@@ -342,9 +372,9 @@ function createProxy(options) {
       inputResponses: { approval: answer },
     });
     const refusal = decision.kind === "refuse" ? decision.refusal : "response_malformed";
-    const detail = decision.kind === "refuse"
+    const detail = envelopeDetail || (decision.kind === "refuse"
       ? decision.detail
-      : "a duplicate elicitation response cannot authorize another execution";
+      : "a duplicate elicitation response cannot authorize another execution");
     emitReceipt("BLOCK", completed.frame, {
       refusal,
       detail,
@@ -420,11 +450,15 @@ function createProxy(options) {
         blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
         return;
       }
-      if (!frame.method && Object.hasOwn(frame, "id")) {
+      if (Object.hasOwn(frame, "id") && (!frame.method
+        || pendingElicitations.has(frame.id) || completedElicitations.has(frame.id))) {
         if (completeElicitation(frame)) return;
         if (refuseDuplicateElicitation(frame)) return;
         if (typeof frame.id === "string" && ELICITATION_ID_PATTERN.test(frame.id)) return;
       }
+      if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
+        && Object.hasOwn(frame.params || {}, "requestId")
+        && cancelPendingRequest(frame.params.requestId)) return;
       if (frame.method === "initialize") {
         const capabilities = frame.params?.capabilities;
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
