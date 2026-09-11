@@ -32,7 +32,6 @@ const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exce
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
-const ELICITATION_ID_PATTERN = /^seal-elicitation\/v1\.[0-9a-f]{64}$/;
 const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "runtime_tree_unknown",
   "runtime_tree_fail",
@@ -101,6 +100,9 @@ function createProxy(options) {
   const receiptCorrelations = new Map();
   const pendingElicitations = new Map();
   const completedElicitations = new Map();
+  // Retain exact retired IDs for this session: an unissued lookalike belongs
+  // to the child, while arbitrarily late replies to our own IDs stay consumed.
+  const retiredElicitationIds = new Set();
   let clientCapabilities = null;
 
   function mintReceiptCorrelation(requestState) {
@@ -117,14 +119,16 @@ function createProxy(options) {
     let id;
     do {
       id = `seal-elicitation/v1.${randomBytes(32).toString("hex")}`;
-    } while (pendingElicitations.has(id) || completedElicitations.has(id));
+    } while (pendingElicitations.has(id) || completedElicitations.has(id) || retiredElicitationIds.has(id));
     return id;
   }
 
   function rememberCompletedElicitation(id, pending) {
     completedElicitations.set(id, pending);
     if (completedElicitations.size <= receiptCorrelationCapacity) return;
-    completedElicitations.delete(completedElicitations.keys().next().value);
+    const oldestId = completedElicitations.keys().next().value;
+    retiredElicitationIds.add(oldestId);
+    completedElicitations.delete(oldestId);
   }
 
   function isTerminalDecision(decision) {
@@ -347,10 +351,11 @@ function createProxy(options) {
       if (pending.frame.id !== requestId) continue;
       cancelled = true;
       pendingElicitations.delete(id);
+      retiredElicitationIds.add(id);
       clearTimeout(pending.timer);
       discardReceiptCorrelation(pending.requestState);
-      // Do not retain a completed slot. The reserved elicitation ID namespace
-      // already absorbs late responses without retrying or forwarding them.
+      // Keep only the exact retired ID, without retaining a completed slot
+      // or request state, so late answers cannot retry or reach the child.
       finishGuarded(pending.frame, pending.requestState, pending.correlation,
         { approval: { action: "cancel" } }, "the client cancelled the original tool request");
       onClientLine(JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled",
@@ -363,6 +368,7 @@ function createProxy(options) {
     const completed = completedElicitations.get(frame.id);
     if (!completed) return false;
     completedElicitations.delete(frame.id);
+    retiredElicitationIds.add(frame.id);
     const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
     const params = completed.frame.params || {};
     const decision = contract.retry({
@@ -412,6 +418,7 @@ function createProxy(options) {
       const pending = pendingElicitations.get(elicitationId);
       if (!pending) return;
       pendingElicitations.delete(elicitationId);
+      retiredElicitationIds.add(elicitationId);
       finishGuarded(
         frame,
         requestState,
@@ -451,10 +458,11 @@ function createProxy(options) {
         return;
       }
       if (Object.hasOwn(frame, "id") && (!frame.method
-        || pendingElicitations.has(frame.id) || completedElicitations.has(frame.id))) {
+        || pendingElicitations.has(frame.id) || completedElicitations.has(frame.id)
+        || retiredElicitationIds.has(frame.id))) {
         if (completeElicitation(frame)) return;
         if (refuseDuplicateElicitation(frame)) return;
-        if (typeof frame.id === "string" && ELICITATION_ID_PATTERN.test(frame.id)) return;
+        if (retiredElicitationIds.has(frame.id)) return;
       }
       if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
         && Object.hasOwn(frame.params || {}, "requestId")
@@ -480,7 +488,11 @@ function createProxy(options) {
     },
     stop() {
       stopping = true;
-      for (const pending of pendingElicitations.values()) clearTimeout(pending.timer);
+      for (const [id, pending] of pendingElicitations) {
+        clearTimeout(pending.timer);
+        retiredElicitationIds.add(id);
+      }
+      for (const id of completedElicitations.keys()) retiredElicitationIds.add(id);
       pendingElicitations.clear();
       completedElicitations.clear();
       return new Promise((resolve) => {

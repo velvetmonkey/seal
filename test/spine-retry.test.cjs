@@ -1364,7 +1364,7 @@ const { createProxy } = require(root + '/spine/proxy.cjs');
 const { createJournal } = require(root + '/spine/store.cjs');
 const { generateSigner } = require(root + '/spine/receipt-v2.cjs');
 const accept = { action: 'accept', content: { approve: true } };
-async function harness(t, observeMaps = false) {
+async function harness(t, observeMaps = false, childRequestId = null) {
   const dir = testTmpdir('seal-cancelbind-');
   const record = path.join(dir, 'child.ndjson');
   fs.writeFileSync(record, '');
@@ -1387,7 +1387,7 @@ async function harness(t, observeMaps = false) {
   }
   const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
     receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: 1,
-    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);fs.appendFileSync(process.argv[1],line+'\\n');if(Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record],
+    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
     onClientLine(line) { frames.push(JSON.parse(line)); },
   });
   t.after(() => proxy.stop());
@@ -1417,7 +1417,7 @@ for(const [name,envelope] of [
   ['neither',{}], ['neither with extra',{extra:true}],
 ]) test('cancelbind envelope '+name,async t=>{
   const h=await harness(t);const e=await h.begin(1);h.answer(e,envelope);await h.fence();
-  const response=h.frames.find(f=>f.id===1);t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),response}));
+  const response=h.frames.find(f=>f.id===1);t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),response,child:h.calls()}));
   assert.equal(h.toolCalls(),0,'malformed envelope must never authorize a child call');
   assert.match(JSON.stringify(response),/envelope/i,'refusal must name the envelope');
 });
@@ -1429,10 +1429,10 @@ test('cancelbind control unknown and settled cancellation',async t=>{
   assert.equal(after,1);assert.equal(h.toolCalls(),2);
 });
 test('cancelbind control ordinary accept',async t=>{
-  const h=await harness(t);const e=await h.begin(1);h.answer(e);await h.fence();t.diagnostic('childCalls='+h.toolCalls());assert.equal(h.toolCalls(),1);
+  const h=await harness(t);const e=await h.begin(1);h.answer(e);await h.fence();t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),child:h.calls()}));assert.equal(h.toolCalls(),1);
 });
 test('cancelbind control ordinary reject',async t=>{
-  const h=await harness(t);const e=await h.begin(1);h.answer(e,{result:{action:'decline'}});await h.fence();t.diagnostic('childCalls='+h.toolCalls());assert.equal(h.toolCalls(),0);
+  const h=await harness(t);const e=await h.begin(1);h.answer(e,{result:{action:'decline'}});await h.fence();t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),child:h.calls()}));assert.equal(h.toolCalls(),0);
 });
 test('cancelbind control cancellation after forward',async t=>{
   const h=await harness(t);const e=await h.begin(1);h.answer(e);await h.fence();h.cancel(1);await h.fence();
@@ -1466,7 +1466,7 @@ test('cancelbind repeated cancellations release both maps and cannot consume lat
   assert.equal(events.filter(event => event.type === 'status' && event.status === 'cancelled').length, 32);
   assert.equal(events.filter(event => event.status === 'consumed').length, 0);
   t.diagnostic(JSON.stringify({cycles:32, childCalls:h.toolCalls(), starting,
-    ending:h.maps.map(map => map.size), cancelled:32, consumed:0}));
+    ending:h.maps.map(map => map.size), cancelled:32, consumed:0, child:h.calls()}));
 });
 
 for (const [name, fields] of [
@@ -1482,6 +1482,31 @@ for (const [name, fields] of [
   await h.fence();
   assert.equal(h.toolCalls(), 0);
   assert.match(JSON.stringify(h.frames.find(frame => frame.id === 1)), /envelope/);
+});
+
+for (const id of ['seal-elicitation/v1.' + '0123456789abcdef'.repeat(4), 'child-roots-1']) {
+  test('cancelbind child response ownership ' + id, async t => {
+    const h = await harness(t, false, id);
+    await h.wait(f => f.id === id && f.method === 'roots/list');
+    const reply = {jsonrpc:'2.0', id, result:{roots:[]}};
+    h.send(reply);
+    await h.fence();
+    const child = h.calls().filter(f => f.id === id);
+    t.diagnostic(JSON.stringify({id, child}));
+    assert.deepEqual(child, [reply], 'child must receive the reply to its own request');
+  });
+}
+test('cancelbind genuine elicitation consumed and repeated answers never reach child', async t => {
+  const h = await harness(t);
+  const e = await h.begin(1);
+  h.answer(e);
+  await h.fence();
+  const afterAccept = h.calls();
+  h.answer(e); h.answer(e); h.answer(e);
+  await h.fence();
+  t.diagnostic(JSON.stringify({elicitationId:e.id, afterAccept, afterReplays:h.calls()}));
+  assert.equal(h.toolCalls(), 1);
+  assert.deepEqual(h.calls().filter(f => f.id === e.id), []);
 });
 
 }
