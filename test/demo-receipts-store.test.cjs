@@ -98,3 +98,34 @@ test("a legitimate explicit --dir works and is not called temporary", () => {
   assert.doesNotMatch(result.stdout, /temporary demo directory:/);
   assert.equal(receiptNames(directory).length, 2, result.stdout);
 });
+
+
+test("seal demo ignores non-receipt JSON and rejected receipt filenames", async () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-population-"));
+  const directory = path.join(root, "demo");
+  const receipts = path.join(directory, "receipts");
+  fs.mkdirSync(receipts, { recursive: true });
+  for (const name of ["backup.json", "receipt-01-123-0001-ALLOW.json"]) {
+    fs.writeFileSync(path.join(receipts, name), "not JSON");
+  }
+  const child = spawn(process.execPath, [SEAL, "demo", "--dir", directory], {
+    env: { ...process.env, HOME: path.join(root, "home"), XDG_DATA_HOME: path.join(root, "xdg") },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let out = "";
+  let err = "";
+  let answered = false;
+  child.stdout.on("data", (chunk) => {
+    out += chunk;
+    if (!answered && /Approve\? \[y\/N\]/.test(out)) {
+      answered = true;
+      child.stdin.write("y\n");
+    }
+  });
+  child.stderr.on("data", (chunk) => { err += chunk; });
+  const code = await new Promise((resolve) => child.once("close", resolve));
+  assert.equal(code, 0, `${out}${err}`);
+  assert.equal([...out.matchAll(/^receipt written: /gm)].length, 3, out);
+  assert.match(out, /^New Seal decisions: 0$/m);
+  assert.doesNotMatch(out, /^receipt written: .*\/(?:backup.json|receipt-01-123-0001-ALLOW.json)$/m);
+});
