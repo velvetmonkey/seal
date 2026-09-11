@@ -168,6 +168,61 @@ function verifyStore(storeRoot, record) {
   return { ok: true, treeSha256: digest };
 }
 
+// Pin the install record for this wrapper lifetime; never adopt a replacement.
+// Disk agreement is an observation, not proof of already-loaded module bytes.
+function createRuntimeTreeCheck(storeRoot = path.resolve(__dirname, "..")) {
+  const recordPath = path.resolve(storeRoot, "..", "..", "install.json");
+  const unknown = () => ({ ok: false, band: "UNKNOWN", code: "runtime_tree_unknown",
+    detail: "Runtime tree UNKNOWN: no trustworthy installed-tree record was available; source-checkout and unreadable-record runs cannot be compared." });
+  const fail = (reason) => ({ ok: false, band: "FAIL", code: "runtime_tree_fail",
+    detail: `Runtime tree FAIL: ${reason}; authorization refused.` });
+  let anchorBytes, anchor;
+  try {
+    anchorBytes = fs.readFileSync(recordPath, "utf8");
+    anchor = JSON.parse(anchorBytes);
+    const prefix = path.resolve(recordPath, "..", "..", "..");
+    if (anchor.schema !== "seal.install/v1" ||
+        typeof anchor.store !== "string" || path.resolve(prefix, anchor.store) !== storeRoot ||
+        !/^[0-9a-f]{64}$/.test(anchor.treeSha256) ||
+        !Array.isArray(anchor.files) || anchor.files.length === 0) return unknown;
+    const names = new Set();
+    for (const file of anchor.files) {
+      if (!file || typeof file.path !== "string" || !file.path ||
+          file.path.includes("\\") || file.path.split("/").some(part => !part || part === "." || part === "..") ||
+          names.has(file.path) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 ||
+          !/^[0-9a-f]{64}$/.test(file.sha256)) return unknown;
+      names.add(file.path);
+    }
+    if (treeDigest(anchor.files) !== anchor.treeSha256) return unknown;
+  } catch { return unknown; }
+  return () => {
+    let current;
+    try { current = fs.readFileSync(recordPath, "utf8"); } catch { return unknown(); }
+    if (current !== anchorBytes) return fail("install record changed since this wrapper started");
+    const checked = verifyStore(storeRoot, anchor);
+    if (!checked.ok) return fail(checked.reason);
+    // Include unrecorded entries: hashing only the manifest's list cannot
+    // establish agreement for the complete installed tree.
+    const expected = new Set(anchor.files.map(file => file.path));
+    function inventory(dir, relative = "") {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const name = relative ? `${relative}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          const failure = inventory(path.join(dir, entry.name), name);
+          if (failure) return failure;
+        } else if (!expected.has(name)) return `unrecorded installed path: ${name}`;
+      }
+      return null;
+    }
+    try {
+      const failure = inventory(storeRoot);
+      if (failure) return fail(failure);
+    } catch (error) { return fail(`installed tree inventory unreadable: ${error.message}`); }
+    return { ok: true, band: "PASS",
+      detail: `Runtime tree PASS: immediately before this decision, the ${anchor.files.length} files on disk matched install record tree ${checked.treeSha256}; this does not establish which bytes this process already loaded.` };
+  };
+}
+
 module.exports = {
   PLATFORM,
   SUPPORTED_PLATFORMS,
@@ -177,4 +232,5 @@ module.exports = {
   packPayload,
   unpackPayload,
   verifyStore,
+  createRuntimeTreeCheck,
 };

@@ -60,6 +60,8 @@ function createApprovalContract({
   store,
   kernelAdapter = createKernelAuthorizationAdapter(),
   leaseFence,
+  runtimeTreeCheck,
+  onRuntimeObservation,
 } = {}) {
   // A fresh random epoch per construction: pendings from any earlier epoch
   // are invalid by definition — a restart forces a fresh call.
@@ -289,6 +291,11 @@ function createApprovalContract({
     if (leaseFence) {
       const fence = leaseFence();
       if (!fence?.ok) return refuse(REFUSALS.LEASE_GENERATION_MISMATCH, fence?.detail || "this proxy no longer owns the active lease generation");
+    }
+    if (runtimeTreeCheck) {
+      const observation = runtimeTreeCheck();
+      if (onRuntimeObservation) onRuntimeObservation(observation.detail);
+      if (!observation.ok) return refuse(observation.code, observation.detail);
     }
     let kernel;
     const kernelNow = Math.floor(now() / 1000);
