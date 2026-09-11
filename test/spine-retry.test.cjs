@@ -1353,3 +1353,160 @@ test("argshape CLI object displays nested values and its receipt verifies", asyn
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
+// Cancellation and response-envelope regressions: child-owned recording evidence.
+{
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.join(__dirname, '..');
+const { createProxy } = require(root + '/spine/proxy.cjs');
+const { createJournal } = require(root + '/spine/store.cjs');
+const { generateSigner } = require(root + '/spine/receipt-v2.cjs');
+const accept = { action: 'accept', content: { approve: true } };
+async function harness(t, observeMaps = false, childRequestId = null) {
+  const dir = testTmpdir('seal-cancelbind-');
+  const record = path.join(dir, 'child.ndjson');
+  fs.writeFileSync(record, '');
+  const storePath = path.join(dir, 'journal');
+  createJournal(storePath);
+  const frames = [];
+  // Run the same proxy source in an isolated context to observe its actual
+  // maps without adding production diagnostics or rewriting its logic.
+  const maps = [];
+  let makeProxy = createProxy;
+  if (observeMaps) {
+    const filename = path.join(root, 'spine/proxy.cjs');
+    const context = {
+      require: require('node:module').createRequire(filename), module: { exports: {} },
+      process, Buffer, console, setTimeout, clearTimeout,
+      Map: class extends Map { constructor(...args) { super(...args); maps.push(this); } },
+    };
+    require('node:vm').runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
+    makeProxy = context.module.exports.createProxy;
+  }
+  const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
+    receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: 1,
+    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const send = f => proxy.write(JSON.stringify(f));
+  const wait = async predicate => { const end = Date.now()+5000; while(!frames.some(predicate)){assert.ok(Date.now()<end, JSON.stringify(frames));await new Promise(r=>setTimeout(r,10));}return frames.find(predicate); };
+  let fenceId=10000;
+  const fence = async () => { const id=fenceId++;send({jsonrpc:'2.0',id,method:'ping'});await wait(f=>f.id===id); };
+  const calls = () => fs.readFileSync(record,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  const toolCalls = () => calls().filter(f=>f.method==='tools/call').length;
+  const begin = async id => { const previous = new Set(frames.filter(f=>f.method==='elicitation/create').map(f=>f.id)); send({jsonrpc:'2.0',id,method:'tools/call',params:{name:'demo.mutate',arguments:{line:'cancelbind '+id}}});return wait(f=>f.method==='elicitation/create'&&!previous.has(f.id)); };
+  const cancel = id => send({jsonrpc:'2.0',method:'notifications/cancelled',params:{requestId:id,reason:'client cancelled'}});
+  const answer = (elicitation, envelope={result:accept}) => send({jsonrpc:'2.0',id:elicitation.id,...envelope});
+  send({jsonrpc:'2.0',id:90,method:'initialize',params:{capabilities:{elicitation:{}}}});
+  await wait(f=>f.id===90);
+  return {maps,dir,storePath,frames,proxy,send,wait,fence,calls,toolCalls,begin,cancel,answer};
+}
+test('cancelbind cancellation then late accept', async t=>{
+  const h=await harness(t);const e=await h.begin(1);await h.fence();assert.equal(h.toolCalls(),0);
+  h.cancel(1);await h.fence();const before=h.toolCalls();h.answer(e);await h.fence();
+  t.diagnostic(JSON.stringify({beforeLateAccept:before,afterLateAccept:h.toolCalls(),child:h.calls()}));
+  assert.equal(h.toolCalls(),0,'cancelled call must never reach child');
+});
+for(const [name,envelope] of [
+  ['error plus result',{error:{code:-32603,message:'Approval dialog failed'},result:accept}],
+  ['null error plus result',{error:null,result:accept}],
+  ['zero error plus result',{error:0,result:accept}],
+  ['neither',{}], ['neither with extra',{extra:true}],
+]) test('cancelbind envelope '+name,async t=>{
+  const h=await harness(t);const e=await h.begin(1);h.answer(e,envelope);await h.fence();
+  const response=h.frames.find(f=>f.id===1);t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),response,child:h.calls()}));
+  assert.equal(h.toolCalls(),0,'malformed envelope must never authorize a child call');
+  assert.match(JSON.stringify(response),/envelope/i,'refusal must name the envelope');
+});
+test('cancelbind control unknown and settled cancellation',async t=>{
+  const h=await harness(t);const e=await h.begin(1);h.cancel(999);h.answer(e);await h.fence();
+  const after=h.toolCalls();h.cancel(1);await h.fence();
+  const next=await h.begin(2);h.answer(next);await h.fence();
+  t.diagnostic(JSON.stringify({afterUnknown:after,afterSettledAndFresh:h.toolCalls(),child:h.calls()}));
+  assert.equal(after,1);assert.equal(h.toolCalls(),2);
+});
+test('cancelbind control ordinary accept',async t=>{
+  const h=await harness(t);const e=await h.begin(1);h.answer(e);await h.fence();t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),child:h.calls()}));assert.equal(h.toolCalls(),1);
+});
+test('cancelbind control ordinary reject',async t=>{
+  const h=await harness(t);const e=await h.begin(1);h.answer(e,{result:{action:'decline'}});await h.fence();t.diagnostic(JSON.stringify({childCalls:h.toolCalls(),child:h.calls()}));assert.equal(h.toolCalls(),0);
+});
+test('cancelbind control cancellation after forward',async t=>{
+  const h=await harness(t);const e=await h.begin(1);h.answer(e);await h.fence();h.cancel(1);await h.fence();
+  const child=h.calls();t.diagnostic(JSON.stringify({child}));assert.equal(h.toolCalls(),1);
+  assert.ok(child.findIndex(f=>f.method==='notifications/cancelled')>child.findIndex(f=>f.method==='tools/call'));
+});
+
+test('cancelbind repeated cancellations release both maps and cannot consume later', async t => {
+  const h = await harness(t, true);
+  assert.equal(h.maps.length, 3, 'observe correlation, pending and completed maps');
+  const starting = h.maps.map(map => map.size);
+  assert.deepEqual(starting, [0, 0, 0]);
+  for (let id = 1; id <= 32; id++) {
+    const e = await h.begin(id);
+    assert.deepEqual(h.maps.map(map => map.size), [1, 1, 0]);
+    h.cancel(id);
+    assert.ok(h.frames.some(frame => frame.method === 'notifications/cancelled'
+      && frame.params.requestId === e.id), 'close the client elicitation');
+    assert.deepEqual(h.maps.map(map => map.size), starting, 'no retained cancellation slot');
+    const journalAfterCancel = fs.readFileSync(h.storePath, 'utf8');
+    h.answer(e);
+    h.answer(e);
+    await h.fence();
+    assert.equal(h.toolCalls(), 0, 'child records no cancelled calls');
+    assert.equal(fs.readFileSync(h.storePath, 'utf8'), journalAfterCancel,
+      'late acceptance must not retry or consume the journaled cancellation');
+    assert.deepEqual(h.maps.map(map => map.size), starting);
+  }
+  const events = fs.readFileSync(h.storePath, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(events.filter(event => event.type === 'issued').length, 32);
+  assert.equal(events.filter(event => event.type === 'status' && event.status === 'cancelled').length, 32);
+  assert.equal(events.filter(event => event.status === 'consumed').length, 0);
+  t.diagnostic(JSON.stringify({cycles:32, childCalls:h.toolCalls(), starting,
+    ending:h.maps.map(map => map.size), cancelled:32, consumed:0, child:h.calls()}));
+});
+
+for (const [name, fields] of [
+  ['missing version', {jsonrpc:undefined, result:accept}],
+  ['wrong version', {jsonrpc:'1.0', result:accept}],
+  ['method on response', {method:'invalid-response', result:accept}],
+  ['null error only', {error:null}],
+  ['zero error only', {error:0}],
+]) test('cancelbind envelope '+name, async t => {
+  const h = await harness(t);
+  const e = await h.begin(1);
+  h.answer(e, fields);
+  await h.fence();
+  assert.equal(h.toolCalls(), 0);
+  assert.match(JSON.stringify(h.frames.find(frame => frame.id === 1)), /envelope/);
+});
+
+for (const id of ['seal-elicitation/v1.' + '0123456789abcdef'.repeat(4), 'child-roots-1']) {
+  test('cancelbind child response ownership ' + id, async t => {
+    const h = await harness(t, false, id);
+    await h.wait(f => f.id === id && f.method === 'roots/list');
+    const reply = {jsonrpc:'2.0', id, result:{roots:[]}};
+    h.send(reply);
+    await h.fence();
+    const child = h.calls().filter(f => f.id === id);
+    t.diagnostic(JSON.stringify({id, child}));
+    assert.deepEqual(child, [reply], 'child must receive the reply to its own request');
+  });
+}
+test('cancelbind genuine elicitation consumed and repeated answers never reach child', async t => {
+  const h = await harness(t);
+  const e = await h.begin(1);
+  h.answer(e);
+  await h.fence();
+  const afterAccept = h.calls();
+  h.answer(e); h.answer(e); h.answer(e);
+  await h.fence();
+  t.diagnostic(JSON.stringify({elicitationId:e.id, afterAccept, afterReplays:h.calls()}));
+  assert.equal(h.toolCalls(), 1);
+  assert.deepEqual(h.calls().filter(f => f.id === e.id), []);
+});
+
+}

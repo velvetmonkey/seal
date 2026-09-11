@@ -32,7 +32,6 @@ const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exce
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
-const ELICITATION_ID_PATTERN = /^seal-elicitation\/v1\.[0-9a-f]{64}$/;
 const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "runtime_tree_unknown",
   "runtime_tree_fail",
@@ -101,6 +100,9 @@ function createProxy(options) {
   const receiptCorrelations = new Map();
   const pendingElicitations = new Map();
   const completedElicitations = new Map();
+  // Retain exact retired IDs for this session: an unissued lookalike belongs
+  // to the child, while arbitrarily late replies to our own IDs stay consumed.
+  const retiredElicitationIds = new Set();
   let clientCapabilities = null;
 
   function mintReceiptCorrelation(requestState) {
@@ -117,14 +119,16 @@ function createProxy(options) {
     let id;
     do {
       id = `seal-elicitation/v1.${randomBytes(32).toString("hex")}`;
-    } while (pendingElicitations.has(id) || completedElicitations.has(id));
+    } while (pendingElicitations.has(id) || completedElicitations.has(id) || retiredElicitationIds.has(id));
     return id;
   }
 
   function rememberCompletedElicitation(id, pending) {
     completedElicitations.set(id, pending);
     if (completedElicitations.size <= receiptCorrelationCapacity) return;
-    completedElicitations.delete(completedElicitations.keys().next().value);
+    const oldestId = completedElicitations.keys().next().value;
+    retiredElicitationIds.add(oldestId);
+    completedElicitations.delete(oldestId);
   }
 
   function isTerminalDecision(decision) {
@@ -294,15 +298,29 @@ function createProxy(options) {
     return decision;
   }
 
+  function elicitationAnswer(frame) {
+    const hasResult = Object.hasOwn(frame, "result");
+    const hasError = Object.hasOwn(frame, "error");
+    const validError = !hasError || (frame.error && typeof frame.error === "object"
+      && !Array.isArray(frame.error) && Number.isInteger(frame.error.code)
+      && typeof frame.error.message === "string");
+    const validEnvelope = frame.jsonrpc === "2.0"
+      && !Object.hasOwn(frame, "method") && hasResult !== hasError && validError;
+    const answer = validEnvelope && hasResult && frame.result && typeof frame.result === "object"
+      ? frame.result
+      : { action: "cancel" };
+    const detail = !validEnvelope
+      ? "malformed JSON-RPC response envelope: require jsonrpc 2.0, no method, and exactly one of result and a well-formed error"
+      : hasError
+        ? `the client rejected elicitation/create: ${frame.error.message}`
+        : undefined;
+    return { answer, detail };
+  }
+
   function completeElicitation(frame) {
     const pending = pendingElicitations.get(frame.id);
     if (!pending) return false;
-    const answer = frame.result && typeof frame.result === "object"
-      ? frame.result
-      : { action: "cancel" };
-    const detail = frame.error
-      ? `the client rejected elicitation/create: ${frame.error.message || "no error message"}`
-      : undefined;
+    const { answer, detail } = elicitationAnswer(frame);
     // Keep the pending entry and timer until retry has settled. A completed
     // elicitation is one client answer, even when its shape cannot authorize
     // the request, so its correlation capacity must be released on every
@@ -327,13 +345,31 @@ function createProxy(options) {
     return true;
   }
 
+  function cancelPendingRequest(requestId) {
+    let cancelled = false;
+    for (const [id, pending] of pendingElicitations) {
+      if (pending.frame.id !== requestId) continue;
+      cancelled = true;
+      pendingElicitations.delete(id);
+      retiredElicitationIds.add(id);
+      clearTimeout(pending.timer);
+      discardReceiptCorrelation(pending.requestState);
+      // Keep only the exact retired ID, without retaining a completed slot
+      // or request state, so late answers cannot retry or reach the child.
+      finishGuarded(pending.frame, pending.requestState, pending.correlation,
+        { approval: { action: "cancel" } }, "the client cancelled the original tool request");
+      onClientLine(JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled",
+        params: { requestId: id, reason: "the original tool request was cancelled" } }));
+    }
+    return cancelled;
+  }
+
   function refuseDuplicateElicitation(frame) {
     const completed = completedElicitations.get(frame.id);
     if (!completed) return false;
     completedElicitations.delete(frame.id);
-    const answer = frame.result && typeof frame.result === "object"
-      ? frame.result
-      : { action: "cancel" };
+    retiredElicitationIds.add(frame.id);
+    const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
     const params = completed.frame.params || {};
     const decision = contract.retry({
       tool: params.name,
@@ -342,9 +378,9 @@ function createProxy(options) {
       inputResponses: { approval: answer },
     });
     const refusal = decision.kind === "refuse" ? decision.refusal : "response_malformed";
-    const detail = decision.kind === "refuse"
+    const detail = envelopeDetail || (decision.kind === "refuse"
       ? decision.detail
-      : "a duplicate elicitation response cannot authorize another execution";
+      : "a duplicate elicitation response cannot authorize another execution");
     emitReceipt("BLOCK", completed.frame, {
       refusal,
       detail,
@@ -382,6 +418,7 @@ function createProxy(options) {
       const pending = pendingElicitations.get(elicitationId);
       if (!pending) return;
       pendingElicitations.delete(elicitationId);
+      retiredElicitationIds.add(elicitationId);
       finishGuarded(
         frame,
         requestState,
@@ -420,11 +457,16 @@ function createProxy(options) {
         blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
         return;
       }
-      if (!frame.method && Object.hasOwn(frame, "id")) {
+      if (Object.hasOwn(frame, "id") && (!frame.method
+        || pendingElicitations.has(frame.id) || completedElicitations.has(frame.id)
+        || retiredElicitationIds.has(frame.id))) {
         if (completeElicitation(frame)) return;
         if (refuseDuplicateElicitation(frame)) return;
-        if (typeof frame.id === "string" && ELICITATION_ID_PATTERN.test(frame.id)) return;
+        if (retiredElicitationIds.has(frame.id)) return;
       }
+      if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
+        && Object.hasOwn(frame.params || {}, "requestId")
+        && cancelPendingRequest(frame.params.requestId)) return;
       if (frame.method === "initialize") {
         const capabilities = frame.params?.capabilities;
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
@@ -446,7 +488,11 @@ function createProxy(options) {
     },
     stop() {
       stopping = true;
-      for (const pending of pendingElicitations.values()) clearTimeout(pending.timer);
+      for (const [id, pending] of pendingElicitations) {
+        clearTimeout(pending.timer);
+        retiredElicitationIds.add(id);
+      }
+      for (const id of completedElicitations.keys()) retiredElicitationIds.add(id);
       pendingElicitations.clear();
       completedElicitations.clear();
       return new Promise((resolve) => {
