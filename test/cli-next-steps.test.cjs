@@ -200,6 +200,14 @@ for (const alias of [[], ["--help"], ["-h"], ["--version"], ["-V"]]) {
 }
 
 // CLAIM-COVERAGE: docs/reference/cli.md#cli-reference
+test("CLI contract: every help line fits 80 columns", () => {
+  const help = execFileSync(SEAL, ["--help"], { encoding: "utf8" });
+  for (const [index, line] of help.split(/\r?\n/).entries()) {
+    assert.ok([...line].length <= 80,
+      `help line ${index + 1} exceeds 80 columns (${[...line].length}): ${line}`);
+  }
+});
+
 test("CLI contract: every public parser flag appears in help and the reference", () => {
   const root = path.resolve(__dirname, "..");
   const cli = fs.readFileSync(SEAL, "utf8");
