@@ -1,18 +1,29 @@
 {
   "version": 1,
   "ruling": {
-    "base": "f28f71001485cf071c0189294d4c4b4cbb946c9c",
+    "base": "19fa50eb4e1d0b5c9ad273908af6cc972d7486c9",
     "author": "Ben",
-    "date": "2026-09-09",
-    "scope": "Ben ruled on 2026-09-09 at 13:11 with the exact words \"yes of course\", in answer to the question whether to authorise the two-line claim-channel step in PR 295. The authorised change in .github/workflows/ci.yml adds the step named \"Closed CLI channel and pinned authored catalogue\" and its command \"node --test test/claim-channel.test.cjs\". This records Ben's human decision; the lane only records the exact merge-base, protected-path set and Git blobs derived after the final payload commit and rebase.",
+    "date": "2026-09-11",
+    "scope": "Ben ruled on 2026-09-10 at 19:34 Telegram, verbatim \"3. Authorise\" (seal PR 306's protected-path change on the four installed-tree-pin files), and on 2026-09-11 at 16:24 Telegram, verbatim \"1. yes\" (the Monkey may write the ruling record for those four blobs on PR 306). This records exactly those human decisions; the lane derives the merge-base and Git blobs after merging current main.",
     "retires": [
-      "The 2026-09-06 ruling from PR 244, base d8f5198bf48191339cb412b5fa83bfc7de3392fc, which is now on main and no longer applies to any open change.",
-      "The 2026-09-07 ruling from PR 253, base ee337d0a9558c29aad20cdfef3287f65c66e55bc, which was verified to be an ancestor of origin/main on 2026-09-09 and no longer describes this candidate range."
+      "The 2026-09-09 ruling from PR 295, base f28f71001485cf071c0189294d4c4b4cbb946c9c, whose change was verified as an ancestor of origin/main on 2026-09-11 and no longer describes this candidate range."
     ],
     "files": [
       {
-        "path": ".github/workflows/ci.yml",
-        "blob": "4609ec0ced4ad5cdb9b3ea055c45e455d9cda025"
+        "path": "scripts/installed-tree-pin.cjs",
+        "blob": "641cec215d715a74856ebf4ec3c34d7b4afe96f4"
+      },
+      {
+        "path": "scripts/sync-installed-tree-pin.cjs",
+        "blob": "d9bb8fbab02d752548d50a331b6d14174207632a"
+      },
+      {
+        "path": "test/installed-tree-pin-generator.test.cjs",
+        "blob": "43e40c13573a7b1b457dedd6d1bde88b6f7a9024"
+      },
+      {
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "9eac1e9149c870dda3d1f7f9b29c0d9ce27ca6ef"
       }
     ]
   }
