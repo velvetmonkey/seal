@@ -5,8 +5,6 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { releaseArtifactName } = require("./product-identity.cjs");
-
 const ROOT = path.join(__dirname, "..");
 const dist = path.join(ROOT, "dist");
 const STORE_HASH = /(\btree:?\s+|\/store\/)[0-9a-f]{64}\b/g;
@@ -18,11 +16,11 @@ const refusals = [];
 execFileSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", dist], { stdio: "inherit" });
 const [sha256, bytes, artifact] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
 const meta = JSON.parse(fs.readFileSync(path.join(dist, `${artifact}.meta.json`), "utf8"));
-// The build just made is named for THIS commit. The pin is a claim about the
-// bytes the release will publish, so it carries the release name. The two
-// agree because the payload is named by VERSION and never by the commit.
-const released = releaseArtifactName(meta.version);
-fs.writeFileSync(path.join(ROOT, "SHA256SUMS"), `${sha256}  ${bytes}  ${released}\n`);
+// A fresh source build is not a published release. Downloaded releases carry
+// their authoritative SHA256SUMS asset; keep the repository's release pin empty
+// between releases, as the version-identity gate requires. The fresh-build sums
+// remain in dist/SHA256SUMS and the marked documentation block is updated below.
+fs.writeFileSync(path.join(ROOT, "SHA256SUMS"), "");
 
 function applyReplacements(text, replacements) {
   for (const [expression, value] of replacements) text = text.replace(expression, value);

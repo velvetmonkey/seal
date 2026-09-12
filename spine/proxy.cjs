@@ -368,7 +368,7 @@ function createProxy(options) {
       blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
       return;
     }
-    const decision = contract.begin({ tool: params.name, args: params.arguments ?? {}, selection: matchedSelection });
+    const decision = contract.begin({ tool: params.name, args: params.arguments, selection: matchedSelection });
     if (decision.kind === "refuse") {
       emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
       respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));

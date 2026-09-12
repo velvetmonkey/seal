@@ -35,6 +35,7 @@ const SOURCES = [
     ],
     sentinel: "drifted",
   },
+  { file: "spine/uninstall.cjs", patterns: [/new ProtectionError\(\s*'([a-z_]+)'/g, /\brefuse\('([a-z_]+)'/g], sentinel: "installation_lock_active" },
   { file: "spine/proxy.cjs", patterns: [/"(protected_server_missing|protected_server_failed|forward_refused)"/g], sentinel: "forward_refused" },
   { file: "spine/platform.cjs", patterns: [/REFUSE ([a-z_]+):/g], sentinel: "unsupported_platform" },
   { file: "spine/integrity.cjs", patterns: [/\.code = "([a-z_]+)"/g, /\bcode: "([a-z_]+)"/g], sentinel: "artifact_truncated" },

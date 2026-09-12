@@ -184,7 +184,7 @@ function main() {
     process.stderr.write([
       "UNSUPPORTED PLATFORM",
       "",
-      "Seal v0.3.0.",
+      "Seal v0.4.0.",
       "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
       "",
       "No files were changed.",
@@ -248,8 +248,40 @@ function main() {
   const storeRoot = path.join(prefix, "lib", "seal", "store", manifest.treeSha256);
   const recordPath = path.join(prefix, "lib", "seal", "install.json");
   const launchPath = path.join(prefix, "bin", "seal");
+  const registryPath = path.join(prefix, "lib", "seal", "routes.json");
 
-  readVerifiedExistingInstall(recordPath, launchPath, manifest.platform);
+  const previous = readVerifiedExistingInstall(recordPath, launchPath, manifest.platform);
+  let routes = previous?.routes || [];
+  const registryStat = lstatOrAbsent(registryPath);
+  if (registryStat) {
+    if (!previous?.routeRegistry || previous.routeRegistry !== "lib/seal/routes.json" || !registryStat.isFile()) {
+      refuse("existing_install_untrusted", "route registry is not owned by the existing installation");
+    }
+    try {
+      const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      if (registry.schema !== "seal.routes/v1" || !Array.isArray(registry.routes)) throw new Error("invalid route registry");
+      routes = registry.routes;
+    } catch (error) { refuse("existing_install_untrusted", `cannot read route registry: ${error.message}`); }
+  } else if (previous?.routeRegistry) {
+    refuse("existing_install_untrusted", "existing route registry is missing");
+  }
+  // Preserve first-creation ownership across upgrades. Never infer ownership
+  // merely because a pre-existing file happens to contain the same bytes.
+  const owned = new Map((previous?.ownership?.paths || []).map(entry => [entry.path, entry]));
+  const remember = (target, kind, data) => {
+    const relative = path.relative(prefix, target);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return;
+    const old = owned.get(relative);
+    const present = lstatOrAbsent(target);
+    if (present?.isSymbolicLink()) refuse("existing_install_untrusted", `symbolic link at install target: ${target}`);
+    if (!present || old) owned.set(relative, { path: relative, kind, ...(data ? { sha256: sha256Hex(data) } : {}) });
+    if (target !== prefix) remember(path.dirname(target), "directory");
+  };
+  for (const file of files) remember(path.join(storeRoot, file.path), "file", file.data);
+  const launchPayload = files.find(file => file.path === "scripts/seal-launch.cjs");
+  if (launchPayload) remember(launchPath, "file", launchPayload.data);
+  remember(recordPath, "file");
+  remember(registryPath, "file");
 
   for (const file of files) {
     if (file.path.split("/").includes("..")) refuse("artifact_malformed", `payload path escapes: ${file.path}`);
@@ -273,7 +305,10 @@ function main() {
     treeSha256: manifest.treeSha256,
     store: storeRel,
     files: manifest.files,
+    ownership: { schema: "seal.created-paths/v1", paths: [...owned.values()] },
+    routeRegistry: "lib/seal/routes.json",
   };
+  writeFileDeep(registryPath, `${JSON.stringify({ schema: "seal.routes/v1", routes }, null, 2)}\n`, 0o600);
   writeFileDeep(recordPath, `${JSON.stringify(record, null, 2)}\n`, 0o444);
 
   try { fs.chmodSync(storeRoot, 0o555); } catch { /* best-effort; hash check is the detector */ }

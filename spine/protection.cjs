@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const { writeCompleteSync } = require("./write.cjs");
 const os = require("node:os");
 const path = require("node:path");
 const { performance } = require("node:perf_hooks");
@@ -947,7 +948,15 @@ function leaseMatches(lease, token) {
     lease.startWitness === token.startWitness && lease.generation === token.generation;
 }
 
-function acquireProjectLock(projectRoot, env = process.env) {
+function acquireProjectLock(projectRoot, env = process.env, operation) {
+  const installationLock = require("./uninstall.cjs").installLock(undefined, operation);
+  try {
+    const projectLock = acquireProjectLockOnly(projectRoot, env);
+    return { ...projectLock, release() { try { projectLock.release(); } finally { installationLock.release(); } } };
+  } catch (error) { installationLock.release(); throw error; }
+}
+
+function acquireProjectLockOnly(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
   const witness = requireProcessStartWitnessBinding(process.pid, "Seal's own witness at project-lock acquire");
   const owner = { pid: process.pid, startWitness: witness.witness };
@@ -958,7 +967,7 @@ function acquireProjectLock(projectRoot, env = process.env) {
       requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
       const fd = fs.openSync(filePath, "wx", 0o600);
       try {
-        fs.writeSync(fd, JSON.stringify(owner) + "\n");
+        writeCompleteSync(fd, JSON.stringify(owner) + "\n");
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
@@ -1114,6 +1123,7 @@ async function protect({
     };
     state.localOverride = installedLocalOverride({ root, serverName, sealBin, statePath });
     writeState(statePath, state);
+    require("./uninstall.cjs").registerRoute(statePath, state, env);
 
     const install = runClaude([
       "mcp", "add", "--scope", "local", serverName,
@@ -1262,11 +1272,15 @@ async function acquireProjectLockWaiting(projectRoot, env, wait = { elapsedMs: 0
   try {
     for (;;) {
       try {
-        return acquireProjectLock(projectRoot, env);
+        return acquireProjectLock(projectRoot, env, "startup");
       } catch (error) {
-        if (!(error instanceof ProtectionError) || error.code !== "proxy_lease_active") throw error;
+        if (!(error instanceof ProtectionError) || !["proxy_lease_active", "installation_lock_active"].includes(error.code)) throw error;
         const elapsedMs = performance.now() - started;
         if (elapsedMs >= ACTIVATION_LOCK_WAIT_MS) {
+          if (error.code === "installation_lock_active") {
+            throw new ProtectionError("installation_lock_active",
+              `startup refused: timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the installation lock held by pid ${error.lockHolderPid}; retry after that Seal operation finishes`);
+          }
           throw new ProtectionError(
             "proxy_lease_active",
             `timed out after waiting ${Math.round(wait.elapsedMs + elapsedMs)}ms to acquire the project lock held by pid ${error.lockHolderPid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`,

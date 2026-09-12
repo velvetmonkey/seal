@@ -5,7 +5,7 @@
     "kernel/wasm/seal.js": "801417decfbc49b926a16c9968aa3e77e792abf05eb782ec8ed530325fb8c6c5",
     "kernel/wasm/seal.wasm": "28bb3ae71985357163e3b651791e2a70c462ea5d1313a59b4967d4c20ea77657",
     "kernel/kernel.js": "94c283b153c00135d04f9a2ed6915596ef0a183c89af034a8ee68eaa959f9a0d",
-    "kernel/seal-config.js": "8092a84687755e2155f49daa1ad02ecce1105795c68a6577f6634869df901fed",
+    "kernel/seal-config.js": "c51baa70d718c5d94cbd13fd6a60039e184fd61a360e24f87a2d56b450d7d927",
     "kernel/receipt-format.js": "d336952fa7a9834daf4ed157d117bec31a0316258b41aa78e506327cc079c368",
     "kernel/runner.cjs": "3826e1012d2768b5e98cd3de442ba0dfee053e7fe84ab8005103fdb8860c1d0b",
     "src/verify.cjs": "db8ff0cdd1c46c9e05b59567eaaf939d9ba01b0ab3e9b59fcb1c67486924fad0"

@@ -3,7 +3,7 @@
 // not import this helper; its population comes from the declared site manifest.
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { quotedTreeHashHits } = require("../scripts/installed-tree-pin.cjs");
+const { isJsonRecords, quotedTreeHashHits } = require("../scripts/installed-tree-pin.cjs");
 
 function assertNamedRefuse(fn, code) {
   let failed = null;
@@ -85,4 +85,29 @@ test("an unrecognised store-hash role is a named refusal", () => {
   ].join("\n");
   assertNamedRefuse(() => quotedTreeHashHits(text, "unknown.md"), "role_marker_unknown");
   assert.throws(() => quotedTreeHashHits(text, "unknown.md"), /unknown\.md:1 unknown store-hash role "release-cache"/);
+});
+
+test("record content, not filename or digest, separates captures from documentation", () => {
+  const hash = "a".repeat(64);
+  const records = [JSON.stringify({ text: `/store/${hash}` }), JSON.stringify({ count: 2 })].join("\r\n");
+  for (const file of ["future.jsonl", "renamed.md", "extensionless"]) {
+    assert.equal(isJsonRecords(records), true);
+    assertNamedRefuse(() => quotedTreeHashHits(records, file), "pin_source_not_documentation");
+    assert.throws(() => quotedTreeHashHits(records, file), /is a JSON record stream, not a documentation page; recorded store paths are not installed-tree pins/);
+  }
+  const doc = ["<!-- Seal installed-tree pin role: fresh-build -->", "```output", `/store/${hash}`, "```"].join("\n");
+  assert.equal(isJsonRecords(doc), false);
+  assert.equal(quotedTreeHashHits(doc, "mistaken.jsonl")[0].hash, hash);
+  const unmarked = doc.split("\n").slice(1).join("\n");
+  assertNamedRefuse(() => quotedTreeHashHits(unmarked, "mistaken.jsonl"), "role_marker_absent");
+  for (const text of ["", "\n", '{"text":', records + "\nprose"]) {
+    assert.equal(isJsonRecords(text), false, text);
+  }
+  for (const text of [JSON.stringify([`/store/${hash}`]), JSON.stringify(`/store/${hash}`), "null", "42", "true"]) {
+    assert.equal(isJsonRecords(text), true, text);
+  }
+  // A JSON example inside a documentation fence is still a documentation pin.
+  const fencedRecords = doc.replace(`/store/${hash}`, JSON.stringify({ text: `/store/${hash}` }));
+  assert.equal(isJsonRecords(fencedRecords), false);
+  assert.equal(quotedTreeHashHits(fencedRecords, "example.md").length, 1);
 });
