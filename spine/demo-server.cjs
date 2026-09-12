@@ -8,6 +8,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
+const { writeCompleteSync } = require("./write.cjs");
 
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
@@ -15,7 +16,7 @@ const ERASE_TOOL = "demo.erase";
 function writeFileSyncedTo(filePath, text) {
   const fd = fs.openSync(filePath, "w", 0o600);
   try {
-    fs.writeSync(fd, text);
+    writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
@@ -25,7 +26,7 @@ function writeFileSyncedTo(filePath, text) {
 function appendSyncedTo(filePath, text) {
   const fd = fs.openSync(filePath, "a", 0o600);
   try {
-    fs.writeSync(fd, text);
+    writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);

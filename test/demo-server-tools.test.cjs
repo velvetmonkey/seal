@@ -54,3 +54,63 @@ test("the demo server advertises append and erase with real file effects", async
     await new Promise((resolve) => child.once("exit", resolve));
   }
 });
+
+// Exercise the private persistence boundaries without expanding the server API.
+const vm = require("node:vm");
+const { createRequire } = require("node:module");
+const serverPath = path.join(__dirname, "..", "spine", "demo-server.cjs");
+const serverScope = { require: createRequire(serverPath), module: { exports: {} }, Buffer, process };
+vm.runInNewContext(
+  fs.readFileSync(serverPath, "utf8") + "\nmodule.exports = { writeFileSyncedTo, appendSyncedTo };",
+  serverScope,
+  { filename: serverPath },
+);
+
+for (const [name, write] of Object.entries(serverScope.module.exports)) {
+  for (const kind of ["string", "Buffer"]) {
+    test(`${name} preserves ${kind} bytes and ENOSPC but refuses real partial writes`, (t) => {
+      const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-write-"));
+      const file = path.join(root, "data");
+      const text = "éclair\n";
+      const data = kind === "string" ? text : Buffer.from(text);
+      const bytes = Buffer.from(text);
+      const prefix = name === "appendSyncedTo" ? Buffer.from("existing\n") : Buffer.alloc(0);
+      const reset = () => fs.writeFileSync(file, prefix);
+
+      reset();
+      write(file, data);
+      assert.deepEqual(fs.readFileSync(file), Buffer.concat([prefix, bytes]));
+
+      const full = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+      t.mock.method(fs, "writeSync", () => { throw full; });
+      try {
+        assert.throws(() => write(file, data), (error) => error === full);
+      } finally {
+        t.mock.restoreAll();
+      }
+
+      reset();
+      const originalWrite = fs.writeSync;
+      let offered;
+      let fdUsed;
+      let error;
+      t.mock.method(fs, "writeSync", (fd, input) => {
+        fdUsed = fd;
+        offered = Buffer.from(input);
+        return originalWrite(fd, offered, 0, offered.length - 1);
+      });
+      const sync = t.mock.method(fs, "fsyncSync");
+      try {
+        try { write(file, data); } catch (caught) { error = caught; }
+        assert.deepEqual(offered, bytes);
+        assert.deepEqual(fs.readFileSync(file), Buffer.concat([prefix, bytes.subarray(0, -1)]));
+        assert.equal(error?.code, "EIO", `${name} returned success after a real partial ${kind} write`);
+        assert.equal(error.message, `incomplete write: wrote ${bytes.length - 1} of ${bytes.length} bytes`);
+        assert.equal(sync.mock.callCount(), 0, "a failed write must not reach fsync");
+        assert.throws(() => fs.fstatSync(fdUsed), { code: "EBADF" }, "the descriptor must still close");
+      } finally {
+        t.mock.restoreAll();
+      }
+    });
+  }
+}
