@@ -32,6 +32,49 @@ function parseArgs(argv) {
 }
 
 async function run(argv) {
+  let proxy;
+  let input;
+  let stopping = false;
+  let shutdownTask;
+  let childClosed;
+  const childDone = new Promise((resolve) => { childClosed = resolve; });
+
+  // The first failure wins, including a status selected before shutdown.
+  // Mark stopping before closing input: readline's close event is synchronous.
+  function shutdown(code = 0) {
+    process.exitCode = process.exitCode || code;
+    if (stopping) return shutdownTask;
+    stopping = true;
+    shutdownTask = Promise.resolve().then(async () => {
+      input?.close();
+      process.stdin.destroy();
+      try {
+        if (proxy) {
+          await proxy.stop(); // clears pending approvals and their timers
+          await childDone; // stop can resolve before the child's stdout closes
+        }
+      } catch (error) {
+        process.exitCode = process.exitCode || 1;
+        process.stderr.write(`seal __proxy: shutdown failed: ${error.message}\n`);
+      }
+      // Journal and receipt writes complete synchronously inside proxy.write.
+      // Empty writes wait behind all queued output without closing shared stdio.
+      await Promise.all([process.stdout, process.stderr].map((stream) =>
+        new Promise((resolve) => {
+          if (stream.destroyed || !stream.writable) return resolve();
+          stream.write("", resolve);
+        })));
+      process.exit(process.exitCode || 0);
+    });
+    return shutdownTask;
+  }
+
+  function fail(error) {
+    process.stderr.write(`seal __proxy: ${error?.message ?? String(error)}\n`);
+    printKernelTiming(error, (message) => process.stderr.write(`${message}\n`));
+    void shutdown(1);
+  }
+
   requireProtectSupportedPlatform();
   let parsed;
   try {
@@ -39,25 +82,25 @@ async function run(argv) {
   } catch (error) {
     process.stderr.write(`seal __proxy: ${error.message}\n`);
     process.stderr.write("usage: seal __proxy --protect-state FILE\n       seal __proxy --init-store --store FILE\n");
-    process.exit(2);
+    await shutdown(2); return;
   }
   const { options, childArgv } = parsed;
 
   if (options.initStore) {
-    if (!options.storePath) { process.stderr.write("seal __proxy: --init-store needs --store FILE\n"); process.exit(2); }
+    if (!options.storePath) { process.stderr.write("seal __proxy: --init-store needs --store FILE\n"); await shutdown(2); return; }
     try {
       createJournal(options.storePath);
     } catch (error) {
       process.stderr.write(`seal __proxy: ${error.message}\n`);
-      process.exit(1);
+      await shutdown(1); return;
     }
     process.stdout.write(`approval store initialised: ${options.storePath}\n`);
-    process.exit(0);
+    await shutdown(0); return;
   }
 
   if (!options.protectState) {
     process.stderr.write("seal __proxy: legacy invocation without a receipt signer is refused; use --protect-state FILE\n");
-    process.exit(2);
+    await shutdown(2); return;
   }
 
   let proxyOptions = { ...options, childArgv };
@@ -89,60 +132,62 @@ async function run(argv) {
     } catch (error) {
       if (error instanceof ProtectionError && error.code === "proxy_lease_active") {
         process.stderr.write(`REFUSED proxy_lease_active\n${error.message}\n`);
-        process.exit(1);
+        await shutdown(1); return;
       }
       const prefix = error instanceof StoreError ? "seal __proxy"
         : `seal __proxy: ${error instanceof ProtectionError ? error.code : "startup failed"}`;
       process.stderr.write(`${prefix}: ${error.message}\n`);
-      process.exit(1);
+      await shutdown(1); return;
     }
   }
 
   for (const required of ["storePath", "receiptsDir"]) {
-    if (!proxyOptions[required]) { process.stderr.write(`seal __proxy: ${required} is required\n`); process.exit(2); }
+    if (!proxyOptions[required]) { process.stderr.write(`seal __proxy: ${required} is required\n`); await shutdown(2); return; }
   }
   if ((!Array.isArray(proxyOptions.guardSelections) || proxyOptions.guardSelections.length === 0) &&
       (!Array.isArray(proxyOptions.guardTools) || proxyOptions.guardTools.length === 0) && !proxyOptions.guardTool) {
-    process.stderr.write("seal __proxy: guardTools is required\n"); process.exit(2);
+    process.stderr.write("seal __proxy: guardTools is required\n"); await shutdown(2); return;
   }
   if (proxyOptions.childArgv.length === 0) {
     process.stderr.write("seal __proxy: a server command is required after --\n");
-    process.exit(2);
+    await shutdown(2); return;
   }
 
-  let proxy;
   try {
     proxy = createProxy({
       ...proxyOptions,
       onClientLine: (line) => process.stdout.write(line + "\n"),
-      onChildExit: (code) => {
-        if (code !== 0 && code !== null) {
-          process.stderr.write(`seal __proxy: protected server exited ${code}\n`);
-          process.exit(1);
+      onChildExit: (code, signal) => {
+        childClosed();
+        if (stopping) return;
+        if (code !== 0) {
+          process.stderr.write(`seal __proxy: protected server exited ${code === null ? signal : code}\n`);
         }
+        void shutdown(code === 0 ? 0 : 1);
       },
     });
   } catch (error) {
     const prefix = error instanceof StoreError ? "seal __proxy" : "seal __proxy: startup failed";
     process.stderr.write(`${prefix}: ${error.message}\n`);
-    process.exit(1);
+    await shutdown(1);
+    return;
   }
-  const input = readline.createInterface({ input: process.stdin, terminal: false });
+  process.once("SIGINT", () => { void shutdown(130); });
+  process.once("SIGTERM", () => { void shutdown(143); });
+  process.once("uncaughtException", fail);
+  process.once("unhandledRejection", fail);
+  process.stdout.on("error", () => { void shutdown(1); });
+  process.stderr.on("error", () => { void shutdown(1); });
+  input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
+    if (stopping) return;
     try {
       proxy.write(line);
     } catch (error) {
-      process.stderr.write(`seal __proxy: ${error.message}\n`);
-      printKernelTiming(error, (message) => process.stderr.write(`${message}\n`));
-      process.exitCode = 1;
-      input.close();
-      proxy.stop().finally(() => process.exit(1));
+      fail(error);
     }
   });
-  input.on("close", async () => {
-    await proxy.stop();
-    process.exit(process.exitCode || 0);
-  });
+  input.on("close", () => { void shutdown(); });
 }
 
 module.exports = { run };
