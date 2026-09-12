@@ -95,6 +95,59 @@ function checkOutsideClaims(file, text) {
   }
 }
 
+// Three full 30-second attempts plus two 500ms pauses, bounded per asset.
+const DOWNLOAD_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 500;
+const DOWNLOAD_LIMIT_MS = 91000;
+const TRANSIENT_HTTP = new Set([408, 429, 500, 502, 503, 504]);
+const TRANSPORT_CODES = new Set([
+  'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND',
+  'ENETUNREACH', 'EHOSTUNREACH', 'EPIPE', 'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+]);
+
+function errorChain(error, seen = new Set()) {
+  if (!error || seen.has(error)) return [];
+  seen.add(error);
+  return [error, ...errorChain(error.cause, seen),
+    ...(Array.isArray(error.errors) ? error.errors.flatMap(child => errorChain(child, seen)) : [])];
+}
+
+function describeError(error) {
+  return errorChain(error).map(item =>
+    `${item.name || 'Error'}${item.code ? ` [${item.code}]` : ''}: ${item.message || String(item)}`
+  ).join(' <- ');
+}
+
+async function downloadPublished(url, name) {
+  const started = performance.now();
+  const deadline = started + DOWNLOAD_LIMIT_MS;
+  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+    try {
+      const remaining = Math.floor(deadline - performance.now());
+      if (remaining <= 0) throw new Error('download time limit exhausted');
+      const response = await fetch(url, { signal: AbortSignal.timeout(Math.min(30000, remaining)) });
+      if (!response.ok) {
+        // Release the response before opening another connection.
+        await response.body?.cancel().catch(() => {});
+        throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+      }
+      // Body transport failures are retryable too. Authentication stays outside
+      // this loop: once bytes arrive, a wrong digest must fail immediately.
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      const transient = error.status !== undefined ? TRANSIENT_HTTP.has(error.status)
+        : errorChain(error).some(item => item.name === 'TimeoutError' || TRANSPORT_CODES.has(item.code));
+      const detail = `cannot fetch published ${name} (${url}), attempt ${attempt}/${DOWNLOAD_ATTEMPTS}, ${Math.round(performance.now() - started)}ms: ${describeError(error)}`;
+      if (!transient || attempt === DOWNLOAD_ATTEMPTS || deadline - performance.now() <= RETRY_DELAY_MS) {
+        throw new Error(detail, { cause: error });
+      }
+      console.error(`RETRY ${detail}; waiting ${RETRY_DELAY_MS}ms`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+    }
+  }
+}
+
 async function main() {
   const install = fs.readFileSync(path.join(DOCS_ROOT, 'docs/start/install.md'), 'utf8');
   const readme = fs.readFileSync(path.join(DOCS_ROOT, 'README.md'), 'utf8');
@@ -144,9 +197,8 @@ async function main() {
     const names = [value('artifact_name'), value('checker_name'), value('sums_name')];
     for (const name of names) assert.equal(path.basename(name), name, 'asset name must be a basename');
     await Promise.all(names.map(async name => {
-      const response = await fetch(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`, { signal: AbortSignal.timeout(30000) });
-      assert.ok(response.ok, `cannot fetch published ${name}: HTTP ${response.status}`);
-      fs.writeFileSync(path.join(assets, name), Buffer.from(await response.arrayBuffer()), { mode: 0o644 });
+      const bytes = await downloadPublished(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`, name);
+      fs.writeFileSync(path.join(assets, name), bytes, { mode: 0o644 });
       // The suite uses umask 077. Give the refusal experiment an explicit
       // non-executable starting mode, independent of the caller's umask.
       fs.chmodSync(path.join(assets, name), 0o644);
@@ -256,4 +308,4 @@ async function main() {
     tempRoot.cleanup(root);
   }
 }
-main().catch(error => { console.error(`FAIL install prose: ${error.message}`); process.exitCode = 1; });
+main().catch(error => { console.error(`FAIL install prose: ${error.message}${error.cause ? `; cause: ${describeError(error.cause)}` : ''}`); process.exitCode = 1; });
