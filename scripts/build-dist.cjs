@@ -38,6 +38,7 @@ const PAYLOAD_PATHS = [
   "spine/receipt-population.cjs",
   "spine/receipt-v2.cjs",
   "spine/store.cjs",
+  "spine/write.cjs",
   "spine/tool-selection.cjs",
   "contract/canonical.cjs",
   "contract/contract.cjs",

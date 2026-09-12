@@ -54,7 +54,7 @@ function validate(r) {
   if (r.seal_receipt !== "v2") fail("unsupported receipt schema");
   let orderIndex = -1;
   for (const k of Object.keys(r)) { const next = ORDER.indexOf(k); if (next <= orderIndex) fail("member order is not the v2 order", "member_order"); orderIndex = next; }
-  if (typeof r.tool !== "string" || !r.tool || !r.arguments || Array.isArray(r.arguments)) fail("tool and arguments are required");
+  if (typeof r.tool !== "string" || !r.tool || r.arguments === null || typeof r.arguments !== "object" || Array.isArray(r.arguments)) fail("tool and arguments are required");
   if (!Number.isSafeInteger(r.now) || r.now < 0) fail("now must be a non-negative safe integer");
   if (!r.kernel_config || typeof r.kernel_config !== "object" || Array.isArray(r.kernel_config)) fail("kernel_config is required");
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
@@ -129,6 +129,6 @@ export function format(result) { return `Document structure       ${result.read 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
-  try { const out = await verify(readFileSync(file, "utf8"), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
+  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
   catch (e) { console.log(`REFUSE ${e.code || "invalid_receipt"}: ${e.message}`); process.exitCode = 1; }
 }

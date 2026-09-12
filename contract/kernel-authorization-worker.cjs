@@ -5,6 +5,7 @@
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const fs = require("node:fs");
+const { writeCompleteSync } = require("../spine/write.cjs");
 
 function timestamp() {
   return process.hrtime.bigint();
@@ -47,7 +48,7 @@ function emitLifecycle(name, detail) {
 
 process.on("beforeExit", () => emitLifecycle("beforeExit", { active_resources: activeResources() }));
 process.on("exit", () => {
-  fs.writeSync(2, `SEAL_KERNEL_LIFECYCLE ${JSON.stringify(lifecycleRecord("exit", { active_resources: activeResources() }))}\n`);
+  writeCompleteSync(2, `SEAL_KERNEL_LIFECYCLE ${JSON.stringify(lifecycleRecord("exit", { active_resources: activeResources() }))}\n`);
 });
 
 async function main() {
