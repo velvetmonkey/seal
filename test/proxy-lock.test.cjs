@@ -534,8 +534,10 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGKILL", "child-SIGTERM", "uncaught
       if (signal === "child-SIGTERM") process.kill(pid, "SIGTERM");
       else if (signal !== "uncaught") run.child.kill(signal);
       await departureUntil(() => run.closed, () => `signal shutdown: ${run.err}`);
-      if (signal === "SIGKILL") assert.equal(run.signal, "SIGKILL");
-      else assert.equal(run.code, signal === "SIGTERM" ? 143 : signal === "SIGINT" ? 130 : 1);
+      if (["SIGKILL", "SIGTERM", "SIGINT"].includes(signal)) {
+        assert.equal(run.signal, signal);
+        assert.equal(run.code, null);
+      } else assert.equal(run.code, 1);
       assert.equal(lockOwnerIsLive(readState(ctx.states.alpha).lease), false);
     } finally {
       await departureCleanup(run);

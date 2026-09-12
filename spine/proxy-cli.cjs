@@ -172,8 +172,6 @@ async function run(argv) {
     await shutdown(1);
     return;
   }
-  process.once("SIGINT", () => { void shutdown(130); });
-  process.once("SIGTERM", () => { void shutdown(143); });
   process.once("uncaughtException", fail);
   process.once("unhandledRejection", fail);
   process.stdout.on("error", () => { void shutdown(1); });
