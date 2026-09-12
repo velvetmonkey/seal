@@ -9,7 +9,9 @@
 // consumed approvals back to life. Unreadable or corrupt state throws; the
 // caller exits non-zero and never approves over it.
 const fs = require("node:fs");
+const { writeCompleteSync } = require("./write.cjs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { ProtectionError, lockOwnerIsLive, processStartWitness } = require("./protection.cjs");
 
 class StoreError extends Error {}
@@ -60,34 +62,78 @@ function withFileLock(filePath, callback) {
       `cannot establish process-start witness for approval-journal-lock owner pid ${owner.pid}; fix the local process-start witness source and retry`,
     );
   }
-  for (;;) {
-    try {
-      const fd = fs.openSync(lockPath, "wx", 0o600);
+  // Keep the private inode linked until release so its identity cannot be
+  // recycled. Only fully written, synced owner records become public.
+  const temporary = `${lockPath}.${process.pid}.${crypto.randomBytes(16).toString("hex")}`;
+  const fd = fs.openSync(temporary, "wx", 0o600);
+  const identity = fs.fstatSync(fd);
+  const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+  const stat = (file) => {
+    try { return fs.lstatSync(file); }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  };
+  let acquired = false;
+  try {
+    writeCompleteSync(fd, JSON.stringify(owner) + "\n");
+    fs.fsyncSync(fd);
+    for (;;) {
       try {
-        fs.writeSync(fd, JSON.stringify(owner) + "\n");
-        fs.fsyncSync(fd);
-      } finally {
-        fs.closeSync(fd);
+        fs.linkSync(temporary, lockPath);
+        acquired = true;
+        break;
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
       }
-      break;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      let existing;
-      try { existing = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { existing = null; }
-      if (!lockOwnerIsLive(existing, "approval-journal-lock owner")) {
-        try { fs.unlinkSync(lockPath); } catch (unlinkError) {
-          if (unlinkError.code !== "ENOENT") throw unlinkError;
+      let existing, observed;
+      let reader;
+      try {
+        reader = fs.openSync(lockPath, "r");
+        observed = fs.fstatSync(reader);
+        existing = JSON.parse(fs.readFileSync(reader, "utf8"));
+        if (!observed.isFile() || !Number.isSafeInteger(existing?.pid) || existing.pid <= 0 ||
+            (existing.startWitness !== null &&
+             (typeof existing.startWitness !== "string" || !existing.startWitness))) {
+          throw new StoreError("invalid approval journal lock owner");
         }
-        continue;
+        // A complete legacy record with an explicit null witness is stale:
+        // acquisition has always refused to create such an owner. Missing or
+        // truncated records above cannot authorize recovery.
+        if (!lockOwnerIsLive(existing, "approval-journal-lock owner")) {
+          // Elect exactly one reaper per stale inode. Retain this hard link:
+          // deleting it would let a delayed reaper win again and unlink a new
+          // acquisition (and retaining it prevents inode-number reuse).
+          const recovery = `${lockPath}.reaped.${observed.dev}.${observed.ino}`;
+          try { fs.linkSync(lockPath, recovery); }
+          catch (error) {
+            if (error.code === "ENOENT") continue;
+            if (error.code === "EEXIST") {
+              const current = stat(lockPath);
+              if (!current || !same(current, observed)) continue;
+              throw new StoreError("approval journal lock recovery is in progress or interrupted; retry, then inspect if persistent");
+            }
+            throw error;
+          }
+          const claimed = stat(recovery);
+          const current = stat(lockPath);
+          if (claimed && current && same(claimed, observed) && same(current, observed)) fs.unlinkSync(lockPath);
+          continue;
+        }
+      } catch (error) {
+        if (error.code === "ENOENT") continue;
+        if (error instanceof SyntaxError) throw new StoreError("incomplete or invalid approval journal lock owner; inspect before retrying");
+        throw error;
+      } finally {
+        if (reader !== undefined) fs.closeSync(reader);
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
     }
-  }
-  try {
     return callback();
   } finally {
-    try { fs.unlinkSync(lockPath); } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+    try {
+      const current = stat(lockPath);
+      if (acquired && current && same(current, identity)) fs.unlinkSync(lockPath);
+    } finally {
+      try { fs.closeSync(fd); } finally { fs.unlinkSync(temporary); }
     }
   }
 }
@@ -108,10 +154,21 @@ function openJournal(filePath) {
     },
     append(event) {
       const fd = fs.openSync(filePath, "a", 0o600);
+      const before = fs.fstatSync(fd).size;
       try {
-        fs.writeSync(fd, JSON.stringify(event) + "\n");
+        writeCompleteSync(fd, JSON.stringify(event) + "\n");
         fs.fsyncSync(fd);
         events.push(event);
+      } catch (error) {
+        // A failed append must not leave a torn final line that bricks replay.
+        // Callers serialize approval transactions with withLock.
+        try {
+          fs.ftruncateSync(fd, before);
+          fs.fsyncSync(fd);
+        } catch (rollbackError) {
+          throw new AggregateError([error, rollbackError], "approval append and rollback failed");
+        }
+        throw error;
       } finally {
         fs.closeSync(fd);
       }
