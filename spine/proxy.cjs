@@ -432,7 +432,11 @@ function createProxy(options) {
           : {};
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
-        const args = frame.params?.arguments ?? {};
+        // MCP arguments is optional. Normalize omission on the parsed frame
+        // before selection and approval so every guarded stage shares it.
+        // Explicit null and other non-object values still reach the renderer.
+        if (!Object.hasOwn(frame.params, "arguments")) frame.params.arguments = {};
+        const args = frame.params.arguments;
         const matching = selections
           .filter((selection) => selection.name === frame.params.name)
           .map((selection) => evaluateSelection(selection, args, line))
