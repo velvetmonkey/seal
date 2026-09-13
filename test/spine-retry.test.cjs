@@ -1364,7 +1364,7 @@ const { createProxy } = require(root + '/spine/proxy.cjs');
 const { createJournal } = require(root + '/spine/store.cjs');
 const { generateSigner } = require(root + '/spine/receipt-v2.cjs');
 const accept = { action: 'accept', content: { approve: true } };
-async function harness(t, observeMaps = false, childRequestId = null) {
+async function harness(t, observeMaps = false, childRequestId = null, capacity = 1) {
   const dir = testTmpdir('seal-cancelbind-');
   const record = path.join(dir, 'child.ndjson');
   fs.writeFileSync(record, '');
@@ -1374,20 +1374,32 @@ async function harness(t, observeMaps = false, childRequestId = null) {
   // Run the same proxy source in an isolated context to observe its actual
   // maps without adding production diagnostics or rewriting its logic.
   const maps = [];
+  const sets = [];
+  const timers = new Set();
+  let exited;
+  const exit = new Promise(resolve => { exited = resolve; });
   let makeProxy = createProxy;
   if (observeMaps) {
     const filename = path.join(root, 'spine/proxy.cjs');
     const context = {
       require: require('node:module').createRequire(filename), module: { exports: {} },
-      process, Buffer, console, setTimeout, clearTimeout,
+      process, Buffer, console,
+      setTimeout(callback, ms) {
+        const timer = setTimeout(() => { timers.delete(timer); callback(); }, ms);
+        timers.add(timer);
+        return timer;
+      },
+      clearTimeout(timer) { timers.delete(timer); clearTimeout(timer); },
+      Set: class extends Set { constructor(...args) { super(...args); sets.push(this); } },
       Map: class extends Map { constructor(...args) { super(...args); maps.push(this); } },
     };
     require('node:vm').runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
     makeProxy = context.module.exports.createProxy;
   }
   const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
-    receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: 1,
-    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
+    receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: capacity,
+    onChildExit(code, signal) { exited({code, signal, sizes: maps.map(m => m.size), timers: timers.size}); },
+    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='test/exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
     onClientLine(line) { frames.push(JSON.parse(line)); },
   });
   t.after(() => proxy.stop());
@@ -1402,7 +1414,7 @@ async function harness(t, observeMaps = false, childRequestId = null) {
   const answer = (elicitation, envelope={result:accept}) => send({jsonrpc:'2.0',id:elicitation.id,...envelope});
   send({jsonrpc:'2.0',id:90,method:'initialize',params:{capabilities:{elicitation:{}}}});
   await wait(f=>f.id===90);
-  return {maps,dir,storePath,frames,proxy,send,wait,fence,calls,toolCalls,begin,cancel,answer};
+  return {maps,sets,timers,exit,dir,storePath,frames,proxy,send,wait,fence,calls,toolCalls,begin,cancel,answer};
 }
 test('cancelbind cancellation then late accept', async t=>{
   const h=await harness(t);const e=await h.begin(1);await h.fence();assert.equal(h.toolCalls(),0);
@@ -1507,6 +1519,56 @@ test('cancelbind genuine elicitation consumed and repeated answers never reach c
   t.diagnostic(JSON.stringify({elicitationId:e.id, afterAccept, afterReplays:h.calls()}));
   assert.equal(h.toolCalls(), 1);
   assert.deepEqual(h.calls().filter(f => f.id === e.id), []);
+});
+
+test('cancelbind retired IDs stay bounded under overflow and stop', async t => {
+  const capacity = 4;
+  const h = await harness(t, true, null, capacity);
+  const retired = h.sets[h.sets.length - 1];
+  const ids = [];
+  let peak = 0;
+  for (let id = 1; id <= capacity * 3; id++) {
+    const e = await h.begin(id);
+    ids.push(e.id);
+    h.cancel(id);
+    peak = Math.max(peak, retired.size);
+  }
+  t.diagnostic(JSON.stringify({cycles: ids.length, capacity, peak, retained: retired.size}));
+  assert.ok(peak <= capacity, `retired store peaked at ${peak}, capacity ${capacity}`);
+  assert.deepEqual([...retired], ids.slice(-capacity), 'oldest retired IDs are evicted');
+  h.answer({id: ids.at(-1)});
+  await h.fence();
+  assert.equal(h.toolCalls(), 0);
+  assert.equal(h.calls().filter(f => f.id === ids.at(-1)).length, 0);
+  // Evicted responses have no approval state and follow the unknown-ID route.
+  h.answer({id: ids[0]});
+  await h.fence();
+  assert.equal(h.calls().filter(f => f.id === ids[0]).length, 1);
+  assert.equal(h.toolCalls(), 0);
+  for (let id = 20; id < 20 + capacity; id++) await h.begin(id);
+  await h.proxy.stop();
+  assert.ok(retired.size <= capacity);
+  assert.deepEqual(h.maps.map(m => m.size), [0, 0, 0]);
+});
+
+test('cancelbind child exit clears pending timers and correlations before callback', async t => {
+  const h = await harness(t, true, null, 4);
+  const completed = await h.begin(1);
+  h.answer(completed, {result: {action: 'decline'}});
+  await h.begin(2);
+  await h.begin(3);
+  assert.deepEqual(h.maps.map(m => m.size), [2, 2, 1]);
+  assert.equal(h.timers.size, 2);
+  h.send({jsonrpc:'2.0', method:'test/exit'});
+  const exit = await h.exit;
+  t.diagnostic(JSON.stringify(exit));
+  assert.equal(exit.code, 7);
+  assert.deepEqual(exit.sizes, [0, 0, 0]);
+  assert.equal(exit.timers, 0);
+  const before = h.frames.length;
+  h.send({jsonrpc:'2.0', id:4, method:'tools/call', params:{name:'demo.mutate', arguments:{line:'after exit'}}});
+  assert.equal(h.frames.length, before, 'closed proxy cannot allocate new approval state');
+  assert.deepEqual(h.maps.map(m => m.size), [0, 0, 0]);
 });
 
 }

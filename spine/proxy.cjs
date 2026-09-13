@@ -100,10 +100,28 @@ function createProxy(options) {
   const receiptCorrelations = new Map();
   const pendingElicitations = new Map();
   const completedElicitations = new Map();
-  // Retain exact retired IDs for this session: an unissued lookalike belongs
-  // to the child, while arbitrarily late replies to our own IDs stay consumed.
+  // Retain only the most recent exact retired IDs. Older replies follow the
+  // unknown-ID child route, but have no approval state left to authorize a call.
   const retiredElicitationIds = new Set();
   let clientCapabilities = null;
+
+  function retireElicitation(id) {
+    retiredElicitationIds.add(id);
+    if (retiredElicitationIds.size > receiptCorrelationCapacity) {
+      retiredElicitationIds.delete(retiredElicitationIds.values().next().value);
+    }
+  }
+
+  function clearElicitationState() {
+    for (const [id, pending] of pendingElicitations) {
+      clearTimeout(pending.timer);
+      retireElicitation(id);
+    }
+    for (const id of completedElicitations.keys()) retireElicitation(id);
+    pendingElicitations.clear();
+    completedElicitations.clear();
+    receiptCorrelations.clear();
+  }
 
   function mintReceiptCorrelation(requestState) {
     const correlation = `seal-receipt-correlation/v1.${randomBytes(32).toString("hex")}`;
@@ -127,7 +145,7 @@ function createProxy(options) {
     completedElicitations.set(id, pending);
     if (completedElicitations.size <= receiptCorrelationCapacity) return;
     const oldestId = completedElicitations.keys().next().value;
-    retiredElicitationIds.add(oldestId);
+    retireElicitation(oldestId);
     completedElicitations.delete(oldestId);
   }
 
@@ -150,11 +168,14 @@ function createProxy(options) {
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });
   let stopping = false;
+  let childClosed = false;
   let childSpawnError = null;
   child.once("error", (error) => {
     childSpawnError = error.code === "ENOENT" ? "protected_server_missing" : "protected_server_failed";
   });
   child.once("close", (code, signal) => {
+    childClosed = true;
+    clearElicitationState();
     if (onChildExit) onChildExit(stopping ? 0 : code, signal);
   });
   const childOut = readline.createInterface({ input: child.stdout, terminal: false });
@@ -351,7 +372,7 @@ function createProxy(options) {
       if (pending.frame.id !== requestId) continue;
       cancelled = true;
       pendingElicitations.delete(id);
-      retiredElicitationIds.add(id);
+      retireElicitation(id);
       clearTimeout(pending.timer);
       discardReceiptCorrelation(pending.requestState);
       // Keep only the exact retired ID, without retaining a completed slot
@@ -368,7 +389,7 @@ function createProxy(options) {
     const completed = completedElicitations.get(frame.id);
     if (!completed) return false;
     completedElicitations.delete(frame.id);
-    retiredElicitationIds.add(frame.id);
+    retireElicitation(frame.id);
     const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
     const params = completed.frame.params || {};
     const decision = contract.retry({
@@ -418,7 +439,7 @@ function createProxy(options) {
       const pending = pendingElicitations.get(elicitationId);
       if (!pending) return;
       pendingElicitations.delete(elicitationId);
-      retiredElicitationIds.add(elicitationId);
+      retireElicitation(elicitationId);
       finishGuarded(
         frame,
         requestState,
@@ -434,6 +455,7 @@ function createProxy(options) {
 
   return {
     write(line) {
+      if (stopping || childClosed) return;
       if (line.trim() === "") return;
       let frame;
       try {
@@ -488,13 +510,7 @@ function createProxy(options) {
     },
     stop() {
       stopping = true;
-      for (const [id, pending] of pendingElicitations) {
-        clearTimeout(pending.timer);
-        retiredElicitationIds.add(id);
-      }
-      for (const id of completedElicitations.keys()) retiredElicitationIds.add(id);
-      pendingElicitations.clear();
-      completedElicitations.clear();
+      clearElicitationState();
       return new Promise((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) return resolve();
         child.once("close", () => resolve());
