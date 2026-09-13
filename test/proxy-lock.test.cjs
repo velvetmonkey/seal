@@ -311,11 +311,11 @@ test("two-loop activation refusal states the total measured lock wait", async (t
   let second;
   let phase = 0;
   const attempts = [[], []];
-  const open = fs.openSync;
+  const link = fs.linkSync;
   const unlink = fs.unlinkSync;
-  t.mock.method(fs, "openSync", function (file, flags, ...args) {
-    if (file === lockPath && flags === "wx" && phase < 2) attempts[phase].push(performance.now());
-    return open.call(this, file, flags, ...args);
+  t.mock.method(fs, "linkSync", function (source, file, ...args) {
+    if (file === lockPath && phase < 2) attempts[phase].push(performance.now());
+    return link.call(this, source, file, ...args);
   });
   // The first holder releases after a substantial preflight wait. Once
   // preflight releases its own lock, install a second live holder before
