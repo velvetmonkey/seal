@@ -1,12 +1,12 @@
 {
   "version": 1,
   "ruling": {
-    "base": "19fa50eb4e1d0b5c9ad273908af6cc972d7486c9",
+    "base": "7f1fa1bf9bbf86aa2bbab75e4e64ecdf8dcc145f",
     "author": "Ben",
-    "date": "2026-09-11",
-    "scope": "Ben ruled on 2026-09-10 at 19:34 Telegram, verbatim \"3. Authorise\" (seal PR 306's protected-path change on the four installed-tree-pin files), and on 2026-09-11 at 16:24 Telegram, verbatim \"1. yes\" (the Monkey may write the ruling record for those four blobs on PR 306). This records exactly those human decisions; the lane derives the merge-base and Git blobs after merging current main.",
+    "date": "2026-09-13",
+    "scope": "Ben ruled 2026-09-13 at 20:19 Telegram, verbatim \"2. Yes.\" — authorising the protected-path ruling for these four installed-tree-pin files, unchanged by this PR's own diff, imported by merging current main",
     "retires": [
-      "The 2026-09-09 ruling from PR 295, base f28f71001485cf071c0189294d4c4b4cbb946c9c, whose change was verified as an ancestor of origin/main on 2026-09-11 and no longer describes this candidate range."
+      "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306."
     ],
     "files": [
       {
