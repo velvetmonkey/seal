@@ -167,7 +167,7 @@ function startActivation(statePath, env) {
       (state) => { process.stdout.write("ACTIVE " + state.lease.pid + " " + state.lease.generation + "\\n"); process.stdin.on("end", () => process.exit(0)); },
       (error) => { process.stdout.write("REFUSED " + error.code + "\\n" + error.message + "\\n"); process.stdin.on("end", () => process.exit(1)); },
     );
-  `], { env: { ...process.env, SEAL_RACE_DIAG: process.env.GITHUB_ACTIONS === "true" && process.versions.node.startsWith("22.") ? "1" : "0" }, stdio: ["pipe", "pipe", "inherit"] });
+  `], { stdio: ["pipe", "pipe", "inherit"] });
   let stdout = "";
   const reported = new Promise((resolve) => {
     child.stdout.on("data", (chunk) => {
@@ -205,26 +205,26 @@ test("two protected servers starting in the same window both activate; a session
 // Keep every single-shot assertion; independent cases continue after a failure.
 const sameServerRepeats = process.env.GITHUB_ACTIONS === "true" && process.versions.node.startsWith("22.") ? 50 : 1;
 for (let iteration = 0; iteration < sameServerRepeats; iteration++) {
-test("two starters for the same server in the same window: exactly one takes the lease and the loser is refused with the winner's real generation" + (iteration ? ` (repeat ${iteration + 1}/${sameServerRepeats})` : ""), async () => {
-  const ctx = pendingServers(["alpha"]);
-  const first = startActivation(ctx.states.alpha, ctx.env);
-  const second = startActivation(ctx.states.alpha, ctx.env);
-  const [firstExit, secondExit] = await settle([first, second]);
-  const outcomes = [[first, firstExit], [second, secondExit]];
-  const winners = outcomes.filter(([, exit]) => exit.code === 0);
-  const losers = outcomes.filter(([, exit]) => exit.code === 1);
-  assert.equal(winners.length, 1, `${first.output()}${second.output()}`);
-  assert.equal(losers.length, 1, `${first.output()}${second.output()}`);
-  const [winner] = winners[0];
-  const [loser] = losers[0];
-  assert.equal(winner.output(), `ACTIVE ${winner.pid} 1\n`);
-  assert.equal(loser.output(), `REFUSED proxy_lease_active\nactive lease holder pid ${winner.pid}, generation 1; retry after that session exits\n`);
-  const stored = readState(ctx.states.alpha);
-  assert.equal(stored.state, "ACTIVE");
-  assert.equal(stored.lease.pid, winner.pid);
-  assert.equal(stored.lease.generation, 1);
-  assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "no startup lock survives the race");
-});
+  test("two starters for the same server in the same window: exactly one takes the lease and the loser is refused with the winner's real generation" + (iteration ? ` (repeat ${iteration + 1}/${sameServerRepeats})` : ""), async () => {
+    const ctx = pendingServers(["alpha"]);
+    const first = startActivation(ctx.states.alpha, ctx.env);
+    const second = startActivation(ctx.states.alpha, ctx.env);
+    const [firstExit, secondExit] = await settle([first, second]);
+    const outcomes = [[first, firstExit], [second, secondExit]];
+    const winners = outcomes.filter(([, exit]) => exit.code === 0);
+    const losers = outcomes.filter(([, exit]) => exit.code === 1);
+    assert.equal(winners.length, 1, `${first.output()}${second.output()}`);
+    assert.equal(losers.length, 1, `${first.output()}${second.output()}`);
+    const [winner] = winners[0];
+    const [loser] = losers[0];
+    assert.equal(winner.output(), `ACTIVE ${winner.pid} 1\n`);
+    assert.equal(loser.output(), `REFUSED proxy_lease_active\nactive lease holder pid ${winner.pid}, generation 1; retry after that session exits\n`);
+    const stored = readState(ctx.states.alpha);
+    assert.equal(stored.state, "ACTIVE");
+    assert.equal(stored.lease.pid, winner.pid);
+    assert.equal(stored.lease.generation, 1);
+    assert.equal(fs.existsSync(lockPathFor(ctx.project, ctx.env)), false, "no startup lock survives the race");
+  });
 }
 
 // Keep a real protect operation in its synchronous Claude subprocess while a
