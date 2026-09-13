@@ -51,6 +51,23 @@ test("seal verify exits successfully only for a signed receipt and the correct k
   assert.match(withoutKey.out, /VERIFY    UNVERIFIED/);
 });
 
+test("seal verify accepts pretty-printed signed receipts", () => {
+  const real = realReceipt();
+  const body = JSON.parse(fs.readFileSync(real.receipt, "utf8"));
+  for (const [name, contents] of [
+    ["two-space", JSON.stringify(body, null, 2) + "\n"],
+    ["four-space", JSON.stringify(body, null, 4) + "\n"],
+    ["crlf", JSON.stringify(body, null, 2).replace(/\n/g, "\r\n")],
+  ]) {
+    const target = path.join(real.dir, `${name}.json`);
+    fs.writeFileSync(target, contents);
+    const result = run(["verify", target, "--pubkey", real.publicKey]);
+    assert.equal(result.code, 0, `${name}: ${result.out}`);
+    assert.match(result.out, /Document structure       VALID/);
+    assert.match(result.out, /Signature and bindings   VALID/);
+  }
+});
+
 test("seal verify exits nonzero for a fabricated unsigned receipt", () => {
   const real = realReceipt();
   const body = JSON.parse(fs.readFileSync(real.receipt, "utf8"));

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -26,19 +26,25 @@ function familyEnvironment() {
 
   const family = path.join(ROOT, ".family");
   assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding");
-  mkdirSync(family);
-  for (const [repo, branch] of FAMILY) {
-    const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
-      `https://github.com/velvetmonkey/${repo}`, path.join(family, repo)], {
-      cwd: ROOT, encoding: "utf8",
-    });
-    assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
+  const privateFamily = testTmpdir("seal-linkcheck-family-");
+  const cleanup = () => rmSync(privateFamily, { recursive: true, force: true });
+  try {
+    for (const [repo, branch] of FAMILY) {
+      const clone = spawnSync("git", ["clone", "--depth", "1", "--branch", branch,
+        `https://github.com/velvetmonkey/${repo}`, path.join(privateFamily, repo)], {
+        cwd: ROOT, encoding: "utf8",
+      });
+      assert.equal(clone.status, 0, `${clone.stdout}${clone.stderr}`);
+    }
+    const env = { ...process.env };
+    for (const [repo] of FAMILY) {
+      env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(privateFamily, repo);
+    }
+    return { env, cleanup };
+  } catch (error) {
+    cleanup();
+    throw error;
   }
-  const env = { ...process.env };
-  for (const [repo] of FAMILY) {
-    env[`FAMILY_${repo.replaceAll("-", "_").toUpperCase()}_ROOT`] = path.join(family, repo);
-  }
-  return { env, cleanup: () => rmSync(family, { recursive: true, force: true }) };
 }
 
 function run(cwd = ROOT, env = process.env) {
@@ -177,4 +183,27 @@ test("path matcher still catches stale filenames with unknown extensions", () =>
     [..."docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt".matchAll(pathString)].map((match) => match[1]),
     ["docs/assurance/RELEASE-NOTES-v0.2.0-rc.2.txt"],
   );
+});
+
+// The fixture's filesystem is the existence oracle, independent of both the
+// checker's scanned-target report and its checked-target bookkeeping.
+test("missing local target is independently absent and reported broken", () => {
+  const scratch = testTmpdir("seal-linkcheck-missing-");
+  try {
+    const clone = spawnSync("git", ["clone", "--shared", ROOT, scratch], { encoding: "utf8" });
+    assert.equal(clone.status, 0, clone.stdout + clone.stderr);
+    // Exercise the working checker, including any uncommitted fault injection.
+    copyFileSync(SCRIPT, path.join(scratch, "scripts/linkcheck.mjs"));
+    const missing = "linkguardran-does-not-exist.md";
+    assert.equal(existsSync(path.join(scratch, missing)), false, "missing target must be absent outside the checker");
+    appendFileSync(path.join(scratch, "README.md"), `\n[Missing target](${missing})\n`);
+    const result = spawnSync(process.execPath, [path.join(scratch, "scripts/linkcheck.mjs")], {
+      cwd: scratch, encoding: "utf8", env: process.env,
+    });
+    assert.equal(result.status, 1, "missing target must make the link checker fail: " + result.stdout + result.stderr);
+    assert.match(result.stdout, /^BROKEN  README\.md -> linkguardran-does-not-exist\.md$/mu,
+      "known missing target must have its own BROKEN diagnostic");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 });

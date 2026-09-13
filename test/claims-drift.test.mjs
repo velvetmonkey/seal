@@ -2,49 +2,46 @@
 // Regression: a fatal manifest read must not mask later claim drift.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import tempRoot from "../scripts/temp-root.cjs";
 const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = resolve(ROOT, "scripts/claims-drift.mjs"); // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#limitations; CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box; CLAIM-COVERAGE: docs/assurance/index.html#index-drift
-const README = resolve(ROOT, "README.md");
-const TRUTH_BOX = resolve(ROOT, "docs/archive/TRUTH-BOX.md");
-const INDEX = resolve(ROOT, "docs/assurance/index.html");
 const COVERED_CLAIM_FILES = [
   "docs/archive/LIMITATIONS.md", // CLAIM-COVERAGE: docs/archive/LIMITATIONS.md#limitations-list
   "docs/archive/TRUTH-BOX.md", // CLAIM-COVERAGE: docs/archive/TRUTH-BOX.md#truth-box-list
   "docs/assurance/index.html", // CLAIM-COVERAGE: docs/assurance/index.html#index-list
 ];
-const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->")
-  ? README
-  : resolve(ROOT, "docs/assurance/index.html");
-const UNREADABLE = resolve(ROOT, "docs/.claims-drift-unreadable");
-
-const FIXTURE_FILES = [
-  "docs/archive/LIMITATIONS.md",
-  "docs/archive/README.md",
-  "docs/archive/TRUTH-BOX.md",
-  "docs/assurance/index.html",
-  "docs/assurance/linkcheck-population-control.md",
-  "scripts/claim-bearing-files.json",
-  "scripts/linkcheck.mjs",
-  "test/linkcheck.test.mjs",
-];
-
-function fixture() {
-  const root = testTmpdir(join(tmpdir(), "seal-claims-drift-"));
-  for (const file of FIXTURE_FILES) {
-    const target = resolve(root, file);
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(resolve(ROOT, file), target);
+function isolatedRepository(t) {
+  const root = testTmpdir("seal-claims-drift-");
+  assert.notEqual(root, ROOT, "claims-drift mutations must use a private repository");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd: ROOT,
+    encoding: "buffer",
+  }).toString("utf8").split("\0").filter(Boolean);
+  for (const file of files) {
+    const source = join(ROOT, file);
+    const destination = join(root, file);
+    const stat = lstatSync(source);
+    mkdirSync(join(destination, ".."), { recursive: true });
+    if (stat.isSymbolicLink()) symlinkSync(readlinkSync(source), destination);
+    else if (stat.isFile()) {
+      copyFileSync(source, destination);
+      chmodSync(destination, stat.mode & 0o7777);
+    }
   }
+  // The guard derives its population from Git. Index the complete copied list,
+  // including tracked files that also match an ignore rule; no commit is needed.
+  execFileSync("git", ["init", "-q", root]);
+  execFileSync("git", ["-C", root, "add", "--force", "--all"]);
   return root;
 }
+
 
 function runFixture(root) {
   return spawnSync(process.execPath, [GUARD], {
@@ -54,7 +51,13 @@ function runFixture(root) {
   });
 }
 
-test("fatal manifest read first still reports later drift", () => {
+test("fatal manifest read first still reports later drift", (t) => {
+  const ROOT = isolatedRepository(t);
+  const GUARD = resolve(ROOT, "scripts/claims-drift.mjs");
+  const README = resolve(ROOT, "README.md");
+  const DRIFT_FILE = readFileSync(README, "utf8").includes("<!-- claims:begin -->")
+    ? README : resolve(ROOT, "docs/assurance/index.html");
+  const UNREADABLE = resolve(ROOT, "docs/.claims-drift-unreadable");
   const guard = readFileSync(GUARD, "utf8");
   for (const file of COVERED_CLAIM_FILES) assert.ok(guard.includes(file), `claims-drift guard must name ${file}`);
   const readme = readFileSync(DRIFT_FILE, "utf8");
@@ -85,7 +88,9 @@ test("fatal manifest read first still reports later drift", () => {
   }
 });
 
-test("an empty claims-drift block population is a refusal", () => {
+test("an empty claims-drift block population is a refusal", (t) => {
+  const ROOT = isolatedRepository(t);
+  const GUARD = resolve(ROOT, "scripts/claims-drift.mjs");
   const guard = readFileSync(GUARD, "utf8");
   const empty = guard.replace(
     /const BLOCKS = \[[\s\S]*?\n\];/,
@@ -102,7 +107,11 @@ test("an empty claims-drift block population is a refusal", () => {
   }
 });
 
-test("the truth-box guard reads the mirrored fact instead of its assertion sentence", () => {
+test("the truth-box guard reads the mirrored fact instead of its assertion sentence", (t) => {
+  const ROOT = isolatedRepository(t);
+  const GUARD = resolve(ROOT, "scripts/claims-drift.mjs");
+  const TRUTH_BOX = resolve(ROOT, "docs/archive/TRUTH-BOX.md");
+  const INDEX = resolve(ROOT, "docs/assurance/index.html");
   const truthBox = readFileSync(TRUTH_BOX, "utf8");
   const index = readFileSync(INDEX, "utf8");
   const withoutAssertion = truthBox.replace(
@@ -136,8 +145,7 @@ test("the truth-box guard reads the mirrored fact instead of its assertion sente
 });
 
 test("the archive count guard reads registrations in both directions", (t) => {
-  const root = fixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = isolatedRepository(t);
   const manifestPath = resolve(root, "scripts/claim-bearing-files.json");
   const source = readFileSync(manifestPath, "utf8");
   const manifest = JSON.parse(source);
@@ -160,8 +168,7 @@ test("the archive count guard reads registrations in both directions", (t) => {
 });
 
 test("converted guards do not depend on their assertion sentences", (t) => {
-  const root = fixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = isolatedRepository(t);
   const archiveReadmePath = resolve(root, "docs/archive/README.md");
   const linkcheckControlPath = resolve(root, "docs/assurance/linkcheck-population-control.md");
   const archiveReadme = readFileSync(archiveReadmePath, "utf8");
@@ -184,8 +191,7 @@ test("converted guards do not depend on their assertion sentences", (t) => {
 });
 
 test("the linkcheck separate-source guard rejects a product-logic import", (t) => {
-  const root = fixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = isolatedRepository(t);
   const linkcheckTestPath = resolve(root, "test/linkcheck.test.mjs");
   const source = readFileSync(linkcheckTestPath, "utf8");
   const imported = `${source}\nimport { markdownDestinations } from "../scripts/linkcheck.mjs";\n`;

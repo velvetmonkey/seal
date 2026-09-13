@@ -99,7 +99,7 @@ function roleByLine(text, file) {
   }
   return (line) => {
     const role = roles.get(line);
-    assert.ok(role, `REFUSE pin_population_role_absent: ${file}:${line} pin has no installed-tree role marker`);
+    assert.ok(role, `REFUSE pin_population_role_absent: ${file}:${line} documentation pin has no installed-tree role marker`);
     assert.ok(
       role === "published-asset" || role === "fresh-build",
       `REFUSE pin_population_role_unknown: ${file}:${line} has unknown installed-tree role ${JSON.stringify(role)}`,
@@ -108,32 +108,45 @@ function roleByLine(text, file) {
   };
 }
 
-function declaredPopulation() {
-  const sites = JSON.parse(fs.readFileSync(SITE_MANIFEST, "utf8"));
+function declaredPopulation(root = ROOT) {
+  const sites = JSON.parse(fs.readFileSync(path.join(root, "scripts", "installed-tree-pin-sites.json"), "utf8"));
   assert.ok(Array.isArray(sites) && sites.length > 0, "REFUSE pin_population_manifest_invalid: manifest must be a non-empty array");
   const keys = sites.map(siteKey);
   assert.equal(new Set(keys).size, keys.length, "REFUSE pin_population_manifest_invalid: manifest contains duplicate sites");
   return new Set(keys);
 }
 
-function externalPinPopulation() {
+// Independent content classification: do not import the producer's population
+// filter. Only complete JSON record streams leave the raw grep set.
+function recordStream(text) {
+  let count = 0;
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try { JSON.parse(line); } catch { return false; }
+    count += 1;
+  }
+  return count > 0;
+}
+
+function externalPinPopulation(root = ROOT) {
   const grep = spawnSync(
     "git",
-    ["-C", ROOT, "grep", "-n", "-E", "tree:? +[0-9a-f]{64}|/store/[0-9a-f]{64}", "--"],
+    ["-C", root, "grep", "-n", "-E", "tree:? +[0-9a-f]{64}|/store/[0-9a-f]{64}", "--"],
     { encoding: "utf8" },
   );
   assert.ok(grep.status === 0 || grep.status === 1, `REFUSE pin_population_enumeration_failed: ${grep.stderr || grep.stdout}`);
   const files = new Map();
   const discovered = new Map();
-  for (const outputLine of grep.stdout.split("\n").filter(Boolean)) {
+  for (const outputLine of grep.stdout.split(/\r?\n/).filter(Boolean)) {
     const parsed = outputLine.match(/^([^:]+):(\d+):(.*)$/);
     assert.ok(parsed, `REFUSE pin_population_enumeration_failed: unrecognised git grep output ${outputLine}`);
     const file = parsed[1];
     const line = Number(parsed[2]);
     if (!files.has(file)) {
-      const text = fs.readFileSync(path.join(ROOT, file), "utf8");
-      files.set(file, { text, roleAt: roleByLine(text, file) });
+      const text = fs.readFileSync(path.join(root, file), "utf8");
+      files.set(file, { text, records: recordStream(text), roleAt: roleByLine(text, file) });
     }
+    if (files.get(file).records) continue;
     for (const match of parsed[3].matchAll(PIN_PATTERN)) {
       const kind = match[1] ? "tree" : "store";
       const site = { file, line, column: match.index + 1, kind, role: files.get(file).roleAt(line) };
@@ -142,7 +155,12 @@ function externalPinPopulation() {
       discovered.set(key, { ...site, hash: match[1] || match[2] });
     }
   }
-  const declared = declaredPopulation();
+  const declared = declaredPopulation(root);
+  for (const [file, entry] of files) {
+    if (entry.records && [...declared].some((key) => key.startsWith(`${file}:`))) {
+      assert.fail(`REFUSE pin_source_not_documentation: ${file} is a JSON record stream, not a documentation page; recorded store paths are not installed-tree pins`);
+    }
+  }
   for (const key of declared) {
     assert.ok(discovered.has(key), `REFUSE pin_population_mismatch: gate missing declared site ${key}`);
   }
@@ -327,6 +345,15 @@ test("repin rewrites a legitimate single-marker fresh-build block", (t) => {
   assert.doesNotMatch(fs.readFileSync(readme, "utf8"), new RegExp(stale));
 });
 
+function assertInstalledTreeHash(hit, expected) {
+  assert.equal(
+    hit.hash,
+    expected,
+    `${hit.file}:${hit.line}:${hit.column} ${hit.role} installed-tree hash mismatch: ` +
+      `quoted ${hit.hash}, ${hit.role} ${expected}`,
+  );
+}
+
 test("declared installed-tree sites found by git grep match built artifacts", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
@@ -343,16 +370,65 @@ test("declared installed-tree sites found by git grep match built artifacts", (t
     const expected = hit.role === "published-asset" ? publishedExpected : freshExpected;
     if (hit.role === "published-asset") quotedPublished += 1;
     else quotedFresh += 1;
-    assert.equal(
-      hit.hash,
-      expected,
-      `${hit.file}:${hit.line}:${hit.column} ${hit.role} installed-tree hash mismatch: ` +
-        `quoted ${hit.hash}, ${hit.role} ${expected}`,
-    );
+    assertInstalledTreeHash(hit, expected);
   }
   assert.ok(hits.length > 0, "the repository must quote at least one installed-tree hash");
   assert.ok(quotedPublished > 0, "the repository must quote at least one published-asset installed-tree hash");
   assert.ok(quotedFresh > 0, "the repository must quote at least one fresh-build installed-tree hash");
+});
+
+test("record streams leave the independent population while stale documentation still fails", (t) => {
+  const root = fs.mkdtempSync(path.join(scratchRoot(), "seal-pin-population-"));
+  t.after(() => removeScratch(root));
+  const sites = JSON.parse(fs.readFileSync(SITE_MANIFEST, "utf8"));
+  for (const file of new Set(sites.map((site) => site.file))) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, file), path.join(root, file));
+  }
+  fs.mkdirSync(path.join(root, "scripts"));
+  const manifest = path.join(root, "scripts", "installed-tree-pin-sites.json");
+  fs.writeFileSync(manifest, JSON.stringify(sites));
+  const git = (...args) => {
+    const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  };
+  git("init", "-q");
+  git("add", ".");
+  const original = externalPinPopulation(root);
+  assert.equal(original.length, sites.length);
+  const published = original.find((hit) => hit.role === "published-asset").hash;
+  for (const file of ["future.jsonl", "capture.md", "extensionless"]) {
+    fs.writeFileSync(path.join(root, file), [
+      JSON.stringify({ text: `/store/${"0".repeat(64)}` }),
+      JSON.stringify({ text: `/store/${published}` }),
+    ].join("\r\n"));
+  }
+  git("add", ".");
+  assert.deepEqual(externalPinPopulation(root), original);
+
+  const fresh = original.find((hit) => hit.role === "fresh-build");
+  const page = path.join(root, fresh.file);
+  const text = fs.readFileSync(page, "utf8");
+  const built = buildDist();
+  t.after(() => removeScratch(built.out));
+  const expected = externalTreeSha256FromArtifact(namedArtifact(built.out, built.built.stdout));
+  assertInstalledTreeHash(fresh, expected);
+  fs.writeFileSync(page, text.replace(fresh.hash, "0".repeat(64)));
+  assert.throws(() => assertInstalledTreeHash(externalPinPopulation(root).find((hit) => hit.role === "fresh-build"), expected), /installed-tree hash mismatch/);
+  fs.writeFileSync(page, text);
+  assertInstalledTreeHash(externalPinPopulation(root).find((hit) => hit.role === "fresh-build"), expected);
+
+  // An accidental extension change cannot make a documentation page data.
+  const renamed = fresh.file.replace(/\.md$/, ".jsonl");
+  fs.renameSync(page, path.join(root, renamed));
+  git("add", "-A");
+  assertNamedRefuse(() => externalPinPopulation(root), "pin_population_mismatch");
+  fs.writeFileSync(manifest, JSON.stringify(sites.map((site) => ({ ...site, file: site.file === fresh.file ? renamed : site.file }))));
+  assert.equal(externalPinPopulation(root).length, original.length);
+  fs.writeFileSync(path.join(root, renamed), text.replace("**Seal installed-tree pin role:** `fresh-build`", "Missing role"));
+  assertNamedRefuse(() => externalPinPopulation(root), "pin_population_role_absent");
+  fs.writeFileSync(path.join(root, renamed), JSON.stringify({ text: `/store/${expected}` }));
+  assertNamedRefuse(() => externalPinPopulation(root), "pin_source_not_documentation");
 });
 
 test("a missing built artifact is a named refusal", (t) => {

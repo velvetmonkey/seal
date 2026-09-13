@@ -34,7 +34,7 @@ function scanDocument(text) {
   const string = () => { const start = i; if (text[i++] !== '"') fail("expected string", "read_failed"); while (i < text.length) { const c = text[i++]; if (c === "\\") { if (i >= text.length) fail("truncated escape", "read_failed"); if (text[i++] === "u") { if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i, i + 4))) fail("bad unicode escape", "read_failed"); i += 4; } } else if (c === '"') return JSON.parse(text.slice(start, i)); else if (c.charCodeAt(0) < 32) fail("control character in string", "read_failed"); } fail("truncated string", "read_failed"); };
   const value = () => { ws(); const c = text[i]; if (c === '"') { string(); return; } if (c === "{") { object(); return; } if (c === "[") { array(); return; } if (text.startsWith("true", i)) { i += 4; return; } if (text.startsWith("false", i)) { i += 5; return; } if (text.startsWith("null", i)) { i += 4; return; } const n = text.slice(i).match(/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/); if (!n) fail("bad value", "read_failed"); i += n[0].length; };
   const array = () => { i++; ws(); if (text[i] === "]") { i++; return; } for (;;) { value(); ws(); if (text[i] === ",") { i++; continue; } if (text[i] === "]") { i++; return; } fail("truncated array", "read_failed"); } };
-  const object = () => { i++; ws(); const names = new Set(); if (text[i] === "}") { i++; return; } for (;;) { const name = string(); if (names.has(name)) fail(`duplicate member ${name}`, "duplicate_member"); names.add(name); ws(); if (text[i++] !== ":") fail("expected colon", "read_failed"); value(); ws(); if (text[i] === ",") { i++; continue; } if (text[i] === "}") { i++; return; } fail("truncated object", "read_failed"); } };
+  const object = () => { i++; ws(); const names = new Set(); if (text[i] === "}") { i++; return; } for (;;) { ws(); const name = string(); if (names.has(name)) fail(`duplicate member ${name}`, "duplicate_member"); names.add(name); ws(); if (text[i++] !== ":") fail("expected colon", "read_failed"); value(); ws(); if (text[i] === ",") { i++; continue; } if (text[i] === "}") { i++; return; } fail("truncated object", "read_failed"); } };
   ws(); value(); ws(); if (i !== text.length) fail("trailing or truncated JSON", "read_failed");
 }
 
@@ -54,7 +54,7 @@ function validate(r) {
   if (r.seal_receipt !== "v2") fail("unsupported receipt schema");
   let orderIndex = -1;
   for (const k of Object.keys(r)) { const next = ORDER.indexOf(k); if (next <= orderIndex) fail("member order is not the v2 order", "member_order"); orderIndex = next; }
-  if (typeof r.tool !== "string" || !r.tool || !r.arguments || Array.isArray(r.arguments)) fail("tool and arguments are required");
+  if (typeof r.tool !== "string" || !r.tool || r.arguments === null || typeof r.arguments !== "object" || Array.isArray(r.arguments)) fail("tool and arguments are required");
   if (!Number.isSafeInteger(r.now) || r.now < 0) fail("now must be a non-negative safe integer");
   if (!r.kernel_config || typeof r.kernel_config !== "object" || Array.isArray(r.kernel_config)) fail("kernel_config is required");
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
@@ -129,6 +129,6 @@ export function format(result) { return `Document structure       ${result.read 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
-  try { const out = await verify(readFileSync(file, "utf8"), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
+  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
   catch (e) { console.log(`REFUSE ${e.code || "invalid_receipt"}: ${e.message}`); process.exitCode = 1; }
 }

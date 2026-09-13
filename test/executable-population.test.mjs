@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -10,7 +10,31 @@ const { testTmpdir } = tempRoot;
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const ENUMERATOR = join(ROOT, "scripts/executable-population.mjs");
-const ANTI_ROLL = join(ROOT, "scripts/check-executable-population-callers.mjs");
+
+function isolatedRepository(t) {
+  const root = testTmpdir("seal-executable-population-");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd: ROOT,
+    encoding: "buffer",
+  }).toString("utf8").split("\0").filter(Boolean);
+  for (const file of files) {
+    const source = join(ROOT, file);
+    const destination = join(root, file);
+    const stat = lstatSync(source);
+    mkdirSync(join(destination, ".."), { recursive: true });
+    if (stat.isSymbolicLink()) symlinkSync(readlinkSync(source), destination);
+    else if (stat.isFile()) {
+      copyFileSync(source, destination);
+      chmodSync(destination, stat.mode & 0o7777);
+    }
+  }
+  // The guard derives its population from Git. Index the complete copied list,
+  // including tracked files that also match an ignore rule; no commit is needed.
+  execFileSync("git", ["init", "-q", root]);
+  execFileSync("git", ["-C", root, "add", "--force", "--all"]);
+  return root;
+}
 
 function fixture() {
   const root = testTmpdir(join(tmpdir(), "seal-enumcanon-"));
@@ -73,13 +97,14 @@ test("computed paths and symlinks resolve to executable behaviour", (t) => {
 });
 
 test("anti-roll-your-own guard names a rogue population guard", (t) => {
-  const rogue = join(ROOT, "scripts/rogue-executable-population-guard.mjs");
-  t.after(() => rmSync(rogue, { force: true }));
+  const root = isolatedRepository(t);
+  const ANTI_ROLL = join(root, "scripts/check-executable-population-callers.mjs");
+  const rogue = join(root, "scripts/rogue-executable-population-guard.mjs");
   writeFileSync(rogue, '// EXECUTABLE-POPULATION-GUARD\nimport { readdirSync } from "node:fs";\nreaddirSync(".");\n');
-  const broken = spawnSync(process.execPath, [ANTI_ROLL], { cwd: ROOT, encoding: "utf8" });
+  const broken = spawnSync(process.execPath, [ANTI_ROLL], { cwd: root, encoding: "utf8" });
   assert.notEqual(broken.status, 0);
   assert.match(broken.stderr, /rogue-executable-population-guard\.mjs/);
   rmSync(rogue);
-  const restored = spawnSync(process.execPath, [ANTI_ROLL], { cwd: ROOT, encoding: "utf8" });
+  const restored = spawnSync(process.execPath, [ANTI_ROLL], { cwd: root, encoding: "utf8" });
   assert.equal(restored.status, 0, restored.stderr);
 });

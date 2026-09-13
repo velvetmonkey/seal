@@ -217,3 +217,14 @@ test("both duplicate name orders are refused before the child and normal traffic
   assert.equal(fs.readFileSync(capture, "utf8"), `${init}\n${unguarded}\n`);
   t.diagnostic("child raw capture contains only initialize and the unchanged normal unguarded frame");
 });
+
+test("renderline proxy refuses selection overflow before sending any approval", async (t) => {
+  const run = session("db.mutate");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "overflow", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3, d: 4 } } }));
+  const refused = await waitFor(run.frames, (frame) => frame.id === "overflow");
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /unrenderable_effect.*need 8 lines/);
+  assert.equal(run.frames.some((frame) => frame.method === "elicitation/create"), false);
+});

@@ -67,7 +67,7 @@ function declaredHashRole(text, index, file, blocks) {
   if (!block || block.markerLines.length === 0) {
     refuse(
       "role_marker_absent",
-      `${file}:${line} store hash has no role marker; add ` +
+      `${file}:${line} documentation store hash has no role marker; add ` +
         "<!-- Seal installed-tree pin role: published-asset --> or " +
         "<!-- Seal installed-tree pin role: fresh-build --> immediately before its fenced block",
     );
@@ -90,7 +90,26 @@ function declaredHashRole(text, index, file, blocks) {
   return { role, line };
 }
 
+// A nonempty stream of JSON records is data, regardless of its path or
+// extension. Do not reinterpret captured strings as documentation promises.
+// Everything else remains a candidate: malformed records and Markdown renamed
+// to .jsonl must not escape role or declared-population checks.
+function isJsonRecords(text) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+  return lines.length > 0 && lines.every((line) => {
+    try {
+      JSON.parse(line);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function quotedTreeHashHits(text, file = "<memory>") {
+  if (isJsonRecords(text)) {
+    refuse("pin_source_not_documentation", `${file} is a JSON record stream, not a documentation page; recorded store paths are not installed-tree pins`);
+  }
   const blocks = fencedBlocks(text);
   return [...text.matchAll(TREE), ...text.matchAll(STORE)].map((match) => {
     const declared = declaredHashRole(text, match.index, file, blocks);
@@ -269,6 +288,7 @@ function publishedTreeSha256FromRelease() {
 module.exports = {
   ROOT,
   buildDist,
+  isJsonRecords,
   namedArtifact,
   publishedTreeSha256FromRelease,
   quotedTreeHashHits,

@@ -24,21 +24,24 @@ test("the current VERSION has a release note with the same identity", () => {
 });
 
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.3.0.md#release-notes-v030
+// CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.4.0.md#release-notes-v040
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
-  const notes = fs.readFileSync(NOTES, "utf8");
+  for (const record of new Set([NOTES, path.join(ROOT, "docs/assurance/RELEASE-NOTES-v0.3.0.md")])) {
+    const notes = fs.readFileSync(record, "utf8");
 
-  assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
-  const helperProvenance = "native macOS process-start witness helper is release-produced, not independ" + "ently reproduced.";
-  assert.ok(notes.includes(helperProvenance));
-  assert.match(notes, /macOS Protect execution is not exercised in CI\./);
-  for (const citation of ["spine/platform.cjs", "test/darwin-readiness.test.cjs", "test/release-matrix.test.mjs"]) {
-    assert.match(notes, new RegExp(citation.replaceAll(".", "\\.")), `release notes cite ${citation}`);
+    assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+    const helperProvenance = "native macOS process-start witness helper is release-produced, not independ" + "ently reproduced.";
+    assert.ok(notes.includes(helperProvenance));
+    assert.match(notes, /macOS Protect execution is not exercised in CI\./);
+    for (const citation of ["spine/platform.cjs", "test/darwin-readiness.test.cjs", "test/release-matrix.test.mjs"]) {
+      assert.match(notes, new RegExp(citation.replaceAll(".", "\\.")), `release notes cite ${citation}`);
+    }
+    assert.match(notes, /one `seal\.receipt\/v2` envelope/);
+    assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
+    assert.match(notes, /Positive VERIFY is unreachable in this release/);
+    assert.match(notes, /formatted result is `UNVERIFIED`/);
+    assert.doesNotMatch(notes, /\bPROVED\b/, "the final release note must make zero PROVED claims");
   }
-  assert.match(notes, /one `seal\.receipt\/v2` envelope/);
-  assert.match(notes, /refuses `authorityRoot` and `occurrenceWitness` inputs/);
-  assert.match(notes, /Positive VERIFY is unreachable in this release/);
-  assert.match(notes, /formatted result is `UNVERIFIED`/);
-  assert.doesNotMatch(notes, /\bPROVED\b/, "the final release note must make zero PROVED claims");
 });
 
 test("rc.3 release-note identity and platform boundary remain immutable", () => {
