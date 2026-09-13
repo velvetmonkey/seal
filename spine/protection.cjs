@@ -964,13 +964,22 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (;;) {
     try {
-      requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
-      const fd = fs.openSync(filePath, "wx", 0o600);
+      // Publish complete owner bytes atomically. Creating proxy.lock before
+      // writing its owner lets a contender mistake the empty file for a stale
+      // lock, unlink it, and enter the same critical section as its creator.
+      const temporary = `${filePath}.${process.pid}.${crypto.randomBytes(8).toString("hex")}`;
+      const fd = fs.openSync(temporary, "wx", 0o600);
       try {
-        writeCompleteSync(fd, JSON.stringify(owner) + "\n");
-        fs.fsyncSync(fd);
+        try {
+          writeCompleteSync(fd, JSON.stringify(owner) + "\n");
+          fs.fsyncSync(fd);
+        } finally {
+          fs.closeSync(fd);
+        }
+        requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
+        fs.linkSync(temporary, filePath);
       } finally {
-        fs.closeSync(fd);
+        fs.unlinkSync(temporary);
       }
       return {
         filePath,
