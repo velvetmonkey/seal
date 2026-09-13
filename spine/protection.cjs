@@ -956,6 +956,13 @@ function acquireProjectLock(projectRoot, env = process.env, operation) {
   } catch (error) { installationLock.release(); throw error; }
 }
 
+// RACE-DIAG: temporary runner-only forensic trace; stdout remains protocol-only.
+function raceDiag(event, details = {}) {
+  if (process.env.SEAL_RACE_DIAG === "1") process.stderr.write("RACE-DIAG " + JSON.stringify({
+    pid: process.pid, ns: process.hrtime.bigint().toString(), event, ...details,
+  }) + "\n");
+}
+
 function acquireProjectLockOnly(projectRoot, env = process.env) {
   const filePath = lockPathFor(projectRoot, env);
   const witness = requireProcessStartWitnessBinding(process.pid, "Seal's own witness at project-lock acquire");
@@ -966,19 +973,23 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
     try {
       requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
       const fd = fs.openSync(filePath, "wx", 0o600);
+      raceDiag("lock-created", { filePath, owner, inode: fs.fstatSync(fd).ino });
       try {
         writeCompleteSync(fd, JSON.stringify(owner) + "\n");
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
       }
+      raceDiag("lock-acquired", { filePath, owner, recovered });
       return {
         filePath,
         recovered,
         release() {
           try {
             const current = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            raceDiag("lock-release-read", { filePath, owner, current });
             if (current.pid === owner.pid && current.startWitness === owner.startWitness) fs.unlinkSync(filePath);
+            raceDiag("lock-released", { filePath, owner });
           } catch (error) {
             if (error.code !== "ENOENT") throw error;
           }
@@ -987,7 +998,10 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
       let existing;
-      try { existing = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { existing = null; }
+      let raw;
+      try { raw = fs.readFileSync(filePath, "utf8"); existing = JSON.parse(raw); }
+      catch (error) { existing = null; raceDiag("lock-read-error", { filePath, raw, error: error.message }); }
+      raceDiag("lock-contended", { filePath, existing });
       if (lockOwnerIsLive(existing, "project-lock owner")) {
         // A live lock owner is a Seal operation in progress, not a lease: it
         // finishes and releases, so the sentence must not tell the user to
@@ -1000,6 +1014,7 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
         throw refusal;
       }
       try {
+        raceDiag("lock-recover-unlink", { filePath, existing });
         fs.unlinkSync(filePath);
         recovered = true;
       } catch (unlinkError) {
@@ -1294,17 +1309,22 @@ async function acquireProjectLockWaiting(projectRoot, env, wait = { elapsedMs: 0
   }
 }
 
-async function withProjectLock(projectRoot, env, body, wait) {
+async function withProjectLock(projectRoot, env, body, wait, phase) {
+  raceDiag("section-wait", { projectRoot, phase });
   const lock = await acquireProjectLockWaiting(projectRoot, env, wait);
+  raceDiag("section-acquired", { projectRoot, phase });
   try {
     return body(lock);
   } finally {
     lock.release();
+    raceDiag("section-released", { projectRoot, phase });
   }
 }
 
 function refuseLiveLease(state) {
-  if (lockOwnerIsLive(state.lease)) {
+  const live = lockOwnerIsLive(state.lease);
+  raceDiag("lease-read", { projectRoot: state.projectRoot, serverName: state.serverName, lease: state.lease, live });
+  if (live) {
     throw new ProtectionError(
       "proxy_lease_active",
       `active lease holder pid ${state.lease.pid}, generation ${state.lease.generation ?? "unknown"}; retry after that session exits`,
@@ -1380,7 +1400,7 @@ async function activationLease(statePath, env = process.env) {
     // the journal also uses protection's lock helpers; createProxy checks again.
     require("./store.cjs").openJournal(state.storePath);
     return { state, recovered: lock.recovered };
-  }, wait);
+  }, wait, "preflight");
   // Tool discovery starts the guarded server and can take up to the discovery
   // timeout. It runs outside the project lock, as protect's own discovery
   // does, so another server activating in the same window is not refused for
@@ -1441,13 +1461,15 @@ async function activationLease(statePath, env = process.env) {
         startedAt: new Date().toISOString(),
       },
     };
+    raceDiag("ACTIVE-write-before", { statePath, lease: next.lease });
     writeState(statePath, next, {
       beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
     });
+    raceDiag("ACTIVE-write-after", { statePath, lease: next.lease });
     Object.defineProperty(next, "leaseToken", { value: next.lease });
     Object.defineProperty(next, "lockRecovered", { value: preflight.recovered || lock.recovered });
     return next;
-  }, wait);
+  }, wait, "post-discovery");
 }
 
 function beforeForwardFromState(statePath, leaseToken) {
