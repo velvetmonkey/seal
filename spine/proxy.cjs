@@ -376,7 +376,7 @@ function createProxy(options) {
       clearTimeout(pending.timer);
       discardReceiptCorrelation(pending.requestState);
       // Keep only the exact retired ID, without retaining a completed slot
-      // or request state, so late answers cannot retry or reach the child.
+      // or request state; recently retired answers cannot retry or reach the child.
       finishGuarded(pending.frame, pending.requestState, pending.correlation,
         { approval: { action: "cancel" } }, "the client cancelled the original tool request");
       onClientLine(JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled",
