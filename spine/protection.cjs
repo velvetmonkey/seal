@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const { writeCompleteSync } = require("./write.cjs");
 const os = require("node:os");
 const path = require("node:path");
 const { performance } = require("node:perf_hooks");
@@ -966,7 +967,7 @@ function acquireProjectLockOnly(projectRoot, env = process.env) {
       requireMacosHelperIdentity(witness.helperIdentity, "before project-lock commit");
       const fd = fs.openSync(filePath, "wx", 0o600);
       try {
-        fs.writeSync(fd, JSON.stringify(owner) + "\n");
+        writeCompleteSync(fd, JSON.stringify(owner) + "\n");
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);

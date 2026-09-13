@@ -356,3 +356,243 @@ test("two-loop activation refusal states the total measured lock wait", async (t
   assert.deepEqual(fs.readFileSync(ctx.states.alpha), before, "refusal writes no route state");
   assert.equal(lockOwnerIsLive(JSON.parse(fs.readFileSync(lockPath))), true);
 });
+
+// Real CLI lifecycle controls. Discovery and the protected child use the same
+// server; only a client command makes the latter depart.
+const DEPARTING_SERVER = `
+  const rl = require("node:readline").createInterface({ input: process.stdin });
+  rl.on("line", line => {
+    const f = JSON.parse(line);
+    const reply = result => process.stdout.write(JSON.stringify({jsonrpc:"2.0", id:f.id, result}) + "\\n");
+    if (f.method === "initialize") reply({protocolVersion:"2025-06-18", capabilities:{tools:{}}, serverInfo:{name:"depart",version:"1"}, pid:process.pid});
+    if (f.method === "tools/list") reply({tools:[{name:"demo.mutate",inputSchema:{type:"object"}}]});
+    if (f.method === "depart") {
+      if (f.params.answer) reply({done:true, padding:"x".repeat(256 * 1024)});
+      process.exitCode = f.params.code;
+      rl.close();
+      process.stdin.destroy();
+    }
+  });
+`;
+
+function departureProject() {
+  const ctx = pendingServers(["alpha"]);
+  const server = { command: process.execPath, args: ["-e", DEPARTING_SERVER] };
+  fs.writeFileSync(path.join(ctx.project, ".mcp.json"), JSON.stringify({mcpServers:{alpha:server}}));
+  const observed = readProjectServer(ctx.project, "alpha");
+  const state = readState(ctx.states.alpha);
+  Object.assign(state, {projectServerDigest:observed.serverDigest, projectServer:observed.server,
+    childArgv:observed.childArgv, childEnv:observed.childEnv});
+  fs.writeFileSync(ctx.states.alpha, JSON.stringify(state));
+  return ctx;
+}
+
+function departureWrapper(ctx, selectedStatus = 0, fault = false) {
+  const cli = path.join(__dirname, "../spine/proxy-cli.cjs");
+  const child = spawn(process.execPath, ["-e", `
+    process.exitCode = ${selectedStatus};
+    require(${JSON.stringify(cli)}).run(process.argv.slice(1)).then(() => {
+      if (${fault}) setTimeout(() => { throw new Error("lifecycle uncaught control"); }, 500);
+    });
+  `, "--", "--protect-state", ctx.states.alpha], {
+    env:{...process.env,...ctx.env}, cwd:ctx.project, stdio:["pipe","pipe","pipe"],
+  });
+  const run = {child, out:"", err:"", frames:[], closed:false, code:null};
+  let buffered = "";
+  child.stdout.on("data", chunk => {
+    run.out += chunk; buffered += chunk;
+    const lines = buffered.split("\n"); buffered = lines.pop();
+    for (const line of lines) if (line.trim()) run.frames.push(JSON.parse(line));
+  });
+  child.stderr.on("data", chunk => {run.err += chunk;});
+  run.exit = new Promise(resolve => child.once("close", (code, signal) => {
+    Object.assign(run, {closed:true, code, signal}); resolve();
+  }));
+  child.stdin.on("error", () => {});
+  run.send = frame => child.stdin.write(JSON.stringify({jsonrpc:"2.0",...frame}) + "\n");
+  return run;
+}
+
+async function departureUntil(predicate, detail, timeout = 10000) {
+  const until = Date.now() + timeout;
+  while (!predicate()) {
+    assert.ok(Date.now() < until, typeof detail === "function" ? detail() : detail);
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
+
+async function departureReady(run, capabilities = {}) {
+  run.send({id:"init", method:"initialize", params:{capabilities}});
+  await departureUntil(() => run.frames.some(f => f.id === "init"), () => `initialize: ${run.err}`);
+  return run.frames.find(f => f.id === "init").result.pid;
+}
+
+async function departureCleanup(run) {
+  if (!run.closed) run.child.stdin.end();
+  const kill = setTimeout(() => run.child.kill("SIGKILL"), 3000);
+  await run.exit;
+  clearTimeout(kill);
+}
+
+for (const outstanding of [false, true]) {
+  test(`child departure: exit 0 closes transport with input open (outstanding=${outstanding}) and permits replacement`, async () => {
+    const ctx = departureProject();
+    const first = departureWrapper(ctx);
+    let replacement;
+    try {
+      const pid = await departureReady(first);
+      const witness = processStartWitness(pid);
+      assert.ok(witness);
+      const before = readState(ctx.states.alpha);
+      assert.equal(before.state, "ACTIVE");
+      assert.equal(before.lease.pid, first.child.pid);
+      assert.equal(lockOwnerIsLive(before.lease), true);
+      first.send({...(outstanding ? {id:"abandoned-id"} : {}), method:"depart", params:{code:0}});
+      await departureUntil(() => !lockOwnerIsLive({pid,startWitness:witness}), "protected child must actually exit");
+      // Capture the main regression with process and stored-state evidence
+      // before asserting the desired transport result.
+      await new Promise(resolve => setTimeout(resolve, 400));
+      replacement = departureWrapper(ctx);
+      replacement.send({id:"init",method:"initialize",params:{capabilities:{}}});
+      await departureUntil(() => replacement.closed || replacement.frames.some(f => f.id === "init"), () => replacement.err);
+      const after = readState(ctx.states.alpha);
+      console.log(JSON.stringify({outstanding, childGone:true, wrapperClosed:first.closed,
+        leaseLive:lockOwnerIsLive(before.lease), storedState:after.state, storedPid:after.lease.pid,
+        originalPid:first.child.pid, replacementPid:replacement.child.pid,
+        replacementCode:replacement.code, replacementRefused:/REFUSED proxy_lease_active/.test(replacement.err)}));
+      assert.equal(first.closed, true, "clean child exit must close wrapper while client input stays open");
+      assert.equal(first.code, 0);
+      assert.equal(first.frames.some(f => f.id === "abandoned-id"), false, "transport EOF abandons unhandled requests");
+      assert.equal(after.lease.pid, replacement.child.pid);
+      assert.equal(after.lease.generation, before.lease.generation + 1);
+      assert.equal(lockOwnerIsLive(after.lease), true);
+    } finally {
+      await departureCleanup(first);
+      if (replacement) await departureCleanup(replacement);
+    }
+  });
+}
+
+for (const control of [
+  {name:"code 7", code:7, expected:1},
+  {name:"already selected failure", code:0, selected:23, expected:23},
+  {name:"answered request flush", code:0, answer:true, expected:0},
+  {name:"deliberate stop on client EOF", stop:true, expected:0},
+]) {
+  test(`child departure control: ${control.name}`, async () => {
+    const ctx = departureProject();
+    const run = departureWrapper(ctx, control.selected);
+    try {
+      await departureReady(run);
+      if (control.answer) {
+        run.child.stdout.pause();
+        setTimeout(() => run.child.stdout.resume(), 200);
+      }
+      if (control.stop) run.child.stdin.end();
+      else run.send({id:"final-id",method:"depart",params:{code:control.code,answer:control.answer}});
+      await departureUntil(() => run.closed, () => `wrapper did not close: ${run.err}`, 4000);
+      assert.equal(run.code, control.expected);
+      assert.equal(lockOwnerIsLive(readState(ctx.states.alpha).lease), false);
+      if (control.code === 7) assert.match(run.err, /protected server exited 7/);
+      if (control.stop) assert.doesNotMatch(run.err, /protected server exited/);
+      if (control.answer) {
+        const answer = run.frames.find(f => f.id === "final-id");
+        assert.equal(answer.result.done, true);
+        assert.equal(answer.result.padding.length, 256 * 1024);
+      }
+    } finally { await departureCleanup(run); }
+  });
+}
+
+test("child departure control: live concurrent wrapper is still refused without changing stored lease", async () => {
+  const ctx = departureProject();
+  const first = departureWrapper(ctx);
+  let second;
+  try {
+    await departureReady(first);
+    const before = readState(ctx.states.alpha);
+    second = departureWrapper(ctx);
+    await departureUntil(() => second.closed, "second wrapper must refuse");
+    assert.equal(second.code, 1);
+    assert.match(second.err, /REFUSED proxy_lease_active/);
+    assert.deepEqual(readState(ctx.states.alpha), before);
+    assert.equal(lockOwnerIsLive(before.lease), true);
+    assert.equal(first.closed, false);
+  } finally {
+    await departureCleanup(first);
+    if (second) await departureCleanup(second);
+  }
+});
+
+for (const signal of ["SIGTERM", "SIGINT", "SIGKILL", "child-SIGTERM", "uncaught"]) {
+  test(`child departure control: ${signal} leaves no live lease`, async () => {
+    const ctx = departureProject();
+    const run = departureWrapper(ctx, 0, signal === "uncaught");
+    let pid;
+    try {
+      pid = await departureReady(run);
+      if (signal === "child-SIGTERM") process.kill(pid, "SIGTERM");
+      else if (signal !== "uncaught") run.child.kill(signal);
+      await departureUntil(() => run.closed, () => `signal shutdown: ${run.err}`);
+      if (["SIGKILL", "SIGTERM", "SIGINT"].includes(signal)) {
+        assert.equal(run.signal, signal);
+        assert.equal(run.code, null);
+      } else assert.equal(run.code, 1);
+      assert.equal(lockOwnerIsLive(readState(ctx.states.alpha).lease), false);
+    } finally {
+      await departureCleanup(run);
+      if (signal === "SIGKILL" && pid) { try { process.kill(pid, "SIGKILL"); } catch {} }
+    }
+  });
+}
+
+test("child departure control: pending approval writes survive exit and replacement invalidates the old epoch", async () => {
+  const ctx = departureProject();
+  const run = departureWrapper(ctx);
+  let replacement;
+  try {
+    await departureReady(run, {elicitation:{}});
+    run.send({id:"approval-id",method:"tools/call",params:{name:"demo.mutate",arguments:{line:"shutdown-write-control"}}});
+    await departureUntil(() => run.frames.some(f => f.method === "elicitation/create"), () => `approval: ${run.out}\n${run.err}`, 20000);
+    const state = readState(ctx.states.alpha);
+    const journalBefore = fs.readFileSync(state.storePath, "utf8");
+    const issued = require("../spine/store.cjs").openJournal(state.storePath).events.find(e => e.type === "issued");
+    assert.ok(issued, "approval issuance must be journaled");
+    const receipts = fs.readdirSync(state.receiptsDir).filter(n => n.endsWith("-INPUT_REQUIRED.json"));
+    assert.equal(receipts.length, 1);
+    const file = path.join(state.receiptsDir, receipts[0]);
+    const receiptBytes = fs.readFileSync(file);
+    run.send({method:"depart",params:{code:0}});
+    await departureUntil(() => run.closed, "pending approval timer must not keep wrapper alive");
+    assert.equal(run.code, 0);
+    assert.equal(fs.readFileSync(state.storePath, "utf8"), journalBefore);
+    assert.deepEqual(fs.readFileSync(file), receiptBytes);
+    const {signature,...body} = JSON.parse(receiptBytes);
+    assert.equal(require("node:crypto").verify(null,
+      Buffer.from(require("../spine/receipt-v2.cjs").canonical(body)),
+      require("../spine/protection.cjs").loadReceiptSigner({...process.env,...ctx.env}).publicKey,
+      Buffer.from(signature.value,"hex")), true);
+    replacement = departureWrapper(ctx);
+    await departureReady(replacement);
+    assert.ok(require("../spine/store.cjs").openJournal(state.storePath).events.some(e =>
+      e.type === "status" && e.handle_hash === issued.handle_hash && e.status === "restart_invalidated"));
+  } finally {
+    await departureCleanup(run);
+    if (replacement) await departureCleanup(replacement);
+  }
+});
+
+test("child departure control: a write failure survives the deliberate child stop", async () => {
+  const ctx = departureProject();
+  const run = departureWrapper(ctx);
+  try {
+    await departureReady(run, {elicitation:{}});
+    const state = readState(ctx.states.alpha);
+    fs.appendFileSync(state.storePath, "corrupt journal\n");
+    run.send({id:"write-failure",method:"tools/call",params:{name:"demo.mutate",arguments:{line:"failure"}}});
+    await departureUntil(() => run.closed, () => `write failure: ${run.err}`);
+    assert.equal(run.code, 1);
+    assert.equal(lockOwnerIsLive(state.lease), false);
+    assert.doesNotMatch(run.err, /protected server exited/);
+  } finally { await departureCleanup(run); }
+});
