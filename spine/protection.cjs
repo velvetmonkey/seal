@@ -1318,6 +1318,7 @@ function refuseLiveLease(state) {
 function activationInputs(state) {
   return JSON.stringify({
     projectRoot: state.projectRoot,
+    projectId: state.projectId,
     serverName: state.serverName,
     projectServerDigest: state.projectServerDigest,
     childArgv: state.childArgv,
@@ -1333,7 +1334,7 @@ function activationInputs(state) {
 // is still the record preflight validated and no other session has taken a
 // live lease on it meanwhile: a loser's failure must never null a live lease.
 // Returns the error the caller should raise.
-async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error, wait) {
+async function discoveryFailureOutcome(statePath, projectRoot, env, validated, error, wait, validateState) {
   let lock;
   try {
     lock = await acquireProjectLockWaiting(projectRoot, env, wait);
@@ -1343,20 +1344,24 @@ async function discoveryFailureOutcome(statePath, projectRoot, env, validated, e
   try {
     const state = readState(statePath);
     if (!state) return error;
+    validateState(state);
     refuseLiveLease(state);
     if (activationInputs(state) === activationInputs(validated)) markBroken(statePath, state, error);
     return error;
   } catch (outcome) {
-    return outcome instanceof ProtectionError && outcome.code === "proxy_lease_active" ? outcome : error;
+    return outcome instanceof ProtectionError && ["proxy_lease_active", "identity_absent"].includes(outcome.code) ? outcome : error;
   } finally {
     lock.release();
   }
 }
 
-async function activationLease(statePath, env = process.env) {
-  requireHumanApprovalOrigin(env);
+async function activationLease(statePath, env = process.env, validateState = () => {}) {
   const initial = readState(statePath);
   if (!initial) throw new ProtectionError("state_broken", "protection state is absent");
+  // The CLI requires route identity before any activation side effect. Repeat
+  // its validation on every reread, including discovery failure cleanup.
+  validateState(initial);
+  requireHumanApprovalOrigin(env);
   const projectRoot = initial.projectRoot;
   // Sum only acquisition time across preflight and commit (or failure cleanup).
   // Discovery and the locked bodies do not count as waiting for the lock.
@@ -1366,6 +1371,7 @@ async function activationLease(statePath, env = process.env) {
   const preflight = await withProjectLock(projectRoot, env, (lock) => {
     const state = readState(statePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+    validateState(state);
     refuseLiveLease(state);
     const childCommand = state.childArgv && state.childArgv[0];
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
@@ -1396,13 +1402,14 @@ async function activationLease(statePath, env = process.env) {
       timeoutMs: preflight.state.discoveryTimeoutMs || DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
-    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error, wait);
+    throw await discoveryFailureOutcome(statePath, projectRoot, env, preflight.state, error, wait, validateState);
   }
   return await withProjectLock(projectRoot, env, (lock) => {
     const state = readState(statePath);
     if (!state) throw new ProtectionError("state_broken", "protection state is absent");
     // The loser of a same-server race meets the winner's committed lease here
     // and is refused with the winner's real pid and generation.
+    validateState(state);
     refuseLiveLease(state);
     if (state.state === STATES.UNPROTECTED || activationInputs(state) !== activationInputs(preflight.state)) {
       throw new ProtectionError(
