@@ -377,7 +377,6 @@ function createProxy(options) {
       return;
     }
     const requestState = decision.result.requestState;
-
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });
     const elicitationId = newElicitationId();

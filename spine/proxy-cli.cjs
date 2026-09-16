@@ -139,7 +139,6 @@ async function run(argv) {
         childArgv: state.childArgv,
         childEnv: state.childEnv,
         childCwd: state.projectRoot,
-        serverName: state.serverName,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
         runtimeTreeCheck: createRuntimeTreeCheck(),
         onRuntimeObservation: (message) => process.stderr.write(`${message}\n`),

@@ -8,6 +8,9 @@
 // Keep the seven-line total budget: the recorded fold provides no evidence
 // for increasing it. Folding two ceremony lines into the useful content frees
 // two argument lines without increasing either the vertical or width budget.
+// Configured routes share the first tool line with its first argument so the
+// route occupies line 2 without displacing any formerly painted field. Refuse
+// when that combined line cannot fit. Standalone rendering keeps its layout.
 // The measured usable width remains terminal width - 6. Never truncate.
 const { canonicalString } = require("./canonical.cjs");
 

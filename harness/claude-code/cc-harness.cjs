@@ -572,7 +572,7 @@ function observeNegotiation(state, begin, end) {
 function expectedDialogLines(state, note) {
   const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
   const { renderApprovalMessage } = require(rendererPath);
-  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
+  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000, serverLabel: SERVER_NAME });
   if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
   const contractPath = path.join(state.paths.store, "contract", "contract.cjs");
   const { createApprovalContract } = require(contractPath);
@@ -581,7 +581,7 @@ function expectedDialogLines(state, note) {
     ttlMs: 120000,
     kernelAdapter: { authorize() { throw new Error("dialog rendering does not authorize"); } },
   });
-  const begun = contract.begin({ tool: GUARDED_TOOL, args: { note } });
+  const begun = contract.begin({ tool: GUARDED_TOOL, args: { note }, serverLabel: SERVER_NAME });
   if (begun.kind !== "input_required") refuse("dialog_unrenderable", `the pinned artifact refuses to create this approval: ${begun.refusal || begun.kind}`);
   const approve = begun.elicitationParams?.requestedSchema?.properties?.approve;
   if (typeof approve?.title !== "string" || typeof approve?.description !== "string") {
@@ -593,7 +593,7 @@ function expectedDialogLines(state, note) {
 function dialogContiguityBound(state, note) {
   const rendererPath = path.join(state.paths.store, "contract", "renderer.cjs");
   const { renderApprovalMessage } = require(rendererPath);
-  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000 });
+  const rendered = renderApprovalMessage(GUARDED_TOOL, { note }, { terminalWidth: MIN_COLUMNS, ttlMs: 120000, serverLabel: SERVER_NAME });
   if (!rendered.ok) refuse("dialog_unrenderable", `the pinned artifact refuses to render this approval: ${rendered.reason}`);
   // This is the installed renderer's complete source dialog, normalized in
   // exactly the same way as the recording. It is the permitted span, rather

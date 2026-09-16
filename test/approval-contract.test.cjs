@@ -289,6 +289,38 @@ test("configured server labels preserve keys and escape misleading display chara
   assert.notEqual(renderServerLabel("unknown"), renderServerLabel(undefined));
 });
 
+test("configured route preserves the first three painted fields and checks escaped width", () => {
+  const { renderServerLabel } = require("../contract/renderer.cjs");
+  for (const args of [{}, { operation: "delete" }, { a: 1, b: 2 }, { a: 1, b: 2, c: 3 }]) {
+    const before = renderApprovalMessage("db.mutate", args);
+    const after = renderApprovalMessage("db.mutate", args, { serverLabel: "prod-db_01" });
+    assertInsideEnvelope(after);
+    assert.equal(after.lines[1], renderServerLabel("prod-db_01"));
+    for (const line of before.lines.slice(0, 3)) {
+      assert.ok(after.lines.slice(0, 3).some((painted) => painted.includes(line.trimStart())), line);
+    }
+    assert.deepEqual(after.argLines, before.argLines);
+    assert.equal(after.scopeLine, before.scopeLine);
+  }
+  const bidi = "payroll\u202etxt.exe";
+  assert.equal(displayWidth(renderServerLabel(bidi)), 77);
+  const wide = renderApprovalMessage("db.mutate", { operation: "delete" }, { serverLabel: bidi, terminalWidth: 83 });
+  assertInsideEnvelope(wide, 83);
+  assert.equal(wide.lines[1], renderServerLabel(bidi));
+  assert.ok(!wide.message.includes("\u202e"));
+  for (const serverLabel of [bidi, "\u202e".repeat(13), "x".repeat(100)]) {
+    const refused = createApprovalContract().begin({ tool: "db.mutate", args: { operation: "delete" }, serverLabel });
+    assert.equal(refused.kind, "refuse");
+    assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
+    assert.match(refused.detail, /74 columns/);
+    assert.equal(refused.elicitationParams, undefined);
+  }
+  const args = { line: "x".repeat(50) };
+  assertInsideEnvelope(renderApprovalMessage("db.mutate", args));
+  assert.equal(renderApprovalMessage("db.mutate", args, { serverLabel: "db" }).ok, false,
+    "refuse instead of pushing a formerly painted argument or scope below the fold");
+});
+
 // The current Scope line has one column of headroom in the 74-column envelope.
 test("the rendered Scope line fits the measured 74-column envelope", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
