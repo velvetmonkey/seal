@@ -28,12 +28,12 @@ including its backslashes and `&&` operators; a failed comparison skips both
 
 <!-- generated from published release; do not edit -->
 ```bash
-SEAL_VERSION=v0.3.0
-artifact_name="seal-v0.3.0-linux-x64" \
-&& artifact_sha256="93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b" \
-&& artifact_bytes=6247615 \
+SEAL_VERSION=v0.4.0
+artifact_name="seal-v0.4.0-linux-x64" \
+&& artifact_sha256="5b49ea26d29b608fcb4e3e370062b96e8c4a81d7fb5ce1fd30a2cbe737c69d3b" \
+&& artifact_bytes=6301771 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="55f26a95c5aed564545ae35a409b7ea73ca4f1d9f7cf67311a9d79215e3563e3" \
+&& sums_sha256="0552373fc3cb7f7257b4cf491395425a1ce2f7126cc60142a961f53ff29026ce" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -176,9 +176,9 @@ reuse the incompatible state as current protection or restore protection by itse
 Seal is a formally anchored authorization gate for selected MCP `tools/call`
 effects.
 
-Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is TESTED.
+Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is not yet tested.
 Release incorporation: The theorem artifact does not yet ship and run in the released build graph.
-Semantic correspondence: The theorem concerns `SealV2.decide`. The shipped authorization path is `sealHostStep -> stepImpl -> Host.dispatch`. Their correspondence is tested, not proved. The `interpreted Lean vs shipped WASM` job runs the correspondence test.
+Semantic correspondence: The theorem concerns `SealV2.decide`. The shipped authorization path is `sealHostStep -> stepImpl -> Host.dispatch`. Their correspondence is not yet tested or proved. The `interpreted Lean vs shipped WASM` job compares verdicts from the shipped implementation interpreted through `Ffi.modelStep` with verdicts from its compiled WASM on a corpus; it asserts their agreement, with no independent expected verdict. It does not compare `SealV2.decide` with the shipped path.
 The proof-bearing source compiles reproducibly to the WASM the product uses,
 and a tested Node runtime enforces it with durable one-use state,
 configuration-drift refusal, concurrent-proxy fencing and signed receipts.

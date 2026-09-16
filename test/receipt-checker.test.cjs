@@ -116,3 +116,43 @@ test("the retired v1 checker and sorted-key producer are absent", () => {
   assert.equal(fs.existsSync(path.join(ROOT, "checker", "seal-receipt-check.mjs")), false);
   assert.equal(fs.existsSync(path.join(ROOT, "spine", "receipt-seal.cjs")), false);
 });
+
+for (const [label, command] of [["seal verify", [SEAL, "verify"]], ["standalone checker", [CHECKER]]]) {
+  test(`argshape ${label} rejects corrupt UTF-8 but accepts genuine multibyte text`, () => {
+    const real = makeRealReceipt();
+    const { generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
+    const signer = generateSigner();
+    const record = JSON.parse(fs.readFileSync(real.receipt));
+    record.reason = "legitimate é 漢 😀 replacement �";
+    const bytes = Buffer.from(JSON.stringify(sealReceipt(signer, record, record.action)));
+    const legitimate = path.join(real.dir, "legitimate.json");
+    fs.writeFileSync(legitimate, bytes);
+    const checked = spawnSync(process.execPath, [...command, legitimate, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    assert.match(checked.stdout, /Signature and bindings   VALID/);
+    assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
+    const at = bytes.indexOf(Buffer.from("�"));
+    assert.ok(at >= 0);
+    const corrupt = path.join(real.dir, "corrupt.json");
+    fs.writeFileSync(corrupt, Buffer.concat([bytes.subarray(0, at), Buffer.from([0xff]), bytes.subarray(at + 3)]));
+    const refused = spawnSync(process.execPath, [...command, corrupt, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
+    assert.equal(refused.status, 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
+    assert.match(refused.stdout + refused.stderr, /read_failed|ill-formed UTF-8/);
+  });
+}
+
+for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", false], ["0", 0], ["[]", []], ["null", null], ["missing", undefined]]) {
+  test(`argshape receipt validator independently refuses ${label} through both CLIs`, () => {
+    const real = makeRealReceipt();
+    const body = JSON.parse(fs.readFileSync(real.receipt));
+    if (value === undefined) delete body.arguments;
+    else body.arguments = value;
+    const file = path.join(real.dir, "shape.json");
+    fs.writeFileSync(file, JSON.stringify(body));
+    for (const command of [[SEAL, "verify"], [CHECKER]]) {
+      const refused = spawnSync(process.execPath, [...command, file, "--pubkey", real.publicKey], { encoding: "utf8" });
+      assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+      assert.match(refused.stdout + refused.stderr, /tool and arguments are required/);
+    }
+  });
+}

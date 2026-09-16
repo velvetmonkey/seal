@@ -41,6 +41,13 @@
   ],
   "exceptions": [
     {
+      "path": "docs/reference/cli.md",
+      "reason": "standalone public CLI contract",
+      "footer": [
+        { "role": "Up", "label": "Reference", "target": "README.md" }
+      ]
+    },
+    {
       "path": "docs/guide/when-something-looks-wrong.md",
       "reason": "token-cross-checked guide page",
       "footer": [
@@ -94,6 +101,11 @@
     },
     {
       "path": "docs/assurance/RELEASE-NOTES-v0.3.0.md",
+      "reason": "release note",
+      "footer": []
+    },
+    {
+      "path": "docs/assurance/RELEASE-NOTES-v0.4.0.md",
       "reason": "release note",
       "footer": []
     },

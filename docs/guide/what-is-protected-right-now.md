@@ -17,7 +17,7 @@ $ seal status
 ```
 
 ```output
-Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
+Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
 Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/f245ca9632a2147b4c4f6cbb08d8f8da/servers/db/state.json)
 
 Gated through this route:
@@ -124,7 +124,7 @@ and the next session will raise the gate again on start.
 ### `ACTIVE`
 
 ```output
-Sealed MCP route notes: ACTIVE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json)
+Sealed MCP route notes: LEASE ACTIVE (/home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/state.json); authorization runtime judgment is evaluated for each approval.
 
 Gated through this route:
   delete_all_notes
@@ -263,7 +263,7 @@ refusal without claiming that the tool list is absent or the server is unrouted.
 ## The Runtime line
 
 ```output
-Runtime: present seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3
+Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
 ```
 
 The pinned runtime is installed beside the command, where both protected-call
@@ -276,13 +276,16 @@ before status can print a Runtime line.
 
 `seal protect` registers the wrapper at
 `prefix/lib/seal/store/<tree>/bin/seal`, bypassing the installed launcher.
-A protected call does not re-check `runtime/kernel/wasm/seal.js` against its
-pinned hash; a wrapper started with changed `seal.js` bytes can still reach
-`ACTIVE`, authorize the call and write an `ALLOW` receipt.
+After Accept, each protected call rechecks every installed payload file,
+including `runtime/kernel/wasm/seal.js`, against the fixed install record
+before kernel authorization. A mismatch or unavailable record refuses the
+call. PASS establishes disk agreement at that check, not which bytes the
+process already loaded; a writer able to replace both the tree and its record
+before wrapper startup can still forge agreement.
 
 Two forms through the installed launcher, both from real runs:
 
-- `Runtime: present …` — every file status inspected matches its pinned hash.
+- `Runtime at status check: kernel payload bytes matched …` — every file status inspected matches its pinned hash; the installed tree is checked separately for each protected approval.
 - `REFUSE artifact_digest_mismatch: installed file digest mismatch:
   runtime/kernel/wasm/seal.js` — printed instead of any status output, with
   exit code 1, when a stored runtime file no longer matches the install record.

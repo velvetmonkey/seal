@@ -7,6 +7,7 @@ const path = require("node:path");
 const {
   ROOT,
   buildDist,
+  isJsonRecords,
   publishedTreeSha256FromRelease,
   quotedTreeHashHits,
   removeScratch,
@@ -66,6 +67,11 @@ function declaredSites() {
     refuse("pin_population_manifest_invalid", "installed-tree pin site manifest must be a non-empty array");
   }
   const keys = sites.map(siteKey);
+  for (const site of sites) {
+    const text = readConsumedFile(site.file);
+    // A declaration cannot turn recorded output into a documentation pin.
+    if (isJsonRecords(text)) quotedTreeHashHits(text, site.file);
+  }
   if (new Set(keys).size !== keys.length) {
     refuse("pin_population_manifest_invalid", "installed-tree pin site manifest contains duplicate sites");
   }
@@ -110,6 +116,7 @@ function main() {
   let publishedHits = 0;
   for (const relative of trackedFiles()) {
     const text = relative === "docs/start/install.md" ? installText : readConsumedFile(relative);
+    if (isJsonRecords(text)) continue;
     const hits = quotedTreeHashHits(text, relative);
     for (const hit of hits) {
       const lineStart = text.lastIndexOf("\n", hit.index - 1) + 1;

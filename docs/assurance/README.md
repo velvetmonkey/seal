@@ -17,12 +17,13 @@ the Node CLI this repository ships.
 3. [evaluator-walk.md](../start/evaluator-walk.md) — the forensic receipt check for a
    source build after `seal demo`, using the checkout checker, with no captured
    transcript.
-4. [assurance/RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md) — what v0.3.0 contains and
+4. [assurance/RELEASE-NOTES-v0.4.0.md](RELEASE-NOTES-v0.4.0.md) — what v0.4.0 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
    v0.2.0 was withdrawn before publication. Its record remains historical at
    [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md).
+   The candidate [assurance/RELEASE-NOTES-v0.4.0.md](RELEASE-NOTES-v0.4.0.md) describes this checkout.
    The v0.3.0 release record is
    [assurance/RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
    The historical record prepared with the v0.2.1 release tree is
@@ -37,6 +38,8 @@ the Node CLI this repository ships.
    pinned digest can and cannot say about an untagged build.
 7. [assurance/architecture.md](architecture.md) — the shipped Node product path first,
   followed by the wider family assurance lineage.
+
+- [reference/cli.md](../reference/cli.md) — commands, flags, argument ranges and exit codes.
 
 - [start/README.md](../start/README.md) — the start section map.
 
@@ -68,7 +71,7 @@ the Node CLI this repository ships.
 4. [assurance/claude-code-evidence.md](claude-code-evidence.md) — the client matrix, why
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
-5. [The `seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.3.0/seal-receipt-v2.mjs) — the
+5. [The `seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.4.0/seal-receipt-v2.mjs) — the
    receipt checker is a sibling asset published with the release and is also
    inside the installed payload as `checker/seal-receipt-v2.mjs`, byte for
    byte. Download it with the binary to verify both against that release's
@@ -116,7 +119,7 @@ the Node CLI this repository ships.
 
 ## I want the design history
 
-Dated records of how v0.3.0 got its shape. Several describe designs that were
+Dated records of how v0.4.0 got its shape. Several describe designs that were
 ruled on and explicitly never built; each says so in its opening lines.
 
 - [ROADMAP-KERNEL-OUTWARD.md](../archive/ROADMAP-KERNEL-OUTWARD.md) — the working order

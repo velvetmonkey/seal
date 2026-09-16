@@ -339,3 +339,45 @@ test("rebuild-only entry point refuses an invalid tag before building", () => {
   assert.match(outcome.error, /release tag is invalid/);
   assert.equal(builds, 0);
 });
+
+for (const build of [false, true]) {
+  for (const fail of [false, true]) {
+    test(`public reproduce owner ${build ? "build" : "comparison"} maps actual parser outcome to exit ${fail ? 1 : 0}`, () => {
+      const vm = require("node:vm");
+      const owner = path.resolve(__dirname, "../scripts/seal-reproduce.cjs");
+      const root = testTmpdir(path.join(require("node:os").tmpdir(), "seal-owner-cli-"));
+      const h = harness();
+      const originalBuild = h.deps.buildPinnedKernel;
+      let observed;
+      h.deps.buildPinnedKernel = (tag, work, options) => {
+        observed = { tag, ...options };
+        if (fail) throw new Error("injected rebuild failure");
+        return originalBuild(tag, work, options);
+      };
+      const proc = { stdout: { write() {} }, stderr: { write() {} } };
+      const sandbox = { require: require("node:module").createRequire(owner), module: {},
+        __dirname: path.dirname(owner), process: proc, Buffer, deps: h.deps };
+      vm.createContext(sandbox);
+      vm.runInContext(fs.readFileSync(owner, "utf8"), sandbox, { filename: owner });
+      // Keep the real argument parsers and owner main; replace only expensive
+      // download/install/build dependencies already injected by owner unit tests.
+      vm.runInContext("const actualExecute = execute; execute = (argv) => actualExecute(argv, deps); const actualBuild = executeBuildPinned; executeBuildPinned = (argv) => actualBuild(argv, deps);", sandbox);
+      const source = path.join(root, "source");
+      const output = path.join(root, "kernel.wasm");
+      const manifest = path.join(root, "release.json");
+      sandbox.args = build
+        ? ["build-pinned-kernel", TAG, "--source", source, "--output", output, "--manifest", manifest]
+        : [TAG, "--source", source, "--platform", "linux-x64", "--authority", "independent", "--authority-name", "outside rebuilder"];
+      vm.runInContext("main(args)", sandbox);
+      const record = path.join(root, "owner.exit");
+      fs.writeFileSync(record, `${proc.exitCode}\n`);
+      assert.equal(Number(fs.readFileSync(record, "utf8")), fail ? 1 : 0);
+      assert.equal(observed.tag, TAG);
+      assert.equal(observed.sourceRoot, source);
+      if (build) {
+        assert.equal(observed.manifestPath, manifest);
+        if (!fail) assert.deepEqual(fs.readFileSync(output), PUBLISHED_KERNEL);
+      }
+    });
+  }
+}

@@ -348,7 +348,7 @@ test("darwin-arm64 is admitted on the product path", () => {
 test("help states Linux and macOS product parity", () => {
   const result = runNode([path.join(ROOT, "bin", "seal")]);
   assert.equal(result.code, 0, result.out);
-  assert.match(result.stdout, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
+  assert.match(result.stdout.replace(/\s+/g, " "), /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
   assert.doesNotMatch(result.stdout, /Protect is not supported on macOS yet\./);
 });
 

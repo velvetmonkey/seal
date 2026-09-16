@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -13,8 +14,11 @@ function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function demoRun() {
-  const child = spawn(process.execPath, [SEAL, "demo"], { stdio: ["pipe", "pipe", "pipe"] });
+function demoRun(root) {
+  const child = spawn(process.execPath, [SEAL, "demo"], {
+    env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8");
@@ -35,9 +39,10 @@ function demoRun() {
 }
 
 test("demo announces and retains its checker directory, and Remove explains its cleanup", async (t) => {
-  const demo = demoRun();
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-coldwalk-test-"));
+  const demo = demoRun(root);
   await demo.waitFor(/Approve\? \[y\/N\]/);
-  const demoPrefix = path.join(os.tmpdir(), "seal-demo-");
+  const demoPrefix = path.join(root, "seal-demo-");
   const announced = demo.output().match(new RegExp(
     `temporary demo directory: (${escapeRegex(demoPrefix)}[^\\s]+) \\(remains after the demo for the printed checker command\\)`,
   ));

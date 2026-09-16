@@ -21,7 +21,6 @@ const path = require("node:path");
 const readline = require("node:readline");
 
 const { createApprovalContract } = require("../contract/contract.cjs");
-const { renderServerLabel } = require("../contract/renderer.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
@@ -34,6 +33,15 @@ const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 const ELICITATION_ID_PATTERN = /^seal-elicitation\/v1\.[0-9a-f]{64}$/;
+const NO_KERNEL_RECEIPT_REFUSALS = new Set([
+  "runtime_tree_unknown",
+  "runtime_tree_fail",
+  "lease_generation_mismatch",
+  "kernel_execution_refused",
+  "kernel_integrity_refused",
+  "kernel_manifest_refused",
+  "kernel_output_refused",
+]);
 const TERMINAL_REFUSALS = new Set([
   "already_consumed",
   "terminally_declined",
@@ -54,8 +62,10 @@ function createProxy(options) {
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
-    serverName,       // configured route label; presentation only
+    projectId,        // durable protection-state project identity
+    serverName,       // durable route identity; display does not authenticate it
     beforeForward,    // optional fail-closed live drift check
+    runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
@@ -84,7 +94,7 @@ function createProxy(options) {
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
-  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, leaseFence });
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, projectId, serverId: serverName, leaseFence, runtimeTreeCheck, onRuntimeObservation });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
   // This identifier exists only to join receipt records from this proxy
@@ -149,6 +159,12 @@ function createProxy(options) {
   childOut.on("line", (line) => onClientLine(line));
 
   function emitReceipt(action, frame, extra, kernelReceipt) {
+    if (!kernelReceipt && action === "BLOCK" && NO_KERNEL_RECEIPT_REFUSALS.has(extra?.refusal)) {
+      // Shared by ordinary and duplicate responses, and every other refusal
+      // caller: never re-enter the kernel to sign a result it did not produce.
+      decisionSink({ decision: action, refusal: extra.refusal });
+      return null;
+    }
     let receipt = kernelReceipt || contract.receiptFor({
       tool: frame.params?.name,
       args: frame.params?.arguments ?? {},
@@ -257,20 +273,7 @@ function createProxy(options) {
       const detail = detailOverride || decision.detail;
       const receiptExtra = { refusal, detail };
       receiptExtra.approvalRequest = approvalRequest;
-      if (decision.receipt) {
-        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      } else if (
-        refusal === "kernel_execution_refused"
-        || refusal === "kernel_integrity_refused"
-        || refusal === "kernel_manifest_refused"
-        || refusal === "kernel_output_refused"
-      ) {
-        // retryUnlocked already refused with no receipt. Calling receiptFor
-        // again would re-enter the kernel that just produced nothing.
-        decisionSink({ decision: "BLOCK", refusal });
-      } else {
-        emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      }
+      emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
       respond(frame.id, refusalResult(refusal, detail, decision.timing));
       if (decision.timing) {
         const error = new Error(detail);
@@ -296,22 +299,33 @@ function createProxy(options) {
   function completeElicitation(frame) {
     const pending = pendingElicitations.get(frame.id);
     if (!pending) return false;
-    pendingElicitations.delete(frame.id);
-    clearTimeout(pending.timer);
     const answer = frame.result && typeof frame.result === "object"
       ? frame.result
       : { action: "cancel" };
     const detail = frame.error
       ? `the client rejected elicitation/create: ${frame.error.message || "no error message"}`
       : undefined;
-    finishGuarded(
-      pending.frame,
-      pending.requestState,
-      pending.correlation,
-      { approval: answer },
-      detail,
-    );
-    rememberCompletedElicitation(frame.id, pending);
+    // Keep the pending entry and timer until retry has settled. A completed
+    // elicitation is one client answer, even when its shape cannot authorize
+    // the request, so its correlation capacity must be released on every
+    // outcome rather than only on contract-terminal outcomes.
+    try {
+      finishGuarded(
+        pending.frame,
+        pending.requestState,
+        pending.correlation,
+        { approval: answer },
+        detail,
+      );
+    } finally {
+      // `finishGuarded` may throw after a kernel timing refusal. Cleanup is
+      // deliberately unconditional so no processed answer can strand the
+      // pending entry, its timer, or its capacity reservation.
+      pendingElicitations.delete(frame.id);
+      clearTimeout(pending.timer);
+      discardReceiptCorrelation(pending.requestState);
+      rememberCompletedElicitation(frame.id, pending);
+    }
     return true;
   }
 
@@ -356,17 +370,14 @@ function createProxy(options) {
       blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
       return;
     }
-    const decision = contract.begin({ tool: params.name, args: params.arguments ?? {} });
+    const decision = contract.begin({ tool: params.name, args: params.arguments, selection: matchedSelection, serverLabel: serverName ?? null });
     if (decision.kind === "refuse") {
       emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
       respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
       return;
     }
     const requestState = decision.result.requestState;
-    decision.elicitationParams = {
-      ...decision.elicitationParams,
-      message: `${decision.elicitationParams.message}\n${renderServerLabel(serverName)}\nSelection predicate: ${matchedSelection.label} (${matchedSelection.detail})`,
-    };
+
     const correlation = mintReceiptCorrelation(requestState);
     emitReceipt("INPUT_REQUIRED", frame, { approvalRequest: { correlation } });
     const elicitationId = newElicitationId();
