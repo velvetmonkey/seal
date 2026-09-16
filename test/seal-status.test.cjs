@@ -11,9 +11,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../runtime-man
 const { processStartWitness, projectId } = require("../spine/protection.cjs");
 const { requireMatchingVersion } = require("../spine/version.cjs");
 
-function writeOwnedState(root, project, statePath, fields) {
+function writeOwnedState(root, project, statePath, fields, command = "/seal") {
   const projectRoot = fs.realpathSync(project);
-  const definition = { type: "stdio", command: CLI, args: ["__proxy", "--protect-state", statePath], env: {} };
+  const definition = { type: "stdio", command, args: ["__proxy", "--protect-state", statePath], env: {} };
   fs.writeFileSync(path.join(root, ".claude.json"), JSON.stringify({
     projects: { [projectRoot]: { mcpServers: { db: definition } } },
   }, null, 2) + "\n");
@@ -219,7 +219,7 @@ test("coverage only calls selected tools BROKERED behind a live Seal-owned wrapp
   writeOwnedState(root, project, statePath, {
     state: "ACTIVE", guardTool: "write", receiptsDir: path.dirname(statePath),
     lease: { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 8 },
-  });
+  }, CLI);
 
   let result = run(["coverage"], root, "", project);
   assert.equal(result.code, 0, result.out);

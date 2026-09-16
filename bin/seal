@@ -669,7 +669,8 @@ function printHelp() {
   seal uninstall            preview and confirm removal of this installation
   seal doctor
       show approval-origin assumptions
-  seal coverage             report known mediated and unmediated routes for this deployment
+  seal coverage
+      report known mediated and unmediated routes for this deployment
   seal demo [--dir PATH]
       show one exact call run once and its replay blocked
   seal verify PATH [--pubkey HEX]
