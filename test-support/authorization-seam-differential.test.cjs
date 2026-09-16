@@ -57,10 +57,13 @@ async function scenarioData() {
   const retryTool = "demo.mutate";
   const retryArgs = { line: "seam differential" };
   const cases = [
-    { name: "matching accepted retry", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: true },
-    { name: "altered retry arguments", issuedTool: retryTool, issuedArgs: { line: "issued value" }, retryTool, retryArgs, accepted: true },
-    { name: "approval declined", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: false },
-    { name: "approval for another tool", issuedTool: "demo.other", issuedArgs: retryArgs, retryTool, retryArgs, accepted: true },
+    { name: "matching accepted retry", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: true, expected: "ALLOW" },
+    { name: "altered retry arguments", issuedTool: retryTool, issuedArgs: { line: "issued value" }, retryTool, retryArgs, accepted: true, expected: "BLOCK" },
+    { name: "approval declined", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: false, expected: "BLOCK" },
+    { name: "approval for another tool", issuedTool: "demo.other", issuedArgs: retryArgs, retryTool, retryArgs, accepted: true, expected: "BLOCK" },
+    ...require("./json-argument-vectors.cjs").map(({ name, args }) => ({
+      name, issuedTool: retryTool, issuedArgs: args, retryTool, retryArgs: args, accepted: true, expected: "ALLOW",
+    })),
   ].map((input) => ({ ...input, epoch: 1, now: 1000 }));
   const config = {
     epoch: 1,
@@ -126,6 +129,8 @@ test("interpreted Lean agrees with shipped WASM through the Node authorization a
     } catch (error) {
       wasmAnswer = `ERROR ${error.code || error.name}: ${error.message}`;
     }
+    assert.equal(wasmAnswer, input.expected, `${input.name}: shipped answer differs from the expected outcome`);
+    assert.equal(leanAnswers[index], input.expected, `${input.name}: interpreted answer differs from the expected outcome`);
     if (leanAnswers[index] !== wasmAnswer) {
       throw new Error(
         `authorization differential disagreement for input ${JSON.stringify(input)}: ` +

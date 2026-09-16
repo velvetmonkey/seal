@@ -42,6 +42,11 @@ const CORPUS = [
     value: [9007199254740991, -9007199254740991, -0, { z: [], a: {} }],
     expected: '[9007199254740991,-9007199254740991,0,{"z":[],"a":{}}]',
   },
+  {
+    name: "decimals and scientific notation retain parsed numeric values",
+    value: { amount: 12.5, coordinates: [-33.8688, 151.2093], rate: 1e-7, computed: 0.1 + 0.2, tiny: Number.MIN_VALUE },
+    expected: '{"amount":12.5,"coordinates":[-33.8688,151.2093],"rate":1e-7,"computed":0.30000000000000004,"tiny":5e-324}',
+  },
 ];
 
 test("producer and checker canonicalisers conform to the v2 own-property enumeration specification", () => {
@@ -63,4 +68,11 @@ test("undefined is a named non-JSON exclusion from the shared corpus", () => {
     () => checkerCanonical(undefined),
     (error) => error?.code === "value_not_canonical",
   );
+});
+
+test("producer and checker retain non-finite and out-of-range numeric refusals", () => {
+  for (const value of [NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1, -Number.MAX_SAFE_INTEGER - 1]) {
+    assert.throws(() => producerCanonical({ nested: [value] }), (error) => error.code === "receipt_value_malformed");
+    assert.throws(() => checkerCanonical({ nested: [value] }), (error) => error.code === "number_not_canonical");
+  }
 });
