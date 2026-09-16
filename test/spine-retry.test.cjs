@@ -1298,7 +1298,7 @@ test("unsupported platform returns unsupported, not a warning", async (t) => {
   assert.match(run.err, /unsupported/);
 });
 
-for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", false], ["0", 0], ["[]", []], ["null", null], ["missing", undefined]]) {
+for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", false], ["0", 0], ["[]", []], ["null", null]]) {
   test(`argshape CLI refuses ${label} before offering approval`, async (t) => {
     const dir = testTmpdir("seal-argshape-");
     const dataFile = path.join(dir, "data.txt");
@@ -1353,3 +1353,111 @@ test("argshape CLI object displays nested values and its receipt verifies", asyn
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
+
+for (const mode of ["omitted", "explicit empty", "unguarded omitted"]) {
+  test(`optargs no-input tool ${mode} round trip`, async (t) => {
+    const dir = testTmpdir("seal-optargs-");
+    const callsFile = path.join(dir, "calls.jsonl");
+    fs.writeFileSync(callsFile, "");
+    // A real child advertises and records the no-input tool. Only this child
+    // writes callsFile; proxy logs cannot stand in for execution evidence.
+    const server = `
+      const fs = require("node:fs");
+      require("node:readline").createInterface({ input: process.stdin }).on("line", line => {
+        const frame = JSON.parse(line);
+        let result;
+        if (frame.method === "initialize") result = { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "no-input", version: "1" } };
+        if (frame.method === "tools/list") result = { tools: [{ name: "flush", inputSchema: { type: "object", properties: {} } }] };
+        if (frame.method === "tools/call") {
+          fs.appendFileSync(process.argv[1], JSON.stringify(frame) + "\\n");
+          result = { content: [{ type: "text", text: "flushed" }] };
+        }
+        if (result) process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: frame.id, result }) + "\\n");
+      });`;
+    const renderedArgs = [];
+    const kernelInputs = [];
+    const renderer = require("../contract/renderer.cjs");
+    const kernelModule = require("../contract/kernel-authorization.cjs");
+    const render = renderer.renderApprovalMessage;
+    const adapterFactory = kernelModule.createKernelAuthorizationAdapter;
+    t.mock.method(renderer, "renderApprovalMessage", (tool, args, options) => {
+      renderedArgs.push(args);
+      return render(tool, args, options);
+    });
+    t.mock.method(kernelModule, "createKernelAuthorizationAdapter", (...options) => {
+      const adapter = adapterFactory(...options);
+      return { authorize(input) {
+        kernelInputs.push(input);
+        return adapter.authorize(input);
+      } };
+    });
+    // Reload only consumers of these observers. The real renderer and kernel
+    // still run, and the module cache is cleared again when this test ends.
+    const consumers = [require.resolve("../contract/contract.cjs"), require.resolve("../spine/proxy.cjs")];
+    for (const file of consumers) delete require.cache[file];
+    t.after(() => { for (const file of consumers) delete require.cache[file]; });
+    const observedCreateProxy = require("../spine/proxy.cjs").createProxy;
+    const storePath = path.join(dir, "approvals.journal");
+    createJournal(storePath);
+    const signer = generateSigner();
+    const frames = [];
+    const proxy = observedCreateProxy({
+      guardTool: mode === "unguarded omitted" ? "other" : "flush",
+      storePath, signer, receiptsDir: path.join(dir, "receipts"),
+      childArgv: [process.execPath, "-e", server, callsFile],
+      onClientLine: line => frames.push(JSON.parse(line)),
+    });
+    t.after(() => proxy.stop());
+    const send = frame => proxy.write(JSON.stringify({ jsonrpc: "2.0", ...frame }));
+    const waitFor = async predicate => {
+      const started = Date.now();
+      while (!frames.some(predicate)) {
+        assert.ok(Date.now() - started < 15000, JSON.stringify(frames));
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return frames.find(predicate);
+    };
+    const calls = () => fs.readFileSync(callsFile, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse);
+    send({ id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } });
+    await waitFor(frame => frame.id === 90);
+    send({ id: 91, method: "tools/list", params: {} });
+    const listing = await waitFor(frame => frame.id === 91);
+    assert.deepEqual(listing.result.tools[0], { name: "flush", inputSchema: { type: "object", properties: {} } });
+    const params = { name: "flush" };
+    if (mode === "explicit empty") params.arguments = {};
+    send({ id: 1, method: "tools/call", params });
+    if (mode !== "unguarded omitted") {
+      const offered = await waitFor(frame => frame.method === "elicitation/create" || frame.id === 1);
+      assert.equal(calls().length, 0, "child must not execute before approval");
+      assert.equal(offered.method, "elicitation/create", `approval not offered; child calls ${calls().length}: ${JSON.stringify(offered)}`);
+      assert.match(offered.params.message, /Tool: flush; Approval required\n  \(none\)\n/);
+      assert.deepEqual(renderedArgs, [{}]);
+      send({ id: offered.id, result: { action: "accept", content: { approve: true } } });
+    }
+    const reply = await waitFor(frame => frame.id === 1);
+    assert.deepEqual(reply.result, { content: [{ type: "text", text: "flushed" }] });
+    assert.equal(calls().length, 1, "child records exactly one execution");
+    if (mode === "unguarded omitted") {
+      assert.equal(Object.hasOwn(calls()[0].params, "arguments"), false);
+      assert.equal(renderedArgs.length, 0);
+      assert.equal(kernelInputs.length, 0);
+      assert.equal(frames.some(frame => frame.method === "elicitation/create"), false);
+      return;
+    }
+    assert.deepEqual(calls()[0].params.arguments, renderedArgs[0]);
+    const authorized = kernelInputs.find(input => input.accepted);
+    assert.ok(authorized, "real kernel receives affirmative authorization");
+    assert.strictEqual(authorized.retryArgs, renderedArgs[0], "renderer and kernel receive the same JS object");
+    assert.deepEqual(authorized.issuedArgs, renderedArgs[0], "journal binding preserves the same argument value");
+    for (const input of kernelInputs) assert.strictEqual(input.retryArgs, renderedArgs[0]);
+    for (const action of ["INPUT_REQUIRED", "ALLOW"]) {
+      assert.deepEqual(receiptFor(dir, action).arguments, renderedArgs[0], `${action} receipt preserves arguments`);
+    }
+    const receipts = path.join(dir, "receipts");
+    const file = path.join(receipts, fs.readdirSync(receipts).find(name => name.endsWith("-ALLOW.json")));
+    const checked = spawnSync(process.execPath, [CHECKER, file, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    assert.match(checked.stdout, /Signature and bindings   VALID/);
+    assert.match(checked.stdout, /Verifier-local verdict\s+REPRODUCED/);
+  });
+}

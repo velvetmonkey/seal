@@ -62,6 +62,8 @@ function createProxy(options) {
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
+    projectId,        // durable protection-state project identity
+    serverName,       // durable protection-state server identity
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
@@ -92,7 +94,7 @@ function createProxy(options) {
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
-  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, leaseFence, runtimeTreeCheck, onRuntimeObservation });
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, projectId, serverId: serverName, leaseFence, runtimeTreeCheck, onRuntimeObservation });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
   // This identifier exists only to join receipt records from this proxy
@@ -432,7 +434,11 @@ function createProxy(options) {
           : {};
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
-        const args = frame.params?.arguments ?? {};
+        // MCP arguments is optional. Normalize omission on the parsed frame
+        // before selection and approval so every guarded stage shares it.
+        // Explicit null and other non-object values still reach the renderer.
+        if (!Object.hasOwn(frame.params, "arguments")) frame.params.arguments = {};
+        const args = frame.params.arguments;
         const matching = selections
           .filter((selection) => selection.name === frame.params.name)
           .map((selection) => evaluateSelection(selection, args, line))
