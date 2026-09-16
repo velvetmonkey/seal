@@ -920,7 +920,8 @@ async function multiServerProxy(ctx, name) {
       const request = await next();
       assert.equal(request.method, "elicitation/create");
       assert.equal(request.params.message.split("\n")[1], `Server (configured route, identity not authenticated): "${name}"`);
-      assert.equal(request.params.message.split("\n")[0], 'Tool: demo.mutate; Approval required; line: "must not run"');
+      assert.equal(request.params.message.split("\n")[0], 'Tool: demo.mutate; Approval required');
+      assert.equal(request.params.message.split("\n")[3], '  line: "must not run"');
       assert.equal(request.params.message.split("\n")[2], "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
       const { displayWidth, WIDTH_MARGIN } = require("../contract/renderer.cjs");
       for (const line of request.params.message.split("\n")) assert.ok(displayWidth(line) <= 80 - WIDTH_MARGIN);

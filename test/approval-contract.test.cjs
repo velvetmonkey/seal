@@ -289,18 +289,21 @@ test("configured server labels preserve keys and escape misleading display chara
   assert.notEqual(renderServerLabel("unknown"), renderServerLabel(undefined));
 });
 
-test("configured route preserves the first three painted fields and checks escaped width", () => {
+test("configured route budgets all mandatory fields independently of arguments", () => {
   const { renderServerLabel } = require("../contract/renderer.cjs");
-  for (const args of [{}, { operation: "delete" }, { a: 1, b: 2 }, { a: 1, b: 2, c: 3 }]) {
-    const before = renderApprovalMessage("db.mutate", args);
+  const many = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`arg${i}`, i]));
+  for (const args of [{}, { operation: "delete" }, { alpha: "one", beta: "two", gamma: 3 }, many]) {
     const after = renderApprovalMessage("db.mutate", args, { serverLabel: "prod-db_01" });
-    assertInsideEnvelope(after);
-    assert.equal(after.lines[1], renderServerLabel("prod-db_01"));
-    for (const line of before.lines.slice(0, 3)) {
-      assert.ok(after.lines.slice(0, 3).some((painted) => painted.includes(line.trimStart())), line);
+    assert.ok(after.ok, after.reason);
+    const painted = after.lines.slice(0, 3).join("\n");
+    for (const field of ["Tool: db.mutate", "Approval required", renderServerLabel("prod-db_01"), after.scopeLine]) {
+      assert.ok(painted.includes(field), field);
     }
-    assert.deepEqual(after.argLines, before.argLines);
-    assert.equal(after.scopeLine, before.scopeLine);
+    for (const line of after.lines) assert.ok(displayWidth(line) <= 74);
+    const expectedArgs = Object.keys(args).sort().map((key) => `  ${key}: ${args[key]}`);
+    assert.deepEqual(after.argLines, expectedArgs.length ? expectedArgs : ["  (none)"]);
+    assert.equal(after.scopeLine, "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
+    for (const line of after.argLines) assert.ok(after.lines.includes(line));
   }
   const bidi = "payroll\u202etxt.exe";
   assert.equal(displayWidth(renderServerLabel(bidi)), 77);
@@ -317,8 +320,24 @@ test("configured route preserves the first three painted fields and checks escap
   }
   const args = { line: "x".repeat(50) };
   assertInsideEnvelope(renderApprovalMessage("db.mutate", args));
-  assert.equal(renderApprovalMessage("db.mutate", args, { serverLabel: "db" }).ok, false,
-    "refuse instead of pushing a formerly painted argument or scope below the fold");
+  assertInsideEnvelope(renderApprovalMessage("db.mutate", args, { serverLabel: "db" }));
+});
+
+test("route refusal boundary depends only on mandatory fields, not argument length or count", () => {
+  const { renderServerLabel } = require("../contract/renderer.cjs");
+  const labelLength = 74 - displayWidth(renderServerLabel("x")) + 1;
+  for (const args of [{}, { query: "x".repeat(55) }, { query: "x".repeat(1000) }, { alpha: "one", beta: "two", gamma: 3 }]) {
+    const rendered = renderApprovalMessage("db.mutate", args, { serverLabel: "s".repeat(labelLength) });
+    assert.ok(rendered.ok, rendered.reason);
+    assert.ok(rendered.lines.slice(0, 3).join("\n").includes(rendered.scopeLine));
+    assert.ok(rendered.lines.slice(0, 3).includes(renderServerLabel("s".repeat(labelLength))));
+    for (const line of rendered.lines) assert.ok(displayWidth(line) <= 74);
+    assert.equal(rendered.lines.slice(3, -1).join(""), rendered.argLines.join(""), "wrapping must preserve every argument character");
+    assert.equal(renderApprovalMessage("db.mutate", args, { serverLabel: "s".repeat(labelLength + 1) }).ok, false);
+  }
+  const wide = renderApprovalMessage("db.mutate", {}, { serverLabel: "db", terminalWidth: 240 });
+  assert.ok(wide.ok, wide.reason);
+  assert.ok(wide.lines[0].includes(wide.scopeLine), "mandatory fields pack together when width permits");
 });
 
 // The current Scope line has one column of headroom in the 74-column envelope.

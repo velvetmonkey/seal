@@ -1,16 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Claude Code 2.1.251 paints three message lines, then folds the rest, and
-// separately paints the approve schema description. Put tool and argument
-// values first; retain all six-line-body information, including both boundary
-// lines, for clients that paint the whole message. The generic approval title
-// shares the tool line: it does not earn a painted slot of its own.
-//
-// Keep the seven-line total budget: the recorded fold provides no evidence
-// for increasing it. Folding two ceremony lines into the useful content frees
-// two argument lines without increasing either the vertical or width budget.
-// Configured routes share the first tool line with its first argument so the
-// route occupies line 2 without displacing any formerly painted field. Refuse
-// when that combined line cannot fit. Standalone rendering keeps its layout.
+// Configured-route approvals reserve the first three physical lines for all
+// mandatory fields. Arguments follow, losslessly wrapped, without consuming
+// that budget. Standalone approvals retain their existing complete-effect cap.
 // The measured usable width remains terminal width - 6. Never truncate.
 const { canonicalString } = require("./canonical.cjs");
 
@@ -49,6 +40,36 @@ function renderName(name) {
   return BARE_VALUE.test(name) ? name : escapeDisplay(JSON.stringify(name));
 }
 
+// Pack the complete mandatory set, backtracking when an early placement
+// would prevent a later field from fitting. No field has a fixed line number;
+// arguments never participate in this three-line feasibility decision.
+function packMandatory(fields, usable, lines = []) {
+  if (fields.length === 0) return lines;
+  const [field, ...rest] = fields;
+  for (let i = 0; i <= lines.length && i < 3; i++) {
+    const candidate = i < lines.length ? `${lines[i]}; ${field}` : field;
+    if (displayWidth(candidate) > usable) continue;
+    const next = [...lines];
+    next[i] = candidate;
+    const packed = packMandatory(rest, usable, next);
+    if (packed) return packed;
+  }
+  return null;
+}
+
+function wrapContent(text, usable) {
+  const lines = [];
+  let line = "", width = 0;
+  for (const ch of text) {
+    const size = displayWidth(ch);
+    if (width + size > usable) { lines.push(line); line = ""; width = 0; }
+    line += ch;
+    width += size;
+  }
+  lines.push(line);
+  return lines;
+}
+
 function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000, firstLine = "Approval required", selection, serverLabel } = {}) {
   if (typeof tool !== "string" || tool.length === 0) {
     return { ok: false, reason: "tool name is not a non-empty string" };
@@ -70,23 +91,33 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
   }
 
   const scopeLine = `Scope: ${SCOPE_RULE}; ${formatTtl(ttlMs)}.`;
-  const parts = [`Tool: ${renderName(tool)}; ${escapeDisplay(firstLine)}`, ...argLines, scopeLine, OUTSIDE_LINE];
-  if (serverLabel !== undefined) {
-    // Preserve every formerly painted field: combine tool/banner and the first
-    // argument, then use the freed slot for the route. The final width check
-    // refuses if combining would hide content; never push it below the fold.
-    parts.splice(0, 2, `${parts[0]}; ${argLines[0].trimStart()}`, renderServerLabel(serverLabel));
+  const routed = serverLabel !== undefined;
+  const mandatory = routed ? packMandatory([
+    `Tool: ${renderName(tool)}`,
+    escapeDisplay(firstLine),
+    renderServerLabel(serverLabel),
+    scopeLine,
+  ], usable) : null;
+  if (routed && !mandatory) {
+    return { ok: false, reason: `mandatory approval fields do not fit within three lines of ${usable} columns; interactive approval is refused rather than truncated` };
   }
+  const parts = routed
+    ? [...mandatory, ...argLines.flatMap((line) => wrapContent(line, usable)), ...wrapContent(OUTSIDE_LINE, usable)]
+    : [`Tool: ${renderName(tool)}; ${escapeDisplay(firstLine)}`, ...argLines, scopeLine, OUTSIDE_LINE];
   if (selection) {
     // Explicitly wrap the explanatory suffix before measuring the final text.
-    // Keep every character, including spaces; an overlong word still refuses.
+    // Keep every character, including spaces. Standalone rendering retains
+    // its word-based envelope; routed content can wrap within a long word.
     const suffix = `Selection predicate: ${escapeDisplay(selection.label)} (${escapeDisplay(selection.detail)})`;
-    let line = "";
-    for (const word of suffix.match(/\S+\s*/g) || []) {
-      if (line && displayWidth(line + word) > usable) { parts.push(line); line = ""; }
-      line += word;
+    if (routed) parts.push(...wrapContent(suffix, usable));
+    else {
+      let line = "";
+      for (const word of suffix.match(/\S+\s*/g) || []) {
+        if (line && displayWidth(line + word) > usable) { parts.push(line); line = ""; }
+        line += word;
+      }
+      parts.push(line);
     }
-    parts.push(line);
   }
   const message = parts.join("\n");
   const lines = message.split("\n");
@@ -97,7 +128,7 @@ function renderApprovalMessage(tool, args, { terminalWidth = 80, ttlMs = 120000,
     }
   }
   const physicalLineCount = message.split("\n").length;
-  if (physicalLineCount > MESSAGE_LINE_CAP) {
+  if (!routed && physicalLineCount > MESSAGE_LINE_CAP) {
     return {
       ok: false,
       reason: `the complete effect, scope and outside-Seal line need ${physicalLineCount} lines; Seal permits ${MESSAGE_LINE_CAP}; interactive approval is refused rather than truncated`,
