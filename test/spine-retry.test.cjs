@@ -890,7 +890,7 @@ test("a very long argument string is refused without taking down the protected s
   const receiptsBefore = blockedReceipts(dir);
   proxy.stdin.write(JSON.stringify({
     jsonrpc: "2.0", id: 1, method: "tools/call",
-    params: { name: "demo.mutate", arguments: { line: "x".repeat(100000) } },
+    params: { name: "demo.mutate", arguments: { line: "x".repeat(require("../contract/renderer.cjs").MESSAGE_CHARACTER_CAP) } },
   }) + "\n");
   const refused = await responseFor(1);
   assert.equal(refused.result.isError, true, JSON.stringify(refused));
