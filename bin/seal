@@ -203,6 +203,74 @@ function printReachabilityObservation(protection, cwd, env) {
   console.log("Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.");
 }
 
+// Coverage is an inventory of known routes, not a containment claim.  In
+// particular, a saved protect record is not enough: the wrapper must still be
+// owned by this tree and its lease must be live. This is inference, not a probe.
+function coverage() {
+  requireProtectSupportedPlatform();
+  const protection = require(path.join(ROOT, "spine", "protection.cjs"));
+  console.log("Coverage enumeration is not proven complete.");
+  let paths;
+  try { paths = protection.statePathsFor(process.cwd(), process.env); }
+  catch (error) {
+    console.log(`UNKNOWN selected MCP tools — protection records could not be enumerated: ${error.message}`);
+    coverageOutsideRoutes();
+    process.exitCode = 1;
+    return;
+  }
+  if (paths.length === 0) {
+    console.log("UNKNOWN selected MCP tools — no protected project record exists");
+  }
+  for (const statePath of paths) {
+    try {
+      const state = protection.readState(statePath);
+      const view = protection.protectionView(state, process.cwd(), process.env);
+      const tools = view.state === protection.STATES.UNPROTECTED ? [] : protection.protectedToolNames(view);
+      if (view.state === protection.STATES.ACTIVE && !coverageWrapperIsThisTree(view)) {
+        console.log(`UNKNOWN selected MCP tools on ${view.serverName}: ${tools.join(", ")} — wrapper command does not resolve to this Seal tree; run coverage from the wrapper installation or reinstall protection with this binary`);
+      } else if (view.state === protection.STATES.ACTIVE) {
+        console.log(`BROKERED selected MCP tools on ${view.serverName}: ${tools.join(", ")} — inferred from a live lease and an owned override resolving to this Seal tree; no refusal probe was run`);
+      } else {
+        console.log(`UNKNOWN selected MCP tools on ${view.serverName || "unnamed route"}: ${tools.join(", ") || "none"} — protection state is ${view.state}, not a live wrapper lease`);
+      }
+    } catch (error) {
+      console.log(`UNKNOWN selected MCP tools at ${statePath} — wrapper enforcement could not be established: ${error.message}`);
+      process.exitCode = 1;
+    }
+  }
+  coverageOutsideRoutes();
+}
+
+function coverageWrapperIsThisTree(view) {
+  const command = view.localOverride?.definition?.command;
+  // Protect installs an absolute executable path. Ambiguous PATH lookups or
+  // relative commands cannot establish which installation the client launches.
+  if (typeof command !== "string" || !path.isAbsolute(command)) return false;
+  try {
+    return fs.realpathSync(command) === fs.realpathSync(path.join(ROOT, "bin", "seal"));
+  } catch {
+    return false;
+  }
+}
+
+function coverageOutsideRoutes() {
+  // These four are deliberately named by protectionBoundary's existing
+  // "Not controlled" output.  The other routes stay UNKNOWN: absence of a
+  // record that Seal mediates them is not evidence that they cannot exist.
+  console.log('UNBROKERED direct shell — "Bash and subprocesses outside this MCP route"');
+  console.log('UNBROKERED spawned subprocesses — "Bash and subprocesses outside this MCP route"');
+  console.log('UNBROKERED alternate MCP endpoints — "other MCP servers not routed through this Seal wrapper"');
+  console.log('UNBROKERED direct resource access — "direct resource access outside this MCP route"');
+  console.log('UNBROKERED other clients — "other clients"');
+  console.log("UNKNOWN network");
+  console.log("UNKNOWN cached tool handles");
+  console.log("UNKNOWN in-process calls");
+  console.log("UNKNOWN autonomous background effects");
+  console.log("UNKNOWN non-tools/call methods");
+  console.log("UNKNOWN unselected tools/call methods");
+  console.log("UNKNOWN server-to-client requests (sampling/createMessage) — wrapper relays server output without filtering; downstream effects were not established");
+}
+
 function statusRecord(recordPath, readError) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let receiptDir;
@@ -572,6 +640,10 @@ async function main() {
   if (command === "recover") return recoverCommand(process.argv.slice(3));
   if (command === "receipts") return receiptCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
+  if (command === "coverage") {
+    if (process.argv.length > 3) { console.error("seal coverage takes no arguments"); process.exitCode = 2; return; }
+    return coverage();
+  }
   if (command === "status") {
     if (process.argv.length > 3) { console.error("seal status takes no arguments"); process.exitCode = 2; return; }
     return status();
@@ -597,6 +669,7 @@ function printHelp() {
   seal uninstall            preview and confirm removal of this installation
   seal doctor
       show approval-origin assumptions
+  seal coverage             report known mediated and unmediated routes for this deployment
   seal demo [--dir PATH]
       show one exact call run once and its replay blocked
   seal verify PATH [--pubkey HEX]
