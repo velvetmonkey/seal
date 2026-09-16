@@ -389,11 +389,8 @@ function spawnProxy(dir, dataFile, extra = {}) {
   ], { env: proxyEnv, stdio: ["pipe", "pipe", "pipe"] });
   const run = attach(proxy);
   const responses = [];
-  let buffered = "";
-  proxy.stdout.on("data", () => {
-    const chunk = run.out.slice(buffered.length);
-    buffered = run.out;
-    for (const line of chunk.split("\n")) if (line.trim()) responses.push(JSON.parse(line));
+  require("node:readline").createInterface({ input: proxy.stdout }).on("line", (line) => {
+    if (line.trim()) responses.push(JSON.parse(line));
   });
   const waitForFrame = (predicate, ms = 15000) => new Promise((resolve, reject) => {
     const started = Date.now();
@@ -879,11 +876,11 @@ for (const shape of [
   });
 }
 
-test("a very long argument string is refused without taking down the protected server", async (t) => {
+test("a very long argument string stays gated and wrapped without taking down the protected server", async (t) => {
   const dir = testTmpdir("seal-value-shape-long-string-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
-  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  const { proxy, run, requestFor, responseFor, responses } = spawnProxy(dir, dataFile);
   t.after(run.kill);
   initialize(proxy);
   await responseFor(90);
@@ -892,22 +889,29 @@ test("a very long argument string is refused without taking down the protected s
     jsonrpc: "2.0", id: 1, method: "tools/call",
     params: { name: "demo.mutate", arguments: { line: "x".repeat(100000) } },
   }) + "\n");
-  const refused = await responseFor(1);
-  assert.equal(refused.result.isError, true, JSON.stringify(refused));
-  assert.match(refused.result.content[0].text, /approval refused: unrenderable_effect/);
-  assert.equal(readCount(`${dataFile}.count`), "0");
+  const prompt = await requestFor("elicitation/create");
+  const lines = prompt.params.message.split("\n");
+  const { displayWidth, renderServerLabel } = require("../contract/renderer.cjs");
+  const painted = lines.slice(0, 3).join("\n");
+  for (const field of ["Tool: demo.mutate", "Approval required", renderServerLabel("demo"), "Scope:", "2 min."]) {
+    assert.ok(painted.includes(field), field);
+  }
+  for (const line of lines) assert.ok(displayWidth(line) <= 74);
+  const outside = lines.findIndex((line) => line.startsWith("Outside Seal:"));
+  assert.equal(lines.slice(3, outside).join(""), `  line: ${"x".repeat(100000)}`);
+  assert.equal(readCount(`${dataFile}.count`), "0", "long arguments still require human approval");
   assert.equal(proxy.exitCode, null, `proxy exited under long-string: ${run.err}`);
-  const receiptsAfterFault = blockedReceipts(dir);
-  assert.equal(
-    receiptsAfterFault.length,
-    receiptsBefore.length,
-    `kernel fault minted a receipt: ${JSON.stringify(receiptsAfterFault)}`,
-  );
-  assert.equal(
-    receiptsAfterFault.filter((body) => body.action || body.verdict || body.kernel_inputs || body.replay).length,
-    0,
-    "synthetic verdict fields present after a kernel fault with no kernel result",
-  );
+  assert.equal(blockedReceipts(dir).length, receiptsBefore.length, "offering approval must not fabricate a decision receipt");
+  answer(proxy, prompt, "decline");
+  const declined = await responseFor(1);
+  assert.equal(declined.result.isError, true);
+  assert.match(declined.result.content[0].text, /declined/);
+  assert.equal(readCount(`${dataFile}.count`), "0");
+  const receiptsAfterDecline = blockedReceipts(dir);
+  assert.equal(receiptsAfterDecline.length, receiptsBefore.length,
+    "the oversized kernel input must not fabricate a receipt when the kernel produces no result");
+  assert.equal(receiptsAfterDecline.filter((body) => body.action || body.verdict || body.kernel_inputs || body.replay).length, 0);
+  responses.length = 0;
   proxy.stdin.write(JSON.stringify({ ...callParams("after long-string"), id: 2 }) + "\n");
   const elicitation = await requestFor("elicitation/create");
   answer(proxy, elicitation, "accept", { approve: true });
@@ -1430,7 +1434,11 @@ for (const mode of ["omitted", "explicit empty", "unguarded omitted"]) {
       const offered = await waitFor(frame => frame.method === "elicitation/create" || frame.id === 1);
       assert.equal(calls().length, 0, "child must not execute before approval");
       assert.equal(offered.method, "elicitation/create", `approval not offered; child calls ${calls().length}: ${JSON.stringify(offered)}`);
-      assert.match(offered.params.message, /Tool: flush; Approval required\n  \(none\)\n/);
+      const lines = offered.params.message.split("\n");
+      assert.equal(lines[0], "Tool: flush; Approval required");
+      assert.equal(lines[1], "Server (configured route, identity not authenticated): unknown");
+      assert.equal(lines[2], "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
+      assert.equal(lines[3], "  (none)");
       assert.deepEqual(renderedArgs, [{}]);
       send({ id: offered.id, result: { action: "accept", content: { approve: true } } });
     }
