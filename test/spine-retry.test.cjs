@@ -752,34 +752,41 @@ for (const action of ["decline", "cancel"]) test(`real elicitation ${action} ref
   assert.equal(await run.exit, 0, run.err);
 });
 
-test("a non-integer argument is refused without taking down the protected server", async (t) => {
+for (const [label, argument] of [
+  ["decimal", 1.5],
+  ["nested decimal", { nested: 1.5 }],
+  ["decimal array", [1.5, 2.5]],
+  ["scientific notation", 1.2345678901234567e-6],
+]) test(`a ${label} argument is approved once and recorded as a number`, async (t) => {
   const dir = testTmpdir("seal-decimal-arg-");
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
-  const { proxy, run, requestFor, responseFor } = spawnProxy(dir, dataFile);
+  const { proxy, run, requestFor, responseFor, responses } = spawnProxy(dir, dataFile);
   t.after(run.kill);
   initialize(proxy);
   await responseFor(90);
 
   proxy.stdin.write(JSON.stringify({
     jsonrpc: "2.0", id: 1, method: "tools/call",
-    params: { name: "demo.mutate", arguments: { line: 1.5 } },
+    params: { name: "demo.mutate", arguments: { line: argument } },
   }) + "\n");
-  const refused = await responseFor(1);
-  assert.equal(refused.result.isError, true);
-  assert.match(refused.result.content[0].text, /approval refused: unrenderable_effect/);
-  assert.match(refused.result.content[0].text, /no canonical form/);
+  const decimalApproval = await requestFor("elicitation/create");
   assert.equal(readCount(`${dataFile}.count`), "0");
-  assert.equal(proxy.exitCode, null, `proxy exited under 1.5: ${run.err}`);
-  const malformed = fs.readdirSync(path.join(dir, "receipts"))
+  answer(proxy, decimalApproval, "accept", { approve: true });
+  const allowed = await responseFor(1);
+  assert.ok(!allowed.result.isError, JSON.stringify(allowed));
+  assert.equal(readCount(`${dataFile}.count`), "1");
+  const receipt = fs.readdirSync(path.join(dir, "receipts"))
     .map((name) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", name), "utf8")))
-    .find((body) => body.tool === "<malformed>");
-  assert.equal(malformed && malformed.action, "BLOCK");
+    .find((body) => body.action === "ALLOW");
+  assert.deepEqual(receipt.arguments, { line: argument });
+  responses.length = 0;
+  answer(proxy, decimalApproval, "accept", { approve: true });
 
   proxy.stdin.write(JSON.stringify({ ...callParams("after decimal"), id: 2 }) + "\n");
   const elicitation = await requestFor("elicitation/create");
   assert.match(elicitation.id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
-  assert.equal(readCount(`${dataFile}.count`), "0");
+  assert.equal(readCount(`${dataFile}.count`), "1");
 
   proxy.stdin.write(JSON.stringify({ ...callParams("must stay blocked", {
     requestState: `seal-rs1.${"ab".repeat(32)}`,
@@ -788,7 +795,7 @@ test("a non-integer argument is refused without taking down the protected server
   const blocked = await responseFor(3);
   assert.equal(blocked.result.isError, true);
   assert.match(blocked.result.content[0].text, /response_malformed/);
-  assert.equal(readCount(`${dataFile}.count`), "0");
+  assert.equal(readCount(`${dataFile}.count`), "1");
   assert.equal(proxy.exitCode, null, `proxy exited after the gated follow-up: ${run.err}`);
 
   proxy.stdin.end();
@@ -842,27 +849,7 @@ for (const shape of [
         params: { name: "demo.mutate", arguments: { line: Number.MAX_SAFE_INTEGER + 1 } },
       }) + "\n");
     },
-    pattern: /integer outside the safe canonical range/,
-  },
-  {
-    label: "nested-decimal",
-    write(proxy) {
-      proxy.stdin.write(JSON.stringify({
-        jsonrpc: "2.0", id: 1, method: "tools/call",
-        params: { name: "demo.mutate", arguments: { line: { nested: 1.5 } } },
-      }) + "\n");
-    },
-    pattern: /no canonical form/,
-  },
-  {
-    label: "decimal-array",
-    write(proxy) {
-      proxy.stdin.write(JSON.stringify({
-        jsonrpc: "2.0", id: 1, method: "tools/call",
-        params: { name: "demo.mutate", arguments: { line: [1.5, 2.5] } },
-      }) + "\n");
-    },
-    pattern: /no canonical form/,
+    pattern: /number outside the safe canonical range/,
   },
   {
     label: "nonfinite-1e400",
