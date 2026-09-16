@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
@@ -109,6 +109,9 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
       params: { protocolVersion: "2025-06-18", capabilities: { elicitation: {} } },
     })}\n`);
     await initialized;
+    const active = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+    assert.equal(active.state, "ACTIVE");
+    assert.equal(active.lease.pid, proxy.pid);
     const response = waitForMethod(proxy.stdout, "elicitation/create");
     proxy.stdin.write(`${JSON.stringify({
       jsonrpc: "2.0",
@@ -117,6 +120,11 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
       params: { name: "demo.mutate", arguments: { line: "receipt-key-control" } },
     })}\n`);
     assert.match((await response).id, /^seal-elicitation\/v1\.[0-9a-f]{64}$/);
+    const issued = fs.readFileSync(active.storePath, "utf8").trim().split("\n").map(JSON.parse).find((event) => event.type === "issued");
+    assert.ok(issued);
+    assert.equal(issued.project_id, active.projectId);
+    assert.equal(issued.server_id, active.serverName);
+    console.log(JSON.stringify({ case: "valid identity success", state: active.state, project_id: issued.project_id, server_id: issued.server_id }));
   } finally {
     proxy.stdin.end();
     await new Promise((resolve) => proxy.once("close", resolve));
@@ -144,6 +152,97 @@ test("protected-path receipts carry the durable signer through proxy-cli's enume
   assert.match(checked.stdout, /Signature and bindings   VALID/);
   assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   assert.match(checked.stdout, /Event occurrence         NOT ESTABLISHED/);
+});
+
+for (const [name, identity] of [
+  ["empty serverName", { projectId: "plant-project-313", serverName: "" }],
+  ["legacy identity absent", {}],
+  ["projectId absent", { serverName: "db" }],
+  ["empty projectId", { projectId: "", serverName: "db" }],
+  ["serverName absent", { projectId: "plant-project-313" }],
+]) {
+  test(`proxy-cli refuses ${name} before startup side effects`, () => {
+    const ctx = fixture();
+    const state = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+    delete state.projectId;
+    delete state.serverName;
+    Object.assign(state, identity);
+    fs.writeFileSync(ctx.statePath, JSON.stringify(state));
+    const before = fs.readFileSync(ctx.statePath, "utf8");
+    const result = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", ctx.statePath], {
+      cwd: ctx.project, env: ctx.env, encoding: "utf8", timeout: 10000,
+    });
+    const observed = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+    console.log(JSON.stringify({ case: name, exit: result.status, stderr: result.stderr.trim(), state: observed.state, lease: observed.lease, unchanged: fs.readFileSync(ctx.statePath, "utf8") === before }));
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /seal __proxy: identity_absent:/);
+    assert.doesNotMatch(result.stderr, /drifted|SIGNING KEY CREATED/);
+    assert.equal(fs.readFileSync(ctx.statePath, "utf8"), before, "refusal must not mutate state or commit a lease");
+    assert.equal(fs.readFileSync(state.storePath, "utf8"), "");
+    assert.equal(fs.existsSync(receiptKeyPaths(ctx.env).directory), false);
+    assert.equal(fs.existsSync(ctx.receiptsDir), false);
+  });
+}
+
+for (const discoveryFails of [false, true]) {
+  test(`proxy-cli rechecks identity after discovery ${discoveryFails ? "fails" : "succeeds"}`, () => {
+    const ctx = fixture();
+    const state = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+    // A real discovery child removes projectId while activation is outside
+    // the lock. Both lease commit and failure cleanup must validate again.
+    const script = `
+      const fs = require("node:fs");
+      require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
+        const request = JSON.parse(line);
+        if (request.method === "initialize") {
+          console.log(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "identity-race", version: "1" } } }));
+        } else if (request.method === "tools/list") {
+          const statePath = process.argv[1];
+          const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+          delete state.projectId;
+          fs.writeFileSync(statePath, JSON.stringify(state));
+          if (${discoveryFails}) process.exit(1);
+          console.log(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { tools: [{ name: "demo.mutate", inputSchema: { type: "object" } }] } }));
+        }
+      });
+    `;
+    fs.writeFileSync(path.join(ctx.project, ".mcp.json"), JSON.stringify({ mcpServers: { db: { command: process.execPath, args: ["-e", script, ctx.statePath] } } }));
+    const observed = readProjectServer(ctx.project, "db");
+    Object.assign(state, { childArgv: observed.childArgv, projectServerDigest: observed.serverDigest });
+    fs.writeFileSync(ctx.statePath, JSON.stringify(state));
+    const result = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", ctx.statePath], {
+      cwd: ctx.project, env: ctx.env, encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /seal __proxy: identity_absent:/);
+    const after = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+    const expected = { ...state };
+    delete expected.projectId;
+    assert.deepEqual(after, expected, "activation must not mutate the identity-less record");
+    assert.equal(after.lease, null);
+    assert.equal(fs.readFileSync(state.storePath, "utf8"), "");
+    assert.equal(fs.existsSync(receiptKeyPaths(ctx.env).directory), false);
+  });
+}
+
+test("proxy-cli with valid identity still refuses genuine route drift", () => {
+  const ctx = fixture();
+  const state = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+  const configPath = path.join(ctx.project, ".mcp.json");
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  config.mcpServers.db.args.push("changed-route");
+  fs.writeFileSync(configPath, JSON.stringify(config));
+  const result = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", ctx.statePath], {
+    cwd: ctx.project, env: ctx.env, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /seal __proxy: drifted:/);
+  assert.doesNotMatch(result.stderr, /identity_absent/);
+  const after = JSON.parse(fs.readFileSync(ctx.statePath, "utf8"));
+  assert.equal(after.state, "DRIFTED");
+  assert.equal(after.lease, null);
+  assert.equal(fs.readFileSync(state.storePath, "utf8"), "");
+  console.log(JSON.stringify({ case: "valid identity, real drift", exit: result.status, stderr: result.stderr.trim(), state: after.state, lease: after.lease }));
 });
 
 test("proxy threads distinct route identities into both approval journals", async (t) => {
