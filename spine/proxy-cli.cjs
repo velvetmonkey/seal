@@ -8,7 +8,7 @@ const readline = require("node:readline");
 const { createRuntimeTreeCheck } = require("./integrity.cjs");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
-const { activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
+const { readState, activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
 const { requireProtectSupportedPlatform } = require("./platform.cjs");
 const { printKernelTiming } = require("./presentation.cjs");
 
@@ -29,6 +29,14 @@ function parseArgs(argv) {
     i += 2;
   }
   return { options, childArgv: [] };
+}
+
+function requireProtectedIdentity(state) {
+  if (!state) throw new ProtectionError("state_broken", "protection state is absent");
+  if (typeof state.projectId !== "string" || state.projectId.length === 0 ||
+      typeof state.serverName !== "string" || state.serverName.length === 0) {
+    throw new ProtectionError("identity_absent", "protected state must name both projectId and serverName before proxy startup");
+  }
 }
 
 async function run(argv) {
@@ -75,7 +83,6 @@ async function run(argv) {
     void shutdown(1);
   }
 
-  requireProtectSupportedPlatform();
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -85,6 +92,19 @@ async function run(argv) {
     await shutdown(2); return;
   }
   const { options, childArgv } = parsed;
+
+  // Reading the invocation and its state is the only work before identity
+  // validation. In particular, do not acquire locks, discover tools, create
+  // a store or signer, or mutate drift/lease state for a legacy identity.
+  if (options.protectState) {
+    try {
+      requireProtectedIdentity(readState(options.protectState));
+    } catch (error) {
+      process.stderr.write(`seal __proxy: ${error instanceof ProtectionError ? error.code : "startup failed"}: ${error.message}\n`);
+      await shutdown(1); return;
+    }
+  }
+  requireProtectSupportedPlatform();
 
   if (options.initStore) {
     if (!options.storePath) { process.stderr.write("seal __proxy: --init-store needs --store FILE\n"); await shutdown(2); return; }
@@ -106,11 +126,13 @@ async function run(argv) {
   let proxyOptions = { ...options, childArgv };
   if (options.protectState) {
     try {
-      const state = await activationLease(options.protectState, process.env);
+      const state = await activationLease(options.protectState, process.env, requireProtectedIdentity);
       const signer = loadReceiptSigner(process.env, (message) => process.stderr.write(message));
       if (state.lockRecovered) process.stderr.write("seal __proxy: recovered stale project lock\n");
       proxyOptions = {
         guardSelections: protectedToolSelections(state),
+        projectId: state.projectId,
+        serverName: state.serverName,
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
