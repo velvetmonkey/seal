@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
@@ -54,3 +54,117 @@ test("the demo server advertises append and erase with real file effects", async
     await new Promise((resolve) => child.once("exit", resolve));
   }
 });
+
+// Exercise the private persistence boundaries without expanding the server API.
+const vm = require("node:vm");
+const { createRequire } = require("node:module");
+const serverPath = path.join(__dirname, "..", "spine", "demo-server.cjs");
+const serverScope = { require: createRequire(serverPath), module: { exports: {} }, Buffer, process };
+vm.runInNewContext(
+  fs.readFileSync(serverPath, "utf8") + "\nmodule.exports = { writeFileSyncedTo, appendSyncedTo };",
+  serverScope,
+  { filename: serverPath },
+);
+
+for (const [name, write] of Object.entries(serverScope.module.exports)) {
+  for (const kind of ["string", "Buffer"]) {
+    test(`${name} preserves ${kind} bytes and ENOSPC but refuses real partial writes`, (t) => {
+      const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-write-"));
+      const file = path.join(root, "data");
+      const text = "éclair\n";
+      const data = kind === "string" ? text : Buffer.from(text);
+      const bytes = Buffer.from(text);
+      const prefix = name === "appendSyncedTo" ? Buffer.from("existing\n") : Buffer.alloc(0);
+      const reset = () => fs.writeFileSync(file, prefix);
+
+      reset();
+      const successWrite = t.mock.method(fs, "writeSync");
+      const successSync = t.mock.method(fs, "fsyncSync");
+      const successClose = t.mock.method(fs, "closeSync");
+      write(file, data);
+      assert.equal(successWrite.mock.callCount(), 1);
+      assert.equal(successSync.mock.callCount(), 1);
+      assert.equal(successClose.mock.callCount(), 1);
+      t.mock.restoreAll();
+      assert.deepEqual(fs.readFileSync(file), Buffer.concat([prefix, bytes]));
+
+      const full = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+      t.mock.method(fs, "writeSync", () => { throw full; });
+      try {
+        assert.throws(() => write(file, data), (error) => error === full);
+      } finally {
+        t.mock.restoreAll();
+      }
+
+      fs.writeFileSync(file, "existing\n");
+      const originalWrite = fs.writeSync;
+      let offered;
+      let fdUsed;
+      let error;
+      t.mock.method(fs, "writeSync", (fd, input) => {
+        fdUsed = fd;
+        offered = Buffer.from(input);
+        return originalWrite(fd, offered, 0, offered.length - 1);
+      });
+      const sync = t.mock.method(fs, "fsyncSync");
+      try {
+        try { write(file, data); } catch (caught) { error = caught; }
+        assert.deepEqual(offered, bytes);
+        if (name === "appendSyncedTo") {
+          assert.equal(fs.readFileSync(file, "utf8"), "existing\n");
+        } else {
+          assert.throws(() => fs.readFileSync(file), { code: "ENOENT" });
+        }
+        assert.equal(error?.code, "EIO", `${name} returned success after a real partial ${kind} write`);
+        assert.equal(error.message, `incomplete write: wrote ${bytes.length - 1} of ${bytes.length} bytes`);
+        assert.equal(sync.mock.callCount(), name === "appendSyncedTo" ? 1 : 0, "only append rollback must fsync after failure");
+        assert.throws(() => fs.fstatSync(fdUsed), { code: "EBADF" }, "the descriptor must still close");
+      } finally {
+        t.mock.restoreAll();
+      }
+      if (name === "appendSyncedTo") {
+        write(file, "next\n");
+        assert.equal(fs.readFileSync(file, "utf8"), "existing\nnext\n");
+      }
+    });
+  }
+}
+
+// Run the real tool handlers with a real short write in a child, so an
+// uncaught persistence error cannot be confused with a successful RPC reply.
+for (const tool of ["demo.mutate", "demo.erase"]) {
+  test(`${tool} leaves no accepted partial record after a real short write`, () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-handler-"));
+    const file = path.join(root, "data");
+    const child = spawnSync(process.execPath, ["-e", `
+      const fs = require("node:fs");
+      const write = fs.writeSync;
+      fs.writeSync = (fd, bytes, ...args) => {
+        const target = ${JSON.stringify(tool)} === "demo.erase" ? "1\\n" : "abcdef\\n";
+        if (Buffer.isBuffer(bytes) && bytes.toString() === target) {
+          return write(fd, bytes, 0, bytes.length - 1);
+        }
+        return write(fd, bytes, ...args);
+      };
+      require(${JSON.stringify(serverPath)}).run(${JSON.stringify(file)});
+    `], {
+      input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: tool, arguments: { line: "abcdef" } } }) + "\n",
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    assert.equal(child.status, 1, child.stderr);
+    assert.match(child.stderr, /incomplete write: wrote/);
+    assert.equal(child.stdout, "");
+    assert.equal(fs.readFileSync(file, "utf8"), "");
+    if (tool === "demo.erase") {
+      // Execute the downstream reader itself, including its normal trim().
+      const demoPath = path.join(__dirname, "..", "spine", "demo.cjs");
+      const scope = { require: createRequire(demoPath), module: { exports: {} }, process };
+      vm.runInNewContext(fs.readFileSync(demoPath, "utf8") + "\nmodule.exports = { readCount };", scope);
+      assert.throws(() => scope.module.exports.readCount(`${file}.count`), { code: "ENOENT" });
+    } else {
+      assert.equal(fs.readFileSync(`${file}.count`, "utf8"), "0\n");
+    }
+  });
+}
