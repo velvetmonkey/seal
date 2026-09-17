@@ -324,3 +324,7 @@
 {"id":"cli-help-round2-28","kind":"emitted","text":"inspect its text to judge protection.","sha256":"b2f46654d813e473bce0d6f0bfab7ecd25f8e0a4f79a1d2173d3cfdac938ae22"}
 {"id":"cli-help-round2-29","kind":"emitted","text":"Seal supports install, demo, receipt checking and Protect on Linux x86-64","sha256":"b06b13d5500eb49c2519c367a51a3205929b71d65186d526ba0a5d4dda5d7d97"}
 {"id":"cli-help-round2-30","kind":"emitted","text":"and macOS x64/arm64.","sha256":"49ab5aff77ab78ac59c291a646397739e570794df01cd07c442945b5e739e82a"}
+{"id":"approval-string-100","kind":"emitted","text":"amount: \"100\"","sha256":"83353043bc1e7f669f3e847f672959baa14c62853a4d659763452fe7f7e56fc1"}
+{"id":"approval-newline-key","kind":"emitted","text":"\"k\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\": 1","sha256":"874862dfe72451f8cdfb100705e5edd54623d898246e40f8cf2ac7c6809d6a2b"}
+{"id":"approval-escaped-tool","kind":"emitted","text":"Tool: \"demo\\u202emutate\"; Approval required","sha256":"d13f8b56c38984ebc476150d8b087ab7bb0f580596c388e39ccdf3195ff08946"}
+{"id":"approval-compact-arguments","kind":"emitted","text":"c: 3; café: \"first\\nsecond\"","sha256":"2b531a4bc252ae2adb57cf31f8b347fa5fc4d89a691b2097fc6c868997597b14"}
