@@ -700,3 +700,87 @@ test("status follows a wrapper installed from a child into its Claude project sc
     assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db"/);
   }
 });
+
+test("history shares the filename population and bounds hostile decision claims", async () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-history-hostile-"));
+  const population = require("../spine/receipt-population.cjs");
+  const record = (now, tool = "db.write", action = "ALLOW") => JSON.stringify({ seal_receipt: "v2", tool, now, verdict: action });
+  for (let i = 0; i < 3000; i++) {
+    // Repeated sequences deliberately remain separate files, not unique events.
+    fs.writeFileSync(path.join(root, `receipt-${i}-77-0001-ALLOW.json`),
+      i % 3 === 0 ? "{" : record(i % 3 === 1 ? Date.now() + 86400000 : i));
+  }
+  for (let i = 0; i < 20; i++) fs.writeFileSync(path.join(root, `receipt-bad-${i}.json`), "{}");
+  fs.writeFileSync(path.join(root, "unrelated"), "{}");
+  fs.writeFileSync(path.join(root, "receipt-4000-77-0002-BLOCK.json"), record(4000, "db.write", "BLOCK"));
+  const before = population.inspectReceiptDirectory(root);
+  const result = await population.query(root, { limit: 3, since: 2990, until: 4000, tool: "db.write" });
+  const out = result.join("\n");
+  assert.equal(before.receiptFiles.length, 3001);
+  assert.match(out, /Receipt files observed: 3001 /);
+  assert.match(out, /Receipt files rejected: 20 /);
+  assert.match(out, /Non-receipt files ignored: 1/);
+  assert.match(out, /Decision contents UNKNOWN: 2000; future timestamps: 1000/);
+  assert.match(out, /Matching decision claims observed: 5; ALLOW 4; BLOCK 1/);
+  assert.deepEqual(result.slice(-3), ['4000 BLOCK tool "db.write"', '2999 ALLOW tool "db.write"', '2996 ALLOW tool "db.write"']);
+  assert.doesNotMatch(out, /COMPLETE/);
+  assert.ok(Buffer.byteLength(out) < 2500);
+  // Cross the hard directory ceiling; no exact total may be asserted.
+  for (let i = 0; i < 7100; i++) fs.writeFileSync(path.join(root, `receipt-invalid-${i}`), "{}");
+  const capped = (await population.query(root)).join("\n");
+  assert.match(capped, /Receipt files observed: at least /);
+  assert.match(capped, /total population\/rejected\/ignored counts UNKNOWN/);
+  assert.match(capped, /entries 10000\/10000/);
+  assert.doesNotMatch(capped, /COMPLETE/);
+});
+
+test("history rejects unsafe content, bounds bytes, escapes text, and validates CLI filters", async () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-history-content-"));
+  const { query } = require("../spine/receipt-population.cjs");
+  const name = (i) => path.join(root, `receipt-1-77-${String(i).padStart(4, "0")}-ALLOW.json`);
+  fs.writeFileSync(name(1), JSON.stringify({ seal_receipt: "v2", tool: "COMPLETE\nforged", now: 1, verdict: "BLOCK" }));
+  fs.writeFileSync(name(2), '{"seal_receipt":"v2","tool":"x","now":1,"verdict":"BLOCK","verdict":"ALLOW"}');
+  fs.writeFileSync(name(3), " ".repeat(65537));
+  fs.symlinkSync(name(1), name(4));
+  require("node:child_process").execFileSync("mkfifo", [name(5)]);
+  // A FIFO is not part of the existing population; a symlink is, but cannot be read.
+  const out = (await query(root)).join("\n");
+  assert.match(out, /Receipt files observed: 4 /);
+  assert.match(out, /Decision contents UNKNOWN: 3/);
+  assert.match(out, /1 BLOCK tool "\\u0043OMPLETE\\nforged"/);
+  assert.doesNotMatch(out, /COMPLETE/);
+  for (const args of [["--limit", "101"], ["--since", "2", "--until", "1"], ["--limit", "1", "--limit", "2"], ["--since", "NaN"]]) {
+    assert.equal(run(["history", root, ...args], root).code, 1);
+  }
+  const filtered = run(["history", root, "--since", "0", "--until", "1", "--tool", "COMPLETE\nforged", "--limit", "1"], root);
+  assert.equal(filtered.code, 0);
+  assert.match(filtered.out, /Matching decision claims observed: 1; ALLOW 0; BLOCK 1/);
+  assert.doesNotMatch(filtered.out, /COMPLETE/);
+});
+
+test("history deletion and renumbering during reads cannot assert completeness", async () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-history-delete-"));
+  const { query } = require("../spine/receipt-population.cjs");
+  const names = [1, 3, 5].map((n) => path.join(root, `receipt-1-77-000${n}-ALLOW.json`));
+  for (const name of names) fs.writeFileSync(name, '{"seal_receipt":"v2","tool":"x","now":1,"verdict":"ALLOW"}');
+  const original = fs.openSync;
+  let removed = false;
+  fs.openSync = function(target, ...args) {
+    if (!removed && names.includes(target)) {
+      removed = true;
+      for (const name of names) fs.unlinkSync(name);
+      fs.writeFileSync(path.join(root, "receipt-1-77-0001-ALLOW.json"), '{"seal_receipt":"v2","tool":"x","now":1,"verdict":"BLOCK"}');
+    }
+    return original.call(fs, target, ...args);
+  };
+  let out;
+  try { out = (await query(root)).join("\n"); } finally { fs.openSync = original; }
+  assert.equal(removed, true);
+  assert.match(out, /Receipt files observed: 3 /);
+  assert.match(out, /Decision contents UNKNOWN: 2/);
+  assert.match(out, /Receipt completeness: UNKNOWN/);
+  assert.doesNotMatch(out, /COMPLETE/);
+  const after = (await query(root)).join("\n");
+  assert.match(after, /Receipt gaps found: 0/);
+  assert.match(after, /Receipt completeness: UNKNOWN/);
+});
