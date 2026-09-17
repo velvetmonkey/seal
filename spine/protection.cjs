@@ -581,6 +581,8 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
   return new Promise((resolve, reject) => {
     const child = spawn(childArgv[0], childArgv.slice(1), {
       cwd: projectRoot,
+      // A private POSIX process group lets cleanup reach inherited-pipe descendants.
+      detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"],
       env: childEnv ? { ...env, ...childEnv } : env,
     });
@@ -597,21 +599,66 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
     const stop = () => {
       clearTimeout(timer);
       return new Promise((resolve) => {
-        if (closed) return resolve();
+        const group = process.platform !== "win32" && Number.isInteger(child.pid) ? -child.pid : null;
+        const groupAlive = () => {
+          if (group === null) return false;
+          try { process.kill(group, 0); return true; }
+          catch (error) { return error.code !== "ESRCH"; }
+        };
+        const signalGroup = (signal) => {
+          if (group !== null) { try { process.kill(group, signal); } catch {} }
+        };
+        let done = false;
+        let escalated = false;
         let graceTimer;
-        child.once("close", () => {
+        let deadline;
+        let poll;
+        const finish = () => {
+          if (done) return;
+          done = true;
           clearTimeout(graceTimer);
+          clearTimeout(deadline);
+          clearInterval(poll);
+          child.removeListener("exit", onExit);
+          child.removeListener("close", check);
+          // Neither inherited pipes nor an unreapable child may own our wait.
+          lines.close();
+          child.stdin.destroy();
+          child.stdout.destroy();
+          child.stderr.destroy();
+          child.unref();
           resolve();
-        });
-        try { child.stdin.end(); } catch {}
-        if (child.exitCode !== null || child.signalCode !== null) return;
-        try { child.kill("SIGTERM"); } catch {}
-        graceTimer = setTimeout(() => {
+        };
+        const check = () => {
+          if (closed && !groupAlive()) finish();
+        };
+        const onExit = () => {
+          // Preserve the direct child's single TERM; once it exits, TERM any
+          // remaining group members even if they no longer hold our pipes.
+          if (!escalated) signalGroup("SIGTERM");
+          check();
+        };
+        const kill = () => {
+          escalated = true;
           if (child.exitCode === null && child.signalCode === null) {
             try { child.kill("SIGKILL"); } catch {}
           }
-        }, 2000);
-        graceTimer.unref();
+          signalGroup("SIGKILL");
+        };
+        child.once("exit", onExit);
+        child.once("close", check);
+        // Reserve the last 50ms of the existing 2000ms budget for reaping.
+        // The deadline stays referenced and never depends on close or exit.
+        graceTimer = setTimeout(kill, 1950);
+        deadline = setTimeout(() => { kill(); finish(); }, 2000);
+        poll = setInterval(check, 20);
+        try { child.stdin.end(); } catch {}
+        if (child.exitCode === null && child.signalCode === null && !closed) {
+          try { child.kill("SIGTERM"); } catch {}
+        } else {
+          onExit();
+        }
+        check();
       });
     };
     const fail = (code, message) => {
