@@ -487,7 +487,7 @@ test("mixedselect status, repeated protect, unprotect and archive preserve lifec
 
 // Observe real child signals while holding natural-exit output until exit has
 // been observed, making the already-exited cleanup race deterministic.
-function observedDiscovery(t, { natural = false, inputFailure = false } = {}) {
+function observedDiscovery(t, { natural = false, inputFailure = false, suppressClose = false } = {}) {
   const Module = require("node:module");
   const filename = path.join(ROOT, "spine/protection.cjs");
   const loaded = new Module(filename, module);
@@ -498,8 +498,14 @@ function observedDiscovery(t, { natural = false, inputFailure = false } = {}) {
     if (id !== "node:child_process") return require(id.startsWith(".") ? path.resolve(path.dirname(filename), id) : id);
     return { ...require(id), spawn(...args) {
       const child = spawn(...args);
+      if (suppressClose) {
+        const emit = child.emit.bind(child);
+        child.emit = (event, ...args) => event === "close" ? false : emit(event, ...args);
+      }
       const record = { child, signals: [], closed: false };
       children.push(record);
+      const end = child.stdin.end.bind(child.stdin);
+      child.stdin.end = (...args) => { record.cleanupStarted = Date.now(); return end(...args); };
       const kill = child.kill.bind(child);
       child.kill = (signal) => { record.signals.push({ signal, at: Date.now() }); return kill(signal); };
       child.once("close", () => { record.closed = true; });
@@ -587,4 +593,70 @@ test("a discovery grace period does not delay an unrelated discovery", async (t)
   assert.deepEqual(fast, ["db.read"]);
   assert.equal(slowDone, false);
   assert.deepEqual(await slow, fast);
+});
+
+
+// All descendants install their handlers before discovery can finish. Recording
+// each PID lets the probe verify the tree, rather than just the direct child.
+for (const mode of ["inherited-pipes", "great-grandchild", "closed-pipes"]) {
+  test(`discovery cleans its process group: ${mode}`, async (t) => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-discovery-tree-"));
+    const count = mode === "great-grandchild" ? 2 : 1;
+    const files = Array.from({ length: count }, (_, i) => path.join(root, `pid-${i}`));
+    const descendant = (index) => `
+      process.on('SIGTERM', () => {});
+      setInterval(() => {}, 1000);
+      ${index + 1 < count ? `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant(index + 1))}], {stdio:'inherit'});` : ""}
+      require('node:fs').writeFileSync(${JSON.stringify(files[index])}, String(process.pid));
+    `;
+    t.after(() => {
+      for (const file of files) {
+        if (fs.existsSync(file)) { try { process.kill(Number(fs.readFileSync(file)), "SIGKILL"); } catch {} }
+      }
+    });
+    const source = `
+      process.on('SIGTERM', () => {});
+      setInterval(() => {}, 1000);
+      const fs = require('node:fs');
+      require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant(0))}], {stdio:${JSON.stringify(mode === "closed-pipes" ? "ignore" : "inherit")}});
+      require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+        const frame = JSON.parse(line);
+        if (frame.method === 'initialize') console.log(JSON.stringify({id:1,result:{}}));
+        if (frame.method === 'tools/list') {
+          const ready = setInterval(() => {
+            if (!${JSON.stringify(files)}.every(file => fs.existsSync(file))) return;
+            clearInterval(ready);
+            console.log(JSON.stringify({id:2,result:{tools:[{name:'db.read'}]}}));
+            ${mode === "closed-pipes" ? "process.exit(0);" : ""}
+          }, 5);
+        }
+      });
+    `;
+    const observed = observedDiscovery(t);
+    const started = Date.now();
+    assert.deepEqual(await observed.listServerTools({ childArgv: [process.execPath, "-e", source], projectRoot: ROOT, timeoutMs: 1000 }), ["db.read"]);
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 2400, `discovery exceeded cleanup budget: ${elapsed}ms`);
+    const cleanupMs = Date.now() - observed.children[0].cleanupStarted;
+    assert.ok(cleanupMs < 2200, `cleanup deadline exceeded: ${cleanupMs}ms`);
+    const pids = [observed.children[0].child.pid, ...files.map(file => Number(fs.readFileSync(file)))];
+    const ps = spawnSync("ps", ["-p", pids.join(","), "-o", "pid=,ppid=,stat=,args="], { encoding: "utf8" });
+    // A killed orphan can briefly be a zombie pending the host init's reap;
+    // zombies cannot execute or keep inherited pipe descriptors open.
+    assert.ok(ps.status === 0 || ps.status === 1, ps.stderr);
+    assert.ok(ps.stdout.trim().split("\n").filter(Boolean).every(line => /^\s*\d+\s+\d+\s+Z/.test(line)), `live descendant survived: ${ps.stdout}`);
+    t.diagnostic(JSON.stringify({ mode, elapsed, cleanupMs, pids, psStatus: ps.status, ps: ps.stdout.trim() }));
+  });
+}
+
+test("discovery deadline settles without a close event", async (t) => {
+  const observed = observedDiscovery(t, { suppressClose: true });
+  const started = Date.now();
+  assert.deepEqual(await observed.listServerTools({ childArgv: [process.execPath, "-e", discoveryChild("ignore")], projectRoot: ROOT }), ["db.read"]);
+  const elapsed = Date.now() - started;
+  assert.equal(observed.children[0].closed, false);
+  assert.ok(elapsed >= 2000 && elapsed < 2400, `deadline took ${elapsed}ms`);
+  const ps = spawnSync("ps", ["-p", String(observed.children[0].child.pid), "-o", "pid="], { encoding: "utf8" });
+  assert.equal(ps.status, 1, ps.stdout);
+  t.diagnostic(JSON.stringify({ mode: "no-close-event", elapsed, psStatus: ps.status }));
 });
