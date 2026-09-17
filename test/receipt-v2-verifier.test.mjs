@@ -208,9 +208,14 @@ test("number token and parsed-value controls match the specification", () => {
     assert.equal(parsed.now, 1000);
     console.log(`NUMBER ${token}: READ GREEN -> parsed 1000`);
   }
-  assert.doesNotThrow(() => read('{"now":1.5}'));
-  assert.throws(() => canonical({ now: 1.5 }), (e) => e.code === "number_not_canonical");
-  console.log("NUMBER 1.5: READ GREEN -> canonical REFUSE (number_not_canonical)");
+  assert.equal(canonical(read('{"amount":1.5000,"rate":1e-7}')), '{"amount":1.5,"rate":1e-7}');
+  console.log("NUMBER 1.5: READ GREEN -> canonical GREEN (numeric 1.5)");
+});
+
+test("decimal argument support does not relax the integer timestamp field", async () => {
+  const r = resign({ ...envelope(), now: 1.5 });
+  await assert.rejects(() => verify(text(r), { publicKeyHex: pub }),
+    (error) => error.code === "invalid_receipt" && /now must be a non-negative safe integer/.test(error.message));
 });
 
 test("Unicode boundary controls match the specification", () => {

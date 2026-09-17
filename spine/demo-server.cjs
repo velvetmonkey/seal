@@ -8,6 +8,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
+const { writeCompleteSync } = require("./write.cjs");
 
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
@@ -15,8 +16,17 @@ const ERASE_TOOL = "demo.erase";
 function writeFileSyncedTo(filePath, text) {
   const fd = fs.openSync(filePath, "w", 0o600);
   try {
-    fs.writeSync(fd, text);
+    writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
+  } catch (error) {
+    // A failed replacement is not evidence that a later reader may accept.
+    // Match receipt emission: remove the incomplete file before propagating.
+    try {
+      fs.unlinkSync(filePath);
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "demo replacement and cleanup failed");
+    }
+    throw error;
   } finally {
     fs.closeSync(fd);
   }
@@ -25,8 +35,21 @@ function writeFileSyncedTo(filePath, text) {
 function appendSyncedTo(filePath, text) {
   const fd = fs.openSync(filePath, "a", 0o600);
   try {
-    fs.writeSync(fd, text);
-    fs.fsyncSync(fd);
+    const before = fs.fstatSync(fd).size;
+    try {
+      writeCompleteSync(fd, text);
+      fs.fsyncSync(fd);
+    } catch (error) {
+      // Like journal append, restore the complete prefix and persist rollback.
+      // The demo server handles these writes synchronously in one process.
+      try {
+        fs.ftruncateSync(fd, before);
+        fs.fsyncSync(fd);
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], "demo append and rollback failed");
+      }
+      throw error;
+    }
   } finally {
     fs.closeSync(fd);
   }

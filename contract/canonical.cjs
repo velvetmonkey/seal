@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Canonical bytes for the approval contract: compact JSON, keys sorted by
-// UTF-8 byte order, safe integers only, no undefined/NaN/Infinity. The
+// UTF-8 byte order, finite numbers within the safe integer magnitude range,
+// no undefined/NaN/Infinity. Decimals retain their parsed JSON numeric value. The
 // contract binds arguments by the SHA-256 of this rendering, so "identical
 // arguments" means identical canonical bytes, nothing looser.
 //
@@ -16,8 +17,7 @@ function encode(value) {
   if (value === false) return "false";
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new Error("non-finite number has no canonical form");
-    if (!Number.isInteger(value)) throw new Error("non-integer number has no canonical form in the contract");
-    if (value < -MAX_SAFE || value > MAX_SAFE) throw new Error("integer outside the safe canonical range");
+    if (value < -MAX_SAFE || value > MAX_SAFE) throw new Error("number outside the safe canonical range");
     if (Object.is(value, -0)) return "0";
     return String(value);
   }
