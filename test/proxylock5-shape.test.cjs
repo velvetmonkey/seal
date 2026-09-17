@@ -122,12 +122,23 @@ test("the common-spelling guard covers direct and optional process.kill", () => 
   }
 
   assert.deepEqual(destructures, [], "process.kill must not be extracted into an untracked alias");
-  assert.equal(references.length, 1, "there must be exactly one direct process.kill primitive in product source");
-  assert.equal(references[0].file, protectionPath, "the process.kill primitive must remain in protection.cjs");
+  // discoverytermtree round 3 explicitly changes the single-primitive contract:
+  // detached sessions need tree SIGKILL as well as private-group control. Pin
+  // exactly these four sites; the lock-owner witness gate remains unchanged.
+  assert.equal(references.length, 4, "exactly the witnessed liveness and three discovery primitives are permitted");
   const protectionSource = withoutComments(fs.readFileSync(protectionPath, "utf8"));
-  const [livePidStart, livePidEnd] = functionRange(protectionSource, "livePid");
-  assert.ok(references[0].index > livePidStart && references[0].index < livePidEnd,
-    "the process.kill primitive must remain inside private livePid");
+  const permitted = [
+    ["livePid", /process\.kill\(pid, 0\)/],
+    ["discoveryGroupAlive", /process\.kill\(group, 0\)/],
+    ["signalDiscoveryGroup", /process\.kill\(group, signal\)/],
+    ["killDiscoveryDescendant", /process\.kill\(pid, "SIGKILL"\)/],
+  ];
+  for (const [name, spelling] of permitted) {
+    const [start, end] = functionRange(protectionSource, name);
+    const sites = references.filter(ref => ref.file === protectionPath && ref.index > start && ref.index < end);
+    assert.equal(sites.length, 1, `${name} must contain exactly its authorized primitive`);
+    assert.match(protectionSource.slice(start, end), spelling);
+  }
   assert.equal(rawProcessKillReferences("try { process?.kill(pid, 0); } catch {} ").length, 1,
     "the common optional-chaining spelling must remain covered");
 });
