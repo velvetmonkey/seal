@@ -586,6 +586,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
     });
     let phase = "start";
     let settled = false;
+    let closed = false;
     let stderr = "";
     let timer;
     let listId = 2;
@@ -595,14 +596,29 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
     const detail = () => stderr.trim() ? ` (${stderr.trim().slice(0, 500)})` : "";
     const stop = () => {
       clearTimeout(timer);
-      try { child.stdin.end(); } catch {}
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+      return new Promise((resolve) => {
+        if (closed) return resolve();
+        let graceTimer;
+        child.once("close", () => {
+          clearTimeout(graceTimer);
+          resolve();
+        });
+        try { child.stdin.end(); } catch {}
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        try { child.kill("SIGTERM"); } catch {}
+        graceTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) {
+            try { child.kill("SIGKILL"); } catch {}
+          }
+        }, 2000);
+        graceTimer.unref();
+      });
     };
     const fail = (code, message) => {
       if (settled) return;
       settled = true;
-      stop();
-      reject(new ProtectionError(code, message));
+      const error = new ProtectionError(code, message);
+      stop().then(() => reject(error));
     };
     const arm = (code, message) => {
       clearTimeout(timer);
@@ -636,6 +652,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
       arm("protected_server_initialize_failed", "configured server did not answer initialize");
     });
     child.once("close", (code, signal) => {
+      closed = true;
       if (settled) return;
       const ending = signal ? `signal ${signal}` : `exit ${code}`;
       if (phase === "start") fail("protected_server_start_failed", `configured server did not start (${ending})${detail()}`);
@@ -689,8 +706,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
           return;
         }
         settled = true;
-        stop();
-        resolve(names);
+        stop().then(() => resolve(names));
       }
     });
   });
