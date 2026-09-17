@@ -1,34 +1,20 @@
 {
   "version": 1,
   "ruling": {
-    "base": "ce9c7cac42a200452b03dad0ccf5e3651ff0de64",
+    "base": "3d94c2322507c5ec6ca9b9df935b2a493ec26e70",
     "author": "Ben",
-    "date": "2026-09-13",
-    "scope": "Ben ruled 2026-09-13 at 20:19 Telegram, verbatim \"2. Yes.\" \u2014 authorising the protected-path ruling for these four installed-tree-pin files, unchanged by this PR's own diff, imported by merging current main",
+    "date": "2026-09-17",
+    "scope": "Ben ruled 2026-09-17, \"do it\", in briefs/protectedpathrangefix.md: fix the protected-path history range while retaining reverted-edit and merge-only defenses.",
     "retires": [
-      "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306."
+      "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306.",
+      "The previous candidate-range record at base ce9c7cac42a200452b03dad0ccf5e3651ff0de64 covered imported main history, now excluded by this fix; prior human authorisations are not revoked.",
+      "The candidate-range record at base 34c56ffa5cce44f52e3b5afdb3a555648f3d4812 was superseded by an ordinary rebase onto current main after PR 346 landed; the file and its blob are unchanged, only the base moved. Prior authorisation is not revoked."
     ],
     "files": [
       {
-        "path": "scripts/installed-tree-pin.cjs",
-        "blob": "641cec215d715a74856ebf4ec3c34d7b4afe96f4"
-      },
-      {
-        "path": "scripts/sync-installed-tree-pin.cjs",
-        "blob": "d9bb8fbab02d752548d50a331b6d14174207632a"
-      },
-      {
-        "path": "test/installed-tree-pin-generator.test.cjs",
-        "blob": "43e40c13573a7b1b457dedd6d1bde88b6f7a9024"
-      },
-      {
-        "path": "test/installed-tree-pin.test.cjs",
-        "blob": "9eac1e9149c870dda3d1f7f9b29c0d9ce27ca6ef"
+        "path": "scripts/check-protected-paths.cjs",
+        "blob": "894f520cee6802abf171ffd7554693b5e41ce9f6"
       }
-    ],
-    "rangeRefresh": {
-      "previousBase": "7f1fa1bf9bbf86aa2bbab75e4e64ecdf8dcc145f",
-      "reason": "Current main integrated without rewriting published history; all four previously authorised blobs remain identical to the prior PR head and current main. No protected artifact content changed in round 2."
-    }
+    ]
   }
 }
