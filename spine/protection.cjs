@@ -579,6 +579,9 @@ function observedNames(names) {
 // relies on before claiming that a named tool is protected.
 // Snapshot current ancestry, independent of process groups/sessions. Keep observed
 // descendants across scans because TERM can reparent them before the deadline.
+// A descendant that fully detaches (double-fork, new session, reparent to init)
+// before the first deadline-cleanup scan is unobservable to this ancestry walk
+// and cannot be contained by it; later or repeated scans cannot recover that link.
 function discoveryTreePids(roots) {
   const found = new Set(roots);
   if (process.platform === "linux") {
