@@ -279,6 +279,7 @@ test("bounded history leaves a concurrent live proxy free to emit a receipt", as
   const planted = path.join(directory, "receipt-1-77-0001-ALLOW.json");
   const bytes = '{"seal_receipt":"v2","tool":"db.mutate","now":1,"verdict":"ALLOW"}';
   fs.writeFileSync(planted, bytes);
+  const release = path.join(run.dir, "release-history-reader");
   const child = require("node:child_process").spawn(process.execPath, ["-e", `
     const fs = require("node:fs");
     const { query } = require(${JSON.stringify(path.join(ROOT, "spine/receipt-population.cjs"))});
@@ -288,7 +289,11 @@ test("bounded history leaves a concurrent live proxy free to emit a receipt", as
       if (!paused) {
         paused = true;
         process.stdout.write("READ_OPEN\\n");
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+        const end = Date.now() + 15000;
+        while (!fs.existsSync(${JSON.stringify(release)})) {
+          if (Date.now() > end) throw new Error("proxy emission barrier timed out");
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+        }
       }
       return original.apply(fs, args);
     };
@@ -308,6 +313,7 @@ test("bounded history leaves a concurrent live proxy free to emit a receipt", as
   assert.ok(emitted.length > 0, "proxy must emit while query has a receipt open");
   assert.equal(child.exitCode, null, "emission must precede query exit");
   const saved = emitted.map((name) => fs.readFileSync(path.join(directory, name)));
+  fs.writeFileSync(release, "proxy emitted");
   assert.equal(await exited, 0, errors);
   assert.equal(fs.readFileSync(planted, "utf8"), bytes);
   emitted.forEach((name, index) => assert.deepEqual(fs.readFileSync(path.join(directory, name)), saved[index]));

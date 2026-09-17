@@ -21,42 +21,43 @@ function inspectReceiptDirectory(directory, { maxEntries = Infinity } = {}) {
   const receiptFiles = [];
   const nonMatchingFiles = [];
   const rejectedFiles = [];
-  try { for (;;) {
-    const entry = entries.readSync();
-    if (!entry) break;
-    if (scannedEntries >= maxEntries) { truncated = true; break; }
-    scannedEntries += 1;
-    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-    const match = entry.name.match(RECEIPT_NAME);
-    if (!match) {
-      if (entry.name.startsWith(RECEIPT_PREFIX)) {
+  try {
+    for (;;) {
+      const entry = entries.readSync();
+      if (!entry) break;
+      if (scannedEntries >= maxEntries) { truncated = true; break; }
+      scannedEntries += 1;
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+      const match = entry.name.match(RECEIPT_NAME);
+      if (!match) {
+        if (entry.name.startsWith(RECEIPT_PREFIX)) {
+          rejectedFiles.push({
+            name: entry.name,
+            reason: "timestamp and pid must be safe non-negative integers; sequence must be safe and use no non-canonical leading zeroes",
+          });
+          continue;
+        }
+        nonMatchingFiles.push(entry.name);
+        continue;
+      }
+      const timestamp = parseFilenameNumber(match[1]);
+      const pid = parseFilenameNumber(match[2]);
+      const sequence = parseFilenameNumber(match[3], true);
+      if (timestamp === null || pid === null || sequence === null) {
         rejectedFiles.push({
           name: entry.name,
           reason: "timestamp and pid must be safe non-negative integers; sequence must be safe and use no non-canonical leading zeroes",
         });
         continue;
       }
-      nonMatchingFiles.push(entry.name);
-      continue;
-    }
-    const timestamp = parseFilenameNumber(match[1]);
-    const pid = parseFilenameNumber(match[2]);
-    const sequence = parseFilenameNumber(match[3], true);
-    if (timestamp === null || pid === null || sequence === null) {
-      rejectedFiles.push({
+      receiptFiles.push({
         name: entry.name,
-        reason: "timestamp and pid must be safe non-negative integers; sequence must be safe and use no non-canonical leading zeroes",
+        timestamp,
+        pid,
+        sequence,
+        action: match[4],
       });
-      continue;
     }
-    receiptFiles.push({
-      name: entry.name,
-      timestamp,
-      pid,
-      sequence,
-      action: match[4],
-    });
-  }
   } finally { entries.closeSync(); }
   const byPid = new Map();
   for (const receipt of receiptFiles) {
