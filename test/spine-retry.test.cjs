@@ -1667,3 +1667,202 @@ test('cancelbind child exit clears pending timers and correlations before callba
 });
 
 }
+
+// Identity evidence is the child's raw input, never an ID reparsed as a Number.
+async function identityHarness(t, options = {}) {
+  const dir = testTmpdir('seal-reqident-');
+  const record = path.join(dir, 'child.ndjson');
+  fs.writeFileSync(record, '');
+  const storePath = path.join(dir, 'journal');
+  createJournal(storePath);
+  const lines = [];
+  const proxy = createProxy({
+    signer: generateSigner(), guardTool: 'demo.mutate', storePath,
+    receiptsDir: path.join(dir, 'receipts'),
+    childArgv: [process.execPath, '-e', `
+      const fs = require('node:fs');
+      require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+        fs.appendFileSync(process.argv[1], line + '\\n');
+        // This controlled peer echoes the raw ID token without JSON.parse.
+        const id = line.match(/"id"\\s*:\\s*("(?:\\\\.|[^"\\\\])*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/);
+        if (id) process.stdout.write('{"jsonrpc":"2.0","id":' + id[1] + ',"result":{}}\\n');
+      });`, record],
+    onClientLine: line => lines.push(line), ...options,
+  });
+  t.after(async () => { await proxy.stop(); fs.rmSync(dir, {recursive:true, force:true}); });
+  const wait = async predicate => {
+    const deadline = Date.now() + 10000;
+    while (!lines.some(predicate)) {
+      assert.ok(Date.now() < deadline, `raw client lines: ${lines.join('\n')}`);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return lines.find(predicate);
+  };
+  const send = frame => proxy.write(JSON.stringify(frame));
+  let serial = 0;
+  const fence = async () => {
+    const id = `identity-fence-${serial++}`;
+    send({jsonrpc:'2.0', id, method:'ping'});
+    await wait(line => line === `{"jsonrpc":"2.0","id":${JSON.stringify(id)},"result":{}}`);
+  };
+  const rawCalls = () => fs.readFileSync(record, 'utf8').split('\n').filter(line => line.includes('"method":"tools/call"'));
+  const call = (token, args = {line:'identity'}, tool = 'demo.mutate') =>
+    `{"jsonrpc":"2.0","id":${token},"method":"tools/call","params":{"name":${JSON.stringify(tool)},"arguments":${JSON.stringify(args)}}}`;
+  const begin = (token, args) => {
+    const before = lines.length;
+    proxy.write(call(token, args));
+    const elicitation = lines.slice(before).map(JSON.parse).find(frame => frame.method === 'elicitation/create');
+    assert.ok(elicitation, lines.slice(before).join('\n'));
+    return elicitation;
+  };
+  const answer = (elicitation, action = 'accept') => send({jsonrpc:'2.0', id:elicitation.id,
+    result:{action, ...(action === 'accept' ? {content:{approve:true}} : {})}});
+  send({jsonrpc:'2.0', id:'identity-init', method:'initialize', params:{capabilities:{elicitation:{}}}});
+  await fence();
+  return {dir, storePath, proxy, lines, send, wait, fence, rawCalls, call, begin, answer};
+}
+
+test('reqident single large guarded identity survives on child raw wire and reply', async t => {
+  const h = await identityHarness(t);
+  h.answer(h.begin('9007199254740993'));
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), [h.call('9007199254740993')]);
+  assert.ok(h.lines.includes('{"jsonrpc":"2.0","id":9007199254740993,"result":{}}'));
+});
+
+for (const reverse of [false, true]) test(`reqident overlapping large identities, reverse acceptance ${reverse}`, async t => {
+  const h = await identityHarness(t);
+  const entries = ['9007199254740992', '9007199254740993'].map((token, index) => {
+    const args = {line:`bound-${index}`};
+    return {token, args, approval:h.begin(token, args)};
+  });
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), [], 'no execution before approval');
+  if (reverse) entries.reverse();
+  for (const entry of entries) {
+    assert.match(entry.approval.params.message, new RegExp(entry.args.line));
+    h.answer(entry.approval);
+    await h.fence();
+  }
+  assert.deepEqual(h.rawCalls(), entries.map(({token,args}) => h.call(token,args)));
+});
+
+test('reqident local decline preserves large identity and child records zero calls', async t => {
+  const h = await identityHarness(t);
+  h.answer(h.begin('9007199254740993'), 'decline');
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  const refusal = h.lines.find(line => line.includes('approval refused: declined'));
+  assert.ok(refusal, h.lines.join('\n'));
+  assert.match(refusal, /"id":9007199254740993,/);
+});
+
+for (const [label, token] of [['string', '"9007199254740993"'], ['small', '42']]) {
+  test(`reqident control ${label} identity`, async t => {
+    const h = await identityHarness(t);
+    h.answer(h.begin(token));
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [h.call(token)]);
+    assert.ok(h.lines.includes(`{"jsonrpc":"2.0","id":${token},"result":{}}`));
+  });
+}
+
+test('reqident control unguarded line is byte-identical', async t => {
+  const h = await identityHarness(t);
+  const line = '  ' + h.call('9007199254740993', {line:'unguarded'}, 'other.tool') + '  ';
+  h.proxy.write(line);
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), [line]);
+});
+
+for (const reverse of [false, true]) test(`reqident control argument binding, reverse acceptance ${reverse}`, async t => {
+  const h = await identityHarness(t);
+  const entries = ['41', '42'].map((token, index) => {
+    const args = {line:`control-${index}`};
+    return {token, args, approval:h.begin(token,args)};
+  });
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  if (reverse) entries.reverse();
+  for (const entry of entries) {
+    assert.match(entry.approval.params.message, new RegExp(entry.args.line));
+    h.answer(entry.approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), entries.slice(0, entries.indexOf(entry)+1).map(({token,args}) => h.call(token,args)));
+  }
+});
+
+test('reqident decimal arguments stay binary64 while identity stays exact', async t => {
+  const h = await identityHarness(t);
+  const args = {line:1.5, nested:{amount:0.125}};
+  h.answer(h.begin('9007199254740993', args));
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), [h.call('9007199254740993', args)]);
+  const receipt = fs.readdirSync(path.join(h.dir, 'receipts')).map(name =>
+    JSON.parse(fs.readFileSync(path.join(h.dir, 'receipts', name), 'utf8'))).find(r => r.action === 'ALLOW');
+  assert.deepEqual(receipt.arguments, args);
+  assert.equal(typeof receipt.arguments.line, 'number');
+});
+
+for (const refusal of ['continuation', 'capability', 'duplicate', 'unrenderable', 'forward', 'timeout']) {
+  test(`reqident local refusal ${refusal} retains raw identity`, async t => {
+    let refuseForward = false;
+    const h = await identityHarness(t, {
+      beforeForward: () => ({ok:!refuseForward, refusal:'identity_test_refused', detail:'test forwarding refusal'}),
+      ...(refusal === 'timeout' ? {elicitationTimeoutMs:50} : {}),
+    });
+    let wire = h.call('9007199254740993');
+    if (refusal === 'continuation') wire = wire.replace('"name":"demo.mutate"', '"requestState":"fake","name":"demo.mutate"');
+    if (refusal === 'capability') h.send({jsonrpc:'2.0',id:'no-capability',method:'initialize',params:{capabilities:{}}});
+    if (refusal === 'duplicate') wire = wire.replace('"line":"identity"', '"line":"first","line":"second"');
+    if (refusal === 'unrenderable') wire = h.call('9007199254740993', null);
+    if (refusal === 'forward') { refuseForward = true; wire = h.call('9007199254740993', {}, 'other.tool'); }
+    h.proxy.write(wire);
+    await h.wait(line => line.includes('"isError":true'));
+    refuseForward = false;
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), []);
+    const reply = h.lines.find(line => line.includes('"isError":true'));
+    assert.match(reply, /"id":9007199254740993,/);
+  });
+}
+
+test('reqident cancellation distinguishes adjacent large IDs and preserves the survivor', async t => {
+  const h = await identityHarness(t);
+  const first = h.begin('9007199254740992', {line:'first'});
+  const second = h.begin('9007199254740993', {line:'second'});
+  h.proxy.write('{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9007199254740993}}');
+  h.answer(first);
+  h.answer(second);
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), [h.call('9007199254740992', {line:'first'})]);
+  assert.ok(h.lines.some(line => line.includes('"id":9007199254740993,') && line.includes('approval refused: cancelled')));
+  assert.equal(h.lines.filter(line => line.includes('approval refused: cancelled')).length, 1);
+});
+
+for (const [token, cancelToken] of [
+  ['4.2e1', '42.0'], ['-0', '0'], ['9007199254740993e2', '900719925474099300'],
+]) test(`reqident equivalent numeric cancellation ${token}`, async t => {
+  const h = await identityHarness(t);
+  const approval = h.begin(token);
+  h.proxy.write(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":${cancelToken}}}`);
+  h.answer(approval);
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  assert.ok(h.lines.some(line => line.includes(`"id":${token},`) && line.includes('approval refused: cancelled')));
+});
+
+for (const token of ['-9007199254740993', '9007199254740993e0', '"900719925474099\\u0033"', '-0']) {
+  test(`reqident exact token ${token} cannot be confused with nested argument IDs`, async t => {
+    const h = await identityHarness(t);
+    const args = {line:'nested', id:42, nested:[{id:'decoy', requestId:43}]};
+    const before = h.lines.length;
+    const wire = h.call(token,args).replace('"id":', '"\\u0069d":');
+    h.proxy.write(wire);
+    const approval = h.lines.slice(before).map(JSON.parse).find(f => f.method === 'elicitation/create');
+    assert.ok(approval);
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [h.call(token,args)]);
+  });
+}

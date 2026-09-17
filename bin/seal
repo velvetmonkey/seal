@@ -695,6 +695,7 @@ async function main() {
   if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
   if (command === "recover") return recoverCommand(process.argv.slice(3));
+  if (command === "history") return receiptPopulation.queryCommand(process.argv.slice(3));
   if (command === "receipts") return receiptCommand(process.argv.slice(3));
   if (command === "doctor") return doctorCommand();
   if (command === "coverage") {
@@ -721,6 +722,9 @@ function printHelp() {
       remove the local override without touching .mcp.json
   seal recover --archive [SERVER]
       archive incompatible state and remove Seal's owned local override
+  seal history DIRECTORY [--limit 1..100] [--tool NAME]
+      [--since EPOCH_MS] [--until EPOCH_MS]
+      count files and list recent claims (default 20; context UNKNOWN)
   seal receipts DIRECTORY
       inspect receipt filename sequences for observed gaps
   seal uninstall            preview and confirm removal of this installation

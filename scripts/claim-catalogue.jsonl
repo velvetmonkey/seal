@@ -330,3 +330,6 @@
 {"id":"approval-newline-key","kind":"emitted","text":"\"k\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\": 1","sha256":"874862dfe72451f8cdfb100705e5edd54623d898246e40f8cf2ac7c6809d6a2b"}
 {"id":"approval-escaped-tool","kind":"emitted","text":"Tool: \"demo\\u202emutate\"; Approval required","sha256":"d13f8b56c38984ebc476150d8b087ab7bb0f580596c388e39ccdf3195ff08946"}
 {"id":"approval-compact-arguments","kind":"emitted","text":"c: 3; café: \"first\\nsecond\"","sha256":"2b531a4bc252ae2adb57cf31f8b347fa5fc4d89a691b2097fc6c868997597b14"}
+{"id":"history-invocation","kind":"emitted","text":"seal history DIRECTORY [--limit 1..100] [--tool NAME]","sha256":"e4c8654060c3bb4026adbc88af362d50a5d1a83967820da8549686b5a1f1115a"}
+{"id":"history-window","kind":"emitted","text":"[--since EPOCH_MS] [--until EPOCH_MS]","sha256":"6e3a7f1f4bb24758f034127a604932b04c1aec202da794910351b67b6ecb9775"}
+{"id":"history-description","kind":"emitted","text":"count files and list recent claims (default 20; context UNKNOWN)","sha256":"d7016dac58d9ddae5ed71655bbb0cbc1683163c551becf70d63cf3320db04217"}

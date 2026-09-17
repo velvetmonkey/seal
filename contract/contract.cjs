@@ -22,6 +22,7 @@
 // an assumption we declare, not a property we enforce. The allow evidence
 // repeats this.
 const crypto = require("node:crypto");
+const { replayApprovalEvents } = require("../spine/store.cjs");
 const { canonicalString, sha256Hex } = require("./canonical.cjs");
 const { renderApprovalMessage, renderName } = require("./renderer.cjs");
 const { createKernelAuthorizationAdapter, KernelAuthorizationError } = require("./kernel-authorization.cjs");
@@ -71,29 +72,7 @@ function createApprovalContract({
   function loadStore() {
     if (!store) return;
     recordsByHash.clear();
-    for (const event of store.events) {
-      if (event.type === "issued") {
-        recordsByHash.set(event.handle_hash, {
-          handle_hash: event.handle_hash,
-          status: "pending",
-          project_id: event.project_id,
-          server_id: event.server_id,
-          tool: event.tool,
-          canonical_effect_bytes: event.canonical_effect_bytes,
-          connection_epoch: event.connection_epoch,
-          input_request_key: event.input_request_key,
-          created_at: event.created_at,
-          expires_at: event.expires_at,
-          approval_nonce: event.approval_nonce,
-        });
-      } else if (event.type === "status") {
-        const record = recordsByHash.get(event.handle_hash);
-        if (!record) throw new Error(`approval store is inconsistent: status for unknown handle hash ${event.handle_hash}`);
-        record.status = event.status;
-      } else {
-        throw new Error(`approval store is inconsistent: unknown event type ${event.type}`);
-      }
-    }
+    for (const [hash, record] of replayApprovalEvents(store.events)) recordsByHash.set(hash, record);
     // The correction's second lifetime: any continuation still pending from
     // an earlier connection epoch is invalidated here, and the journal
     // records that so the invalidation itself survives.
@@ -105,7 +84,7 @@ function createApprovalContract({
     }
   }
 
-  loadStore();
+  if (store) store.withLock(loadStore);
 
   function refuse(refusal, detail, timing) {
     return { kind: "refuse", refusal, detail, ...(timing === undefined ? {} : { timing }) };
