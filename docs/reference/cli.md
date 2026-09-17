@@ -18,6 +18,7 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]` | Install a local Claude Code override for selected calls on the named project stdio MCP server. | 0 on success; 1 on usage error, refusal or failure |
 | `seal unprotect SERVER` | Remove Seal's owned local override without editing the project .mcp.json. | 0 on success; 1 on refusal or failure |
 | `seal recover --archive [SERVER]` | Archive incompatible state and remove the owned local override. Stop Claude Code first. Retain journals, receipts and signing keys. | 0 on success; 1 on usage error, refusal or failure |
+| `seal history DIRECTORY [--limit N] [--since EPOCH_MS] [--until EPOCH_MS] [--tool NAME]` | Count observed receipt files and list recent decision claims; see bounds below. | 0 for a report including UNKNOWN; 1 for invalid arguments or unavailable directory |
 | `seal receipts DIRECTORY` | Inspect receipt filenames for sequence gaps; DIRECTORY must exist and be a directory. | 0 if the scan finds no rejected names or gaps; 1 on rejected names, gaps, usage error or read failure |
 | `seal doctor` | Report approval-origin assumptions and local readiness. | 0 for reportable assumptions; 1 for an automatic elicitation hook, failed readiness or failure |
 | `seal status` | Report project protection, local runtime and receipt observations. | 0 for reportable route state; 1 for unreadable/refused protection state or failure; 2 if any argument follows `status` |
@@ -70,5 +71,33 @@ shape; `receipts` requires exactly one argument. `verify` uses the first positio
 path and first later `--pubkey` value, ignoring other trailing words; `unprotect`
 uses only its first argument, and `doctor` ignores trailing arguments. These
 existing parsing rules do not add flags to those commands.
+
+
+### `seal history DIRECTORY`
+
+Count the filename-validated receipt population and list recent ALLOW/BLOCK
+claims using `--limit N` (default 20, maximum 100), `--since EPOCH_MS`,
+`--until EPOCH_MS`, and/or `--tool NAME` (exact match, at most 256 characters).
+Time bounds are inclusive and apply to the receipt's kernel `now`, in epoch
+milliseconds; the default window ends when the query starts. Future-dated
+contents are UNKNOWN, not recent decisions. The proxy `action` takes precedence
+over the kernel `verdict`; other actions are counted separately.
+
+This reads the same filename population as `seal receipts`. Counts refer to
+files, not unique events: duplicate sequence numbers are not deduplicated.
+Contents are unverified claims; signature, occurrence, and current route/server
+context remain UNKNOWN. Use `seal verify` with a trusted key for signature
+checking. Filename rejection counts and content UNKNOWN counts are separate.
+Deletion, renumbering, and concurrent writes can never establish completeness.
+
+Work is capped at 10,000 directory entries, 64 KiB per receipt, 16 MiB of receipt
+bytes, and 100 output rows. A directory cap makes population, rejected-file,
+and ignored-file counts lower bounds and their totals UNKNOWN. Unreadable,
+malformed, oversized, symlinked, changing, or byte-budget-excluded receipts
+count as content UNKNOWN; their matching decisions are also UNKNOWN. Listed
+rows are the newest observed claims, not a snapshot guarantee. Ties use filename
+order. The command opens regular files read-only without taking writer locks.
+It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
+unavailable directory. Underlying filesystem stalls are outside these work caps.
 
 Up: [Reference](README.md).
