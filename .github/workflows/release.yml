@@ -271,7 +271,8 @@ jobs:
     needs: release
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      # Draft releases require push access, even for downloads.
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Download the draft release manifest
@@ -303,7 +304,8 @@ jobs:
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     permissions:
-      contents: read
+      # Draft releases require push access, even for downloads.
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
