@@ -72,3 +72,30 @@ uses only its first argument, and `doctor` ignores trailing arguments. These
 existing parsing rules do not add flags to those commands.
 
 Up: [Reference](README.md).
+
+### `seal history DIRECTORY`
+
+Count the filename-validated receipt population and list recent ALLOW/BLOCK
+claims using `--limit N` (default 20, maximum 100), `--since EPOCH_MS`,
+`--until EPOCH_MS`, and/or `--tool NAME` (exact match, at most 256 characters).
+Time bounds are inclusive and apply to the receipt's kernel `now`, in epoch
+milliseconds; the default window ends when the query starts. Future-dated
+contents are UNKNOWN, not recent decisions. The proxy `action` takes precedence
+over the kernel `verdict`; other actions are counted separately.
+
+This reads the same filename population as `seal receipts`. Counts refer to
+files, not unique events: duplicate sequence numbers are not deduplicated.
+Contents are unverified claims; signature, occurrence, and current route/server
+context remain UNKNOWN. Use `seal verify` with a trusted key for signature
+checking. Filename rejection counts and content UNKNOWN counts are separate.
+Deletion, renumbering, and concurrent writes can never establish completeness.
+
+Work is capped at 10,000 directory entries, 64 KiB per receipt, 16 MiB of receipt
+bytes, and 100 output rows. A directory cap makes population, rejected-file,
+and ignored-file counts lower bounds and their totals UNKNOWN. Unreadable,
+malformed, oversized, symlinked, changing, or byte-budget-excluded receipts
+count as content UNKNOWN; their matching decisions are also UNKNOWN. Listed
+rows are the newest observed claims, not a snapshot guarantee. Ties use filename
+order. The command opens regular files read-only without taking writer locks.
+It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
+unavailable directory. Underlying filesystem stalls are outside these work caps.

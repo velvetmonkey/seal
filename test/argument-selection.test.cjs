@@ -269,3 +269,48 @@ test("predicate context quotes the tool name consistently with the approval", as
     assert.equal(prompt.params.message.includes('\u202e'), false);
   }
 });
+
+test("bounded history leaves a concurrent live proxy free to emit a receipt", async (t) => {
+  const run = session("db.mutate");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  const directory = path.join(run.dir, "receipts");
+  fs.mkdirSync(directory, { recursive: true });
+  const planted = path.join(directory, "receipt-1-77-0001-ALLOW.json");
+  const bytes = '{"seal_receipt":"v2","tool":"db.mutate","now":1,"verdict":"ALLOW"}';
+  fs.writeFileSync(planted, bytes);
+  const child = require("node:child_process").spawn(process.execPath, ["-e", `
+    const fs = require("node:fs");
+    const { query } = require(${JSON.stringify(path.join(ROOT, "spine/receipt-population.cjs"))});
+    const original = fs.readSync;
+    let paused = false;
+    fs.readSync = function(...args) {
+      if (!paused) {
+        paused = true;
+        process.stdout.write("READ_OPEN\\n");
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+      }
+      return original.apply(fs, args);
+    };
+    query(${JSON.stringify(directory)}).then(lines => console.log(lines.join("\\n")));
+  `], { stdio: ["ignore", "pipe", "pipe"] });
+  t.after(() => { if (child.exitCode === null) child.kill(); });
+  let output = "", errors = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { errors += chunk; });
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  await waitFor([{}], () => output.includes("READ_OPEN"));
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 701, method: "tools/call", params: { name: "db.mutate", arguments: {} } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: prompt.id, result: { action: "decline" } }));
+  await waitFor(run.frames, (frame) => frame.id === 701);
+  const emitted = fs.readdirSync(directory).filter((name) => name !== path.basename(planted));
+  assert.ok(emitted.length > 0, "proxy must emit while query has a receipt open");
+  assert.equal(child.exitCode, null, "emission must precede query exit");
+  const saved = emitted.map((name) => fs.readFileSync(path.join(directory, name)));
+  assert.equal(await exited, 0, errors);
+  assert.equal(fs.readFileSync(planted, "utf8"), bytes);
+  emitted.forEach((name, index) => assert.deepEqual(fs.readFileSync(path.join(directory, name)), saved[index]));
+  assert.match(output, /Receipt completeness: UNKNOWN/);
+  assert.doesNotMatch(output, /COMPLETE/);
+});
