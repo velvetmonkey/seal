@@ -476,3 +476,79 @@ test("a protected artifact deleted within the candidate range still requires a r
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /test\/fixtures\/transient\.json/);
 });
+
+
+test("a catch-up merge excludes main's protected history even after main advances again", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, ["branch", "-m", "main"]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "topic.txt"), "ordinary topic\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "topic"]);
+  git(root, ["switch", "main"]);
+  mkdirSync(join(root, "corpus"));
+  writeFileSync(join(root, "corpus", "main.txt"), "main v1\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "protected main change"]);
+  git(root, ["switch", "topic"]);
+  git(root, ["merge", "--no-ff", "main", "-m", "catch up"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "main"]);
+  writeFileSync(join(root, "corpus", "main.txt"), "main v2\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "main advances again"]);
+  const result = run(root, "main", head);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PROTECTED PATH REVIEW OK/);
+});
+
+test("a topic protected edit and revert still require a ruling before and after merge", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "corpus"));
+  writeFileSync(join(root, "corpus", "existing.txt"), "approved\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "protected baseline"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "corpus", "existing.txt"), "attack\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "protected attack"]);
+  git(root, ["revert", "--no-edit", "HEAD"]);
+  assert.equal(git(root, ["diff", base, "HEAD", "--", "corpus/existing.txt"]), "");
+  for (const merged of [false, true]) {
+    if (merged) mergeTopic(root, base);
+    const result = run(root, base, "HEAD");
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /HUMAN RULING REQUIRED/);
+    assert.match(result.stderr, /corpus\/existing\.txt/);
+  }
+});
+
+
+test("a merge-only protected edit remains visible after a later revert", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, ["branch", "-m", "main"]);
+  git(root, ["switch", "-qc", "topic"]);
+  writeFileSync(join(root, "topic.txt"), "topic\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "topic"]);
+  git(root, ["switch", "main"]);
+  writeFileSync(join(root, "main.txt"), "main\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "main"]);
+  git(root, ["switch", "topic"]);
+  git(root, ["merge", "--no-ff", "--no-commit", "main"]);
+  mkdirSync(join(root, "corpus"));
+  writeFileSync(join(root, "corpus", "merge.txt"), "merge attack\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "merge with protected edit"]);
+  git(root, ["rm", "corpus/merge.txt"]);
+  git(root, ["commit", "-qm", "erase merge edit"]);
+  assert.equal(git(root, ["diff", "main", "HEAD", "--", "corpus"]), "");
+  const result = run(root, "main", "HEAD");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /corpus\/merge\.txt/);
+});
