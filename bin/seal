@@ -210,34 +210,91 @@ function coverage() {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   console.log("Coverage enumeration is not proven complete.");
-  let paths;
-  try { paths = protection.statePathsFor(process.cwd(), process.env); }
-  catch (error) {
-    console.log(`UNKNOWN selected MCP tools — protection records could not be enumerated: ${error.message}`);
-    coverageOutsideRoutes();
-    process.exitCode = 1;
-    return;
+  console.log("Coverage BROKERED requires a live lease; status BROKERED describes static wrapper ownership. A PENDING RESTART wrapper is UNKNOWN here even when status reports BROKERED; client use remains UNKNOWN.");
+  const { projectRoot, sources } = statusScopeSources(fs.realpathSync(process.cwd()), process.env);
+  console.log(`Coverage project: ${projectRoot}; scopes: user, local, project (same direct configuration sources as status; effective client selection UNKNOWN)`);
+  const byName = new Map();
+  for (const source of sources) {
+    const servers = source.parsed?.mcpServers;
+    if (source.error || !servers || typeof servers !== "object" || Array.isArray(servers)) {
+      console.log(`Scope UNKNOWN — ${source.label} MCP configuration ${source.error || "has no inspectable mcpServers object"}: ${source.filePath}`);
+      continue;
+    }
+    for (const [name, definition] of Object.entries(servers)) {
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name).push({ source: source.label, definition });
+    }
   }
-  if (paths.length === 0) {
-    console.log("UNKNOWN selected MCP tools — no protected project record exists");
-  }
-  for (const statePath of paths) {
+  const records = new Map();
+  let recordsError;
+  try {
+    for (const statePath of protection.statePathsFor(projectRoot, process.env)) {
+      try { records.set(statePath, { state: protection.readState(statePath) }); }
+      catch (error) { records.set(statePath, { error }); }
+    }
+  } catch (error) { recordsError = error; }
+  const usedRecords = new Set();
+  for (const [name, entries] of [...byName.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const label = `selected MCP tools on ${name}`;
+    const local = entries.find((entry) => entry.source === "local");
+    const args = local?.definition?.args;
+    const statePath = Array.isArray(args) && args[0] === "__proxy" &&
+      args[1] === "--protect-state" && args.length === 3 && typeof args[2] === "string"
+      ? path.resolve(projectRoot, args[2]) : null;
+    const matching = [...records.entries()].filter(([file, record]) => record.state?.serverName === name ||
+      (record.error && path.basename(path.dirname(path.dirname(file))) === "servers" &&
+        path.basename(path.dirname(file)) === encodeURIComponent(name).replaceAll(".", "%2E")));
+    for (const [file] of matching) usedRecords.add(file);
+    if (statePath) usedRecords.add(statePath);
+    const wrapperLike = entries.some(({ definition }) => Array.isArray(definition?.args) &&
+      definition.args.some((arg) => arg === "__proxy" || arg === "--protect-state"));
     try {
-      const state = protection.readState(statePath);
-      const view = protection.protectionView(state, process.cwd(), process.env);
-      const tools = view.state === protection.STATES.UNPROTECTED ? [] : protection.protectedToolNames(view);
-      if (view.state === protection.STATES.ACTIVE && !coverageWrapperIsThisTree(view)) {
-        console.log(`UNKNOWN selected MCP tools on ${view.serverName}: ${tools.join(", ")} — wrapper command does not resolve to this Seal tree; run coverage from the wrapper installation or reinstall protection with this binary`);
-      } else if (view.state === protection.STATES.ACTIVE) {
-        console.log(`BROKERED selected MCP tools on ${view.serverName}: ${tools.join(", ")} — inferred from a live lease and an owned override resolving to this Seal tree; no refusal probe was run`);
+      if (recordsError) throw recordsError;
+      // A damaged record cannot supply its serverName; locate the server's
+      // canonical record too, so damage is not mistaken for absence.
+      const expectedPath = statePath || matching[0]?.[0];
+      if (records.has(expectedPath)) {
+        usedRecords.add(expectedPath);
+        if (records.get(expectedPath).error) throw records.get(expectedPath).error;
+      }
+      if (statePath || matching.length || records.has(expectedPath) || wrapperLike) {
+        if (!local) throw new Error("no inspected local wrapper establishes ownership");
+        const state = statePath ? protection.readState(statePath) : matching[0]?.[1].state;
+        if (!state) throw new Error("installed wrapper protection record is unavailable");
+        if (state.serverName !== name || typeof state.projectRoot !== "string" ||
+            protection.claudeProjectRoot(state.projectRoot) !== projectRoot) throw new Error("installed wrapper server or project scope does not match the inspected entry");
+        if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
+        const view = protection.protectionView(state, state.projectRoot, process.env);
+        const tools = view.state === protection.STATES.UNPROTECTED ? [] : protection.protectedToolNames(view);
+        if (view.state === protection.STATES.ACTIVE && !coverageWrapperIsThisTree(view)) {
+          console.log(`UNKNOWN ${label}: ${tools.join(", ")} — wrapper command does not resolve to this Seal tree; run coverage from the wrapper installation or reinstall protection with this binary`);
+        } else if (view.state === protection.STATES.ACTIVE) {
+          console.log(`BROKERED ${label}: ${tools.join(", ")} — inferred from a live lease and an owned override resolving to this Seal tree; no refusal probe was run`);
+        } else {
+          console.log(`UNKNOWN ${label}: ${tools.join(", ") || "none"} — protection state is ${view.state}, not a live wrapper lease`);
+        }
+      } else if (entries.some(({ definition }) => !definition || typeof definition !== "object" ||
+          Array.isArray(definition) || !(typeof definition.command === "string" || typeof definition.url === "string"))) {
+        console.log(`UNKNOWN ${label} — entry has no inspectable command or URL; ownership cannot be established`);
       } else {
-        console.log(`UNKNOWN selected MCP tools on ${view.serverName || "unnamed route"}: ${tools.join(", ") || "none"} — protection state is ${view.state}, not a live wrapper lease`);
+        console.log(`UNBROKERED ${label} — configured without Seal; effective client selection is UNKNOWN`);
       }
     } catch (error) {
-      console.log(`UNKNOWN selected MCP tools at ${statePath} — wrapper enforcement could not be established: ${error.message}`);
+      console.log(`UNKNOWN ${label} — wrapper enforcement could not be established: ${error.message}`);
       process.exitCode = 1;
     }
   }
+  // Retain diagnostics for orphaned records without duplicating configured rows.
+  for (const [statePath, record] of records) {
+    if (usedRecords.has(statePath)) continue;
+    console.log(`UNKNOWN selected MCP tools at ${statePath} — wrapper enforcement could not be established: ${record.error?.message || "record has no matching configured server"}`);
+    process.exitCode = 1;
+  }
+  if (recordsError && byName.size === 0) {
+    console.log(`UNKNOWN selected MCP tools — protection records could not be enumerated: ${recordsError.message}`);
+    process.exitCode = 1;
+  }
+  if (byName.size === 0) console.log("UNKNOWN selected MCP tools — no configured MCP servers could be enumerated");
   coverageOutsideRoutes();
 }
 

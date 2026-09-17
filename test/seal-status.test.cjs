@@ -259,6 +259,36 @@ test("coverage only calls selected tools BROKERED behind a live Seal-owned wrapp
   assert.match(result.out, /^BROKERED selected MCP tools /m);
   setCommand(CLI);
 
+  // Configuration, not the record population, defines the named inventory.
+  fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({
+    mcpServers: { db: { command: "original-db" }, plain: { command: "plain-server" } },
+  }));
+  const assertPopulation = (output) => {
+    assert.equal(output.match(/^(?:BROKERED|UNBROKERED|UNKNOWN) selected MCP tools on db(?:[: ]|$)/gm)?.length, 1, output);
+    assert.equal(output.match(/^UNBROKERED selected MCP tools on plain — configured without Seal/gm)?.length, 1, output);
+  };
+  result = run(["coverage"], root, "", project);
+  assertPopulation(result.out);
+  assert.match(result.out, /^BROKERED selected MCP tools on db:/m);
+  owned.state = "PENDING RESTART";
+  fs.writeFileSync(statePath, JSON.stringify(owned));
+  result = run(["coverage"], root, "", project);
+  assertPopulation(result.out);
+  assert.match(result.out, /^UNKNOWN selected MCP tools on db: write — protection state is PENDING RESTART/m);
+  assert.match(result.out, /status BROKERED describes static wrapper ownership/);
+  fs.renameSync(statePath, `${statePath}.aside`);
+  result = run(["coverage"], root, "", project);
+  assertPopulation(result.out);
+  assert.match(result.out, /^UNKNOWN selected MCP tools on db — .*record is unavailable/m);
+  fs.renameSync(`${statePath}.aside`, statePath);
+  fs.writeFileSync(statePath, "{damaged");
+  result = run(["coverage"], root, "", project);
+  assertPopulation(result.out);
+  assert.match(result.out, /^UNKNOWN selected MCP tools on db — .*state is unreadable/m);
+  owned.state = "ACTIVE";
+  fs.writeFileSync(statePath, JSON.stringify(owned));
+  fs.unlinkSync(path.join(project, ".mcp.json"));
+
   // Plant the enforcement failure: the saved state remains, but its installed
   // wrapper no longer does.  Coverage must withdraw BROKERED rather than
   // report the stale record as protection.
