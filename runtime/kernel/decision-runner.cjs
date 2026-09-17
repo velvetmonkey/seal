@@ -19,8 +19,24 @@ function buildEnvelope(config) {
   return JSON.stringify({ payload, signature });
 }
 
+// Independently encode the kernel wire form. Fractions use scientific
+// notation to satisfy its mantissa-digit bound without rounding their values.
+// This does not import the producer or its target/receipt canonicalisers.
+function wireJson(value) {
+  if (Array.isArray(value)) return `[${value.map(wireJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const members = Object.keys(value).filter((key) => value[key] !== undefined);
+    return `{${members.map((key) => `${JSON.stringify(key)}:${wireJson(value[key])}`).join(",")}}`;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("non-finite kernel input");
+    if (!Number.isInteger(value)) return value.toExponential();
+  }
+  return JSON.stringify(value);
+}
+
 function rpc(tool, args, id = 1) {
-  return JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
+  return wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
 }
 
 function buildStepInput({ tool, args, approvals, now, votes, grants, forecasts, granted_capabilities }) {

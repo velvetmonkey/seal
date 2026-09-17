@@ -16,8 +16,8 @@ function canonical(value) {
   if (value === undefined) throw new ReceiptRefusal("receipt_value_absent", "receipt value is absent");
   if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "number") {
-    if (!Number.isFinite(value) || !Number.isInteger(value) || !Number.isSafeInteger(value)) {
-      throw new ReceiptRefusal("receipt_value_malformed", "receipt number is not a finite safe integer");
+    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+      throw new ReceiptRefusal("receipt_value_malformed", "receipt number is not finite or is outside the safe canonical range");
     }
     return JSON.stringify(value);
   }
