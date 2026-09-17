@@ -50,7 +50,7 @@ function normalizeToolSelection(selection) {
     : { ok: false, name, predicate, error: parsed.error, source: `${name}?${predicate}` };
 }
 
-function jsonHasDuplicateObjectKeys(text) {
+function jsonHasDuplicateObjectKeys(text, onValue) {
   let index = 0;
   let duplicate = false;
   const whitespace = () => { while (/\s/u.test(text[index] || "")) index += 1; };
@@ -62,8 +62,15 @@ function jsonHasDuplicateObjectKeys(text) {
     }
     throw new Error("unterminated JSON string");
   }
-  function value() {
+  // Optional source observation leaves ordinary JSON.parse argument semantics
+  // alone. Paths distinguish envelope identities from similarly named args.
+  function value(path = []) {
     whitespace();
+    const start = index;
+    readValue(path);
+    if (onValue) onValue(path, text.slice(start, index));
+  }
+  function readValue(path) {
     if (text[index] === "{") {
       index += 1; whitespace();
       const keys = new Set();
@@ -76,7 +83,7 @@ function jsonHasDuplicateObjectKeys(text) {
         keys.add(key);
         whitespace();
         if (text[index++] !== ":") throw new Error("object colon is absent");
-        value(); whitespace();
+        value([...path, key]); whitespace();
         const token = text[index++];
         if (token === "}") return;
         if (token !== ",") throw new Error("object separator is invalid");
@@ -85,8 +92,9 @@ function jsonHasDuplicateObjectKeys(text) {
     if (text[index] === "[") {
       index += 1; whitespace();
       if (text[index] === "]") { index += 1; return; }
+      let item = 0;
       for (;;) {
-        value(); whitespace();
+        value([...path, item++]); whitespace();
         const token = text[index++];
         if (token === "]") return;
         if (token !== ",") throw new Error("array separator is invalid");
