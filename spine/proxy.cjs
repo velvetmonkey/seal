@@ -32,6 +32,33 @@ const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exce
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
+// Session-only transport metadata: never passed to the contract or receipts.
+// Symbols also survive the spread used for duplicate-key refusals.
+const WIRE_ID = Symbol("wire request id");
+
+function withWireId(frame, body) {
+  const token = frame[WIRE_ID];
+  if (token === undefined) return JSON.stringify(body);
+  // The token is a complete value observed by the validated JSON scanner.
+  // Serialize the rest normally; only the top-level identity bypasses Number.
+  const { id, ...rest } = body;
+  const { jsonrpc, ...tail } = rest;
+  return `{"jsonrpc":${JSON.stringify(jsonrpc)},"id":${token},${JSON.stringify(tail).slice(1)}`;
+}
+
+function wireIdentity(token, parsed) {
+  if (typeof parsed !== "number" || token === undefined) return parsed;
+  // Compare numeric values exactly, including equivalent integer spellings
+  // (42, 42.0, 4.2e1). Never expand a potentially enormous exponent.
+  const [, sign, whole, fraction = "", exponent = "0"] =
+    token.match(/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  let digits = (whole + fraction).replace(/^0+/, "");
+  if (!digits) return "number:0";
+  const trailing = digits.match(/0*$/)[0].length;
+  digits = digits.slice(0, digits.length - trailing);
+  const power = BigInt(exponent) - BigInt(fraction.length) + BigInt(trailing);
+  return `number:${sign}${digits}e${power}`;
+}
 const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "runtime_tree_unknown",
   "runtime_tree_fail",
@@ -223,8 +250,8 @@ function createProxy(options) {
     return receiptPath;
   }
 
-  function respond(id, result) {
-    onClientLine(JSON.stringify({ jsonrpc: "2.0", id, result }));
+  function respond(frame, result) {
+    onClientLine(withWireId(frame, { jsonrpc: "2.0", id: frame.id, result }));
   }
 
   function requestElicitation(id, params) {
@@ -252,7 +279,7 @@ function createProxy(options) {
 
   function blockForward(frame, refusal, detail) {
     emitReceipt("BLOCK", frame, { refusal, detail });
-    if (frame && Object.hasOwn(frame, "id")) respond(frame.id, refusalResult(refusal, detail));
+    if (frame && Object.hasOwn(frame, "id")) respond(frame, refusalResult(refusal, detail));
   }
 
   function blockMalformedClientFrame(frame, detail) {
@@ -299,7 +326,7 @@ function createProxy(options) {
       const receiptExtra = { refusal, detail };
       receiptExtra.approvalRequest = approvalRequest;
       emitReceipt("BLOCK", frame, receiptExtra, decision.receipt);
-      respond(frame.id, refusalResult(refusal, detail, decision.timing));
+      respond(frame, refusalResult(refusal, detail, decision.timing));
       if (decision.timing) {
         const error = new Error(detail);
         error.code = refusal;
@@ -314,7 +341,7 @@ function createProxy(options) {
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
-    child.stdin.write(JSON.stringify({
+    child.stdin.write(withWireId(frame, {
       jsonrpc: "2.0", id: frame.id, method: frame.method,
       params: { name: tool, arguments: args },
     }) + "\n");
@@ -368,10 +395,11 @@ function createProxy(options) {
     return true;
   }
 
-  function cancelPendingRequest(requestId) {
+  function cancelPendingRequest(requestId, requestToken) {
     let cancelled = false;
     for (const [id, pending] of pendingElicitations) {
-      if (pending.frame.id !== requestId) continue;
+      if (typeof pending.frame.id !== typeof requestId
+        || wireIdentity(pending.frame[WIRE_ID], pending.frame.id) !== wireIdentity(requestToken, requestId)) continue;
       cancelled = true;
       pendingElicitations.delete(id);
       retireElicitation(id);
@@ -430,7 +458,7 @@ function createProxy(options) {
     const decision = contract.begin({ tool: params.name, args: params.arguments, selection: matchedSelection });
     if (decision.kind === "refuse") {
       emitReceipt("BLOCK", frame, { refusal: decision.refusal, detail: decision.detail }, decision.receipt);
-      respond(frame.id, refusalResult(decision.refusal, decision.detail, decision.timing));
+      respond(frame, refusalResult(decision.refusal, decision.detail, decision.timing));
       return;
     }
     const requestState = decision.result.requestState;
@@ -471,8 +499,12 @@ function createProxy(options) {
         return;
       }
       let hasDuplicateKeys;
+      let requestToken;
       try {
-        hasDuplicateKeys = jsonHasDuplicateObjectKeys(line);
+        hasDuplicateKeys = jsonHasDuplicateObjectKeys(line, (path, token) => {
+          if (path.length === 1 && path[0] === "id") frame[WIRE_ID] = token;
+          if (path.length === 2 && path[0] === "params" && path[1] === "requestId") requestToken = token;
+        });
       } catch {
         blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
         return;
@@ -490,7 +522,7 @@ function createProxy(options) {
       }
       if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
         && Object.hasOwn(frame.params || {}, "requestId")
-        && cancelPendingRequest(frame.params.requestId)) return;
+        && cancelPendingRequest(frame.params.requestId, requestToken)) return;
       if (frame.method === "initialize") {
         const capabilities = frame.params?.capabilities;
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
