@@ -35,6 +35,7 @@ const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Session-only transport metadata: never passed to the contract or receipts.
 // Symbols also survive the spread used for duplicate-key refusals.
 const WIRE_ID = Symbol("wire request id");
+const WIRE_META = Symbol("wire request metadata");
 
 function withWireId(frame, body) {
   const token = frame[WIRE_ID];
@@ -341,10 +342,12 @@ function createProxy(options) {
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
-    child.stdin.write(withWireId(frame, {
-      jsonrpc: "2.0", id: frame.id, method: frame.method,
-      params: { name: tool, arguments: args },
-    }) + "\n");
+    const envelope = withWireId(frame, { jsonrpc: "2.0", id: frame.id, method: frame.method });
+    // Preserve the validated metadata's original JSON, including opaque numeric
+    // progress tokens that would lose precision through a JavaScript Number.
+    const forwardedParams = JSON.stringify({ name: tool, arguments: args });
+    const metadata = Object.hasOwn(params, "_meta") ? `,"_meta":${frame[WIRE_META]}` : "";
+    child.stdin.write(`${envelope.slice(0, -1)},"params":${forwardedParams.slice(0, -1)}${metadata}}}\n`);
     return decision;
   }
 
@@ -446,6 +449,32 @@ function createProxy(options) {
       blockForward(frame, "response_malformed", "client-supplied approval continuations are not accepted; answer the elicitation/create request");
       return;
     }
+    // Approval binds the tool and arguments through the contract. Only progress
+    // correlation is supported outside that identity: it cannot add execution
+    // semantics, and stays on this session's saved frame until its answer arrives.
+    // Unknown metadata (including task relationships), task augmentation and
+    // extension fields must be refused before creating any approval.
+    const unsupported = [
+      ...Object.keys(frame).filter((key) => !["jsonrpc", "id", "method", "params"].includes(key)),
+      ...Object.keys(params).filter((key) => !["name", "arguments", "_meta"].includes(key)),
+    ];
+    if (unsupported.length > 0) {
+      blockForward(frame, "request_field_unsupported", `unsupported guarded tools/call field: ${JSON.stringify(unsupported[0])}`);
+      return;
+    }
+    if (Object.hasOwn(params, "_meta")) {
+      const meta = params._meta;
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)
+        || Object.keys(meta).some((key) => key !== "progressToken")) {
+        blockForward(frame, "request_metadata_unsupported", "guarded tools/call metadata supports only progressToken");
+        return;
+      }
+      if (Object.hasOwn(meta, "progressToken") && typeof meta.progressToken !== "string"
+        && typeof meta.progressToken !== "number") {
+        blockForward(frame, "progress_token_unsupported", "progressToken must be a string or a number");
+        return;
+      }
+    }
     if (!clientCapabilities || !Object.hasOwn(clientCapabilities, "elicitation")) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
       return;
@@ -503,6 +532,7 @@ function createProxy(options) {
       try {
         hasDuplicateKeys = jsonHasDuplicateObjectKeys(line, (path, token) => {
           if (path.length === 1 && path[0] === "id") frame[WIRE_ID] = token;
+          if (path.length === 2 && path[0] === "params" && path[1] === "_meta") frame[WIRE_META] = token;
           if (path.length === 2 && path[0] === "params" && path[1] === "requestId") requestToken = token;
         });
       } catch {
