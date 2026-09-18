@@ -141,7 +141,7 @@ function createApprovalContract({
   }
 
   function beginUnlocked({ tool, args, selection }) {
-    const rendered = renderApprovalMessage(tool, args, { terminalWidth, ttlMs, selection });
+    const rendered = renderApprovalMessage(tool, args, { terminalWidth, ttlMs, selection, serverId });
     if (!rendered.ok) return refuse(REFUSALS.UNRENDERABLE, rendered.reason);
 
     let canonicalEffect;

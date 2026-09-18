@@ -24,7 +24,7 @@ function waitFor(frames, predicate, timeoutMs = 5000) {
   });
 }
 
-function session(selection) {
+function session(selection, serverName = null) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-argument-selection-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
@@ -35,6 +35,7 @@ function session(selection) {
     storePath,
     receiptsDir: path.join(dir, "receipts"),
     childArgv: [process.execPath, SERVER, "ok", "db.mutate"],
+    serverName,
     onClientLine: (line) => frames.push(JSON.parse(line)),
   });
   proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "init", method: "initialize", params: { capabilities: { elicitation: {} } } }));
@@ -246,6 +247,15 @@ test("the final proxy presentation includes predicate text inside the logical me
   assert.ok(prompt.params.message.includes('d: 4'));
 });
 
+test("the proxy renders its configured server route", async (t) => {
+  const run = session("db.mutate", "configured-db");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "route", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1 } } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  assert.match(prompt.params.message, /Route \(configured, not authenticated\): configured-db/);
+});
+
 test("predicate composition refuses an over-budget message before offering approval", async (t) => {
   const run = session({ name: 'db.mutate', predicate: `operation="${'x'.repeat(100)}"` });
   t.after(() => run.close());
@@ -319,4 +329,25 @@ test("bounded history leaves a concurrent live proxy free to emit a receipt", as
   emitted.forEach((name, index) => assert.deepEqual(fs.readFileSync(path.join(directory, name)), saved[index]));
   assert.match(output, /Receipt completeness: UNKNOWN/);
   assert.doesNotMatch(output, /COMPLETE/);
+});
+
+
+test("renderline proxy preserves mandatory fields and gates arguments at the universal line cap", async (t) => {
+  const run = session("db.mutate", "configured-db");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "at-cap", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3 } } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  const lines = prompt.params.message.split("\n");
+  assert.equal(lines.length, 7);
+  assert.equal(lines[0], "Tool: db.mutate; Approval required");
+  assert.equal(lines[5], "Route (configured, not authenticated): configured-db");
+  assert.equal(lines[3], "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
+  assert.deepEqual(lines.slice(1, 3), ["  a: 1; b: 2", "  c: 3"]);
+  assert.equal(lines.at(-1), "Selection predicate: db.mutate (bare tool name selects all calls)");
+  assert.equal(run.frames.some((frame) => frame.id === "at-cap"), false, "call must remain pending approval");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: prompt.id, result: { action: "decline" } }));
+  const declined = await waitFor(run.frames, (frame) => frame.id === "at-cap");
+  assert.equal(declined.result.isError, true);
+  assert.match(declined.result.content[0].text, /declined/);
 });

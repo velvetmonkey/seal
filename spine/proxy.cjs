@@ -89,7 +89,7 @@ function createProxy(options) {
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
     projectId,        // durable protection-state project identity
-    serverName,       // durable protection-state server identity
+    serverName,       // durable route identity; display does not authenticate it
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence

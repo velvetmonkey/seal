@@ -110,7 +110,9 @@ For `approval_shown`, "complete exact-call dialog" means the complete set of
 strings derived from the installed artifact: its first three message lines
 (excluding a standalone generic `Approval required` title, if present), schema
 title, and full schema description. The current renderer supplies the tool,
-argument value, and scope in those first three lines for `append_note`; its
+argument value, and scope in those first three lines for `append_note`; when
+known, it also supplies the configured (not authenticated) server route within
+the same seven-line message budget. Its
 description repeats the argument and full scope, including TTL, and adds
 `Outside Seal: Bash, network, subprocesses, other tools and servers.`
 

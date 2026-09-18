@@ -86,7 +86,7 @@ function appendApprovalContext(message, context) {
   return measureApprovalMessage(lines.join("\n"));
 }
 
-function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approval required", selection } = {}) {
+function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approval required", selection, serverId } = {}) {
   if (typeof tool !== "string" || tool.length === 0) {
     return { ok: false, reason: "tool name is not a non-empty string" };
   }
@@ -103,8 +103,20 @@ function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approv
     return { ok: false, reason: `arguments have no canonical rendering: ${error.message}` };
   }
 
+  let routeLine;
+  if (serverId !== undefined && serverId !== null) {
+    if (typeof serverId !== "string" || serverId.length === 0) {
+      return { ok: false, reason: "configured server route is not a non-empty string" };
+    }
+    // This is display context, not a client-authenticated identity. It is a
+    // first-class line in the universal envelope: it must fit before Seal can
+    // offer an approval, and any later selection context uses the same folding
+    // and refusal path over the complete message.
+    routeLine = `Route (configured, not authenticated): ${renderName(serverId)}`;
+  }
   const scopeLine = `Scope: ${SCOPE_RULE}; ${formatTtl(ttlMs)}.`;
   const lines = [`Tool: ${renderName(tool)}; ${escapeInvisible(firstLine)}`, ...argLines, scopeLine, OUTSIDE_LINE];
+  if (routeLine) lines.push(routeLine);
 
   let measured = measureApprovalMessage(lines.join("\n"));
   if (!measured.ok) return measured;
