@@ -41,24 +41,25 @@ function resolve(href: string) {
     gap: 0.4rem;
     height: 100%;
     padding: 1.25rem;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
+    border: 1px solid var(--seal-border, var(--sl-color-gray-5));
+    border-top: 3px solid var(--seal-border, var(--sl-color-gray-5));
+    border-radius: var(--seal-radius, 0.5rem);
     text-decoration: none;
     color: var(--sl-color-text);
-    background: var(--sl-color-bg-nav);
+    background: var(--seal-surface, var(--sl-color-bg-nav));
   }
   .family-route a:hover,
   .family-route a:focus-visible {
-    border-color: var(--sl-color-text-accent);
+    border-color: var(--seal-accent, var(--sl-color-text-accent));
   }
   .family-route a:focus-visible {
-    outline: 2px solid var(--sl-color-text-accent);
+    outline: 2px solid var(--seal-accent, var(--sl-color-text-accent));
     outline-offset: 2px;
   }
   .family-route--primary a {
-    border-color: var(--sl-color-text-accent);
-    border-width: 2px;
-    background: var(--sl-color-bg-accent-overlay, var(--sl-color-bg-nav));
+    border-top-color: var(--seal-accent, var(--sl-color-text-accent));
+    border-top-width: 4px;
+    background: var(--seal-accent-soft, var(--sl-color-bg-nav));
   }
   .family-route__action {
     font-weight: 600;

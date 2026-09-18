@@ -1,0 +1,108 @@
+---
+// SPDX-License-Identifier: Apache-2.0
+//
+// Homepage decision-receipt example (docs-site spec section 3; maps onto the
+// reference bundle's `.receipt`, `.check-list` and `.receipt-caption` —
+// ASTRO-INTEGRATION.md section 1). This renders a single, explicitly labeled
+// RECORDED EXAMPLE. It is not a live checker: it does not accept input, does
+// not call seal-check or the assurance kit, and must never be styled to look
+// like a pass/fail verdict on the running deployment. The values below are
+// the reviewed public specimen's own recorded fields (tool, decision) and the
+// same row-by-row result the browser checker reports for that specimen — see
+// docs/public/examples/PROVENANCE.md for the fixture this mirrors.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+const checks: { label: string; result: string; status: 'good' | 'unknown' }[] = [
+  { label: 'Document structure', result: 'Valid', status: 'good' },
+  { label: 'Signature & bindings', result: 'Valid', status: 'good' },
+  { label: 'Verifier-local replay', result: 'Reproduced', status: 'good' },
+  { label: 'Operator authority', result: 'Not established', status: 'unknown' },
+  { label: 'Event occurrence', result: 'Not established', status: 'unknown' },
+];
+---
+<figure class="seal-receipt" aria-labelledby="seal-receipt-heading">
+  <div class="seal-receipt__head">
+    <span id="seal-receipt-heading">Decision receipt</span>
+    <span>Recorded example</span>
+  </div>
+  <p class="seal-receipt__tool">demo.mutate</p>
+  <p class="seal-receipt__decision">Recorded decision: <strong>BLOCK</strong></p>
+  <dl class="seal-receipt__checks">
+    {checks.map((check) => (
+      <div>
+        <dt>{check.label}</dt>
+        <dd class={`seal-status-${check.status}`}>{check.result}</dd>
+      </div>
+    ))}
+  </dl>
+  <figcaption class="seal-receipt__caption">
+    Recorded result for the bundled public specimen, not a live check — open the
+    <a href={`${base}/verify/browser/`}>browser checker guide</a> to run this
+    yourself against the <a href={`${base}/examples/protect-block.receipt.json`}>example receipt</a>
+    and its <a href={`${base}/examples/protect-signer.pub`}>demo public key</a>.
+  </figcaption>
+</figure>
+<style>
+  .seal-receipt {
+    margin: 0;
+    max-width: 26rem;
+    background: var(--seal-surface, var(--sl-color-bg-nav));
+    border: 1px solid var(--seal-border, var(--sl-color-hairline));
+    border-top: 4px solid var(--seal-accent, var(--sl-color-accent));
+    border-radius: var(--seal-radius, 0.375rem);
+    padding: 1.5rem 1.6rem;
+  }
+  .seal-receipt__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px dashed var(--seal-border, var(--sl-color-hairline));
+    padding-bottom: 0.85rem;
+    margin-bottom: 0.85rem;
+    color: var(--seal-muted, var(--sl-color-gray-2));
+    font: 0.7rem/1.5 var(--__sl-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .seal-receipt__tool {
+    font: 600 1.3rem/1.4 var(--__sl-font-mono, ui-monospace, monospace);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .seal-receipt__decision {
+    color: var(--seal-muted, var(--sl-color-gray-2));
+    font-size: 0.85rem;
+    margin: 0.3rem 0 1rem;
+  }
+  .seal-receipt__decision strong {
+    color: var(--seal-text, var(--sl-color-white));
+  }
+  .seal-receipt__checks {
+    margin: 0;
+  }
+  .seal-receipt__checks > div {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 0.55rem 0;
+    border-top: 1px solid var(--seal-border, var(--sl-color-hairline));
+    font-size: 0.82rem;
+  }
+  .seal-receipt__checks dt,
+  .seal-receipt__checks dd {
+    margin: 0;
+  }
+  .seal-receipt__checks dd {
+    font-weight: 600;
+    text-align: right;
+  }
+  .seal-receipt__caption {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--seal-border, var(--sl-color-hairline));
+    color: var(--seal-muted, var(--sl-color-gray-2));
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
+</style>

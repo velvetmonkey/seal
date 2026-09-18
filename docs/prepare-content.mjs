@@ -91,6 +91,17 @@ function destinationFor(source, raw) {
   return raw;
 }
 
+// Starlight renders its own <h1> from the frontmatter title set below on
+// every ordinary article page (ASTRO-INTEGRATION.md section 3: "Normalize
+// this so each rendered page has one H1... remove the duplicate source H1
+// during generation."). Source Markdown keeps its own leading "# Title" for
+// readers viewing the file directly on GitHub; strip only that first H1 line
+// (the same line pageSlug's title is read from) out of the generated copy so
+// the built page does not render it twice.
+function stripSourceH1(markdown) {
+  return markdown.replace(/^#[ \t]+.+\r?\n?/m, '');
+}
+
 function rewriteLinks(source, markdown) {
   return markdown.replace(/(!?\[[^\]]*\]\()([^)\s]+)([^)]*\))/g,
     (whole, open, destination, close) => `${open}${destinationFor(source, destination)}${close}`);
@@ -147,7 +158,7 @@ function main() {
       : '';
     const warning = archive ? `> **Archive — not current documentation.** ${archiveWarning}\n\n` : '';
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    const prepared = prepareMarkdown(sourceName, original);
+    const prepared = stripSourceH1(prepareMarkdown(sourceName, original));
     fs.writeFileSync(destination, `---\ntitle: ${JSON.stringify(title)}\n${archiveFrontmatter}---\n\n${warning}${rewriteLinks(source, prepared)}`);
   }
 

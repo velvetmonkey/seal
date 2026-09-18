@@ -1,0 +1,17 @@
+# Fixture provenance
+
+`protect-block.receipt.json` and `protect-signer.pub` in this directory are
+unmodified public specimens from the
+[seal-check examples directory](https://github.com/velvetmonkey/seal-check/tree/1a709be2aab7e14ec38747bee4bb65f535e48004/examples),
+reviewed at seal-check revision `1a709be2aab7e14ec38747bee4bb65f535e48004`.
+`protect-signer.pub` is a public demo key, not a private credential. Both
+files are byte-for-byte identical to that source; `LICENSE` in this directory
+is the original seal-check repository license covering them, also copied
+unmodified.
+
+These three files were carried over from the external Astro-integration
+reference bundle at `ASTRO-INTEGRATION.md` section 6 / `README.md` "Fixture
+provenance", which reviewed and re-published the same upstream specimen.
+
+This note is the only new prose in this directory; the three files above were
+not edited to produce it.

@@ -23,3 +23,167 @@
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
+
+/* ==========================================================================
+   Seal design system
+   ==========================================================================
+   Ported from the external reference bundle reviewed at
+   /home/monkey/scratch/seal-docs-concept/seal-docs-site/assets/styles.css
+   (ASTRO-INTEGRATION.md section 1), reviewed Seal revision
+   0f78aa726f0c57f279eae1f0605f61ced31dd6ac.
+
+   This does NOT import that bundle's global reset/layout: Starlight already
+   owns the outer page, sidebar, search and article wrappers (unchanged
+   below). Two kinds of rule follow instead:
+
+   1. `--seal-*` custom properties plus a small set of `.seal-*` component
+      classes, used only by the new Seal-authored components (DecisionReceipt,
+      the restyled FamilyRoutes route list) — scoped, additive, and inert
+      everywhere else.
+   2. A warm-paper/rust-accent (light) and charcoal/lighter-accent (dark)
+      repaint of Starlight's OWN documented theme custom properties
+      (--sl-color-bg, --sl-color-accent, etc.), keyed off the same
+      `[data-theme]` attribute Starlight's ThemeSelect already writes to
+      <html>. This is Starlight's supported theming hook, so the hero,
+      sidebar, buttons and search dialog restyle themselves without a second
+      theme mechanism, and without any structural change to Starlight's own
+      components. Colour never carries a result alone: every status below
+      still ships an explicit text label (see DecisionReceipt.astro).
+   ========================================================================== */
+
+:root {
+  --seal-radius: 0.375rem;
+}
+
+:root[data-theme='light'] {
+  --seal-bg: #f8f5ef;
+  --seal-surface: #fffdf8;
+  --seal-text: #182826;
+  --seal-muted: #53615e;
+  --seal-border: #d5dbd0;
+  --seal-accent: #a33d20;
+  --seal-accent-text: #fffaf4;
+  --seal-accent-soft: #f3e3d4;
+  --seal-success: #266344;
+  --seal-warning: #765000;
+  --seal-danger: #a62d30;
+
+  /* Repaint Starlight's own theme tokens (see astro.config.mjs customCss) so
+     Starlight-owned chrome — hero, sidebar, link buttons, search dialog —
+     picks up the same warm-paper/rust palette through its one theme switch. */
+  --sl-color-bg: var(--seal-bg);
+  --sl-color-bg-nav: var(--seal-surface);
+  --sl-color-bg-sidebar: var(--seal-bg);
+  --sl-color-bg-inline-code: var(--seal-accent-soft);
+  --sl-color-text: var(--seal-text);
+  --sl-color-white: var(--seal-text);
+  --sl-color-gray-2: var(--seal-muted);
+  --sl-color-gray-5: var(--seal-border);
+  --sl-color-gray-6: var(--seal-border);
+  --sl-color-accent: var(--seal-accent);
+  --sl-color-accent-high: var(--seal-accent);
+  --sl-color-accent-low: var(--seal-accent-soft);
+  --sl-color-text-accent: var(--seal-accent);
+}
+
+:root[data-theme='dark'] {
+  --seal-bg: #171b1b;
+  --seal-surface: #242a29;
+  --seal-text: #ecf1e9;
+  --seal-muted: #b6c3ba;
+  --seal-border: #414b45;
+  --seal-accent: #ffad88;
+  --seal-accent-text: #281910;
+  --seal-accent-soft: #43372c;
+  --seal-success: #a5d2aa;
+  --seal-warning: #e5c474;
+  --seal-danger: #ffadb0;
+
+  --sl-color-bg: var(--seal-bg);
+  --sl-color-bg-nav: var(--seal-surface);
+  --sl-color-bg-sidebar: var(--seal-bg);
+  --sl-color-bg-inline-code: var(--seal-accent-soft);
+  --sl-color-text: var(--seal-text);
+  --sl-color-white: var(--seal-text);
+  --sl-color-gray-2: var(--seal-muted);
+  --sl-color-gray-5: var(--seal-border);
+  --sl-color-gray-6: var(--seal-border);
+  --sl-color-accent: var(--seal-accent);
+  --sl-color-accent-high: var(--seal-accent);
+  --sl-color-accent-low: var(--seal-accent-soft);
+  --sl-color-text-accent: var(--seal-accent);
+}
+
+/* Hero (Starlight's own splash-template Hero.astro, restyled in place —
+   spec: FamilyHero maps onto `.hero`/`.tagline`/`.actions`, not a
+   replacement component, per ASTRO-INTEGRATION.md section 1/2). */
+.hero h1 {
+  letter-spacing: -0.03em;
+}
+.hero .sl-link-button.primary {
+  border-radius: var(--seal-radius);
+  font-weight: 600;
+}
+
+/* Guide "steps": the shipped guides use ordered lists rather than the
+   reference's per-step <h2>, so the numbered-step language (.step-number)
+   is adapted onto the existing <ol> markup instead of restructuring content. */
+.sl-markdown-content ol {
+  counter-reset: seal-step;
+  list-style: none;
+  padding-left: 0;
+}
+.sl-markdown-content ol > li {
+  counter-increment: seal-step;
+  position: relative;
+  padding-left: 2.25rem;
+}
+.sl-markdown-content ol > li::before {
+  content: counter(seal-step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.05em;
+  font: 600 0.75rem/1.4 var(--__sl-font-mono, ui-monospace, monospace);
+  color: var(--seal-accent, var(--sl-color-text-accent));
+  background: var(--seal-accent-soft, var(--sl-color-accent-low));
+  border-radius: 3px;
+  padding: 0.15rem 0.3rem;
+}
+
+/* Evidence tables (EvidenceTable mapping / `.table-scroll`): Starlight's own
+   markdown tables already scroll their own container (rule above); this only
+   adds the reference's tighter row rhythm. */
+.sl-markdown-content table {
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.sl-markdown-content th,
+.sl-markdown-content td {
+  padding-block: 0.7rem;
+}
+
+/* Callouts: style the existing blockquote markup (used today for the
+   `> Scope:` / `> The state machine is TESTED.` signposts) as the
+   reference's `.callout`, without introducing a new directive syntax into
+   any source Markdown. */
+.sl-markdown-content blockquote {
+  background: var(--seal-accent-soft, var(--sl-color-accent-low));
+  border-left: 3px solid var(--seal-accent, var(--sl-color-accent));
+  border-radius: 0 var(--seal-radius) var(--seal-radius) 0;
+  margin-block: 1.5rem;
+  padding: 0.85rem 1.1rem;
+}
+.sl-markdown-content blockquote > :first-child {
+  margin-top: 0;
+}
+.sl-markdown-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* Explicit, never color-only, status labels shared by DecisionReceipt.astro
+   and (per spec) any future ScopedResult.astro result panel. Each status
+   already carries its own text ("Valid", "Not established", "Reproduced");
+   these classes only add colour as a secondary reinforcement. */
+.seal-status-good { color: var(--seal-success); }
+.seal-status-unknown { color: var(--seal-muted); }
+.seal-status-fail { color: var(--seal-danger); font-weight: 600; }
