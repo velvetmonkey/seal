@@ -132,3 +132,81 @@ test("live release-publish environment requires a named reviewer and forbids adm
   assert.ok(reviewerNames.length > 0, "release-publish required_reviewers rule names no reviewer");
   assert.equal(body.can_admins_bypass, false, "release-publish allows administrators to bypass protection rules");
 });
+
+// Execute the workflow's Bash body. Only GitHub and manifest generation are
+// stubbed. These tests check release control flow, not manifest validity.
+const { spawnSync } = require("node:child_process");
+const { testTmpdir } = require("../scripts/temp-root.cjs");
+const os = require("node:os");
+
+function runDraftStep(state, assetMode = "complete") {
+  const directory = testTmpdir(path.join(os.tmpdir(), "seal-release-recovery-"));
+  const dist = path.join(directory, "dist");
+  fs.mkdirSync(dist);
+  fs.writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
+  fs.writeFileSync(path.join(directory, "claude-code-label.txt"), "UNTESTED\n");
+  const names = ["seal-v1.2.3-linux-x64", "seal-v1.2.3-darwin-arm64", "seal-v1.2.3-darwin-x64", "seal-receipt-v2.mjs", "release-manifest.json"];
+  for (const name of names) fs.writeFileSync(path.join(dist, name), `${name}\n`);
+  fs.writeFileSync(path.join(dist, "SHA256SUMS"), names.slice(0, 4).map((name) => {
+    const bytes = fs.readFileSync(path.join(dist, name));
+    return `${crypto.createHash("sha256").update(bytes).digest("hex")}  ${bytes.length}  ${name}\n`;
+  }).join(""));
+  names.push("SHA256SUMS");
+  const assets = names.map((name) => ({ name, digest: `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(dist, name))).digest("hex")}` }));
+  if (assetMode === "missing") assets.splice(assets.findIndex((asset) => asset.name === "release-manifest.json"), 1);
+  if (assetMode === "different") assets[0].digest = `sha256:${"0".repeat(64)}`;
+  fs.writeFileSync(path.join(directory, "assets.json"), JSON.stringify(assets));
+  const step = workflow.match(/      - name: Create the draft release to be verified\n([\s\S]*?)(?=^      - uses: actions\/upload-artifact@v4)/m)?.[1];
+  assert.ok(step, "draft step must exist");
+  const body = step.split("        run: |\n")[1].replace(/^          /gm, "");
+  const mock = `
+gh() {
+  printf '%s\\n' "$*" >> "$RUNNER_TEMP/calls"
+  if [[ "$1 $2" = 'release view' ]]; then
+    if [[ "$*" = *'--json assets'* ]]; then cat "$RUNNER_TEMP/assets.json"; return; fi
+    case "$TEST_RELEASE_STATE" in
+      missing) echo 'release not found' >&2; return 1 ;;
+      unavailable) echo 'HTTP 503' >&2; return 1 ;;
+      *) printf '%s\\n' "$TEST_RELEASE_STATE"; return ;;
+    esac
+  fi
+  if [[ "$1 $2" = 'release create' && "$TEST_RELEASE_STATE" != missing ]]; then
+    echo 'release already exists' >&2; return 1
+  fi
+  if [[ "$1 $2" = 'release create' || "$1 $2" = 'release upload' ]]; then return 0; fi
+  echo 'unexpected gh command' >&2; return 99
+}
+node() {
+  [[ "$1" = scripts/create-release-manifest.mjs ]] || return 99
+}
+`;
+  const result = spawnSync("bash", ["--noprofile", "--norc", "-euo", "pipefail", "-c", mock + body], {
+    cwd: directory, encoding: "utf8", timeout: 10_000,
+    env: { PATH: process.env.PATH, RUNNER_TEMP: directory, GITHUB_REF_NAME: "v1.2.3", GITHUB_SHA: "a".repeat(40), TEST_RELEASE_STATE: state },
+  });
+  const calls = fs.readFileSync(path.join(directory, "calls"), "utf8").trim().split("\n");
+  return { ...result, calls };
+}
+
+for (const [name, state, assets, expected, mutation, refusal] of [
+  ["creates an absent draft", "missing", "complete", 0, "release create", null],
+  ["adopts an identical draft without writes", "true", "complete", 0, null, null],
+  ["uploads only the missing draft asset", "true", "missing", 0, "release upload", null],
+  ["refuses different draft bytes without writes", "true", "different", 1, null, "REFUSE draft asset digest differs"],
+  ["refuses a published release without writes", "false", "complete", 1, null, "REFUSE release already published"],
+  ["refuses an unreadable release state without writes", "unavailable", "complete", 1, null, "REFUSE cannot determine release state"],
+]) {
+  test(`draft shell ${name}`, () => {
+    const result = runDraftStep(state, assets);
+    assert.equal(result.status, expected, result.stderr);
+    if (refusal) assert.match(result.stderr, new RegExp(refusal));
+    const writes = result.calls.filter((call) => !call.startsWith("release view "));
+    assert.equal(writes.length, mutation ? 1 : 0, JSON.stringify(writes));
+    if (mutation) assert.ok(writes[0].startsWith(`${mutation} v1.2.3 `), writes[0]);
+    if (assets === "missing") {
+      assert.match(writes[0], /\/release-manifest\.json$/);
+      assert.equal(writes[0].split(" ").length, 4, "upload exactly one asset without clobber");
+    }
+    if (state === "missing") assert.match(writes[0], /--draft --verify-tag/);
+  });
+}

@@ -98,6 +98,50 @@ default. Slow but legitimate servers can use
 `seal protect --timeout-ms MILLISECONDS SERVER TOOL`; timeout refusals name
 that flag, and the selected deadline is retained for the activation re-check.
 
+## Release approval and recovery
+
+Cut and push the release tag for the exact commit that passed default-branch CI.
+The tag must match `VERSION`.
+The Release workflow builds the three platform artifacts and creates a draft.
+It then rebuilds the pinned kernel and verifies the downloaded draft on Linux
+x64, macOS arm64, and macOS x64.
+The `publish` job then waits for approval in the `release-publish` environment.
+The owner account, `velvetmonkey`, reads all three `verify-draft` job logs.
+The owner approves only after this review.
+Only then does the job make the release public.
+The `release-docs` job follows publication.
+
+Open the waiting run from
+[the Release workflow](https://github.com/velvetmonkey/seal/actions/workflows/release.yml).
+Select **Review deployments**, select `release-publish`, then select
+**Approve and deploy**.
+To approve from the terminal, set `RUN_ID` to that run's numeric ID.
+Run these commands as the owner after reading the evidence:
+
+```bash
+ENVIRONMENT_ID=$(gh api repos/velvetmonkey/seal/environments/release-publish --jq .id)
+gh api --method POST "repos/velvetmonkey/seal/actions/runs/$RUN_ID/pending_deployments" \
+  -F "environment_ids[]=$ENVIRONMENT_ID" \
+  -f state=approved -f comment='Reviewed all three verify-draft jobs'
+```
+
+If `rebuild-kernel` fails after draft creation, select **Re-run failed jobs**.
+The terminal command is `gh run rerun "$RUN_ID" --failed --repo velvetmonkey/seal`.
+GitHub retries the failed job and its dependent jobs.
+The successful `build-artifacts` and `release` jobs do not rerun.
+The three `verify-draft` jobs run after the kernel rebuild succeeds.
+Publication still requires approval.
+Do not delete the draft or tag for this retry.
+
+A full workflow retry also keeps the same tag.
+The `release` job adopts an existing draft only if each existing asset has the
+same SHA-256 digest as its local candidate.
+It uploads only missing assets.
+It refuses a different digest, an unreadable release state, or a published release.
+The shell execution tests in `test/release-publish-gate.test.cjs` test these paths
+with a local GitHub substitute.
+They do not publish a release or test a live approval.
+
 Previous: [Architecture](architecture.md).
 Up: [Assurance](README.md).
 Next: [Version identity](version-identity.md).
