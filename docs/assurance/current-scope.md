@@ -10,6 +10,8 @@ this page cannot drift from it silently.
 
 ## Proved model properties
 
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+
 The following is quoted verbatim from the README so this page cannot drift
 from it silently:
 
@@ -57,6 +59,8 @@ Quoted verbatim from the README:
   defect.
 
 ## Family context
+
+**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
 
 The archived family claims matrix
 ([CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md)) describes a wider Seal
