@@ -30,12 +30,12 @@ Copy the whole POSIX command, including its backslashes and `&&` operators.
 A failed comparison skips both `chmod` and execution.
 
 ```bash
-SEAL_VERSION=v0.3.0
-artifact_name="seal-v0.3.0-linux-x64" \
-&& artifact_sha256="93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b" \
-&& artifact_bytes=6247615 \
+SEAL_VERSION=v0.4.0
+artifact_name="seal-v0.4.0-linux-x64" \
+&& artifact_sha256="5b49ea26d29b608fcb4e3e370062b96e8c4a81d7fb5ce1fd30a2cbe737c69d3b" \
+&& artifact_bytes=6301771 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="55f26a95c5aed564545ae35a409b7ea73ca4f1d9f7cf67311a9d79215e3563e3" \
+&& sums_sha256="0552373fc3cb7f7257b4cf491395425a1ce2f7126cc60142a961f53ff29026ce" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \

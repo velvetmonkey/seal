@@ -96,6 +96,18 @@ remain readable by the updated checker. The kernel wire encoding may spell a
 fraction in scientific notation to satisfy its digit bound; this preserves the
 parsed value and does not change the arguments in the receipt or downstream call.
 
+**Cross-repo compatibility note.** The independent checkers in
+`velvetmonkey/seal-check` (`protect-receipt.js`) and
+`velvetmonkey/seal-assurance-kit` (`src/verify.cjs`) currently require every
+number in a receipt to be a finite safe integer (`Number.isInteger` and
+`Number.isSafeInteger` both true) and refuse a canonical-but-decimal number
+this specification accepts. A receipt whose `arguments` contain a decimal,
+negative fraction, or scientific-notation value that this checkout's producer
+and checker treat as valid will currently be rejected by both of those
+checkers as `number_not_canonical` / non-canonical. Integer-only receipts are
+unaffected. This is a known gap between the specification and those two
+checkers, not a spec ambiguity; see each repo's own compatibility statement.
+
 Kernel approval targets use the pinned Lean 4.28 `Json.compress` rendering,
 including its Unicode scalar key ordering and string/number encoding. This is
 not RFC 8785 JCS. The JavaScript target encoder must match that kernel encoding;
