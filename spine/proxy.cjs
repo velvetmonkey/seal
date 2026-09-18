@@ -14,7 +14,7 @@
 // (Ed25519 token files, approvals NDJSON) is discarded — Claude Code
 // rejects the held shape on a modern connection. Retry state lives in the
 // contract; its authorization sub-question is delegated to the kernel.
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -76,6 +76,53 @@ const TERMINAL_REFUSALS = new Set([
   "restart_invalidated",
   "declined",
 ]);
+
+// Mirror discovery cleanup: this is best-effort process cleanup, not a sandbox.
+// Snapshot current ancestry, independent of process groups/sessions. Keep observed
+// descendants across scans because TERM can reparent them before the deadline.
+// A descendant that fully detaches (double-fork, new session, reparent to init)
+// before the first deadline-cleanup scan is unobservable to this ancestry walk
+// and cannot be contained by it; later or repeated scans cannot recover that link.
+function proxyTreePids(roots) {
+  const found = new Set(roots);
+  if (process.platform === "linux") {
+    for (const pid of found) {
+      try {
+        for (const tid of fs.readdirSync(`/proc/${pid}/task`)) {
+          try {
+            for (const word of fs.readFileSync(`/proc/${pid}/task/${tid}/children`, "utf8").trim().split(/\s+/)) {
+              const descendant = Number(word);
+              if (Number.isInteger(descendant) && descendant > 0) found.add(descendant);
+            }
+          } catch {} // A thread may exit while its children are being read.
+        }
+      } catch {} // Already exited, including a root retained from an earlier scan.
+    }
+  } else if (process.platform === "darwin") {
+    const snapshot = spawnSync("/bin/ps", ["-A", "-o", "pid=,ppid="], {
+      encoding: "utf8", timeout: 25, maxBuffer: 4 * 1024 * 1024,
+    });
+    const children = new Map();
+    for (const line of (snapshot.stdout || "").trim().split("\n")) {
+      const [pid, parent] = line.trim().split(/\s+/).map(Number);
+      if (pid > 0 && parent > 0) {
+        if (!children.has(parent)) children.set(parent, []);
+        children.get(parent).push(pid);
+      }
+    }
+    for (const pid of found) for (const descendant of children.get(pid) || []) found.add(descendant);
+  }
+  return found;
+}
+
+function killProxyDescendant(pid) {
+  // Ben's discoverytermtree round-3 ruling accepts snapshot/kill TOCTOU:
+  // an exited PID could be reused for an unrelated process. The window is
+  // bounded by the scan-and-kill loop's execution time; this is an explicitly
+  // accepted small timing residual, not a claim of atomic OS containment.
+  try { process.kill(pid, "SIGKILL"); } catch {}
+}
+
 
 function createProxy(options) {
   const {
@@ -193,10 +240,12 @@ function createProxy(options) {
 
   const child = spawn(childCommand, childArgv.slice(1), {
     cwd: spawnCwd,
+    detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "inherit"],
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });
   let stopping = false;
+  let stopTask;
   let childClosed = false;
   let childSpawnError = null;
   child.once("error", (error) => {
@@ -547,15 +596,84 @@ function createProxy(options) {
       if (canForward(frame)) child.stdin.write(line + "\n");
     },
     stop() {
+      if (stopTask) return stopTask;
       stopping = true;
       clearElicitationState();
-      return new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) return resolve();
-        child.once("close", () => resolve());
+      stopTask = new Promise((resolve) => {
+        const group = process.platform !== "win32" && Number.isInteger(child.pid) ? -child.pid : null;
+        function proxyGroupAlive() {
+          if (group === null) return false;
+          try { process.kill(group, 0); return true; }
+          catch (error) { return error.code !== "ESRCH"; }
+        };
+        function signalProxyGroup(signal) {
+          if (group !== null) { try { process.kill(group, signal); } catch {} }
+        };
+        const originalPid = child.pid;
+        let descendants = new Set();
+        const scanTree = () => {
+          const roots = new Set(descendants);
+          if (Number.isInteger(originalPid)) roots.add(originalPid);
+          descendants = proxyTreePids(roots);
+          descendants.delete(originalPid);
+        };
+        scanTree(); // Before TERM can orphan an observed detached session.
+        let done = false;
+        let escalated = false;
+        let graceTimer;
+        let deadline;
+        let poll;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(graceTimer);
+          clearTimeout(deadline);
+          clearInterval(poll);
+          child.removeListener("exit", onExit);
+          child.removeListener("close", check);
+          // Neither inherited pipes nor an unreapable child may own our wait.
+          childOut.close();
+          child.stdin.destroy();
+          child.stdout.destroy();
+          child.unref();
+          resolve();
+        };
+        const check = () => {
+          if (!escalated) scanTree();
+          if (childClosed && descendants.size === 0 && !proxyGroupAlive()) finish();
+        };
+        const onExit = () => {
+          // Preserve the direct child's single TERM; once it exits, TERM any
+          // remaining group members even if they no longer hold our pipes.
+          if (!escalated) signalProxyGroup("SIGTERM");
+          check();
+        };
+        const kill = () => {
+          scanTree(); // Walk every depth again at the grace deadline.
+          escalated = true;
+          // Kill leaves before ancestors so this snapshot retains its ancestry.
+          for (const pid of [...descendants].reverse()) killProxyDescendant(pid);
+          if (child.exitCode === null && child.signalCode === null) {
+            try { child.kill("SIGKILL"); } catch {}
+          }
+          signalProxyGroup("SIGKILL");
+        };
+        child.once("exit", onExit);
+        child.once("close", check);
+        // Reserve the last 50ms of the existing 2000ms budget for reaping.
+        // The deadline stays referenced and never depends on close or exit.
+        graceTimer = setTimeout(kill, 1950);
+        deadline = setTimeout(() => { kill(); finish(); }, 2000);
+        poll = setInterval(check, 20);
         try { child.stdin.end(); } catch {}
-        child.kill("SIGTERM");
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 2000).unref();
+        if (child.exitCode === null && child.signalCode === null && !childClosed) {
+          try { child.kill("SIGTERM"); } catch {}
+        } else {
+          onExit();
+        }
+        check();
       });
+      return stopTask;
     },
   };
 }

@@ -1913,3 +1913,97 @@ for (const token of ['-9007199254740993', '9007199254740993e0', '"90071992547409
     assert.deepEqual(h.rawCalls(), [h.call(token,args)]);
   });
 }
+
+// F06: actual descendants hold the server's stdout open after its exit.
+// The escaped-session case deliberately demonstrates the containment limit:
+// Seal must release its transport even when it cannot find the pipe holder.
+for (const mode of ["inherited-pipe", "detached-observed", "escaped-session", "already-exited", "ignore-term", "cooperative"]) {
+  test(`proxy shutdown is bounded: ${mode}`, async (t) => {
+    const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-stop-"));
+    const pidFile = path.join(dir, "descendant.pid");
+    const storePath = path.join(dir, "store");
+    createJournal(storePath);
+    const leaf = `
+      process.on('SIGTERM', () => {});
+      setInterval(() => {}, 1000);
+      require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+    `;
+    const hasLeaf = !["ignore-term", "cooperative"].includes(mode);
+    const intermediary = `
+      const leaf = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(leaf)}],
+        {detached:true, stdio:['ignore',1,2]});
+      leaf.unref();
+    `;
+    const server = `
+      const fs = require('node:fs');
+      ${mode === "ignore-term" ? "process.on('SIGTERM', () => {});" : ""}
+      const keep = setInterval(() => {}, 1000);
+      ${hasLeaf ? `
+        const child = require('node:child_process').spawn(process.execPath,
+          ['-e', ${JSON.stringify(mode === "escaped-session" ? intermediary : leaf)}],
+          {detached:${mode === "detached-observed"}, stdio:['ignore',1,2]});
+        let exited = false;
+        child.on('exit', () => exited = true);
+        const poll = setInterval(() => {
+          if (!fs.existsSync(${JSON.stringify(pidFile)}) || (${mode === "escaped-session"} && !exited)) return;
+          clearInterval(poll);
+          console.log(JSON.stringify({ready:true, pid:process.pid}));
+          ${mode === "already-exited" ? "process.exit(0);" : ""}
+        }, 10);
+      ` : "console.log(JSON.stringify({ready:true, pid:process.pid}));"}
+    `;
+    let parentPid;
+    let proxy;
+    const running = pid => {
+      const result = spawnSync("ps", ["-p", String(pid), "-o", "stat="], {encoding:"utf8"});
+      return result.stdout.trim() !== "" && !result.stdout.trim().startsWith("Z");
+    };
+    t.after(async () => {
+      for (const pid of [parentPid, fs.existsSync(pidFile) ? Number(fs.readFileSync(pidFile)) : null]) {
+        if (pid) { try { process.kill(pid, "SIGKILL"); } catch {} }
+      }
+      if (proxy) await proxy.stop();
+    });
+    let ready;
+    const readiness = new Promise(resolve => { ready = resolve; });
+    proxy = createProxy({guardTool:"demo.mutate", storePath, receiptsDir:path.join(dir,"receipts"),
+      signer:generateSigner(), childArgv:[process.execPath,"-e",server],
+      onClientLine:line => { const frame = JSON.parse(line); if (frame.ready) ready(frame.pid); }});
+    const timeout = setTimeout(() => ready(null), 5000);
+    parentPid = await readiness;
+    clearTimeout(timeout);
+    assert.ok(parentPid, "real server became ready");
+    const descendantPid = hasLeaf ? Number(fs.readFileSync(pidFile)) : null;
+    if (descendantPid) assert.equal(running(descendantPid), true);
+    if (mode === "already-exited") {
+      const until = Date.now() + 1000;
+      while (running(parentPid) && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+      assert.equal(running(parentPid), false);
+    }
+    const started = performance.now();
+    const stopping = proxy.stop();
+    assert.strictEqual(proxy.stop(), stopping, "concurrent callers share cleanup");
+    await stopping;
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 2500, `stop exceeded its two-second budget plus scheduling allowance: ${elapsed}ms`);
+    assert.strictEqual(proxy.stop(), stopping, "completed shutdown is idempotent");
+    assert.equal(running(parentPid), false, "direct server was reaped");
+    if (descendantPid) assert.equal(running(descendantPid), mode === "escaped-session",
+      "observable descendants die; an unobservable escaped session may survive without owning the wait");
+    if (mode === "ignore-term") assert.ok(elapsed >= 1900, "TERM-resistant server reached escalation");
+    if (mode === "cooperative") assert.ok(elapsed < 1000, "cooperative server need not wait for escalation");
+    t.diagnostic(JSON.stringify({mode, elapsed, parentPid, descendantPid}));
+  });
+}
+
+test("proxy shutdown is bounded after a spawn error", async () => {
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-spawn-error-"));
+  const storePath = path.join(dir, "store");
+  createJournal(storePath);
+  const proxy = createProxy({guardTool:"demo.mutate", storePath, receiptsDir:path.join(dir,"receipts"),
+    signer:generateSigner(), childArgv:["seal-nonexistent-f06-server"], onClientLine:() => {}});
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const start = performance.now();
+  await proxy.stop();
+  assert.ok(performance.now() - start < 1000);
+});
