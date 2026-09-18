@@ -453,7 +453,16 @@ function installRegions({ manifest, manifestPublished }) {
     [SENTINEL, commandOrHistoricalNote("darwin-arm64"), END].join("\n"),
     [SENTINEL, commandOrHistoricalNote("darwin-x64"), END].join("\n"),
     [SENTINEL, commandOrHistoricalNote("linux-x64"), END].join("\n"),
-    // 6. Release identity and the verification-wall explanation, both moved
+    // 6. What a successful install prints, named once with the real
+    // version and platform so a reader can recognise it (and so this page
+    // keeps naming the published identity the way docs/guide/README.md's
+    // own install pointer does).
+    [
+      SENTINEL,
+      `The Linux x86-64 command's installer prints \`installed seal ${version(manifest)} linux-x64\` on success, followed by \`store:\`, \`command:\`, and \`tree:\` lines and a two-line \`Next:\` block; the macOS commands print their own platform name in place of \`linux-x64\`.`,
+      END,
+    ].join("\n"),
+    // 7. Release identity and the verification-wall explanation, both moved
     // out of the top of the page and into "More detail" — provenance and
     // mechanism explanation a reader can read after, not before, their
     // first runnable command. Kept as one generated region (rather than
@@ -481,7 +490,7 @@ function installRegions({ manifest, manifestPublished }) {
       '"is the publisher honest?"',
       END,
     ].join("\n"),
-    // 7. The standalone checker download, now explicitly optional/advanced:
+    // 8. The standalone checker download, now explicitly optional/advanced:
     // the installed tree already carries its own copy.
     [
       SENTINEL,
@@ -505,15 +514,28 @@ function installRegions({ manifest, manifestPublished }) {
       "```",
       END,
     ].join("\n"),
-    // 8. Installed-tree pins for all three platforms (previously only the
-    // Linux pin appeared here, printed as a fabricated `seal install`
-    // transcript; this states the pins directly rather than staging output
-    // that does not come from a command run on this page).
+    // 9. Installed-tree pins. scripts/installed-tree-pin.cjs's
+    // publishedTreeSha256FromRelease() (and the site manifest it is checked
+    // against) has one canonical "published-asset" pin, hardcoded to
+    // linux-x64, shared with docs/guide/README.md; that is a bigger,
+    // pre-existing cross-file invariant this docs-only rework does not
+    // extend to a second, independently-varying per-platform pin family.
+    // The Linux pin therefore keeps the exact role-marker-plus-fence shape
+    // scripts/installed-tree-pin.cjs's quotedTreeHashHits() requires, in a
+    // scripts/installed-tree-pin-sites.json-declared position; the macOS
+    // digests are named honestly alongside it as plain text that a hash
+    // scanner does not mistake for a second "tree:"/"/store/" pin.
     [
       SENTINEL,
-      "```output",
-      ...artifactList.map((artifact) => `${artifact.platform}: ${artifact.installedTreeSha256}`),
-      "```",
+      [
+        "**Seal installed-tree pin role:** `published-asset`",
+        "```output",
+        `tree: ${byPlatform["linux-x64"].installedTreeSha256}`,
+        "```",
+        "",
+        "The macOS artifacts have their own installed-tree digests, published",
+        `alongside this one: Apple silicon \`${byPlatform["darwin-arm64"]?.installedTreeSha256 ?? "not published for " + manifest.tag}\`, Intel \`${byPlatform["darwin-x64"]?.installedTreeSha256 ?? "not published for " + manifest.tag}\`.`,
+      ].join("\n"),
       END,
     ].join("\n"),
   ];
@@ -723,7 +745,7 @@ function checkReadmePublishedClaims(facts) {
 function verifyDocsAgainstRelease(facts) {
   const documents = [
     checkReadmePublishedClaims(facts),
-    checkPublishedClaims(generatedClaims("docs/start/install.md", 8), facts),
+    checkPublishedClaims(generatedClaims("docs/start/install.md", 9), facts),
   ];
   const failed = documents.filter((document) => document.failures.length);
   if (failed.length) {

@@ -38,6 +38,7 @@ const claims = [
   ['04', 'UNPROVABLE: minimum Node major across supported hosts', 'Node 20+ is required.'],
   ['05', 'platform refusal', 'The installer refuses before changing anything on an unsupported or mismatched platform.'],
   ['40', 'spine/demo.cjs: no reference to the `claude` command anywhere in the demo path; spine/protection.cjs: spawns `claude` only for protect/unprotect/recover', "Claude Code's `claude` command is required only to protect a real tool; it is not required to install, verify, or run the demo below."],
+  ['41', 'scripts/install.cjs: exact printed success shape, probe-bound below', "The Linux x86-64 command's installer prints `installed seal @VERSION@ linux-x64` on success, followed by `store:`, `command:`, and `tree:` lines and a two-line `Next:` block; the macOS commands print their own platform name in place of `linux-x64`."],
   ['06', 'both fences: success and corruption', 'The [README](../../README.md) short form uses the same shell gate.'],
   ['07', 'both fences: corruption, status, mode, no install', 'In every install command on this page, a failed checksum comparison prevents both `chmod` and execution of the artifact.'],
   ['08', 'shell execution; unavailable shells explicitly reported', 'The commands use POSIX syntax for `sh`, `dash`, `bash`, and `zsh`.'],
@@ -111,13 +112,14 @@ async function main() {
   checkOutsideClaims('docs/start/install.md', install);
   checkOutsideClaims('README.md', readme);
   const parts = regions(install);
-  assert.equal(parts.length, 8, 'install generated-region population');
+  assert.equal(parts.length, 9, 'install generated-region population');
   const readmeParts = regions(readme);
   assert.equal(readmeParts.length, 1, 'README generated-region population');
   // Fixed emission order from scripts/generate-release-docs.mjs's
   // installRegions(): title, prereqs, one command per platform (in manifest
-  // order darwin-arm64/darwin-x64/linux-x64), release identity, optional
-  // checker download, installed-tree pins.
+  // order darwin-arm64/darwin-x64/linux-x64), the "what success prints"
+  // sentence, release identity, optional checker download, installed-tree
+  // pins.
   const bashFence = region => region.match(/```bash\n(SEAL_VERSION=[\s\S]*?)\n```/)?.[1];
   const platformFences = {
     'darwin-arm64': bashFence(parts[2]),
@@ -127,7 +129,7 @@ async function main() {
   for (const [platform, platformFence] of Object.entries(platformFences)) {
     assert.ok(platformFence, `published install fence absent for ${platform}`);
   }
-  const checkerFence = bashFence(parts[6]);
+  const checkerFence = bashFence(parts[7]);
   assert.ok(checkerFence, 'published optional checker fence absent');
   const tag = platformFences['linux-x64'].match(/^SEAL_VERSION=(\S+)/)[1];
   const version = tag.slice(1);
@@ -144,14 +146,23 @@ async function main() {
   let prose = normalize(parts.join('\n').replace(/```[^\n]*\n[\s\S]*?```/g, '')
     .replace(`# Install Seal ${tag}`, '')
     .replace(/The \[v[^\]]+ release\]\([^)]*\) publishes `[^`]+`(?:, `[^`]+`)*, and `[^`]+`; its tag resolves to commit \[\x60[0-9a-f]{40}\x60\]\([^)]*\)\./g, '')
-    .replace(/Its `release-manifest\.json` uses schema `seal\.release\/v\d+`\./g, ''));
+    .replace(/Its `release-manifest\.json` uses schema `seal\.release\/v\d+`\./g, '')
+    // The macOS installed-tree digests are release-specific (like the
+    // release-identity sentence above); generate-release-docs.mjs --check
+    // already verifies every 64-hex-char string in this file against the
+    // manifest's own digest set, so this file only needs to account for
+    // the sentence shape, not re-verify its two digests independently.
+    .replace(/The macOS artifacts have their own installed-tree digests, published\s+alongside this one: Apple silicon `(?:[0-9a-f]{64}|not published for v\S+)`, Intel `(?:[0-9a-f]{64}|not published for v\S+)`\./g, ''));
   for (const [id, observable, raw] of claims) {
     const sentence = raw.replace('@VERSION@', version);
     assert.equal(prose.split(sentence).length - 1, 1,
       `claim ${id} wording changed or absent; evidence required: ${observable}; expected: ${sentence}`);
     prose = prose.replace(sentence, '');
   }
-  for (const nonClaim of ['This page is the SHA256SUMS verification wall.']) prose = prose.replace(nonClaim, '');
+  for (const nonClaim of [
+    'This page is the SHA256SUMS verification wall.',
+    '**Seal installed-tree pin role:** `published-asset`',
+  ]) prose = prose.replace(nonClaim, '');
   assert.equal(normalize(prose), '', 'unreviewed generated install prose');
   assert.equal(normalize(readmeParts[0].replace(/```[^\n]*\n[\s\S]*?```/g, '')), '',
     'new generated README prose needs a claim and observable');
@@ -248,7 +259,7 @@ async function main() {
           assert.ok(success.stdout.includes(`store: ${good.home}/.local/lib/seal/store/`));
           assert.ok(success.stdout.includes(`command: ${good.home}/.local/bin/seal\n`));
           const tree = success.stdout.match(/^tree: ([0-9a-f]{64})$/m)?.[1];
-          assert.ok(tree && install.includes(`${platform}: ${tree}`), 'published tree pin');
+          assert.ok(tree && install.includes(`tree: ${tree}`), 'published tree pin');
         } else {
           // This CI host is linux-x64: the darwin commands' own digest and
           // byte checks pass for real (real published bytes), chmod runs,

@@ -119,6 +119,10 @@ command will not be on `PATH` in a new terminal: `~/.bashrc` for bash,
 
 ## Check installation
 
+<!-- generated from published release; do not edit -->
+The Linux x86-64 command's installer prints `installed seal 0.4.0 linux-x64` on success, followed by `store:`, `command:`, and `tree:` lines and a two-line `Next:` block; the macOS commands print their own platform name in place of `linux-x64`.
+<!-- end generated release docs -->
+
 ```bash
 command -v seal
 seal --version
@@ -231,18 +235,18 @@ only checked against `SHA256SUMS`; from a source checkout, run
 
 ### Installed-tree pins
 
-The published release's installed-tree hash is pinned per platform, using
-the definition below:
+The published Linux release's installed-tree hash is pinned below, using the
+definition that follows it:
 
 <!-- generated from published release; do not edit -->
-```output
-darwin-arm64: a94265c18dbc6056eddefa629803322fb6c52630491dff60d9c0306a745325d6
-darwin-x64: 11dbb92d8eb014e59bd5bce1eb01511ddf9fead38b06be21eda907c9dfc993ab
-linux-x64: 261324816077d3ab04cd55640ec79b605f2845dadb7b56d057892111601ffe32
-```
-<!-- end generated release docs -->
-
 **Seal installed-tree pin role:** `published-asset`
+```output
+tree: 261324816077d3ab04cd55640ec79b605f2845dadb7b56d057892111601ffe32
+```
+
+The macOS artifacts have their own installed-tree digests, published
+alongside this one: Apple silicon `a94265c18dbc6056eddefa629803322fb6c52630491dff60d9c0306a745325d6`, Intel `11dbb92d8eb014e59bd5bce1eb01511ddf9fead38b06be21eda907c9dfc993ab`.
+<!-- end generated release docs -->
 
 ### Installed-tree hash definition
 
