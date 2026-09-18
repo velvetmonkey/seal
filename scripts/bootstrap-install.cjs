@@ -160,7 +160,17 @@ async function downloadAndVerify(url, expectedBytes, expectedSha256, destPath, {
     try { fs.unlinkSync(destPath); } catch { /* best-effort; the refusal is what matters */ }
     return { ok: false, code: "download_failed", reason: `download of ${url} was interrupted: ${error.message}` };
   }
-  await new Promise((resolve, reject) => file.end((error) => (error ? reject(error) : resolve())));
+  // Wait for the underlying file descriptor to actually CLOSE, not just for
+  // writes to finish. `end(callback)` fires on Node's 'finish' event, which
+  // can land before the fd is closed at the OS level; under real scheduling
+  // load, execve()-ing this file a moment too early hits Linux's ETXTBSY
+  // ("text file busy") because a writable fd is still open on it. This is
+  // the whole reason downloadAndVerify returns before anyone chmods or
+  // executes destPath.
+  await new Promise((resolve, reject) => {
+    file.once("error", reject);
+    file.end(() => file.once("close", resolve));
+  });
   if (received !== expectedBytes) {
     return { ok: false, code: "artifact_truncated", reason: `downloaded ${received} bytes from ${url}; the release names ${expectedBytes}` };
   }

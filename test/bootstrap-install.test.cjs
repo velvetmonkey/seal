@@ -13,7 +13,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
@@ -26,9 +26,41 @@ function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+// Deliberately ASYNC (child_process.spawn + a Promise), never spawnSync.
+// Several tests below run an in-process HTTP server (serveAssets) that the
+// spawned bootstrap child talks to over real loopback TCP. spawnSync blocks
+// this process's entire event loop until the child exits, including the
+// loop that the in-process HTTP server needs to accept and answer that very
+// connection -- so a synchronous spawn here would deadlock every scenario
+// where the child successfully reaches the server, and only fail because
+// spawnSync's own timeout guard eventually kills the child. Only a
+// genuinely unreachable/no-response child would ever look interesting under
+// spawnSync; that is not what most of these tests are exercising.
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", timeout: 30000, ...options });
-  return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "", error: result.error };
+  return new Promise((resolve) => {
+    const child = spawn(command, args, options);
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      child.kill("SIGKILL");
+    }, options.timeout ?? 30000);
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code: null, stdout, stderr, error });
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr, error: undefined });
+    });
+  });
 }
 
 // Builds the one platform artifact this host can actually build and run
@@ -38,10 +70,10 @@ function run(command, args, options = {}) {
 // generate-bootstrap.mjs re-validates this manifest with the exact validator
 // scripts/generate-release-docs.mjs already trusts, so a shape defect here
 // would fail generation, not slip through.
-function buildFixture(root) {
+async function buildFixture(root) {
   const out = testTmpdir(path.join(os.tmpdir(), "seal-bootstrap-fixture-"));
   const dist = path.join(out, "dist");
-  const built = run(process.execPath, [BUILD, "--out", dist], { cwd: root });
+  const built = await run(process.execPath, [BUILD, "--out", dist], { cwd: root });
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
   const [digest, bytes, name] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
   const artifactPath = path.join(dist, name);
@@ -71,7 +103,7 @@ function buildFixture(root) {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
   const bootstrapOut = path.join(out, "bootstrap-dist");
-  const generated = run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: root });
+  const generated = await run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: root });
   assert.equal(generated.code, 0, `${generated.stdout}${generated.stderr}`);
   const bootstrapPath = path.join(bootstrapOut, `seal-bootstrap-v${VERSION}`);
   assert.ok(fs.existsSync(bootstrapPath), generated.stdout);
@@ -122,13 +154,13 @@ function snapshotBootstrapTmp() {
 }
 
 test("bootstrap downloads, verifies, and installs, printing location, version, PATH guidance, and seal demo", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home");
   fs.mkdirSync(home);
   const asset = await serveAssets((name) => (name === fixture.artifactName ? fs.readFileSync(fixture.artifactPath) : undefined));
   try {
     const before = snapshotBootstrapTmp();
-    const result = run("sh", [fixture.bootstrapPath], {
+    const result = await run("sh", [fixture.bootstrapPath], {
       env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl },
     });
     assert.equal(result.code, 0, `${result.stdout}${result.stderr}`);
@@ -146,7 +178,7 @@ test("bootstrap downloads, verifies, and installs, printing location, version, P
 });
 
 test("corrupted product artifact bytes are refused before execution, and nothing is installed", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-corrupt");
   fs.mkdirSync(home);
   const original = fs.readFileSync(fixture.artifactPath);
@@ -155,7 +187,7 @@ test("corrupted product artifact bytes are refused before execution, and nothing
   const asset = await serveAssets((name) => (name === fixture.artifactName ? corrupted : undefined));
   try {
     const before = snapshotBootstrapTmp();
-    const result = run("sh", [fixture.bootstrapPath], {
+    const result = await run("sh", [fixture.bootstrapPath], {
       env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl },
     });
     assert.notEqual(result.code, 0);
@@ -169,14 +201,14 @@ test("corrupted product artifact bytes are refused before execution, and nothing
 });
 
 test("truncated download is refused cleanly and temporary files are cleaned up", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-truncated");
   fs.mkdirSync(home);
   const bytes = fs.readFileSync(fixture.artifactPath);
   const asset = await serveAssets((name) => (name === fixture.artifactName ? bytes : undefined), { truncate: true });
   try {
     const before = snapshotBootstrapTmp();
-    const result = run("sh", [fixture.bootstrapPath], {
+    const result = await run("sh", [fixture.bootstrapPath], {
       env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl },
     });
     assert.notEqual(result.code, 0);
@@ -189,14 +221,14 @@ test("truncated download is refused cleanly and temporary files are cleaned up",
 });
 
 test("a download that exceeds the published length is aborted mid-stream, not merely rejected at the end", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-oversized");
   fs.mkdirSync(home);
   const oversized = Buffer.concat([fs.readFileSync(fixture.artifactPath), Buffer.alloc(64 * 1024 * 1024, 1)]);
   const asset = await serveAssets((name) => (name === fixture.artifactName ? oversized : undefined));
   try {
     const started = performance.now();
-    const result = run("sh", [fixture.bootstrapPath], {
+    const result = await run("sh", [fixture.bootstrapPath], {
       env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl },
     });
     const elapsedMs = performance.now() - started;
@@ -211,11 +243,11 @@ test("a download that exceeds the published length is aborted mid-stream, not me
 });
 
 test("an unreachable host is refused cleanly with an actionable message", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-unreachable");
   fs.mkdirSync(home);
   const before = snapshotBootstrapTmp();
-  const result = run("sh", [fixture.bootstrapPath], {
+  const result = await run("sh", [fixture.bootstrapPath], {
     // Port 1 is a reserved, unlisenable TCP port: nothing will ever answer here.
     env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: "http://127.0.0.1:1" },
   });
@@ -227,13 +259,13 @@ test("an unreachable host is refused cleanly with an actionable message", async 
 });
 
 test("an unsupported platform is refused before any network request is made", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-unsupported");
   fs.mkdirSync(home);
   const asset = await serveAssets(() => fs.readFileSync(fixture.artifactPath));
   try {
     const before = snapshotBootstrapTmp();
-    const result = run("sh", [fixture.bootstrapPath], {
+    const result = await run("sh", [fixture.bootstrapPath], {
       env: {
         ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl,
         SEAL_SPINE_PLATFORM: "win32", SEAL_SPINE_ARCH: "x64",
@@ -251,17 +283,16 @@ test("an unsupported platform is refused before any network request is made", as
 });
 
 test("a missing Node prerequisite is refused with an actionable message and no partial state", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-no-node");
   fs.mkdirSync(home);
   const before = snapshotBootstrapTmp();
   // Strip every directory that could contain a `node` binary from PATH,
   // while still allowing /bin/sh itself (invoked by absolute path) to run.
-  const result = spawnSync("/bin/sh", [fixture.bootstrapPath], {
-    encoding: "utf8",
+  const result = await run("/bin/sh", [fixture.bootstrapPath], {
     env: { HOME: home, PATH: "/seal-test-empty-path" },
   });
-  assert.notEqual(result.status, 0);
+  assert.notEqual(result.code, 0);
   assert.match(result.stderr, /^REFUSE node_missing: this installer requires Node/m);
   assert.equal(result.stdout, "");
   assert.equal(fs.existsSync(path.join(home, ".local")), false, "a missing prerequisite must not change any installation state");
@@ -269,22 +300,22 @@ test("a missing Node prerequisite is refused with an actionable message and no p
 });
 
 test("running the bootstrap twice preserves install.cjs's own reinstall semantics, with no second code path", async () => {
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-reinstall");
   fs.mkdirSync(home);
   const asset = await serveAssets((name) => (name === fixture.artifactName ? fs.readFileSync(fixture.artifactPath) : undefined));
   try {
     const env = { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl };
-    const first = run("sh", [fixture.bootstrapPath], { env });
+    const first = await run("sh", [fixture.bootstrapPath], { env });
     assert.equal(first.code, 0, `${first.stdout}${first.stderr}`);
     const recordPath = path.join(home, ".local", "lib", "seal", "install.json");
     const storeSha = JSON.parse(fs.readFileSync(recordPath, "utf8")).treeSha256;
     const storeMode = fs.statSync(path.join(home, ".local", "lib", "seal", "store", storeSha)).mode & 0o777;
     assert.equal(storeMode, 0o555, "install.cjs's own immutable-store guarantee must survive the bootstrap handoff");
-    const second = run("sh", [fixture.bootstrapPath], { env });
+    const second = await run("sh", [fixture.bootstrapPath], { env });
     assert.equal(second.code, 0, `${second.stdout}${second.stderr}`);
     assert.deepEqual(asset.requests, [fixture.artifactName, fixture.artifactName]);
-    const launched = run(process.execPath, [path.join(home, ".local", "bin", "seal"), "--version"]);
+    const launched = await run(process.execPath, [path.join(home, ".local", "bin", "seal"), "--version"]);
     assert.equal(launched.code, 0, `${launched.stdout}${launched.stderr}`);
     assert.equal(launched.stdout.trim(), VERSION);
   } finally {
@@ -299,7 +330,7 @@ test("selecting an artifact trusts the running process's own architecture, not a
   // "correct" that with a host-chip probe: forcing Rosetta detection on must
   // not change which artifact gets fetched. See scripts/bootstrap-install.cjs
   // for the design rationale.
-  const fixture = buildFixture(ROOT);
+  const fixture = await buildFixture(ROOT);
   const home = path.join(fixture.out, "home-rosetta");
   fs.mkdirSync(home);
   const darwinX64 = fixture.manifest.artifacts.find((entry) => entry.platform === "darwin-x64");
@@ -314,13 +345,13 @@ test("selecting an artifact trusts the running process's own architecture, not a
   const manifestPath = path.join(fixture.out, "rosetta-manifest.json");
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   const bootstrapOut = path.join(fixture.out, "rosetta-bootstrap-dist");
-  const generated = run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: ROOT });
+  const generated = await run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: ROOT });
   assert.equal(generated.code, 0, `${generated.stdout}${generated.stderr}`);
   const bootstrapPath = path.join(bootstrapOut, `seal-bootstrap-v${VERSION}`);
 
   const asset = await serveAssets((name) => (name === entry.name ? fakeBytes : undefined));
   try {
-    const result = run("sh", [bootstrapPath], {
+    const result = await run("sh", [bootstrapPath], {
       env: {
         ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl,
         SEAL_SPINE_PLATFORM: "darwin", SEAL_SPINE_ARCH: "x64", SEAL_BOOTSTRAP_FORCE_ROSETTA: "1",
