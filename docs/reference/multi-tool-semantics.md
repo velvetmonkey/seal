@@ -13,19 +13,20 @@ It does not propose implementation work or decide the boxpol question.
 
 **That 2026-09-08 recheck used SHA-256 `93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b`,
 the published `v0.3.0` artifact, before multi-server protection shipped.**
-Current behavior differs from question 2's answer below: as of `v0.4.0`,
-multiple servers can be protected in the same project at once, and
-activation outside the project lock lets them run simultaneously
-(`docs/assurance/RELEASE-NOTES-v0.4.0.md`, PR #304 "Protect multiple servers
+Current behavior differs from question 2's answer below: a later release
+added multiple-server protection — multiple servers can be protected in the
+same project at once, and activation outside the project lock lets them run
+simultaneously (see the current release notes,
+`docs/assurance/RELEASE-NOTES-v0.4.0.md`, PR #304 "Protect multiple servers
 and admit the recovery help line" and PR #312 "Activate outside the project
 lock so simultaneous servers both start"; see also
 [Several servers in one project](../guide/choosing-what-to-protect.md#several-servers-in-one-project)
 for the current operating guidance). State now lives per server at
 `projects/<id>/servers/<encoded-server-name>/state.json`; the single
-project-level `state.json` this page's observations were captured against is
-the pre-`v0.4.0` layout, kept readable for compatibility. The per-server
-answers in questions 1, 3, and 4 (a server's declared tool set is atomic:
-fixed at protect time, breaks as a whole if a member vanishes, and is
+project-level `state.json` this page's observations were captured against
+predates multi-server support and is kept readable for compatibility. The
+per-server answers in questions 1, 3, and 4 (a server's declared tool set is
+atomic: fixed at protect time, breaks as a whole if a member vanishes, and is
 cleared as a whole by unprotect) remain accurate for that one server; only
 the "a project has one protected route" claim in question 2 is superseded
 and is retained there as a dated historical record, not current guidance.
@@ -76,13 +77,13 @@ The tools on one server share that server's one state and one lease. A second
 protect for the same server refuses; neither invocation adds to the guarded
 set.
 
-**Historical (pre-`v0.4.0`, dated 2026-09-08 against the `v0.3.0` artifact,
-superseded — see the note above).** At that commit, a project admitted only
-one protected route: with two configured servers, a second `seal protect` for
-the other server refused, and status listed that server under `Not
-controlled`. As of `v0.4.0`, protecting one server no longer blocks protecting
-a different server in the same project; see the current-behavior note above
-and [Several servers in one project](../guide/choosing-what-to-protect.md#several-servers-in-one-project).
+**Historical (dated 2026-09-08 against the `v0.3.0` artifact, superseded —
+see the note above).** At that commit, a project admitted only one protected
+route: with two configured servers, a second `seal protect` for the other
+server refused, and status listed that server under `Not controlled`. A
+later release lifted that limit: protecting one server no longer blocks
+protecting a different server in the same project; see the current-behavior
+note above and [Several servers in one project](../guide/choosing-what-to-protect.md#several-servers-in-one-project).
 
 **Evidence.** In that captured release, `bin/seal` obtains one
 protection view, prints the
