@@ -42,3 +42,15 @@ test("homepage does not show a fabricated verdict or badge", () => {
 test("homepage template hides the sidebar and table of contents (Starlight splash)", () => {
   assert.match(HOMEPAGE, /template:\s*'splash'/, "homepage must use Starlight's splash template so the sidebar/TOC do not appear");
 });
+
+import { focusScrollableContent } from '../docs/finalize-site.mjs';
+
+test('built code and tables remain keyboard-scrollable without changing content or existing focus policy', () => {
+  const input = '<pre data-language="text"><code>PASS &lt;sample&gt;</code></pre><table class="wide"><tr><th>Result</th></tr></table><pre tabindex="-1">owner policy</pre>';
+  const output = focusScrollableContent(input);
+  assert.ok(output.includes('<pre tabindex="0" data-language="text">'));
+  assert.ok(output.includes('<table tabindex="0" class="wide">'));
+  assert.ok(output.includes('<pre tabindex="-1">owner policy</pre>'));
+  assert.ok(output.includes('<code>PASS &lt;sample&gt;</code>'));
+  assert.equal(focusScrollableContent(output), output);
+});
