@@ -16,7 +16,7 @@ Then, from that seal-check checkout:
 python3 -m http.server 8763 --bind 127.0.0.1
 ```
 
-Open http://127.0.0.1:8763/ in that browser. This exact local server was used for the fresh demo walkthrough. Wait for the kernel status, then follow [your first receipt](your-first-receipt.md). Stop the server with Ctrl+C when finished.
+Open `http://127.0.0.1:8763/` in that browser. This exact local server was used for the fresh demo walkthrough. Wait for the kernel status, then follow [your first receipt](your-first-receipt.md). Stop the server with Ctrl+C when finished.
 
 If the kernel cannot load, check that the server root contains wasm/seal.wasm and that the browser can fetch it. Keep the entire checkout together; replacing a single kernel file can violate its pinned identity. Use HTTPS for a remotely hosted deployment or a browser-supported local origin for local testing.
 
