@@ -10,7 +10,16 @@ receipt at a time, entirely in your browser, at
    the page documents).
 2. Paste the receipt JSON, or use the shipped example
    ([`examples/allow.receipt.json`](https://github.com/velvetmonkey/seal-check/blob/master/examples/allow.receipt.json))
-   to see a passing check without needing a receipt of your own.
+   to see a passing check without needing a receipt of your own. seal-check
+   loads this same bundled example itself on a plain visit, before you paste
+   anything:
+
+   ![The seal-check paste box with the bundled examples/allow.receipt.json already loaded and checked. The banner reads "Intact — but the signer is not verified", the checks table shows nine passing content and replay checks with "Who signed it (authority)" and two other rows marked NOT CHECKED, and the recorded decision at the bottom reads ALLOWED.](../public/images/verify/seal-check-example-allow.png)
+
+   Every content and replay check can pass while authority stays unpinned —
+   that is `authority_trusted: UNPINNED` in the row-by-row table above, spelled
+   out here as "Who signed it (authority) — NOT CHECKED" until you supply a
+   pin.
 3. Where the receipt format supports it, supply a separately obtained public
    key (an `expected-config-pubkey`, from your own deploy trust file or CI
    configuration — never copied out of the receipt itself) to check operator
@@ -32,6 +41,18 @@ still not be signed by an authority you trust — that is what
 **Older Spine-format receipts do not support kernel replay.** Where the format
 predates the v2 kernel-replay path, seal-check reports what it can (signature,
 shape) and does not claim a replay result it cannot produce.
+
+seal-check's own README documents a reproducible tamper recipe: take that same
+bundled example, change `"verdict": "ALLOW"` to `"verdict": "BLOCK"`, and
+re-paste it. Reproducing that recipe gives a genuine failing check, not a
+passing one with different words:
+
+![The same seal-check page after re-pasting the bundled example with its verdict field changed from ALLOW to BLOCK. The banner is now red and reads "This receipt does NOT check out", listing "re-running the same request through the same kernel gives a different decision (ALLOW) than the receipt claims". The checks table shows the "Decision replay" row highlighted red as "checked — FAILED", with every other content check still passing.](../public/images/verify/seal-check-example-tampered.png)
+
+This is what a failing replay check looks like: the signature and every other
+content check still pass — only `kernel_replay_consistent` (the "Decision
+replay" row) flips, because the kernel disagrees with the flipped verdict the
+receipt now claims.
 
 ## Privacy
 

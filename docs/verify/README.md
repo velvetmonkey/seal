@@ -20,6 +20,8 @@ installed it from.
 
 ## One receipt, or a broader review
 
+![Diagram: one signed receipt splits into two separate paths. The left path, seal-check (browser), reports signature, replay and authority-pin results. The right path, seal-assurance-kit (CLI), reports verify, scan, receipt-diff and adequacy results. A caption below the two boxes reads "same bytes, two separate tools".](../public/images/verify/receipt-two-ways.svg)
+
 Opening seal-check and pasting a receipt answers "is this one receipt valid,
 replay-consistent, and whose authority is or is not pinned?" It says nothing
 about any other receipt, and nothing about policy coverage across your

@@ -2,9 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteUrl } from './site-url.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
+const siteBase = siteUrl().pathname.replace(/\/$/, '');
 const output = path.join(here, 'src/content/docs');
 const archiveWarning = 'Files in the last two groups describe the Seal family of research repositories or a past design state — they are kept for the record and are not claims about the Node CLI this repository ships.';
 const historicalDeadTarget = 'https://github.com/velvetmonkey/seal/blob/18bba8ea230ead9fb605cd61d352a0e894c256d5/scripts/check-receipt-canonicalization.mjs';
@@ -64,6 +66,16 @@ function destinationFor(source, raw) {
   const suffix = match[2] || '';
   const sourceName = path.relative(root, source).split(path.sep).join('/');
   const targetName = path.posix.normalize(path.posix.join(path.posix.dirname(sourceName), match[1]));
+  // Real static assets (screenshots, captured-output renders) live under
+  // docs/public/, Astro's convention for files served byte-for-byte at the
+  // site root. Astro does not rewrite literal markdown paths with the
+  // configured base itself, so this is the one place that must, or every
+  // such reference would otherwise fall into the "unknown repo path" branch
+  // below and become a non-image GitHub blob-view link instead of the real
+  // asset.
+  if (targetName.startsWith('docs/public/')) {
+    return `${siteBase}/${targetName.slice('docs/public/'.length)}${suffix}`;
+  }
   if (sourceSet.has(targetName)) {
     const from = routeFor(sourceName);
     const to = routeFor(targetName);
