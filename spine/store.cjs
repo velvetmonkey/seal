@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Durable approval-state journal. Append-only NDJSON of contract events,
-// fsynced per append, replayed at open to rebuild the contract's state so
-// one-use survives a process restart.
+// Durable approval-state journal. Legacy NDJSON events remain readable; a
+// checkpoint replaces the replay prefix with pending records and permanent
+// terminal tombstones. All mutations share the approval transaction lock.
 //
 // Silence must fail: an ABSENT store is a refusal, not an empty store —
 // creation is a deliberate separate act (createJournal), never something
@@ -51,6 +51,59 @@ function readEvents(filePath) {
     events.push(event);
   }
   return events;
+}
+
+const TERMINAL_STATUSES = new Set(["consumed", "declined", "cancelled", "expired", "restart_invalidated"]);
+const CHECKPOINT_TYPE = "approval_checkpoint";
+const COMPACT_BYTES = 4 * 1024 * 1024;
+const COMPACT_EVENTS = 2048;
+
+// This is also the contract's replay function: compaction cannot use a
+// different interpretation of status transitions from authorization.
+function replayApprovalEvents(events) {
+  const records = new Map();
+  const corrupt = (why) => { throw new StoreError(`approval store is inconsistent: ${why}`); };
+  const insert = (record) => {
+    if (!record || !/^[0-9a-f]{64}$/.test(record.handle_hash) || records.has(record.handle_hash)) {
+      corrupt("invalid or duplicate handle hash");
+    }
+    records.set(record.handle_hash, record);
+  };
+  for (const [index, event] of events.entries()) {
+    if (event.type === CHECKPOINT_TYPE) {
+      if (index !== 0 || event.version !== 1 || !Array.isArray(event.records) ||
+          event.count !== event.records.length || event.sha256 !== checkpointHash(event.records)) {
+        corrupt("invalid checkpoint position, version, count or digest");
+      }
+      for (const record of event.records) {
+        if (record?.status !== "pending" && !TERMINAL_STATUSES.has(record?.status)) corrupt("invalid checkpoint status");
+        insert({ ...record });
+      }
+    } else if (event.type === "issued") {
+      const { type, ...record } = event;
+      insert({ ...record, status: "pending" });
+    } else if (event.type === "status") {
+      const record = records.get(event.handle_hash);
+      if (!record) corrupt(`status for unknown handle hash ${event.handle_hash}`);
+      if (!TERMINAL_STATUSES.has(event.status) ||
+          (record.status !== "pending" && record.status !== event.status)) corrupt("non-monotonic status transition");
+      // Terminal authorization depends only on identity and the refusal.
+      // Retain those forever; the archived journal retains the full evidence.
+      records.set(event.handle_hash, { handle_hash: event.handle_hash, status: event.status });
+    } else {
+      corrupt(`unknown event type ${event.type}`);
+    }
+  }
+  return records;
+}
+
+function checkpointHash(records) {
+  return crypto.createHash("sha256").update(JSON.stringify(records)).digest("hex");
+}
+
+function stateBytes(records) {
+  return JSON.stringify([...records.values()].map(record => record.status === "pending"
+    ? record : { handle_hash: record.handle_hash, status: record.status }));
 }
 
 function withFileLock(filePath, callback) {
@@ -140,19 +193,72 @@ function withFileLock(filePath, callback) {
 
 function openJournal(filePath) {
   let events = readEvents(filePath);
+  let locked = false;
+  function compactLocked() {
+    const before = replayApprovalEvents(events);
+    const records = JSON.parse(stateBytes(before));
+    const checkpoint = { type: CHECKPOINT_TYPE, version: 1, count: records.length,
+      records, sha256: checkpointHash(records) };
+    const suffix = crypto.randomBytes(16).toString("hex");
+    const temporary = `${filePath}.checkpoint.${suffix}`;
+    const archive = `${filePath}.history.${suffix}`;
+    let fd, directory;
+    try {
+      directory = fs.openSync(path.dirname(filePath), "r");
+      // Make the source durable, then retain its inode as historical evidence
+      // before publishing a replacement. Archives are never replayed or pruned.
+      fd = fs.openSync(filePath, "r");
+      fs.fsyncSync(fd);
+      fs.closeSync(fd); fd = undefined;
+      fs.linkSync(filePath, archive);
+      fs.fsyncSync(directory);
+      fd = fs.openSync(temporary, "wx", 0o600);
+      writeCompleteSync(fd, JSON.stringify(checkpoint) + "\n");
+      fs.fsyncSync(fd);
+      fs.closeSync(fd); fd = undefined;
+      const candidate = readEvents(temporary);
+      if (stateBytes(replayApprovalEvents(candidate)) !== stateBytes(before)) {
+        throw new StoreError("approval checkpoint changes authorization state; refusing publication");
+      }
+      // A reader sees either complete inode. A writer must refresh after
+      // acquiring this same lock, and therefore appends only to the new one.
+      fs.renameSync(temporary, filePath);
+      fs.fsyncSync(directory);
+      events = candidate;
+      return { archive, records: records.length };
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+      if (directory !== undefined) fs.closeSync(directory);
+      try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
+  }
+  function transact(callback, automatic) {
+    if (locked) return callback();
+    return withFileLock(filePath, () => {
+      locked = true;
+      try {
+        // Also finish a previous publisher's rename if its directory fsync
+        // failed. No subsequent decision may depend on an unsynced name.
+        const directory = fs.openSync(path.dirname(filePath), "r");
+        try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+        journal.refresh();
+        // Bound replay of verbose events, not the number of permanent
+        // tombstones. Never discard identities to satisfy a size cap.
+        if (automatic && events.length >= COMPACT_EVENTS && fs.statSync(filePath).size >= COMPACT_BYTES) compactLocked();
+        return callback();
+      } finally { locked = false; }
+    });
+  }
   const journal = {
     get events() { return events; },
     refresh() {
       events = readEvents(filePath);
       return events;
     },
-    withLock(callback) {
-      return withFileLock(filePath, () => {
-        journal.refresh();
-        return callback();
-      });
-    },
+    withLock(callback) { return transact(callback, true); },
+    compact() { return transact(compactLocked, false); },
     append(event) {
+      if (!locked) return journal.withLock(() => journal.append(event));
       const fd = fs.openSync(filePath, "a", 0o600);
       const before = fs.fstatSync(fd).size;
       try {
@@ -177,4 +283,4 @@ function openJournal(filePath) {
   return journal;
 }
 
-module.exports = { createJournal, openJournal, StoreError };
+module.exports = { createJournal, openJournal, replayApprovalEvents, StoreError };

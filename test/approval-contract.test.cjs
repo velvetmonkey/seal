@@ -15,7 +15,7 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
-const { renderApprovalMessage, MESSAGE_LINE_CAP, WIDTH_MARGIN, displayWidth } = require("../contract/renderer.cjs");
+const { renderApprovalMessage, MESSAGE_LINE_CAP, MESSAGE_CHARACTER_CAP, WIDTH_MARGIN, displayWidth, renderName } = require("../contract/renderer.cjs");
 const { canonicalString, sha256Hex } = require("../contract/canonical.cjs");
 const { canonical, generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
 
@@ -244,13 +244,15 @@ test("separate one-use grants for the same effect have distinct signed receipt b
 
 // --- the rendering envelope, measured --------------------------------------
 
-function assertInsideEnvelope(rendered, terminalWidth = 80) {
+function assertInsideEnvelope(rendered) {
   assert.ok(rendered.ok, rendered.reason);
   assert.ok(rendered.lines.length <= MESSAGE_LINE_CAP,
     `rendered message has ${rendered.lines.length} lines; the envelope is ${MESSAGE_LINE_CAP}`);
+  assert.ok(Array.from(rendered.message).length <= MESSAGE_CHARACTER_CAP);
+  assert.deepEqual(rendered.lines, rendered.message.split("\n"));
   for (const line of rendered.lines) {
-    assert.ok(displayWidth(line) <= terminalWidth - WIDTH_MARGIN,
-      `line exceeds usable width ${terminalWidth - WIDTH_MARGIN}: ${line}`);
+    assert.ok(Array.from(line).length <= MESSAGE_CHARACTER_CAP,
+      `line exceeds the character envelope: ${line}`);
   }
 }
 
@@ -266,78 +268,47 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines.length, 4);
 });
 
+test("a configured route is rendered within the universal seven-line budget", () => {
+  const args = { a: 1, b: 2, c: 3, d: 4 };
+  const withoutRoute = renderApprovalMessage(TOOL, args);
+  assertInsideEnvelope(withoutRoute);
+  assert.equal(withoutRoute.lines.length, MESSAGE_LINE_CAP);
+
+  const withRoute = renderApprovalMessage(TOOL, args, { serverId: "local-db" });
+  assert.equal(withRoute.ok, false);
+  assert.match(withRoute.reason, /need 8 lines; Seal permits 7/);
+
+  const refused = createApprovalContract({ serverId: "local-db" }).begin({ tool: TOOL, args });
+  assert.equal(refused.kind, "refuse");
+  assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
+  assert.match(refused.detail, /need 8 lines; Seal permits 7/);
+});
+
+test("a configured route uses the renderer's escaped name presentation", () => {
+  const rendered = renderApprovalMessage(TOOL, {}, { serverId: "local\u202edb" });
+  assertInsideEnvelope(rendered);
+  assert.ok(rendered.message.includes(`Route (configured, not authenticated): ${renderName("local\u202edb")}`));
+  assert.equal(rendered.message.includes("local\u202edb"), false);
+});
+
+test("route and selection context share the existing seven-line folding path", () => {
+  const rendered = renderApprovalMessage(TOOL, { a: 1, b: 2, c: 3 }, {
+    serverId: "local-db",
+    selection: { label: "db.mutate", detail: "selected" },
+  });
+  assertInsideEnvelope(rendered);
+  assert.equal(rendered.lines.length, MESSAGE_LINE_CAP);
+  assert.match(rendered.message, /Route \(configured, not authenticated\): local-db/);
+  assert.match(rendered.message, /Selection predicate: db\.mutate \(selected\)/);
+  assert.match(rendered.message, /  a: 1; b: 2/);
+});
+
 test("every fixed approval message line fits the measured default width", () => {
   const rendered = renderApprovalMessage(TOOL, ARGS);
   assert.ok(rendered.ok, rendered.reason);
   for (const line of [rendered.lines[0], rendered.lines[2], rendered.lines[3]]) {
     assert.ok(displayWidth(line) <= 74, `fixed line exceeds 74 columns: ${line}`);
   }
-});
-
-test("configured server labels preserve keys and escape misleading display characters", () => {
-  const { renderServerLabel } = require("../contract/renderer.cjs");
-  const prefix = "Server (configured route, identity not authenticated): ";
-  for (const value of [undefined, null, "", "   ", 42]) {
-    assert.equal(renderServerLabel(value), `${prefix}unknown`);
-  }
-  for (const value of ["alpha", "beta", "unknown", "x".repeat(10000), 'a"\\\n\u001b\u202e\u200b\u00a0😀']) {
-    const line = renderServerLabel(value);
-    assert.match(line, /^[\x20-\x7e]+$/);
-    assert.equal(JSON.parse(line.slice(prefix.length)), value);
-  }
-  assert.notEqual(renderServerLabel("alpha"), renderServerLabel("beta"));
-  assert.notEqual(renderServerLabel("unknown"), renderServerLabel(undefined));
-});
-
-test("configured route budgets all mandatory fields independently of arguments", () => {
-  const { renderServerLabel } = require("../contract/renderer.cjs");
-  const many = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`arg${i}`, i]));
-  for (const args of [{}, { operation: "delete" }, { alpha: "one", beta: "two", gamma: 3 }, many]) {
-    const after = renderApprovalMessage("db.mutate", args, { serverLabel: "prod-db_01" });
-    assert.ok(after.ok, after.reason);
-    const painted = after.lines.slice(0, 3).join("\n");
-    for (const field of ["Tool: db.mutate", "Approval required", renderServerLabel("prod-db_01"), after.scopeLine]) {
-      assert.ok(painted.includes(field), field);
-    }
-    for (const line of after.lines) assert.ok(displayWidth(line) <= 74);
-    const expectedArgs = Object.keys(args).sort().map((key) => `  ${key}: ${args[key]}`);
-    assert.deepEqual(after.argLines, expectedArgs.length ? expectedArgs : ["  (none)"]);
-    assert.equal(after.scopeLine, "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
-    for (const line of after.argLines) assert.ok(after.lines.includes(line));
-  }
-  const bidi = "payroll\u202etxt.exe";
-  assert.equal(displayWidth(renderServerLabel(bidi)), 77);
-  const wide = renderApprovalMessage("db.mutate", { operation: "delete" }, { serverLabel: bidi, terminalWidth: 83 });
-  assertInsideEnvelope(wide, 83);
-  assert.equal(wide.lines[1], renderServerLabel(bidi));
-  assert.ok(!wide.message.includes("\u202e"));
-  for (const serverLabel of [bidi, "\u202e".repeat(13), "x".repeat(100)]) {
-    const refused = createApprovalContract().begin({ tool: "db.mutate", args: { operation: "delete" }, serverLabel });
-    assert.equal(refused.kind, "refuse");
-    assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
-    assert.match(refused.detail, /74 columns/);
-    assert.equal(refused.elicitationParams, undefined);
-  }
-  const args = { line: "x".repeat(50) };
-  assertInsideEnvelope(renderApprovalMessage("db.mutate", args));
-  assertInsideEnvelope(renderApprovalMessage("db.mutate", args, { serverLabel: "db" }));
-});
-
-test("route refusal boundary depends only on mandatory fields, not argument length or count", () => {
-  const { renderServerLabel } = require("../contract/renderer.cjs");
-  const labelLength = 74 - displayWidth(renderServerLabel("x")) + 1;
-  for (const args of [{}, { query: "x".repeat(55) }, { query: "x".repeat(1000) }, { alpha: "one", beta: "two", gamma: 3 }]) {
-    const rendered = renderApprovalMessage("db.mutate", args, { serverLabel: "s".repeat(labelLength) });
-    assert.ok(rendered.ok, rendered.reason);
-    assert.ok(rendered.lines.slice(0, 3).join("\n").includes(rendered.scopeLine));
-    assert.ok(rendered.lines.slice(0, 3).includes(renderServerLabel("s".repeat(labelLength))));
-    for (const line of rendered.lines) assert.ok(displayWidth(line) <= 74);
-    assert.equal(rendered.lines.slice(3, -1).join(""), rendered.argLines.join(""), "wrapping must preserve every argument character");
-    assert.equal(renderApprovalMessage("db.mutate", args, { serverLabel: "s".repeat(labelLength + 1) }).ok, false);
-  }
-  const wide = renderApprovalMessage("db.mutate", {}, { serverLabel: "db", terminalWidth: 240 });
-  assert.ok(wide.ok, wide.reason);
-  assert.ok(wide.lines[0].includes(wide.scopeLine), "mandatory fields pack together when width permits");
 });
 
 // The current Scope line has one column of headroom in the 74-column envelope.
@@ -403,11 +374,11 @@ test("a CHANGED first line replaces, never adds", () => {
 
 test("an effect that cannot be shown completely is refused, not truncated — and begin() refuses to offer it", async (t) => {
   const child = await startChild(t);
-  const bigArgs = { line: "x".repeat(400) };
+  const bigArgs = { line: "x".repeat(MESSAGE_CHARACTER_CAP) };
   const rendered = renderApprovalMessage(TOOL, bigArgs);
   assert.equal(rendered.ok, false);
-  assert.match(rendered.reason, /hides the rest without any indicator|truncation would hide/);
-  const contract = createApprovalContract();
+  assert.match(rendered.reason, /characters; Seal permits/);
+  const contract = createApprovalContract({ serverId: null });
   const decision = contract.begin({ tool: TOOL, args: bigArgs });
   assert.equal(decision.kind, "refuse");
   assert.equal(decision.refusal, REFUSALS.UNRENDERABLE);
@@ -423,8 +394,8 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   assert.equal(child.count(), "0");
 });
 
-test("a terminal too narrow for the fixed lines refuses instead of overflowing", () => {
-  const rendered = renderApprovalMessage(TOOL, ARGS, { terminalWidth: 40 });
+test("an over-cap message refuses even when a narrow terminal is supplied", () => {
+  const rendered = renderApprovalMessage(TOOL, { line: "x".repeat(MESSAGE_CHARACTER_CAP) }, { terminalWidth: 40 });
   assert.equal(rendered.ok, false);
 });
 
@@ -432,7 +403,7 @@ test("every offered message obeys the envelope across argument sizes", () => {
   for (let n = 1; n <= 300; n += 7) {
     const rendered = renderApprovalMessage(TOOL, { line: "y".repeat(n) });
     if (rendered.ok) assertInsideEnvelope(rendered);
-    else assert.match(rendered.reason, /lines|columns/);
+    else assert.match(rendered.reason, /lines|characters/);
   }
 });
 
@@ -505,17 +476,18 @@ test("renderline escapes names, nested values, controls and directional characte
   assert.match(hidden.argLines[0], /\\n/);
 });
 
-test("renderline checks the physical final presentation including selection", () => {
+test("renderline checks the complete logical presentation including selection", () => {
   const selection = { label: "db.mutate", detail: "selected" };
-  const contract = createApprovalContract();
+  const contract = createApprovalContract({ serverId: null });
   const opened = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3 }, selection });
   assert.equal(opened.kind, "input_required");
   assert.equal(opened.elicitationParams.message.split("\n").length, 7);
+  assert.ok(opened.elicitationParams.message.includes("Selection predicate: db.mutate (selected)"));
   assert.equal(opened.result.content[0].text, opened.elicitationParams.message);
-  const overflow = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4 }, selection });
+  const overflow = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4, e: 5 }, selection });
   assert.equal(overflow.refusal, REFUSALS.UNRENDERABLE);
   assert.match(overflow.detail, /need 8 lines/);
-  assert.equal(contract.begin({ tool: TOOL, args: {}, selection: { label: "x".repeat(100), detail: "selected" } }).refusal, REFUSALS.UNRENDERABLE);
+  assert.equal(contract.begin({ tool: TOOL, args: {}, selection: { label: "x".repeat(200), detail: "selected" } }).refusal, REFUSALS.UNRENDERABLE);
 });
 
 test("renderline second order values retain the canonical effect in approval receipts", () => {
@@ -528,8 +500,205 @@ test("renderline second order values retain the canonical effect in approval rec
     assert.ok(allowed.receipt);
     assert.deepEqual(allowed.receipt.arguments, args);
     assert.equal(allowed.receipt.tool, TOOL);
-    assert.equal(renderApprovalMessage(allowed.receipt.tool, allowed.receipt.arguments).message, opened.elicitationParams.message);
-    assert.equal(opened.elicitationParams.message, renderApprovalMessage(TOOL, args).message);
+    assert.equal(renderApprovalMessage(allowed.receipt.tool, allowed.receipt.arguments, { serverId: "default-server" }).message, opened.elicitationParams.message);
+    assert.equal(opened.elicitationParams.message, renderApprovalMessage(TOOL, args, { serverId: "default-server" }).message);
   }
-  assert.equal(createApprovalContract().begin({ tool: TOOL, args: { a: "x".repeat(10000) } }).refusal, REFUSALS.UNRENDERABLE);
+  assert.equal(createApprovalContract().begin({ tool: TOOL, args: { a: "x".repeat(MESSAGE_CHARACTER_CAP) } }).refusal, REFUSALS.UNRENDERABLE);
+});
+
+test("presentation measurement counts logical lines, including hidden line separators", () => {
+  const { measureApprovalMessage } = require('../contract/renderer.cjs');
+  for (const separator of ['\n', '\r', '\r\n', '\u0085', '\u2028', '\u2029']) {
+    const measured = measureApprovalMessage(Array(8).fill('a').join(separator));
+    assert.equal(measured.ok, false, `8 logical lines separated by ${JSON.stringify(separator)}`);
+    assert.match(measured.reason, /need 8 lines/);
+  }
+});
+
+test("presentation preserves JSON scalar types while keeping ordinary strings readable", () => {
+  for (const value of [100, 0, -1, true, false, null]) {
+    const string = createApprovalContract().begin({ tool: TOOL, args: { amount: String(value) } });
+    const scalar = createApprovalContract().begin({ tool: TOOL, args: { amount: value } });
+    assert.notEqual(string.elicitationParams.message, scalar.elicitationParams.message);
+    assert.notEqual(string.elicitationParams.requestedSchema.properties.approve.description,
+      scalar.elicitationParams.requestedSchema.properties.approve.description);
+  }
+  for (const value of ['100', '1e2', '-0', 'true', 'false', 'null']) {
+    assert.equal(renderApprovalMessage(TOOL, { amount: value }).argLines[0], `  amount: ${JSON.stringify(value)}`);
+  }
+  assert.equal(renderApprovalMessage(TOOL, { table: 'customers' }).argLines[0], '  table: customers');
+});
+
+test("presentation escapes bidi controls but preserves shaping characters", () => {
+  const { renderName } = require('../contract/renderer.cjs');
+  for (const ch of ['\n', '\r', '\t', '\x1b', '\x7f', '\u0085', '\u061c', '\u200e', '\u202e', '\u2066', '\u2028', '\u2029']) {
+    const name = `a${ch}b`;
+    const opened = createApprovalContract({ serverId: null }).begin({ tool: name, args: { [name]: ch } });
+    assert.equal(opened.kind, 'input_required');
+    const params = opened.elicitationParams;
+    assert.ok(!params.message.includes(name), JSON.stringify(ch));
+    assert.ok(params.message.includes(renderName(name)));
+    assert.equal(params.requestedSchema.properties.approve.title, `Approve one run: ${renderName(name)}`);
+    assert.ok(!params.requestedSchema.properties.approve.description.includes(ch));
+    assert.notEqual(renderName(name), renderName(`a\\u${ch.codePointAt(0).toString(16).padStart(4, '0')}b`));
+  }
+  const args = { café: 'first\nsecond', 客户: 'customers', c: 3, d: 4 };
+  const rendered = renderApprovalMessage('工具', args);
+  assertInsideEnvelope(rendered);
+  assert.ok(rendered.message.includes('café: "first\\nsecond"'));
+  assert.ok(rendered.message.includes('客户: customers'));
+  assert.equal(createApprovalContract({ serverId: null }).begin({ tool: '工具', args }).kind, 'input_required');
+  const persian = 'می‌روم';
+  const indic = 'क्‍ष';
+  const emoji = '👩‍💻';
+  for (const name of [persian, indic]) {
+    assert.equal(renderName(name), name);
+    assert.ok(renderApprovalMessage(name, { name }).message.includes(name));
+  }
+  assert.ok(renderApprovalMessage(TOOL, { emoji }).message.includes(emoji));
+  for (const ch of ['\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069']) {
+    assert.ok(!renderName(`a${ch}b`).includes(ch), `bidi control ${JSON.stringify(ch)} must be escaped`);
+  }
+});
+
+
+for (const [label, point] of [
+  ['format boundary', 0x206a], ['format successor', 0x206b],
+  ['ignorable combining mark', 0x034f], ['unassigned', 0x0378],
+]) {
+  test(`presentation identifies every name code point: ${label}`, () => {
+    const { renderName } = require('../contract/renderer.cjs');
+    const ch = String.fromCodePoint(point);
+    const name = `ab${ch}cd`;
+    const shown = renderName(name);
+    assert.ok(!shown.includes(ch), `U+${point.toString(16)} must be visibly escaped`);
+    assert.deepEqual(Array.from(JSON.parse(shown)), Array.from(name));
+    assert.notEqual(shown, renderName(JSON.stringify(name).slice(1, -1).replace(ch, `\\u${point.toString(16)}`)));
+  });
+}
+
+test('presentation enumerates the Unicode invisible population and preserves shaping', () => {
+  const { renderName } = require('../contract/renderer.cjs');
+  const population = /[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\p{Cn}\p{Zl}\p{Zp}]/u;
+  let count = 0;
+  let omitted = 0;
+  for (let point = 0; point <= 0x10ffff; point += 1) {
+    const ch = String.fromCodePoint(point);
+    if (point === 0x200c || point === 0x200d || /\p{Variation_Selector}/u.test(ch) || !population.test(ch)) continue;
+    count += 1;
+    const name = `ab${ch}cd`;
+    const shown = renderName(name);
+    if (shown.includes(ch)) omitted += 1;
+    // Canonical JSON short escapes for controls are equally visible and exact.
+    assert.deepEqual(Array.from(JSON.parse(shown)), Array.from(name));
+  }
+  assert.ok(count > 0);
+  assert.equal(omitted, 0, `${omitted} of ${count} invisible code points remain literal`);
+  for (const name of ['می‌نویسم', 'अभिषेक', '👨‍👩‍👧‍👦']) {
+    const shown = renderName(name);
+    assert.equal(shown.startsWith('"') ? JSON.parse(shown) : shown, name);
+    assert.ok(shown.includes(name));
+  }
+});
+
+
+test("the character envelope admits complete long values independently of client width", () => {
+  const value = "x".repeat(100000);
+  for (const terminalWidth of [40, 60, 80, 120, 200000]) {
+    const rendered = renderApprovalMessage(TOOL, { line: value }, { terminalWidth });
+    assertInsideEnvelope(rendered);
+    assert.equal(rendered.argLines[0], `  line: ${value}`);
+    assert.equal(Array.from(rendered.message).length, 100187);
+  }
+  const { measureApprovalMessage, appendApprovalContext } = require("../contract/renderer.cjs");
+  assert.equal(MESSAGE_CHARACTER_CAP, 200000);
+  assert.equal(measureApprovalMessage("x".repeat(MESSAGE_CHARACTER_CAP)).ok, true);
+  assert.equal(measureApprovalMessage("x".repeat(MESSAGE_CHARACTER_CAP + 1)).ok, false);
+  assert.equal(measureApprovalMessage("😀".repeat(MESSAGE_CHARACTER_CAP)).ok, true);
+  assert.equal(measureApprovalMessage("😀".repeat(MESSAGE_CHARACTER_CAP + 1)).ok, false);
+  assert.equal(appendApprovalContext("x".repeat(MESSAGE_CHARACTER_CAP), "context").ok, false);
+  assert.equal(appendApprovalContext("message", "x".repeat(160)).ok, true);
+  assert.equal(appendApprovalContext("message", "x".repeat(161)).ok, false);
+});
+
+test("variation selectors survive in names, values, schema and complete emoji", () => {
+  const { renderName } = require("../contract/renderer.cjs");
+  for (const text of ["❤️", "✈️", "木\u{e0100}", "a\ufe0eb"]) {
+    const opened = createApprovalContract().begin({ tool: text, args: { [text]: text } });
+    assert.equal(opened.kind, "input_required");
+    assert.ok(opened.elicitationParams.message.includes(text));
+    assert.ok(opened.elicitationParams.requestedSchema.properties.approve.title.includes(text));
+    assert.ok(opened.elicitationParams.requestedSchema.properties.approve.description.includes(text));
+    assert.ok(renderName(text).includes(text));
+  }
+});
+
+
+test("configured server labels preserve keys and escape misleading display characters", () => {
+  const prefix = "Route (configured, not authenticated): ";
+  for (const value of [undefined, null]) {
+    const rendered = renderApprovalMessage(TOOL, {}, { serverId: value });
+    assertInsideEnvelope(rendered);
+    assert.equal(rendered.message.includes(prefix), false);
+  }
+  for (const value of ["", 42]) {
+    const rendered = renderApprovalMessage(TOOL, {}, { serverId: value });
+    assert.equal(rendered.ok, false);
+    assert.match(rendered.reason, /configured server route is not a non-empty string/);
+  }
+  for (const value of ["alpha", "beta", "unknown", "   ", "x".repeat(10000), 'a"\\\n\u001b\u202e\u200b\u00a0😀']) {
+    const rendered = renderApprovalMessage(TOOL, {}, { serverId: value });
+    assertInsideEnvelope(rendered);
+    const line = rendered.lines.at(-1);
+    assert.equal(line, prefix + renderName(value));
+    assert.equal(line.slice(prefix.length).startsWith('"') ? JSON.parse(line.slice(prefix.length)) : line.slice(prefix.length), value);
+    assert.doesNotMatch(line, /[\n\u001b\u202e\u200b]/);
+  }
+  assert.notEqual(renderName("alpha"), renderName("beta"));
+  assert.notEqual(renderApprovalMessage(TOOL, {}, { serverId: "unknown" }).message,
+    renderApprovalMessage(TOOL, {}, { serverId: undefined }).message);
+});
+
+test("configured route budgets all mandatory fields and arguments within seven lines", () => {
+  for (const args of [{}, { operation: "delete" }, { alpha: "one", beta: "two", gamma: 3 }]) {
+    const after = renderApprovalMessage("db.mutate", args, { serverId: "prod-db_01" });
+    assertInsideEnvelope(after);
+    for (const field of ["Tool: db.mutate", "Approval required", "Route (configured, not authenticated): prod-db_01", after.scopeLine, after.outsideLine]) {
+      assert.ok(after.message.includes(field), field);
+    }
+    const expectedArgs = Object.keys(args).sort().map((key) => `  ${key}: ${args[key]}`);
+    assert.deepEqual(after.argLines, expectedArgs.length ? expectedArgs : ["  (none)"]);
+    assert.equal(after.scopeLine, "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
+    for (const line of after.argLines) assert.ok(after.lines.includes(line));
+  }
+  const many = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`arg${i}`, i]));
+  const refused = createApprovalContract({ serverId: "prod-db_01" }).begin({ tool: TOOL, args: many });
+  assert.equal(refused.kind, "refuse");
+  assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
+  assert.match(refused.detail, /need 104 lines; Seal permits 7/);
+  assert.equal(refused.elicitationParams, undefined);
+  for (const serverId of ["payroll\u202etxt.exe", "\u202e".repeat(13), "x".repeat(100)]) {
+    const rendered = renderApprovalMessage(TOOL, { operation: "delete" }, { serverId });
+    assertInsideEnvelope(rendered);
+    assert.equal(rendered.lines.at(-1), `Route (configured, not authenticated): ${renderName(serverId)}`);
+    assert.equal(rendered.message.includes("\u202e"), false);
+  }
+});
+
+test("route refusal boundary measures complete characters and lines independently of terminal width", () => {
+  for (const args of [{}, { query: "x".repeat(55) }, { query: "x".repeat(1000) }, { alpha: "one", beta: "two", gamma: 3 }]) {
+    const initial = renderApprovalMessage(TOOL, args, { serverId: "s" });
+    const labelLength = MESSAGE_CHARACTER_CAP - Array.from(initial.message).length + 1;
+    for (const terminalWidth of [80, 240]) {
+      const rendered = renderApprovalMessage(TOOL, args, { serverId: "s".repeat(labelLength), terminalWidth });
+      assertInsideEnvelope(rendered);
+      assert.equal(Array.from(rendered.message).length, MESSAGE_CHARACTER_CAP);
+      assert.ok(rendered.lines.includes(rendered.scopeLine));
+      assert.ok(rendered.lines.includes(`Route (configured, not authenticated): ${"s".repeat(labelLength)}`));
+      for (const line of rendered.argLines) assert.ok(rendered.lines.includes(line), "every argument character must survive");
+      const refused = renderApprovalMessage(TOOL, args, { serverId: "s".repeat(labelLength + 1), terminalWidth });
+      assert.equal(refused.ok, false);
+      assert.match(refused.reason, /200001 characters; Seal permits 200000/);
+    }
+  }
 });

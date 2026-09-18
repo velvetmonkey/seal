@@ -95,6 +95,40 @@ function git(args) {
   return spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" });
 }
 
+// Enumerate explicitly: log must not walk back into already-reviewed base history.
+function topicChanges(base, head) {
+  const commits = git(["rev-list", "--parents", head, "--not", base, "--"]);
+  if (commits.status !== 0) return commits;
+  const outputs = [];
+  for (const line of commits.stdout.trim().split("\n").filter(Boolean)) {
+    const [commit, ...parents] = line.split(" ");
+    const changed = git(["log", "-m", "--no-walk", "--format=", "--name-status", "-z", "--diff-filter=ACDMRTUXB", commit, "--"]);
+    if (changed.status !== 0) return changed;
+    if (parents.length < 2) {
+      // Keep every ordinary commit, including edits later reverted on the topic.
+      outputs.push(changed.stdout);
+      continue;
+    }
+    // A unique catch-up merge's -m output also contains main's imported edits.
+    // Compare this merge to the base history it has incorporated, not today's
+    // base tree (which may have advanced again). Keep merge-only changes even
+    // when a later topic commit reverts them.
+    const incorporated = git(["merge-base", base, commit]);
+    if (incorporated.status !== 0) return incorporated;
+    const own = git(["diff", "--name-status", "-z", "--diff-filter=ACDMRTUXB", incorporated.stdout.trim(), commit, "--"]);
+    if (own.status !== 0) return own;
+    const changedPaths = parseNameStatus(changed.stdout);
+    const ownPaths = parseNameStatus(own.stdout);
+    if (!changedPaths || !ownPaths) return { status: 1, stderr: "malformed name-status output.\n" };
+    const ownSet = new Set(ownPaths);
+    // Paths, including both rename endpoints, are what the policy reviews.
+    for (const file of changedPaths) {
+      if (ownSet.has(file)) outputs.push(`M\0${file}\0`);
+    }
+  }
+  return { status: 0, stdout: outputs.join(""), stderr: "" };
+}
+
 // CLAIM-COVERAGE: docs/PROTECTED-PATH-RULINGS.json
 function exactRuling(mergeBase, head, changedPaths) {
   const record = git(["show", `${head}:${RULING_DOCUMENT}`]);
@@ -132,11 +166,9 @@ if (!protectedListIsIntact()) {
     process.stderr.write(`PROTECTED_PATH_DIFF_UNREADABLE: cannot find merge base for ${options.base} and ${options.head}.\n${mergeBase.stderr}`);
     process.exitCode = 1;
   } else {
-    // The net tree diff alone erases an add-then-delete sequence. Walk every
-    // commit in the same target-branch range, diffing merges against every
-    // parent, so neither a deletion nor a merge-only change disappears from
-    // review.
-    const changed = git(["log", "-m", "--format=", "--name-status", "-z", "--diff-filter=ACDMRTUXB", `${mergeBase.stdout.trim()}..${options.head}`, "--"]);
+    // A net head diff erases edit-then-revert attacks. Inspect each unique
+    // topic commit, retaining -m merge evidence without charging imported main.
+    const changed = topicChanges(options.base, options.head);
     if (changed.status !== 0) {
       process.stderr.write(`PROTECTED_PATH_DIFF_UNREADABLE: cannot read merge range.\n${changed.stderr}`);
       process.exitCode = 1;

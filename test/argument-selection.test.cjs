@@ -24,7 +24,7 @@ function waitFor(frames, predicate, timeoutMs = 5000) {
   });
 }
 
-function session(selection) {
+function session(selection, serverName = null) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-argument-selection-"));
   const storePath = path.join(dir, "approvals.journal");
   createJournal(storePath);
@@ -35,6 +35,7 @@ function session(selection) {
     storePath,
     receiptsDir: path.join(dir, "receipts"),
     childArgv: [process.execPath, SERVER, "ok", "db.mutate"],
+    serverName,
     onClientLine: (line) => frames.push(JSON.parse(line)),
   });
   proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "init", method: "initialize", params: { capabilities: { elicitation: {} } } }));
@@ -218,21 +219,135 @@ test("both duplicate name orders are refused before the child and normal traffic
   t.diagnostic("child raw capture contains only initialize and the unchanged normal unguarded frame");
 });
 
-test("renderline proxy preserves mandatory fields and gates arguments beyond the old line cap", async (t) => {
+test("renderline proxy refuses selection overflow before sending any approval", async (t) => {
   const run = session("db.mutate");
   t.after(() => run.close());
   await waitFor(run.frames, (frame) => frame.id === "init");
-  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "overflow", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3, d: 4 } } }));
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "overflow", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3, d: 4, e: 5 } } }));
+  const refused = await waitFor(run.frames, (frame) => frame.id === "overflow");
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /unrenderable_effect.*need 8 lines/);
+  assert.equal(run.frames.some((frame) => frame.method === "elicitation/create"), false);
+});
+
+test("the final proxy presentation includes predicate text inside the logical message envelope", async (t) => {
+  const { MESSAGE_LINE_CAP } = require('../contract/renderer.cjs');
+  const run = session('db.mutate');
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === 'init');
+  const args = { café: 'first\nsecond', 客户: 'customers', c: 3, d: 4 };
+  run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'long-legitimate', method: 'tools/call', params: { name: 'db.mutate', arguments: args } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === 'elicitation/create');
+  const lines = prompt.params.message.split('\n');
+  assert.ok(lines.length <= MESSAGE_LINE_CAP, `final logical lines: ${lines.length}`);
+  assert.match(prompt.params.message, /Selection predicate: db\.mutate \(bare tool name selects all calls\)/);
+  assert.ok(prompt.params.message.includes('café: "first\\nsecond"'));
+  assert.ok(prompt.params.message.includes('客户: customers'));
+  assert.ok(prompt.params.message.includes('c: 3'));
+  assert.ok(prompt.params.message.includes('d: 4'));
+});
+
+test("the proxy renders its configured server route", async (t) => {
+  const run = session("db.mutate", "configured-db");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "route", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1 } } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  assert.match(prompt.params.message, /Route \(configured, not authenticated\): configured-db/);
+});
+
+test("predicate composition refuses an over-budget message before offering approval", async (t) => {
+  const run = session({ name: 'db.mutate', predicate: `operation="${'x'.repeat(100)}"` });
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === 'init');
+  run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'too-wide', method: 'tools/call', params: { name: 'db.mutate', arguments: { operation: 100 } } }));
+  const response = await waitFor(run.frames, (frame) => frame.id === 'too-wide');
+  assert.match(response.result.content[0].text, /unrenderable_effect/);
+  assert.equal(run.frames.some((frame) => frame.method === 'elicitation/create'), false);
+});
+
+test("predicate context quotes the tool name consistently with the approval", async (t) => {
+  const { renderName } = require('../contract/renderer.cjs');
+  for (const name of ['db.\u202emutate', 'db.\\u202emutate']) {
+    const run = session(name);
+    t.after(() => run.close());
+    await waitFor(run.frames, (frame) => frame.id === 'init');
+    run.proxy.write(JSON.stringify({ jsonrpc: '2.0', id: 'names', method: 'tools/call', params: { name, arguments: { amount: '100' } } }));
+    const prompt = await waitFor(run.frames, (frame) => frame.method === 'elicitation/create');
+    assert.ok(prompt.params.message.includes(`Selection predicate: ${renderName(name)}`));
+    assert.ok(prompt.params.message.includes(`Tool: ${renderName(name)}`));
+    assert.equal(prompt.params.message.includes('\u202e'), false);
+  }
+});
+
+test("bounded history leaves a concurrent live proxy free to emit a receipt", async (t) => {
+  const run = session("db.mutate");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  const directory = path.join(run.dir, "receipts");
+  fs.mkdirSync(directory, { recursive: true });
+  const planted = path.join(directory, "receipt-1-77-0001-ALLOW.json");
+  const bytes = '{"seal_receipt":"v2","tool":"db.mutate","now":1,"verdict":"ALLOW"}';
+  fs.writeFileSync(planted, bytes);
+  const release = path.join(run.dir, "release-history-reader");
+  const child = require("node:child_process").spawn(process.execPath, ["-e", `
+    const fs = require("node:fs");
+    const { query } = require(${JSON.stringify(path.join(ROOT, "spine/receipt-population.cjs"))});
+    const original = fs.readSync;
+    let paused = false;
+    fs.readSync = function(...args) {
+      if (!paused) {
+        paused = true;
+        process.stdout.write("READ_OPEN\\n");
+        const end = Date.now() + 15000;
+        while (!fs.existsSync(${JSON.stringify(release)})) {
+          if (Date.now() > end) throw new Error("proxy emission barrier timed out");
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+        }
+      }
+      return original.apply(fs, args);
+    };
+    query(${JSON.stringify(directory)}).then(lines => console.log(lines.join("\\n")));
+  `], { stdio: ["ignore", "pipe", "pipe"] });
+  t.after(() => { if (child.exitCode === null) child.kill(); });
+  let output = "", errors = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { errors += chunk; });
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  await waitFor([{}], () => output.includes("READ_OPEN"));
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 701, method: "tools/call", params: { name: "db.mutate", arguments: {} } }));
+  const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: prompt.id, result: { action: "decline" } }));
+  await waitFor(run.frames, (frame) => frame.id === 701);
+  const emitted = fs.readdirSync(directory).filter((name) => name !== path.basename(planted));
+  assert.ok(emitted.length > 0, "proxy must emit while query has a receipt open");
+  assert.equal(child.exitCode, null, "emission must precede query exit");
+  const saved = emitted.map((name) => fs.readFileSync(path.join(directory, name)));
+  fs.writeFileSync(release, "proxy emitted");
+  assert.equal(await exited, 0, errors);
+  assert.equal(fs.readFileSync(planted, "utf8"), bytes);
+  emitted.forEach((name, index) => assert.deepEqual(fs.readFileSync(path.join(directory, name)), saved[index]));
+  assert.match(output, /Receipt completeness: UNKNOWN/);
+  assert.doesNotMatch(output, /COMPLETE/);
+});
+
+
+test("renderline proxy preserves mandatory fields and gates arguments at the universal line cap", async (t) => {
+  const run = session("db.mutate", "configured-db");
+  t.after(() => run.close());
+  await waitFor(run.frames, (frame) => frame.id === "init");
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "at-cap", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3 } } }));
   const prompt = await waitFor(run.frames, (frame) => frame.method === "elicitation/create");
   const lines = prompt.params.message.split("\n");
+  assert.equal(lines.length, 7);
   assert.equal(lines[0], "Tool: db.mutate; Approval required");
-  assert.equal(lines[1], "Server (configured route, identity not authenticated): unknown");
-  assert.equal(lines[2], "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
-  assert.deepEqual(lines.slice(3, 7), ["  a: 1", "  b: 2", "  c: 3", "  d: 4"]);
+  assert.equal(lines[5], "Route (configured, not authenticated): configured-db");
+  assert.equal(lines[3], "Scope: this parsed call (key order, 1/1.0 match); at most one run; 2 min.");
+  assert.deepEqual(lines.slice(1, 3), ["  a: 1; b: 2", "  c: 3"]);
   assert.equal(lines.at(-1), "Selection predicate: db.mutate (bare tool name selects all calls)");
-  assert.equal(run.frames.some((frame) => frame.id === "overflow"), false, "call must remain pending approval");
+  assert.equal(run.frames.some((frame) => frame.id === "at-cap"), false, "call must remain pending approval");
   run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: prompt.id, result: { action: "decline" } }));
-  const declined = await waitFor(run.frames, (frame) => frame.id === "overflow");
+  const declined = await waitFor(run.frames, (frame) => frame.id === "at-cap");
   assert.equal(declined.result.isError, true);
   assert.match(declined.result.content[0].text, /declined/);
 });

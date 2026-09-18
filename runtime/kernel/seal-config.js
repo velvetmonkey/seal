@@ -15,14 +15,74 @@ export function stableHash(parts) {
   return stableHashParts(parts);
 }
 
+// Match Lean 4.28 Json.compress, not JSON.stringify: Lean uses scalar-value
+// key ordering, long escapes for backspace/tab/form feed, and JsonNumber's
+// decimal rendering. This is a target preimage only; it never rewrites the
+// approved arguments. test/json-arguments.test.cjs checks it against real WASM.
+function compareKeys(a, b) {
+  const left = Array.from(a), right = Array.from(b);
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    const difference = left[i].codePointAt(0) - right[i].codePointAt(0);
+    if (difference) return difference;
+  }
+  return left.length - right.length;
+}
+
+function leanString(value) {
+  // Match entire JSON escape tokens so a literal backslash followed by "t"
+  // stays distinct from a tab character.
+  return JSON.stringify(value).replace(/\\(?:["\\/bfnrt]|u[0-9a-f]{4})/g,
+    (escape) => ({ "\\b": "\\u0008", "\\t": "\\u0009", "\\f": "\\u000c" })[escape] || escape);
+}
+
+function leanNumber(value) {
+  // Algorithm: leanprover/lean4 v4.28.0, src/Lean/Data/Json/Basic.lean,
+  // JsonNumber.toString. Keep this version aligned with the pinned WASM.
+  if (!Number.isFinite(value)) throw new Error("non-finite number has no kernel encoding");
+  if (value === 0) return "0";
+  const sign = value < 0 ? "-" : "";
+  const [mantissa, power = "0"] = String(Math.abs(value)).split("e");
+  const [whole, fraction = ""] = mantissa.split(".");
+  const digits = (whole + fraction).replace(/^0+/, "");
+  const places = fraction.length - Number(power);
+  if (places <= 0) return sign + digits + "0".repeat(-places);
+  // Lean JsonNumber.toString retains up to nine leading fractional zeroes
+  // before moving the remaining scale into a negative exponent.
+  const exponent = Math.min(0, 9 + digits.length - places);
+  const scale = places + exponent;
+  const padded = digits.padStart(scale + 1, "0");
+  const left = padded.slice(0, -scale);
+  const right = padded.slice(-scale).replace(/0+$/, "");
+  return sign + left + (right ? `.${right}` : "") + (exponent ? `e${exponent}` : "");
+}
+
 const canonicalJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) =>
-      `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+    return `{${Object.keys(value).sort(compareKeys).map((key) =>
+      `${leanString(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   }
+  if (typeof value === "string") return leanString(value);
+  if (typeof value === "number") return leanNumber(value);
   return JSON.stringify(value);
 };
+
+// The kernel's raw-wire digit bound counts leading fractional zeroes. Use
+// scientific notation for fractions so every finite binary64 value needs at
+// most 17 mantissa digits. The downstream call and receipt keep their original
+// parsed numbers. Integer-valued protocol fields keep their existing spelling.
+function wireJson(value) {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("non-finite number has no kernel encoding");
+    return Number.isInteger(value) ? JSON.stringify(value) : value.toExponential();
+  }
+  if (Array.isArray(value)) return `[${value.map(wireJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).filter((key) => value[key] !== undefined).map((key) =>
+      `${JSON.stringify(key)}:${wireJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
 
 // Stage-A guarded target: domain + tool + complete canonical arguments and
 // explicit absence frames for metadata, request state and input responses.
@@ -84,7 +144,7 @@ export const SCENARIOS = {
   "store-subtle":    { config: CFG_STORE, tool: "store.update", args: { op: "assign", key: "k1" }, approvals: [guardTarget("store.update", { op: "assign", key: "k1" })], demo: 3, label: "store.update { op: assign }" },
 };
 
-const rpc = (tool, args, id = 1) => JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
+const rpc = (tool, args, id = 1) => wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
 
 // Build the seal_decide step-input JSON for a scenario (or a custom tool call).
 // `votes` is the raw consensus votes-file text (NDJSON lines
