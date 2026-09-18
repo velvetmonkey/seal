@@ -6,8 +6,13 @@ import { fileURLToPath } from 'node:url';
 // Code examples and tables can overflow on narrow viewports. Keep their
 // native semantics while allowing keyboard users to focus and scroll them.
 export function focusScrollableContent(html) {
-  return html.replace(/<(pre|table)(?=[\s>])([^>]*)>/gi, (tag, element, attributes) =>
-    /\btabindex\s*=/i.test(attributes) ? tag : `<${element} tabindex="0"${attributes}>`);
+  // Raw-text elements and comments are not markup to rewrite: their text
+  // may contain example tags or quoted JavaScript strings.
+  return html.replace(/<!--[\s\S]*?-->|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<(pre|table)(?=[\s>])([^>]*)>/gi,
+    (tag, rawTextElement, element, attributes) => {
+      if (!element || /\btabindex\s*=/i.test(attributes)) return tag;
+      return `<${element} tabindex="0"${attributes}>`;
+    });
 }
 
 function finalize(directory) {

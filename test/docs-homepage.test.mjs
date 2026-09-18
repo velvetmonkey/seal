@@ -54,3 +54,9 @@ test('built code and tables remain keyboard-scrollable without changing content 
   assert.ok(output.includes('<code>PASS &lt;sample&gt;</code>'));
   assert.equal(focusScrollableContent(output), output);
 });
+
+test('scroll focus finalization preserves scripts, styles, comments and raw-text examples byte-for-byte', () => {
+  const raw = '<script>const markup = "<pre>example</pre><table></table>";</script><style>/* <pre> */</style><!-- <table> --><textarea><pre>literal</pre></textarea><title><table>literal</table></title>';
+  assert.equal(focusScrollableContent(raw), raw);
+  assert.equal(focusScrollableContent(raw + '<pre>real</pre>'), raw + '<pre tabindex="0">real</pre>');
+});
