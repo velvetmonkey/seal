@@ -805,7 +805,7 @@ test("history shares the filename population and bounds hostile decision claims"
   fs.writeFileSync(path.join(root, "unrelated"), "{}");
   fs.writeFileSync(path.join(root, "receipt-4000-77-0002-BLOCK.json"), record(4000, "db.write", "BLOCK"));
   const before = population.inspectReceiptDirectory(root);
-  const result = await population.query(root, { limit: 3, since: 2990, until: 4000, tool: "db.write" });
+  const result = await population.query(root, { limit: 3, since: 2990000, until: 4000000, tool: "db.write" });
   const out = result.join("\n");
   assert.equal(before.receiptFiles.length, 3001);
   assert.match(out, /Receipt files observed: 3001 /);
@@ -813,7 +813,7 @@ test("history shares the filename population and bounds hostile decision claims"
   assert.match(out, /Non-receipt files ignored: 1/);
   assert.match(out, /Decision contents UNKNOWN: 2000; future timestamps: 1000/);
   assert.match(out, /Matching decision claims observed: 5; ALLOW 4; BLOCK 1/);
-  assert.deepEqual(result.slice(-3), ['4000 BLOCK tool "db.write"', '2999 ALLOW tool "db.write"', '2996 ALLOW tool "db.write"']);
+  assert.deepEqual(result.slice(-3), ['4000000 BLOCK tool "db.write"', '2999000 ALLOW tool "db.write"', '2996000 ALLOW tool "db.write"']);
   assert.doesNotMatch(out, /COMPLETE/);
   assert.ok(Buffer.byteLength(out) < 2500);
   // Cross the hard directory ceiling; no exact total may be asserted.
@@ -838,12 +838,12 @@ test("history rejects unsafe content, bounds bytes, escapes text, and validates 
   const out = (await query(root)).join("\n");
   assert.match(out, /Receipt files observed: 4 /);
   assert.match(out, /Decision contents UNKNOWN: 3/);
-  assert.match(out, /1 BLOCK tool "\\u0043OMPLETE\\nforged"/);
+  assert.match(out, /1000 BLOCK tool "\\u0043OMPLETE\\nforged"/);
   assert.doesNotMatch(out, /COMPLETE/);
   for (const args of [["--limit", "101"], ["--since", "2", "--until", "1"], ["--limit", "1", "--limit", "2"], ["--since", "NaN"]]) {
     assert.equal(run(["history", root, ...args], root).code, 1);
   }
-  const filtered = run(["history", root, "--since", "0", "--until", "1", "--tool", "COMPLETE\nforged", "--limit", "1"], root);
+  const filtered = run(["history", root, "--since", "0", "--until", "1000", "--tool", "COMPLETE\nforged", "--limit", "1"], root);
   assert.equal(filtered.code, 0);
   assert.match(filtered.out, /Matching decision claims observed: 1; ALLOW 0; BLOCK 1/);
   assert.doesNotMatch(filtered.out, /COMPLETE/);
@@ -874,4 +874,61 @@ test("history deletion and renumbering during reads cannot assert completeness",
   const after = (await query(root)).join("\n");
   assert.match(after, /Receipt gaps found: 0/);
   assert.match(after, /Receipt completeness: UNKNOWN/);
+});
+
+
+test("history finds freshly emitted approval receipts in seconds and milliseconds without changing signed bytes", async () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-history-emitted-"));
+  const { createApprovalContract } = require("../contract/contract.cjs");
+  const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
+  const { generateSigner } = require("../spine/receipt-v2.cjs");
+  const { openReceiptEmitter } = require("../spine/receipts.cjs");
+  const { query } = require("../spine/receipt-population.cjs");
+  const { verify } = await import("../checker/seal-receipt-v2.mjs");
+  const signer = generateSigner();
+  const emitter = openReceiptEmitter(root, signer);
+  const tool = "demo.mutate", args = { line: "history integration" };
+  const contract = createApprovalContract();
+  const pending = contract.begin({ tool, args });
+  const decision = contract.retry({ tool, args, requestState: pending.result.requestState,
+    inputResponses: { approval: { action: "accept", content: { approve: true } } } });
+  assert.equal(decision.kind, "allow");
+  const seconds = decision.receipt.now;
+  assert.ok(Math.abs(seconds * 1000 - Date.now()) < 60000);
+  const files = [emitter.emit(decision.receipt, "ALLOW")];
+  // Real kernel evaluation and the same signing/writing path, with a caller
+  // supplying milliseconds. No hand-authored receipt or post-signature edit.
+  const emitAt = (now) => {
+    const result = createKernelAuthorizationAdapter().authorize({ epoch: 1,
+      issuedTool: tool, issuedArgs: args, retryTool: tool, retryArgs: args,
+      accepted: true, now });
+    assert.equal(result.verdict, "ALLOW");
+    files.push(emitter.emit(result.receipt_record, "ALLOW"));
+  };
+  const milliseconds = seconds * 1000 - 500;
+  emitAt(milliseconds);
+  emitAt(seconds - 120); // old seconds
+  emitAt(seconds * 1000 - 120000); // old milliseconds
+  emitAt(seconds + 120); // future seconds
+  emitAt(seconds * 1000 + 120000); // future milliseconds
+  const originals = files.map((file) => fs.readFileSync(file));
+  const recent = run(["history", root, "--since", String(Date.now() - 60000)], root);
+  assert.equal(recent.code, 0, recent.out);
+  assert.match(recent.out, /Matching decision claims observed: 2; ALLOW 2; BLOCK 0/);
+  assert.match(recent.out, /future timestamps: 2/);
+  assert.deepEqual(recent.out.trim().split("\n").slice(-2), [
+    `${seconds * 1000} ALLOW tool "${tool}"`, `${milliseconds} ALLOW tool "${tool}"`,
+  ]);
+  for (const instant of [seconds * 1000, milliseconds]) {
+    const exact = (await query(root, { since: instant, until: instant })).join("\n");
+    assert.match(exact, /Matching decision claims observed: 1;/);
+    const after = (await query(root, { since: instant + 1, until: instant + 1 })).join("\n");
+    assert.match(after, /Matching decision claims observed: 0;/);
+  }
+  for (const [i, file] of files.entries()) {
+    assert.deepEqual(fs.readFileSync(file), originals[i]);
+    const checked = await verify(originals[i], { publicKeyHex: signer.publicKeyHex });
+    assert.equal(checked.signature, true);
+    assert.equal(checked.replay, true);
+  }
 });
