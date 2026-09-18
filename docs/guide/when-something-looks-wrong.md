@@ -239,6 +239,21 @@ gave. Run in the project directory, and spell the server exactly as
 server entry is malformed (a non-array `args`, a non-object `env`, a missing
 command). The message names the specific problem; fix the file.
 
+### `project_environment_missing`
+
+A launch field in `.mcp.json` references an unset environment variable without a
+fallback. Set the named variable in the environment used to run Seal and Claude,
+or provide `${VAR:-default}`, then retry. Seal refuses to launch the literal
+placeholder. Resolved launch values are bound into protection's drift detection;
+changing them requires unprotecting and protecting the server again.
+
+### `project_environment_unsupported`
+
+A launch field contains a placeholder outside Seal's supported `${VAR}` and
+`${VAR:-default}` syntax. Use one of those forms or a literal value, then retry.
+Expansion happens once against the launching environment, not against other
+entries in the server's `env` object. A set but empty variable stays empty.
+
 ### `project_server_non_stdio`
 
 The named server is `http` (or anything but `stdio`). Seal gates local
