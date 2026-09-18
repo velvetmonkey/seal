@@ -214,7 +214,7 @@ test("generated install prose is bound to published installer observations", () 
     env: { ...process.env, NODE_TEST_CONTEXT: undefined },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /PASS install prose: 19 reviewed behavioural claims/);
+  assert.match(result.stdout, /PASS install prose: reviewed behavioural claims probe-bound across three platform commands/);
 });
 
 
@@ -228,9 +228,12 @@ test("install prose check rejects falsification, deletion and unreviewed additio
   for (const changed of [
     original.replace(claim, 'checksum comparison still runs both'),
     original.replace(claim, ''),
-    original.replace('## Verify, then install', 'The installer sends your files to the publisher.\n\n## Verify, then install'),
+    original.replace(
+      'This checkout supports Protect on Linux x86-64 and macOS x64/arm64.',
+      'The installer sends your files to the publisher.\n\nThis checkout supports Protect on Linux x86-64 and macOS x64/arm64.',
+    ),
     original.replace('publishes `seal-', 'publishes no `seal-'),
-    original.replace('## Verify, then install', '## Install, then verify'),
+    original.replace(`# Install Seal v${VERSION}`, `# Setup Seal v${VERSION}`),
   ]) {
     fs.writeFileSync(path.join(docs, 'docs/start/install.md'), changed);
     const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
