@@ -94,5 +94,6 @@ test/terminal-renderer.test.cjs
 test/tool-validation.test.cjs
 test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
+test/withdrawn-version.test.cjs
 test/workflow-gh-repo-context.test.cjs
 test/workflow-host-paths.test.cjs
