@@ -94,12 +94,15 @@ function checkProof({ sourceRoot, evidencePath }) {
     const manifestBytes = fs.readFileSync(manifestPath);
     const manifest = JSON.parse(manifestBytes);
     evidence.manifest_sha256 = sha256(manifestBytes);
-    evidence.build_command = ["lake", "build", "AuthorizationCorrespondenceProof"];
+    // A fresh clone alone is insufficient: dependencies can prefer a cloud
+    // release containing precompiled oleans. Disable Lake's build caches too.
+    const buildArgs = ["--no-cache", "build", "AuthorizationCorrespondenceProof"];
+    evidence.build_command = ["lake", ...buildArgs];
     const transcript = path.join(work, "build.log");
     const fd = fs.openSync(transcript, "wx");
     let build;
     try {
-      build = spawnSync("lake", ["build", "AuthorizationCorrespondenceProof"], {
+      build = spawnSync("lake", buildArgs, {
         cwd: checkout, env, stdio: ["ignore", fd, fd],
       });
     } finally { fs.closeSync(fd); }
