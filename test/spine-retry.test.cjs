@@ -1918,7 +1918,7 @@ for (const token of ['-9007199254740993', '9007199254740993e0', '"90071992547409
 // The escaped-session case deliberately demonstrates the containment limit:
 // Seal must release its transport even when it cannot find the pipe holder.
 for (const mode of ["inherited-pipe", "detached-observed", "escaped-session", "already-exited", "ignore-term", "cooperative"]) {
-  test(`proxy shutdown is bounded: ${mode}`, async (t) => {
+  test(`proxy shutdown is bounded: ${mode}`, {timeout:10000}, async (t) => {
     const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-stop-"));
     const pidFile = path.join(dir, "descendant.pid");
     const storePath = path.join(dir, "store");
@@ -1996,7 +1996,7 @@ for (const mode of ["inherited-pipe", "detached-observed", "escaped-session", "a
   });
 }
 
-test("proxy shutdown is bounded after a spawn error", async () => {
+test("proxy shutdown is bounded after a spawn error", {timeout:5000}, async () => {
   const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-spawn-error-"));
   const storePath = path.join(dir, "store");
   createJournal(storePath);
