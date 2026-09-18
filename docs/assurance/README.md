@@ -38,6 +38,11 @@ the Node CLI this repository ships.
    pinned digest can and cannot say about an untagged build.
 7. [assurance/architecture.md](architecture.md) — the shipped Node product path first,
   followed by the wider family assurance lineage.
+8. [assurance/current-scope.md](current-scope.md) — current guarantees, tested
+   behaviour, trusted assumptions and what is not established, tied to the
+   README's own "Guarantees and non-guarantees" section.
+9. [verify/README.md](../verify/README.md) — choose between the browser checker,
+   the CLI assurance kit, and this product's own `seal verify`.
 
 - [reference/cli.md](../reference/cli.md) — commands, flags, argument ranges and exit codes.
 
@@ -71,6 +76,9 @@ the Node CLI this repository ships.
 4. [assurance/claude-code-evidence.md](claude-code-evidence.md) — the client matrix, why
    the Claude Code row is still untested, and the human-assisted acceptance
    harness and checker that would close it.
+4a. [verify/browser.md](../verify/browser.md) and [verify/cli.md](../verify/cli.md) —
+    the browser (seal-check) and CLI (seal-assurance-kit) checking routes, and
+    what each reports separately from this repository.
 5. [The `seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.4.0/seal-receipt-v2.mjs) — the
    receipt checker is a sibling asset published with the release and is also
    inside the installed payload as `checker/seal-receipt-v2.mjs`, byte for

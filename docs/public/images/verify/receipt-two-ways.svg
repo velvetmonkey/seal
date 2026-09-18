@@ -1,0 +1,43 @@
+<svg viewBox="0 0 720 260" role="img" aria-labelledby="receipt-two-ways-title receipt-two-ways-desc" xmlns="http://www.w3.org/2000/svg" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace">
+  <title id="receipt-two-ways-title">One receipt, checked two independent ways</title>
+  <desc id="receipt-two-ways-desc">
+    A single signed decision receipt can be checked by seal-check in a browser,
+    which reports signature validity, kernel replay consistency and authority
+    pinning, or by seal-assurance-kit on the command line, which reports verify,
+    scan, receipt-diff and adequacy results. Both paths read the same receipt
+    bytes and share the same kernel and receipt-format dependencies, so
+    agreement between them is not independent confirmation of a shared defect
+    in that common code.
+  </desc>
+  <rect x="0" y="0" width="720" height="260" fill="#ffffff" stroke="#d0d3da" stroke-width="1"></rect>
+  <g fill="none" stroke="#6b7280" stroke-width="2">
+    <rect x="290" y="14" width="140" height="46" rx="6"></rect>
+    <rect x="70" y="110" width="220" height="46" rx="6"></rect>
+    <rect x="430" y="110" width="220" height="46" rx="6"></rect>
+    <rect x="40" y="196" width="280" height="50" rx="6" stroke-dasharray="4 3"></rect>
+    <rect x="400" y="196" width="280" height="50" rx="6" stroke-dasharray="4 3"></rect>
+  </g>
+  <g fill="#1f2430" font-size="14" text-anchor="middle">
+    <text x="360" y="42">one signed receipt</text>
+    <text x="180" y="138">seal-check (browser)</text>
+    <text x="540" y="138">seal-assurance-kit (CLI)</text>
+    <text x="180" y="217">signature · replay ·</text>
+    <text x="180" y="234">authority pin</text>
+    <text x="540" y="217">verify · scan ·</text>
+    <text x="540" y="234">receipt-diff · adequacy</text>
+  </g>
+  <g stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-two-ways)">
+    <path d="M310 60c0 20-90 30-130 46"></path>
+    <path d="M410 60c0 20 90 30 130 46"></path>
+    <line x1="180" y1="156" x2="180" y2="192"></line>
+    <line x1="540" y1="156" x2="540" y2="192"></line>
+  </g>
+  <g fill="#4b5563" font-size="11" font-style="italic" text-anchor="middle">
+    <text x="360" y="180">same bytes, two separate tools</text>
+  </g>
+  <defs>
+    <marker id="arrow-two-ways" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#6b7280"></path>
+    </marker>
+  </defs>
+</svg>
