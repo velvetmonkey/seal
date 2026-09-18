@@ -98,10 +98,6 @@ default. Slow but legitimate servers can use
 `seal protect --timeout-ms MILLISECONDS SERVER TOOL`; timeout refusals name
 that flag, and the selected deadline is retained for the activation re-check.
 
-Previous: [Architecture](architecture.md).
-Up: [Assurance](README.md).
-Next: [Version identity](version-identity.md).
-
 ## Release approval and recovery
 
 Cut and push the release tag for the exact commit that passed default-branch CI.
@@ -145,3 +141,7 @@ It refuses a different digest, an unreadable release state, or a published relea
 The shell execution tests in `test/release-publish-gate.test.cjs` test these paths
 with a local GitHub substitute.
 They do not publish a release or test a live approval.
+
+Previous: [Architecture](architecture.md).
+Up: [Assurance](README.md).
+Next: [Version identity](version-identity.md).
