@@ -100,6 +100,7 @@
     "docs/public/examples/protect-block.receipt.json": { "allowlistReason": "This is an unmodified public specimen receipt copied byte-for-byte from the seal-check repository's own examples directory (see the adjacent PROVENANCE.txt); it is fixture data consumed by the homepage's labeled example receipt, not authored prose making a claim." },
     "docs/public/examples/PROVENANCE.txt": { "allowlistReason": "This note records the upstream repository, revision and license for the two adjacent specimen files; it is a citation of an external fixture's origin, not a claim about this repository's own shipped behavior." },
     "docs/src/components/DecisionReceipt.astro": { "allowlistReason": "This component renders a single, explicitly labeled recorded example (not a live checker) from the bundled public specimen; its source comment and caption describe that scope rather than asserting new shipped behavior, and the homepage page it renders on is separately covered by test/docs-homepage.test.mjs#homepage." },
+    "docs/archive/pass2-captures.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/check/README.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/check/your-first-receipt.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/check/from-seal.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },

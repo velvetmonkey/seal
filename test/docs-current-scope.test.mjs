@@ -64,9 +64,10 @@ test("current-scope.md quotes the README's canonical guarantees verbatim", () =>
 
 // Pass 2: scope and receipt-family boundaries for the new reader entry points.
 const FAMILY_PAGE_LIMITS = {
+  "docs/archive/pass2-captures.md": "not every number or optional field",
   "docs/check/README.md": "does not establish operator identity",
   "docs/check/your-first-receipt.md": "Authority and occurrence remain unverified",
-  "docs/check/from-seal.md": "not every number or optional field",
+  "docs/check/from-seal.md": "Event occurrence is not established",
   "docs/check/results.md": "different from a receipt refused",
   "docs/check/formats.md": "not an invalid producer receipt",
   "docs/check/keys-and-sharing.md": "Editing a signed receipt",
@@ -149,3 +150,5 @@ test('format guide keeps decimals in the product contract and names checker comp
 // CLAIM-COVERAGE: docs/guide/first-approval.md#family-content-scope
 // CLAIM-COVERAGE: docs/guide/lifecycle.md#family-content-scope
 // CLAIM-COVERAGE: docs/evidence/sources.md#family-content-scope
+
+// CLAIM-COVERAGE: docs/archive/pass2-captures.md#family-content-scope

@@ -4,7 +4,7 @@ First complete [your first approval](../guide/first-approval.md). Keep the print
 
 Open the [checker](https://velvetmonkey.github.io/seal-check/), select that receipt file, then select receipt-signer.pub from the **same run**. The signer control appears after a Protect or Spine receipt is selected. No command needs to run in the browser.
 
-This walkthrough was exercised on Linux with Seal v0.4.0 and the checker revision listed in [sources](../evidence/sources.md). A freshly emitted demo receipt passed signature, argument/config commitment and local replay checks. Changing its argument produced a commitment refusal. This establishes the observed example's compatibility, not every number or optional field allowed by the contract.
+The [dated walkthrough capture](../archive/pass2-captures.md) records the exact tested version and observed checks. Use [sources](../evidence/sources.md) to identify the companion revisions.
 
 The demo key establishes self-consistency only: it came from the producer that made the receipt. For operator authority, obtain the applicable trust material separately. Protect receipts do not carry producer kernel identity; verifier-local replay cannot identify the producer's binary. Event occurrence is not established.
 

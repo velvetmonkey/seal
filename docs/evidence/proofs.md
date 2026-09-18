@@ -1,5 +1,7 @@
 # Proof and source index
 
+**Lean proof source: seal-host.** The imported model files below preserve that source lineage.
+
 The model and theorem boundary is distinct from the shipped Node authorization path. seal-host contains the host model lineage; Seal carries imported model sources and a runtime whose correspondence has its own limits.
 
 The following immutable Seal source snapshot makes the imported statements inspectable without relying on moving line numbers:
