@@ -1,14 +1,22 @@
 ---
 import Search from '@astrojs/starlight/components/Search.astro';
 import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import { sealCheckUrl } from '../data/family.ts';
 const archive = Astro.url.pathname.includes('/archive/');
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <div class="header">
   <nav aria-label="Global">
-    <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/`}>{archive ? 'Current Seal documentation' : 'Seal'}</a>
+    <a class="brand" href={`${base}/`}>{archive ? 'Current Seal documentation' : 'Seal'}</a>
     {archive && <strong>Archive</strong>}
-    <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/documentation-map/`}>Documentation map</a>
-    <a href="https://github.com/velvetmonkey/seal">GitHub</a>
+    <details class="nav-menu">
+      <summary aria-label="More navigation">Menu</summary>
+      <div class="nav-menu__items">
+        <a href={`${base}/documentation-map/`}>Docs</a>
+        <a href={sealCheckUrl} rel="external">Check a receipt<span aria-hidden="true"> ↗</span></a>
+        <a href="https://github.com/velvetmonkey/seal">GitHub</a>
+      </div>
+    </details>
   </nav>
   <div class="tools"><Search /><ThemeSelect /></div>
 </div>
@@ -20,6 +28,48 @@ const archive = Astro.url.pathname.includes('/archive/');
   nav strong { color: var(--sl-color-white); text-transform: uppercase; letter-spacing: .08em; }
   nav a:hover { text-decoration: underline; }
   nav a:focus-visible { outline: 2px solid var(--sl-color-text-accent); outline-offset: 4px; }
+
+  /* On wide viewports, show every link inline and hide the disclosure chrome. */
+  .nav-menu { position: static; }
+  .nav-menu summary { display: none; }
+  .nav-menu[open] .nav-menu__items,
+  .nav-menu .nav-menu__items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  @media (max-width: 26rem) {
+    .header { padding-inline-end: 2.5rem; gap: .5rem; }
+    nav { gap: .65rem; font-size: .875rem; }
+    .tools { gap: .25rem; }
+    /* Narrow viewports (spec: ~390px): collapse Docs/checker/GitHub into a
+       disclosure so the brand, search and theme controls stay reachable and
+       the custom header does not wrap onto the Starlight sidebar toggle. */
+    .nav-menu summary {
+      display: inline-flex;
+      cursor: pointer;
+      color: var(--sl-color-white);
+      font-weight: 600;
+      list-style: none;
+    }
+    .nav-menu summary::-webkit-details-marker { display: none; }
+    .nav-menu .nav-menu__items {
+      position: absolute;
+      inset-inline-start: 0;
+      top: 100%;
+      flex-direction: column;
+      align-items: flex-start;
+      background: var(--sl-color-bg-nav);
+      border: 1px solid var(--sl-color-gray-5);
+      border-radius: 0.375rem;
+      padding: 0.75rem 1rem;
+      z-index: 10;
+    }
+    .nav-menu { position: relative; }
+  }
+
   @media (max-width: 49.99rem) {
     .header { padding-inline-end: 2.5rem; gap: .5rem; }
     nav { gap: .65rem; font-size: .875rem; }

@@ -1,0 +1,82 @@
+---
+// SPDX-License-Identifier: Apache-2.0
+//
+// Reusable route-card presentation for the three Seal-family entry points.
+// Site-relative hrefs are resolved against BASE_URL here so the cards do not
+// break when the site is built under a different base path (for example a
+// preview deployment mounted at /preview/seal/ rather than /seal/).
+import { familyRoutes } from '../data/family.ts';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+function resolve(href: string) {
+  return /^https?:\/\//.test(href) ? href : `${base}/${href}`;
+}
+---
+<ul class="family-routes">
+  {familyRoutes.map((route, index) => (
+    <li class={`family-route${index === 0 ? ' family-route--primary' : ''}`}>
+      <a href={resolve(route.href)} rel={route.external ? 'external' : undefined}>
+        <span class="family-route__action">
+          {route.action}
+          {route.external && <span class="family-route__external" aria-hidden="true">↗</span>}
+        </span>
+        <span class="family-route__project">{route.project}</span>
+        <span class="family-route__description">{route.description}</span>
+      </a>
+    </li>
+  ))}
+</ul>
+<style>
+  .family-routes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .family-route a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    height: 100%;
+    padding: 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--sl-color-text);
+    background: var(--sl-color-bg-nav);
+  }
+  .family-route a:hover,
+  .family-route a:focus-visible {
+    border-color: var(--sl-color-text-accent);
+  }
+  .family-route a:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+  }
+  .family-route--primary a {
+    border-color: var(--sl-color-text-accent);
+    border-width: 2px;
+    background: var(--sl-color-bg-accent-overlay, var(--sl-color-bg-nav));
+  }
+  .family-route__action {
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--sl-color-white);
+  }
+  .family-route__external {
+    margin-left: 0.25rem;
+    font-weight: 400;
+  }
+  .family-route__project {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sl-color-gray-2);
+  }
+  .family-route__description {
+    color: var(--sl-color-gray-2);
+    font-size: 0.9rem;
+  }
+</style>

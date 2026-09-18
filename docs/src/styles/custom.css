@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Minimal homepage/article width and responsive-header tuning. Reuses
+   Starlight's existing typography, spacing and theme tokens; this file adds
+   no new color system. */
+
+/* Article body width target ~65-75 characters; Starlight's own content grid
+   already applies this within .sl-markdown-content, so this only trims a
+   touch of extra breathing room on very wide viewports. */
+.sl-markdown-content {
+  --sl-content-width: 68rem;
+}
+
+/* Wide code blocks and tables scroll inside their own container instead of
+   forcing the page to overflow horizontally. */
+.sl-markdown-content pre,
+.sl-markdown-content table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Keep prose links visually distinct without relying on color alone. */
+.sl-markdown-content a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}

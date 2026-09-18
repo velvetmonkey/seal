@@ -104,8 +104,23 @@ function main() {
   emptyGenerated(output);
   fs.mkdirSync(output, { recursive: true });
 
-  const landing = `---\ntitle: Seal\ndescription: ${siteDescription}\n---\n\n${siteDescription}\n\nThis guide is for using that gate day to day. It assumes you have seen a \`.mcp.json\` before and can run commands in a terminal, and nothing more.\n\nSeal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.\n\n[Choose your route](documentation-map/)\n`;
-  fs.writeFileSync(path.join(output, 'index.md'), landing);
+  // The homepage route "/" is owned exclusively by src/pages/index.astro
+  // (a Starlight custom page, see astro.config.mjs). This generator must
+  // never also write a competing src/content/docs/index.md: the root has
+  // exactly one owner.
+  const slugs = new Map();
+  for (const source of sources) {
+    const sourceName = path.relative(root, source).split(path.sep).join('/');
+    const slug = pageSlug(sourceName);
+    if (slug === '') {
+      throw new Error(`${sourceName}: generated slug is empty, which would collide with the custom homepage at src/pages/index.astro`);
+    }
+    const existing = slugs.get(slug);
+    if (existing) {
+      throw new Error(`duplicate generated route "/${slug}/" from both ${existing} and ${sourceName}`);
+    }
+    slugs.set(slug, sourceName);
+  }
 
   for (const source of sources) {
     const sourceName = path.relative(root, source).split(path.sep).join('/');
@@ -124,7 +139,7 @@ function main() {
     fs.writeFileSync(destination, `---\ntitle: ${JSON.stringify(title)}\n${archiveFrontmatter}---\n\n${warning}${rewriteLinks(source, prepared)}`);
   }
 
-  console.log(`Prepared landing page and ${sources.length} markdown sources without modifying them`);
+  console.log(`Prepared ${sources.length} markdown sources without modifying them; homepage is src/pages/index.astro`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
