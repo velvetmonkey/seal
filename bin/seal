@@ -646,6 +646,8 @@ function unprotectCommand(args) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   const [serverName] = args;
   const result = protection.unprotect({ serverName, projectRoot: process.cwd(), env: process.env });
+  console.log(`Project .mcp.json source before unprotect: ${result.projectSourceBefore}`);
+  console.log(`Project .mcp.json source after unprotect: ${result.projectSourceAfter}`);
   console.log(`Project .mcp.json hash before unprotect: ${result.beforeHash}`);
   console.log(`Project .mcp.json hash after unprotect: ${result.afterHash}`);
   for (const line of protection.protectionBoundary({ ...(result.previousState || {}), state: "UNPROTECTED" }, process.cwd(), result.statePath)) console.log(line);
