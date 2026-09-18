@@ -51,12 +51,15 @@ function status() {
     : runtime.state === "integrity check failed"
       ? `Runtime at status check FAIL: integrity check failed seal-assurance-kit@${manifest.commit} (${runtime.reason}; runtime bytes do not match the published runtime)`
       : `Runtime at status check UNKNOWN: absent seal-assurance-kit@${manifest.commit} (${runtime.reason})`);
-  printReachabilityObservation(protection, process.cwd(), process.env);
+  const { projectRoot, installedRecords } = printReachabilityObservation(protection, process.cwd(), process.env);
 
   let paths;
-  try { paths = protection.statePathsFor(process.cwd(), process.env); }
-  catch (error) { statusRecord(undefined, error); return; }
-  for (const filePath of paths.length ? paths : [undefined]) statusRecord(filePath);
+  try { paths = protection.statePathsFor(projectRoot, process.env); }
+  catch (error) { statusRecord(undefined, projectRoot, error); return; }
+  paths = [...new Set([...paths, ...installedRecords.keys()])];
+  for (const filePath of paths.length ? paths : [undefined]) {
+    statusRecord(filePath, installedRecords.get(filePath) || projectRoot);
+  }
 }
 
 // JSON.parse validates syntax, but loses repeated object members. Walk the raw
@@ -150,6 +153,7 @@ function printReachabilityObservation(protection, cwd, env) {
   let recordsError;
   try { states = protection.statePathsFor(projectRoot, env).map((filePath) => protection.readState(filePath)).filter(Boolean); }
   catch (error) { recordsError = error; console.log(`UNKNOWN — Installed wrapper records could not be inspected: ${error.message}`); }
+  const installedRecords = new Map();
   const definitions = [];
   let unknown = false;
   for (const source of sources) {
@@ -187,6 +191,11 @@ function printReachabilityObservation(protection, cwd, env) {
         if (typeof installationRoot !== "string" ||
             protection.claudeProjectRoot(installationRoot) !== projectRoot) throw new Error("installed wrapper project scope does not match the inspected project");
         protection.assertSealOwnedLocalOverride(state, installationRoot, name, env);
+        // Child installations keep their own state directory even though Claude
+        // selects the Git scope. Only enumerate records in this data home.
+        if (recordPath && protection.statePathsFor(installationRoot, env).includes(recordPath)) {
+          installedRecords.set(recordPath, installationRoot);
+        }
         const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
         console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
       } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
@@ -201,6 +210,7 @@ function printReachabilityObservation(protection, cwd, env) {
   if (definitions.length === 0 && !unknown) console.log("  UNKNOWN — no direct MCP definitions were observed");
   console.log("UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.");
   console.log("Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.");
+  return { projectRoot, installedRecords };
 }
 
 // Coverage is an inventory of known routes, not a containment claim.  In
@@ -328,7 +338,7 @@ function coverageOutsideRoutes() {
   console.log("UNKNOWN server-to-client requests (sampling/createMessage) — wrapper relays server output without filtering; downstream effects were not established");
 }
 
-function statusRecord(recordPath, readError) {
+function statusRecord(recordPath, projectRoot, readError) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let receiptDir;
   let stateRead = false;
@@ -337,7 +347,7 @@ function statusRecord(recordPath, readError) {
   let statePath;
   try {
     if (readError) throw readError;
-    const root = fs.realpathSync(process.cwd());
+    const root = fs.realpathSync(projectRoot);
     const filePath = recordPath;
     const state = filePath ? protection.readState(filePath) : null;
     stateRead = true;
