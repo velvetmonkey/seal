@@ -8,39 +8,21 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import FamilyRoutes from '../components/FamilyRoutes.astro';
 import DecisionReceipt from '../components/DecisionReceipt.astro';
 // Keep the illustration and its accessible claims on the covered homepage.
-const approvalStory = `<svg class="approval-story" viewBox="0 0 480 440" role="img" aria-labelledby="approval-story-title approval-story-desc" xmlns="http://www.w3.org/2000/svg">
-  <title id="approval-story-title">Your decision comes before the tool call</title>
-  <desc id="approval-story-desc">A selected agent request reaches Seal. You review the exact call and say yes or no. Yes permits at most one execution; no stops the call. Seal also writes a signed decision receipt. A receipt does not prove that a tool effect occurred.</desc>
-  <defs>
-    <marker id="story-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 6 3 0 6" fill="none" stroke="var(--seal-accent)" stroke-width="1.5"/></marker>
-  </defs>
-  <rect x="8" y="8" width="456" height="424" rx="12" fill="var(--seal-surface)" stroke="var(--seal-border)"/>
-  <g font-family="ui-sans-serif, system-ui, sans-serif" fill="var(--seal-text)">
-    <text x="32" y="38" font-size="12" letter-spacing="2" fill="var(--seal-muted)">ONE CALL. YOUR DECISION.</text>
-    <rect x="32" y="60" width="192" height="65" rx="6" fill="var(--seal-bg)" stroke="var(--seal-border)"/>
-    <text x="48" y="86" font-size="17" font-weight="600">Agent request</text>
-    <text x="48" y="109" font-size="13" fill="var(--seal-muted)">A selected tool call</text>
-    <path d="M128 126V159" fill="none" stroke="var(--seal-accent)" stroke-width="2" marker-end="url(#story-arrow)"/>
-    <rect x="32" y="167" width="264" height="122" rx="6" fill="var(--seal-accent-soft)" stroke="var(--seal-accent)"/>
-    <circle cx="58" cy="194" r="8" fill="none" stroke="var(--seal-accent)" stroke-width="2"/>
-    <path d="M44 217Q44 202 58 202Q72 202 72 217" fill="none" stroke="var(--seal-accent)" stroke-width="2"/>
-    <text x="86" y="198" font-size="18" font-weight="600">Seal approval gate</text>
-    <text x="48" y="235" font-size="14">You review the exact call.</text>
-    <text x="48" y="266" font-size="15" font-weight="600">YES / allow once</text>
-    <path d="M297 245H324" fill="none" stroke="var(--seal-accent)" stroke-width="2" marker-end="url(#story-arrow)"/>
-    <text x="335" y="241" font-size="14" font-weight="600">NO</text>
-    <text x="335" y="262" font-size="13" fill="var(--seal-muted)">Call stops</text>
-    <path d="M106 290V331" fill="none" stroke="var(--seal-accent)" stroke-width="2" marker-end="url(#story-arrow)"/>
-    <path d="M258 290V309H356V331" fill="none" stroke="var(--seal-accent)" stroke-width="2" marker-end="url(#story-arrow)"/>
-    <rect x="32" y="339" width="174" height="66" rx="6" fill="var(--seal-bg)" stroke="var(--seal-border)"/>
-    <text x="48" y="365" font-size="17" font-weight="600">Tool call</text>
-    <text x="48" y="388" font-size="13" fill="var(--seal-muted)">Only if permitted</text>
-    <path d="M254 339H413L432 358V405H254Z" fill="var(--seal-bg)" stroke="var(--seal-border)"/>
-    <path d="M413 339V358H432" fill="none" stroke="var(--seal-border)"/>
-    <text x="270" y="365" font-size="17" font-weight="600">Signed receipt</text>
-    <text x="270" y="388" font-size="13" fill="var(--seal-muted)">Decision recorded</text>
-  </g>
-</svg>`;
+const approvalStory = `<figure class="approval-story">
+  <div class="approval-stage">
+    <div class="approval-terminal">
+      <div class="terminal-chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="terminal-heading">MCP server “notes” requests your input</p>
+      <p class="terminal-title">Approval required</p>
+      <p>Tool: append_note<br>Arguments:<br><span class="terminal-muted">… (+3 more lines)</span></p>
+      <p class="terminal-choice">❯ * Approve one run: append_note: ☐</p>
+      <p class="terminal-scope">Arguments: note: seal-accepted-note. Scope: at most one run.</p>
+      <div class="terminal-actions"><span class="terminal-accept">Accept</span><span>Decline</span></div>
+    </div>
+    <span class="terminal-receipt">signed decision receipt</span>
+  </div>
+  <figcaption>Stylised from a recorded Claude Code dialog, not a live capture.</figcaption>
+</figure>`;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const link = (path: string) => `${base}/${path}`;
@@ -233,8 +215,68 @@ const frontmatter = {
   }
   :global(.approval-story) {
     width: 100%;
-    height: auto;
-    filter: drop-shadow(8px 10px 0 var(--seal-accent-soft));
+    margin: 0;
+    min-width: 0;
+  }
+  :global(.approval-stage) {
+    position: relative;
+    padding: 1rem 1rem 3.5rem;
+    perspective: 1000px;
+  }
+  :global(.approval-terminal) {
+    color: #ecf1e9;
+    background: #242a29;
+    border: 1px solid #53615e;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    font: 0.875rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+    box-shadow: 0 1.25rem 2.5rem #0003, 0 0.25rem 0.5rem #0002;
+    transform: rotateY(-5deg) rotateZ(-3deg);
+    overflow-wrap: anywhere;
+  }
+  :global(.approval-terminal p) { margin: 0 0 1rem; }
+  :global(.terminal-chrome) { display: flex; gap: 0.4rem; margin-bottom: 1.25rem; }
+  :global(.terminal-chrome i) { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #b6c3ba; }
+  :global(.terminal-heading), :global(.terminal-muted) { color: #b6c3ba; }
+  :global(.terminal-title) { color: #ffad88; font-weight: 700; }
+  :global(.terminal-choice) { padding-left: 0.6rem; border-left: 2px solid #ffad88; }
+  :global(.approval-terminal .terminal-scope) { padding-left: 0.75rem; font-size: 0.8125rem; color: #b6c3ba; }
+  :global(.terminal-actions) { display: flex; gap: 1rem; align-items: center; }
+  :global(.terminal-actions span) { padding: 0.25rem 0.75rem; }
+  :global(.terminal-accept) { background: #ffad88; color: #281910; border-radius: 0.25rem; }
+  :global(.terminal-receipt) {
+    position: absolute;
+    right: 0;
+    bottom: 1rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--seal-accent);
+    border-radius: var(--seal-radius);
+    background: var(--seal-surface);
+    color: var(--seal-text);
+    font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    box-shadow: 0 0.4rem 1rem #0002;
+  }
+  :global(.approval-story figcaption) {
+    margin: 0.5rem 1rem 0;
+    color: var(--seal-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.approval-story[data-animate] .terminal-accept) { animation: accept-highlight 8s ease-in-out infinite; }
+    :global(.approval-story[data-animate] .terminal-receipt) { animation: receipt-reveal 8s ease-in-out infinite; }
+    :global(.approval-story[data-paused] .terminal-accept),
+    :global(.approval-story[data-paused] .terminal-receipt),
+    :global(.approval-story:hover .terminal-accept),
+    :global(.approval-story:hover .terminal-receipt) { animation-play-state: paused; }
+  }
+  @keyframes accept-highlight {
+    0%, 15%, 100% { background: transparent; color: #ecf1e9; }
+    30%, 88% { background: #ffad88; color: #281910; }
+  }
+  @keyframes receipt-reveal {
+    0%, 35%, 100% { opacity: 0; transform: translate(-1rem, -0.5rem); }
+    50%, 88% { opacity: 1; transform: translate(0, 0); }
   }
   :global(.seal-intro) {
     color: var(--seal-text);
@@ -260,6 +302,8 @@ const frontmatter = {
       padding-block: 1.5rem 2rem;
       min-height: auto;
     }
+    :global(.approval-stage) { padding-inline: 0.75rem; }
+    :global(.approval-terminal) { padding: 1rem; font-size: 0.8125rem; }
     :global(.hero:has(.approval-story) .stack) { text-align: start; }
     :global(.hero:has(.approval-story) .copy) { align-items: flex-start; }
     :global(.hero:has(.approval-story) .actions) { justify-content: flex-start; }
@@ -318,3 +362,16 @@ const frontmatter = {
     margin-inline: auto;
   }
 </style>
+
+<script>
+  // The static final frame is also the no-JavaScript and reduced-motion state.
+  const illustration = document.querySelector<HTMLElement>('.approval-story');
+  if (illustration) {
+    const syncVisibility = () => {
+      illustration.toggleAttribute('data-paused', document.hidden);
+    };
+    syncVisibility();
+    illustration.setAttribute('data-animate', '');
+    document.addEventListener('visibilitychange', syncVisibility);
+  }
+</script>
