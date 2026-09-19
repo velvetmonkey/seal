@@ -365,6 +365,65 @@ test('uninstall refuses a route subsequently owned by a different installation',
   assert.deepEqual(fs.readFileSync(box.statePath), state);
 });
 
+test('recovery unregisters only its archived route and uninstall succeeds', () => {
+  const box = uninstallBox();
+  const second = path.join(box.root, 'second');
+  fs.mkdirSync(second);
+  assert.equal(run('git', ['init', '-q', second]).code, 0);
+  fs.writeFileSync(path.join(second, '.mcp.json'), box.projectBytes);
+  assert.equal(box.invoke(['protect', 'warehouse', 'inspect'], { project: second }).code, 0);
+  const registryPath = path.join(box.prefix, 'lib/seal/routes.json');
+  const original = JSON.parse(fs.readFileSync(registryPath));
+  assert.equal(original.routes.length, 2);
+  const state = JSON.parse(fs.readFileSync(box.statePath));
+  state.schema = 'seal.protect/future';
+  const incompatible = JSON.stringify(state) + '\n';
+  fs.writeFileSync(box.statePath, incompatible);
+  const recovered = box.invoke(['recover', '--archive', 'warehouse']);
+  assert.equal(recovered.code, 0, recovered.out);
+  assert.equal(fs.existsSync(box.statePath), false);
+  const archive = fs.readdirSync(path.dirname(box.statePath)).find(name => name.startsWith('state.json.recovered-'));
+  assert.ok(archive);
+  assert.equal(fs.readFileSync(path.join(path.dirname(box.statePath), archive), 'utf8'), incompatible);
+  assert.deepEqual(JSON.parse(fs.readFileSync(registryPath)), {
+    schema: 'seal.routes/v1', routes: original.routes.filter(route => route.statePath !== box.statePath),
+  });
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.equal(result.code, 0, result.out);
+  assertUninstallRouteRestored(box);
+});
+
+test('uninstall still refuses an unrelated missing registered state without recovery', () => {
+  const box = uninstallBox();
+  assert.equal(box.invoke(['unprotect', 'warehouse']).code, 0);
+  fs.unlinkSync(box.statePath);
+  const result = box.invoke(['uninstall'], { input: 'yes\n' });
+  assert.notEqual(result.code, 0, result.out);
+  assert.ok(result.out.includes(`registered protection state is missing: ${box.statePath}`), result.out);
+  assert.ok(fs.existsSync(box.recordPath));
+});
+
+test('recovery retains state and archive when route registry validation fails', () => {
+  const box = uninstallBox();
+  const state = JSON.parse(fs.readFileSync(box.statePath));
+  state.schema = 'seal.protect/future';
+  const incompatible = JSON.stringify(state) + '\n';
+  fs.writeFileSync(box.statePath, incompatible);
+  const registryPath = path.join(box.prefix, 'lib/seal/routes.json');
+  const registry = fs.readFileSync(registryPath);
+  fs.writeFileSync(registryPath, '{');
+  const recovered = box.invoke(['recover', '--archive', 'warehouse']);
+  assert.notEqual(recovered.code, 0, recovered.out);
+  assert.equal(fs.readFileSync(box.statePath, 'utf8'), incompatible);
+  const archives = fs.readdirSync(path.dirname(box.statePath)).filter(name => name.startsWith('state.json.recovered-'));
+  assert.equal(archives.length, 1);
+  assert.equal(fs.readFileSync(path.join(path.dirname(box.statePath), archives[0]), 'utf8'), incompatible);
+  fs.writeFileSync(registryPath, registry);
+  const retry = box.invoke(['recover', '--archive', 'warehouse']);
+  assert.equal(retry.code, 0, retry.out);
+  assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
+});
+
 test('a cached installed module refuses mutations after its installation is removed', () => {
   const box = uninstallBox();
   const loaded = require(path.join(box.prefix, box.record().store, 'spine/uninstall.cjs'));

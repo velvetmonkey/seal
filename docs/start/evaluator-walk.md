@@ -63,8 +63,17 @@ production-grade check would verify against a key you obtained from a
 source you already trust, not a file written next to the receipt.
 
 The separate browser product at https://velvetmonkey.github.io/seal-check/ does
-not check this demo's v2 receipt. Use the checkout-root command above.
-The landing page has **zero `<button>` controls**.
+check this demo's Protect v2 receipt — verified directly against a receipt
+from this checkout's own `seal demo`: it reproduces the same
+READ/VALIDATE/REPLAY rows as the checkout checker above and leaves authority
+and event occurrence equally unverified. Open the page, choose the receipt
+JSON file, then choose the signer public key file printed above (or paste its
+64 hex characters). File pickers drive the check itself, not a button click; the page's
+only buttons are a dark-mode toggle and six informational tooltips, none of which
+take part in the verification. See
+[seal-check's README](https://github.com/velvetmonkey/seal-check#protect-and-spine-receipts)
+for the exact commit its checker follows. Use the checkout-root command above
+if you would rather stay in the terminal.
 
 See [DISTRIBUTION.md](../assurance/distribution.md) for what the payload contains, and
 [LIMITATIONS.md](../archive/LIMITATIONS.md) for the family-level claims block.

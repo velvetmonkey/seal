@@ -403,3 +403,4 @@ this page's status row together.
 
 Previous: [Version identity](version-identity.md).
 Up: [Assurance](README.md).
+Next: [Current guarantees and limits](current-scope.md).

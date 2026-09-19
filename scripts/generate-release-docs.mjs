@@ -608,6 +608,11 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^\\[\\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\)$)`, "m"), checkerUrl, "checker release route"],
+      [new RegExp(`(?<=^SEAL_VERSION=)v${SEMVER}$`, "m"), tag, "install fence release tag"],
+      [new RegExp(`(?<=^artifact_name=")seal-v${SEMVER}-linux-x64(?=" \\\\$)`, "m"), manifest.artifact.name, "install fence artifact name"],
+      [new RegExp(`(?<=^&& artifact_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.artifact.sha256, "install fence artifact digest"],
+      [new RegExp(`(?<=^&& artifact_bytes=)\\d+(?= \\\\$)`, "m"), manifest.artifact.bytes, "install fence artifact byte count"],
+      [new RegExp(`(?<=^&& sums_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.checksums.sha256, "install fence SHA256SUMS digest"],
     ]),
     replacePublishedSurface("docs/assurance/index.html", [
       [new RegExp(`(?<=href=")RELEASE-NOTES-v${SEMVER}\\.md(?=">Release notes</a>)`), releaseNotes, "release-note navigation"],
