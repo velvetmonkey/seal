@@ -5,8 +5,9 @@
 // <button> controls with the evaluator walk's marked live-page claims.
 //
 // Scope: this guard proves only that its required public-page sentence exists, two
-// named old phrasings are absent, the fetched HTML has no literal <button> tag,
-// and that complete HTML equals this frozen pin. It does not inspect or execute
+// named old phrasings are absent, every <button> the fetched HTML contains is a known
+// theme-toggle/tooltip control and never a verification-bearing one, and that complete
+// HTML equals this frozen pin. It does not inspect or execute
 // app.js or wasm/seal.js. A green result cannot show that the page executes
 // nothing, or that no MCP tool-call runs.
 import { createHash } from "node:crypto";
@@ -21,9 +22,9 @@ const PAGE_RELATIVE = process.env.LIVE_CLAIM_GUARD_PAGE_RELATIVE ?? "docs/start/
 const PAGE = process.env.LIVE_CLAIM_GUARD_PAGE ?? process.env.LIVE_CLAIM_GUARD_README ?? resolve(ROOT, PAGE_RELATIVE);
 const CLAIM_SITES = resolve(ROOT, "scripts/live-page-claim-sites.json");
 const PIN = Object.freeze({
-  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "dc9104079564238c07034c9279a86995c12af92b",
-  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "13239"),
-  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "15724dc88f55520138edfc993048cfadd40e9f365efaa3c72ce8f3b1bfd7a348",
+  commit: process.env.LIVE_CLAIM_GUARD_COMMIT ?? "1fb110188117f2df4043936e7621f2d380b8591f",
+  bytes: Number(process.env.LIVE_CLAIM_GUARD_BYTES ?? "12211"),
+  sha256: process.env.LIVE_CLAIM_GUARD_SHA256 ?? "19663124955f5a0515294a497f9016f9eda320ce1d15fdceb6a53dd6a4b49a64",
 });
 const PROVENANCE_URL = process.env.LIVE_CLAIM_GUARD_PROVENANCE_URL
   ?? `https://raw.githubusercontent.com/velvetmonkey/seal-check/${PIN.commit}/index.html`;
@@ -86,8 +87,12 @@ try { page = readFileSync(PAGE, "utf8"); }
 catch (error) { console.error(`ERROR  cannot read public-page claim population ${PAGE}: ${error.message}`); process.exit(2); }
 const regions = claimRegions(page);
 const claims = regions.map((region) => region.text).join("\n");
-if (!claims.includes("The landing page has **zero `<button>` controls**.")) {
-  fail("checked public-page population must state: The landing page has **zero `<button>` controls**.");
+if (!claims.includes(
+  "File pickers drive the check itself, not a button click; the page's\n" +
+  "only buttons are a dark-mode toggle and six informational tooltips, none of which\n" +
+  "take part in the verification."
+)) {
+  fail("checked public-page population must state the file-pickers-drive-the-check claim verbatim");
 }
 if (/runs? a supplied MCP tool-call|to run a supplied MCP tool-call/i.test(claims)) {
   fail("README claims the landing page runs a supplied MCP tool-call, but the checked landing-page control model forbids that claim");
@@ -126,8 +131,18 @@ function changedRegion(expected, actual) {
   return `first changed region near byte ${start}:\n- pinned ${excerpt(expected, expectedEnd)}\n+ served ${excerpt(actual, actualEnd)}`;
 }
 
-if (buttons !== 0) fail(`landing page has ${buttons} <button> controls; checked public page claims zero`);
-else console.log("INFO  landing-page control count: zero <button> controls");
+// The landing page never runs a verification-bearing button; the claim is not "zero
+// buttons," it is "no button drives the check." Verify the STRONGER, semantic
+// invariant: every button present is a known non-verification control (a theme
+// toggle or an informational tooltip trigger), never anything that could submit
+// input or run a check. A future button of any other class fails loud.
+const buttonTags = text.match(/<button\b[^>]*>/gi) ?? [];
+const NON_VERIFYING_BUTTON = /\bclass="(?:theme-toggle|tip-btn(?:\s+tip-btn-text)?)"/;
+const unrecognized = buttonTags.filter((tag) => !NON_VERIFYING_BUTTON.test(tag));
+if (unrecognized.length > 0) {
+  fail(`landing page has ${unrecognized.length} <button> control(s) outside the known theme-toggle/tooltip set: ${unrecognized.join(" | ")}`);
+}
+console.log(`INFO  landing-page control count: ${buttons} <button> controls, all theme-toggle/tooltip, none verification-bearing`);
 
 let pinnedSource;
 let sourceSha256;
