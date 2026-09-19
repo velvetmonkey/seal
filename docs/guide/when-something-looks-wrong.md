@@ -239,6 +239,21 @@ gave. Run in the project directory, and spell the server exactly as
 server entry is malformed (a non-array `args`, a non-object `env`, a missing
 command). The message names the specific problem; fix the file.
 
+### `project_environment_missing`
+
+A launch field in `.mcp.json` references an unset environment variable without a
+fallback. Set the named variable in the environment used to run Seal and Claude,
+or provide `${VAR:-default}`, then retry. Seal refuses to launch the literal
+placeholder. Resolved launch values are bound into protection's drift detection;
+changing them requires unprotecting and protecting the server again.
+
+### `project_environment_unsupported`
+
+A launch field contains a placeholder outside Seal's supported `${VAR}` and
+`${VAR:-default}` syntax. Use one of those forms or a literal value, then retry.
+Expansion happens once against the launching environment, not against other
+entries in the server's `env` object. A set but empty variable stays empty.
+
 ### `project_server_non_stdio`
 
 The named server is `http` (or anything but `stdio`). Seal gates local
@@ -346,14 +361,22 @@ refuses the forward with the approval's one use already spent.
 ### `claude_install_failed`
 
 The `claude mcp add` step reported failure, and Seal recorded the state as
-`BROKEN` with that reason. Because the external command may have made a
-partial change, stop Claude Code and inspect the actual local override before
-changing it by hand. This failed install left no recorded proof that Seal owns
-an installed override, so `seal unprotect <server>` refuses with
-`no_seal_owned_override`. Creating an arbitrary replacement does not supply
-that ownership proof and cannot make this unprotect path complete. Use Claude
-Code's error and the override you actually find to decide what manual cleanup
-is needed.
+`BROKEN` with that reason. Fix the external cause, then retry `seal protect`
+if no local override was installed. Seal checks the actual local configuration
+and refuses retry while a wrapper lease is live.
+
+If the command installed the Seal override before reporting failure, stop
+Claude Code and run `seal unprotect <server>` before protecting again.
+Unprotect checks the actual override against the recorded ownership definition,
+including for older failed-install records. A foreign replacement or unreadable
+local configuration still refuses; inspect that configuration and Claude Code's
+error before making manual changes. An absent failed override has nothing to
+remove, so use the protect retry path.
+
+Unprotect can remove an owned, inactive override even if the project's
+`.mcp.json` is missing or invalid JSON. Its output reports the source observation
+before and after removal. Readable files have byte hashes; unavailable files
+have null hashes, which do not establish that unreadable contents are unchanged.
 
 ### `claude_remove_failed`
 
