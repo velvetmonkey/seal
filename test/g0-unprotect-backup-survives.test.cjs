@@ -26,6 +26,6 @@ function probe(root) {
 }
 if (process.argv[2] === "--probe") { try { probe(process.argv[3]); } catch (error) { console.error(error.stack || error.message); process.exit(1); } process.exit(0); }
 test("unprotect preserves an existing Claude backup", () => {
-  probe(ROOT); const mutant = copyTree(); const file = path.join(mutant, "spine", "protection.cjs"); const source = fs.readFileSync(file, "utf8"); const needle = "  const after = readProjectConfig(root).hash;\n"; assert.equal(source.split(needle).length - 1, 1, "unprotect mutation site must be unique"); fs.writeFileSync(file, source.replace(needle, '  fs.rmSync(path.join(env.HOME, ".claude", "backups"), { recursive: true, force: true });\n' + needle));
+  probe(ROOT); const mutant = copyTree(); const file = path.join(mutant, "spine", "protection.cjs"); const source = fs.readFileSync(file, "utf8"); const needle = "  const after = observeProjectSource(root);\n"; assert.equal(source.split(needle).length - 1, 1, "unprotect mutation site must be unique"); fs.writeFileSync(file, source.replace(needle, '  fs.rmSync(path.join(env.HOME, ".claude", "backups"), { recursive: true, force: true });\n' + needle));
   const result = spawnSync(process.execPath, [__filename, "--probe", mutant], { encoding: "utf8", timeout: 60000 }); assert.notEqual(result.status, 0, "backup-removal mutant unexpectedly passed"); assert.match(`${result.stdout}\n${result.stderr}`, /unprotect backup-survival claim failed: planted backup .* was removed/);
 });
