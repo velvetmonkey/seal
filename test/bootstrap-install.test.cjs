@@ -63,49 +63,49 @@ function run(command, args, options = {}) {
   });
 }
 
-// Builds the one platform artifact this host can actually build and run
-// (linux-x64), then a schema seal.release/v2 manifest naming it truthfully
-// alongside two SHAPE-valid but inert darwin placeholders (this box cannot
-// build or execute a macOS payload; macos.yml covers real Darwin builds).
-// generate-bootstrap.mjs re-validates this manifest with the exact validator
-// scripts/generate-release-docs.mjs already trusts, so a shape defect here
-// would fail generation, not slip through.
+// Build the real Linux installer and codec-produced Darwin test payloads.
+// All manifest facts and checksum entries are derived from the files on disk;
+// these Darwin payloads exercise selection, not native macOS execution.
 async function buildFixture(root) {
   const out = testTmpdir(path.join(os.tmpdir(), "seal-bootstrap-fixture-"));
   const dist = path.join(out, "dist");
   const built = await run(process.execPath, [BUILD, "--out", dist], { cwd: root });
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
-  const [digest, bytes, name] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const [digest, bytes, sourceName] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
+  const { releaseArtifactName } = require("../scripts/product-identity.cjs");
+  const name = releaseArtifactName(VERSION);
   const artifactPath = path.join(dist, name);
+  fs.copyFileSync(path.join(dist, sourceName), artifactPath);
   const checkerPath = path.join(dist, "seal-receipt-v2.mjs");
   fs.copyFileSync(path.join(root, "checker", "seal-receipt-v2.mjs"), checkerPath);
   const checkerBytes = fs.readFileSync(checkerPath);
   const sumsPath = path.join(dist, "SHA256SUMS");
-  const manifest = {
-    schema: "seal.release/v2",
-    tag: `v${VERSION}`,
-    commitSha: "0".repeat(40),
-    minimumNodeMajor: 20,
-    artifacts: [
-      { platform: "darwin-arm64", name: `seal-v${VERSION}-darwin-arm64`, sha256: "b".repeat(64), bytes: 100, installedTreeSha256: "c".repeat(64), nativeHelperProvenance: "release-produced, not independently reproduced" },
-      { platform: "darwin-x64", name: `seal-v${VERSION}-darwin-x64`, sha256: "d".repeat(64), bytes: 101, installedTreeSha256: "e".repeat(64), nativeHelperProvenance: "release-produced, not independently reproduced" },
-      // `name` names the file build-dist.cjs actually produced on this checkout
-      // (an untagged commit wears a `-dev.g<sha>` identity; see
-      // scripts/product-identity.cjs), not a fabricated release name, so the
-      // test server below can serve it under the exact name the bootstrap
-      // requests.
-      { platform: "linux-x64", name, sha256: digest, bytes: Number(bytes), installedTreeSha256: "a".repeat(64) },
-    ],
-    checker: { name: "seal-receipt-v2.mjs", sha256: sha256(checkerBytes), bytes: checkerBytes.length },
-    checksums: { name: "SHA256SUMS", sha256: sha256(fs.readFileSync(sumsPath)) },
-  };
+  const { packPayload } = require("../spine/integrity.cjs");
+  const { manifestFromObserved } = await import("../scripts/release-manifest-lib.mjs");
+  const version = VERSION;
+  const payloadRoot = path.join(out, "darwin-payload");
+  fs.mkdirSync(path.join(payloadRoot, "runtime"), { recursive: true });
+  fs.writeFileSync(path.join(payloadRoot, "package.json"), JSON.stringify({ engines: { node: ">=20" } }));
+  fs.writeFileSync(path.join(payloadRoot, "runtime", "macos-process-start-witness"), "test helper");
+  const artifacts = [{ name, bytes: fs.readFileSync(artifactPath) }];
+  for (const platform of ["darwin-arm64", "darwin-x64"]) {
+    const artifactName = `seal-v${version}-${platform}`;
+    const artifactBytes = Buffer.concat([Buffer.from("#!/bin/sh\nexit 0\n// --SEAL-PAYLOAD--\n"), packPayload(payloadRoot, version, platform).payload]);
+    fs.writeFileSync(path.join(dist, artifactName), artifactBytes);
+    artifacts.push({ name: artifactName, bytes: artifactBytes });
+  }
+  const checksumsBytes = Buffer.from([...artifacts, { name: "seal-receipt-v2.mjs", bytes: checkerBytes }]
+    .map((entry) => `${sha256(entry.bytes)}  ${entry.bytes.length}  ${entry.name}\n`).join(""));
+  fs.writeFileSync(sumsPath, checksumsBytes);
+  const manifest = manifestFromObserved({ tag: `v${version}`, commitSha: "0".repeat(40), artifacts,
+    checkerName: "seal-receipt-v2.mjs", checkerBytes, checksumsName: "SHA256SUMS", checksumsBytes });
   const manifestPath = path.join(out, "release-manifest.json");
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
   const bootstrapOut = path.join(out, "bootstrap-dist");
-  const generated = await run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: root });
+  const generated = await run(process.execPath, [GENERATE, "--manifest", manifestPath, "--assets-dir", dist, "--out", bootstrapOut], { cwd: root });
   assert.equal(generated.code, 0, `${generated.stdout}${generated.stderr}`);
-  const bootstrapPath = path.join(bootstrapOut, `seal-bootstrap-v${VERSION}`);
+  const bootstrapPath = path.join(bootstrapOut, `seal-bootstrap-${manifest.tag}`);
   assert.ok(fs.existsSync(bootstrapPath), generated.stdout);
 
   return { out, artifactPath, artifactName: name, artifactBytes: Number(bytes), artifactDigest: digest, bootstrapPath, manifest };
@@ -334,20 +334,9 @@ test("selecting an artifact trusts the running process's own architecture, not a
   const home = path.join(fixture.out, "home-rosetta");
   fs.mkdirSync(home);
   const darwinX64 = fixture.manifest.artifacts.find((entry) => entry.platform === "darwin-x64");
-  const fakeBytes = Buffer.alloc(darwinX64.bytes, 0x41);
-  // The fixture's darwin-x64 sha256 is a placeholder ("d".repeat(64)), so
-  // regenerate a bootstrap whose embedded digest actually matches bytes we
-  // can serve, without needing a real macOS build on this host.
-  const manifest = JSON.parse(JSON.stringify(fixture.manifest));
-  const entry = manifest.artifacts.find((candidate) => candidate.platform === "darwin-x64");
-  entry.sha256 = sha256(fakeBytes);
-  entry.bytes = fakeBytes.length;
-  const manifestPath = path.join(fixture.out, "rosetta-manifest.json");
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-  const bootstrapOut = path.join(fixture.out, "rosetta-bootstrap-dist");
-  const generated = await run(process.execPath, [GENERATE, "--manifest", manifestPath, "--out", bootstrapOut], { cwd: ROOT });
-  assert.equal(generated.code, 0, `${generated.stdout}${generated.stderr}`);
-  const bootstrapPath = path.join(bootstrapOut, `seal-bootstrap-v${VERSION}`);
+  const entry = darwinX64;
+  const fakeBytes = fs.readFileSync(path.join(fixture.out, "dist", entry.name));
+  const bootstrapPath = fixture.bootstrapPath;
 
   const asset = await serveAssets((name) => (name === entry.name ? fakeBytes : undefined));
   try {

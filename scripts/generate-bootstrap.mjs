@@ -14,7 +14,7 @@
 //      the same source scripts/generate-release-docs.mjs already trusts to
 //      publish install instructions.
 //   3. THIS script reads that release-manifest.json and re-validates its
-//      shape (scripts/release-manifest-lib.mjs#validateManifestShape, the
+//      shape and observed artifact bytes (validateManifestAgainstObserved, the
 //      same validator the docs generator uses) before embedding a narrowed
 //      copy of it -- repository, tag, commitSha, minimumNodeMajor, and each
 //      artifact's {platform, name, sha256, bytes} -- into
@@ -37,6 +37,7 @@
 //   node scripts/generate-bootstrap.mjs \
 //     --manifest <path to release-manifest.json, schema seal.release/v2> \
 //     --out <output directory> \
+//     [--assets-dir <directory containing release assets>] (default: manifest directory)
 //     [--repository owner/repo]     (default: $SEAL_RELEASE_REPOSITORY or velvetmonkey/seal)
 //
 // Writes <out>/<bootstrapName> (the bootstrap script, mode 0o555) and
@@ -47,7 +48,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { validateManifestShape } from "./release-manifest-lib.mjs";
+import { validateManifestAgainstObserved, validateManifestShape } from "./release-manifest-lib.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATE_PATH = path.join(ROOT, "scripts", "bootstrap-install.cjs");
@@ -134,6 +135,24 @@ function main() {
   } catch (error) {
     refuse("manifest_json", `${manifestPath}: ${error.message}`);
   }
+  validateManifestShape(manifest);
+  const assetsDir = path.resolve(option(argv, "--assets-dir") || path.dirname(path.resolve(manifestPath)));
+  const read = (name) => {
+    const target = path.join(assetsDir, name);
+    if (path.dirname(target) !== assetsDir) refuse("asset_name", `${name} escapes --assets-dir`);
+    try { return fs.readFileSync(target); }
+    catch (error) { refuse("asset_read", `${target}: ${error.message}`); }
+  };
+  const observed = {
+    tag: manifest.tag,
+    commitSha: manifest.commitSha,
+    artifacts: manifest.artifacts.map((artifact) => ({ name: artifact.name, bytes: read(artifact.name) })),
+    checkerName: manifest.checker.name,
+    checkerBytes: read(manifest.checker.name),
+    checksumsName: manifest.checksums.name,
+    checksumsBytes: read(manifest.checksums.name),
+  };
+  validateManifestAgainstObserved(manifest, observed);
   const templateSource = fs.readFileSync(TEMPLATE_PATH, "utf8").replace(/^#!\/usr\/bin\/env node\n/, "");
   const { name, bytes } = buildBootstrapArtifact({ manifest, repository, templateSource });
 

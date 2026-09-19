@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-// Pure generation-logic tests for scripts/generate-bootstrap.mjs: the
+// Generation-logic and observed-byte CLI tests for scripts/generate-bootstrap.mjs: the
 // artifact map must come from a validated manifest (never hand-typed), and
 // generation must be acyclic -- the produced bytes must never contain a
-// hash of themselves. These run against in-memory fixtures only; end-to-end
+// hash of themselves. CLI fixtures use the product payload codec; end-to-end
 // download/verify/install behaviour is covered by test/bootstrap-install.test.cjs.
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { manifestFromObserved } from "../scripts/release-manifest-lib.mjs";
+import integrity from "../spine/integrity.cjs";
 import { fileURLToPath } from "node:url";
 import { buildBootstrapArtifact, sha256 } from "../scripts/generate-bootstrap.mjs";
 
@@ -31,6 +33,29 @@ function validManifest(overrides = {}) {
     checksums: { name: "SHA256SUMS", sha256: "8".repeat(64) },
   };
   return { ...base, ...overrides };
+}
+
+function writeObservedFixture(scratch) {
+  const payloadRoot = path.join(scratch, "payload");
+  fs.mkdirSync(payloadRoot);
+  fs.writeFileSync(path.join(payloadRoot, "package.json"), JSON.stringify({ engines: { node: ">=20" } }));
+  const artifacts = ["linux-x64", "darwin-arm64", "darwin-x64"].map((platform) => {
+    if (platform.startsWith("darwin")) {
+      fs.mkdirSync(path.join(payloadRoot, "runtime"), { recursive: true });
+      fs.writeFileSync(path.join(payloadRoot, "runtime", "macos-process-start-witness"), "test helper");
+    }
+    const bytes = Buffer.concat([Buffer.from("#!/bin/sh\nexit 0\n// --SEAL-PAYLOAD--\n"), integrity.packPayload(payloadRoot, "9.9.9", platform).payload]);
+    const name = `seal-v9.9.9-${platform}`;
+    fs.writeFileSync(path.join(scratch, name), bytes);
+    return { name, bytes };
+  });
+  const checkerName = "seal-receipt-v2.mjs";
+  const checkerBytes = Buffer.from("// test checker\n");
+  fs.writeFileSync(path.join(scratch, checkerName), checkerBytes);
+  const checksumsBytes = Buffer.from([...artifacts, { name: checkerName, bytes: checkerBytes }]
+    .map(({ name, bytes }) => `${sha256(bytes)}  ${bytes.length}  ${name}\n`).join(""));
+  fs.writeFileSync(path.join(scratch, "SHA256SUMS"), checksumsBytes);
+  return manifestFromObserved({ tag: "v9.9.9", commitSha: "f".repeat(40), artifacts, checkerName, checkerBytes, checksumsName: "SHA256SUMS", checksumsBytes });
 }
 
 test("the generated bootstrap embeds exactly the manifest's artifact facts, narrowed to what it needs", () => {
@@ -113,7 +138,7 @@ test("the CLI writes the bootstrap and a separate sidecar digest file, and the s
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-bootstrap-cli-"));
   try {
     const manifestPath = path.join(scratch, "release-manifest.json");
-    fs.writeFileSync(manifestPath, JSON.stringify(validManifest(), null, 2));
+    fs.writeFileSync(manifestPath, JSON.stringify(writeObservedFixture(scratch), null, 2));
     const outDir = path.join(scratch, "out");
     const result = spawnSync(process.execPath, [path.join(ROOT, "scripts", "generate-bootstrap.mjs"), "--manifest", manifestPath, "--out", outDir], { encoding: "utf8" });
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
@@ -127,5 +152,57 @@ test("the CLI writes the bootstrap and a separate sidecar digest file, and the s
     assert.equal(bytes.toString("utf8").includes(digest), false, "the sidecar digest must not appear inside the bootstrap it describes");
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("PHYSICAL TAMPER: CLI refuses a planted script even when manifest and checksums match its bytes", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const os = await import("node:os");
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-bootstrap-tamper-"));
+  try {
+    const manifest = writeObservedFixture(scratch);
+    const artifact = manifest.artifacts.find((entry) => entry.platform === "linux-x64");
+    const planted = Buffer.from("#!/bin/sh\necho PWNED_BOOTSTRAP_EXEC\n# test\n");
+    assert.equal(planted.length, 43);
+    fs.writeFileSync(path.join(scratch, artifact.name), planted);
+    artifact.sha256 = sha256(planted);
+    artifact.bytes = planted.length;
+    const sums = Buffer.from([...manifest.artifacts, manifest.checker]
+      .map((entry) => `${entry.sha256}  ${entry.bytes}  ${entry.name}\n`).join(""));
+    fs.writeFileSync(path.join(scratch, "SHA256SUMS"), sums);
+    manifest.checksums.sha256 = sha256(sums);
+    const manifestPath = path.join(scratch, "release-manifest.json");
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    const outDir = path.join(scratch, "out");
+    const result = spawnSync(process.execPath, [path.join(ROOT, "scripts", "generate-bootstrap.mjs"), "--manifest", manifestPath, "--out", outDir], { encoding: "utf8" });
+    assert.notEqual(result.status, 0, "planted script must not generate a bootstrap");
+    assert.match(result.stderr, /release_manifest_artifact_invalid/);
+    assert.equal(result.stdout, "");
+    assert.equal(fs.existsSync(outDir), false);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("CLI refuses artifact hash and byte-count claims that disagree with observed files", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const os = await import("node:os");
+  for (const field of ["sha256", "bytes"]) {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "seal-bootstrap-mismatch-"));
+    try {
+      const manifest = writeObservedFixture(scratch);
+      const artifact = manifest.artifacts.find((entry) => entry.platform === "linux-x64");
+      artifact[field] = field === "sha256" ? "0".repeat(64) : artifact.bytes + 1;
+      const manifestPath = path.join(scratch, "release-manifest.json");
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      const outDir = path.join(scratch, "out");
+      const result = spawnSync(process.execPath, [path.join(ROOT, "scripts", "generate-bootstrap.mjs"), "--manifest", manifestPath, "--out", outDir], { encoding: "utf8" });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /release_manifest_asset_mismatch/);
+      assert.match(result.stderr, new RegExp(field));
+      assert.equal(fs.existsSync(outDir), false);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
   }
 });
