@@ -888,11 +888,13 @@ test("unchanged native client probes use the pin despite PATH shadowing and disa
   assert.equal(spawnSync("cc", [source, "-o", client]).status, 0);
   const artifact = artifactFixture();
   const oldUpdater = process.env.DISABLE_AUTOUPDATER;
+  // Supply protect's PATH client before init; probes must still use the pin.
+  const { stubBin } = syntheticSetup(workspace);
   process.env.DISABLE_AUTOUPDATER = "0";
   let state;
   try {
     state = harness.init(["--artifact", artifact.path, "--sha256", artifact.sha256,
-      "--bytes", artifact.bytes, "--run-dir", runDir, "--client", client]);
+      "--bytes", artifact.bytes, "--run-dir", runDir, "--client", client, "--stub-bin", stubBin]);
     assert.equal(harness.runEnv(state).DISABLE_AUTOUPDATER, "1");
   } finally {
     if (oldUpdater === undefined) delete process.env.DISABLE_AUTOUPDATER;
