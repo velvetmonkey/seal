@@ -4,6 +4,7 @@ test/argument-selection.test.cjs
 test/artifact-identity.test.cjs
 test/authorization-status-boundaries.test.mjs
 test/authorization-status-surfaces.test.cjs
+test/bootstrap-install.test.cjs
 test/cc-evidence.test.cjs
 test/cc-fixture.test.cjs
 test/cc-harness-truth.test.cjs
@@ -40,6 +41,7 @@ test/g0-protect-no-backup.test.cjs
 test/g0-receipt-key-directory.test.cjs
 test/g0-receipt-key-reuse.test.cjs
 test/g0-unprotect-backup-survives.test.cjs
+test/generate-bootstrap.test.mjs
 test/guide-tokens.test.mjs
 test/identity-wiring.test.cjs
 test/installed-tree-pin-generator.test.cjs
