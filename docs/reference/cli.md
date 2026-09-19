@@ -20,6 +20,8 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal recover --archive [SERVER]` | Archive incompatible state and remove the owned local override. Stop Claude Code first. Retain journals, receipts and signing keys. | 0 on success; 1 on usage error, refusal or failure |
 | `seal history DIRECTORY [--limit N] [--since EPOCH_MS] [--until EPOCH_MS] [--tool NAME]` | Count observed receipt files and list recent decision claims; see bounds below. | 0 for a report including UNKNOWN; 1 for invalid arguments or unavailable directory |
 | `seal receipts DIRECTORY` | Inspect receipt filenames for sequence gaps; DIRECTORY must exist and be a directory. | 0 if the scan finds no rejected names or gaps; 1 on rejected names, gaps, usage error or read failure |
+| `seal coverage` | Report known mediated, unmediated and unknown routes from this deployment. Does not discover every alternate route. | 0 for a report; 1 for unreadable/refused configuration; 2 for extra arguments |
+| `seal uninstall` | Preview and confirm removal of an installed distribution and its owned overrides. Retain history, journals, receipts and signing keys. | 0 on completion or cancellation; 1 on refusal/failure |
 | `seal doctor` | Report approval-origin assumptions and local readiness. | 0 for reportable assumptions; 1 for an automatic elicitation hook, failed readiness or failure |
 | `seal status` | Report project protection, local runtime and receipt observations. | 0 for reportable route state; 1 for unreadable/refused protection state or failure; 2 if any argument follows `status` |
 
@@ -30,7 +32,7 @@ or complete client-route coverage; read the observations, as explained in
 
 An unknown command prints `seal: unknown command: NAME` to stderr, prints help to
 stdout, and exits **2**. Ordinary command usage failures exit **1**, except extra
-arguments to `status`, which exit **2**. These are command outcomes, not a promise
+arguments to `status` or `coverage`, which exit **2**. These are command outcomes, not a promise
 about OS signals or a process that cannot start.
 
 ## Flags and argument ranges
@@ -39,7 +41,7 @@ about OS signals or a process that cannot start.
 |---|---|
 | `--help`, `-h` | No value; first argument only. Extra arguments after the alias are ignored. |
 | `--version`, `-V` | No value; first argument only. Extra arguments after the alias are ignored. |
-| `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and cleaned up. An explicitly supplied directory is retained. |
+| `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and retained for receipt inspection. An explicitly supplied directory is also retained. |
 | `verify --pubkey HEX` | Trusted Ed25519 public key, 32 bytes encoded as 64 lowercase hexadecimal characters. Place after PATH. Omission or an invalid key cannot yield exit 0. |
 | `protect --timeout-ms MILLISECONDS` | Decimal integer **1 through 2147483647 inclusive**, default **30000**, applied per discovery phase. No sign, leading zero, decimal point or exponent. May occur among positional arguments; the last occurrence wins. |
 | `recover --archive` | Required literal switch, first after `recover`; no value. Optional SERVER selects the record to archive. |

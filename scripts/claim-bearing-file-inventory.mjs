@@ -50,6 +50,11 @@ const EXCLUDED_BINARY_SUFFIXES = new Map([
 ]);
 
 export function carriesClaim(text, path) {
+  // Complete family task guides carry scoped claims even when a paragraph
+  // uses a component noun instead of repeating the product name.
+  if (/^docs\/(?:check|assure|concepts|evidence)\/.*\.md$/.test(path) ||
+      path === "docs/guide/first-approval.md" || path === "docs/guide/lifecycle.md") return true;
+
   // A code-shaped text file contributes only its human-language comments and
   // sentence-like string literals.  This is syntax-shaped rather than
   // extension-shaped: a .js claim is seen, while identifiers such as
