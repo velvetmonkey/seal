@@ -437,10 +437,13 @@ function checkChildLog(packDir, manifest, report) {
     if (record.kind === "exit") state.closed = true;
   }
   // A client may tear down an MCP subprocess without closing its stdin, so an
-  // individual session need not carry exit. The independent final-boundary
-  // commitment below establishes the complete byte length of the whole log.
-  if (records.length === 0 || records.at(-1)?.kind !== "exit") {
-    report.refuse("child_log_truncated", "child.jsonl does not finish with the fixture's exit record");
+  // individual session need not carry exit. This stops catching only "the
+  // fixture did not exit gracefully"; the independent final-boundary commitment
+  // below still catches truncation of the whole log.
+  const tail = records.at(-1);
+  const tailSession = sessions.get(tail?.session);
+  if (!tail || (tail.kind !== "exit" && (!tailSession || tailSession.closed))) {
+    report.refuse("child_log_session_discontinuous", "child.jsonl has no tail in a started, unclosed session or at its exit");
   }
   checkChildLogCommitment(packDir, raw, lines.length, report);
   const calls = records.filter((record) => record.kind === "child-call");
