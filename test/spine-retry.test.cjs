@@ -428,6 +428,54 @@ function receiptFor(dir, decision) {
   return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
 }
 
+test("guarded request envelopes are refused over stdio before approval selection", async (t) => {
+  const dir = testTmpdir("seal-guarded-envelope-");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(path.join(dir, "approvals.journal"));
+  const h = spawnProxy(dir, dataFile);
+  t.after(() => h.run.kill());
+  initialize(h.proxy);
+  await h.responseFor(90);
+  const valid = { ...callParams("valid envelope"), id: 701, extra: "allowed" };
+  const missingVersion = { ...valid };
+  delete missingVersion.jsonrpc;
+  const missingId = { ...valid };
+  delete missingId.id;
+  const malformed = [missingVersion, { ...valid, jsonrpc: "1.0" },
+    { ...valid, jsonrpc: 2 }, missingId,
+    ...[null, [], {}, true].map(id => ({ ...valid, id }))];
+  for (const frame of malformed) {
+    const start = h.responses.length;
+    h.proxy.stdin.write(JSON.stringify(frame) + "\n");
+    const deadline = Date.now() + 15000;
+    while (h.responses.length === start) {
+      assert.ok(Date.now() < deadline, h.run.out + h.run.err);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.deepEqual(h.responses.slice(start), [{ jsonrpc: "2.0", id: null,
+      error: { code: -32600, message: "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id" } }]);
+  }
+  assert.equal(readCount(dataFile + ".count"), "0");
+  assert.equal(h.responses.some(frame => frame.method === "elicitation/create"), false);
+  const receipts = fs.readdirSync(path.join(dir, "receipts"))
+    .map(file => JSON.parse(fs.readFileSync(path.join(dir, "receipts", file), "utf8")));
+  assert.equal(receipts.length, malformed.length);
+  assert.ok(receipts.every(receipt => receipt.action === "BLOCK" && receipt.tool === "<batch>"));
+  for (const id of [0, "valid-id"]) {
+    const start = h.responses.length;
+    h.proxy.stdin.write(JSON.stringify({ ...valid, id }) + "\n");
+    const deadline = Date.now() + 15000;
+    let elicitation;
+    while (!(elicitation = h.responses.slice(start).find(frame => frame.method === "elicitation/create"))) {
+      assert.ok(Date.now() < deadline, h.run.out + h.run.err);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    answer(h.proxy, elicitation, "accept", { approve: true });
+    assert.ok(!(await h.responseFor(id)).result.isError);
+  }
+  assert.equal(readCount(dataFile + ".count"), "2");
+});
+
 test("a top-level batch is refused as one frame and never reaches the child", async (t) => {
   const dir = testTmpdir("seal-batch-frame-");
   const storePath = path.join(dir, "approvals.journal");
