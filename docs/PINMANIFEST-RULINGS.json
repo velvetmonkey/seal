@@ -1,17 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4",
-    "author": "velvetmonkey",
-    "date": "2026-09-06",
-    "scope": "Ben approved PR 245 on 2026-09-05, in his words: \"Approve\". This is the FIRST use of the pin-manifest review door that PR 249 added, merged to main as dba60d3d. THE CHANGE: scripts/installed-tree-pin-sites.json declares where installed-tree pins live. Its declared sites had drifted from the built artifacts, so assertion 269 failed and blocked four pull requests. This corrects the declared sites to match. I verified the merge-base and the blob digest on disk before writing this record.",
+    "base": "0f78aa726f0c57f279eae1f0605f61ced31dd6ac",
+    "author": "Ben",
+    "date": "2026-09-18",
+    "scope": "Ben ruled 2026-09-18, \"do it\", via the Monkey: authorise the pin-manifest repositioning in PR 356 (install-experience fix). The change is an honest reposition of the same two published-asset/fresh-build tree digests to match the restructured install page, plus removal of one redundant \"store\" pin whose fabricated transcript line the same PR deleted from the page. No pin was added, no role changed, no digest weakened.",
     "retires": [
-      "The empty placeholder record shipped with PR 249, which recorded no ruling."
+      "The 2026-09-17 ruling for scripts/check-protected-paths.cjs, base 3d94c2322507c5ec6ca9b9df935b2a493ec26e70, no longer describes this PR's own merge-base or changed protected files; that PR's change is already merged into main and does not need a live ruling on this branch. Prior authorisation for it is not revoked."
     ],
     "files": [
       {
         "path": "scripts/installed-tree-pin-sites.json",
-        "blob": "14d5ee0bb69e1935320bc390d225cd5193bbd4ff"
+        "blob": "87c66741bf45c03163bb50f5b6a68e1a511c4b50"
       }
     ]
   }

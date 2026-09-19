@@ -56,7 +56,7 @@ test("demo announces and retains its checker directory, and Remove explains its 
   assert.ok(fs.statSync(path.join(directory, "receipt-signer.pub")).isFile(), "the retained directory must keep the checker public key");
 
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /When you are finished, remove the directory printed as `Demo directory: \/absolute\/path`\./);
+  assert.match(readme, /a `Recover this\nrun directory with:` command; run that command when you are finished\./);
   assert.doesNotMatch(readme, /(?:^|[;&|\s])(rm|rmdir|unlink|trash)(?:\s|$)|-delete/);
 });
 

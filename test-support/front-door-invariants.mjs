@@ -6,7 +6,7 @@ export const README_SECTIONS = [
   "Seal is a local approval boundary for AI-agent tool calls.",
   "*Claude can ask. Seal decides whether that exact call may cross the boundary.*",
   "## Supported path",
-  "## Try Seal in two minutes",
+  "## Manual verified installation",
   "## What you should see",
   "## Protect a real tool set",
   "## Remove it",

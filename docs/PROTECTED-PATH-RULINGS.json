@@ -1,19 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "3d94c2322507c5ec6ca9b9df935b2a493ec26e70",
+    "base": "0f78aa726f0c57f279eae1f0605f61ced31dd6ac",
     "author": "Ben",
-    "date": "2026-09-17",
-    "scope": "Ben ruled 2026-09-17, \"do it\", in briefs/protectedpathrangefix.md: fix the protected-path history range while retaining reverted-edit and merge-only defenses.",
+    "date": "2026-09-18",
+    "scope": "Ben ruled 2026-09-18, \"do it\", via the Monkey: authorise the pin-manifest repositioning in PR 356 (install-experience fix). The change is an honest reposition of the same two published-asset/fresh-build tree digests to match the restructured install page, plus removal of one redundant \"store\" pin whose fabricated transcript line the same PR deleted from the page. No pin was added, no role changed, no digest weakened.",
     "retires": [
-      "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306.",
-      "The previous candidate-range record at base ce9c7cac42a200452b03dad0ccf5e3651ff0de64 covered imported main history, now excluded by this fix; prior human authorisations are not revoked.",
-      "The candidate-range record at base 34c56ffa5cce44f52e3b5afdb3a555648f3d4812 was superseded by an ordinary rebase onto current main after PR 346 landed; the file and its blob are unchanged, only the base moved. Prior authorisation is not revoked."
+      "The 2026-09-17 ruling for scripts/check-protected-paths.cjs, base 3d94c2322507c5ec6ca9b9df935b2a493ec26e70, no longer describes this PR's own merge-base or changed protected files; that PR's change is already merged into main and does not need a live ruling on this branch. Prior authorisation for it is not revoked."
     ],
     "files": [
       {
-        "path": "scripts/check-protected-paths.cjs",
-        "blob": "894f520cee6802abf171ffd7554693b5e41ce9f6"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "87c66741bf45c03163bb50f5b6a68e1a511c4b50"
       }
     ]
   }

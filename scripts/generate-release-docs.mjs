@@ -382,90 +382,160 @@ function readmeRegions({ manifest }) {
   ].join("\n")];
 }
 
+// Every reader's platform gets its own real, fully verified command: the
+// same shape as the README short form (digest + byte-count gate, then
+// chmod/exec/PATH in one block), just with that platform's own published
+// name/digest/bytes baked in. No checker download here — every installed
+// tree already carries checker/seal-receipt-v2.mjs; that download is a
+// separate, optional, advanced step (see the "More detail" region below).
+function platformInstallCommand(manifest, artifact) {
+  return [
+    "```bash",
+    `SEAL_VERSION=${manifest.tag}`,
+    `artifact_name=${JSON.stringify(artifact.name)} \\`,
+    `&& artifact_sha256=${JSON.stringify(artifact.sha256)} \\`,
+    `&& artifact_bytes=${artifact.bytes} \\`,
+    `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
+    `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
+    "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name\" \\",
+    "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name\" \\",
+    "&& if command -v shasum >/dev/null 2>&1; then sums_actual=\"$(shasum -a 256 \"$sums_name\")\"; else sums_actual=\"$(sha256sum \"$sums_name\")\"; fi \\",
+    "&& test \"${sums_actual%% *}\" = \"$sums_sha256\" \\",
+    "&& expected_record=\"$(awk -v name=\"$artifact_name\" '$3 == name { print $1, $2, $3 }' \"$sums_name\")\" \\",
+    "&& test \"$expected_record\" = \"$artifact_sha256 $artifact_bytes $artifact_name\" \\",
+    "&& if command -v shasum >/dev/null 2>&1; then actual_digest=\"$(shasum -a 256 \"$artifact_name\")\"; else actual_digest=\"$(sha256sum \"$artifact_name\")\"; fi \\",
+    "&& test \"${actual_digest%% *}\" = \"$artifact_sha256\" \\",
+    "&& actual_bytes=\"$(wc -c < \"$artifact_name\")\" \\",
+    "&& test \"$actual_bytes\" -eq \"$artifact_bytes\" \\",
+    "&& chmod +x \"$artifact_name\" \\",
+    "&& ./\"$artifact_name\" --sha256 \"$artifact_sha256\" --bytes \"$artifact_bytes\" --prefix ~/.local \\",
+    "&& export PATH=\"$HOME/.local/bin:$PATH\"",
+    "```",
+  ].join("\n");
+}
+
 function installRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
   const [platformSupport, platformLimit] = installPlatformParagraphs(manifest, platform);
+  // Legacy (pre-manifest) releases published one Linux-only artifact and
+  // carry no `artifacts` array; documentationManifest() leaves `.artifact`/
+  // `.platform` as that one entry. Every current (schema v2) release always
+  // carries all three, enforced by validateManifestShape/manifestFromObserved.
+  // A legacy manifest.artifact carries no .platform of its own (only the
+  // manifest-level manifest.platform); fold it in so this list always has a
+  // platform key to route on, matching the v2 artifacts[] shape.
+  const artifactList = manifest.artifacts ?? [{ ...manifest.artifact, platform: manifest.artifact.platform ?? manifest.platform }];
+  const byPlatform = Object.fromEntries(artifactList.map((artifact) => [artifact.platform, artifact]));
+  const commandOrHistoricalNote = (platformName) => (byPlatform[platformName]
+    ? platformInstallCommand(manifest, byPlatform[platformName])
+    : `Not published for ${manifest.tag}.`);
   return [
+    // 1. Title only. Everything a reader needs to reach a runnable command
+    // (platform choice, prerequisites) is static prose around this region;
+    // only the version in the heading itself needs the published release.
+    [SENTINEL, `# Install Seal ${manifest.tag}`, END].join("\n"),
+    // 2. Before you start: platform support facts and the one line that
+    // used to be buried in the verification-wall paragraph readers had to
+    // get through before any command — Claude Code is a Protect-only
+    // requirement, not an install/demo requirement.
     [
       SENTINEL,
-      `# Install Seal ${manifest.tag}`,
-      `${releaseSentence(manifest, manifestPublished)} ${platformSupport}`,
+      platformSupport,
       platformLimit,
       "The installer refuses before changing anything on an unsupported or mismatched platform.",
       "",
+      "Claude Code's `claude` command is required only to protect a real tool; it is not required to install, verify, or run the demo below.",
+      END,
+    ].join("\n"),
+    // 3-5. One equally-weighted, fully verified command per supported
+    // platform, in the same order the release manifest and "Choose your
+    // platform" list them.
+    [SENTINEL, commandOrHistoricalNote("darwin-arm64"), END].join("\n"),
+    [SENTINEL, commandOrHistoricalNote("darwin-x64"), END].join("\n"),
+    [SENTINEL, commandOrHistoricalNote("linux-x64"), END].join("\n"),
+    // 6. What a successful install prints, named once with the real
+    // version and platform so a reader can recognise it (and so this page
+    // keeps naming the published identity the way docs/guide/README.md's
+    // own install pointer does).
+    [
+      SENTINEL,
+      `The Linux x86-64 command's installer prints \`installed seal ${version(manifest)} linux-x64\` on success, followed by \`store:\`, \`command:\`, and \`tree:\` lines and a two-line \`Next:\` block; the macOS commands print their own platform name in place of \`linux-x64\`.`,
+      END,
+    ].join("\n"),
+    // 7. Release identity and the verification-wall explanation, both moved
+    // out of the top of the page and into "More detail" — provenance and
+    // mechanism explanation a reader can read after, not before, their
+    // first runnable command. Kept as one generated region (rather than
+    // static prose) so tampering with any sentence here still fails the
+    // exhaustive generated-prose accounting in check-install-prose.mjs,
+    // the same as before this page was reordered.
+    [
+      SENTINEL,
+      releaseSentence(manifest, manifestPublished),
+      "",
       "This page is the SHA256SUMS verification wall. The [README](../../README.md)",
-      "short form uses the same shell gate. In every install command below, a failed",
-      "checksum comparison prevents both `chmod` and execution of the artifact.",
-      "The commands use POSIX syntax for `sh`, `dash`, `bash`, and `zsh`. Copy each",
+      "short form uses the same shell gate. In every install command on this page,",
+      "a failed checksum comparison prevents both `chmod` and execution of the",
+      "artifact. The commands use POSIX syntax for `sh`, `dash`, `bash`, and `zsh`. Copy each",
       "whole command, including its continuation backslashes and `&&` operators;",
       "there is no shell-option preamble. The release version is a separate assignment;",
       "omitting it cannot remove the verification gate. Each continuation starts with",
       "`&&`, so copying a continuation alone produces a syntax error.",
       "",
-      "The digest comparison below is *your* check, with the OS SHA-256 tool,",
+      "The digest comparison here is *your* check, with the OS SHA-256 tool,",
       `against the \`${manifest.checksums.name}\` asset attached to the same GitHub release. That is`,
       "not the installer checking itself. The `--sha256` flag is a",
       "second pin the installer demands and will refuse without. The optional `--bytes` flag adds a length check. Together they",
       'answer "did I download the bytes the release named?" They do not answer',
       '"is the publisher honest?"',
-      "",
-      "## Verify, then install",
       END,
     ].join("\n"),
+    // 8. The standalone checker download, now explicitly optional/advanced:
+    // the installed tree already carries its own copy.
     [
       SENTINEL,
       "```bash",
       `SEAL_VERSION=${manifest.tag}`,
-      `artifact_name=${JSON.stringify(manifest.artifact.name)} \\`,
-      `&& artifact_sha256=${JSON.stringify(manifest.artifact.sha256)} \\`,
-      `&& artifact_bytes=${manifest.artifact.bytes} \\`,
-      `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
-      `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
-      `&& checker_name=${JSON.stringify(manifest.checker.name)} \\`,
+      `checker_name=${JSON.stringify(manifest.checker.name)} \\`,
       `&& checker_sha256=${JSON.stringify(manifest.checker.sha256)} \\`,
       `&& checker_bytes=${manifest.checker.bytes} \\`,
+      `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
+      `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
       "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name\" \\",
-      "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name\" \\",
       "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name\" \\",
       "&& if command -v shasum >/dev/null 2>&1; then sums_actual=\"$(shasum -a 256 \"$sums_name\")\"; else sums_actual=\"$(sha256sum \"$sums_name\")\"; fi \\",
       "&& test \"${sums_actual%% *}\" = \"$sums_sha256\" \\",
-      "&& expected_record=\"$(awk -v name=\"$artifact_name\" '$3 == name { print $1, $2, $3 }' \"$sums_name\")\" \\",
-      "&& test \"$expected_record\" = \"$artifact_sha256 $artifact_bytes $artifact_name\" \\",
-      "&& if command -v shasum >/dev/null 2>&1; then actual_digest=\"$(shasum -a 256 \"$artifact_name\")\"; else actual_digest=\"$(sha256sum \"$artifact_name\")\"; fi \\",
-      "&& test \"${actual_digest%% *}\" = \"$artifact_sha256\" \\",
-      "&& actual_bytes=\"$(wc -c < \"$artifact_name\")\" \\",
-      "&& test \"$actual_bytes\" -eq \"$artifact_bytes\" \\",
       "&& checker_record=\"$(awk -v name=\"$checker_name\" '$3 == name { print $1, $2, $3 }' \"$sums_name\")\" \\",
       "&& test \"$checker_record\" = \"$checker_sha256 $checker_bytes $checker_name\" \\",
       "&& if command -v shasum >/dev/null 2>&1; then checker_actual=\"$(shasum -a 256 \"$checker_name\")\"; else checker_actual=\"$(sha256sum \"$checker_name\")\"; fi \\",
       "&& test \"${checker_actual%% *}\" = \"$checker_sha256\" \\",
       "&& checker_count=\"$(wc -c < \"$checker_name\")\" \\",
-      "&& test \"$checker_count\" -eq \"$checker_bytes\" \\",
-      "&& chmod +x \"$artifact_name\" \\",
-      "&& ./\"$artifact_name\" --sha256 \"$artifact_sha256\" --bytes \"$artifact_bytes\" --prefix ~/.local",
+      "&& test \"$checker_count\" -eq \"$checker_bytes\"",
       "```",
-      `Success prints \`installed seal ${version(manifest)} ${manifest.platform}\` and the store, command,`,
-      "and tree lines. Path prefixes on `store:` and `command:` differ per machine.",
-      `The tree hash of the published ${manifest.tag} asset is pinned here:`,
-      "",
-      "**Seal installed-tree pin role:** `published-asset`",
-      "```output",
-      `installed seal ${version(manifest)} ${manifest.platform}`,
-      `store: /home/you/.local/lib/seal/store/${manifest.artifact.installedTreeSha256}`,
-      "command: /home/you/.local/bin/seal",
-      `tree: ${manifest.artifact.installedTreeSha256}`,
-      "```",
-      "",
-      "Add `~/.local/bin` to PATH:",
-      "",
-      "```bash",
-      '$ export PATH="$HOME/.local/bin:$PATH"',
-      "```",
-      "",
-      "Further distribution detail, including what each payload contains, is in",
-      "[DISTRIBUTION.md](../assurance/distribution.md). The downloaded checker is",
-      "only checked against `SHA256SUMS`; from a source checkout, run",
-      "`node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.",
+      END,
+    ].join("\n"),
+    // 9. Installed-tree pins. scripts/installed-tree-pin.cjs's
+    // publishedTreeSha256FromRelease() (and the site manifest it is checked
+    // against) has one canonical "published-asset" pin, hardcoded to
+    // linux-x64, shared with docs/guide/README.md; that is a bigger,
+    // pre-existing cross-file invariant this docs-only rework does not
+    // extend to a second, independently-varying per-platform pin family.
+    // The Linux pin therefore keeps the exact role-marker-plus-fence shape
+    // scripts/installed-tree-pin.cjs's quotedTreeHashHits() requires, in a
+    // scripts/installed-tree-pin-sites.json-declared position; the macOS
+    // digests are named honestly alongside it as plain text that a hash
+    // scanner does not mistake for a second "tree:"/"/store/" pin.
+    [
+      SENTINEL,
+      [
+        "**Seal installed-tree pin role:** `published-asset`",
+        "```output",
+        `tree: ${byPlatform["linux-x64"].installedTreeSha256}`,
+        "```",
+        "",
+        "The macOS artifacts have their own installed-tree digests, published",
+        `alongside this one: Apple silicon \`${byPlatform["darwin-arm64"]?.installedTreeSha256 ?? "not published for " + manifest.tag}\`, Intel \`${byPlatform["darwin-x64"]?.installedTreeSha256 ?? "not published for " + manifest.tag}\`.`,
+      ].join("\n"),
       END,
     ].join("\n"),
   ];
@@ -600,23 +670,41 @@ function checkPublishedClaims(document, facts) {
     requireAll("artifact", namedArtifacts, manifest.artifact.name);
   }
   requireAll("tag commit", values(document.text, /\b([0-9a-f]{40})\b/g), manifest.commitSha);
-  requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
+  if (manifest.artifacts) {
+    const foundBytes = values(document.text, /\bartifact_bytes=(\d+)\b/g).map(Number);
+    const expectedBytes = new Set(manifest.artifacts.map((artifact) => artifact.bytes));
+    const unknownBytes = [...new Set(foundBytes.filter((value) => !expectedBytes.has(value)))];
+    const missingBytes = manifest.artifacts.filter((artifact) => !foundBytes.includes(artifact.bytes));
+    if (unknownBytes.length) document.failures.push(`artifact byte count is not published release data: ${unknownBytes.join(", ")}`);
+    if (missingBytes.length) document.failures.push(`published artifact byte counts are absent: ${missingBytes.map((artifact) => `${artifact.platform}=${artifact.bytes}`).join(", ")}`);
+  } else {
+    requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
+  }
   requireAll("checker byte count", values(document.text, /\bchecker_bytes=(\d+)\b/g), manifest.checker.bytes);
 
   const digests = values(document.text, /\b([0-9a-f]{64})\b/g);
   const allowedDigests = new Set([
-    manifest.artifact.sha256,
+    ...(manifest.artifacts
+      ? manifest.artifacts.flatMap((artifact) => [artifact.sha256, artifact.installedTreeSha256])
+      : [manifest.artifact.sha256, manifest.artifact.installedTreeSha256]),
     manifest.checker.sha256,
     manifest.checksums.sha256,
-    manifest.artifact.installedTreeSha256,
   ]);
   const unknownDigests = [...new Set(digests.filter((digest) => !allowedDigests.has(digest)))];
   if (unknownDigests.length) document.failures.push(`digest is not published release data: ${unknownDigests.join(", ")}`);
+  if (manifest.artifacts) {
+    for (const artifact of manifest.artifacts) {
+      if (!digests.includes(artifact.sha256)) document.failures.push(`${artifact.platform} artifact digest is absent`);
+      if (!digests.includes(artifact.installedTreeSha256)) document.failures.push(`${artifact.platform} installed-tree digest is absent`);
+    }
+  } else if (!digests.includes(manifest.artifact.sha256)) {
+    document.failures.push("artifact digest is absent");
+  } else if (!digests.includes(manifest.artifact.installedTreeSha256)) {
+    document.failures.push("installed-tree digest is absent");
+  }
   for (const [label, digest] of [
-    ["artifact digest", manifest.artifact.sha256],
     ["checker digest", manifest.checker.sha256],
     ["SHA256SUMS digest", manifest.checksums.sha256],
-    ["installed-tree digest", manifest.artifact.installedTreeSha256],
   ]) {
     if (!digests.includes(digest)) document.failures.push(`${label} is absent`);
   }
@@ -662,7 +750,7 @@ function checkReadmePublishedClaims(facts) {
 function verifyDocsAgainstRelease(facts) {
   const documents = [
     checkReadmePublishedClaims(facts),
-    checkPublishedClaims(generatedClaims("docs/start/install.md", 2), facts),
+    checkPublishedClaims(generatedClaims("docs/start/install.md", 9), facts),
   ];
   const failed = documents.filter((document) => document.failures.length);
   if (failed.length) {

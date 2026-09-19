@@ -11,18 +11,6 @@ const output = path.join(here, 'src/content/docs');
 const archiveWarning = 'Files in the last two groups describe the Seal family of research repositories or a past design state — they are kept for the record and are not claims about the Node CLI this repository ships.';
 const historicalDeadTarget = 'https://github.com/velvetmonkey/seal/blob/18bba8ea230ead9fb605cd61d352a0e894c256d5/scripts/check-receipt-canonicalization.mjs';
 export const siteDescription = `Seal is a local approval boundary for AI-agent tool calls.`;
-const demoStep = `## Run the harmless approve-once demo
-
-Run the harmless approve-once demo and answer \`y\`:
-
-\`\`\`bash
-demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"
-\`\`\`
-
-When you are finished, remove the directory printed as \`Demo directory: /absolute/path\`.
-
-`;
-
 export function pageSlug(file) {
   let relative = file.replace(/^docs\//, '').replace(/\.md$/, '');
   if (relative === 'README') return 'documentation-map';
@@ -116,9 +104,6 @@ function prepareMarkdown(sourceName, markdown) {
   }
   if (sourceName === 'docs/assurance/README.md') {
     markdown = markdown.replace(/\n## I want the design history[\s\S]*?\nThe evaluator-facing family truth surface is/, '\n\nThe evaluator-facing family truth surface is');
-  }
-  if (sourceName === 'docs/start/install.md') {
-    markdown = markdown.replace('If you installed the published release, continue with\n', `${demoStep}If you installed the published release, continue with\n`);
   }
   return markdown;
 }

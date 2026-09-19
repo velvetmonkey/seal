@@ -41,16 +41,19 @@ test("the Protect section requires Claude Code and provides its availability che
   assert.ok(protect.includes("seal protect db demo.mutate demo.erase"), "Protect must show the named-set command");
 });
 
-test("the demo section names the printed directory as the cleanup target", () => {
+test("the demo section points at the demo's own printed recovery command", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-  const demo = readme.indexOf("## Try Seal in two minutes");
+  const demo = readme.indexOf("## Manual verified installation");
   const protect = readme.indexOf("## Protect a real tool set");
-  const cleanupReminder = "When you are finished, remove the directory printed as `Demo directory: /absolute/path`.";
+  const bareInvocation = "```bash\nseal demo\n```";
+  const cleanupReminder = "a `Recover this\nrun directory with:` command; run that command when you are finished.";
 
   assert.ok(demo >= 0, "README must contain the demo beat");
   assert.ok(protect > demo, "the Protect beat must follow the demo beat");
-  assert.ok(readme.indexOf(cleanupReminder, demo) > demo, "the demo cleanup instruction must appear in the demo section");
-  assert.ok(readme.indexOf(cleanupReminder, demo) < protect, "the demo cleanup instruction must precede Protect");
+  assert.ok(readme.indexOf(bareInvocation, demo) > demo, "the demo section must invoke the real interactive command, not a piped/wrapped one");
+  assert.ok(readme.indexOf(bareInvocation, demo) < protect, "the bare demo invocation must precede Protect");
+  assert.ok(readme.indexOf(cleanupReminder, demo) > demo, "the demo section must point at the demo's own printed recovery command");
+  assert.ok(readme.indexOf(cleanupReminder, demo) < protect, "the recovery pointer must precede Protect");
 });
 
 test("both conventional help flags print the bare-command help and succeed", () => {

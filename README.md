@@ -19,7 +19,12 @@ macOS x64/arm64. Protect also needs Claude Code's `claude` command. Windows,
 Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
-## Try Seal in two minutes
+## Manual verified installation
+
+There is no one-line installer yet: every step below is a real command you
+run and check yourself. This is the Linux x86-64 form; macOS readers and
+anyone who wants each check explained should use the
+[full install guide](docs/start/install.md#choose-your-platform) instead.
 
 Download and verify the published release asset, install it under `~/.local`, then put
 the command on your current shell's `PATH`. Copy the whole POSIX command,
@@ -53,13 +58,21 @@ artifact_name="seal-v0.4.0-linux-x64" \
 ```
 <!-- end generated release docs -->
 
-Run the harmless approve-once demo and answer `y`:
+Add that export line to your shell's startup file too — `~/.bashrc` for
+bash, `~/.zshrc` for zsh, `~/.profile` for a POSIX login shell — or the
+installed command will not be on `PATH` in a new terminal.
+
+Run the harmless approve-once demo and answer its real prompt yourself:
 
 ```bash
-demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
+seal demo
 ```
 
-When you are finished, remove the directory printed as `Demo directory: /absolute/path`.
+The demo asks `Approve? [y/N]` over your actual terminal stdin; watch the
+request it prints, then decide. Approve it, and the demo replays the same
+approval a second time and shows that replay refused. It prints its own
+scratch directory and, when it made that directory itself, a `Recover this
+run directory with:` command; run that command when you are finished.
 
 ## What you should see
 
