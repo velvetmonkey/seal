@@ -306,27 +306,33 @@ function readProjectConfig(projectRoot) {
 function readProjectServer(projectRoot, serverName) {
   const config = readProjectConfig(projectRoot);
   const server = config.parsed.mcpServers[serverName];
-  if (!server) throw new ProtectionError("project_server_absent", `project server "${serverName}" is absent from .mcp.json`);
+  if (!Object.hasOwn(config.parsed.mcpServers, serverName)) throw new ProtectionError("project_server_absent", `project server "${serverName}" is absent from .mcp.json`);
   if (!server || typeof server !== "object" || Array.isArray(server)) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" is not an object`);
   }
-  const type = server.type || "stdio";
+  if (server.type !== undefined && typeof server.type !== "string") {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" type must be a string`);
+  }
+  const type = server.type === undefined ? "stdio" : server.type;
   if (type !== "stdio") throw new ProtectionError("project_server_non_stdio", `project server "${serverName}" is ${type}, not stdio`);
   if (typeof server.command !== "string" || server.command.length === 0) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" has no stdio command`);
   }
-  if (server.args !== undefined && !Array.isArray(server.args)) {
-    throw new ProtectionError("project_server_invalid", `project server "${serverName}" args must be an array`);
+  if (server.args !== undefined && (!Array.isArray(server.args) || server.args.some((arg) => typeof arg !== "string"))) {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" args must be an array of strings`);
   }
   if (server.env !== undefined && (!server.env || typeof server.env !== "object" || Array.isArray(server.env))) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" env must be an object`);
+  }
+  if (server.env !== undefined && Object.values(server.env).some((value) => typeof value !== "string")) {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" env values must be strings`);
   }
   return {
     ...config,
     server,
     serverDigest: sha256(Buffer.from(canonical(server))),
-    childArgv: [server.command, ...(server.args || []).map(String)],
-    childEnv: Object.fromEntries(Object.entries(server.env || {}).map(([key, value]) => [key, String(value)])),
+    childArgv: [server.command, ...(server.args || [])],
+    childEnv: { ...(server.env || {}) },
   };
 }
 
