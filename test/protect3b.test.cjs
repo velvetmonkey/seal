@@ -331,6 +331,61 @@ test("protect names install-time refusals", () => {
   assert.match(result.out, /incompatible_state/);
 });
 
+test("project server fields reject malformed shapes without coercion", () => {
+  const { readProjectServer } = require("../spine/protection.cjs");
+  const project = testTmpdir("seal-project-server-shapes-");
+  const valid = { command: process.execPath };
+  const invalid = [null, false, 0, "", [],
+    ...[null, false, 0, {}, [], ""].map((command) => ({ command })),
+    ...[null, false, 0, {}, []].map((type) => ({ ...valid, type })),
+    ...[null, false, 0, {}, "argument", [1], [{}], [null], [false], [[]], ["ok", 1]].map((args) => ({ ...valid, args })),
+    ...[null, false, 0, "value", [], { A: 1 }, { A: null }, { A: false }, { A: {} }, { A: [] }].map((env) => ({ ...valid, env })),
+  ];
+  for (const server of invalid) {
+    writeProject(project, server);
+    assert.throws(() => readProjectServer(project, "db"), { code: "project_server_invalid" }, JSON.stringify(server));
+  }
+  for (const type of ["", "http", "sse"]) {
+    writeProject(project, { ...valid, type });
+    assert.throws(() => readProjectServer(project, "db"), { code: "project_server_non_stdio" });
+  }
+  writeProject(project, valid);
+  assert.deepEqual(readProjectServer(project, "db").childArgv, [process.execPath]);
+  assert.deepEqual(readProjectServer(project, "db").childEnv, {});
+  writeProject(project, { ...valid, type: "stdio", args: ["", "17", "[object Object]"], env: { A: "", B: "17" } });
+  const read = readProjectServer(project, "db");
+  assert.deepEqual(read.childArgv, [process.execPath, "", "17", "[object Object]"]);
+  assert.deepEqual(read.childEnv, { A: "", B: "17" });
+});
+
+test("protect refuses malformed launch fields before starting the MCP child", () => {
+  const root = testTmpdir("seal-protect-launch-shapes-");
+  const project = path.join(root, "project"), home = path.join(root, "home");
+  fs.mkdirSync(project); fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  const marker = path.join(root, "argv.json");
+  const script = path.join(root, "server.cjs");
+  fs.writeFileSync(script, `require("node:fs").writeFileSync(${JSON.stringify(marker)}, JSON.stringify(process.argv)); require(${JSON.stringify(require.resolve("../spine/demo-server.cjs"))}).run(${JSON.stringify(path.join(root, "data.txt"))});`);
+  const valid = { command: process.execPath, args: [script, "17", "literal argument"], env: { A: "value" } };
+  for (const server of [
+    { ...valid, args: [script, 17, { unexpected: true }] },
+    { ...valid, type: false },
+    { ...valid, env: { A: { unexpected: true } } },
+  ]) {
+    const bytes = writeProject(project, server);
+    const refused = run(project, home, ["protect", "db", "demo.mutate"], env);
+    assert.notEqual(refused.code, 0, refused.out);
+    assert.match(refused.out, /^seal: REFUSE project_server_invalid: /m);
+    assert.equal(fs.existsSync(marker), false, "malformed configuration must not start the child");
+    assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), bytes);
+  }
+  writeProject(project, { ...valid, type: "stdio" });
+  const accepted = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(accepted.code, 0, accepted.out);
+  assert.deepEqual(JSON.parse(fs.readFileSync(marker, "utf8")).slice(1), valid.args);
+  assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
+});
+
 test("explicit recovery archives incompatible bytes, preserves evidence, and permits fresh protect", () => {
   for (const mismatch of ["seal.protect/v99", "seal.protect/v0"]) {
     const root = testTmpdir(`seal-recover-${mismatch.split("/").pop()}-`);
@@ -1158,3 +1213,25 @@ test("F05 missing source does not bypass live lease or ownership refusal", () =>
   assert.match(run(project, home, ["unprotect", "db"], env).out, /local_override_drifted/);
   assert.equal(fs.readFileSync(configPath, "utf8"), foreign);
 });
+
+for (const field of ["args", "env"]) {
+  for (const value of [42, { nested: "${SEAL_EXP_VALUE}" }]) {
+    test(`malformed ${field} ${typeof value} refuses before project expansion`, () => {
+      const root = testTmpdir("seal-malformed-expansion-");
+      const { readProjectServer } = require("../spine/protection.cjs");
+      const server = { command: "${SEAL_EXP_VALUE}", args: ["${SEAL_EXP_VALUE}"], env: { VALID: "${SEAL_EXP_VALUE}" } };
+      if (field === "args") server.args.push(value);
+      else server.env.INVALID = value;
+      const original = writeProject(root, server);
+      let expansionReads = 0;
+      const env = { get SEAL_EXP_VALUE() { expansionReads++; return "expanded"; } };
+      assert.throws(() => readProjectServer(root, "db", env), {
+        code: "project_server_invalid",
+        message: field === "args" ? 'project server "db" args must be an array of strings' : 'project server "db" env values must be strings',
+      });
+      assert.equal(expansionReads, 0, "validation must precede even command expansion");
+      assert.throws(() => readProjectServer(root, "db", {}), { code: "project_server_invalid" });
+      assert.equal(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"), original);
+    });
+  }
+}
