@@ -31,7 +31,7 @@ It refuses an authentic `seal.receipt/v2` receipt with `REFUSE unknown_format: u
 {
   "seal_receipt": "v2",
   "tool": "string",
-  "action": "string (optional)",
+  "action": "non-empty string (required by the checker)",
   "arguments": "JSON object",
   "now": "non-negative safe integer",
   "kernel_config": "exact configuration given to the kernel",
