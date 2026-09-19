@@ -1914,6 +1914,7 @@ for (const token of ['-9007199254740993', '9007199254740993e0', '"90071992547409
   });
 }
 
+// CLAIM-COVERAGE: test/spine-retry.test.cjs#bounded-shutdown
 // F06: actual descendants hold the server's stdout open after its exit.
 // The escaped-session case deliberately demonstrates the containment limit:
 // Seal must release its transport even when it cannot find the pipe holder.
