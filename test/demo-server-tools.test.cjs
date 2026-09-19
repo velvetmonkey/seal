@@ -229,3 +229,70 @@ for (const tool of ["demo.mutate", "demo.erase"]) {
     }
   });
 }
+
+// Like durability-lock.test.cjs, child-local filesystem barriers force the
+// interleavings without adding a timing hook to the product.
+for (const mode of ["exclusive-open", "between-files"]) {
+  test(`concurrent first demo startups handle ${mode} races`, async () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-race-"));
+    const failures = [];
+    for (let trial = 0; trial < 20; trial++) {
+      const file = path.join(root, `data-${trial}`);
+      const children = [0, 1].map((seat) => new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, ["-e", `
+          const fs = require("node:fs");
+          const file = ${JSON.stringify(file)}, seat = ${seat}, mode = ${JSON.stringify(mode)};
+          const exists = fs.existsSync, open = fs.openSync;
+          const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+          const wait = marker => {
+            const end = Date.now() + 5000;
+            while (!exists(marker)) {
+              if (Date.now() > end) throw Error("demo race barrier timeout: " + marker);
+              sleep(5);
+            }
+          };
+          if (mode === "between-files" && seat === 1) wait(file + ".pending");
+          fs.existsSync = target => {
+            const result = exists(target);
+            if (mode === "between-files" && seat === 1 && target === file && result)
+              fs.writeFileSync(file + ".observed", "");
+            return result;
+          };
+          fs.openSync = (target, flags, ...args) => {
+            if (target === file && flags === "wx" && mode === "exclusive-open") {
+              fs.writeFileSync(file + ".ready-" + seat, "");
+              wait(file + ".ready-" + (1 - seat));
+            }
+            if (target === file + ".count" && flags === "wx" && mode === "between-files") {
+              fs.writeFileSync(file + ".pending", "");
+              wait(file + ".observed");
+              sleep(30);
+            }
+            try { return open(target, flags, ...args); }
+            catch (error) {
+              if (target === file && error.code === "EEXIST")
+                fs.writeFileSync(file + ".observed", "");
+              throw error;
+            }
+          };
+          require(${JSON.stringify(serverPath)}).run(file);
+        `], { stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+        let stdout = "", stderr = "";
+        child.stdout.on("data", chunk => { stdout += chunk; });
+        child.stderr.on("data", chunk => { stderr += chunk; });
+        child.on("error", reject);
+        child.on("close", (code, signal) => resolve({ seat, code, signal, stdout, stderr }));
+        child.stdin.on("error", () => {}); // Preserve the child's failure diagnostics.
+        child.stdin.end(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }) + "\n");
+      }));
+      const results = await Promise.all(children);
+      for (const result of results) {
+        if (result.code !== 0 || result.stderr || !result.stdout.includes('"serverInfo"'))
+          failures.push({ trial, ...result });
+      }
+      assert.equal(fs.readFileSync(file, "utf8"), "");
+      assert.equal(fs.readFileSync(`${file}.count`, "utf8"), "0\n");
+    }
+    assert.deepEqual(failures, [], "both children must initialize silently in every trial");
+  });
+}

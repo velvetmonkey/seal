@@ -72,17 +72,33 @@ function run(dataFile) {
   }
   const countFile = `${dataFile}.count`;
   fs.mkdirSync(path.dirname(dataFile), { recursive: true, mode: 0o700 });
-  const dataExists = fs.existsSync(dataFile);
-  const countExists = fs.existsSync(countFile);
-  if (dataExists !== countExists) {
+  const refuseInconsistent = () => {
     process.stderr.write("seal __demo-server: inconsistent state: DATAFILE and DATAFILE.count must both exist or both be absent; refusing initialization\n");
     process.exit(2);
+  };
+  // Read the count first: it is created last. A data-only observation may
+  // belong to a live initializer, so only refuse it after the bounded wait.
+  let created = false;
+  if (fs.existsSync(countFile)) {
+    if (!fs.existsSync(dataFile)) refuseInconsistent();
+  } else {
+    try {
+      writeFileSyncedTo(dataFile, "", "wx");
+      created = true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
   }
-  if (!dataExists) {
-    // Discovery and proxy respawns reuse this pair. Exclusive creation also
-    // refuses a competing initializer instead of truncating its files.
-    writeFileSyncedTo(dataFile, "", "wx");
+  if (created) {
     writeFileSyncedTo(countFile, "0\n", "wx");
+  } else {
+    const sleeper = new Int32Array(new SharedArrayBuffer(4));
+    const deadline = performance.now() + 1000;
+    // An open count file can still be empty before the winner writes 0.
+    while (!fs.existsSync(countFile) || fs.statSync(countFile).size === 0) {
+      if (performance.now() >= deadline) refuseInconsistent();
+      Atomics.wait(sleeper, 0, 0, 10);
+    }
   }
 
   const input = readline.createInterface({ input: process.stdin, terminal: false });
