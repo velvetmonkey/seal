@@ -21,4 +21,4 @@ workflow or a reader procedure for verifying GitHub build attestations.
 
 Previous: [Knowing it worked](knowing-it-worked.md).
 Up: [Guide](README.md).
-Next: [Reference](../reference/README.md).
+Next: [Your first approval](first-approval.md).
