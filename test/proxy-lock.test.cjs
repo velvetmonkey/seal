@@ -24,7 +24,8 @@ const SCRATCH = testTmpdir(path.join(os.tmpdir(), "seal-proxy-lock-"));
 
 function project() {
   const root = testTmpdir(path.join(SCRATCH, "test-"));
-  return { root, lockPath: lockPathFor(root) };
+  const env = { ...process.env, HOME: path.join(root, "home"), XDG_DATA_HOME: path.join(root, "data") };
+  return { root, env, lockPath: lockPathFor(root, env) };
 }
 
 function waitForExit(child) {
@@ -32,13 +33,13 @@ function waitForExit(child) {
 }
 
 test("two concurrent writers: the second writer lock refuses while the first keeps working", async () => {
-  const { root } = project();
+  const { root, env } = project();
   const first = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
     const lock = acquireProjectLock(${JSON.stringify(root)});
     process.stdout.write("FIRST_READY\\n");
     setTimeout(() => { lock.release(); process.exit(0); }, 300);
-  `], { stdio: ["ignore", "pipe", "pipe"] });
+  `], { env, stdio: ["ignore", "pipe", "pipe"] });
   await new Promise((resolve) => first.stdout.once("data", resolve));
   let secondStderr = "";
   const second = spawn(process.execPath, ["-e", `
@@ -46,7 +47,7 @@ test("two concurrent writers: the second writer lock refuses while the first kee
     try { acquireProjectLock(${JSON.stringify(root)}); } catch (error) {
       process.stderr.write(error.code + "\\n" + error.message + "\\n"); process.exit(1);
     }
-  `], { stdio: ["ignore", "ignore", "pipe"] });
+  `], { env, stdio: ["ignore", "ignore", "pipe"] });
   second.stderr.on("data", (chunk) => { secondStderr += chunk; });
   const [result, firstResult] = await Promise.all([waitForExit(second), waitForExit(first)]);
   assert.equal(result.code, 1);
@@ -56,35 +57,35 @@ test("two concurrent writers: the second writer lock refuses while the first kee
 });
 
 test("a cleanly exited proxy leaves a lock that a new proxy acquires", () => {
-  const { root } = project();
-  const first = acquireProjectLock(root);
+  const { root, env } = project();
+  const first = acquireProjectLock(root, env);
   first.release();
-  const second = acquireProjectLock(root);
+  const second = acquireProjectLock(root, env);
   assert.equal(second.recovered, false);
   second.release();
 });
 
 test("a killed proxy leaves a stale lock that the next proxy recovers", async () => {
-  const { root } = project();
+  const { root, env } = project();
   const owner = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
     acquireProjectLock(${JSON.stringify(root)}); process.stdout.write("READY\\n"); setInterval(() => {}, 1000);
-  `], { stdio: ["ignore", "pipe", "ignore"] });
+  `], { env, stdio: ["ignore", "pipe", "ignore"] });
   await new Promise((resolve) => owner.stdout.once("data", resolve));
   owner.kill("SIGKILL");
   await waitForExit(owner);
-  const recovered = acquireProjectLock(root);
+  const recovered = acquireProjectLock(root, env);
   assert.equal(recovered.recovered, true);
   recovered.release();
 });
 
 test("a live PID with a different process-start witness is stale", () => {
-  const { root, lockPath } = project();
+  const { root, env, lockPath } = project();
   const unrelated = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   try {
     fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(lockPath, JSON.stringify({ pid: unrelated.pid, startWitness: "not-that-process" }) + "\n", { mode: 0o600 });
-    const acquired = acquireProjectLock(root);
+    const acquired = acquireProjectLock(root, env);
     assert.equal(acquired.recovered, true);
     acquired.release();
   } finally {
@@ -126,7 +127,7 @@ function pendingServers(names) {
   fs.mkdirSync(project);
   const servers = Object.fromEntries(names.map((name) => [name, { command: process.execPath, args: ["-e", SLOW_SERVER] }]));
   fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: servers }) + "\n");
-  const env = { XDG_DATA_HOME: dataHome };
+  const env = { HOME: path.join(root, "home"), XDG_DATA_HOME: dataHome };
   const states = {};
   for (const name of names) {
     const projectServer = readProjectServer(project, name);
@@ -167,7 +168,7 @@ function startActivation(statePath, env) {
       (state) => { process.stdout.write("ACTIVE " + state.lease.pid + " " + state.lease.generation + "\\n"); process.stdin.on("end", () => process.exit(0)); },
       (error) => { process.stdout.write("REFUSED " + error.code + "\\n" + error.message + "\\n"); process.stdin.on("end", () => process.exit(1)); },
     );
-  `], { stdio: ["pipe", "pipe", "inherit"] });
+  `], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "inherit"] });
   let stdout = "";
   const reported = new Promise((resolve) => {
     child.stdout.on("data", (chunk) => {
