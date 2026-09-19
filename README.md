@@ -132,8 +132,8 @@ remembering:
 seal status
 ```
 
-Receipts contain the complete parsed arguments for protected tools and child
-command metadata, so sharing a receipt shares those values.
+Receipts contain the complete parsed arguments for protected tools, so sharing a
+receipt shares those arguments.
 
 ## Remove it
 
