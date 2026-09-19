@@ -1913,3 +1913,79 @@ for (const token of ['-9007199254740993', '9007199254740993e0', '"90071992547409
     assert.deepEqual(h.rawCalls(), [h.call(token,args)]);
   });
 }
+
+// F02: the peer writes its actual input to disk; approval output alone is not
+// evidence that request metadata made it through the wrapper.
+for (const meta of ['{}', '{"progressToken":"f02-progress"}', '{"progressToken":0}',
+  '{"progressToken":9007199254740993}', '{"progressToken":1.0000000000000001}']) {
+  test(`metadata forwarding: child observes exact progress metadata ${meta}`, async t => {
+    const h = await identityHarness(t);
+    const original = h.call('101');
+    const wire = original.slice(0, -2) + ',"_meta":' + meta + '}}';
+    h.proxy.write(wire);
+    const approval = h.lines.map(JSON.parse).find(frame => frame.method === 'elicitation/create');
+    assert.ok(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [], 'no child call before approval');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [wire], 'child must receive the original opaque progress token');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [wire], 'duplicate approval must not forward again');
+  });
+}
+
+for (const [label, extra, top, refusal] of [
+  ['task', {task:{ttl:60000}}, {}, 'request_field_unsupported'],
+  ['null task', {task:null}, {}, 'request_field_unsupported'],
+  ['parameter extension', {extension:{mode:'test'}}, {}, 'request_field_unsupported'],
+  ['envelope extension', {}, {extension:true}, 'request_field_unsupported'],
+  ['empty parameter key', {'':true}, {}, 'request_field_unsupported'],
+  ['empty envelope key', {}, {'':true}, 'request_field_unsupported'],
+  ['metadata extension', {_meta:{progressToken:'p', 'example.com/mode':'execute'}}, {}, 'request_metadata_unsupported'],
+  ['task relationship', {_meta:{'io.modelcontextprotocol/related-task':{taskId:'task-1'}}}, {}, 'request_metadata_unsupported'],
+  ['null metadata', {_meta:null}, {}, 'request_metadata_unsupported'],
+  ['array metadata', {_meta:[]}, {}, 'request_metadata_unsupported'],
+  ['boolean token', {_meta:{progressToken:true}}, {}, 'progress_token_unsupported'],
+  ['null token', {_meta:{progressToken:null}}, {}, 'progress_token_unsupported'],
+  ['object token', {_meta:{progressToken:{}}}, {}, 'progress_token_unsupported'],
+]) {
+  test(`metadata forwarding: ${label} refused before approval`, async t => {
+    const decisions = [];
+    const h = await identityHarness(t, {onDecision: decision => decisions.push(decision)});
+    h.send({...callParams('unsupported', extra), id:101, ...top});
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), []);
+    assert.equal(h.lines.map(JSON.parse).some(frame => frame.method === 'elicitation/create'), false);
+    assert.deepEqual(decisions.map(({decision, refusal}) => ({decision, refusal})), [{decision:'BLOCK', refusal}]);
+    assert.match(h.lines.find(line => JSON.parse(line).id === 101), new RegExp(refusal));
+    const approval = h.begin('102');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [h.call('102')], 'refusal must leave the session usable');
+  });
+}
+
+test('metadata forwarding: overlapping approvals retain their original metadata and arguments', async t => {
+  const h = await identityHarness(t);
+  const entries = ['first', 'second'].map((line, index) => {
+    const frame = {...callParams(line, {_meta:{progressToken:line}}), id:101 + index};
+    const before = h.lines.length;
+    h.send(frame);
+    const approval = h.lines.slice(before).map(JSON.parse).find(frame => frame.method === 'elicitation/create');
+    assert.ok(approval);
+    assert.match(approval.params.message, new RegExp(line));
+    // Mutating the caller's object cannot modify the proxy's saved wire frame.
+    frame.params.arguments.line = 'changed';
+    frame.params._meta.progressToken = 'changed';
+    return {line, id:101 + index, approval};
+  });
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  for (const entry of entries.reverse()) h.answer(entry.approval);
+  await h.fence();
+  assert.deepEqual(h.rawCalls().map(JSON.parse), entries.map(({line, id}) => ({
+    ...callParams(line, {_meta:{progressToken:line}}), id,
+  })));
+});
