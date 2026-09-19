@@ -22,7 +22,9 @@ test/demo-server-tools.test.cjs
 test/demo-witness.test.cjs
 test/dist-pin.test.cjs
 test/dist3d.test.cjs
+test/docs-current-scope.test.mjs
 test/docs-fenced-languages.test.mjs
+test/docs-homepage.test.mjs
 test/docs-index.test.cjs
 test/docs-navigation.test.mjs
 test/docs-scope.test.mjs

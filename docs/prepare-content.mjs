@@ -2,9 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteUrl } from './site-url.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
+const siteBase = siteUrl().pathname.replace(/\/$/, '');
 const output = path.join(here, 'src/content/docs');
 const archiveWarning = 'Files in the last two groups describe the Seal family of research repositories or a past design state — they are kept for the record and are not claims about the Node CLI this repository ships.';
 const historicalDeadTarget = 'https://github.com/velvetmonkey/seal/blob/18bba8ea230ead9fb605cd61d352a0e894c256d5/scripts/check-receipt-canonicalization.mjs';
@@ -64,6 +66,16 @@ function destinationFor(source, raw) {
   const suffix = match[2] || '';
   const sourceName = path.relative(root, source).split(path.sep).join('/');
   const targetName = path.posix.normalize(path.posix.join(path.posix.dirname(sourceName), match[1]));
+  // Real static assets (screenshots, captured-output renders) live under
+  // docs/public/, Astro's convention for files served byte-for-byte at the
+  // site root. Astro does not rewrite literal markdown paths with the
+  // configured base itself, so this is the one place that must, or every
+  // such reference would otherwise fall into the "unknown repo path" branch
+  // below and become a non-image GitHub blob-view link instead of the real
+  // asset.
+  if (targetName.startsWith('docs/public/')) {
+    return `${siteBase}/${targetName.slice('docs/public/'.length)}${suffix}`;
+  }
   if (sourceSet.has(targetName)) {
     const from = routeFor(sourceName);
     const to = routeFor(targetName);
@@ -77,6 +89,17 @@ function destinationFor(source, raw) {
     return `https://github.com/velvetmonkey/seal/blob/main/${repositoryTarget}${suffix}`;
   }
   return raw;
+}
+
+// Starlight renders its own <h1> from the frontmatter title set below on
+// every ordinary article page (ASTRO-INTEGRATION.md section 3: "Normalize
+// this so each rendered page has one H1... remove the duplicate source H1
+// during generation."). Source Markdown keeps its own leading "# Title" for
+// readers viewing the file directly on GitHub; strip only that first H1 line
+// (the same line pageSlug's title is read from) out of the generated copy so
+// the built page does not render it twice.
+function stripSourceH1(markdown) {
+  return markdown.replace(/^#[ \t]+.+\r?\n?/m, '');
 }
 
 function rewriteLinks(source, markdown) {
@@ -104,8 +127,23 @@ function main() {
   emptyGenerated(output);
   fs.mkdirSync(output, { recursive: true });
 
-  const landing = `---\ntitle: Seal\ndescription: ${siteDescription}\n---\n\n${siteDescription}\n\nThis guide is for using that gate day to day. It assumes you have seen a \`.mcp.json\` before and can run commands in a terminal, and nothing more.\n\nSeal holds each exact call, asks once, permits at most one execution, and writes a signed receipt.\n\n[Choose your route](documentation-map/)\n`;
-  fs.writeFileSync(path.join(output, 'index.md'), landing);
+  // The homepage route "/" is owned exclusively by src/pages/index.astro
+  // (a Starlight custom page, see astro.config.mjs). This generator must
+  // never also write a competing src/content/docs/index.md: the root has
+  // exactly one owner.
+  const slugs = new Map();
+  for (const source of sources) {
+    const sourceName = path.relative(root, source).split(path.sep).join('/');
+    const slug = pageSlug(sourceName);
+    if (slug === '') {
+      throw new Error(`${sourceName}: generated slug is empty, which would collide with the custom homepage at src/pages/index.astro`);
+    }
+    const existing = slugs.get(slug);
+    if (existing) {
+      throw new Error(`duplicate generated route "/${slug}/" from both ${existing} and ${sourceName}`);
+    }
+    slugs.set(slug, sourceName);
+  }
 
   for (const source of sources) {
     const sourceName = path.relative(root, source).split(path.sep).join('/');
@@ -120,11 +158,11 @@ function main() {
       : '';
     const warning = archive ? `> **Archive — not current documentation.** ${archiveWarning}\n\n` : '';
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    const prepared = prepareMarkdown(sourceName, original);
+    const prepared = stripSourceH1(prepareMarkdown(sourceName, original));
     fs.writeFileSync(destination, `---\ntitle: ${JSON.stringify(title)}\n${archiveFrontmatter}---\n\n${warning}${rewriteLinks(source, prepared)}`);
   }
 
-  console.log(`Prepared landing page and ${sources.length} markdown sources without modifying them`);
+  console.log(`Prepared ${sources.length} markdown sources without modifying them; homepage is src/pages/index.astro`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

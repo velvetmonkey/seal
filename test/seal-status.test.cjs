@@ -716,7 +716,10 @@ function scopeOwnershipCase() {
 test("status resolves wrapper ownership from every project directory", (t) => {
   const c = scopeOwnershipCase();
   for (const [label, cwd] of [["root", c.project], ["child", c.child], ["symlink", c.linked]]) {
-    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+    const output = c.observe(t, label, cwd);
+    assert.match(output, /  BROKERED — Local MCP entry "db" matches Seal's installed wrapper/);
+    assert.match(output, /Sealed MCP route db: PENDING RESTART/);
+    assert.doesNotMatch(output, /Sealed MCP route: - outside Seal/);
   }
   fs.writeFileSync(path.join(c.outside, ".mcp.json"), JSON.stringify({ mcpServers: { plain: { command: "ordinary-server" } } }));
   assert.match(c.observe(t, "outside", c.outside), /  UNBROKERED — Inspected project MCP entry "plain" is configured without Seal/);
@@ -788,7 +791,9 @@ test("status follows a wrapper installed from a child into its Claude project sc
   fs.writeFileSync(childState, JSON.stringify(state));
   fs.unlinkSync(c.statePath);
   for (const [label, cwd] of [["child installation from root", c.project], ["child installation from child", c.child], ["child installation from symlink", c.linked]]) {
-    assert.match(c.observe(t, label, cwd), /  BROKERED — Local MCP entry "db"/);
+    const output = c.observe(t, label, cwd);
+    assert.match(output, /  BROKERED — Local MCP entry "db"/);
+    assert.match(output, /Sealed MCP route db: PENDING RESTART/);
   }
 });
 

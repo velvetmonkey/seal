@@ -50,6 +50,12 @@
     "test-support/front-door-invariants.mjs": { "allowlistReason": "The candidate strings are exact README and route-table fixtures consumed by the front-door invariant tests; they are test data, not an additional published claim surface." },
     "test/fixtures/readme-demo-output.txt": { "allowlistReason": "This is captured demo output supplied to the README transcript guard; it is test evidence, not an additional published claim surface." },
     "docs/assurance/architecture.md": { "coveredBy": ["test/docs-scope.test.mjs#architecture"] },
+    "docs/assurance/current-scope.md": { "coveredBy": ["test/docs-current-scope.test.mjs#current-scope"] },
+    "docs/src/pages/index.astro": { "coveredBy": ["test/docs-homepage.test.mjs#homepage"] },
+    "docs/verify/README.md": { "allowlistReason": "This orientation page compares two separately hosted companion tools (seal-check, seal-assurance-kit) by task; their exact current behaviour is governed by those repositories' own tests, not a fixture in this repository." },
+    "docs/verify/browser.md": { "allowlistReason": "This page walks the separately hosted seal-check browser checker and quotes its own current privacy notice; reproducing that hosted page's behaviour is outside a repository-local deterministic check." },
+    "docs/verify/cli.md": { "allowlistReason": "This page walks the separately versioned seal-assurance-kit CLI's commands and exit codes, sourced from that repository's own tested documentation; it is not a fixture in this repository." },
+    "docs/public/images/verify/receipt-two-ways.svg": { "allowlistReason": "This diagram's title/desc text illustrates the same one-receipt-two-hosted-tools split described in docs/verify/README.md; it is static alt content for an image, not an independently tested behaviour claim in this repository." },
     "docs/archive/ARTIFACT-INHERITANCE.md": { "allowlistReason": "This declared successor design intentionally records unbuilt and inferred mappings; its cross-repository implementation status cannot be established by a local executable check." },
     "docs/archive/AUTHORIZATION-MESH.md": { "coveredBy": ["test/docs-scope.test.mjs#authorization-mesh"] },
     "docs/archive/BROKER-HA.md": { "allowlistReason": "This deployment-design document makes model and operational claims that require a configured multi-broker environment; this repository has no such executable fixture." },
@@ -88,6 +94,11 @@
     "docs/guide/what-is-protected-right-now.md": { "coveredBy": ["test/guide-tokens.test.mjs#protected-now"] },
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs#looks-wrong"] },
     "test/guide-tokens.test.mjs": { "allowlistReason": "The apparent assertions are reviewed guide claim literals and tamper fixtures consumed by this test; they are test evidence, not another published claim surface." },
-    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs#index-drift", "scripts/launch-truth-gate.mjs#landing-page"] }
+    "test/docs-current-scope.test.mjs": { "allowlistReason": "The apparent assertions are the exact README sentences this drift check binds docs/assurance/current-scope.md to; they are test fixture data, not an additional published claim surface." },
+    "test/docs-homepage.test.mjs": { "allowlistReason": "The apparent assertions are the exact homepage copy literals this test binds docs/src/pages/index.astro to; they are test fixture data, not an additional published claim surface." },
+    "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs#index-drift", "scripts/launch-truth-gate.mjs#landing-page"] },
+    "docs/public/examples/protect-block.receipt.json": { "allowlistReason": "This is an unmodified public specimen receipt copied byte-for-byte from the seal-check repository's own examples directory (see the adjacent PROVENANCE.txt); it is fixture data consumed by the homepage's labeled example receipt, not authored prose making a claim." },
+    "docs/public/examples/PROVENANCE.txt": { "allowlistReason": "This note records the upstream repository, revision and license for the two adjacent specimen files; it is a citation of an external fixture's origin, not a claim about this repository's own shipped behavior." },
+    "docs/src/components/DecisionReceipt.astro": { "allowlistReason": "This component renders a single, explicitly labeled recorded example (not a live checker) from the bundled public specimen; its source comment and caption describe that scope rather than asserting new shipped behavior, and the homepage page it renders on is separately covered by test/docs-homepage.test.mjs#homepage." }
   }
 }

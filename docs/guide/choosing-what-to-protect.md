@@ -7,14 +7,31 @@ as important — what it leaves alone.
 ## The judgement call
 
 Open your project's `.mcp.json` and look at each server's tools (Claude Code's
-`/mcp` screen lists them, and so does the server's own documentation). Most
-tools are harmless: they read, they search, they list. Choose the set whose
-calls you need to stop for approval.
+`/mcp` screen lists them, and so does the server's own documentation). Choose
+the set whose calls you need to stop for approval, based on what each call
+can actually do, not on whether it is labelled a read or a write.
 
 Ask, for each tool: *if Claude Code called this once, with arguments I never
-saw, what is the worst that happens?* A tool that reads files loses you
-nothing. A tool that deletes, drops, sends, pays, or publishes can lose you
-something real. Name every tool in the set that warrants that gate.
+saw, what is the worst that happens?* Judge that by consequence, not by verb:
+
+- **Destructive or irreversible changes** — deletes, drops, truncates,
+  overwrites, force-pushes: anything that loses or corrupts data you cannot
+  get back.
+- **External sends** — anything that leaves your machine: publishes, pays,
+  emails, posts, or calls another service. Once it is sent, you cannot
+  unsend it.
+- **Sensitive reads** — a "read" tool is not automatically harmless. A tool
+  that can read secrets, private messages, customer data, or anything you
+  would not want exfiltrated is a real risk even though it never writes
+  anything. Reading is how data leaves a system just as surely as sending
+  does.
+- **Credential or privilege access** — anything that can read, mint, or use
+  an API key, token, password, or session that grants further access beyond
+  the tool call itself.
+
+A tool that only lists or searches over data you would not mind Claude Code
+seeing and does not touch any of the categories above is a reasonable one to
+leave ungated. Name every tool in the set that warrants the gate.
 
 The bundled demo is the useful contrast: `demo.mutate` appends to its demo data
 file, while `demo.erase` truncates it. They are different risks; naming both
