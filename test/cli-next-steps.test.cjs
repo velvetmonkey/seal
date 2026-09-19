@@ -326,6 +326,13 @@ test("CLI contract: protect, unprotect, recover, doctor and status exact exits",
   assert.match(unprotected.out, /Sealed MCP route: - outside Seal/);
   assert.equal(ctx.run(["doctor"]).code, 0);
   assert.equal(ctx.run(["doctor"], "", { SEAL_ELICITATION_AUTO_RESPONSE: "automatic" }).code, 1);
+  for (const command of ["doctor", "coverage"]) {
+    for (const argument of ["--bogus-flag", "unexpected", ""]) {
+      const rejected = ctx.run([command, argument]);
+      assert.equal(rejected.code, 2, rejected.out);
+      assert.equal(rejected.out, `seal ${command} takes no arguments\n`);
+    }
+  }
   const protectedRun = ctx.run(["protect", "--timeout-ms", "2147483647", "db", "demo.mutate"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.equal(ctx.run(["protect", "db", "demo.mutate"]).code, 1);
