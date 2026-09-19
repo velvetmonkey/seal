@@ -173,7 +173,7 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
 });
 
-test("status and coverage retain root protection from nested and symlinked directories", () => {
+test("protect, unprotect, recover, status and coverage share the git root from nested and symlinked directories", () => {
   const root = testTmpdir("seal-protect3b-status-root-");
   const project = path.join(root, "project");
   const home = path.join(root, "home");
@@ -186,6 +186,10 @@ test("status and coverage retain root protection from nested and symlinked direc
   const fakeBin = fakeClaudeBin(root);
   const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: home };
   writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const rootConfigPath = path.join(project, ".mcp.json");
+  const rootConfig = JSON.parse(fs.readFileSync(rootConfigPath, "utf8"));
+  rootConfig.mcpServers.cache = { command: "root-cache-server" };
+  fs.writeFileSync(rootConfigPath, JSON.stringify(rootConfig));
   const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.equal(protectedRun.code, 0, protectedRun.out);
   const baseline = run(project, home, ["status"], env);
@@ -202,6 +206,43 @@ test("status and coverage retain root protection from nested and symlinked direc
     assert.match(observed.out, /selected MCP tools on db: demo.mutate — protection state is PENDING RESTART/);
     assert.equal(observed.out, coverage.out);
   }
+  const sourceBefore = fs.readFileSync(path.join(project, ".mcp.json"), "utf8");
+  const nestedSource = writeProject(nested, { command: "nested-server-must-not-run" });
+  const stateEnv = { XDG_DATA_HOME: path.join(home, ".local", "share") };
+  const file = statePathFor(project, stateEnv, "db");
+  for (const cwd of [nested, linked]) {
+    const unprotected = run(cwd, home, ["unprotect", "db"], env);
+    assert.equal(unprotected.code, 0, unprotected.out);
+    assert.ok(unprotected.out.includes(file), unprotected.out);
+    assert.ok(unprotected.out.includes(`Project .mcp.json hash before unprotect: ${sha256(sourceBefore)}`), unprotected.out);
+    assert.equal(readState(file).state, "UNPROTECTED");
+    const protectedAgain = run(cwd, home, ["protect", "db", "demo.mutate"], env);
+    assert.equal(protectedAgain.code, 0, protectedAgain.out);
+    assert.ok(protectedAgain.out.includes(file), protectedAgain.out);
+    assert.match(protectedAgain.out, /configured MCP servers not routed through this Seal wrapper: cache/);
+    assert.equal(readState(file).projectRoot, project);
+    assert.equal(fs.existsSync(statePathFor(nested, stateEnv, "db")), false);
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.ok(status.out.includes(file), status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    const incompatible = JSON.stringify({ ...readState(file), schema: "seal.protect/v99" });
+    fs.writeFileSync(file, incompatible);
+    const recoveryArgs = cwd === nested ? ["recover", "--archive", "db"] : ["recover", "--archive"];
+    const recovered = run(cwd, home, recoveryArgs, env);
+    assert.equal(recovered.code, 0, recovered.out);
+    const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+    assert.ok(archive?.startsWith(`${file}.recovered-`), recovered.out);
+    assert.equal(fs.readFileSync(archive, "utf8"), incompatible);
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), sourceBefore);
+    assert.equal(fs.readFileSync(path.join(nested, ".mcp.json"), "utf8"), nestedSource);
+    const outside = run(cwd, home, ["status"], env);
+    assert.equal(outside.code, 0, outside.out);
+    assert.match(outside.out, /Sealed MCP route: - outside Seal/);
+    assert.equal(run(cwd, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  }
+
 });
 
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {
