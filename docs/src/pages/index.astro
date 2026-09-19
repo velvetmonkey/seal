@@ -15,6 +15,13 @@ const frontmatter = {
   title: 'Seal — approval for selected AI-agent tool calls',
   description: 'Seal is a local approval gate for selected Claude Code MCP tool calls.',
   template: 'splash' as const,
+  // Starlight renders the banner before the hero, outside the header menu.
+  banner: {
+    content: `<nav class="docs-entry" aria-label="Documentation entry">
+      <div><strong>Seal documentation</strong><p>Browse the table of contents and find your next step.</p></div>
+      <a href="${link('documentation-map/')}">Read the docs <span aria-hidden="true">→</span></a>
+    </nav>`,
+  },
   hero: {
     title: 'Approve the exact tool call.',
     tagline:
@@ -122,6 +129,55 @@ const frontmatter = {
   </section>
 </StarlightPage>
 <style>
+  :global(.sl-banner:has(.docs-entry)) {
+    background: var(--seal-accent-soft);
+    color: var(--seal-text);
+    border-bottom: 1px solid var(--seal-border);
+    box-shadow: none;
+  }
+  :global(.docs-entry) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 1100px;
+    margin-inline: auto;
+    padding-block: 0.5rem;
+    text-align: start;
+  }
+  :global(.docs-entry strong) {
+    font-size: 1.125rem;
+  }
+  :global(.docs-entry p) {
+    margin-block: 0.375rem 0;
+    color: var(--seal-muted);
+  }
+  :global(.docs-entry a) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    padding: 0.625rem 1rem;
+    border-radius: var(--seal-radius);
+    background: var(--seal-accent);
+    color: var(--seal-accent-text);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  :global(.docs-entry a:hover) {
+    text-decoration-thickness: 2px;
+  }
+  :global(.docs-entry a:focus-visible) {
+    outline: 2px solid var(--seal-accent);
+    outline-offset: 4px;
+  }
+  @media (max-width: 26rem) {
+    :global(.docs-entry a) {
+      margin-inline-start: auto;
+    }
+  }
   .scope-sentence {
     max-width: 65ch;
     margin-inline: auto;
