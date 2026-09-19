@@ -9,6 +9,7 @@ import FamilyRoutes from '../components/FamilyRoutes.astro';
 import DecisionReceipt from '../components/DecisionReceipt.astro';
 // Keep the illustration and its accessible claims on the covered homepage.
 const approvalStory = `<figure class="approval-story">
+  <figcaption>Stylised from a recorded Claude Code dialog, not a live capture.</figcaption>
   <div class="approval-stage">
     <div class="approval-terminal">
       <div class="terminal-chrome" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -21,7 +22,6 @@ const approvalStory = `<figure class="approval-story">
     </div>
     <span class="terminal-receipt">signed decision receipt</span>
   </div>
-  <figcaption>Stylised from a recorded Claude Code dialog, not a live capture.</figcaption>
 </figure>`;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -257,7 +257,7 @@ const frontmatter = {
     box-shadow: 0 0.4rem 1rem #0002;
   }
   :global(.approval-story figcaption) {
-    margin: 0.5rem 1rem 0;
+    margin: 0 1rem 0.5rem;
     color: var(--seal-muted);
     font-size: 0.8125rem;
     line-height: 1.5;
