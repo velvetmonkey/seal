@@ -1504,7 +1504,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
     validateState(state);
     refuseLiveLease(state);
     const childCommand = state.childArgv && state.childArgv[0];
-    if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
+    if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(path.resolve(state.projectRoot, childCommand))) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
     }
     const got = currentDigestForState(state);
