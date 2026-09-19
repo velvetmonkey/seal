@@ -173,6 +173,37 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
 });
 
+test("status and coverage retain root protection from nested and symlinked directories", () => {
+  const root = testTmpdir("seal-protect3b-status-root-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "src", "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(home);
+  execFileSync("git", ["init", "--quiet", project]);
+  const linked = path.join(root, "linked");
+  fs.symlinkSync(nested, linked, "dir");
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: home };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const baseline = run(project, home, ["status"], env);
+  assert.equal(baseline.code, 0, baseline.out);
+  const coverage = run(project, home, ["coverage"], env);
+  assert.equal(coverage.code, 0, coverage.out);
+  for (const cwd of [project, nested, linked]) {
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    assert.equal(withoutObservationTime(status.out), withoutObservationTime(baseline.out));
+    const observed = run(cwd, home, ["coverage"], env);
+    assert.equal(observed.code, 0, observed.out);
+    assert.match(observed.out, /selected MCP tools on db: demo.mutate — protection state is PENDING RESTART/);
+    assert.equal(observed.out, coverage.out);
+  }
+});
+
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {
   const root = testTmpdir("seal-protect3b-owned-override-");
   const project = path.join(root, "project");
