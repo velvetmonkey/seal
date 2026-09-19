@@ -136,7 +136,7 @@ for (const [label, command] of [["seal verify", [SEAL, "verify"]], ["standalone 
     const corrupt = path.join(real.dir, "corrupt.json");
     fs.writeFileSync(corrupt, Buffer.concat([bytes.subarray(0, at), Buffer.from([0xff]), bytes.subarray(at + 3)]));
     const refused = spawnSync(process.execPath, [...command, corrupt, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
-    assert.equal(refused.status, 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
+    assert.equal(refused.status, command[0] === SEAL ? 2 : 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
     assert.match(refused.stdout + refused.stderr, /read_failed|ill-formed UTF-8/);
   });
 }
@@ -151,7 +151,7 @@ for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", 
     fs.writeFileSync(file, JSON.stringify(body));
     for (const command of [[SEAL, "verify"], [CHECKER]]) {
       const refused = spawnSync(process.execPath, [...command, file, "--pubkey", real.publicKey], { encoding: "utf8" });
-      assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+      assert.equal(refused.status, command[0] === SEAL ? 2 : 1, refused.stdout + refused.stderr);
       assert.match(refused.stdout + refused.stderr, /tool and arguments are required/);
     }
   });
