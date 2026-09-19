@@ -1,142 +1,277 @@
 // SPDX-License-Identifier: Apache-2.0
+"use strict";
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const test = require("node:test");
-const { testTmpdir } = require("../scripts/temp-root.cjs");
-
-const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
-
+const { pathToFileURL } = require("node:url");
+const argsOf = (effect) => (Object.hasOwn(effect, "args") ? effect.args : {});
 const ROOT = path.resolve(__dirname, "..");
-const MODEL = path.join(ROOT, "test-support", "kernel-authorization-model.lean");
-const LEAN_TOOLCHAIN = "Lean (version 4.28.0";
-const FFI_SHA256 = "092b67ff2a17380c3b3f9ed560395443bc0b749a3ae3a42b3d9af1a8256fe0f3";
-const IN_TREE_LAKE_MANIFEST_SHA256 = "bfeb39beac1e2bdc3513fb15a4d0163c6557be67540199e334459f68054b2604";
-
-function sha256(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+const sha256 = (file) =>
+  crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+function candidateFile(root, relative) {
+  const file = fs.realpathSync(path.join(root, relative));
+  assert.ok(
+    file.startsWith(root + path.sep),
+    `candidate-root: ${relative} escaped candidate`,
+  );
+  assert.ok(fs.statSync(file).isFile(), `candidate-root: missing ${relative}`);
+  return file;
 }
-
-function refuse(message) {
-  throw new Error(`interpreted Lean unavailable: ${message}`);
-}
-
-function leanEnvironment() {
-  const sourceRoot = process.env.SEAL_INTERPRETED_LEAN_ROOT;
-  if (!sourceRoot) {
-    refuse("set SEAL_INTERPRETED_LEAN_ROOT to the built in-tree source tree");
+function interpretedAnswers(sourceRoot, cases, outputDir) {
+  const libraries = [
+    path.join(sourceRoot, ".lake/build/lib/lean"),
+    path.join(sourceRoot, "kernel-source/.lake/build/lib/lean"),
+  ];
+  for (const name of fs.readdirSync(path.join(sourceRoot, ".lake/packages"))) {
+    const lib = path.join(
+      sourceRoot,
+      ".lake/packages",
+      name,
+      ".lake/build/lib/lean",
+    );
+    if (fs.existsSync(lib)) libraries.push(lib);
   }
-  const ffi = path.join(sourceRoot, "Ffi.lean");
-  const manifest = path.join(sourceRoot, "lake-manifest.json");
-  if (sha256(ffi) !== FFI_SHA256) refuse(`Ffi.lean is not pinned sha256 ${FFI_SHA256}`);
-  if (sha256(manifest) !== IN_TREE_LAKE_MANIFEST_SHA256) {
-    refuse(`in-tree lake-manifest.json is not pinned sha256 ${IN_TREE_LAKE_MANIFEST_SHA256}`);
-  }
-  const lean = process.env.SEAL_LEAN || "lean";
-  const version = spawnSync(lean, ["--version"], { encoding: "utf8" });
-  if (version.status !== 0 || !version.stdout.startsWith(LEAN_TOOLCHAIN)) {
-    refuse(`need Lean 4.28.0 at ${JSON.stringify(lean)}: ${(version.stderr || version.stdout).trim()}`);
-  }
-  const libraryPaths = [path.join(sourceRoot, ".lake", "build", "lib", "lean")];
-  const packages = path.join(sourceRoot, ".lake", "packages");
-  for (const name of fs.readdirSync(packages)) {
-    const library = path.join(packages, name, ".lake", "build", "lib", "lean");
-    if (fs.existsSync(library)) libraryPaths.push(library);
-  }
-  for (const library of libraryPaths) {
-    if (!fs.existsSync(library)) refuse(`compiled import directory is absent: ${library}`);
-  }
-  return { lean, sourceRoot, leanPath: libraryPaths.join(path.delimiter) };
-}
-
-async function scenarioData() {
-  const cfg = await import(pathToFileURL(path.join(ROOT, "runtime", "kernel", "seal-config.js")).href);
-  const retryTool = "demo.mutate";
-  const retryArgs = { line: "seam differential" };
-  const cases = [
-    { name: "matching accepted retry", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: true, expected: "ALLOW" },
-    { name: "altered retry arguments", issuedTool: retryTool, issuedArgs: { line: "issued value" }, retryTool, retryArgs, accepted: true, expected: "BLOCK" },
-    { name: "approval declined", issuedTool: retryTool, issuedArgs: retryArgs, retryTool, retryArgs, accepted: false, expected: "BLOCK" },
-    { name: "approval for another tool", issuedTool: "demo.other", issuedArgs: retryArgs, retryTool, retryArgs, accepted: true, expected: "BLOCK" },
-    ...require("./json-argument-vectors.cjs").map(({ name, args }) => ({
-      name, issuedTool: retryTool, issuedArgs: args, retryTool, retryArgs: args, accepted: true, expected: "ALLOW",
-    })),
-  ].map((input) => ({ ...input, epoch: 1, now: 1000 }));
-  const config = {
-    epoch: 1,
-    safety: {
-      approval: { control_file: "product-adapter", ttl_seconds: 120 },
-      tools: [{ name: retryTool, mode: "guarded", match: { type: "always" }, target: [{ full_arguments: true }] }],
-    },
-    temporal: { policies: [] },
+  for (const lib of libraries)
+    assert.ok(fs.existsSync(lib), `missing Lean import directory: ${lib}`);
+  const corpus = path.join(outputDir, "oracle-input.jsonl"),
+    output = path.join(outputDir, "oracle-output.jsonl");
+  fs.writeFileSync(
+    corpus,
+    cases.map((c) => JSON.stringify(c)).join("\n") + "\n",
+  );
+  const env = {
+    ...process.env,
+    ELAN_TOOLCHAIN: fs
+      .readFileSync(path.join(sourceRoot, "lean-toolchain"), "utf8")
+      .trim(),
+    LEAN_PATH: libraries.join(path.delimiter),
+    SEAL_CORRESPONDENCE_LOGICAL: "1",
+    SEAL_SEAMDIFF_CORPUS: corpus,
+    SEAL_SEAMDIFF_OUTPUT: output,
   };
-  const steps = cases.map((input) => {
-    const issuedTarget = cfg.guardTarget(input.issuedTool, input.issuedArgs);
-    return cfg.buildStepInput({
-      tool: input.retryTool,
-      args: input.retryArgs,
-      approvals: input.accepted ? [issuedTarget] : [],
-      now: input.now,
+  const result = spawnSync(
+    "lean",
+    [path.join(ROOT, "test-support/kernel-authorization-model.lean")],
+    { cwd: sourceRoot, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+  );
+  fs.writeFileSync(
+    path.join(outputDir, "oracle-execution.log"),
+    (result.stdout || "") + (result.stderr || ""),
+  );
+  assert.equal(
+    result.status,
+    0,
+    `oracle-execution: ${result.error || result.stderr || result.stdout}`,
+  );
+  const answers = fs
+    .readFileSync(output, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.equal(answers.length, cases.length, "oracle-case-count");
+  return answers;
+}
+async function compareCandidate({
+  candidateRoot,
+  sourceRoot,
+  corpusPath,
+  outputDir,
+  oracleAnswers,
+  expectedCandidateRoot,
+}) {
+  assert.ok(
+    candidateRoot,
+    "--candidate-root is required; no checkout fallback",
+  );
+  const root = fs.realpathSync(candidateRoot);
+  if (expectedCandidateRoot)
+    assert.equal(
+      root,
+      fs.realpathSync(expectedCandidateRoot),
+      "candidate-root: checkout loaded instead of candidate",
+    );
+  fs.mkdirSync(outputDir, { recursive: true });
+  const files = [
+    "contract/kernel-authorization.cjs",
+    "contract/kernel-authorization-worker.cjs",
+    "runtime/kernel/seal-config.js",
+    "runtime/kernel/runner.cjs",
+    "runtime/kernel/kernel.js",
+    "runtime/kernel/wasm/seal.js",
+    "runtime/kernel/wasm/seal.wasm",
+    "runtime-manifest.json",
+  ];
+  const components = Object.fromEntries(
+    files.map((file) => [file, sha256(candidateFile(root, file))]),
+  );
+  const loaded = require(
+    candidateFile(root, "contract/kernel-authorization.cjs"),
+  );
+  assert.equal(
+    fs.realpathSync(loaded.DEFAULT_KERNEL_ROOT),
+    path.join(root, "runtime/kernel"),
+    "candidate-root: runtime root",
+  );
+  const cfg = await import(
+    pathToFileURL(candidateFile(root, "runtime/kernel/seal-config.js")).href
+  );
+  const cases = fs
+    .readFileSync(corpusPath, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.ok(cases.length > 0, "empty corpus");
+  assert.equal(
+    new Set(cases.map((c) => c.id)).size,
+    cases.length,
+    "duplicate corpus IDs",
+  );
+  const logical = cases.map((c) => ({
+    ...c,
+    retry_wire: JSON.parse(
+      cfg.buildStepInput({
+        tool: c.retry.tool,
+        args: argsOf(c.retry),
+        now: c.now,
+      }),
+    ).line,
+  }));
+  const oracle =
+    oracleAnswers || interpretedAnswers(sourceRoot, logical, outputDir);
+  assert.equal(oracle.length, cases.length, "oracle-case-count");
+  const adapter = loaded.createKernelAuthorizationAdapter();
+  let allows = 0;
+  const transcript = [];
+  for (const [index, c] of cases.entries()) {
+    const expected = oracle[index],
+      label = (name) => `${c.id}: ${name}`;
+    assert.equal(expected.id, c.id, label("oracle-id"));
+    assert.equal(expected.profile_admitted, true, label("profile-admitted"));
+    assert.equal(expected.guarded, true, label("guarded"));
+    const issued = { tool: c.issued.tool, args: argsOf(c.issued) },
+      retry = { tool: c.retry.tool, args: argsOf(c.retry) };
+    assert.deepEqual(
+      expected.classified_issue_effect,
+      issued,
+      label("independent-issued-effect"),
+    );
+    assert.deepEqual(
+      expected.classified_retry_effect,
+      retry,
+      label("independent-retry-effect"),
+    );
+    const answer = adapter.authorize({
+      issuedTool: issued.tool,
+      issuedArgs: issued.args,
+      retryTool: retry.tool,
+      retryArgs: retry.args,
+      accepted: c.accepted,
+      epoch: 1,
+      now: c.now,
     });
-  });
-  return { cfg, cases, config, steps };
-}
-
-function pathToFileURL(file) {
-  return require("node:url").pathToFileURL(file);
-}
-
-function interpretedAnswers(t, config, steps, cfg) {
-  const { lean, sourceRoot, leanPath } = leanEnvironment();
-  const temporary = testTmpdir(path.join(os.tmpdir(), "seal-authorization-seamdiff-"));
-  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
-  const payload = path.join(temporary, "payload.json");
-  const corpus = path.join(temporary, "corpus.jsonl");
-  const output = path.join(temporary, "model.jsonl");
-  fs.writeFileSync(payload, JSON.stringify(config));
-  fs.writeFileSync(corpus, steps.join("\n#REINIT\n") + "\n");
-  const result = spawnSync(lean, [MODEL], {
-    cwd: sourceRoot,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      LEAN_PATH: leanPath,
-      SEAL_SEAMDIFF_PAYLOAD: payload,
-      SEAL_SEAMDIFF_CORPUS: corpus,
-      SEAL_SEAMDIFF_OUTPUT: output,
-    },
-  });
-  assert.equal(result.status, 0, `interpreted Lean exited ${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-  const lines = fs.readFileSync(output, "utf8").trim().split("\n");
-  assert.equal(lines.length, steps.length, `interpreted Lean returned ${lines.length} answers for ${steps.length} inputs`);
-  return lines.map((raw) => {
-    const verdict = cfg.parseVerdict(raw, "demo.mutate").verdict;
-    return verdict === "DENY" ? "BLOCK" : verdict;
-  });
-}
-
-test("interpreted Lean agrees with shipped WASM through the Node authorization adapter", async (t) => {
-  const { cfg, cases, config, steps } = await scenarioData();
-  const leanAnswers = interpretedAnswers(t, config, steps, cfg);
-  const adapter = createKernelAuthorizationAdapter();
-  for (const [index, input] of cases.entries()) {
-    let wasmAnswer;
-    try {
-      wasmAnswer = adapter.authorize(input).verdict;
-    } catch (error) {
-      wasmAnswer = `ERROR ${error.code || error.name}: ${error.message}`;
-    }
-    assert.equal(wasmAnswer, input.expected, `${input.name}: shipped answer differs from the expected outcome`);
-    assert.equal(leanAnswers[index], input.expected, `${input.name}: interpreted answer differs from the expected outcome`);
-    if (leanAnswers[index] !== wasmAnswer) {
-      throw new Error(
-        `authorization differential disagreement for input ${JSON.stringify(input)}: ` +
-        `interpreted Lean=${JSON.stringify(leanAnswers[index])}; ` +
-        `shipped WASM via contract/kernel-authorization-worker.cjs=${JSON.stringify(wasmAnswer)}`,
-      );
-    }
+    const raw = JSON.parse(answer.raw);
+    assert.equal(
+      answer.verdict,
+      expected.live_before ? "ALLOW" : "BLOCK",
+      label("raw-adapter-verdict"),
+    );
+    assert.equal(
+      answer.issued_target,
+      expected.issued_target,
+      label("independent-issued-target"),
+    );
+    assert.deepEqual(
+      raw,
+      JSON.parse(expected.model_raw),
+      label("full-raw-decision"),
+    );
+    assert.equal(
+      raw.route,
+      expected.expected_route,
+      label("independent-route"),
+    );
+    assert.equal(answer.verdict, c.expected, label("reviewed-corpus-verdict"));
+    const audit = JSON.parse(raw.audit),
+      safety = audit.certs.filter((cert) => cert.kernel === "safety");
+    assert.equal(
+      audit.verdict,
+      expected.live_before ? "allow" : "deny",
+      label("audit-verdict"),
+    );
+    assert.equal(safety.length, 1, label("nonempty-safety-certificate"));
+    assert.match(
+      safety[0].certHash,
+      /^[0-9]+$/,
+      label("safety-certificate-hash"),
+    );
+    assert.equal(
+      safety[0].reason,
+      expected.retry_target,
+      label("independent-retry-target"),
+    );
+    assert.equal(safety[0].verdict, audit.verdict, label("safety-verdict"));
+    if (answer.verdict === "ALLOW") allows++;
+    transcript.push({
+      id: c.id,
+      raw: answer.raw,
+      verdict: answer.verdict,
+      issued_target: answer.issued_target,
+    });
   }
-});
+  assert.ok(
+    allows > 0,
+    "positive-control: at least one accepted effect must ALLOW",
+  );
+  for (const [file, digest] of Object.entries(components))
+    assert.equal(
+      sha256(candidateFile(root, file)),
+      digest,
+      `candidate-root: changed during comparison: ${file}`,
+    );
+  const transcriptPath = path.join(outputDir, "candidate-raw.jsonl");
+  fs.writeFileSync(
+    transcriptPath,
+    transcript.map((x) => JSON.stringify(x)).join("\n") + "\n",
+  );
+  return {
+    result: "PASS",
+    scope: "adapter-seam-only",
+    case_count: cases.length,
+    allow_count: allows,
+    candidate_root: root,
+    components,
+    corpus_sha256: sha256(corpusPath),
+    transcript: { path: transcriptPath, sha256: sha256(transcriptPath) },
+    oracle,
+  };
+}
+if (require.main === module) {
+  (async () => {
+    const { values } = require("node:util").parseArgs({
+      options: {
+        "candidate-root": { type: "string" },
+        "source-root": { type: "string" },
+        corpus: { type: "string" },
+        evidence: { type: "string" },
+      },
+    });
+    for (const name of ["candidate-root", "source-root", "corpus", "evidence"])
+      assert.ok(values[name], `--${name} is required`);
+    const result = await compareCandidate({
+      candidateRoot: values["candidate-root"],
+      sourceRoot: values["source-root"],
+      corpusPath: values.corpus,
+      outputDir: path.dirname(path.resolve(values.evidence)),
+    });
+    fs.writeFileSync(values.evidence, JSON.stringify(result, null, 2) + "\n");
+    console.log(
+      `adapter seam PASS: ${result.case_count} cases (${result.allow_count} ALLOW)`,
+    );
+  })().catch((error) => {
+    console.error(error.stack);
+    process.exitCode = 1;
+  });
+}
+module.exports = { compareCandidate };
