@@ -24,5 +24,7 @@ test("receipt v2 page matches executable canonicalisation and workflow controls"
   assert.equal(checkerBytes, expected, "checker departed from ECMAScript own-property enumeration order");
 
   assert.match(workflow, /^name: Authorization seam differential$/mu);
-  assert.match(workflow, /node --test test-support\/authorization-seam-differential\.test\.cjs/u);
+  assert.match(workflow, /node test-support\/authorization-seam-differential\.test\.cjs \\\n\s+--candidate-root "\$candidate_root" --source-root/u);
+  assert.match(workflow, /"\$RUNNER_TEMP\/seam-dist\/\$asset" --sha256 "\$digest" --bytes "\$bytes" --prefix/u);
+  assert.match(workflow, /--corpus test-support\/authorization-correspondence-corpus\.jsonl/u);
 });

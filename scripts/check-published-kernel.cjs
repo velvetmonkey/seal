@@ -189,6 +189,14 @@ function main() {
     const record = JSON.parse(fs.readFileSync(path.join(prefix, "lib", "seal", "install.json"), "utf8"));
     if (platform.startsWith("darwin-")) execFileSync(path.join(prefix, record.store, "runtime", "macos-process-start-witness"), [String(process.pid)], { stdio: "inherit" });
     execFileSync(path.join(prefix, "bin", "seal"), ["demo", "--dir", path.join(work, "demo")], { input: "y\n", stdio: ["pipe", "inherit", "inherit"] });
+    const correspondenceEvidence = arg("--correspondence-evidence");
+    if (correspondenceEvidence) {
+      execFileSync(process.execPath, [path.join(ROOT, "test-support", "authorization-correspondence.cjs"),
+        "--candidate-root", path.join(prefix, record.store), "--artifact", asset,
+        "--source-root", ROOT,
+        "--corpus", path.join(ROOT, "test-support", "authorization-correspondence-corpus.jsonl"),
+        "--evidence", correspondenceEvidence, "--rebuilt-wasm", rebuilt], { stdio: "inherit" });
+    }
   } catch (error) {
     fail(`downloaded ${platform} artifact execution failed (exit ${error.status ?? "unknown"})`);
   }

@@ -27,7 +27,7 @@ jobs:
           lake-package-directory: .
           auto-config: false
           build: true
-          build-args: +Ffi:c.o.export
+          build-args: +Ffi:c.o.export AuthorizationCorrespondenceProof
           test: false
           lint: false
           use-mathlib-cache: true
@@ -39,4 +39,11 @@ jobs:
         run: |
           export ELAN_TOOLCHAIN="$(cat "$SEAL_INTERPRETED_LEAN_ROOT/lean-toolchain")"
           echo "Resolved ELAN_TOOLCHAIN=$ELAN_TOOLCHAIN from $SEAL_INTERPRETED_LEAN_ROOT/lean-toolchain"
-          node --test test-support/authorization-seam-differential.test.cjs
+          node scripts/build-dist.cjs --out "$RUNNER_TEMP/seam-dist"
+          read -r digest bytes asset < "$RUNNER_TEMP/seam-dist/SHA256SUMS"
+          "$RUNNER_TEMP/seam-dist/$asset" --sha256 "$digest" --bytes "$bytes" --prefix "$RUNNER_TEMP/seam-prefix"
+          candidate_root="$(node -e 'const fs=require("fs"),p=require("path"),r=process.argv[1]; console.log(p.join(r,JSON.parse(fs.readFileSync(p.join(r,"lib/seal/install.json"))).store))' "$RUNNER_TEMP/seam-prefix")"
+          node test-support/authorization-seam-differential.test.cjs \
+            --candidate-root "$candidate_root" --source-root "$SEAL_INTERPRETED_LEAN_ROOT" \
+            --corpus test-support/authorization-correspondence-corpus.jsonl \
+            --evidence "$RUNNER_TEMP/seam-evidence/result.json"

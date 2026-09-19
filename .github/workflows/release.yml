@@ -311,6 +311,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Provision the pinned source proof checker
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-mathlib-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: fresh-rebuilt-kernel
@@ -327,7 +335,29 @@ jobs:
           node scripts/check-published-kernel.cjs --release-tag "$GITHUB_REF_NAME" --platform "${{ matrix.platform }}" \
             --checksums "$RUNNER_TEMP/draft/SHA256SUMS" \
             --asset "$RUNNER_TEMP/draft/seal-${GITHUB_REF_NAME}-${{ matrix.platform }}" \
-            --rebuilt-wasm "$RUNNER_TEMP/rebuilt/rebuilt-seal.wasm" --exercise
+            --rebuilt-wasm "$RUNNER_TEMP/rebuilt/rebuilt-seal.wasm" --exercise \
+            --correspondence-evidence "$RUNNER_TEMP/correspondence/result-${{ matrix.platform }}.json"
+      - name: Retain the correspondence evidence and replay transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authorization-correspondence-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/correspondence/result-*.json
+            ${{ runner.temp }}/correspondence/source-proof.json
+            ${{ runner.temp }}/correspondence/corpus.jsonl
+            ${{ runner.temp }}/correspondence/adapter/*.jsonl
+            ${{ runner.temp }}/correspondence/adapter/*.log
+            ${{ runner.temp }}/correspondence/child/**/effects.jsonl
+            ${{ runner.temp }}/correspondence/child/**/proxy.jsonl
+            ${{ runner.temp }}/correspondence/child/**/checks.json
+            ${{ runner.temp }}/correspondence/mutations/**/mutation.json
+            ${{ runner.temp }}/correspondence/mutations/**/setup.log
+            ${{ runner.temp }}/correspondence/mutations/**/effects.jsonl
+            ${{ runner.temp }}/correspondence/mutations/**/proxy.jsonl
+            ${{ runner.temp }}/correspondence/mutations/**/candidate-raw.jsonl
+            ${{ runner.temp }}/correspondence/authorization-proof-*/build.log
+          if-no-files-found: error
 
   publish:
     name: Publish only the verified draft
@@ -339,6 +369,14 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: authorization-correspondence-*
+          path: ${{ runner.temp }}/correspondence-records
       - name: Publish the verified draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -346,6 +384,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
+          mkdir -p "$RUNNER_TEMP/publish-subjects"
+          gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/publish-subjects" \
+            --pattern "seal-${GITHUB_REF_NAME}-linux-x64" \
+            --pattern "seal-${GITHUB_REF_NAME}-darwin-arm64" \
+            --pattern "seal-${GITHUB_REF_NAME}-darwin-x64"
+          node test-support/authorization-publication-check.cjs \
+            --evidence-root "$RUNNER_TEMP/correspondence-records" \
+            --asset-root "$RUNNER_TEMP/publish-subjects" \
+            --tag "$GITHUB_REF_NAME" --source-commit "$(git rev-parse HEAD)"
           gh release edit "$GITHUB_REF_NAME" --draft=false
       - uses: actions/download-artifact@v4
         with:

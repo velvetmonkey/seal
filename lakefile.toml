@@ -63,6 +63,12 @@ globs = ["Host", "Host.+", "Kernels", "Kernels.+", "Ffi", "FfiSpec"]
 name = "Test"
 globs = ["Test.+"]
 
+# Explicit source proof target for the release correspondence harness.
+# A library target checks proof terms without linking the native IO shell.
+[[lean_lib]]
+name = "AuthorizationCorrespondenceProof"
+srcDir = "test-support"
+
 # The `lake lint` entry point — see the lintDriver comment above. `needs`
 # makes Lake build the real linter BEFORE running this driver: the driver
 # itself must never spawn a nested `lake build` while `lake lint` runs.
