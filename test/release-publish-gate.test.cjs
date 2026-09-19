@@ -210,3 +210,49 @@ for (const [name, state, assets, expected, mutation, refusal] of [
     if (state === "missing") assert.match(writes[0], /--draft --verify-tag/);
   });
 }
+
+// Synthetic validator controls; these do not stand in for the live release gate.
+test("v2 publication re-derives transcript assertions and rejects body changes and v1 PASS", () => {
+  const assert = require('node:assert/strict');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.resolve(__dirname, "..");
+  const {ordered, sha256, hop, ENCODING, verifyTranscript} = require(root+'/test-support/authorization-transcript.cjs');
+  const {verifyBodies, verifyPublication} = require(root+'/test-support/authorization-publication-check.cjs');
+  const pack = {guardTools:['demo.mutate']};
+  const guarded = JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'demo.mutate',arguments:{x:1}}});
+  const residual = JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'other',arguments:{x:1}}});
+  const input = JSON.stringify({line:guarded});
+  const oracle = {route:'forward',target:'synthetic-test-target',tool:'demo.mutate',arguments:{x:1}};
+  const raw = JSON.stringify({route:'forward',audit:JSON.stringify({tool:oracle.tool,certs:[{kernel:'safety',reason:oracle.target}]})});
+  const paramsHash = sha256(ordered(JSON.parse(guarded).params));
+  const rows = [
+   {inbound_index:0,child_index:0,corpus_id:'case',hops:[guarded,input,JSON.stringify(oracle),input,raw,guarded,JSON.stringify({tool:oracle.tool,arguments:oracle.arguments}),paramsHash].map(hop)},
+   {inbound_index:1,child_index:1,residual:'residual:unguarded-forward',hops:[residual,null,JSON.stringify({route:'passthrough'}),null,null,residual,JSON.stringify({tool:'other',arguments:{x:1}}),sha256(ordered(JSON.parse(residual).params))].map(hop)}
+  ];
+  const base = {schema:'seal.authorization-correspondence/v2',encoding:ENCODING,joined_transcript:rows,
+   inbound_lines:[guarded,residual],child_lines:[guarded,residual],required_corpus_ids:['case'],
+   injectivity_table:[{target:oracle.target,params_sha256:paramsHash}],transcript_root_sha256:sha256(ordered(rows))};
+  assert.equal(verifyTranscript(base,pack).forwarded,1);
+  let controls=0;
+  function reject(edit, message){const bad=structuredClone(base);edit(bad);bad.transcript_root_sha256=sha256(ordered(bad.joined_transcript));assert.throws(()=>verifyTranscript(bad,pack),message);controls++;}
+  reject(e=>e.schema='seal.authorization-correspondence/v1',/schema/);
+  reject(e=>e.joined_transcript=[],/missing-rows/);
+  reject(e=>e.child_lines.push(guarded),/child-coverage/);
+  reject(e=>e.inbound_lines.push(guarded),/inbound-coverage/);
+  reject(e=>e.joined_transcript[0].hops[0].sha256='0'.repeat(64),/hop-digest/);
+  reject(e=>e.joined_transcript[0].hops[4]=hop(JSON.stringify({route:'block',audit:JSON.stringify({tool:oracle.tool,certs:[{kernel:'safety',reason:oracle.target}]})})),/route/);
+  reject(e=>{let x=JSON.parse(guarded);x.params.arguments.x=2;let wire=JSON.stringify(x);e.child_lines[0]=wire;e.joined_transcript[0].hops[5]=hop(wire);e.joined_transcript[0].hops[6]=hop(JSON.stringify({tool:x.params.name,arguments:x.params.arguments}));e.joined_transcript[0].hops[7]=hop(sha256(ordered(x.params)));},/child-effect/);
+  reject(e=>{let x=JSON.parse(guarded);x.params._meta={extra:true};const wire=JSON.stringify(x),row=structuredClone(e.joined_transcript[0]);row.inbound_index=2;row.child_index=2;row.hops[0]=hop(wire);row.hops[5]=hop(wire);row.hops[7]=hop(sha256(ordered(x.params)));e.inbound_lines.push(wire);e.child_lines.push(wire);e.joined_transcript.push(row);},/injectivity/);
+  reject(e=>e.required_corpus_ids.push('missing-case'),/corpus/);
+  const work = testTmpdir(path.join(os.tmpdir(), "seal-correspondence-publication-"));
+  for(const dir of ['before','after','evidence/authorization-correspondence-linux-x64'])fs.mkdirSync(path.join(work,dir),{recursive:true});
+  const artifact=Buffer.from("test download body");
+  fs.writeFileSync(work+'/before/candidate',artifact);fs.writeFileSync(work+'/after/candidate',artifact);
+  verifyBodies(work+'/before',work+'/after');
+  const changed=Buffer.from(artifact);changed[changed.length-1]^=1;fs.writeFileSync(work+'/after/candidate',changed);
+  assert.throws(()=>verifyBodies(work+'/before',work+'/after'),/body-changed/);controls++;
+  fs.writeFileSync(work+'/evidence/authorization-correspondence-linux-x64/result-linux-x64.json',JSON.stringify({schema:'seal.authorization-correspondence/v1',result:'PASS',release_eligible:true}));
+  assert.throws(()=>verifyPublication({evidenceRoot:work+'/evidence',assetRoot:work+'/before',tag:'test',sourceCommit:'test'}),/schema/);controls++;
+  assert.equal(controls, 11);
+});

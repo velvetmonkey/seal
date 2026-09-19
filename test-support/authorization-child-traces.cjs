@@ -19,17 +19,8 @@ async function runTraces({
     cli = path.join(root, "bin/seal");
   fs.mkdirSync(outputDir, { recursive: true });
   const dir = fs.mkdtempSync(path.join(outputDir, "child-traces-"));
-  const effects = path.join(dir, "effects.jsonl"),
-    store = path.join(dir, "approvals.journal"),
-    receipts = path.join(dir, "receipts");
+  const effects = path.join(dir, "effects.jsonl");
   fs.writeFileSync(effects, "");
-  const init = spawnSync(
-    process.execPath,
-    [cli, "__proxy", "--init-store", "--store", store],
-    { encoding: "utf8" },
-  );
-  assert.equal(init.status, 0, `trace-startup: ${init.stderr}`);
-  const protection = require(path.join(root, "spine/protection.cjs"));
   const projectRoot = path.join(dir, "project");
   fs.mkdirSync(projectRoot);
   const projectFile = path.join(projectRoot, ".mcp.json");
@@ -45,28 +36,11 @@ async function runTraces({
     },
   };
   fs.writeFileSync(projectFile, JSON.stringify(projectConfig));
-  const env = { ...process.env, XDG_DATA_HOME: path.join(dir, "data-home") };
-  const project = protection.readProjectServer(projectRoot, "demo"),
-    statePath = protection.statePathFor(projectRoot, env);
-  fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(
-    statePath,
-    JSON.stringify({
-      schema: "seal.protect/v1",
-      state: protection.STATES.PENDING_RESTART,
-      projectRoot,
-      projectId: protection.projectId(projectRoot),
-      serverName: "demo",
-      projectServerDigest: project.serverDigest,
-      guardTools: ["demo.mutate", "demo.other"],
-      storePath: store,
-      receiptsDir: receipts,
-      childArgv: project.childArgv,
-      childEnv: project.childEnv,
-      lease: null,
-    }),
-    { mode: 0o600 },
-  );
+  const {env, statePath, pack, observation_guard_sha256} = await
+    require("./authorization-observation-pack.cjs").installPack({root, dir, projectRoot});
+  env.SEAL_OBSERVATION_ROOT = root;
+  env.SEAL_OBSERVATION_TAP = path.join(dir, "worker-tap.jsonl");
+  fs.writeFileSync(env.SEAL_OBSERVATION_TAP, "");
   const processes = [],
     transcripts = [],
     checks = [];
@@ -75,7 +49,7 @@ async function runTraces({
   function launch() {
     const child = spawn(
       process.execPath,
-      [cli, "__proxy", "--protect-state", statePath],
+      ["--require", path.join(__dirname, "authorization-worker-tap.cjs"), cli, "__proxy", "--protect-state", statePath],
       { env, stdio: ["pipe", "pipe", "pipe"] },
     );
     const state = { child, frames: [], stderr: "", exit: null };
@@ -238,6 +212,12 @@ async function runTraces({
       /"id"\s*:\s*9007199254740993\s*[,}]/,
       "child-effects:large-request-id-token",
     );
+    const unguarded = {id: ++requestId, tool: "observation.unguarded", args: {residual: true}};
+    run.send({jsonrpc: "2.0", id: unguarded.id, method: "tools/call",
+      params: {name: unguarded.tool, arguments: unguarded.args}});
+    await run.wait(f => f.id === unguarded.id);
+    expected.push(unguarded);
+    check("residual:unguarded-forward", expected);
     // Change the actual configured child before the next approval. The product
     // must observe project drift before permitting another operation.
     const drift = await begin(B);
@@ -340,9 +320,15 @@ async function runTraces({
       "contract:consumed-refusal",
     );
     check("direct-contract-checks-added-no-child-effects", expected);
+    const tapCheck = verifyTap(env.SEAL_OBSERVATION_TAP, pack, processes.length);
     return {
       result: "PASS",
       scope: "installed-proxy-and-direct-contract",
+      observation_guard_sha256,
+      worker_tap: env.SEAL_OBSERVATION_TAP,
+      tap_check: tapCheck,
+      observation_pack: pack,
+      residuals: ["residual:unguarded-forward", "residual:wall-clock-not-in-ninth"],
       checks,
       effect_file: effects,
       process_transcript: path.join(dir, "proxy.jsonl"),
@@ -374,7 +360,34 @@ async function runTraces({
     );
   }
 }
-module.exports = { runTraces };
+function verifyTap(tapPath, pack, processCount) {
+  const tap = fs.readFileSync(tapPath, "utf8").trim().split("\n").map(JSON.parse);
+  const selections = tap.filter(r => r.kind === "loaded_guard_selections");
+  assert.ok(selections.length >= processCount, "observation-pack:missing-live-selection-tap");
+  for (const row of selections) assert.deepEqual(row.selections, pack.guardSelections,
+    "observation-pack:live-selections");
+  const configs = tap.filter(r => r.kind === "contract_config");
+  assert.ok(configs.length >= processCount, "observation-pack:missing-live-config-tap");
+  for (const row of configs) assert.equal(row.ttlMs, pack.approvalTtlMs, "observation-pack:live-ttl");
+  const workerInputs = tap.filter(r => r.kind === "worker_input");
+  const kernelInputs = tap.filter(r => r.kind === "seal_decide_input");
+  const kernelOutputs = tap.filter(r => r.kind === "seal_decide_output");
+  const workerOutputs = tap.filter(r => r.kind === "worker_output");
+  assert.ok(workerInputs.length > 0, "candidate-root:missing-worker-wrapper");
+  assert.equal(workerInputs.length, kernelInputs.length, "candidate-root:worker-wrapper-bypass");
+  assert.equal(workerInputs.length, kernelOutputs.length, "candidate-root:missing-ccall-output");
+  assert.equal(workerInputs.length, workerOutputs.length, "candidate-root:missing-worker-output");
+  for (let i = 0; i < workerInputs.length; i++) {
+    const request = JSON.parse(workerInputs[i].bytes);
+    const wire = JSON.parse(JSON.parse(kernelInputs[i].bytes).line);
+    assert.deepEqual({tool: wire.params.name, args: wire.params.arguments},
+      {tool: request.retryTool, args: request.retryArgs}, "worker-tap:input-rewrite");
+    assert.equal(JSON.parse(workerOutputs[i].bytes).raw, kernelOutputs[i].bytes,
+      "worker-tap:output-rewrite");
+  }
+  return {workers:workerInputs.length, live_selections:selections.length, live_configs:configs.length};
+}
+module.exports = { runTraces, verifyTap };
 if (require.main === module) {
   const { values } = require("node:util").parseArgs({
     options: {

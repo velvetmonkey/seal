@@ -5,6 +5,7 @@ const assert = require("node:assert/strict"),
   fs = require("node:fs"),
   path = require("node:path"),
   crypto = require("node:crypto");
+const { verifyTranscript, ENCODING } = require("./authorization-transcript.cjs");
 const { unpackPayload } = require("../spine/integrity.cjs");
 const { checkProof } = require("./authorization-proof-check.cjs");
 const {
@@ -72,7 +73,8 @@ async function correspondence(options) {
   const outputDir = path.dirname(path.resolve(options.evidence));
   fs.mkdirSync(outputDir, { recursive: true });
   const evidence = {
-    schema: "seal.authorization-correspondence/v1",
+    schema: "seal.authorization-correspondence/v2",
+    encoding: ENCODING,
     scope: "source-model-wasm-child-finite-corpus",
     authority: "same-authority",
     result: "FAIL",
@@ -80,6 +82,13 @@ async function correspondence(options) {
     stages: { proof: { result: "NOT_RUN" }, adapter: { result: "NOT_RUN" }, child: { result: "NOT_RUN" } },
     mutations: [],
     residual_assumptions: [
+      "guarded correspondence is claimed only for tools in runtime/observation-guard.json",
+      "residual:unguarded-forward",
+      "residual:wall-clock-not-in-ninth",
+      "compilation/runtime/IO/crypto",
+      "operator lists other than the pack",
+      "harness dialect rather than a third-party client",
+      "human-present unknown",
       "compiler correctness",
       "runtime",
       "opaque IO",
@@ -183,6 +192,16 @@ async function correspondence(options) {
         "fresh-kernel-rebuild",
       );
       evidence.kernel_rebuild = { sha256: digest, path: options.rebuiltWasm };
+      evidence.wasm_rebuilt_sha256 = digest;
+      evidence.installed_tree_sha256 = evidence.artifact.installed_tree_sha256;
+      evidence.observation_guard_sha256 = evidence.stages.child.observation_guard_sha256;
+      // A v1 stage PASS is never a v2 release PASS. The joined bytes, rather
+      // than stage booleans, are a mandatory precondition for eligibility.
+      verifyTranscript(evidence, evidence.stages.child.observation_pack);
+      assert.ok(evidence.definiens_digest && evidence.ffi_export_map,
+        "release-binding:missing-definiens-and-export-map");
+      assert.ok(evidence.additional_mutations?.length >= 3,
+        "release-binding:missing-live-mutations");
       evidence.release_eligible = true;
     }
     const transcriptFiles = [

@@ -54,20 +54,13 @@ def answer (input : Json) : IO Json := do
   let now ← requireOk ((input.getObjVal? "now") >>= Json.getNat?)
   let issuedTarget ← classifiedTarget issueTool issueArgs
   let retryTarget ← classifiedTarget retryTool retryArgs
-  -- The optional wire spelling is only a representation input. It must decode
-  -- to the logical retry effect and the synthetic ID, independently of any
-  -- JavaScript verdict, target or receipt. This permits exact raw comparison
-  -- while preserving the worker's binary64 wire-number spelling.
-  let defaultLine := (Json.mkObj [("jsonrpc", toJson "2.0"), ("id", toJson (1 : Nat)),
+  -- The oracle spells its own wire. Candidate-produced retry_wire is forbidden.
+  match input.getObjVal? "retry_wire" with
+  | .ok _ => throw (IO.userError "candidate wire is forbidden as oracle input")
+  | .error _ => pure ()
+  let wire := (Json.mkObj [("jsonrpc", toJson "2.0"), ("id", toJson (1 : Nat)),
     ("method", toJson "tools/call"),
     ("params", Json.mkObj [("name", toJson retryTool), ("arguments", retryArgs)])]).compress
-  let wire := ((input.getObjVal? "retry_wire") >>= Json.getStr?).toOption.getD defaultLine
-  let act ← match Host.classifyLine wire with
-    | .act action => pure action
-    | _ => throw (IO.userError s!"{id}: retry wire is not an admitted mediated call")
-  unless act.tool == retryTool && act.argsJson.compress == retryArgs.compress &&
-      act.requestId.compress == "1" do
-    throw (IO.userError s!"{id}: retry wire differs from logical effect or synthetic ID")
   let events := if accepted then [SealCore.Event.approval issuedTarget (now + 120000)] else []
   let before := SealCore.run now SealCore.State.empty events
   let liveBefore := SealCore.live before retryTarget now

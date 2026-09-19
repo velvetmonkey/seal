@@ -378,36 +378,69 @@ jobs:
           pattern: authorization-correspondence-*
           path: ${{ runner.temp }}/correspondence-records
       - name: Publish the verified draft
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          IMMUTABILITY_READ_TOKEN: ${{ secrets.RELEASE_IMMUTABILITY_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Precondition: a re-GET alone cannot prevent later asset replacement.
+          test -n "$IMMUTABILITY_READ_TOKEN" || {
+            echo "REFUSE missing Administration-read credential for immutable-release precondition" >&2
+            exit 1
+          }
+          test "$(GH_TOKEN="$IMMUTABILITY_READ_TOKEN" gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled)" = true
+          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
+          # 1. Resolve the release subject through the tag, never checkout HEAD.
+          git fetch origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          source_commit="$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")"
+          # 2. Download every body; these files are the comparison subjects.
+          mkdir -p "$RUNNER_TEMP/publish-subjects" "$RUNNER_TEMP/public-subjects"
+          gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/publish-subjects"
+          # 3-4. Re-extract subject bindings and re-derive the joined assertions.
+          node test-support/authorization-publication-check.cjs \
+            --evidence-root "$RUNNER_TEMP/correspondence-records" \
+            --asset-root "$RUNNER_TEMP/publish-subjects" \
+            --tag "$GITHUB_REF_NAME" --source-commit "$source_commit"
+          flipped=0
+          yank() {
+            if test "$flipped" = 1; then
+              echo "::error::Release verification failed after publication; yanking $GITHUB_REF_NAME"
+              gh release delete "$GITHUB_REF_NAME" --yes || {
+                echo "::error::URGENT: release yank failed; manual state change required"
+                exit 1
+              }
+            fi
+            exit 1
+          }
+          trap yank ERR
+          # 5. Flip only after the evidence has been independently rechecked.
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          flipped=1
+          touch "$RUNNER_TEMP/correspondence-published"
+          # 6. Download public bodies immediately, compare every asset, then attest.
+          gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/public-subjects"
+          node test-support/authorization-publication-check.cjs \
+            --before-root "$RUNNER_TEMP/publish-subjects" --after-root "$RUNNER_TEMP/public-subjects"
+          # 7. The ERR trap changes release state on any failed public-body check.
+      - name: Attest re-downloaded public bodies
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/public-subjects/*
+      - name: Yank a published release whose attestation failed
+        if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
-          mkdir -p "$RUNNER_TEMP/publish-subjects"
-          gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/publish-subjects" \
-            --pattern "seal-${GITHUB_REF_NAME}-linux-x64" \
-            --pattern "seal-${GITHUB_REF_NAME}-darwin-arm64" \
-            --pattern "seal-${GITHUB_REF_NAME}-darwin-x64"
-          node test-support/authorization-publication-check.cjs \
-            --evidence-root "$RUNNER_TEMP/correspondence-records" \
-            --asset-root "$RUNNER_TEMP/publish-subjects" \
-            --tag "$GITHUB_REF_NAME" --source-commit "$(git rev-parse HEAD)"
-          gh release edit "$GITHUB_REF_NAME" --draft=false
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-final-assets
-          path: ${{ runner.temp }}/dist
-      - name: Attest release assets
-        uses: actions/attest@v4
-        with:
-          subject-path: |
-            ${{ runner.temp }}/dist/seal-v*-linux-x64
-            ${{ runner.temp }}/dist/seal-v*-darwin-arm64
-            ${{ runner.temp }}/dist/seal-v*-darwin-x64
-            ${{ runner.temp }}/dist/seal-receipt-v2.mjs
-            ${{ runner.temp }}/dist/SHA256SUMS
-            ${{ runner.temp }}/dist/release-manifest.json
+          if test -f "$RUNNER_TEMP/correspondence-published"; then
+            # The preceding shell may already have yanked on a body mismatch.
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+              gh release delete "$GITHUB_REF_NAME" --yes
+              echo "::error::Publication/attestation failed; release $GITHUB_REF_NAME yanked"
+            fi
+          fi
 
   release-docs:
     # Publication is complete before this job starts. A documentation failure

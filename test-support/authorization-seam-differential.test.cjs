@@ -5,7 +5,6 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { pathToFileURL } = require("node:url");
 const argsOf = (effect) => (Object.hasOwn(effect, "args") ? effect.args : {});
 const ROOT = path.resolve(__dirname, "..");
 const sha256 = (file) =>
@@ -114,9 +113,6 @@ async function compareCandidate({
     path.join(root, "runtime/kernel"),
     "candidate-root: runtime root",
   );
-  const cfg = await import(
-    pathToFileURL(candidateFile(root, "runtime/kernel/seal-config.js")).href
-  );
   const cases = fs
     .readFileSync(corpusPath, "utf8")
     .trim()
@@ -128,18 +124,8 @@ async function compareCandidate({
     cases.length,
     "duplicate corpus IDs",
   );
-  const logical = cases.map((c) => ({
-    ...c,
-    retry_wire: JSON.parse(
-      cfg.buildStepInput({
-        tool: c.retry.tool,
-        args: argsOf(c.retry),
-        now: c.now,
-      }),
-    ).line,
-  }));
-  const oracle =
-    oracleAnswers || interpretedAnswers(sourceRoot, logical, outputDir);
+  // Logical corpus only: no candidate encoder may produce the oracle input.
+  const oracle = oracleAnswers || interpretedAnswers(sourceRoot, cases, outputDir);
   assert.equal(oracle.length, cases.length, "oracle-case-count");
   const adapter = loaded.createKernelAuthorizationAdapter();
   let allows = 0;

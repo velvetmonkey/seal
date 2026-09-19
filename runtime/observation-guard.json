@@ -1,0 +1,11 @@
+{
+  "schema": "seal.observation-guard/v1",
+  "guardTools": ["demo.mutate", "demo.other"],
+  "guardPredicates": [],
+  "guardSelections": [
+    {"name": "demo.mutate", "predicate": null},
+    {"name": "demo.other", "predicate": null}
+  ],
+  "approvalTtlMs": 120000,
+  "ttlSource": "proxy-constructor-default"
+}
