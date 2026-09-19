@@ -40,6 +40,8 @@ test("the demo server advertises append and erase with real file effects", async
   try {
     await request(1, "initialize", { protocolVersion: "2025-06-18" });
     const listed = await request(2, "tools/list");
+    assert.equal(fs.readFileSync(dataFile, "utf8"), "", "first use starts empty");
+    assert.equal(fs.readFileSync(`${dataFile}.count`, "utf8"), "0\n");
     assert.deepEqual(listed.result.tools.map(({ name, description }) => ({ name, description })), [
       { name: "demo.mutate", description: "append one line to the demo data file" },
       { name: "demo.erase", description: "erase all contents of the demo data file" },
@@ -54,6 +56,65 @@ test("the demo server advertises append and erase with real file effects", async
     await new Promise((resolve) => child.once("exit", resolve));
   }
 });
+
+test("discovery and respawns preserve existing demo data and witnessed mutations", async () => {
+  const { listServerTools } = require("../spine/protection.cjs");
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-startup-"));
+  const dataFile = path.join(root, "data.txt");
+  const countFile = `${dataFile}.count`;
+  fs.writeFileSync(dataFile, "important data\n");
+  fs.writeFileSync(countFile, "7\n");
+  const run = (frames = []) => {
+    const child = spawnSync(process.execPath, [SEAL, "__demo-server", dataFile], {
+      input: frames.map((frame) => JSON.stringify(frame) + "\n").join(""),
+      encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(child.status, 0, child.stderr);
+    return child.stdout.trim() ? child.stdout.trim().split("\n").map(JSON.parse) : [];
+  };
+  const preserved = (data, count) => {
+    assert.equal(fs.readFileSync(dataFile, "utf8"), data);
+    assert.equal(fs.readFileSync(countFile, "utf8"), `${count}\n`);
+  };
+  assert.deepEqual(run(), [], "startup with no frames emits no reply");
+  preserved("important data\n", 7);
+  assert.deepEqual(await listServerTools({
+    childArgv: [process.execPath, SEAL, "__demo-server", dataFile], projectRoot: root,
+  }), ["demo.erase", "demo.mutate"]);
+  preserved("important data\n", 7);
+  for (const [name, data, count] of [
+    ["demo.mutate", "important data\nnew line\n", 8],
+    ["demo.erase", "", 9],
+  ]) {
+    const replies = run([{ jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name, arguments: { line: "new line" } } }]);
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].id, 1);
+    assert.match(replies[0].result.content[0].text, new RegExp(`total tool calls: ${count}$`));
+    preserved(data, count);
+    run();
+    preserved(data, count);
+  }
+});
+
+for (const existing of ["data", "count"]) {
+  test(`demo startup refuses an orphaned ${existing} file without changing it`, () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-orphan-"));
+    const dataFile = path.join(root, "data.txt");
+    const present = existing === "data" ? dataFile : `${dataFile}.count`;
+    const absent = existing === "data" ? `${dataFile}.count` : dataFile;
+    fs.writeFileSync(present, existing === "data" ? "important data\n" : "7\n");
+    const before = fs.readFileSync(present);
+    const child = spawnSync(process.execPath, [SEAL, "__demo-server", dataFile], {
+      input: "", encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(child.status, 2, child.stderr);
+    assert.match(child.stderr, /inconsistent state/);
+    assert.equal(child.stdout, "");
+    assert.deepEqual(fs.readFileSync(present), before);
+    assert.equal(fs.existsSync(absent), false);
+  });
+}
 
 // Exercise the private persistence boundaries without expanding the server API.
 const vm = require("node:vm");

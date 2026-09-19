@@ -13,8 +13,8 @@ const { writeCompleteSync } = require("./write.cjs");
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
 
-function writeFileSyncedTo(filePath, text) {
-  const fd = fs.openSync(filePath, "w", 0o600);
+function writeFileSyncedTo(filePath, text, flags = "w") {
+  const fd = fs.openSync(filePath, flags, 0o600);
   try {
     writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
@@ -72,8 +72,18 @@ function run(dataFile) {
   }
   const countFile = `${dataFile}.count`;
   fs.mkdirSync(path.dirname(dataFile), { recursive: true, mode: 0o700 });
-  writeFileSyncedTo(dataFile, "");
-  writeFileSyncedTo(countFile, "0\n");
+  const dataExists = fs.existsSync(dataFile);
+  const countExists = fs.existsSync(countFile);
+  if (dataExists !== countExists) {
+    process.stderr.write("seal __demo-server: inconsistent state: DATAFILE and DATAFILE.count must both exist or both be absent; refusing initialization\n");
+    process.exit(2);
+  }
+  if (!dataExists) {
+    // Discovery and proxy respawns reuse this pair. Exclusive creation also
+    // refuses a competing initializer instead of truncating its files.
+    writeFileSyncedTo(dataFile, "", "wx");
+    writeFileSyncedTo(countFile, "0\n", "wx");
+  }
 
   const input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
