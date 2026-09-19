@@ -80,7 +80,7 @@ test("fails and names a fetched button disagreement", async () => {
   await withPage(body, async (url) => {
     const result = await run(url, originalReadme, body);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /landing page has 1 <button> controls; checked public page claims zero/);
+    assert.match(result.stderr, /landing page has 1 <button> control\(s\) outside the known theme-toggle\/tooltip set/);
   });
 });
 

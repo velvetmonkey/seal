@@ -303,7 +303,20 @@ function readProjectConfig(projectRoot) {
   return { filePath, bytes, parsed, hash: sha256(bytes) };
 }
 
-function readProjectServer(projectRoot, serverName) {
+// Expand once against the launching environment, never against sibling env
+// entries. Missing/unsupported references refuse rather than launch literal tokens.
+function expandProjectValue(value, env, field) {
+  return value.replace(/\$\{([^{}]*)\}|\$\{/g, (reference, body) => {
+    const match = body?.match(/^([A-Za-z_][A-Za-z0-9_]*)(?::-([^{}]*))?$/);
+    if (!match) throw new ProtectionError("project_environment_unsupported", `${field} has an unsupported environment placeholder; use \${VAR} or \${VAR:-default}`);
+    const [, name, fallback] = match;
+    if (Object.hasOwn(env, name) && env[name] !== undefined) return String(env[name]);
+    if (fallback !== undefined) return fallback;
+    throw new ProtectionError("project_environment_missing", `${field} references unset environment variable ${name}; set it or provide a \${VAR:-default} fallback`);
+  });
+}
+
+function readProjectServer(projectRoot, serverName, env = process.env) {
   const config = readProjectConfig(projectRoot);
   const server = config.parsed.mcpServers[serverName];
   if (!server) throw new ProtectionError("project_server_absent", `project server "${serverName}" is absent from .mcp.json`);
@@ -321,12 +334,19 @@ function readProjectServer(projectRoot, serverName) {
   if (server.env !== undefined && (!server.env || typeof server.env !== "object" || Array.isArray(server.env))) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" env must be an object`);
   }
+  const resolved = { ...server, command: expandProjectValue(server.command, env, "command") };
+  if (server.args !== undefined) resolved.args = server.args.map((value, index) => expandProjectValue(String(value), env, `args[${index}]`));
+  if (server.env !== undefined) resolved.env = Object.fromEntries(Object.entries(server.env).map(([key, value]) => [key, expandProjectValue(String(value), env, `env.${key}`)]));
+  // Preserve existing digests for literal configurations. For interpolated
+  // configurations bind both source and resolution: either kind of drift must
+  // refuse activation/forwarding of the stored launch snapshot.
+  const digestInput = canonical(resolved) === canonical(server) ? server : { source: server, resolved };
   return {
     ...config,
     server,
-    serverDigest: sha256(Buffer.from(canonical(server))),
-    childArgv: [server.command, ...(server.args || []).map(String)],
-    childEnv: Object.fromEntries(Object.entries(server.env || {}).map(([key, value]) => [key, String(value)])),
+    serverDigest: sha256(Buffer.from(canonical(digestInput))),
+    childArgv: [resolved.command, ...(resolved.args || [])],
+    childEnv: resolved.env || {},
   };
 }
 
@@ -518,10 +538,11 @@ function installedLocalOverride({ root, serverName, sealBin, statePath }) {
   };
 }
 
-function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = process.env, { allowAbsent = false } = {}) {
+function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = process.env, { allowAbsent = false, allowFailedInstall = false } = {}) {
   const root = realProjectRoot(projectRoot);
   const owned = state?.localOverride;
-  if (!state || state.state === STATES.UNPROTECTED || !owned || owned.installed !== true ||
+  const failedInstall = allowFailedInstall && state?.state === STATES.BROKEN && owned?.installed === false;
+  if (!state || state.state === STATES.UNPROTECTED || !owned || (owned.installed !== true && !failedInstall) ||
       owned.scope !== "local" || owned.serverName !== serverName || owned.projectRoot !== root ||
       (owned.claudeProjectRoot !== undefined && owned.claudeProjectRoot !== claudeProjectRoot(root)) ||
       owned.projectId !== projectId(root) || state.serverName !== serverName ||
@@ -529,6 +550,7 @@ function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = proc
     throw ownershipRefusal("no_seal_owned_override");
   }
   const current = currentLocalOverride(root, serverName, env);
+  if (current === null && failedInstall) throw ownershipRefusal("no_seal_owned_override");
   if (current === null && allowAbsent) return { absent: true };
   if (current === null || canonical(current) !== canonical(owned.definition)) {
     throw ownershipRefusal(
@@ -1158,6 +1180,17 @@ function protectionView(state, projectRoot, env = process.env) {
   return state;
 }
 
+function retryableAbsentInstall(state, root, serverName, env) {
+  const owned = state?.localOverride;
+  if (state?.state !== STATES.BROKEN || owned?.installed !== false ||
+      owned.scope !== "local" || owned.serverName !== serverName || owned.projectRoot !== root ||
+      owned.projectId !== projectId(root) || state.projectRoot !== root ||
+      state.projectId !== projectId(root) || state.serverName !== serverName ||
+      (owned.claudeProjectRoot !== undefined && owned.claudeProjectRoot !== claudeProjectRoot(root))) return false;
+  refuseLiveLease(state);
+  return currentLocalOverride(root, serverName, env) === null;
+}
+
 async function protect({
   serverName,
   guardTools,
@@ -1191,10 +1224,10 @@ async function protect({
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env, serverName);
   const existing = readState(statePath);
-  if (existing && existing.state !== STATES.UNPROTECTED) {
+  if (existing && existing.state !== STATES.UNPROTECTED && !retryableAbsentInstall(existing, root, serverName, env)) {
     throw new ProtectionError("already_protected", `server "${serverName}" is already ${existing.state}`);
   }
-  const project = readProjectServer(root, serverName);
+  const project = readProjectServer(root, serverName, env);
   assertNoLocalOverride(serverName, root, env);
   const toolNames = await listServerTools({
     childArgv: project.childArgv,
@@ -1217,7 +1250,7 @@ async function protect({
   const lock = acquireProjectLock(root, env);
   try {
     const latest = readState(statePath);
-    if (latest && latest.state !== STATES.UNPROTECTED) {
+    if (latest && latest.state !== STATES.UNPROTECTED && !retryableAbsentInstall(latest, root, serverName, env)) {
       throw new ProtectionError("already_protected", `server "${serverName}" is already ${latest.state}`);
     }
     assertNoLocalOverride(serverName, root, env);
@@ -1260,8 +1293,15 @@ async function protect({
       "--", sealBin, "__proxy", "--protect-state", statePath,
     ], env, root);
     if (install.error || install.code !== 0) {
-      writeState(statePath, { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() });
-      throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}`);
+      // The exit status does not establish whether Claude wrote the override.
+      // Record failure first, then attest ownership from the actual config.
+      const broken = { ...state, state: STATES.BROKEN, brokenReason: install.error ? install.error.message : (install.stderr || install.stdout).trim() };
+      writeState(statePath, broken);
+      const current = currentLocalOverride(root, serverName, env);
+      if (current !== null && canonical(current) === canonical(state.localOverride.definition)) {
+        writeState(statePath, { ...broken, localOverride: { ...state.localOverride, installed: true } });
+      }
+      throw new ProtectionError("claude_install_failed", `Claude Code local override install failed: ${(install.stderr || install.stdout || install.error?.message || "").trim()}. After fixing the cause, retry protect if no local override exists; if the Seal override was installed, stop Claude Code and run seal unprotect first`);
     }
     const installedState = {
       ...state,
@@ -1272,6 +1312,19 @@ async function protect({
   } finally { lock.release(); }
 }
 
+// Source observations do not authorize override removal. Ownership and leases
+// are checked separately; even invalid JSON has comparable byte hashes.
+function observeProjectSource(root) {
+  let bytes;
+  try { bytes = fs.readFileSync(mcpJsonPath(root)); }
+  catch (error) {
+    return { status: error.code === "ENOENT" ? "absent" : "unreadable", hash: null };
+  }
+  try { JSON.parse(bytes.toString("utf8")); }
+  catch { return { status: "invalid", hash: sha256(bytes) }; }
+  return { status: "present", hash: sha256(bytes) };
+}
+
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
   const root = realProjectRoot(projectRoot);
@@ -1279,18 +1332,18 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   const lock = acquireProjectLock(root, env);
   try {
     const state = readState(statePath);
-    assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true });
+    assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true, allowFailedInstall: true });
     if (lockOwnerIsLive(state?.lease)) {
       throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
     }
-    const before = readProjectConfig(root).hash;
+    const before = observeProjectSource(root);
     const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root);
     if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, serverName))) {
       throw new ProtectionError("claude_remove_failed", `Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
     }
-    const after = readProjectConfig(root).hash;
-    if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after });
-    return { beforeHash: before, afterHash: after, statePath, previousState: state };
+    const after = observeProjectSource(root);
+    if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after.hash });
+    return { beforeHash: before.hash, afterHash: after.hash, projectSourceBefore: before.status, projectSourceAfter: after.status, statePath, previousState: state };
   } finally { lock.release(); }
 }
 
@@ -1362,6 +1415,7 @@ function recover({ serverName, projectRoot = process.cwd(), env = process.env })
       throw ownershipRefusal("local_override_drifted", `local override remains; recovery retained state and archive ${archivePath}`);
     }
     assertUnchanged();
+    require("./uninstall.cjs").unregisterRoute(statePath);
     fs.unlinkSync(statePath);
     return { archivePath, previousState: state };
   } finally {
@@ -1375,9 +1429,9 @@ function markDrifted(statePath, state, gotDigest) {
   return next;
 }
 
-function currentDigestForState(state) {
+function currentDigestForState(state, env = process.env) {
   try {
-    return readProjectServer(state.projectRoot, state.serverName).serverDigest;
+    return readProjectServer(state.projectRoot, state.serverName, env).serverDigest;
   } catch {
     return null;
   }
@@ -1507,7 +1561,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
     if (childCommand && (childCommand.includes(path.sep) || childCommand.startsWith(".")) && !fs.existsSync(childCommand)) {
       throw new ProtectionError("protected_server_missing", `protected server command is missing: ${childCommand}`);
     }
-    const got = currentDigestForState(state);
+    const got = currentDigestForState(state, env);
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);
       throw new ProtectionError("drifted", "project server drifted before proxy activation");
@@ -1547,7 +1601,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
         `protection state changed during tool discovery (now ${state.state}); no lease was taken; run seal status`,
       );
     }
-    const got = currentDigestForState(state);
+    const got = currentDigestForState(state, env);
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);
       throw new ProtectionError("drifted", "project server drifted before proxy activation");

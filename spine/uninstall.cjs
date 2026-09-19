@@ -104,6 +104,18 @@ function registerRoute(statePath, state, env) {
   const routes = [...registry.routes.filter(r => r.statePath !== statePath), route];
   atomicReplace(registry.file, JSON.stringify({ schema: 'seal.routes/v1', routes }, null, 2) + '\n', registry.bytes);
 }
+// Called under recovery's installation/project lock, after its owned override
+// is absent and BEFORE deleting the archived state. A failed registry write
+// must leave the original state available for inspection and recovery retry.
+function unregisterRoute(statePath) {
+  const install = installation();
+  if (!install) return;
+  const registry = routeRegistry(install);
+  const routes = registry.routes.filter(r => r.statePath !== statePath);
+  if (routes.length === registry.routes.length) return;
+  if (!registry.file) fail('route removal requires reinstalling Seal with a separate route registry');
+  atomicReplace(registry.file, JSON.stringify({ schema: 'seal.routes/v1', routes }, null, 2) + '\n', registry.bytes);
+}
 function plan(install, env = process.env) {
   const { prefix, root, recordPath } = install;
   const recordBytes = regular(recordPath);
@@ -248,4 +260,4 @@ async function run(args, ask, env = process.env) {
     console.log('Seal uninstall completed; nonempty shared directories were preserved.');
   } finally { lock.release(); }
 }
-module.exports = { installation, installLock, registerRoute, run, plan };
+module.exports = { installation, installLock, registerRoute, unregisterRoute, run, plan };
