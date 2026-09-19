@@ -619,6 +619,86 @@ test("a rehashed self-consistent tail truncation contradicts the separate bounda
   assert.match(result.out, /^REFUSE child_log_commitment_mismatch: /m, result.out);
 });
 
+// Recompute the synthetic boundary using the harness's own file digest mechanism.
+function recommitChildLog(copy) {
+  const childPath = path.join(copy.dir, "child.jsonl");
+  const snapshotsPath = path.join(copy.dir, "snapshots.json");
+  const snapshots = JSON.parse(fs.readFileSync(snapshotsPath, "utf8"));
+  const final = snapshots.snapshots.find((entry) => entry.case === "unprotect" && entry.edge === "end").snapshot.child_log;
+  Object.assign(final, harness.digestOf(childPath), {
+    lines: fs.readFileSync(childPath, "utf8").split("\n").filter((line) => line !== "").length,
+  });
+  fs.writeFileSync(snapshotsPath, `${JSON.stringify(snapshots, null, 2)}\n`);
+  rehash(copy, "child.jsonl");
+  rehash(copy, "snapshots.json");
+}
+
+const tailCases = [
+  { name: "deleted last committed record", refusal: "child_log_commitment_mismatch", edit(lines) { lines.pop(); return lines; } },
+  { name: "half last record without newline", refusal: "child_log_truncated", raw(raw) {
+    const start = raw.lastIndexOf("\n", raw.length - 2) + 1;
+    return raw.slice(0, start + Math.floor((raw.length - start) / 2));
+  } },
+  { name: "altered middle record", refusal: "child_log_chain_broken", commit: true, edit(lines) {
+    const index = lines.findIndex((line) => JSON.parse(line).kind === "frame");
+    lines[index] = JSON.stringify({ ...JSON.parse(lines[index]), tampered: true });
+    return lines;
+  } },
+  { name: "frame after closed session", refusal: "child_log_session_discontinuous", commit: true, edit(lines) {
+    const last = JSON.parse(lines.at(-1));
+    assert.equal(last.kind, "exit", "the existing synthetic helper produces a clean exit tail");
+    lines.push(JSON.stringify({ ...last, kind: "frame", n: last.n + 1, previous_sha256: digest(`${lines.at(-1)}\n`) }));
+    return lines;
+  } },
+  ...["start", "frame", "unparseable", "child-call", "open-tool-call", "unknown-tool-call", "other"].map((kind) => ({
+    name: `${kind} tail in started unclosed session`, commit: true, edit(lines) {
+      if (kind === "child-call") {
+        const index = lines.findIndex((line) => JSON.parse(line).kind === "child-call");
+        return lines.slice(0, index + 1);
+      }
+      const start = { ...JSON.parse(lines.find((line) => JSON.parse(line).kind === "start")), session: "tail-probe" };
+      lines.push(JSON.stringify(start));
+      if (kind !== "start") lines.push(JSON.stringify({ fixture: start.fixture, session: start.session, pid: start.pid,
+        kind, n: 2, previous_sha256: digest(`${lines.at(-1)}\n`) }));
+      return lines;
+    },
+  })),
+  { name: "empty child log", refusal: "child_log_empty", commit: true, raw() { return ""; } },
+  { name: "zero starts", refusal: "child_log_session_discontinuous", commit: true,
+    edit(lines) { return lines.filter((line) => JSON.parse(line).kind !== "start"); } },
+  { name: "only frames", refusal: "child_log_session_discontinuous", commit: true,
+    edit(lines) { return lines.filter((line) => JSON.parse(line).kind === "frame"); } },
+  { name: "frame tail without start", refusal: "child_log_session_discontinuous", commit: true, edit(lines) {
+    const frame = JSON.parse(lines.find((line) => JSON.parse(line).kind === "frame"));
+    lines.push(JSON.stringify({ ...frame, session: "never-started" }));
+    return lines;
+  } },
+];
+
+for (const candidate of tailCases) {
+  test(`child tail: ${candidate.name}`, (t) => {
+    const copy = copyOfPack();
+    const originals = new Map(["child.jsonl", "snapshots.json", "manifest.json"]
+      .map((name) => [name, fs.readFileSync(path.join(copy.dir, name))]));
+    try {
+      const raw = originals.get("child.jsonl").toString("utf8");
+      const changed = candidate.raw ? candidate.raw(raw) : `${candidate.edit(raw.trimEnd().split("\n")).join("\n")}\n`;
+      fs.writeFileSync(path.join(copy.dir, "child.jsonl"), changed);
+      rehash(copy, "child.jsonl");
+      if (candidate.commit) recommitChildLog(copy);
+      const result = check([copy.dir, "--allow-synthetic"]);
+      assert.match(result.out, candidate.refusal ? /1 pack\(s\), 0 accepted, 1 refused/ : /1 pack\(s\), 1 accepted, 0 refused/);
+      if (candidate.refusal) assert.match(result.out, new RegExp(`^REFUSE ${candidate.refusal}:`, "m"), result.out);
+      t.diagnostic(`${candidate.name}: ${result.out.match(/cc-evidence: .*/)[0]}${candidate.refusal ? ` (${candidate.refusal})` : ""}`);
+    } finally {
+      for (const [name, bytes] of originals) fs.writeFileSync(path.join(copy.dir, name), bytes);
+      const restored = check([copy.dir, "--allow-synthetic"]);
+      assert.match(restored.out, /1 pack\(s\), 1 accepted, 0 refused/);
+      t.diagnostic("restored clean exit pack: 1 accepted, 0 refused");
+    }
+  });
+}
+
 test("the checker refuses a pack filed under a path that contradicts its manifest", () => {
   const copy = copyOfPack();
   const misfiled = path.join(path.dirname(copy.dir), "f".repeat(64));
