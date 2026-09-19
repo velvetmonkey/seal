@@ -101,6 +101,8 @@ async function correspondence(options) {
     );
     fs.copyFileSync(options.corpus, path.join(outputDir, "corpus.jsonl"));
     save();
+    evidence.stages.proof = { result: "RUNNING" };
+    save();
     const proof = checkProof({
       sourceRoot: path.resolve(options.sourceRoot),
       evidencePath: path.join(outputDir, "source-proof.json"),
@@ -132,6 +134,8 @@ async function correspondence(options) {
       ),
       "source-binding: oracle program",
     );
+    evidence.stages.adapter = { result: "RUNNING" };
+    save();
     const adapter = await compareCandidate({
       candidateRoot: options.candidateRoot,
       expectedCandidateRoot: options.candidateRoot,
@@ -140,6 +144,8 @@ async function correspondence(options) {
       outputDir: path.join(outputDir, "adapter"),
     });
     evidence.stages.adapter = adapter;
+    save();
+    evidence.stages.child = { result: "RUNNING" };
     save();
     evidence.stages.child = await runTraces({
       candidateRoot: options.candidateRoot,
@@ -198,6 +204,12 @@ async function correspondence(options) {
     save();
     return evidence;
   } catch (error) {
+    for (const stage of Object.values(evidence.stages)) {
+      if (stage.result === "RUNNING") {
+        stage.result = "FAIL";
+        stage.failure = error.message;
+      }
+    }
     evidence.failure = error.message;
     save();
     throw error;
