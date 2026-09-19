@@ -844,3 +844,90 @@ test("an unclean immutable run names the chmod command before rm", () => {
   assert.match(output, /chmod -R u\+w -- .* && rm -rf --/);
   assert.equal(fs.statSync(store).mode & 0o777, 0o555);
 });
+
+test("probe refuses a version-matching native client that re-execs different bytes", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-reexec-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  const state = harness.loadState(runDir);
+  const replacement = path.join(workspace, "replacement");
+  const client = path.join(workspace, "client");
+  const source = path.join(workspace, "client.c");
+  fs.writeFileSync(source, `#include <stdlib.h>\nint main(void) { return system(getenv("CC_PROBE_FIXTURE")); }\n`);
+  assert.equal(spawnSync("cc", [source, "-o", replacement]).status, 0);
+  fs.writeFileSync(source, `#include <stdio.h>\n#include <string.h>\n#include <unistd.h>\nint main(int argc, char **argv) { if (argc == 2 && strcmp(argv[1], "--version") == 0) { puts("2.1.251"); return 0; } execv(${JSON.stringify(replacement)}, argv); return 99; }\n`);
+  assert.equal(spawnSync("cc", [source, "-o", client]).status, 0);
+  const identity = harness.clientIdentity(process.env, client);
+  assert.equal(identity.version, "2.1.251");
+  const otherDigest = harness.digestOf(replacement).sha256;
+  state.synthetic = false;
+  state.claude = identity;
+  const old = process.env.CC_PROBE_FIXTURE;
+  process.env.CC_PROBE_FIXTURE = `SEAL_CC_FIXTURE_LOG='${state.paths.childLog}' SEAL_CC_FIXTURE_EFFECT='${state.paths.effect}' '${process.execPath}' '${path.join(ROOT, "harness/claude-code/fixture-server.cjs")}' < /dev/null`;
+  try {
+    assert.throws(() => harness.takeSnapshot(state, "activation", "begin"), (error) => {
+      assert.equal(error.code, "client_executable_mismatch");
+      assert.ok(error.message.includes(identity.sha256));
+      assert.ok(error.message.includes(otherDigest));
+      console.log(`PHYSICAL TAMPER REFUSE ${error.code}: ${error.message}`);
+      return true;
+    });
+    assert.equal(fs.existsSync(path.join(runDir, "snapshots/activation.begin.json")), false);
+  } finally {
+    if (old === undefined) delete process.env.CC_PROBE_FIXTURE;
+    else process.env.CC_PROBE_FIXTURE = old;
+  }
+});
+
+test("unchanged native client probes use the pin despite PATH shadowing and disable updates", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-current-client-"));
+  const harness = require(HARNESS);
+  const runDir = path.join(workspace, "run");
+  const client = path.join(workspace, "current client");
+  const source = path.join(workspace, "current.c");
+  fs.writeFileSync(source, `#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nint main(int argc, char **argv) { if (!getenv("DISABLE_AUTOUPDATER") || strcmp(getenv("DISABLE_AUTOUPDATER"), "1")) return 91; if (argc == 2) puts("2.1.278"); else puts("pinned probe ran"); return 0; }\n`);
+  assert.equal(spawnSync("cc", [source, "-o", client]).status, 0);
+  const artifact = artifactFixture();
+  const oldUpdater = process.env.DISABLE_AUTOUPDATER;
+  process.env.DISABLE_AUTOUPDATER = "0";
+  let state;
+  try {
+    state = harness.init(["--artifact", artifact.path, "--sha256", artifact.sha256,
+      "--bytes", artifact.bytes, "--run-dir", runDir, "--client", client]);
+    assert.equal(harness.runEnv(state).DISABLE_AUTOUPDATER, "1");
+  } finally {
+    if (oldUpdater === undefined) delete process.env.DISABLE_AUTOUPDATER;
+    else process.env.DISABLE_AUTOUPDATER = oldUpdater;
+  }
+  // A PATH client must never displace the explicitly selected executable.
+  fs.writeFileSync(path.join(state.paths.stubBin, "claude"), "#!/bin/sh\nexit 93\n", { mode: 0o755 });
+  harness.takeSnapshot(state, "activation", "begin");
+  const snapshot = JSON.parse(fs.readFileSync(path.join(runDir, "snapshots/activation.begin.json")));
+  assert.equal(snapshot.claude_mcp_get.code, 0);
+  assert.match(snapshot.claude_mcp_get.stdout, /pinned probe ran/);
+  fs.appendFileSync(client, "changed");
+  assert.throws(() => harness.takeSnapshot(state, "activation", "end"), (error) => error.code === "client_executable_mismatch");
+});
+
+test("finish prints checker refusals instead of PASS for a relabelled synthetic run", () => {
+  const workspace = testTmpdir(path.join(os.tmpdir(), "seal-cc-finish-checker-"));
+  const { harness, runDir } = initSyntheticRun(workspace);
+  completeSyntheticRun(harness, runDir);
+  const original = harness.loadState(runDir);
+  const state = harness.loadState(runDir);
+  state.synthetic = false;
+  harness.saveState(state);
+  try {
+    const result = spawnSync(process.execPath, [HARNESS, "finish", "--run-dir", runDir, "--out", path.join(workspace, "refused")], { encoding: "utf8" });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stdout, /NOT ACCEPTED/);
+    assert.match(result.stdout, /REFUSE synthetic_/);
+    assert.doesNotMatch(result.stdout, /^PASS\b/m);
+    console.log(`PHYSICAL TAMPER ${result.stdout.split("\n").filter((line) => /NOT ACCEPTED|^REFUSE/.test(line)).join("\n")}`);
+  } finally {
+    harness.saveState(original);
+  }
+  const synthetic = spawnSync(process.execPath, [HARNESS, "finish", "--run-dir", runDir, "--out", path.join(workspace, "synthetic")], { encoding: "utf8" });
+  assert.equal(synthetic.status, 0, synthetic.stdout + synthetic.stderr);
+  assert.match(synthetic.stdout, /NOT EXERCISED/);
+  assert.doesNotMatch(synthetic.stdout, /cc-evidence:|^REFUSE|^PASS\b/m);
+});

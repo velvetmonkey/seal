@@ -145,6 +145,7 @@ function runEnv(state) {
   env.XDG_CONFIG_HOME = state.paths.config;
   env.XDG_CACHE_HOME = state.paths.cache;
   env.SEAL_CC_RUN_DIR = state.paths.run;
+  env.DISABLE_AUTOUPDATER = "1";
   env.PATH = [state.paths.stubBin, path.join(state.paths.prefix, "bin"), process.env.PATH || ""].filter(Boolean).join(path.delimiter);
   return env;
 }
@@ -157,6 +158,7 @@ function run(state, file, args, options = {}) {
     stdio: options.stdio || ["ignore", "pipe", "pipe"],
   });
   return {
+    pid: result.pid,
     argv: [file, ...args],
     code: result.status === null ? null : result.status,
     signal: result.signal || null,
@@ -245,10 +247,43 @@ function readProtectionState(state) {
   };
 }
 
+function assertPinnedClient(state) {
+  if (state.synthetic) return;
+  const observed = digestOf(state.claude.executable);
+  if (observed.sha256 !== state.claude.sha256) {
+    refuse("client_executable_mismatch", `client executable sha256 ${observed.sha256 || "<unreadable>"} differs from pinned sha256 ${state.claude.sha256}`);
+  }
+}
+
+// Judge only starts added by this invocation. The probe PID survives exec,
+// so a replacement binary cannot hide behind the pinned version or argv[0].
+// This is a boundary check of the fixture's /proc evidence, not a sandbox:
+// a refused probe's first start remains in the raw log for diagnosis.
+function assertObservedClient(state, records, pid = null) {
+  if (state.synthetic) return;
+  for (const record of records) {
+    if (record.kind !== "start") continue;
+    const chain = Array.isArray(record.ancestry) ? record.ancestry : [];
+    const clients = chain.filter((step) => step.pid === pid ||
+      (Array.isArray(step.argv) && (argvIsClient(step.argv.slice(0, 1), state.claude.executable) ||
+        (step.argv[1] === "mcp" && step.argv[2] === "get"))));
+    for (const client of clients) {
+      const observed = client.executable?.sha256;
+      if (observed !== state.claude.sha256) {
+        refuse("client_executable_mismatch", `observed client executable sha256 ${observed || "<unreadable>"} differs from pinned sha256 ${state.claude.sha256}`);
+      }
+    }
+  }
+}
+
 function snapshot(state, label) {
   const sealVersion = run(state, path.join(state.paths.prefix, "bin", "seal"), ["--version"]);
   const sealStatus = run(state, path.join(state.paths.prefix, "bin", "seal"), ["status"]);
-  const mcpGet = run(state, "claude", ["mcp", "get", SERVER_NAME]);
+  assertPinnedClient(state);
+  const beforeProbe = readChildLog(state).records.length;
+  const mcpGet = run(state, state.claude.command, ["mcp", "get", SERVER_NAME]);
+  assertObservedClient(state, readChildLog(state).records.slice(beforeProbe), mcpGet.pid);
+  assertPinnedClient(state);
   return {
     label,
     at: new Date().toISOString(),
@@ -410,14 +445,18 @@ function recordSession(state, caseId, instructions) {
   for (const line of instructions) say(`  ${line}`);
   say("");
   waitForEnter(state);
+  assertPinnedClient(state);
+  const beforeSession = readChildLog(state).records.length;
   const startedAt = new Date().toISOString();
   const result = spawnSync("script", [
     "--quiet",
     "--log-out", outPath,
     "--log-timing", timingPath,
     "--logging-format", "advanced",
-    "--command", state.claude.command,
+    "--command", shellQuote(state.claude.command),
   ], { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
+  assertObservedClient(state, readChildLog(state).records.slice(beforeSession));
+  assertPinnedClient(state);
   if (result.error) refuse("recorder_failed", `terminal recorder could not start: ${result.error.message}`);
   const conversion = {
     columns: columns || MIN_COLUMNS,
@@ -1134,7 +1173,7 @@ function init(argv) {
     fixture: { path: fixturePath, ...digestOf(fixturePath) },
   };
 
-  const env = { ...process.env, HOME: paths.home, XDG_DATA_HOME: paths.data, PATH: [paths.stubBin, process.env.PATH || ""].filter(Boolean).join(path.delimiter) };
+  const env = { ...process.env, DISABLE_AUTOUPDATER: "1", HOME: paths.home, XDG_DATA_HOME: paths.data, PATH: [paths.stubBin, process.env.PATH || ""].filter(Boolean).join(path.delimiter) };
   delete env.CLAUDE_CONFIG_DIR;
   // A stand-in client is only ever accepted together with --synthetic-client,
   // and it names itself as a stand-in in the version string that becomes the
@@ -1620,7 +1659,24 @@ function finish(state, options) {
   say(`Evidence pack written: ${packDir}`);
   for (const entry of observations) say(`  ${entry.result === "OBSERVED" ? "OBSERVED    " : "NOT OBSERVED"} ${entry.case}`);
   say("");
-  for (const line of manifest.label.split("\n")) say(line);
+  if (state.synthetic) {
+    for (const line of manifest.label.split("\n")) say(line);
+  } else {
+    const checked = spawnSync(process.execPath, [
+      path.resolve(__dirname, "../../scripts/check-cc-evidence.mjs"), packDir,
+    ], { encoding: "utf8" });
+    if (checked.status === 0 && !checked.error) {
+      say(checked.stdout.trim());
+    } else {
+      say("NOT ACCEPTED");
+      // Only refusal lines are printed: diagnostics may quote the pack's
+      // untrusted PASS label, which must not become our verdict.
+      const refusals = (checked.stdout || "").split("\n").filter((line) => line.startsWith("REFUSE "));
+      for (const line of refusals) say(line);
+      if (refusals.length === 0) say(`REFUSE evidence_checker_failed: ${checked.error?.message || checked.stderr?.trim() || `exit ${checked.status}, signal ${checked.signal}`}`);
+      refuse("evidence_not_accepted", "the checker refused the written evidence pack");
+    }
+  }
   say("");
   say("Read rendered-transcript.txt before you publish this pack: it holds any retained scrollback followed by the terminal's last visible frame. It is NOT a record of the whole session. It still contains visible content.");
   say(`Check it: node scripts/check-cc-evidence.mjs ${packDir}${state.synthetic ? " --allow-synthetic" : ""}`);
