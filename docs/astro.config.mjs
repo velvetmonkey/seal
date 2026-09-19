@@ -24,6 +24,7 @@ export default defineConfig({
   base: site.pathname.replace(/\/$/, '') || '/',
   integrations: [starlight({
     title: 'Seal',
+    favicon: '/favicon.png',
     description: siteDescription,
     components: { Header: './src/components/Header.astro' },
     customCss: ['./src/styles/custom.css'],
