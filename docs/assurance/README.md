@@ -48,6 +48,45 @@ the Node CLI this repository ships.
 
 - [start/README.md](../start/README.md) — the start section map.
 
+The dated [archive/pass2-captures.md](../archive/pass2-captures.md) preserves the version-specific walkthrough measurement.
+
+## Family task guides
+
+- [check/README.md](../check/README.md) — Check receipts.
+- [check/your-first-receipt.md](../check/your-first-receipt.md) — Your first receipt.
+- [check/from-seal.md](../check/from-seal.md) — From a Seal demo to the browser.
+- [check/results.md](../check/results.md) — Read receipt results.
+- [check/formats.md](../check/formats.md) — Receipt formats and compatibility.
+- [check/keys-and-sharing.md](../check/keys-and-sharing.md) — Keys and safe sharing.
+- [check/run-locally.md](../check/run-locally.md) — Run the checker locally.
+- [check/reference/README.md](../check/reference/README.md) — Receipt checking reference.
+- [assure/README.md](../assure/README.md) — Assurance CLI.
+- [assure/start.md](../assure/start.md) — First assurance check.
+- [assure/verify.md](../assure/verify.md) — Verify a receipt in the kit.
+- [assure/scan.md](../assure/scan.md) — Scan policy coverage.
+- [assure/receipt-diff.md](../assure/receipt-diff.md) — Compare receipt authorization surfaces.
+- [assure/adequacy.md](../assure/adequacy.md) — Check finite monitor adequacy.
+- [assure/conformance.md](../assure/conformance.md) — Run the boundary conformance corpus.
+- [assure/ci.md](../assure/ci.md) — Use kit results in CI.
+- [assure/configure.md](../assure/configure.md) — Prepare a reviewable host policy.
+- [assure/reference/README.md](../assure/reference/README.md) — Assurance CLI reference.
+- [assure/reference/schemas.md](../assure/reference/schemas.md) — Policy, tools and labels.
+- [assure/reference/verify-profiles.md](../assure/reference/verify-profiles.md) — Verification profiles.
+- [concepts/README.md](../concepts/README.md) — Concepts.
+- [concepts/gate.md](../concepts/gate.md) — The gate and alternate routes.
+- [concepts/approval.md](../concepts/approval.md) — Approval binds an exact request.
+- [concepts/decision-and-effect.md](../concepts/decision-and-effect.md) — A decision is not an effect.
+- [concepts/replay-and-trust.md](../concepts/replay-and-trust.md) — Replay and trust.
+- [concepts/glossary.md](../concepts/glossary.md) — Scope glossary.
+- [evidence/README.md](../evidence/README.md) — Current evidence and gaps.
+- [evidence/dependencies.md](../evidence/dependencies.md) — Verification dependencies.
+- [evidence/proofs.md](../evidence/proofs.md) — Proof and source index.
+- [evidence/correspondence.md](../evidence/correspondence.md) — Model-to-runtime correspondence.
+- [evidence/conformance.md](../evidence/conformance.md) — Finite conformance evidence.
+- [guide/first-approval.md](../guide/first-approval.md) — Your first approval.
+- [guide/lifecycle.md](../guide/lifecycle.md) — Change, recover and remove protection.
+- [evidence/sources.md](../evidence/sources.md) — Source versions and captured examples.
+
 ## I want to know what it does not do
 
 1. [“What Seal covers, and what it does not”](../../README.md) — the boundary
