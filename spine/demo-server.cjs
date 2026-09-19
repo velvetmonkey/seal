@@ -13,8 +13,8 @@ const { writeCompleteSync } = require("./write.cjs");
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
 
-function writeFileSyncedTo(filePath, text) {
-  const fd = fs.openSync(filePath, "w", 0o600);
+function writeFileSyncedTo(filePath, text, flags = "w") {
+  const fd = fs.openSync(filePath, flags, 0o600);
   try {
     writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
@@ -72,8 +72,34 @@ function run(dataFile) {
   }
   const countFile = `${dataFile}.count`;
   fs.mkdirSync(path.dirname(dataFile), { recursive: true, mode: 0o700 });
-  writeFileSyncedTo(dataFile, "");
-  writeFileSyncedTo(countFile, "0\n");
+  const refuseInconsistent = () => {
+    process.stderr.write("seal __demo-server: inconsistent state: DATAFILE and DATAFILE.count must both exist or both be absent; refusing initialization\n");
+    process.exit(2);
+  };
+  // Read the count first: it is created last. A data-only observation may
+  // belong to a live initializer, so only refuse it after the bounded wait.
+  let created = false;
+  if (fs.existsSync(countFile)) {
+    if (!fs.existsSync(dataFile)) refuseInconsistent();
+  } else {
+    try {
+      writeFileSyncedTo(dataFile, "", "wx");
+      created = true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+  }
+  if (created) {
+    writeFileSyncedTo(countFile, "0\n", "wx");
+  } else {
+    const sleeper = new Int32Array(new SharedArrayBuffer(4));
+    const deadline = performance.now() + 1000;
+    // An open count file can still be empty before the winner writes 0.
+    while (!fs.existsSync(countFile) || fs.statSync(countFile).size === 0) {
+      if (performance.now() >= deadline) refuseInconsistent();
+      Atomics.wait(sleeper, 0, 0, 10);
+    }
+  }
 
   const input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
