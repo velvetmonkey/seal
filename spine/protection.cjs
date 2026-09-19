@@ -1362,6 +1362,7 @@ function recover({ serverName, projectRoot = process.cwd(), env = process.env })
       throw ownershipRefusal("local_override_drifted", `local override remains; recovery retained state and archive ${archivePath}`);
     }
     assertUnchanged();
+    require("./uninstall.cjs").unregisterRoute(statePath);
     fs.unlinkSync(statePath);
     return { archivePath, previousState: state };
   } finally {
