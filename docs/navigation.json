@@ -104,58 +104,28 @@
   ],
   "presentation": [
     {
-      "label": "Start here",
+      "label": "Get started",
+      "collapsed": false,
       "pages": [
-        { "path": "docs/start/README.md", "label": "Start" },
-        { "path": "docs/start/install.md", "label": "Install and demo" },
-        { "path": "docs/guide/choosing-what-to-protect.md", "label": "Choose what to protect" }
+        { "path": "docs/start/install.md", "label": "Install" },
+        { "path": "docs/guide/choosing-what-to-protect.md", "label": "Protect a real tool" }
       ]
     },
     {
       "label": "Use Seal",
+      "collapsed": true,
       "pages": [
         { "path": "docs/guide/what-is-protected-right-now.md", "label": "Protection status" },
         { "path": "docs/guide/knowing-it-worked.md", "label": "Read the results" },
         { "path": "docs/guide/when-something-looks-wrong.md", "label": "Troubleshoot a refusal" },
-        { "path": "docs/reference/cli.md", "label": "CLI reference" },
         { "path": "docs/reference/multi-tool-semantics.md", "label": "Multiple tools" },
         { "path": "docs/guide/first-approval.md", "label": "Your first approval" },
         { "path": "docs/guide/lifecycle.md", "label": "Change, recover and remove protection" }
       ]
     },
     {
-      "label": "Check evidence",
-      "pages": [
-        { "path": "docs/verify/README.md", "label": "Choose a checking tool" },
-        { "path": "docs/verify/browser.md", "label": "Browser receipt checks" },
-        { "path": "docs/verify/cli.md", "label": "CLI assurance checks" },
-        { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
-        { "path": "docs/SEAL-RECEIPT-V2.md", "label": "Receipt format" }
-      ]
-    },
-    {
-      "label": "Assurance",
-      "pages": [
-        { "path": "docs/assurance/current-scope.md", "label": "Current guarantees and limits" },
-        { "path": "docs/assurance/architecture.md", "label": "Architecture and verification relationships" },
-        { "path": "docs/reproduce.md", "label": "Reproduce the kernel" },
-        { "path": "docs/guide/github-actions-provenance.md", "label": "Release provenance" },
-        { "path": "docs/assurance/claude-code-evidence.md", "label": "Client evidence" },
-        { "path": "docs/start/evaluator-walk.md", "label": "Source-build evaluator walk" }
-      ]
-    },
-    {
-      "label": "More reference",
-      "pages": [
-        { "path": "docs/assurance/distribution.md", "label": "Distribution" },
-        { "path": "docs/assurance/version-identity.md", "label": "Version identity" },
-        { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt vectors" },
-        { "path": "docs/assurance/RELEASE-NOTES-v0.4.0.md", "label": "Release records" },
-        { "path": "docs/assurance/evaluator-start.md", "label": "Historical assurance material" }
-      ]
-    },
-    {
       "label": "Check receipts",
+      "collapsed": true,
       "pages": [
         { "path": "docs/check/README.md", "label": "Check receipts" },
         { "path": "docs/check/your-first-receipt.md", "label": "Your first receipt" },
@@ -164,46 +134,84 @@
         { "path": "docs/check/formats.md", "label": "Receipt formats and compatibility" },
         { "path": "docs/check/keys-and-sharing.md", "label": "Keys and safe sharing" },
         { "path": "docs/check/run-locally.md", "label": "Run the checker locally" },
-        { "path": "docs/check/reference/README.md", "label": "Receipt checking reference" }
+        { "path": "docs/check/reference/README.md", "label": "Receipt checking reference" },
+        { "path": "docs/verify/README.md", "label": "Choose a checking tool" },
+        { "path": "docs/verify/browser.md", "label": "Browser receipt checks" }
       ]
     },
     {
-      "label": "Assurance CLI",
+      "label": "Reference",
+      "collapsed": true,
       "pages": [
-        { "path": "docs/assure/README.md", "label": "Assurance CLI" },
-        { "path": "docs/assure/start.md", "label": "First assurance check" },
-        { "path": "docs/assure/verify.md", "label": "Verify a receipt in the kit" },
-        { "path": "docs/assure/scan.md", "label": "Scan policy coverage" },
-        { "path": "docs/assure/receipt-diff.md", "label": "Compare receipt authorization surfaces" },
-        { "path": "docs/assure/adequacy.md", "label": "Check finite monitor adequacy" },
-        { "path": "docs/assure/conformance.md", "label": "Run the boundary conformance corpus" },
-        { "path": "docs/assure/ci.md", "label": "Use kit results in CI" },
-        { "path": "docs/assure/configure.md", "label": "Prepare a reviewable host policy" },
-        { "path": "docs/assure/reference/README.md", "label": "Assurance CLI reference" },
-        { "path": "docs/assure/reference/schemas.md", "label": "Policy, tools and labels" },
-        { "path": "docs/assure/reference/verify-profiles.md", "label": "Verification profiles" }
+        { "path": "docs/README.md", "label": "Documentation map" },
+        { "path": "docs/start/README.md", "label": "Start" },
+        { "path": "docs/reference/cli.md", "label": "CLI reference" },
+        { "path": "docs/reference/receipt-operations.md", "label": "Receipt operations" },
+        { "path": "docs/SEAL-RECEIPT-V2.md", "label": "Receipt format" },
+        { "path": "docs/reference/receipt-operations-v1/README.md", "label": "Receipt vectors" }
+      ],
+      "groups": [
+        {
+          "label": "Concepts",
+          "collapsed": true,
+          "pages": [
+            { "path": "docs/concepts/README.md", "label": "Concepts" },
+            { "path": "docs/concepts/gate.md", "label": "The gate and alternate routes" },
+            { "path": "docs/concepts/approval.md", "label": "Approval binds an exact request" },
+            { "path": "docs/concepts/decision-and-effect.md", "label": "A decision is not an effect" },
+            { "path": "docs/concepts/replay-and-trust.md", "label": "Replay and trust" },
+            { "path": "docs/concepts/glossary.md", "label": "Scope glossary" }
+          ]
+        }
       ]
     },
     {
-      "label": "Concepts",
+      "label": "Assurance",
+      "collapsed": true,
       "pages": [
-        { "path": "docs/concepts/README.md", "label": "Concepts" },
-        { "path": "docs/concepts/gate.md", "label": "The gate and alternate routes" },
-        { "path": "docs/concepts/approval.md", "label": "Approval binds an exact request" },
-        { "path": "docs/concepts/decision-and-effect.md", "label": "A decision is not an effect" },
-        { "path": "docs/concepts/replay-and-trust.md", "label": "Replay and trust" },
-        { "path": "docs/concepts/glossary.md", "label": "Scope glossary" }
-      ]
-    },
-    {
-      "label": "Evidence",
-      "pages": [
-        { "path": "docs/evidence/README.md", "label": "Current evidence and gaps" },
-        { "path": "docs/evidence/dependencies.md", "label": "Verification dependencies" },
-        { "path": "docs/evidence/proofs.md", "label": "Proof and source index" },
-        { "path": "docs/evidence/correspondence.md", "label": "Model-to-runtime correspondence" },
-        { "path": "docs/evidence/conformance.md", "label": "Finite conformance evidence" },
-        { "path": "docs/evidence/sources.md", "label": "Source versions and captured examples" }
+        { "path": "docs/assurance/current-scope.md", "label": "Current guarantees and limits" },
+        { "path": "docs/assurance/architecture.md", "label": "Architecture and verification relationships" },
+        { "path": "docs/reproduce.md", "label": "Reproduce the kernel" },
+        { "path": "docs/guide/github-actions-provenance.md", "label": "Release provenance" },
+        { "path": "docs/assurance/claude-code-evidence.md", "label": "Client evidence" },
+        { "path": "docs/start/evaluator-walk.md", "label": "Source-build evaluator walk" },
+        { "path": "docs/assurance/distribution.md", "label": "Distribution" },
+        { "path": "docs/assurance/version-identity.md", "label": "Version identity" },
+        { "path": "docs/assurance/RELEASE-NOTES-v0.4.0.md", "label": "Release records" },
+        { "path": "docs/assurance/evaluator-start.md", "label": "Historical assurance material" },
+        { "path": "docs/verify/cli.md", "label": "CLI assurance checks" }
+      ],
+      "groups": [
+        {
+          "label": "Assurance CLI",
+          "collapsed": true,
+          "pages": [
+            { "path": "docs/assure/README.md", "label": "Assurance CLI" },
+            { "path": "docs/assure/start.md", "label": "First assurance check" },
+            { "path": "docs/assure/verify.md", "label": "Verify a receipt in the kit" },
+            { "path": "docs/assure/scan.md", "label": "Scan policy coverage" },
+            { "path": "docs/assure/receipt-diff.md", "label": "Compare receipt authorization surfaces" },
+            { "path": "docs/assure/adequacy.md", "label": "Check finite monitor adequacy" },
+            { "path": "docs/assure/conformance.md", "label": "Run the boundary conformance corpus" },
+            { "path": "docs/assure/ci.md", "label": "Use kit results in CI" },
+            { "path": "docs/assure/configure.md", "label": "Prepare a reviewable host policy" },
+            { "path": "docs/assure/reference/README.md", "label": "Assurance CLI reference" },
+            { "path": "docs/assure/reference/schemas.md", "label": "Policy, tools and labels" },
+            { "path": "docs/assure/reference/verify-profiles.md", "label": "Verification profiles" }
+          ]
+        },
+        {
+          "label": "Evidence",
+          "collapsed": true,
+          "pages": [
+            { "path": "docs/evidence/README.md", "label": "Current evidence and gaps" },
+            { "path": "docs/evidence/dependencies.md", "label": "Verification dependencies" },
+            { "path": "docs/evidence/proofs.md", "label": "Proof and source index" },
+            { "path": "docs/evidence/correspondence.md", "label": "Model-to-runtime correspondence" },
+            { "path": "docs/evidence/conformance.md", "label": "Finite conformance evidence" },
+            { "path": "docs/evidence/sources.md", "label": "Source versions and captured examples" }
+          ]
+        }
       ]
     }
   ],

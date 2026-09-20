@@ -18,6 +18,12 @@ const sidebarGroups = navigation.presentation ?? navigation.sections.map((sectio
   pages: section.pages,
 }));
 
+const sidebarGroup = (group) => ({
+  label: group.label,
+  collapsed: group.collapsed ?? true,
+  items: [...group.pages.map(item), ...(group.groups ?? []).map(sidebarGroup)],
+});
+
 export default defineConfig({
   outDir: './dist',
   site: site.origin,
@@ -28,12 +34,6 @@ export default defineConfig({
     description: siteDescription,
     components: { Header: './src/components/Header.astro' },
     customCss: ['./src/styles/custom.css'],
-    sidebar: [
-      item(navigation.root),
-      ...sidebarGroups.map((group) => ({
-        label: group.label,
-        items: group.pages.map(item),
-      })),
-    ],
+    sidebar: sidebarGroups.map(sidebarGroup),
   })],
 });
