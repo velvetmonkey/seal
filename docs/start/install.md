@@ -23,8 +23,6 @@ answer "did I download the bytes the release named?" They do not answer
 ## Verify, then install
 <!-- end generated release docs -->
 
-Before scripting receipt checks, read the [v0.4.0 standalone checker exit-status notice](../verify/README.md#v040-standalone-checker-exit-status).
-
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.4.0
@@ -94,6 +92,8 @@ That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
 packs from this tree. It is not a captured command transcript. It will
 change when a payload member changes; it does not change when only docs
 change.
+
+Before scripting receipt checks, read the [v0.4.0 standalone checker exit-status notice](../verify/README.md#v040-standalone-checker-exit-status).
 
 ### Installed-tree hash definition
 
