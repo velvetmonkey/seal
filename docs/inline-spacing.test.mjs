@@ -13,6 +13,7 @@ const text = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
   .replace(/\s+/g, ' ');
 
 for (const sentence of [
+  'Only selected calls routed through Seal are gated. Bash, direct access and other routes remain outside its control. Read the limits.',
   'The decision leaves a signed receipt. Open it in the browser checker or use the assurance CLI to see what the recorded evidence establishes.',
   'Read the current assurance scope for the evidence and remaining assumptions.',
   'open the browser checker guide to run this yourself against the example receipt and its demo public key.',

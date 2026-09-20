@@ -29,7 +29,7 @@ export default defineConfig({
     title: 'Seal',
     favicon: '/favicon.png',
     description: siteDescription,
-    components: { Header: './src/components/Header.astro' },
+    components: { Header: './src/components/Header.astro', Hero: './src/components/Hero.astro' },
     customCss: ['./src/styles/custom.css'],
     sidebar: [
       item(navigation.root),
