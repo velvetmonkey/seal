@@ -26,6 +26,8 @@ the command on your current shell's `PATH`. Copy the whole POSIX command,
 including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
+Read the [v0.4.0 standalone checker exit-status notice](docs/verify/README.md#v040-standalone-checker-exit-status) before scripting receipt checks.
+
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.4.0

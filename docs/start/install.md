@@ -23,6 +23,8 @@ answer "did I download the bytes the release named?" They do not answer
 ## Verify, then install
 <!-- end generated release docs -->
 
+Before scripting receipt checks, read the [v0.4.0 standalone checker exit-status notice](../verify/README.md#v040-standalone-checker-exit-status).
+
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.4.0
