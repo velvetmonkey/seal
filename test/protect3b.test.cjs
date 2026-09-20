@@ -148,6 +148,37 @@ function installedProxyPath() {
   return installedProxy;
 }
 
+test("relative protected command activates from project, nested and unrelated directories", () => {
+  const root = testTmpdir("seal-relative-activation-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "nested");
+  const unrelated = path.join(root, "unrelated");
+  for (const dir of [project, home, nested, unrelated]) fs.mkdirSync(dir);
+  const fakeBin = fakeClaudeBin(root);
+  const serverPath = path.join(project, "server");
+  fs.symlinkSync(process.execPath, serverPath);
+  writeProject(project, { command: "./server", args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const env = { ...process.env, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = statePathFor(project, env);
+  assert.equal(readState(file).state, "PENDING RESTART");
+  assert.equal(readState(file).projectRoot, fs.realpathSync(project));
+  for (const cwd of [nested, unrelated, project]) {
+    assert.equal(fs.existsSync(serverPath), true);
+    const activated = run(cwd, home, ["__proxy", "--protect-state", file], env);
+    assert.equal(activated.code, 0, `${cwd}: ${activated.out}`);
+    assert.equal(readState(file).state, "ACTIVE");
+  }
+  // A caller-local executable must not hide a missing saved-project command.
+  fs.unlinkSync(serverPath);
+  fs.symlinkSync(process.execPath, path.join(unrelated, "server"));
+  const refused = run(unrelated, home, ["__proxy", "--protect-state", file], env);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /protected_server_missing/);
+});
+
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
   const root = testTmpdir("seal-protect3b-hash-");
   const project = path.join(root, "project");
@@ -171,6 +202,37 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash before unprotect: ${beforeHash}`));
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash after unprotect: ${beforeHash}`));
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
+});
+
+test("status and coverage retain root protection from nested and symlinked directories", () => {
+  const root = testTmpdir("seal-protect3b-status-root-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "src", "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(home);
+  execFileSync("git", ["init", "--quiet", project]);
+  const linked = path.join(root, "linked");
+  fs.symlinkSync(nested, linked, "dir");
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: home };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const baseline = run(project, home, ["status"], env);
+  assert.equal(baseline.code, 0, baseline.out);
+  const coverage = run(project, home, ["coverage"], env);
+  assert.equal(coverage.code, 0, coverage.out);
+  for (const cwd of [project, nested, linked]) {
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    assert.equal(withoutObservationTime(status.out), withoutObservationTime(baseline.out));
+    const observed = run(cwd, home, ["coverage"], env);
+    assert.equal(observed.code, 0, observed.out);
+    assert.match(observed.out, /selected MCP tools on db: demo.mutate — protection state is PENDING RESTART/);
+    assert.equal(observed.out, coverage.out);
+  }
 });
 
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {

@@ -61,3 +61,94 @@ test("current-scope.md quotes the README's canonical guarantees verbatim", () =>
     assert.ok(CURRENT_SCOPE.includes(row), `docs/assurance/current-scope.md is missing the assurance-status row: ${row}`);
   }
 });
+
+// Pass 2: scope and receipt-family boundaries for the new reader entry points.
+const FAMILY_PAGE_LIMITS = {
+  "docs/archive/pass2-captures.md": "not every number or optional field",
+  "docs/check/README.md": "does not establish operator identity",
+  "docs/check/your-first-receipt.md": "Authority and occurrence remain unverified",
+  "docs/check/from-seal.md": "Event occurrence is not established",
+  "docs/check/results.md": "different from a receipt refused",
+  "docs/check/formats.md": "not an invalid producer receipt",
+  "docs/check/keys-and-sharing.md": "Editing a signed receipt",
+  "docs/check/run-locally.md": "still depends on the checkout",
+  "docs/check/reference/README.md": "Do not substitute a parsed object",
+  "docs/assure/README.md": "distinct from the Node gate",
+  "docs/assure/start.md": "not independent verification",
+  "docs/assure/verify.md": "not trusted operator identity",
+  "docs/assure/scan.md": "does not establish actual enforcement",
+  "docs/assure/receipt-diff.md": "does not re-verify a seal",
+  "docs/assure/adequacy.md": "not universal adequacy",
+  "docs/assure/conformance.md": "not a universal proof",
+  "docs/assure/ci.md": "was not executed",
+  "docs/assure/configure.md": "were not exercised",
+  "docs/assure/reference/README.md": "not Node-gate protection",
+  "docs/assure/reference/schemas.md": "contract itself permits finite decimals",
+  "docs/assure/reference/verify-profiles.md": "not rank a whole deployment",
+  "docs/concepts/README.md": "without installing the gate",
+  "docs/concepts/gate.md": "not proof that no alternate route exists",
+  "docs/concepts/approval.md": "does not guarantee",
+  "docs/concepts/decision-and-effect.md": "not proof that a database changed",
+  "docs/concepts/replay-and-trust.md": "shared defect",
+  "docs/concepts/glossary.md": "not proof that an effect happened",
+  "docs/evidence/README.md": "not automatically current product facts",
+  "docs/evidence/dependencies.md": "share parts of the kernel",
+  "docs/evidence/proofs.md": "Read each statement with its hypotheses",
+  "docs/evidence/correspondence.md": "neither tested nor proved",
+  "docs/evidence/conformance.md": "not a new universal conformance claim",
+  "docs/evidence/sources.md": "not a contract restriction",
+  "docs/guide/first-approval.md": "not a real Claude Code acceptance walk",
+  "docs/guide/lifecycle.md": "No real-client reconfiguration or uninstall"
+};
+for (const [file, limitation] of Object.entries(FAMILY_PAGE_LIMITS)) {
+  test(`family content preserves scope: ${file}`, () => {
+    const text = readFileSync(resolve(ROOT, file), 'utf8');
+    assert.ok(normalize(text).includes(limitation), `${file}: missing its decision-point limitation`);
+    assert.equal((text.match(/^# /gm) || []).length, 1, `${file}: one source title`);
+    assert.doesNotMatch(text, /proves? (?:that )?(?:the )?(?:effect|action) (?:actually )?(?:happened|occurred)/i);
+  });
+}
+
+test('format guide keeps decimals in the product contract and names checker compatibility separately', () => {
+  const text = readFileSync(resolve(ROOT, 'docs/check/formats.md'), 'utf8');
+  assert.match(text, /contract.*accepts finite decimals/);
+  assert.match(text, /checker compatibility gap/);
+  assert.match(text, /Both Protect and decision receipts can carry seal_receipt v2/);
+});
+
+// CLAIM-COVERAGE: docs/check/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/your-first-receipt.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/from-seal.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/results.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/formats.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/keys-and-sharing.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/run-locally.md#family-content-scope
+// CLAIM-COVERAGE: docs/check/reference/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/start.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/verify.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/scan.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/receipt-diff.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/adequacy.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/conformance.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/ci.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/configure.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/reference/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/reference/schemas.md#family-content-scope
+// CLAIM-COVERAGE: docs/assure/reference/verify-profiles.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/gate.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/approval.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/decision-and-effect.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/replay-and-trust.md#family-content-scope
+// CLAIM-COVERAGE: docs/concepts/glossary.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/README.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/dependencies.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/proofs.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/correspondence.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/conformance.md#family-content-scope
+// CLAIM-COVERAGE: docs/guide/first-approval.md#family-content-scope
+// CLAIM-COVERAGE: docs/guide/lifecycle.md#family-content-scope
+// CLAIM-COVERAGE: docs/evidence/sources.md#family-content-scope
+
+// CLAIM-COVERAGE: docs/archive/pass2-captures.md#family-content-scope
