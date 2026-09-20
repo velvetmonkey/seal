@@ -249,6 +249,7 @@ async function protectWhileStarting(t, delayMs, expectTimeout) {
   fs.mkdirSync(home);
   const marker = path.join(ctx.root, "claude-add-started");
   fs.writeFileSync(path.join(bin, "claude"), `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
     const fs = require("node:fs"), path = require("node:path");
     const args = process.argv.slice(2);
     if (args[1] === "get") process.exit(1);

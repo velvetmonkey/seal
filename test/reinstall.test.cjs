@@ -134,6 +134,7 @@ function uninstallBox() {
   fs.writeFileSync(path.join(project, '.mcp.json'), projectBytes);
   fs.writeFileSync(config, JSON.stringify({ theme: 'foreign', mcpServers: { foreign: {command:'foreign-server'} } }) + '\n');
   fs.writeFileSync(path.join(stubBin, 'claude'), `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const fs=require('node:fs'), path=require('node:path');
 const file=path.join(process.env.CLAUDE_CONFIG_DIR,'.claude.json');
 const config=JSON.parse(fs.readFileSync(file)); const a=process.argv.slice(2); const name=a[4];

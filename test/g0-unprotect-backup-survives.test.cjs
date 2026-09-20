@@ -10,6 +10,7 @@ function copyTree() { const out = testTmpdir(path.join(os.tmpdir(), "seal-g0-unp
 function fakeClaude(root) {
   const bin = path.join(root, "fake-bin"); fs.mkdirSync(bin, { recursive: true }); const file = path.join(bin, "claude");
   fs.writeFileSync(file, `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const fs = require("node:fs"); const path = require("node:path"); const cwd = process.cwd(); const configPath = path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json"); const args = process.argv.slice(2);
 function read() { try { return JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { return {}; } }
 if (args[0] !== "mcp") process.exit(2); const name = args[2] || args[4]; const config = read();

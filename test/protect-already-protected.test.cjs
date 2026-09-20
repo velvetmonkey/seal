@@ -24,6 +24,7 @@ function setup() {
 
   const claude = path.join(bin, "claude");
   fs.writeFileSync(claude, `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const a=process.argv.slice(2), d=path.join(process.env.HOME,".claude-local"); fs.mkdirSync(d,{recursive:true});
 const f=path.join(d,crypto.createHash("sha256").update(process.cwd()+":"+a[a[1]==="add"?4:2]).digest("hex")+".json");

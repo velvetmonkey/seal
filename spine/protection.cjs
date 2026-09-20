@@ -517,7 +517,14 @@ function currentLocalOverride(projectRoot, serverName, env = process.env) {
       `The local Claude Code configuration could not be read: ${reason}\nNo configuration was changed.`,
     );
   }
-  return config?.projects?.[localRoot]?.mcpServers?.[serverName] || null;
+  const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  const project = config?.projects?.[localRoot];
+  if (!object(config) || (config.projects !== undefined && !object(config.projects)) ||
+      (project !== undefined && !object(project)) ||
+      (project?.mcpServers !== undefined && !object(project.mcpServers))) {
+    throw ownershipRefusal("local_override_unreadable", "The local Claude Code configuration has an unsupported structure; local override absence cannot be established.");
+  }
+  return project?.mcpServers?.[serverName] ?? null;
 }
 
 function installedLocalOverride({ root, serverName, sealBin, statePath }) {
@@ -561,8 +568,29 @@ function assertSealOwnedLocalOverride(state, projectRoot, serverName, env = proc
   return { absent: false };
 }
 
-function runClaude(args, env = process.env, cwd = process.cwd()) {
-  const result = spawnSync("claude", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+// Resolve once per operation and use that same executable for every MCP call.
+function identifyClaude(env, cwd) {
+  let command;
+  for (const directory of (env.PATH ?? "/usr/bin:/bin").split(path.delimiter)) {
+    const candidate = path.resolve(cwd, directory, "claude");
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      if (fs.statSync(candidate).isFile()) { command = candidate; break; }
+    } catch {} // Continue PATH lookup just as an executable search would.
+  }
+  const result = command
+    ? spawnSync(command, ["--version"], { cwd, env, encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "pipe"] })
+    : { status: null, stdout: "", stderr: "", error: new Error("claude not found on PATH") };
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  if (result.error || result.status !== 0 || !/^.*\bClaude Code\b.*$/mi.test(output)) {
+    throw new ProtectionError("claude_unusable",
+      `Claude Code command ${JSON.stringify(command || "claude (not found on PATH)")} failed identification: --version exit ${result.status ?? "unavailable"}; stdout ${JSON.stringify(result.stdout || "")}; stderr ${JSON.stringify(result.stderr || "")}${result.error ? `; ${result.error.message}` : ""}. Fix PATH so claude resolves to a working Claude Code installation (on WSL, use the Linux installation), then retry.`);
+  }
+  return command;
+}
+
+function runClaude(args, env = process.env, cwd = process.cwd(), command = "claude") {
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return { code: result.status === null ? 1 : result.status, stdout: result.stdout || "", stderr: result.stderr || "", error: result.error };
 }
 
@@ -581,8 +609,8 @@ function localOverrideExists(serverName, projectRoot = process.cwd(), env = proc
   return result.code === 0 && /^  Scope: Local config /m.test(output);
 }
 
-function assertNoLocalOverride(serverName, projectRoot = process.cwd(), env = process.env) {
-  const result = runClaude(["mcp", "get", serverName], env, projectRoot);
+function assertNoLocalOverride(serverName, projectRoot = process.cwd(), env = process.env, command = "claude") {
+  const result = runClaude(["mcp", "get", serverName], env, projectRoot, command);
   if (result.error && result.error.code === "ENOENT") {
     throw new ProtectionError("claude_unavailable", "claude command is not available");
   }
@@ -1223,12 +1251,13 @@ async function protect({
   requireProtectReadiness(env);
   const root = realProjectRoot(projectRoot);
   const statePath = statePathFor(root, env, serverName);
+  const claude = identifyClaude(env, root);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED && !retryableAbsentInstall(existing, root, serverName, env)) {
     throw new ProtectionError("already_protected", `server "${serverName}" is already ${existing.state}`);
   }
   const project = readProjectServer(root, serverName, env);
-  assertNoLocalOverride(serverName, root, env);
+  assertNoLocalOverride(serverName, root, env, claude);
   const toolNames = await listServerTools({
     childArgv: project.childArgv,
     childEnv: project.childEnv,
@@ -1253,7 +1282,7 @@ async function protect({
     if (latest && latest.state !== STATES.UNPROTECTED && !retryableAbsentInstall(latest, root, serverName, env)) {
       throw new ProtectionError("already_protected", `server "${serverName}" is already ${latest.state}`);
     }
-    assertNoLocalOverride(serverName, root, env);
+    assertNoLocalOverride(serverName, root, env, claude);
     const directory = path.dirname(statePath);
     const storePath = path.join(directory, "approvals.journal");
     const receiptsDir = path.join(directory, "receipts");
@@ -1291,7 +1320,7 @@ async function protect({
     const install = runClaude([
       "mcp", "add", "--scope", "local", serverName,
       "--", sealBin, "__proxy", "--protect-state", statePath,
-    ], env, root);
+    ], env, root, claude);
     if (install.error || install.code !== 0) {
       // The exit status does not establish whether Claude wrote the override.
       // Record failure first, then attest ownership from the actual config.
@@ -1328,6 +1357,7 @@ function observeProjectSource(root) {
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
   const root = realProjectRoot(projectRoot);
+  const claude = identifyClaude(env, root);
   const statePath = statePathFor(root, env, serverName);
   const lock = acquireProjectLock(root, env);
   try {
@@ -1337,9 +1367,18 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
       throw new ProtectionError("active_claude_session", `active Claude session is using "${serverName}"; stop it before unprotect`);
     }
     const before = observeProjectSource(root);
-    const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root);
+    const remove = runClaude(["mcp", "remove", "--scope", "local", serverName], env, root, claude);
     if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, serverName))) {
       throw new ProtectionError("claude_remove_failed", `Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
+    }
+    // Exit zero is not proof of removal (some PATH shims are silent no-ops).
+    let remaining;
+    try { remaining = currentLocalOverride(root, serverName, env); }
+    catch (error) {
+      throw new ProtectionError("claude_remove_failed", `Cannot verify local override removal: ${error.message}`);
+    }
+    if (remaining !== null) {
+      throw new ProtectionError("claude_remove_failed", `Claude Code local override ${JSON.stringify(serverName)} remains in ${claudeConfigPath(env)} after removal; protection state was retained.`);
     }
     const after = observeProjectSource(root);
     if (state) writeState(statePath, { ...state, state: STATES.UNPROTECTED, lease: null, unprotectedAt: new Date().toISOString(), mcpJsonHashAtUnprotect: after.hash });
@@ -1358,13 +1397,23 @@ function recoveryStatePath(root, env, serverName) {
 
 function recover({ serverName, projectRoot = process.cwd(), env = process.env }) {
   const root = realProjectRoot(projectRoot);
+  const claude = identifyClaude(env, root);
   const statePath = serverName === undefined ? statePathFor(root, env) : recoveryStatePath(root, env, serverName);
   // Recovery may inspect incompatible bytes, but must never activate them or
   // rewrite their schema to make them pass readState.
   const requireIncompatible = () => {
-    try { readState(statePath); } catch (error) {
+    let compatible;
+    try { compatible = readState(statePath); } catch (error) {
       if (error.code === "incompatible_state") return;
       throw error;
+    }
+    if (compatible && currentLocalOverride(root, compatible.serverName, env) !== null) {
+      // An old successful unprotect may retain ownership metadata. Use it only
+      // to explain manual cleanup, never to authorize deletion or change state.
+      assertSealOwnedLocalOverride({ ...compatible, state: compatible.state === STATES.UNPROTECTED ? STATES.PENDING_RESTART : compatible.state }, root, compatible.serverName, env);
+      const name = /^[a-zA-Z0-9_.-]+$/.test(compatible.serverName)
+        ? compatible.serverName : "'" + compatible.serverName.replaceAll("'", "'\\''") + "'";
+      throw new ProtectionError("recovery_not_needed", `Seal-owned local override ${JSON.stringify(compatible.serverName)} survives in compatible state. Stop Claude Code, then run claude mcp remove --scope local ${name}; no state or configuration was changed.`);
     }
     throw new ProtectionError("recovery_not_needed", "state is compatible or absent; seal recover --archive only recovers incompatible state; no state or configuration was changed");
   };
@@ -1406,7 +1455,7 @@ function recover({ serverName, projectRoot = process.cwd(), env = process.env })
     assertUnchanged();
     if (current !== null) {
       assertSealOwnedLocalOverride(state, root, state.serverName, env);
-      const remove = runClaude(["mcp", "remove", "--scope", "local", state.serverName], env, root);
+      const remove = runClaude(["mcp", "remove", "--scope", "local", state.serverName], env, root, claude);
       if (remove.error || (remove.code !== 0 && !localOverrideIsAbsent(remove, state.serverName))) {
         throw new ProtectionError("claude_remove_failed", `recovery retained state and archive ${archivePath}; Claude Code local override removal failed: ${(remove.stderr || remove.stdout || remove.error?.message || "").trim()}`);
       }

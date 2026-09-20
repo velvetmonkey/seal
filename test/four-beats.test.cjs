@@ -63,6 +63,7 @@ function run(file, args, opts = {}) {
 function writeFakeClaude(binDir) {
   fs.mkdirSync(binDir, { recursive: true });
   fs.writeFileSync(path.join(binDir, "claude"), `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");

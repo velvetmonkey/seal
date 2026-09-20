@@ -198,7 +198,7 @@ function printReachabilityObservation(protection, cwd, env) {
         }
         const selections = protection.protectedToolSelections(state).map(({ name: tool, predicate }) => predicate === null ? tool : `${tool}?${predicate}`).join(", ");
         console.log(`  BROKERED — Local MCP entry ${JSON.stringify(name)} matches Seal's installed wrapper; this wrapper gates ${selections}. Client use of this entry is UNKNOWN.`);
-      } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message}`); unknown = true; }
+      } catch (error) { console.log(`  UNKNOWN — installed wrapper ${JSON.stringify(name)} could not establish its guarded predicates: ${error.message || "local override ownership could not be established"}`); unknown = true; }
     } else if (entries.some(({ definition }) => !definition || typeof definition !== "object" ||
         Array.isArray(definition) || !(typeof definition.command === "string" || typeof definition.url === "string"))) {
       console.log(`  UNKNOWN — entry ${JSON.stringify(name)} has no inspectable command or URL; ownership cannot be established`);

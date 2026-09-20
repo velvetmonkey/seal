@@ -27,6 +27,13 @@ function fakeClaudeBin(root) {
   fs.mkdirSync(bin, { recursive: true });
   const script = path.join(bin, "claude");
   fs.writeFileSync(script, `#!/usr/bin/env node
+if (process.env.SEAL_TEST_CLAUDE_SILENT === "1") process.exit(0);
+if (process.argv[2] === "--version") {
+  if (process.env.SEAL_TEST_VERSION_LOG) require("node:fs").appendFileSync(process.env.SEAL_TEST_VERSION_LOG, "version\\n");
+  const banner = process.env.SEAL_TEST_VERSION_BANNER ?? "2.1.278 (Claude Code)";
+  (process.env.SEAL_TEST_VERSION_STDERR ? console.error : console.log)(banner);
+  process.exit(Number(process.env.SEAL_TEST_VERSION_EXIT || 0));
+}
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -73,6 +80,12 @@ if (args[1] === "add") {
   process.exit(0);
 }
 if (args[1] === "remove") {
+  if (process.env.SEAL_TEST_REMOVE_FAIL) { console.error("simulated remove failure"); process.exit(23); }
+  if (process.env.SEAL_TEST_REMOVE_NOOP) process.exit(0);
+  if (process.env.SEAL_TEST_REMOVE_CONFIG) {
+    fs.writeFileSync(configPath(), process.env.SEAL_TEST_REMOVE_CONFIG);
+    process.exit(0);
+  }
   const name = args[4];
   const config = readConfig();
   if (!config.projects?.[cwd]?.mcpServers?.[name]) {
@@ -493,7 +506,7 @@ test("recovery retains incompatible state and its archive if Claude removal fail
   const bytes = JSON.stringify({ ...JSON.parse(fs.readFileSync(file)), schema: "seal.protect/v99" });
   fs.writeFileSync(file, bytes);
   const config = fs.readFileSync(path.join(home, ".claude.json"));
-  const refused = run(project, home, ["recover", "--archive"], { PATH: path.dirname(process.execPath) });
+  const refused = run(project, home, ["recover", "--archive"], { ...env, SEAL_TEST_REMOVE_FAIL: "1" });
   assert.notEqual(refused.code, 0, refused.out);
   assert.match(refused.out, /claude_remove_failed/);
   assert.equal(fs.readFileSync(file, "utf8"), bytes);
@@ -678,9 +691,9 @@ test("unprotect still refuses when the Claude command is unavailable during remo
 
   const refused = run(project, home, ["unprotect", "db"], { PATH: path.dirname(process.execPath) });
   assert.notEqual(refused.code, 0);
-  assert.match(refused.out, /claude_remove_failed/);
-  assert.match(refused.out, /ENOENT/);
-  assert.match(refused.out, /^Next:\n  Make Claude Code's claude command available and able to remove the local override, then retry unprotect\.$/m);
+  assert.match(refused.out, /claude_unusable/);
+  assert.match(refused.out, /not found on PATH/);
+  assert.match(refused.out, /Fix PATH/);
 });
 
 test("status guides an absent Seal-owned local override in a pending project", () => {
@@ -1220,3 +1233,108 @@ test("F05 missing source does not bypass live lease or ownership refusal", () =>
   assert.match(run(project, home, ["unprotect", "db"], env).out, /local_override_drifted/);
   assert.equal(fs.readFileSync(configPath, "utf8"), foreign);
 });
+
+
+test("unprotectleftover silent shim refuses without changing state or config", () => {
+  const { root, project, home, env } = lifecycleContext();
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const state = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const before = fs.readFileSync(state), config = fs.readFileSync(fakeLocalOverridePath(root));
+  for (const args of [["unprotect", "db"], ["recover", "--archive", "db"]]) {
+    const result = run(project, home, args, { ...env, SEAL_TEST_CLAUDE_SILENT: "1" });
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, /claude_unusable/);
+    assert.match(result.out, /--version exit 0; stdout ""; stderr ""/);
+    assert.ok(result.out.includes(path.join(root, "bin", "claude")), result.out);
+    assert.deepEqual(fs.readFileSync(state), before);
+    assert.deepEqual(fs.readFileSync(fakeLocalOverridePath(root)), config);
+  }
+  const fresh = lifecycleContext();
+  const refused = run(fresh.project, fresh.home, ["protect", "db", "demo.mutate"], { ...fresh.env, SEAL_TEST_CLAUDE_SILENT: "1" });
+  assert.match(refused.out, /claude_unusable/);
+  assert.equal(fs.existsSync(path.join(fresh.home, ".local")), false);
+});
+
+test("unprotectleftover successful remove exit with surviving override refuses", () => {
+  const { root, project, home, env } = lifecycleContext();
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const state = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const before = fs.readFileSync(state), config = fs.readFileSync(fakeLocalOverridePath(root));
+  const result = run(project, home, ["unprotect", "db"], { ...env, SEAL_TEST_REMOVE_NOOP: "1" });
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /claude_remove_failed/);
+  assert.deepEqual(fs.readFileSync(state), before);
+  assert.deepEqual(fs.readFileSync(fakeLocalOverridePath(root)), config);
+});
+
+test("unprotectleftover working Claude empties scope and permits protect again", () => {
+  const { root, project, home, env } = lifecycleContext();
+  const log = path.join(root, "versions");
+  const checkedEnv = { ...env, SEAL_TEST_VERSION_LOG: log };
+  const projectBytes = fs.readFileSync(path.join(project, ".mcp.json"));
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], checkedEnv).code, 0);
+  const result = run(project, home, ["unprotect", "db"], checkedEnv);
+  assert.equal(result.code, 0, result.out);
+  assert.deepEqual(JSON.parse(fs.readFileSync(fakeLocalOverridePath(root))).projects[project].mcpServers, {});
+  assert.deepEqual(fs.readFileSync(path.join(project, ".mcp.json")), projectBytes);
+  const again = run(project, home, ["protect", "db", "demo.mutate"], checkedEnv);
+  assert.equal(again.code, 0, again.out);
+  assert.equal(fs.readFileSync(log, "utf8"), "version\nversion\nversion\n");
+});
+
+for (const [banner, stderr, exit, accepted] of [
+  ["2.1.278 (Claude Code)", false, 0, true],
+  ["Claude Code 9.9.9", false, 0, true],
+  ["2.1.278 (Claude Code)", true, 0, true],
+  ["different client 1.0", false, 0, false],
+  ["2.1.278", false, 0, false],
+  ["2.1.278 (Claude Code)", false, 23, false],
+]) test(`Claude identification banner ${banner}, stderr ${stderr}, exit ${exit}`, () => {
+  const { project, home, env } = lifecycleContext();
+  const result = run(project, home, ["protect", "db", "demo.mutate"], {
+    ...env, SEAL_TEST_VERSION_BANNER: banner, SEAL_TEST_VERSION_STDERR: stderr ? "1" : "", SEAL_TEST_VERSION_EXIT: String(exit),
+  });
+  if (accepted) assert.equal(result.code, 0, result.out);
+  else {
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, /claude_unusable/);
+    assert.equal(fs.existsSync(path.join(home, ".local")), false);
+  }
+});
+
+test("compatible unprotected state names a proven Seal leftover without mutating it", () => {
+  const { root, project, home, env } = lifecycleContext();
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const state = JSON.parse(fs.readFileSync(file));
+  fs.writeFileSync(file, JSON.stringify({ ...state, state: "UNPROTECTED" }));
+  const before = fs.readFileSync(file), config = fs.readFileSync(fakeLocalOverridePath(root));
+  const status = run(project, home, ["status"], env);
+  assert.match(status.out, /could not establish its guarded predicates: local override ownership could not be established/);
+  const result = run(project, home, ["recover", "--archive", "db"], env);
+  assert.notEqual(result.code, 0, result.out);
+  assert.match(result.out, /Seal-owned local override "db" survives/);
+  assert.match(result.out, /claude mcp remove --scope local db/);
+  assert.deepEqual(fs.readFileSync(file), before);
+  assert.deepEqual(fs.readFileSync(fakeLocalOverridePath(root)), config);
+  const foreign = JSON.parse(config);
+  foreign.projects[project].mcpServers.db.command = "foreign";
+  fs.writeFileSync(fakeLocalOverridePath(root), JSON.stringify(foreign));
+  const refused = run(project, home, ["recover", "--archive", "db"], env);
+  assert.match(refused.out, /local_override_drifted/);
+  assert.doesNotMatch(refused.out, /claude mcp remove/);
+});
+
+
+for (const malformed of ["{", "[]", "null", '{"projects":[]}', '{"projects":{"PROJECT":{"mcpServers":[]}}}']) {
+  test(`unprotect refuses unreadable removal evidence ${malformed}`, () => {
+    const { project, home, env } = lifecycleContext();
+    assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+    const file = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+    const before = fs.readFileSync(file);
+    const result = run(project, home, ["unprotect", "db"], { ...env, SEAL_TEST_REMOVE_CONFIG: malformed.replace("PROJECT", project) });
+    assert.notEqual(result.code, 0, result.out);
+    assert.match(result.out, /claude_remove_failed/);
+    assert.deepEqual(fs.readFileSync(file), before);
+  });
+}
