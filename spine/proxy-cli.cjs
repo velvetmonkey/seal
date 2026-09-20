@@ -44,8 +44,6 @@ async function run(argv) {
   let input;
   let stopping = false;
   let shutdownTask;
-  let childClosed;
-  const childDone = new Promise((resolve) => { childClosed = resolve; });
 
   // The first failure wins, including a status selected before shutdown.
   // Mark stopping before closing input: readline's close event is synchronous.
@@ -59,7 +57,6 @@ async function run(argv) {
       try {
         if (proxy) {
           await proxy.stop(); // clears pending approvals and their timers
-          await childDone; // stop can resolve before the child's stdout closes
         }
       } catch (error) {
         process.exitCode = process.exitCode || 1;
@@ -181,7 +178,6 @@ async function run(argv) {
       ...proxyOptions,
       onClientLine: (line) => process.stdout.write(line + "\n"),
       onChildExit: (code, signal) => {
-        childClosed();
         if (stopping) return;
         if (code !== 0) {
           process.stderr.write(`seal __proxy: protected server exited ${code === null ? signal : code}\n`);
