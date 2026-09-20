@@ -672,6 +672,87 @@ function killDiscoveryDescendant(pid) {
   try { process.kill(pid, "SIGKILL"); } catch {}
 }
 
+// Shared bounded cleanup for discovery and the active stdio proxy. Observable
+// descendants and the private group are killed; an escaped, reparented session
+// can survive, but inherited pipes never own the final wait.
+function stopStdioServer(child, lines, isClosed) {
+  return new Promise((resolve) => {
+    const group = process.platform !== "win32" && Number.isInteger(child.pid) ? -child.pid : null;
+    function discoveryGroupAlive() {
+      if (group === null) return false;
+      try { process.kill(group, 0); return true; }
+      catch (error) { return error.code !== "ESRCH"; }
+    };
+    function signalDiscoveryGroup(signal) {
+      if (group !== null) { try { process.kill(group, signal); } catch {} }
+    };
+    const originalPid = child.pid;
+    let descendants = new Set();
+    const scanTree = () => {
+      const roots = new Set(descendants);
+      if (Number.isInteger(originalPid)) roots.add(originalPid);
+      descendants = discoveryTreePids(roots);
+      descendants.delete(originalPid);
+    };
+    scanTree(); // Before TERM can orphan an observed detached session.
+    let done = false;
+    let escalated = false;
+    let graceTimer;
+    let deadline;
+    let poll;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(graceTimer);
+      clearTimeout(deadline);
+      clearInterval(poll);
+      child.removeListener("exit", onExit);
+      child.removeListener("close", check);
+      // Neither inherited pipes nor an unreapable child may own our wait.
+      lines.close();
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr?.destroy();
+      child.unref();
+      resolve();
+    };
+    const check = () => {
+      if (!escalated) scanTree();
+      if (isClosed() && descendants.size === 0 && !discoveryGroupAlive()) finish();
+    };
+    const onExit = () => {
+      // Preserve the direct child's single TERM; once it exits, TERM any
+      // remaining group members even if they no longer hold our pipes.
+      if (!escalated) signalDiscoveryGroup("SIGTERM");
+      check();
+    };
+    const kill = () => {
+      scanTree(); // Walk every depth again at the grace deadline.
+      escalated = true;
+      // Kill leaves before ancestors so this snapshot retains its ancestry.
+      for (const pid of [...descendants].reverse()) killDiscoveryDescendant(pid);
+      if (child.exitCode === null && child.signalCode === null) {
+        try { child.kill("SIGKILL"); } catch {}
+      }
+      signalDiscoveryGroup("SIGKILL");
+    };
+    child.once("exit", onExit);
+    child.once("close", check);
+    // Reserve the last 50ms of the existing 2000ms budget for reaping.
+    // The deadline stays referenced and never depends on close or exit.
+    graceTimer = setTimeout(kill, 1950);
+    deadline = setTimeout(() => { kill(); finish(); }, 2000);
+    poll = setInterval(check, 20);
+    try { child.stdin.end(); } catch {}
+    if (child.exitCode === null && child.signalCode === null && !isClosed()) {
+      try { child.kill("SIGTERM"); } catch {}
+    } else {
+      onExit();
+    }
+    check();
+  });
+}
+
 function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, timeoutMs = DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS }) {
   return new Promise((resolve, reject) => {
     const child = spawn(childArgv[0], childArgv.slice(1), {
@@ -693,81 +774,7 @@ function listServerTools({ childArgv, childEnv, projectRoot, env = process.env, 
     const detail = () => stderr.trim() ? ` (${stderr.trim().slice(0, 500)})` : "";
     const stop = () => {
       clearTimeout(timer);
-      return new Promise((resolve) => {
-        const group = process.platform !== "win32" && Number.isInteger(child.pid) ? -child.pid : null;
-        function discoveryGroupAlive() {
-          if (group === null) return false;
-          try { process.kill(group, 0); return true; }
-          catch (error) { return error.code !== "ESRCH"; }
-        };
-        function signalDiscoveryGroup(signal) {
-          if (group !== null) { try { process.kill(group, signal); } catch {} }
-        };
-        const originalPid = child.pid;
-        let descendants = new Set();
-        const scanTree = () => {
-          const roots = new Set(descendants);
-          if (Number.isInteger(originalPid)) roots.add(originalPid);
-          descendants = discoveryTreePids(roots);
-          descendants.delete(originalPid);
-        };
-        scanTree(); // Before TERM can orphan an observed detached session.
-        let done = false;
-        let escalated = false;
-        let graceTimer;
-        let deadline;
-        let poll;
-        const finish = () => {
-          if (done) return;
-          done = true;
-          clearTimeout(graceTimer);
-          clearTimeout(deadline);
-          clearInterval(poll);
-          child.removeListener("exit", onExit);
-          child.removeListener("close", check);
-          // Neither inherited pipes nor an unreapable child may own our wait.
-          lines.close();
-          child.stdin.destroy();
-          child.stdout.destroy();
-          child.stderr.destroy();
-          child.unref();
-          resolve();
-        };
-        const check = () => {
-          if (!escalated) scanTree();
-          if (closed && descendants.size === 0 && !discoveryGroupAlive()) finish();
-        };
-        const onExit = () => {
-          // Preserve the direct child's single TERM; once it exits, TERM any
-          // remaining group members even if they no longer hold our pipes.
-          if (!escalated) signalDiscoveryGroup("SIGTERM");
-          check();
-        };
-        const kill = () => {
-          scanTree(); // Walk every depth again at the grace deadline.
-          escalated = true;
-          // Kill leaves before ancestors so this snapshot retains its ancestry.
-          for (const pid of [...descendants].reverse()) killDiscoveryDescendant(pid);
-          if (child.exitCode === null && child.signalCode === null) {
-            try { child.kill("SIGKILL"); } catch {}
-          }
-          signalDiscoveryGroup("SIGKILL");
-        };
-        child.once("exit", onExit);
-        child.once("close", check);
-        // Reserve the last 50ms of the existing 2000ms budget for reaping.
-        // The deadline stays referenced and never depends on close or exit.
-        graceTimer = setTimeout(kill, 1950);
-        deadline = setTimeout(() => { kill(); finish(); }, 2000);
-        poll = setInterval(check, 20);
-        try { child.stdin.end(); } catch {}
-        if (child.exitCode === null && child.signalCode === null && !closed) {
-          try { child.kill("SIGTERM"); } catch {}
-        } else {
-          onExit();
-        }
-        check();
-      });
+      return stopStdioServer(child, lines, () => closed);
     };
     const fail = (code, message) => {
       if (settled) return;
@@ -1751,6 +1758,7 @@ module.exports = {
   doctor,
   localOverrideExists,
   listServerTools,
+  stopStdioServer,
   loadReceiptSigner,
   lockPathFor,
   lockOwnerIsLive,
