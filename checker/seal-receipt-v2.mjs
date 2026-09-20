@@ -131,6 +131,6 @@ export function format(result) { return `Document structure       ${result.read 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
-  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
+  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); if (!out.signature) process.exitCode = 1; }
   catch (e) { console.log(`REFUSE ${e.code || "invalid_receipt"}: ${e.message}`); process.exitCode = 1; }
 }
