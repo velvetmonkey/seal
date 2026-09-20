@@ -1,6 +1,5 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -42,14 +41,15 @@ process.exit(2);
 }
 
 test("protect prints a real local State path for a nested project", () => {
-  const root = testTmpdir(path.join(os.homedir(), "scratch-stateguard-witness-"));
-  const project = path.join(root, "parent", "seal-protect-demo");
+  const root = testTmpdir("seal-stateguard-witness-");
+  const repository = path.join(root, "parent");
+  const project = path.join(repository, "seal-protect-demo");
   const home = path.join(root, "home");
   const config = path.join(root, "claude-config");
   const xdg = path.join(root, "xdg");
   fs.mkdirSync(project, { recursive: true });
   fs.mkdirSync(home, { recursive: true });
-  execFileSync("git", ["init", "-q"], { cwd: path.join(root, "parent") });
+  execFileSync("git", ["init", "-q"], { cwd: repository });
   fs.writeFileSync(path.join(project, "server.cjs"), `#!/usr/bin/env node
 const readline = require("node:readline");
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
@@ -59,9 +59,9 @@ rl.on("line", (line) => {
   if (frame.method === "tools/list") process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: frame.id, result: { tools: [{ name: "demo.mutate" }] } }) + "\\n");
 });
 `);
-  fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({
+  fs.writeFileSync(path.join(repository, ".mcp.json"), JSON.stringify({
     mcpServers: {
-      db: { command: process.execPath, args: ["./server.cjs"] },
+      db: { command: process.execPath, args: ["./seal-protect-demo/server.cjs"] },
     },
   }) + "\n");
   const env = {
@@ -83,12 +83,13 @@ rl.on("line", (line) => {
   const statePath = match[1].trim();
   assert.ok(path.isAbsolute(statePath), `State path is not local and absolute: ${statePath}`);
   assert.equal(fs.statSync(statePath).isFile(), true, `State path is not a file: ${statePath}`);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).projectRoot, fs.realpathSync(repository));
   const status = execFileSync(SEAL, ["status"], { cwd: project, env, encoding: "utf8" });
   assert.match(status, /Sealed MCP route db: PENDING RESTART/);
   assert.match(status, /^  demo\.mutate$/m);
 
   const activated = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
-    cwd: path.join(root, "parent"),
+    cwd: repository,
     env,
     input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n" +
       JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n",
