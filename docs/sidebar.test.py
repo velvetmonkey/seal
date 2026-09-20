@@ -110,6 +110,13 @@ BEFORE_ROUTES = set(json.loads('''[
   "/verify/browser/",
   "/verify/cli/"
 ]'''))
+# Ruling 2026-09-20: this one exact anchor entry may share Install's page.
+DUPLICATE_PAGE_ALLOWLIST = {'/start/install/#run-the-harmless-approve-once-demo'}
+FIRST_USE = [
+    ('Install', '/start/install/'),
+    ('Harmless demo', '/start/install/#run-the-harmless-approve-once-demo'),
+    ('Protect a real tool', '/guide/choosing-what-to-protect/'),
+]
 GROUPS = ['Get started', 'Use Seal', 'Check receipts', 'Reference', 'Assurance']
 
 
@@ -130,9 +137,16 @@ class BuiltSidebarTest(unittest.TestCase):
                 links = [e for e in sidebar.entries if e['kind'] == 'a']
                 routes = [urlsplit(e['href']).path.removeprefix(base) for e in links]
                 self.assertEqual(set(routes), BEFORE_ROUTES, 'Reachable page URLs changed')
-                self.assertEqual(len(routes), len(set(routes)), 'A page appears twice')
+                hrefs = [e['href'].removeprefix(base) for e in links]
+                self.assertEqual(len(hrefs), len(set(hrefs)), 'An exact sidebar entry appears twice')
+                self.assertEqual(set(hrefs) & DUPLICATE_PAGE_ALLOWLIST, DUPLICATE_PAGE_ALLOWLIST,
+                                 'The sole allowed demo anchor must appear exactly once')
+                unique_routes = [route for route, href in zip(routes, hrefs)
+                                 if href not in DUPLICATE_PAGE_ALLOWLIST]
+                self.assertEqual(len(unique_routes), len(set(unique_routes)),
+                                 'A page appears twice outside the exact demo-anchor allowlist')
                 self.assertTrue(all(e['depth'] >= 1 for e in links), 'Ungrouped page')
-                self.assertEqual([e['label'] for e in links[:2]], ['Install', 'Protect a real tool'])
+                self.assertEqual([(e['label'], href) for e, href in zip(links[:3], hrefs[:3])], FIRST_USE)
                 # Starlight opens the current page's ancestors even when collapsed by default.
                 current = '/' + file.parent.relative_to(Path(__file__).parent / 'dist').as_posix() + '/'
                 if current == '/start/install/':

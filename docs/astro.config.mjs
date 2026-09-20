@@ -5,7 +5,9 @@ import { pageSlug, siteDescription } from './prepare-content.mjs';
 import { siteUrl } from './site-url.mjs';
 
 const site = siteUrl();
-const item = ({ path, label }) => ({ label, slug: pageSlug(path) });
+const item = ({ path, label, anchor }) => anchor
+  ? { label, link: `/${pageSlug(path)}/#${anchor}` }
+  : { label, slug: pageSlug(path) };
 
 // The Starlight sidebar is reader-facing presentation: it groups pages by task
 // (spec section 5) using navigation.json's "presentation" field when present.

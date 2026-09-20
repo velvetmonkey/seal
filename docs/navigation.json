@@ -108,6 +108,7 @@
       "collapsed": false,
       "pages": [
         { "path": "docs/start/install.md", "label": "Install" },
+        { "path": "docs/start/install.md", "label": "Harmless demo", "anchor": "run-the-harmless-approve-once-demo" },
         { "path": "docs/guide/choosing-what-to-protect.md", "label": "Protect a real tool" }
       ]
     },
