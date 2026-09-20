@@ -411,7 +411,7 @@ function protectedToolSelections(state) {
 
 function configuredOtherServerNames(state, projectRoot) {
   try {
-    const config = readProjectConfig(projectRoot || state?.projectRoot);
+    const config = readProjectConfig(claudeProjectRoot(projectRoot || state?.projectRoot));
     return Object.keys(config.parsed.mcpServers || {})
       .filter((name) => name !== state?.serverName)
       .sort();
@@ -1228,7 +1228,7 @@ async function protect({
   }
   requireHumanApprovalOrigin(env);
   requireProtectReadiness(env);
-  const root = realProjectRoot(projectRoot);
+  const root = claudeProjectRoot(projectRoot);
   const statePath = statePathFor(root, env, serverName);
   const existing = readState(statePath);
   if (existing && existing.state !== STATES.UNPROTECTED && !retryableAbsentInstall(existing, root, serverName, env)) {
@@ -1334,7 +1334,7 @@ function observeProjectSource(root) {
 
 function unprotect({ serverName, projectRoot = process.cwd(), env = process.env }) {
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
-  const root = realProjectRoot(projectRoot);
+  const root = claudeProjectRoot(projectRoot);
   const statePath = statePathFor(root, env, serverName);
   const lock = acquireProjectLock(root, env);
   try {
@@ -1364,7 +1364,7 @@ function recoveryStatePath(root, env, serverName) {
 }
 
 function recover({ serverName, projectRoot = process.cwd(), env = process.env }) {
-  const root = realProjectRoot(projectRoot);
+  const root = claudeProjectRoot(projectRoot);
   const statePath = serverName === undefined ? statePathFor(root, env) : recoveryStatePath(root, env, serverName);
   // Recovery may inspect incompatible bytes, but must never activate them or
   // rewrite their schema to make them pass readState.
