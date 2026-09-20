@@ -1220,3 +1220,77 @@ test("F05 missing source does not bypass live lease or ownership refusal", () =>
   assert.match(run(project, home, ["unprotect", "db"], env).out, /local_override_drifted/);
   assert.equal(fs.readFileSync(configPath, "utf8"), foreign);
 });
+
+test("initialize observations are unsigned, session-local and absent for malformed clientInfo", { timeout: 20000 }, async (t) => {
+  const root = testTmpdir("seal-observed-client-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    HOME: home, CLAUDE_CONFIG_DIR: home, XDG_DATA_HOME: path.join(home, ".local", "share") };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const installed = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(installed.code, 0, installed.out);
+  const statePath = statePathFor(project, env);
+  const observe = (command) => {
+    const result = run(project, home, [command], env);
+    assert.equal(result.code, 0, result.out);
+    return withoutObservationTime(result.out);
+  };
+  for (const command of ["status", "coverage"]) assert.doesNotMatch(observe(command), /Observed client:|Elicitation declared:/);
+  let child;
+  let closed;
+  let lines;
+  const start = async () => {
+    child = spawn(SEAL, ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
+    closed = new Promise((resolve) => child.once("close", resolve));
+    child.stderr.resume();
+    lines = readline.createInterface({ input: child.stdout });
+    // The previous session's ACTIVE record may still be on disk.
+    for (let i = 0; i < 500 && readState(statePath)?.lease?.pid !== child.pid; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(readState(statePath).lease.pid, child.pid);
+  };
+  const stop = async () => { child.stdin.end(); assert.equal(await closed, 0); lines.close(); };
+  let id = 0;
+  const initialize = async (params) => {
+    const response = new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "initialize", params: { protocolVersion: "2025-06-18", ...params } }) + "\n");
+    assert.equal((await response).id, id);
+  };
+  try {
+    await start();
+    const baseline = Object.fromEntries(["status", "coverage"].map((command) => [command, observe(command)]));
+    const info = { name: "codex-cli", version: "1.2.3" };
+    await initialize({ clientInfo: info, capabilities: { elicitation: {} } });
+    assert.deepEqual(readState(statePath).observedClient, { ...info, elicitationDeclared: true });
+    const extra = "Observed client: codex-cli 1.2.3 (self-asserted, unsigned)\nElicitation declared: yes\n";
+    for (const command of ["status", "coverage"]) {
+      const output = observe(command);
+      assert.ok(output.includes(extra), output);
+      assert.equal(output.replace(extra, ""), baseline[command]);
+      t.diagnostic(`${command}, valid initialize:\n${output}`);
+    }
+    for (const params of [{ capabilities: {} }, { clientInfo: "malformed", capabilities: {} }, { clientInfo: { name: 42, version: "1" } }, { clientInfo: [] }]) {
+      await initialize(params);
+      assert.equal(Object.hasOwn(readState(statePath), "observedClient"), false);
+      for (const command of ["status", "coverage"]) {
+        const output = observe(command);
+        assert.equal(output, baseline[command]);
+        t.diagnostic(`${command}, ${JSON.stringify(params)}: byte-identical to pre-initialize output (observation time normalized)`);
+      }
+    }
+    await initialize({ clientInfo: info, capabilities: {} });
+    for (const command of ["status", "coverage"]) assert.match(observe(command), /^Elicitation declared: no$/m);
+    await stop();
+    await start();
+    assert.equal(Object.hasOwn(readState(statePath), "observedClient"), false);
+    for (const command of ["status", "coverage"]) assert.doesNotMatch(observe(command), /Observed client:|Elicitation declared:/);
+    await stop();
+  } finally {
+    if (child && child.exitCode === null) { child.kill(); await closed; }
+    lines?.close();
+  }
+});

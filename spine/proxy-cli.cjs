@@ -8,7 +8,7 @@ const readline = require("node:readline");
 const { createRuntimeTreeCheck } = require("./integrity.cjs");
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { createJournal } = require("./store.cjs");
-const { readState, activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
+const { readState, recordObservedClient, activationLease, beforeForwardFromState, loadReceiptSigner, protectedToolSelections, ProtectionError } = require("./protection.cjs");
 const { requireProtectSupportedPlatform } = require("./platform.cjs");
 const { printKernelTiming } = require("./presentation.cjs");
 
@@ -140,6 +140,7 @@ async function run(argv) {
         childEnv: state.childEnv,
         childCwd: state.projectRoot,
         beforeForward: beforeForwardFromState(options.protectState, state.leaseToken),
+        onObservedClient: (client) => recordObservedClient(options.protectState, state.leaseToken, client),
         runtimeTreeCheck: createRuntimeTreeCheck(),
         onRuntimeObservation: (message) => process.stderr.write(`${message}\n`),
         leaseFence: () => {
