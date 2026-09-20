@@ -95,6 +95,8 @@
     "docs/guide/when-something-looks-wrong.md": { "coveredBy": ["test/guide-tokens.test.mjs#looks-wrong"] },
     "test/guide-tokens.test.mjs": { "allowlistReason": "The apparent assertions are reviewed guide claim literals and tamper fixtures consumed by this test; they are test evidence, not another published claim surface." },
     "test/docs-current-scope.test.mjs": { "allowlistReason": "The apparent assertions are the exact README sentences this drift check binds docs/assurance/current-scope.md to; they are test fixture data, not an additional published claim surface." },
+    "docs/src/components/ApprovalIllustration.astro": { "coveredBy": ["docs/homepage.browser.test.mjs#recorded-demo"] },
+    "docs/homepage.browser.test.mjs": { "allowlistReason": "The apparent assertion is the expected viewing-controls label checked in Chromium; it is test data, not an additional published product claim." },
     "docs/inline-spacing.test.mjs": { "allowlistReason": "The apparent assertion is an expected homepage sentence consumed by the built-output whitespace test; it is test data, not an additional published product claim." },
     "test/docs-homepage.test.mjs": { "allowlistReason": "The apparent assertions are the exact homepage copy literals this test binds docs/src/pages/index.astro to; they are test fixture data, not an additional published claim surface." },
     "docs/assurance/index.html": { "coveredBy": ["test/claims-drift.test.mjs#index-drift", "scripts/launch-truth-gate.mjs#landing-page"] },

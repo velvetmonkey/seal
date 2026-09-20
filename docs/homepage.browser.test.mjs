@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// CLAIM-COVERAGE: docs/src/components/ApprovalIllustration.astro#recorded-demo
 // Setup: npm ci && npx playwright install chromium (in docs/).
 // Run after npm run build: npm run test:browser.
 import test from 'node:test';
@@ -9,7 +10,10 @@ import { resolve, extname } from 'node:path';
 import { chromium } from 'playwright';
 
 const root = resolve(process.env.SEAL_DOCS_DIST || new URL('./dist', import.meta.url).pathname);
-test('approval illustration holds, forwards once, and refuses replay in Chromium', async () => {
+const fixture = await readFile(new URL('../test/fixtures/readme-demo-output.txt', import.meta.url), 'utf8');
+const demoDirectory = fixture.split('demo directory: ')[1].split(' (remains')[0];
+const recorded = fixture.replaceAll(demoDirectory, '<demo>');
+test('recorded demo shows child counts 0, 1, 1 and its BLOCK receipt in Chromium', async () => {
   const server = createServer(async (req, res) => {
     const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).replace(/^\/seal/, '');
     const file = resolve(root, `.${path.endsWith('/') ? `${path}index.html` : path}`);
@@ -34,41 +38,45 @@ test('approval illustration holds, forwards once, and refuses replay in Chromium
       for (const name of ['Docs', 'Guarantees & limits', 'GitHub']) {
         assert.equal(await page.getByRole('navigation', { name: 'Global' }).getByRole('link', { name, exact: true }).isVisible(), true, `navigation: ${name}`);
       }
-      const args = card.locator('pre');
+      assert.match(await card.locator('figcaption').innerText(), /A recorded run of v0.4.0/);
+      assert.equal(await card.locator('a').getAttribute('href'), 'https://github.com/velvetmonkey/seal/blob/v0.4.0/test/fixtures/readme-demo-output.txt');
+      const args = card.locator('[data-arguments]');
       const status = card.locator('[role="status"]');
       const check = async count => {
         assert.equal(await args.isVisible(), true, 'arguments remain visible');
-        assert.deepEqual(JSON.parse(await args.innerText()), { path: './drafts/old-notes.md' });
+        assert.deepEqual(JSON.parse(await args.innerText()), { line: 'seal demo wrote this line' });
         const box = await args.boundingBox();
         assert.ok(box.x >= 0 && box.x + box.width <= width, 'arguments fit viewport');
-        assert.match(await status.innerText(), new RegExp(`Calls forwarded: ${count}\\.`));
+        assert.match(await status.innerText(), new RegExp(`Child calls observed: ${count}\\.`));
+        for (const line of (await card.locator('[data-transcript]').innerText()).split('\n')) {
+          assert.ok(recorded.includes(line), `excerpt comes from the fixture: ${line}`);
+        }
+        assert.equal(await card.getByText('Viewing controls only; nothing here runs Seal.', { exact: true }).isVisible(), true);
         assert.equal(await status.getAttribute('aria-live'), 'polite');
       };
       await check(0);
       // All transitions use the keyboard, including focus after a disappearing control.
-      const approve = card.getByRole('button', { name: 'Approve once', exact: true });
+      const approve = card.getByRole('button', { name: 'View approval', exact: true });
       await approve.focus();
       await page.keyboard.press('Enter');
       await check(1);
-      assert.equal(await card.getByRole('button', { name: 'Replay the approval' }).evaluate(el => el === document.activeElement), true);
+      assert.equal(await card.getByRole('button', { name: 'View replay' }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
       await check(1);
-      assert.match(await status.innerText(), /Replay refused.*BLOCK/s);
-      assert.equal(await card.getByRole('button', { name: 'Reset', exact: true }).evaluate(el => el === document.activeElement), true);
+      assert.match(await status.innerText(), /BLOCKED.*verdict BLOCK/s);
+      assert.match(await status.innerText(), /one-use held:.*child calls observed: still 1/s);
+      assert.match(await status.innerText(), /receipt written: <demo>\/receipts\/receipt-1788547290172-3933287-0003-BLOCK\.json/);
+      assert.equal(await card.getByRole('button', { name: 'Reset view', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
       await check(0);
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Enter');
-      await check(0);
-      assert.match(await status.innerText(), /Declined/);
-      await page.keyboard.press('Enter');
-      await check(0);
-      await card.getByRole('button', { name: 'Approve once', exact: true }).click();
+      await card.getByRole('button', { name: 'View approval', exact: true }).click();
       await check(1);
-      await card.getByRole('button', { name: 'Replay the approval' }).click();
+      await card.getByRole('button', { name: 'View replay' }).click();
       await check(1);
-      assert.match(await status.innerText(), /Replay refused.*BLOCK/s);
-      await card.getByRole('button', { name: 'Reset', exact: true }).click();
+      assert.match(await status.innerText(), /BLOCKED.*verdict BLOCK/s);
+      assert.match(await status.innerText(), /one-use held:.*child calls observed: still 1/s);
+      assert.match(await status.innerText(), /receipt written: <demo>\/receipts\/receipt-1788547290172-3933287-0003-BLOCK\.json/);
+      await card.getByRole('button', { name: 'Reset view', exact: true }).click();
       await check(0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no horizontal overflow');
       assert.deepEqual(errors, []);

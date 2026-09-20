@@ -13,6 +13,7 @@ const text = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
   .replace(/\s+/g, ' ');
 
 for (const sentence of [
+  'Excerpts from the v0.4.0 transcript; &lt;demo&gt; abbreviates its directory. This run recorded a BLOCK receipt; the demo does not always print that line.',
   'Only selected calls routed through Seal are gated. Bash, direct access and other routes remain outside its control. Read the limits.',
   'The decision leaves a signed receipt. Open it in the browser checker or use the assurance CLI to see what the recorded evidence establishes.',
   'Read the current assurance scope for the evidence and remaining assumptions.',
