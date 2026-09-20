@@ -38,18 +38,25 @@ test("two concurrent writers: the second writer lock refuses while the first kee
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
     const lock = acquireProjectLock(${JSON.stringify(root)});
     process.stdout.write("FIRST_READY\\n");
-    setTimeout(() => { lock.release(); process.exit(0); }, 300);
-  `], { env, stdio: ["ignore", "pipe", "pipe"] });
+    process.stdin.resume();
+    process.stdin.on("end", () => { lock.release(); process.exit(0); });
+  `], { env, stdio: ["pipe", "pipe", "pipe"] });
+  const firstExit = waitForExit(first);
   await new Promise((resolve) => first.stdout.once("data", resolve));
   let secondStderr = "";
   const second = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
+    // Model a contender scheduled after the old 300 ms release window.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     try { acquireProjectLock(${JSON.stringify(root)}); } catch (error) {
       process.stderr.write(error.code + "\\n" + error.message + "\\n"); process.exit(1);
     }
   `], { env, stdio: ["ignore", "ignore", "pipe"] });
   second.stderr.on("data", (chunk) => { secondStderr += chunk; });
-  const [result, firstResult] = await Promise.all([waitForExit(second), waitForExit(first)]);
+  // Hold the first writer until the contender has actually finished.
+  const result = await waitForExit(second);
+  first.stdin.end();
+  const firstResult = await firstExit;
   assert.equal(result.code, 1);
   assert.match(result.signal || "", /^$|^null$/);
   assert.match(secondStderr, /^proxy_lease_active\nproject lock held by pid \d+ for another Seal operation on this project; retry after that operation finishes/);

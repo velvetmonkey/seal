@@ -98,9 +98,10 @@ export function buildBootstrapArtifact({ manifest, repository, templateSource })
   const header = [
     "#!/bin/sh",
     "if ! command -v node >/dev/null 2>&1; then",
-    // Deliberately `>&2`, unlike scripts/install.cjs's own shell-stub header
-    // (which prints its equivalent node_missing line to stdout): every other
-    // refusal this bootstrap prints goes to stderr, so this one does too. See
+    // Deliberately `>&2`: every other refusal this bootstrap prints goes to
+    // stderr, so this one does too. Lane installnodemissingstderr fixed the
+    // historical stdout refusal in scripts/build-dist.cjs's shell-stub header;
+    // both stubs now agree on stderr. See
     // the generation-order comment above this function for why the two shell
     // stubs otherwise intentionally duplicate each other line for line.
     `  printf '%s\\n' "REFUSE node_missing: this installer requires Node >= ${manifest.minimumNodeMajor}. Install Node (for example via nvm, or your OS package manager), then re-run this script." >&2`,
