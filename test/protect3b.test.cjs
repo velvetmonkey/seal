@@ -148,6 +148,37 @@ function installedProxyPath() {
   return installedProxy;
 }
 
+test("relative protected command activates from project, nested and unrelated directories", () => {
+  const root = testTmpdir("seal-relative-activation-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "nested");
+  const unrelated = path.join(root, "unrelated");
+  for (const dir of [project, home, nested, unrelated]) fs.mkdirSync(dir);
+  const fakeBin = fakeClaudeBin(root);
+  const serverPath = path.join(project, "server");
+  fs.symlinkSync(process.execPath, serverPath);
+  writeProject(project, { command: "./server", args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const env = { ...process.env, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = statePathFor(project, env);
+  assert.equal(readState(file).state, "PENDING RESTART");
+  assert.equal(readState(file).projectRoot, fs.realpathSync(project));
+  for (const cwd of [nested, unrelated, project]) {
+    assert.equal(fs.existsSync(serverPath), true);
+    const activated = run(cwd, home, ["__proxy", "--protect-state", file], env);
+    assert.equal(activated.code, 0, `${cwd}: ${activated.out}`);
+    assert.equal(readState(file).state, "ACTIVE");
+  }
+  // A caller-local executable must not hide a missing saved-project command.
+  fs.unlinkSync(serverPath);
+  fs.symlinkSync(process.execPath, path.join(unrelated, "server"));
+  const refused = run(unrelated, home, ["__proxy", "--protect-state", file], env);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /protected_server_missing/);
+});
+
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
   const root = testTmpdir("seal-protect3b-hash-");
   const project = path.join(root, "project");
