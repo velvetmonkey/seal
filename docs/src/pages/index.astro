@@ -7,6 +7,22 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import FamilyRoutes from '../components/FamilyRoutes.astro';
 import DecisionReceipt from '../components/DecisionReceipt.astro';
+// Keep the illustration and its accessible claims on the covered homepage.
+const approvalStory = `<figure class="approval-story">
+  <figcaption>Stylised from a recorded Claude Code dialog, not a live capture.</figcaption>
+  <div class="approval-stage">
+    <div class="approval-terminal">
+      <div class="terminal-chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="terminal-heading">MCP server “notes” requests your input</p>
+      <p class="terminal-title">Approval required</p>
+      <p>Tool: append_note<br>Arguments:<br><span class="terminal-muted">… (+3 more lines)</span></p>
+      <p class="terminal-choice">❯ * Approve one run: append_note: ☐</p>
+      <p class="terminal-scope">Arguments: note: seal-accepted-note. Scope: at most one run.</p>
+      <div class="terminal-actions"><span class="terminal-accept">Accept</span><span>Decline</span></div>
+    </div>
+    <span class="terminal-receipt">signed decision receipt</span>
+  </div>
+</figure>`;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const link = (path: string) => `${base}/${path}`;
@@ -15,19 +31,26 @@ const frontmatter = {
   title: 'Seal — approval for selected AI-agent tool calls',
   description: 'Seal is a local approval gate for selected Claude Code MCP tool calls.',
   template: 'splash' as const,
+  // Starlight renders the banner before the hero, outside the header menu.
+  banner: {
+    content: `<nav class="docs-entry" aria-label="Documentation entry">
+      <div><strong>Seal documentation</strong><p>Browse the table of contents and find your next step.</p></div>
+      <a href="${link('documentation-map/')}">Read the docs <span aria-hidden="true">→</span></a>
+    </nav>`,
+  },
   hero: {
     title: 'Approve the exact tool call.',
-    tagline:
-      'Seal is a local approval gate for selected Claude Code MCP tool calls. Review the exact request, allow at most one execution per approval, and inspect a signed decision receipt.',
+    tagline: `<p class="seal-intro">For developers using Claude Code, Seal holds selected tool calls for your approval and gives you a signed record of the decision.</p>
+      <p class="scope-sentence">Seal is a gate, not a sandbox. Calls and effects outside the configured Seal route remain outside its control.</p>`,
+    image: { html: approvalStory },
+    actions: [
+      { text: 'Try your first approval', link: link('start/install/'), variant: 'primary' as const },
+      { text: 'Already have a receipt?', link: link('check/'), variant: 'minimal' as const },
+    ],
   },
 };
 ---
 <StarlightPage frontmatter={frontmatter}>
-  <p class="scope-sentence">
-    Seal is a gate, not a sandbox. Calls and effects outside the configured Seal route remain
-    outside its control.
-  </p>
-
   <div class="home-receipt-row">
     <FamilyRoutes />
     <DecisionReceipt />
@@ -35,6 +58,10 @@ const frontmatter = {
 
   <section aria-labelledby="how-it-fits">
     <h2 id="how-it-fits">How Seal fits into a tool call</h2>
+    <p>
+      Seal is a local approval gate for selected Claude Code MCP tool calls. Review the exact request,
+      allow at most one execution per approval, and inspect a signed decision receipt.
+    </p>
     <figure class="flow-diagram">
       <svg viewBox="0 0 720 160" role="img" aria-labelledby="flow-diagram-title flow-diagram-desc" xmlns="http://www.w3.org/2000/svg">
         <title id="flow-diagram-title">Seal approval flow</title>
@@ -122,17 +149,172 @@ const frontmatter = {
   </section>
 </StarlightPage>
 <style>
-  .scope-sentence {
-    max-width: 65ch;
+  :global(.sl-banner:has(.docs-entry)) {
+    background: var(--seal-accent-soft);
+    color: var(--seal-text);
+    border-bottom: 1px solid var(--seal-border);
+    box-shadow: none;
+  }
+  :global(.docs-entry) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 1100px;
     margin-inline: auto;
-    text-align: center;
-    color: var(--sl-color-gray-2);
+    padding-block: 0.5rem;
+    text-align: start;
+  }
+  :global(.docs-entry strong) {
+    font-size: 1.125rem;
+  }
+  :global(.docs-entry p) {
+    margin-block: 0.375rem 0;
+    color: var(--seal-muted);
+  }
+  :global(.docs-entry a) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    padding: 0.625rem 1rem;
+    border-radius: var(--seal-radius);
+    background: var(--seal-accent);
+    color: var(--seal-accent-text);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  :global(.docs-entry a:hover) {
+    text-decoration-thickness: 2px;
+  }
+  :global(.docs-entry a:focus-visible) {
+    outline: 2px solid var(--seal-accent);
+    outline-offset: 4px;
+  }
+  @media (max-width: 26rem) {
+    :global(.docs-entry a) {
+      margin-inline-start: auto;
+    }
+  }
+  :global(.hero:has(.approval-story)) {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 3rem;
+    padding-block: 3rem 4rem;
+    min-height: 620px;
+  }
+  :global(.hero:has(.approval-story) h1) {
+    font-size: clamp(2.5rem, 4.4vw, 3.75rem);
+    line-height: 1.06;
+    max-width: 12ch;
+  }
+  :global(.hero:has(.approval-story) .hero-html) {
+    width: 100%;
+    order: 2;
+  }
+  :global(.approval-story) {
+    width: 100%;
+    margin: 0;
+    min-width: 0;
+  }
+  :global(.approval-stage) {
+    position: relative;
+    padding: 1rem 1rem 3.5rem;
+    perspective: 1000px;
+  }
+  :global(.approval-terminal) {
+    color: #ecf1e9;
+    background: #242a29;
+    border: 1px solid #53615e;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    font: 0.875rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+    box-shadow: 0 1.25rem 2.5rem #0003, 0 0.25rem 0.5rem #0002;
+    transform: rotateY(-5deg) rotateZ(-3deg);
+    overflow-wrap: anywhere;
+  }
+  :global(.approval-terminal p) { margin: 0 0 1rem; }
+  :global(.terminal-chrome) { display: flex; gap: 0.4rem; margin-bottom: 1.25rem; }
+  :global(.terminal-chrome i) { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #b6c3ba; }
+  :global(.terminal-heading), :global(.terminal-muted) { color: #b6c3ba; }
+  :global(.terminal-title) { color: #ffad88; font-weight: 700; }
+  :global(.terminal-choice) { padding-left: 0.6rem; border-left: 2px solid #ffad88; }
+  :global(.approval-terminal .terminal-scope) { padding-left: 0.75rem; font-size: 0.8125rem; color: #b6c3ba; }
+  :global(.terminal-actions) { display: flex; gap: 1rem; align-items: center; }
+  :global(.terminal-actions span) { padding: 0.25rem 0.75rem; }
+  :global(.terminal-accept) { background: #ffad88; color: #281910; border-radius: 0.25rem; }
+  :global(.terminal-receipt) {
+    position: absolute;
+    right: 0;
+    bottom: 1rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--seal-accent);
+    border-radius: var(--seal-radius);
+    background: var(--seal-surface);
+    color: var(--seal-text);
+    font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    box-shadow: 0 0.4rem 1rem #0002;
+  }
+  :global(.approval-story figcaption) {
+    margin: 0 1rem 0.5rem;
+    color: var(--seal-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.approval-story[data-animate] .terminal-accept) { animation: accept-highlight 8s ease-in-out infinite; }
+    :global(.approval-story[data-animate] .terminal-receipt) { animation: receipt-reveal 8s ease-in-out infinite; }
+    :global(.approval-story[data-paused] .terminal-accept),
+    :global(.approval-story[data-paused] .terminal-receipt),
+    :global(.approval-story:hover .terminal-accept),
+    :global(.approval-story:hover .terminal-receipt) { animation-play-state: paused; }
+  }
+  @keyframes accept-highlight {
+    0%, 15%, 100% { background: transparent; color: #ecf1e9; }
+    30%, 88% { background: #ffad88; color: #281910; }
+  }
+  @keyframes receipt-reveal {
+    0%, 35%, 100% { opacity: 0; transform: translate(-1rem, -0.5rem); }
+    50%, 88% { opacity: 1; transform: translate(0, 0); }
+  }
+  :global(.seal-intro) {
+    color: var(--seal-text);
+    font-size: 1.125rem;
+    line-height: 1.6;
+    max-width: 42ch;
+    margin: 0;
+  }
+  :global(.hero .scope-sentence) {
+    margin-block: 1rem 0;
+    max-width: 49ch;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--seal-muted);
+  }
+  :global(.hero:has(.approval-story) .actions) {
+    gap: 1rem;
+  }
+  @media (max-width: 49.99rem) {
+    :global(.hero:has(.approval-story)) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2rem;
+      padding-block: 1.5rem 2rem;
+      min-height: auto;
+    }
+    :global(.approval-stage) { padding-inline: 0.75rem; }
+    :global(.approval-terminal) { padding: 1rem; font-size: 0.8125rem; }
+    :global(.hero:has(.approval-story) .stack) { text-align: start; }
+    :global(.hero:has(.approval-story) .copy) { align-items: flex-start; }
+    :global(.hero:has(.approval-story) .actions) { justify-content: flex-start; }
+    :global(.hero:has(.approval-story) .hero-html) { max-width: 30rem; }
   }
   section {
     max-width: 1100px;
     margin-inline: auto;
     margin-block-start: 3rem;
   }
+  section > p { max-width: 65ch; }
   .explore-links {
     display: flex;
     flex-wrap: wrap;
@@ -180,3 +362,16 @@ const frontmatter = {
     margin-inline: auto;
   }
 </style>
+
+<script>
+  // The static final frame is also the no-JavaScript and reduced-motion state.
+  const illustration = document.querySelector<HTMLElement>('.approval-story');
+  if (illustration) {
+    const syncVisibility = () => {
+      illustration.toggleAttribute('data-paused', document.hidden);
+    };
+    syncVisibility();
+    illustration.setAttribute('data-animate', '');
+    document.addEventListener('visibilitychange', syncVisibility);
+  }
+</script>

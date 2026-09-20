@@ -74,3 +74,4 @@ for the current, authoritative list.
 
 Previous: [Browser receipt checks](browser.md).
 Up: [Choose a checking tool](README.md).
+Next: [Check receipts](../check/README.md).
