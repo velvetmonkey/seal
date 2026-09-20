@@ -103,7 +103,6 @@ order. The command opens regular files read-only without taking writer locks.
 It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
 unavailable directory. Underlying filesystem stalls are outside these work caps.
 
-Up: [Reference](README.md).
 
 ### `seal seal_block [--pubkey HEX]`
 
@@ -135,3 +134,5 @@ can yield command exit 0. Exit meanings are command-local across the family:
 seal-check uses 3 for unpinned results, while seal-assurance-kit uses 3 for its
 uncaught-exception handler. Neither meaning is this command's kernel-integrity
 class.
+
+Up: [Reference](README.md).
