@@ -19,6 +19,9 @@ const sidebarGroups = navigation.presentation ?? navigation.sections.map((sectio
 }));
 
 export default defineConfig({
+  // Astro's JSX whitespace mode drops line breaks beside inline elements.
+  // Preserve HTML whitespace so wrapped prose keeps its word boundaries.
+  compressHTML: false,
   outDir: './dist',
   site: site.origin,
   base: site.pathname.replace(/\/$/, '') || '/',
