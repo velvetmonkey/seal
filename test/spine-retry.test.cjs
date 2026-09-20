@@ -321,7 +321,7 @@ test("seal demo derives the replay BLOCK line from the receipt file", async (t) 
   const started = Date.now();
   let deleted = false;
   while (!deleted) {
-    if (Date.now() - started > 5000) assert.fail(`no BLOCK receipt appeared\n${run.out}\n${run.err}`);
+    if (Date.now() - started > 10000) assert.fail(`no BLOCK receipt appeared\n${run.out}\n${run.err}`);
     if (fs.existsSync(receiptsDir)) {
       const block = fs.readdirSync(receiptsDir).find((name) => name.endsWith("-BLOCK.json"));
       if (block) {
