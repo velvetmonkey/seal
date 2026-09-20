@@ -333,3 +333,5 @@
 {"id":"history-invocation","kind":"emitted","text":"seal history DIRECTORY [--limit 1..100] [--tool NAME]","sha256":"e4c8654060c3bb4026adbc88af362d50a5d1a83967820da8549686b5a1f1115a"}
 {"id":"history-window","kind":"emitted","text":"[--since EPOCH_MS] [--until EPOCH_MS]","sha256":"6e3a7f1f4bb24758f034127a604932b04c1aec202da794910351b67b6ecb9775"}
 {"id":"history-description","kind":"emitted","text":"count files and list recent claims (default 20; context UNKNOWN)","sha256":"d7016dac58d9ddae5ed71655bbb0cbc1683163c551becf70d63cf3320db04217"}
+{"id":"sealblockv1-invocation","kind":"emitted","text":"seal seal_block [--pubkey HEX] < receipt.json","sha256":"84b1e92a05a49175b88c765dc686fb76bbcb90cee6eb92bf7668b5375908917e"}
+{"id":"sealblockv1-description","kind":"emitted","text":"check stdin receipt bytes and emit a v1 JSON result","sha256":"7495e9f5e67d9b0d46d14e4c80c6005e034b2671caa69ee31cfb3a92642f0f71"}
