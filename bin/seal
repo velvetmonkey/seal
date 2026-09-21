@@ -345,8 +345,8 @@ function printObservedClient(state) {
   if (!client || typeof client.name !== "string" || typeof client.version !== "string"
       || typeof client.elicitationDeclared !== "boolean") return;
   // Self-asserted strings must not inject additional terminal lines or controls.
-  const display = (value) => value.replace(/[\u0000-\u001f\u007f-\u009f]/g,
-    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const { escapeInvisible } = require(path.join(ROOT, "contract", "renderer.cjs"));
+  const display = (value) => escapeInvisible(value, { preserveShaping: false });
   console.log(`Observed client: ${display(client.name)} ${display(client.version)} (self-asserted, unsigned)`);
   console.log(`Elicitation declared: ${client.elicitationDeclared ? "yes" : "no"}`);
 }

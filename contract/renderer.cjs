@@ -41,9 +41,11 @@ function renderValue(value) {
 // Join controls and variation selectors remain literal for Persian, Indic,
 // emoji and ideographic shaping. Decide membership by Unicode property,
 // including marks that would otherwise qualify for an unquoted name.
-const INVISIBLE = /(?![\u200c\u200d\p{Variation_Selector}])[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\p{Cn}\p{Zl}\p{Zp}]/u;
-function escapeInvisible(text) {
-  return Array.from(text, (ch) => INVISIBLE.test(ch)
+// Untrusted status metadata disables shaping preservation to escape all ignorables.
+const SHAPING = /[\u200c\u200d\p{Variation_Selector}]/u;
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\p{Cn}\p{Zl}\p{Zp}]/u;
+function escapeInvisible(text, { preserveShaping = true } = {}) {
+  return Array.from(text, (ch) => INVISIBLE.test(ch) && !(preserveShaping && SHAPING.test(ch))
     ? ch.split("").map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")
     : ch).join("");
 }

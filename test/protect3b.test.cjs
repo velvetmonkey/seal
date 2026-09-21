@@ -1314,6 +1314,15 @@ test("initialize observations are unsigned, session-local and absent for malform
       assert.equal(output.replace(extra, ""), baseline[command]);
       t.diagnostic(`${command}, valid initialize:\n${output}`);
     }
+    const unsafe = "\u2028\u2029\u202e\u2060\u200c\u200d\ufe0f\n\u001b";
+    const escaped = "\\u2028\\u2029\\u202e\\u2060\\u200c\\u200d\\ufe0f\\u000a\\u001b";
+    await initialize({ clientInfo: { name: `client${unsafe}`, version: `version${unsafe}` }, capabilities: {} });
+    const escapedExtra = `Observed client: client${escaped} version${escaped} (self-asserted, unsigned)\nElicitation declared: no\n`;
+    for (const command of ["status", "coverage"]) {
+      const output = observe(command);
+      assert.ok(output.includes(escapedExtra), `${command} must escape U+2028 and other invisible client characters: ${output}`);
+      assert.equal(output.replace(escapedExtra, ""), baseline[command]);
+    }
     for (const params of [{ capabilities: {} }, { clientInfo: "malformed", capabilities: {} }, { clientInfo: { name: 42, version: "1" } }, { clientInfo: [] }]) {
       await initialize(params);
       assert.equal(Object.hasOwn(readState(statePath), "observedClient"), false);
