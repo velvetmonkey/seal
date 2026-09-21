@@ -538,7 +538,9 @@ test("all duplicate-key frame shapes refuse with a checker-valid ambiguous recei
     const body = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
     assert.equal(body.tool, "<ambiguous>", `shape ${index + 1}`);
     const checked = spawnSync(process.execPath, [CHECKER, receiptPath], { encoding: "utf8" });
-    assert.equal(checked.status, 0, `shape ${index + 1}: ${checked.stdout}${checked.stderr}`);
+    assert.equal(checked.status, 1, `shape ${index + 1}: ${checked.stdout}${checked.stderr}`);
+    assert.match(checked.stdout, /Signature and bindings   UNVERIFIED/);
+    assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   }
 });
 
