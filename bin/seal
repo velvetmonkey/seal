@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
@@ -14,32 +13,8 @@ const receiptPopulation = require(path.join(path.resolve(__dirname, ".."), "spin
 const ROOT = path.resolve(__dirname, "..");
 const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
-const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
-const shippedRuntime = path.join(ROOT, "runtime");
-const shippedRuntimeFiles = Object.entries(manifest.files).filter(([relative]) => relative.startsWith("kernel/"));
+const { inspectRuntime } = require(path.join(ROOT, "spine", "runtime-inspection.cjs"));
 
-function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
-function inspectRuntimeAt(directory, files) {
-  for (const [relative, expected] of files) {
-    const target = path.join(directory, relative);
-    try {
-      if (!fs.statSync(target).isFile()) return { present: false, state: "absent", reason: `${relative} is not a file` };
-      const got = sha256(fs.readFileSync(target));
-      if (got !== expected) return { present: false, state: "integrity check failed", reason: `${relative} hash mismatch` };
-    } catch (error) {
-      return { present: false, state: "absent", reason: `${relative} is unavailable` };
-    }
-  }
-  return { present: true };
-}
-function inspectRuntime() {
-  // The installed artifact ships the kernel, while src/verify.cjs is fetched
-  // into the cache for the optional verification command. Never treat a bad
-  // shipped kernel as a reason to use an unchecked fallback.
-  const shipped = inspectRuntimeAt(shippedRuntime, shippedRuntimeFiles);
-  if (shipped.present || shipped.state === "integrity check failed") return shipped;
-  return inspectRuntimeAt(cache, Object.entries(manifest.files));
-}
 function status() {
   // Status derives ACTIVE/STALE from Linux process-start witnesses. Keep this
   // product path behind the same platform refusal as `seal __proxy`.
@@ -700,6 +675,7 @@ async function main() {
   if (command === "demo") return demo(process.argv.slice(3));
   // Private spine subcommands: not part of the command surface, not listed.
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
+  if (command === "__verify-server") return require(path.join(ROOT, "spine", "verify-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
