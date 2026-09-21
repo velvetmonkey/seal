@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
@@ -562,56 +561,15 @@ async function verify(args) {
   const json = args.includes("--json");
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
-  let result = {
-    read: false, validate: false, replay: false, signature: false,
-    authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
-  };
-  let phase = "input";
-  try {
-    if (!receiptPath || receiptPath === "--json") throw new Error("usage: seal verify PATH");
-    const absolute = path.resolve(receiptPath);
-    let stat;
-    try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
-    if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
-    if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
-    let text;
-    try { text = fs.readFileSync(absolute); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
-    if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
-    phase = "runtime";
-    const runtime = inspectRuntime();
-    if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
-    const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
-    phase = "receipt";
-    // read() retains the checker's UTF-8 and duplicate-member refusals.
-    if (json) { verifier.read(text); result.read = true; }
-    result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
-    result.ok = result.validate && result.signature && result.replay;
-    if (json) console.log(JSON.stringify({ ...result, code: result.ok ? null : "signature_unverifiable" }));
-    else console.log(verifier.format(result));
-    if (!result.ok) process.exitCode = 1;
-  } catch (error) {
-    // Classify existing verifier codes, without reimplementing its checks or
-    // replacing its errors. 1 retains verification failures; 2 follows the
-    // CLI's existing invalid-input convention (status/coverage arguments).
-    const verificationFailure = new Set([
-      "signature_mismatch", "commitment_mismatch", "verdict_mismatch",
-      "action_verdict_mismatch", "inert_input",
-    ]).has(error.code);
-    const exitCode = phase === "runtime" || verificationFailure ? 1 : 2;
-    if (!json) {
-      // The outer handler owns the exact legacy stderr text and debug output.
-      error.exitCode = exitCode;
-      throw error;
-    }
-    // A refusal returns no partial verifier result. Only expose checks known
-    // to have completed; false means not established, including not reached.
-    console.log(JSON.stringify({
-      ...result, ok: false,
-      code: error.code || (phase === "input" ? "read_failed" : phase === "runtime" ? "runtime_unavailable" : "invalid_receipt"),
-      message: error.message,
-    }));
-    process.exitCode = exitCode;
-  }
+  const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
+    .verifyReceipt({ receiptPath, pubkeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+  if (json) console.log(JSON.stringify(result));
+  else if (error) {
+    // Keep the outer handler's legacy stderr and debug presentation.
+    error.exitCode = exitCode;
+    throw error;
+  } else console.log(verifier.format(result));
+  if (exitCode) process.exitCode = exitCode;
 }
 
 function reproduce(args) {

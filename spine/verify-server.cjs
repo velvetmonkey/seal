@@ -10,40 +10,49 @@ const { inspectRuntime } = require("./runtime-inspection.cjs");
 const TOOL = "seal_verify";
 const ROOT = path.resolve(__dirname, "..");
 
-function refuse(code, message) {
-  throw Object.assign(new Error(message), { code });
-}
-
-async function verifyReceipt(args) {
+// Shared CLI/MCP verification boundary. The typed result is built only here;
+// transport-specific exit status and legacy text errors stay outside that object.
+async function verifyReceipt({ receiptPath, pubkeyHex } = {}) {
+  let result = {
+    read: false, validate: false, replay: false, signature: false,
+    authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
+  };
+  let phase = "input";
   try {
-    if (!args || typeof args.receiptPath !== "string" || !args.receiptPath ||
-        (args.pubkeyHex !== undefined && typeof args.pubkeyHex !== "string")) {
-      refuse("invalid_arguments", "receiptPath must be a non-empty string and pubkeyHex, if supplied, must be a string");
+    if (typeof receiptPath !== "string" || !receiptPath || receiptPath === "--json") throw new Error("usage: seal verify PATH");
+    if (pubkeyHex !== undefined && typeof pubkeyHex !== "string") {
+      throw Object.assign(new Error("pubkeyHex must be a string"), { code: "invalid_arguments" });
     }
-    const absolute = path.resolve(args.receiptPath);
+    const absolute = path.resolve(receiptPath);
     let stat;
-    try { stat = fs.statSync(absolute); }
-    catch { refuse("receipt_unavailable", `cannot inspect receipt path: ${absolute}`); }
-    if (!stat.isFile()) refuse("receipt_not_file", `receipt path is not a regular file: ${absolute}`);
-    if ((stat.mode & 0o444) === 0) refuse("receipt_unreadable", `receipt file has no read permission bits: ${absolute}`);
+    try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
+    if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
+    if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
     let text;
-    try { text = fs.readFileSync(absolute); }
-    catch { refuse("receipt_unreadable", `cannot read receipt contents: ${absolute}`); }
-    if (text.length === 0) refuse("receipt_empty", `receipt is empty: ${absolute}`);
+    try { text = fs.readFileSync(absolute); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
+    if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
+    phase = "runtime";
     const runtime = inspectRuntime();
-    if (!runtime.present) refuse("runtime_unavailable", `cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
+    if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
     const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
-    const result = await verifier.verify(text, { publicKeyHex: args.pubkeyHex });
+    phase = "receipt";
+    // read() retains the checker's UTF-8 and duplicate-member refusals.
+    verifier.read(text); result.read = true;
+    result = await verifier.verify(text, { publicKeyHex: pubkeyHex });
     result.ok = result.validate && result.signature && result.replay;
-    return result;
+    result.code = result.ok ? null : "signature_unverifiable";
+    return { result, exitCode: result.ok ? 0 : 1, verifier };
   } catch (error) {
-    // False means not established; do not invent partial successes when the
-    // shared checker throws before returning its result.
-    return {
-      ok: false, read: false, validate: false, signature: false, replay: false,
-      authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
-      error: { code: error.code || "verification_failed", message: error.message },
-    };
+    const verificationFailure = new Set([
+      "signature_mismatch", "commitment_mismatch", "verdict_mismatch",
+      "action_verdict_mismatch", "inert_input",
+    ]).has(error.code);
+    const exitCode = phase === "runtime" || verificationFailure ? 1 : 2;
+    return { result: {
+      ...result, ok: false,
+      code: error.code || (phase === "input" ? "read_failed" : phase === "runtime" ? "runtime_unavailable" : "invalid_receipt"),
+      message: error.message,
+    }, exitCode, error };
   }
 }
 
@@ -96,7 +105,7 @@ function run() {
           respond({ jsonrpc: "2.0", id, error: { code: -32602, message: `unknown tool: ${name}` } });
           return;
         }
-        const result = await verifyReceipt(frame.params?.arguments);
+        const { result } = await verifyReceipt(frame.params?.arguments || {});
         respond({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } });
         return;
       }
@@ -105,4 +114,4 @@ function run() {
   });
 }
 
-module.exports = { run, TOOL };
+module.exports = { run, TOOL, verifyReceipt };

@@ -246,6 +246,7 @@ test("seal_verify speaks stdio MCP and returns read-only JSON verdicts and refus
     const verifier = await import(pathToFileURL(CHECKER).href);
     const expected = await verifier.verify(fs.readFileSync(receiptPath), { publicKeyHex: pubkeyHex });
     expected.ok = expected.validate && expected.signature && expected.replay;
+    expected.code = null;
     assert.deepEqual(result, expected);
     assert.equal(result.ok, true);
     const cli = spawnSync(process.execPath, [SEAL, "verify", receiptPath, "--pubkey", pubkeyHex], { encoding: "utf8" });
@@ -258,18 +259,18 @@ test("seal_verify speaks stdio MCP and returns read-only JSON verdicts and refus
     fs.copyFileSync(receiptPath, unreadable);
     fs.chmodSync(unreadable, 0);
     for (const [args, code] of [
-      [{ receiptPath: path.join(scratch, "absent") }, "receipt_unavailable"],
-      [{ receiptPath: empty }, "receipt_empty"],
-      [{ receiptPath: scratch }, "receipt_not_file"],
-      [{ receiptPath: unreadable }, "receipt_unreadable"],
-      [{}, "invalid_arguments"],
+      [{ receiptPath: path.join(scratch, "absent") }, "read_failed"],
+      [{ receiptPath: empty }, "read_failed"],
+      [{ receiptPath: scratch }, "read_failed"],
+      [{ receiptPath: unreadable }, "read_failed"],
+      [{}, "read_failed"],
       [{ receiptPath, pubkeyHex: 42 }, "invalid_arguments"],
       // A different real Ed25519 public key fails the fixture's signature.
       [{ receiptPath, pubkeyHex: require("node:crypto").generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("hex") }, "signature_mismatch"],
     ]) {
       const failure = await call(args);
       assert.equal(failure.ok, false);
-      assert.equal(failure.error.code, code);
+      assert.equal(failure.code, code);
     }
     assert.equal((await request("unknown", {})).error.code, -32601);
     assert.equal((await request("tools/call", { name: "other" })).error.code, -32602);
@@ -313,11 +314,11 @@ test("packaged seal_verify drains EOF and refuses missing or changed runtime as 
   fs.appendFileSync(wasm, "tamper");
   let result = request();
   assert.equal(result.ok, false);
-  assert.equal(result.error.code, "runtime_unavailable");
-  assert.match(result.error.message, /integrity check failed/);
+  assert.equal(result.code, "runtime_unavailable");
+  assert.match(result.message, /integrity check failed/);
   fs.unlinkSync(wasm);
   result = request();
   assert.equal(result.ok, false);
-  assert.equal(result.error.code, "runtime_unavailable");
-  assert.match(result.error.message, /absent/);
+  assert.equal(result.code, "runtime_unavailable");
+  assert.match(result.message, /absent/);
 });
