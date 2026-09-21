@@ -13,6 +13,7 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal --version`, `seal -V` | Print the version agreed by VERSION and package.json. | 0; 1 if the version cannot be read or disagrees |
 | `seal demo [--dir PATH]` | Run the embedded exact-call and replay demonstration. | 0 on completion, including declining approval; 1 on EOF, refusal or failure |
 | `seal verify PATH [--pubkey HEX] [--json]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 for signature, binding or replay failure (including no usable key), or unavailable runtime; 2 for unreadable input or invalid receipt schema |
+| `seal seal_block [--pubkey HEX] < receipt.json` | Check stdin receipt bytes and emit a v1 JSON result. | 0 for validation, signature and replay success; 3 for kernel integrity failure; 5 for missing/malformed key; 1 otherwise |
 | `seal reproduce TAG [--source PATH] [--platform linux-x64] [--authority same-authority\|independent] [--authority-name NAME]` | Compare a published artifact's kernel with a rebuild from source; print the comparison JSON. Requires a source checkout. | 0 for matching kernel bytes; 1 for mismatch, refusal or failure |
 | `seal reproduce build-pinned-kernel TAG --output PATH [--source PATH] [--manifest PATH]` | Build the selected kernel and copy it to PATH; print the build result. | 0 on successful build and copy; 1 on refusal or failure |
 | `seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]` | Install a local Claude Code override for selected calls on the named project stdio MCP server. | 0 on success; 1 on usage error, refusal or failure |
@@ -130,5 +131,36 @@ rows are the newest observed claims, not a snapshot guarantee. Ties use filename
 order. The command opens regular files read-only without taking writer locks.
 It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
 unavailable directory. Underlying filesystem stalls are outside these work caps.
+
+### `seal seal_block [--pubkey HEX]`
+
+The `seal_block` command reads one v2 receipt from stdin as raw bytes and passes
+those bytes directly to the existing verifier. It does not parse and reserialize
+the request first. The verifier still applies the v2 canonical signature and
+commitment rules; whitespace in the transport is not signed. Invalid UTF-8 and
+duplicate JSON members are refused by the verifier.
+
+The response is one JSON object with `seal_block: "v1"`, `ok`, `authority`,
+`occurrence`, and `verify`. Completed checks also include the existing verifier
+fields (`read`, `validate`, `signature`, `replay`, `receipt`); refusals include
+`error` and `message`. The existing labelled `authority`/`occurrence` convention
+is retained to distinguish caller-key signature success from authority and event
+occurrence. Even exit 0 leaves `verify: false`, authority
+`"UNPINNED / CALLER-SUPPLIED"`, and occurrence `"NOT ESTABLISHED"`.
+
+Only no arguments or one `--pubkey` option are accepted. After reading stdin,
+runtime inspection takes precedence: a kernel hash mismatch exits 3
+(`kernel_integrity`), while an absent runtime exits 1 (`runtime_absent`). Next,
+an omitted key, missing option value, or value other than 64 lowercase hexadecimal
+characters exits 5 (`no_key`), before receipt validation. A well-formed wrong key,
+missing signature, malformed receipt, usage error, or other failure exits 1.
+These new exit classes belong only to `seal_block`; `seal verify` is unchanged.
+
+The existing receipt verdict `BLOCK` describes a kernel decision. It is distinct
+from the `seal_block` command: a correctly signed, reproducible `BLOCK` receipt
+can yield command exit 0. Exit meanings are command-local across the family:
+seal-check uses 3 for unpinned results, while seal-assurance-kit uses 3 for its
+uncaught-exception handler. Neither meaning is this command's kernel-integrity
+class.
 
 Up: [Reference](README.md).

@@ -335,3 +335,5 @@
 {"id":"history-description","kind":"emitted","text":"count files and list recent claims (default 20; context UNKNOWN)","sha256":"d7016dac58d9ddae5ed71655bbb0cbc1683163c551becf70d63cf3320db04217"}
 {"id":"sealverifyjson-help","kind":"emitted","text":"seal verify PATH [--pubkey HEX] [--json]","sha256":"b948d89f034006e00a6cb7ab4be8a1e59b562b2d143ae4370d2789077c43eb77"}
 {"id":"sealverifyjson-exits","kind":"emitted","text":"2 invalid input, unknown command or arguments to status.","sha256":"e5ebd0bbc6b9a589a7da8165c4c029e97e61092c981ef9da21ec3f1a32a42ed0"}
+{"id":"sealblockv1-invocation","kind":"emitted","text":"seal seal_block [--pubkey HEX] < receipt.json","sha256":"84b1e92a05a49175b88c765dc686fb76bbcb90cee6eb92bf7668b5375908917e"}
+{"id":"sealblockv1-description","kind":"emitted","text":"check stdin receipt bytes and emit a v1 JSON result","sha256":"7495e9f5e67d9b0d46d14e4c80c6005e034b2671caa69ee31cfb3a92642f0f71"}

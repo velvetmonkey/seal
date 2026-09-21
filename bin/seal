@@ -639,6 +639,35 @@ async function verify(args) {
   }
 }
 
+async function sealBlock(args) {
+  const emit = (code, fields) => {
+    console.log(JSON.stringify({ seal_block: "v1", ok: false, authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false, ...fields }));
+    process.exitCode = code;
+  };
+  try {
+    if (args.length !== 0 && !(args[0] === "--pubkey" && args.length <= 2)) {
+      return emit(1, { error: "usage", message: "usage: seal seal_block [--pubkey HEX] < receipt.json" });
+    }
+    // Keep stdin as bytes: the verifier owns UTF-8 decoding, duplicate-member
+    // rejection and the receipt specification's canonical signature checks.
+    const bytes = fs.readFileSync(0);
+    const runtime = inspectRuntime();
+    if (!runtime.present) {
+      return emit(runtime.state === "integrity check failed" ? 3 : 1,
+        { error: runtime.state === "integrity check failed" ? "kernel_integrity" : "runtime_absent", message: runtime.reason });
+    }
+    const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
+    if (!verifier.hasPublicKey(args[1])) {
+      return emit(5, { error: "no_key", message: "--pubkey requires 64 lowercase hexadecimal characters" });
+    }
+    const result = await verifier.verify(bytes, { publicKeyHex: args[1] });
+    const ok = result.validate && result.signature && result.replay;
+    emit(ok ? 0 : 1, { ...result, ok });
+  } catch (error) {
+    emit(1, { error: error.code || "invalid_receipt", message: error.message });
+  }
+}
+
 function reproduce(args) {
   const sourceRoot = [ROOT, process.cwd()].find((candidate) => (
     fs.existsSync(path.join(candidate, "kernel-source")) &&
@@ -739,6 +768,7 @@ async function main() {
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv.slice(3));
+  if (command === "seal_block") return sealBlock(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
@@ -783,6 +813,8 @@ function printHelp() {
       report known mediated and unmediated routes for this deployment
   seal demo [--dir PATH]
       show one exact call run once and its replay blocked
+  seal seal_block [--pubkey HEX] < receipt.json
+      check stdin receipt bytes and emit a v1 JSON result
   seal verify PATH [--pubkey HEX] [--json]
       inspect a saved kernel receipt and re-derive its recorded decision
   seal reproduce TAG [--source PATH] [--platform linux-x64]
