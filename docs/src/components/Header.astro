@@ -1,28 +1,36 @@
 ---
 import Search from '@astrojs/starlight/components/Search.astro';
 import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
-import { sealCheckUrl } from '../data/family.ts';
+const home = Astro.url.pathname.replace(/\/$/, '') === import.meta.env.BASE_URL.replace(/\/$/, '');
 const archive = Astro.url.pathname.includes('/archive/');
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<div class="header">
+<div class:list={["header", { "home-header": home }]}>
   <nav aria-label="Global">
     <a class="brand" href={`${base}/`}>
       {archive ? 'Current Seal documentation' : (<>seal<span class="brand-mark" aria-hidden="true">/</span></>)}
     </a>
     {archive && <strong>Archive</strong>}
+    {home ? <div class="home-nav">
+      <a href={`${base}/documentation-map/`}>Docs</a>
+      <a href="#guarantees-limits">Guarantees &amp; limits</a>
+      <a href="https://github.com/velvetmonkey/seal">GitHub</a>
+    </div> : (
     <details class="nav-menu">
       <summary aria-label="More navigation">Menu</summary>
       <div class="nav-menu__items">
         <a href={`${base}/documentation-map/`}>Docs</a>
-        <a href={sealCheckUrl} rel="external">Check a receipt<span aria-hidden="true"> ↗</span></a>
+        <a href={`${base}/#guarantees-limits`}>Guarantees &amp; limits</a>
         <a href="https://github.com/velvetmonkey/seal">GitHub</a>
       </div>
     </details>
+    )}
   </nav>
-  <div class="tools"><Search /><ThemeSelect /></div>
+  {!home && <div class="tools"><Search /><ThemeSelect /></div>}
 </div>
 <style>
+  .home-header nav { width: 100%; justify-content: space-between; }
+  .home-header { max-width: 1100px; margin-inline: auto; }
   .header, nav, .tools { display: flex; align-items: center; gap: 1rem; }
   .header { justify-content: space-between; height: 100%; }
   nav { flex-wrap: wrap; }
@@ -58,7 +66,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     .header { padding-inline-end: 2.5rem; gap: .5rem; }
     nav { gap: .65rem; font-size: .875rem; }
     .tools { gap: .25rem; }
-    /* Narrow viewports (spec: ~390px): collapse Docs/checker/GitHub into a
+    /* Narrow viewports (spec: ~390px): collapse Docs/limits/GitHub into a
        disclosure so the brand, search and theme controls stay reachable and
        the custom header does not wrap onto the Starlight sidebar toggle. */
     .nav-menu summary {
@@ -84,9 +92,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     .nav-menu { position: relative; }
   }
 
+  .home-nav { display: flex; gap: 1.5rem; align-items: center; }
+  @media (max-width: 26rem) {
+    .home-header nav { gap: .5rem; font-size: .75rem; }
+    .home-nav { gap: .75rem; }
+  }
   @media (max-width: 49.99rem) {
     .header { padding-inline-end: 2.5rem; gap: .5rem; }
     nav { gap: .65rem; font-size: .875rem; }
     .tools { gap: .25rem; }
   }
+  .home-header { padding-inline-end: 0; }
 </style>

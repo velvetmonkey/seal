@@ -12,7 +12,7 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal`, `seal --help`, `seal -h` | Print help. | 0 |
 | `seal --version`, `seal -V` | Print the version agreed by VERSION and package.json. | 0; 1 if the version cannot be read or disagrees |
 | `seal demo [--dir PATH]` | Run the embedded exact-call and replay demonstration. | 0 on completion, including declining approval; 1 on EOF, refusal or failure |
-| `seal verify PATH [--pubkey HEX]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 otherwise, including no trusted key |
+| `seal verify PATH [--pubkey HEX] [--json]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 for signature, binding or replay failure (including no usable key), or unavailable runtime; 2 for unreadable input or invalid receipt schema |
 | `seal seal_block [--pubkey HEX] < receipt.json` | Check stdin receipt bytes and emit a v1 JSON result. | 0 for validation, signature and replay success; 3 for kernel integrity failure; 5 for missing/malformed key; 1 otherwise |
 | `seal reproduce TAG [--source PATH] [--platform linux-x64] [--authority same-authority\|independent] [--authority-name NAME]` | Compare a published artifact's kernel with a rebuild from source; print the comparison JSON. Requires a source checkout. | 0 for matching kernel bytes; 1 for mismatch, refusal or failure |
 | `seal reproduce build-pinned-kernel TAG --output PATH [--source PATH] [--manifest PATH]` | Build the selected kernel and copy it to PATH; print the build result. | 0 on successful build and copy; 1 on refusal or failure |
@@ -71,9 +71,38 @@ There are no general per-command help aliases or `--flag=value` forms. `demo`
 accepts only `--dir` pairs (the first directory wins). `protect` and `reproduce`
 reject unknown long options. `recover` requires its exact one- or two-argument
 shape; `receipts` requires exactly one argument. `verify` uses the first positional
-path and first later `--pubkey` value, ignoring other trailing words; `unprotect`
+path and first later `--pubkey` value, recognizes `--json`, and ignores other
+trailing words; `unprotect`
 uses only its first argument, and `doctor` ignores trailing arguments. These
 existing parsing rules do not add flags to those commands.
+
+
+### Machine-readable receipt checks
+
+`seal verify PATH [--pubkey HEX] --json` writes exactly one JSON object to stdout.
+It retains the checker's `read`, `validate`, `replay`, `signature`, `authority`,
+`occurrence`, `verify` and `receipt` fields on a completed check, plus `ok` and
+`code`. `ok` is validation AND signature AND replay; `code` is null when `ok` is
+true. As in text mode, `verify` remains false: a caller-supplied key does not
+establish authority or event occurrence.
+
+On refusal, `code` preserves the checker's typed error and `message` explains it.
+The boolean fields report only established checks; false can also mean a check
+was not reached or no partial result was returned. In particular, a thrown
+verification error does not return partial validation/signature/replay results.
+An absent signature or absent/invalid public key reports
+`signature_unverifiable` when the other checks complete. File-access failures
+report `read_failed`; an unavailable or damaged local runtime reports
+`runtime_unavailable`. Human-readable verification output is unchanged.
+
+The exit classes apply in both output modes. Exit 1 retains the existing
+signature/binding/replay failure meaning, including `commitment_mismatch`,
+`verdict_mismatch`, `action_verdict_mismatch` and `inert_input`. Exit 2 distinguishes
+unreadable or schema-invalid input, following the CLI's existing use of 2 for
+invalid `status`/`coverage` arguments; there was no existing three-class receipt
+exit convention. Missing PATH in text mode retains the legacy usage exit 1.
+Consumers that formerly asserted exactly 1 for schema errors must accept 2;
+consumers checking zero versus nonzero remain compatible.
 
 
 ### `seal history DIRECTORY`
@@ -102,7 +131,6 @@ rows are the newest observed claims, not a snapshot guarantee. Ties use filename
 order. The command opens regular files read-only without taking writer locks.
 It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
 unavailable directory. Underlying filesystem stalls are outside these work caps.
-
 
 ### `seal seal_block [--pubkey HEX]`
 

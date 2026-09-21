@@ -1,0 +1,29 @@
+---
+import DefaultHero from '@astrojs/starlight/components/Hero.astro';
+import ApprovalIllustration from './ApprovalIllustration.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const home = Astro.url.pathname.replace(/\/$/, '') === base;
+---
+{home ? <section class="home-hero" aria-labelledby="_top">
+  <div class="hero-copy">
+    <p class="eyebrow">LOCAL MCP APPROVAL · Claude Code</p>
+    <h1 id="_top">Review risky tool calls before they run.</h1>
+    <p class="lead">Seal sits between Claude Code and a local MCP server. Choose the tools that need approval, inspect each request, and allow at most one execution per approval.</p>
+    <div class="actions"><a class="primary" href={`${base}/start/install/`}>Install &amp; try the demo <span aria-hidden="true">→</span></a><a href={`${base}/guide/choosing-what-to-protect/`}>Protect your tools</a></div>
+    <p class="scope">Only selected calls routed through Seal are gated. Bash, direct access and other routes remain outside its control. <a href="#guarantees-limits">Read the limits.</a></p>
+    <p class="platform">Linux x86-64 · macOS x64/arm64 · Node 20+. Windows and Linux ARM are unsupported.</p>
+  </div>
+  <ApprovalIllustration />
+</section> : <DefaultHero />}
+<style>
+  .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4rem; padding-block: 3rem 1rem; align-items: start; }
+  .eyebrow { font: 600 .75rem/1.5 ui-monospace, monospace; letter-spacing: .1em; color: var(--seal-accent); margin: 0 0 1.5rem; }
+  h1 { font-size: clamp(2.5rem, 4.1vw, 3.5rem); line-height: 1.06; letter-spacing: -.04em; max-width: 14ch; color: var(--seal-text); }
+  .lead { font-size: 1.125rem; line-height: 1.7; margin-block: 1.5rem 2rem; max-width: 43ch; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.25rem; }
+  a { color: var(--seal-text); text-underline-offset: .25em; font-weight: 600; }
+  .primary { background: var(--seal-accent); color: var(--seal-accent-text); padding: 1rem 1.25rem; border-radius: var(--seal-radius); text-decoration: none; }
+  a:focus-visible { outline: 2px solid var(--seal-accent); outline-offset: 4px; }
+  .scope, .platform { font-size: .875rem; line-height: 1.7; color: var(--seal-muted); margin-top: 1.25rem; }
+  @media (max-width: 49.99rem) { .home-hero { grid-template-columns: 1fr; gap: 2rem; padding-top: 1rem; } }
+</style>
