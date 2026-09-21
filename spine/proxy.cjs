@@ -24,6 +24,7 @@ const { createApprovalContract } = require("../contract/contract.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
+const { stopStdioServer } = require("./protection.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
 const { ReceiptRefusal, canonical } = require("./receipt-v2.cjs");
 const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
@@ -194,10 +195,12 @@ function createProxy(options) {
 
   const child = spawn(childCommand, childArgv.slice(1), {
     cwd: spawnCwd,
+    detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "inherit"],
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });
   let stopping = false;
+  let stopTask;
   let childClosed = false;
   let childSpawnError = null;
   child.once("error", (error) => {
@@ -542,6 +545,13 @@ function createProxy(options) {
           : {};
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
+        // The branch already requires a non-empty method string. Refuse an
+        // invalid request envelope before normalizing arguments or selecting.
+        if (frame.jsonrpc !== "2.0" || !Object.hasOwn(frame, "id")
+          || (typeof frame.id !== "string" && typeof frame.id !== "number")) {
+          blockMalformedClientFrame(frame, "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id");
+          return;
+        }
         // MCP arguments is optional. Normalize omission on the parsed frame
         // before selection and approval so every guarded stage shares it.
         // Explicit null and other non-object values still reach the renderer.
@@ -559,15 +569,11 @@ function createProxy(options) {
       if (canForward(frame)) child.stdin.write(line + "\n");
     },
     stop() {
+      if (stopTask) return stopTask;
       stopping = true;
       clearElicitationState();
-      return new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) return resolve();
-        child.once("close", () => resolve());
-        try { child.stdin.end(); } catch {}
-        child.kill("SIGTERM");
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 2000).unref();
-      });
+      stopTask = stopStdioServer(child, childOut, () => childClosed);
+      return stopTask;
     },
   };
 }

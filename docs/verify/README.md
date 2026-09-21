@@ -18,6 +18,32 @@ repository's own `seal verify` is documented alongside its other commands in
 `seal` does not mean it is the same executable; check which repository you
 installed it from.
 
+## v0.4.0 standalone checker exit status
+
+The standalone `checker/seal-receipt-v2.mjs` packaged in the published
+`seal-v0.4.0-linux-x64` asset can exit 0 when its printed
+`Signature and bindings` line says `UNVERIFIED`. Measured with the same valid
+signed receipt:
+
+| Input | v0.4.0 exit | Signature and bindings | main exit |
+| --- | --- | --- | --- |
+| Signed receipt with the correct `--pubkey` | 0 | VALID | 0 |
+| Same receipt with `signature` deleted, correct `--pubkey` supplied | 0 | UNVERIFIED | 1 |
+| Same signed receipt without `--pubkey` | 0 | UNVERIFIED | 1 |
+
+For scripts using v0.4.0 today, supply the separately obtained public key and
+require both exit 0 and a `Signature and bindings` line whose value is exactly
+`VALID`. Treat `UNVERIFIED` or a missing line as failure; exit 0 alone does not
+require a verified signature. This notice concerns the packaged standalone
+checker, distinct from the browser and assurance-kit tools above.
+
+This exit-status behavior is **fixed on main, not in v0.4.0**: main exits 1
+in the deleted-signature and no-key cases. Even exit 0 on main establishes only
+the checked document structure, signature and bindings against the supplied key,
+and verifier-local replay. It establishes neither operator authority nor event
+occurrence: the successful signed test still prints `VERIFY    UNVERIFIED`,
+with authority `UNPINNED / CALLER-SUPPLIED` and occurrence `NOT ESTABLISHED`.
+
 ## One receipt, or a broader review
 
 ![Diagram: one signed receipt splits into two separate paths. The left path, seal-check (browser), reports signature, replay and authority-pin results. The right path, seal-assurance-kit (CLI), reports verify, scan, receipt-diff and adequacy results. A caption below the two boxes reads "same bytes, two separate tools".](../public/images/verify/receipt-two-ways.svg)

@@ -107,7 +107,7 @@ test("the checker runs with the seal binary absent (copied to a clean dir)", () 
 test("the verifier takes its key out of band and never reaches positive VERIFY", () => {
   const real = makeRealReceipt();
   const withoutKey = spawnSync(process.execPath, [CHECKER, real.receipt], { encoding: "utf8" });
-  assert.equal(withoutKey.status, 0, withoutKey.stdout + withoutKey.stderr);
+  assert.equal(withoutKey.status, 1, withoutKey.stdout + withoutKey.stderr);
   assert.match(withoutKey.stdout, /Signature and bindings   UNVERIFIED/);
   assert.match(withoutKey.stdout, /VERIFY    UNVERIFIED/);
 });
@@ -136,7 +136,7 @@ for (const [label, command] of [["seal verify", [SEAL, "verify"]], ["standalone 
     const corrupt = path.join(real.dir, "corrupt.json");
     fs.writeFileSync(corrupt, Buffer.concat([bytes.subarray(0, at), Buffer.from([0xff]), bytes.subarray(at + 3)]));
     const refused = spawnSync(process.execPath, [...command, corrupt, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
-    assert.equal(refused.status, 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
+    assert.equal(refused.status, command[0] === SEAL ? 2 : 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
     assert.match(refused.stdout + refused.stderr, /read_failed|ill-formed UTF-8/);
   });
 }
@@ -151,8 +151,38 @@ for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", 
     fs.writeFileSync(file, JSON.stringify(body));
     for (const command of [[SEAL, "verify"], [CHECKER]]) {
       const refused = spawnSync(process.execPath, [...command, file, "--pubkey", real.publicKey], { encoding: "utf8" });
-      assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+      assert.equal(refused.status, command[0] === SEAL ? 2 : 1, refused.stdout + refused.stderr);
       assert.match(refused.stdout + refused.stderr, /tool and arguments are required/);
     }
   });
 }
+
+// Exit success requires a checked signature, even though phase A never claims VERIFY.
+test("checkerexit deleted signature with the correct key exits 1", () => {
+  const real = makeRealReceipt();
+  const unsigned = writeMutation(real, "unsigned.json", (body) => { delete body.signature; });
+  const result = check(unsigned, real.publicKey);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /Signature and bindings   UNVERIFIED/);
+  assert.match(result.stdout, /Verifier-local verdict   REPRODUCED/);
+  assert.match(result.stdout, /VERIFY    UNVERIFIED/);
+});
+
+test("checkerexit signed receipt without a key exits 1", () => {
+  const real = makeRealReceipt();
+  const result = check(real.receipt);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /Signature and bindings   UNVERIFIED/);
+  assert.match(result.stdout, /VERIFY    UNVERIFIED/);
+});
+
+test("checkerexit caller-supplied key changes failure to exit 0 without claiming VERIFY", () => {
+  const real = makeRealReceipt();
+  const withoutKey = check(real.receipt);
+  assert.equal(withoutKey.status, 1, withoutKey.stdout + withoutKey.stderr);
+  const result = check(real.receipt, real.publicKey);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Signature and bindings   VALID/);
+  assert.match(result.stdout, /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
+  assert.match(result.stdout, /VERIFY    UNVERIFIED/);
+});
