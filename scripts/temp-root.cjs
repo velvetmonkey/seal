@@ -99,6 +99,14 @@ function hookProcessCleanup() {
   if (processCleanupHooked) return;
   processCleanupHooked = true;
   process.once("exit", cleanupProcessScopedRoots);
+  process.once("SIGTERM", () => {
+    cleanupProcessScopedRoots();
+    process.exit(143);
+  });
+  process.once("SIGINT", () => {
+    cleanupProcessScopedRoots();
+    process.exit(130);
+  });
 }
 
 function hookTestCleanup() {
