@@ -333,3 +333,5 @@
 {"id":"history-invocation","kind":"emitted","text":"seal history DIRECTORY [--limit 1..100] [--tool NAME]","sha256":"e4c8654060c3bb4026adbc88af362d50a5d1a83967820da8549686b5a1f1115a"}
 {"id":"history-window","kind":"emitted","text":"[--since EPOCH_MS] [--until EPOCH_MS]","sha256":"6e3a7f1f4bb24758f034127a604932b04c1aec202da794910351b67b6ecb9775"}
 {"id":"history-description","kind":"emitted","text":"count files and list recent claims (default 20; context UNKNOWN)","sha256":"d7016dac58d9ddae5ed71655bbb0cbc1683163c551becf70d63cf3320db04217"}
+{"id":"sealverifyjson-help","kind":"emitted","text":"seal verify PATH [--pubkey HEX] [--json]","sha256":"b948d89f034006e00a6cb7ab4be8a1e59b562b2d143ae4370d2789077c43eb77"}
+{"id":"sealverifyjson-exits","kind":"emitted","text":"2 invalid input, unknown command or arguments to status.","sha256":"e5ebd0bbc6b9a589a7da8165c4c029e97e61092c981ef9da21ec3f1a32a42ed0"}
