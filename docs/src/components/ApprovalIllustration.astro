@@ -1,0 +1,98 @@
+---
+// SPDX-License-Identifier: Apache-2.0
+// Excerpts from the identified v0.4.0 run, not a live demo or client session.
+import transcript from '../../../test/fixtures/readme-demo-output.txt?raw';
+const lines = transcript.split('\n');
+const demoDirectory = lines.find(line => line.startsWith('demo directory: '))!.split('demo directory: ')[1].split(' (remains')[0];
+const excerpt = (prefix: string) => lines.find(line => line.startsWith(prefix))!.replaceAll(demoDirectory, '<demo>');
+const waiting = excerpt('child calls observed: still 0');
+const approved = [excerpt('Approve?'), excerpt('child replied'), excerpt('child calls observed: 1')].join('\n');
+const replayed = [excerpt('replaying the identical'), excerpt('BLOCKED'), excerpt('one-use held:'), lines.find(line => line.startsWith('receipt written:') && line.endsWith('-BLOCK.json'))!.replaceAll(demoDirectory, '<demo>')].join('\n');
+const argumentLine = lines.find(line => line.trimStart().startsWith('line: '))!.trim().slice('line: '.length);
+const argumentsJson = JSON.stringify({ line: JSON.parse(argumentLine) }, null, 2);
+---
+<figure class="approval-story" data-approval-demo>
+  <figcaption>A recorded run of v0.4.0 · <code>seal demo</code></figcaption>
+  <div class="approval-card">
+    <div class="card-header"><span>Recorded CLI transcript</span><span data-step aria-label="Step 1 of 3">01 / 03</span></div>
+    <div class="card-body">
+      <p class="state-heading" data-heading>INPUT REQUIRED</p>
+      <dl><dt>Tool</dt><dd>demo.mutate · guarded</dd><dt>Child</dt><dd>seal __demo-server</dd></dl>
+      <pre aria-label="Tool arguments" data-arguments><code>{argumentsJson}</code></pre>
+      <p class="scope">This parsed call; at most one run; 2 min.</p>
+    </div>
+    <div class="result" role="status" aria-live="polite" aria-atomic="true">
+      <p data-count>Child calls observed: 0.</p>
+      <pre data-transcript>{waiting}</pre>
+    </div>
+  </div>
+  <fieldset class="view-controls">
+    <legend>View this recorded run</legend>
+    <p>Viewing controls only; nothing here runs Seal.</p>
+    <div class="controls">
+      <button type="button" data-approve>View approval</button>
+      <button type="button" data-replay hidden>View replay</button>
+      <button type="button" data-reset hidden>Reset view</button>
+    </div>
+  </fieldset>
+  <p class="provenance">Excerpts from the <a href="https://github.com/velvetmonkey/seal/blob/v0.4.0/test/fixtures/readme-demo-output.txt">v0.4.0 transcript</a>; <code>&lt;demo&gt;</code> abbreviates its directory. This run recorded a BLOCK receipt; the demo does not always print that line.</p>
+  <template data-approved>{approved}</template>
+  <template data-replayed>{replayed}</template>
+  <template data-waiting>{waiting}</template>
+</figure>
+<script>
+  const card = document.querySelector<HTMLElement>('[data-approval-demo]');
+  if (card) {
+    const approve = card.querySelector<HTMLButtonElement>('[data-approve]')!;
+    const replay = card.querySelector<HTMLButtonElement>('[data-replay]')!;
+    const reset = card.querySelector<HTMLButtonElement>('[data-reset]')!;
+    const heading = card.querySelector<HTMLElement>('[data-heading]')!;
+    const step = card.querySelector<HTMLElement>('[data-step]')!;
+    const count = card.querySelector<HTMLElement>('[data-count]')!;
+    const transcript = card.querySelector<HTMLElement>('[data-transcript]')!;
+    type State = 'waiting' | 'approved' | 'replayed';
+    let state: State = 'waiting';
+    const render = (next: State) => {
+      state = next;
+      approve.hidden = state !== 'waiting';
+      replay.hidden = state !== 'approved';
+      reset.hidden = state === 'waiting';
+      const number = state === 'waiting' ? 1 : state === 'approved' ? 2 : 3;
+      step.textContent = `0${number} / 03`;
+      step.setAttribute('aria-label', `Step ${number} of 3`);
+      heading.textContent = { waiting: 'INPUT REQUIRED', approved: 'RECORDED APPROVAL', replayed: 'RECORDED REPLAY — BLOCKED' }[state];
+      count.textContent = `Child calls observed: ${state === 'waiting' ? '0' : '1'}.`;
+      transcript.textContent = card.querySelector<HTMLTemplateElement>(`[data-${state}]`)!.content.textContent;
+      (state === 'waiting' ? approve : state === 'approved' ? replay : reset).focus();
+    };
+    approve.addEventListener('click', () => { if (state === 'waiting') render('approved'); });
+    replay.addEventListener('click', () => { if (state === 'approved') render('replayed'); });
+    reset.addEventListener('click', () => render('waiting'));
+  }
+</script>
+<style>
+  .approval-story { margin: .5rem 0 0; min-width: 0; }
+  figcaption { color: var(--seal-muted); font-size: .8125rem; line-height: 1.5; margin-bottom: .75rem; }
+  .approval-card { background: var(--seal-surface); border: 1px solid var(--seal-border); border-radius: .625rem; overflow: hidden; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--seal-border); color: var(--seal-muted); font: .8125rem/1.5 ui-monospace, monospace; }
+  .card-body { padding: 1.5rem; }
+  .state-heading { color: var(--seal-accent); font: 600 .8125rem/1.5 ui-monospace, monospace; margin: 0 0 1.5rem; }
+  dl { display: grid; grid-template-columns: 4rem 1fr; gap: .5rem 1rem; font: .875rem/1.6 ui-monospace, monospace; margin: 0 0 1.25rem; }
+  dt { color: var(--seal-muted); } dd { margin: 0; }
+  pre { background: var(--seal-bg); color: var(--seal-text); padding: 1rem; border-radius: .25rem; font: .8125rem/1.9 ui-monospace, monospace; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+  .scope { color: var(--seal-muted); font-size: .875rem; margin: 1.25rem 0 0; }
+  .view-controls { border: 1px solid var(--seal-border); border-radius: .375rem; padding: .75rem 1rem 1rem; margin: 1rem 0; }
+  legend { font-size: .875rem; padding-inline: .25rem; font-weight: 600; }
+  .view-controls p, .provenance { font-size: .8125rem; line-height: 1.6; color: var(--seal-muted); margin: 0 0 .75rem; }
+  .provenance a { color: var(--seal-text); text-underline-offset: .2em; }
+  .controls { display: flex; flex-wrap: wrap; gap: .625rem; }
+  button { font: inherit; font-size: .875rem; padding: .75rem 1rem; min-height: 44px; cursor: pointer; background: var(--seal-bg); color: var(--seal-text); border: 1px solid var(--seal-border); border-radius: .25rem; }
+  button:hover { border-color: var(--seal-accent); }
+  button[hidden] { display: none; }
+  button:focus-visible, pre:focus-visible, a:focus-visible { outline: 2px solid var(--seal-accent); outline-offset: 3px; }
+  .result { border-top: 1px solid var(--seal-border); margin: 0; padding: 1rem 1.5rem; font: .8125rem/1.8 ui-monospace, monospace; }
+  .result p { margin: 0 0 .75rem; }
+  .result pre { padding: 0; background: transparent; line-height: 1.6; }
+  @media (max-width: 26rem) { .card-body { padding: 1rem; } .card-header { padding: 1rem; font-size: .75rem; } dl { grid-template-columns: 3rem 1fr; font-size: .8125rem; } pre { padding: .75rem; font-size: .75rem; } .result { padding: 1rem; } }
+  /* No animation or transition: all states also work with reduced motion. */
+</style>

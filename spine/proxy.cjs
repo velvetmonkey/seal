@@ -533,6 +533,13 @@ function createProxy(options) {
           : {};
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
+        // The branch already requires a non-empty method string. Refuse an
+        // invalid request envelope before normalizing arguments or selecting.
+        if (frame.jsonrpc !== "2.0" || !Object.hasOwn(frame, "id")
+          || (typeof frame.id !== "string" && typeof frame.id !== "number")) {
+          blockMalformedClientFrame(frame, "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id");
+          return;
+        }
         // MCP arguments is optional. Normalize omission on the parsed frame
         // before selection and approval so every guarded stage shares it.
         // Explicit null and other non-object values still reach the renderer.
