@@ -143,6 +143,12 @@ test("verify refuses a changed local kernel before reporting a verdict", () => {
         ? Buffer.from([0, 2, 1, 120]) : "\n// changed local glue\n");
       const changed = verify();
       assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+      const blocked = spawnSync(process.execPath, [path.join(tree, "bin/seal"), "seal_block", "--pubkey", real.publicKey], {
+        input: fs.readFileSync(real.receipt), encoding: "utf8",
+        env: { ...process.env, SEAL_CACHE_DIR: path.join(real.dir, "empty-cache") },
+      });
+      assert.equal(blocked.status, 3, blocked.stdout + blocked.stderr);
+      assert.equal(JSON.parse(blocked.stdout).error, "kernel_integrity");
       assert.match(changed.stderr, /local kernel runtime integrity check failed/);
       assert.ok(changed.stderr.includes(`${relative} hash mismatch`), changed.stderr);
       assert.doesNotMatch(changed.stdout + changed.stderr, /REPRODUCED|Document structure/);
@@ -266,4 +272,39 @@ test("CLI and MCP verification have identical typed results including code", asy
     assert.equal(result.code, code);
     assert.equal(result.ok, exit === 0);
   });
+});
+
+test("seal_block preserves stdin bytes and separates missing keys from invalid signatures", () => {
+  const real = realReceipt();
+  const bytes = fs.readFileSync(real.receipt);
+  const good = run(["seal_block", "--pubkey", real.publicKey], bytes);
+  assert.equal(good.code, 0, good.out);
+  const result = JSON.parse(good.out);
+  assert.equal(result.seal_block, "v1");
+  assert.equal(result.ok, true);
+  assert.equal(result.verify, false);
+  assert.equal(result.authority, "UNPINNED / CALLER-SUPPLIED");
+  assert.equal(result.occurrence, "NOT ESTABLISHED");
+  for (const args of [[], ["--pubkey"], ["--pubkey", "bad"]]) {
+    const missing = run(["seal_block", ...args], bytes);
+    assert.equal(missing.code, 5, missing.out);
+    assert.equal(JSON.parse(missing.out).error, "no_key");
+  }
+  const wrong = crypto.generateKeyPairSync("ed25519").publicKey
+    .export({ type: "spki", format: "der" }).subarray(-32).toString("hex");
+  const mismatch = run(["seal_block", "--pubkey", wrong], bytes);
+  assert.equal(mismatch.code, 1, mismatch.out);
+  assert.equal(JSON.parse(mismatch.out).error, "signature_mismatch");
+  // Parsing/reserializing stdin would hide a duplicate; lossy UTF-8 decoding
+  // would replace the invalid byte and turn its refusal into a different error.
+  for (const [input, error] of [
+    [Buffer.from(bytes.toString().replace('"tool":', '"tool":"duplicate","tool":')), "duplicate_member"],
+    [Buffer.concat([Buffer.from([0xff]), bytes]), "read_failed"],
+  ]) {
+    const bad = run(["seal_block", "--pubkey", real.publicKey], input);
+    assert.equal(bad.code, 1, bad.out);
+    assert.equal(JSON.parse(bad.out).error, error);
+  }
+  const legacy = run(["verify", real.receipt, "--pubkey", "bad"]);
+  assert.equal(legacy.code, 1, legacy.out);
 });
