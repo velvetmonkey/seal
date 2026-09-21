@@ -93,6 +93,8 @@ packs from this tree. It is not a captured command transcript. It will
 change when a payload member changes; it does not change when only docs
 change.
 
+Before scripting receipt checks, read the [v0.4.0 standalone checker exit-status notice](../verify/README.md#v040-standalone-checker-exit-status).
+
 ### Installed-tree hash definition
 
 The installed tree is exactly the regular payload files named by the artifact's
