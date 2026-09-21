@@ -4,6 +4,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
 const { requireProtectSupportedPlatform } = require(path.join(path.resolve(__dirname, ".."), "spine", "platform.cjs"));
