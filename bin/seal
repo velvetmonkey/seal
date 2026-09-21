@@ -346,7 +346,9 @@ function printObservedClient(state) {
       || typeof client.elicitationDeclared !== "boolean") return;
   // Self-asserted strings must not inject additional terminal lines or controls.
   const { escapeInvisible } = require(path.join(ROOT, "contract", "renderer.cjs"));
-  const display = (value) => escapeInvisible(value, { preserveShaping: false });
+  const { capClientMetadata } = require(path.join(ROOT, "spine", "presentation.cjs"));
+  // Re-cap legacy state too; escaping controls can expand the stored byte count.
+  const display = (value) => capClientMetadata(escapeInvisible(capClientMetadata(value), { preserveShaping: false }));
   console.log(`Observed client: ${display(client.name)} ${display(client.version)} (self-asserted, unsigned)`);
   console.log(`Elicitation declared: ${client.elicitationDeclared ? "yes" : "no"}`);
 }

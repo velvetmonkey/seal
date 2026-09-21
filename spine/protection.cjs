@@ -1658,7 +1658,14 @@ function recordObservedClient(statePath, leaseToken, observedClient) {
     const state = readState(statePath);
     if (!state || !leaseMatches(state.lease, leaseToken)) return;
     const next = { ...state };
-    if (observedClient) next.observedClient = observedClient;
+    if (observedClient) {
+      const { capClientMetadata } = require("./presentation.cjs");
+      next.observedClient = {
+        name: capClientMetadata(observedClient.name),
+        version: capClientMetadata(observedClient.version),
+        elicitationDeclared: observedClient.elicitationDeclared,
+      };
+    }
     else delete next.observedClient;
     writeState(statePath, next);
   } finally {
