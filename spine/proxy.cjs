@@ -31,6 +31,7 @@ const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } 
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
+const CLIENT_FORM_ELICITATION_UNSUPPORTED = "client_form_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Session-only transport metadata: never passed to the contract or receipts.
@@ -453,6 +454,17 @@ function createProxy(options) {
     }
     if (!clientCapabilities || !Object.hasOwn(clientCapabilities, "elicitation")) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
+      return;
+    }
+    const elicitation = clientCapabilities.elicitation;
+    // MCP 2025-11-25 client/elicitation: an empty capability retains legacy
+    // form support; a nonempty declaration must explicitly support form mode.
+    const supportsForm = elicitation !== null && typeof elicitation === "object" && !Array.isArray(elicitation)
+      && (Object.keys(elicitation).length === 0
+        || (Object.hasOwn(elicitation, "form") && elicitation.form !== null
+          && typeof elicitation.form === "object" && !Array.isArray(elicitation.form)));
+    if (!supportsForm) {
+      blockForward(frame, CLIENT_FORM_ELICITATION_UNSUPPORTED, "the client did not declare form elicitation support; this guarded call requires form-mode approval");
       return;
     }
     if (receiptCorrelations.size >= receiptCorrelationCapacity) {
