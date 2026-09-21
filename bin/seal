@@ -558,7 +558,7 @@ async function demo(args) {
 async function verify(args) {
   const receiptPath = args[0];
   const keyAt = args.indexOf("--pubkey");
-  const json = args.includes("--json");
+  const json = args.indexOf("--json") !== -1;
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
   const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
