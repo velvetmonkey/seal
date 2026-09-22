@@ -306,7 +306,10 @@ installation rather than a Windows shim that exits silently.
 
 ### `claude_unavailable`
 
-The `claude` command is not on `PATH`. `seal protect` installs the gate
+The `claude` command became unavailable when Seal checked for a local override
+(`claude command is not available`). A command missing from `PATH` at the initial
+check instead prints `seal: REFUSE claude_unusable: Claude Code command "claude
+(not found on PATH)" failed identification`. `seal protect` installs the gate
 *through* Claude Code, so it needs it. Install Claude Code or fix `PATH`,
 then re-run.
 
