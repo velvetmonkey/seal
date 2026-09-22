@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
@@ -14,32 +13,8 @@ const receiptPopulation = require(path.join(path.resolve(__dirname, ".."), "spin
 const ROOT = path.resolve(__dirname, "..");
 const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
-const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
-const shippedRuntime = path.join(ROOT, "runtime");
-const shippedRuntimeFiles = Object.entries(manifest.files).filter(([relative]) => relative.startsWith("kernel/"));
+const { inspectRuntime } = require(path.join(ROOT, "spine", "runtime-inspection.cjs"));
 
-function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
-function inspectRuntimeAt(directory, files) {
-  for (const [relative, expected] of files) {
-    const target = path.join(directory, relative);
-    try {
-      if (!fs.statSync(target).isFile()) return { present: false, state: "absent", reason: `${relative} is not a file` };
-      const got = sha256(fs.readFileSync(target));
-      if (got !== expected) return { present: false, state: "integrity check failed", reason: `${relative} hash mismatch` };
-    } catch (error) {
-      return { present: false, state: "absent", reason: `${relative} is unavailable` };
-    }
-  }
-  return { present: true };
-}
-function inspectRuntime() {
-  // The installed artifact ships the kernel, while src/verify.cjs is fetched
-  // into the cache for the optional verification command. Never treat a bad
-  // shipped kernel as a reason to use an unchecked fallback.
-  const shipped = inspectRuntimeAt(shippedRuntime, shippedRuntimeFiles);
-  if (shipped.present || shipped.state === "integrity check failed") return shipped;
-  return inspectRuntimeAt(cache, Object.entries(manifest.files));
-}
 function status() {
   // Status derives ACTIVE/STALE from Linux process-start witnesses. Keep this
   // product path behind the same platform refusal as `seal __proxy`.
@@ -584,59 +559,18 @@ async function demo(args) {
 async function verify(args) {
   const receiptPath = args[0];
   const keyAt = args.indexOf("--pubkey");
-  const json = args.includes("--json");
+  const json = args.indexOf("--json") !== -1;
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
-  let result = {
-    read: false, validate: false, replay: false, signature: false,
-    authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
-  };
-  let phase = "input";
-  try {
-    if (!receiptPath || receiptPath === "--json") throw new Error("usage: seal verify PATH");
-    const absolute = path.resolve(receiptPath);
-    let stat;
-    try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
-    if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
-    if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
-    let text;
-    try { text = fs.readFileSync(absolute); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
-    if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
-    phase = "runtime";
-    const runtime = inspectRuntime();
-    if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
-    const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
-    phase = "receipt";
-    // read() retains the checker's UTF-8 and duplicate-member refusals.
-    if (json) { verifier.read(text); result.read = true; }
-    result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
-    result.ok = result.validate && result.signature && result.replay;
-    if (json) console.log(JSON.stringify({ ...result, code: result.ok ? null : "signature_unverifiable" }));
-    else console.log(verifier.format(result));
-    if (!result.ok) process.exitCode = 1;
-  } catch (error) {
-    // Classify existing verifier codes, without reimplementing its checks or
-    // replacing its errors. 1 retains verification failures; 2 follows the
-    // CLI's existing invalid-input convention (status/coverage arguments).
-    const verificationFailure = new Set([
-      "signature_mismatch", "commitment_mismatch", "verdict_mismatch",
-      "action_verdict_mismatch", "inert_input",
-    ]).has(error.code);
-    const exitCode = phase === "runtime" || verificationFailure ? 1 : 2;
-    if (!json) {
-      // The outer handler owns the exact legacy stderr text and debug output.
-      error.exitCode = exitCode;
-      throw error;
-    }
-    // A refusal returns no partial verifier result. Only expose checks known
-    // to have completed; false means not established, including not reached.
-    console.log(JSON.stringify({
-      ...result, ok: false,
-      code: error.code || (phase === "input" ? "read_failed" : phase === "runtime" ? "runtime_unavailable" : "invalid_receipt"),
-      message: error.message,
-    }));
-    process.exitCode = exitCode;
-  }
+  const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
+    .verifyReceipt({ receiptPath, pubkeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+  if (json) console.log(JSON.stringify(result));
+  else if (error) {
+    // Keep the outer handler's legacy stderr and debug presentation.
+    error.exitCode = exitCode;
+    throw error;
+  } else console.log(verifier.format(result));
+  if (exitCode) process.exitCode = exitCode;
 }
 
 async function sealBlock(args) {
@@ -766,6 +700,7 @@ async function main() {
   if (command === "demo") return demo(process.argv.slice(3));
   // Private spine subcommands: not part of the command surface, not listed.
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
+  if (command === "__verify-server") return require(path.join(ROOT, "spine", "verify-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv.slice(3));
   if (command === "seal_block") return sealBlock(process.argv.slice(3));
