@@ -246,6 +246,7 @@ function coverage() {
         if (!local) throw new Error("no inspected local wrapper establishes ownership");
         const state = statePath ? protection.readState(statePath) : matching[0]?.[1].state;
         if (!state) throw new Error("installed wrapper protection record is unavailable");
+        printObservedClient(state);
         if (state.serverName !== name || typeof state.projectRoot !== "string" ||
             protection.claudeProjectRoot(state.projectRoot) !== projectRoot) throw new Error("installed wrapper server or project scope does not match the inspected entry");
         if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
@@ -272,6 +273,7 @@ function coverage() {
   // Retain diagnostics for orphaned records without duplicating configured rows.
   for (const [statePath, record] of records) {
     if (usedRecords.has(statePath)) continue;
+    printObservedClient(record.state);
     console.log(`UNKNOWN selected MCP tools at ${statePath} — wrapper enforcement could not be established: ${record.error?.message || "record has no matching configured server"}`);
     process.exitCode = 1;
   }
@@ -313,6 +315,19 @@ function coverageOutsideRoutes() {
   console.log("UNKNOWN server-to-client requests (sampling/createMessage) — wrapper relays server output without filtering; downstream effects were not established");
 }
 
+function printObservedClient(state) {
+  const client = state?.observedClient;
+  if (!client || typeof client.name !== "string" || typeof client.version !== "string"
+      || typeof client.elicitationDeclared !== "boolean") return;
+  // Self-asserted strings must not inject additional terminal lines or controls.
+  const { escapeInvisible } = require(path.join(ROOT, "contract", "renderer.cjs"));
+  const { capClientMetadata } = require(path.join(ROOT, "spine", "presentation.cjs"));
+  // Re-cap legacy state too; escaping controls can expand the stored byte count.
+  const display = (value) => capClientMetadata(escapeInvisible(capClientMetadata(value), { preserveShaping: false }));
+  console.log(`Observed client: ${display(client.name)} ${display(client.version)} (self-asserted, unsigned)`);
+  console.log(`Elicitation declared: ${client.elicitationDeclared ? "yes" : "no"}`);
+}
+
 function statusRecord(recordPath, projectRoot, readError) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let receiptDir;
@@ -327,6 +342,7 @@ function statusRecord(recordPath, projectRoot, readError) {
     const state = filePath ? protection.readState(filePath) : null;
     stateRead = true;
     storedState = state;
+    printObservedClient(state);
     stateRoot = root;
     statePath = filePath;
     if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
