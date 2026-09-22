@@ -24,6 +24,8 @@ the Node CLI this repository ships.
    v0.2.0 was withdrawn before publication. Its record remains historical at
    [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md).
    The candidate [assurance/RELEASE-NOTES-v0.4.1.md](RELEASE-NOTES-v0.4.1.md) describes this checkout.
+   The v0.4.0 release record remains available at
+   [assurance/RELEASE-NOTES-v0.4.0.md](RELEASE-NOTES-v0.4.0.md).
    The v0.3.0 release record is
    [assurance/RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
    The historical record prepared with the v0.2.1 release tree is
