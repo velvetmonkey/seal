@@ -699,6 +699,7 @@ async function main() {
   if (command === "--help" || command === "-h") return printHelp();
   if (command === "demo") return demo(process.argv.slice(3));
   // Private spine subcommands: not part of the command surface, not listed.
+  if (command === "__demo-grant-server") return require(path.join(ROOT, "spine", "demo-grant-server.cjs")).run(process.argv[3]);
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
   if (command === "__verify-server") return require(path.join(ROOT, "spine", "verify-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
