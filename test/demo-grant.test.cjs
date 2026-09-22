@@ -120,7 +120,7 @@ test('single-user demonstration: competing actual process cannot acquire target'
  assert.equal(other.status,0,other.stderr);assert.equal(JSON.parse(other.stdout).code,'target_unready');
  assert.equal(s.target.call(params(valid)).code,'ALLOW');assert.equal(s.count(),1);
 });
-test('single-user demonstration: distinct key IDs share spend namespace',t=>{
+test('single-user demonstration: spend record persists the key ID outside its uniqueness namespace',t=>{
  const s=setup(t);assert.equal(s.target.call(params(valid)).code,'ALLOW');
  const row=fs.readdirSync(s.file+'.spends').find(n=>n!=='identity');
  const record=JSON.parse(fs.readFileSync(path.join(s.file+'.spends',row)));

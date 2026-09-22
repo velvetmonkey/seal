@@ -43,7 +43,7 @@ function createTarget(dataFile, { clock = () => { const n = Date.now()/1000; ret
   function config() {
     let c;
     try { c = v.parse(read(dataFile + '.grant.json'), 65536, 5, 'target_unready').value; } catch { v.fail('target_unready'); }
-    if (!c || !v.ID.test(c.audience) || !Array.isArray(c.keys) || !c.keys.length || (audience && c.audience !== audience)) v.fail('target_unready');
+    if (!c || typeof c.audience !== 'string' || !v.ID.test(c.audience) || !Array.isArray(c.keys) || !c.keys.length || (audience && c.audience !== audience)) v.fail('target_unready');
     if (c.clock_trusted !== true) v.fail('clock_untrusted');
     return c;
   }
@@ -127,7 +127,7 @@ function createTarget(dataFile, { clock = () => { const n = Date.now()/1000; ret
         writeCompleteSync(dataFd,frozen.bytes); fs.fsyncSync(dataFd);
       } catch { poison='target_unready'; v.fail('outcome_unknown'); }
       return {code:'ALLOW',effect_count:count+1};
-    } catch(e) { return {code:e.refusal ? e.code : 'target_unready',effect_count:0}; }
+    } catch(e) { return {code:e.refusal ? e.code : 'target_unready'}; }
   }
   function frame(bytes) {
     let id=null;
