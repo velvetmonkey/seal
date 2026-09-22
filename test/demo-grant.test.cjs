@@ -128,3 +128,20 @@ test('single-user demonstration: spend record persists the key ID outside its un
  assert.equal(record.key_id,fixture.issuer.key_id);assert.equal(record.status,'SPENT');
  assert.deepEqual(record.effect,valid.effect);assert.equal(record.effect_sha256,JSON.parse(valid.wire).effect_sha256);
 });
+test('single-user demonstration: replacing enrolled key bytes after spend prevents invocation',t=>{
+ const s=setup(t);const original=fs.fsyncSync;
+ t.mock.method(fs,'fsyncSync',fd=>{
+  original(fd);
+  if(fs.fstatSync(fd).isDirectory()) {
+   // A different public point, derived only from THROWAWAY TEST KEY data.
+   // No private key generation and no new signing/issuance.
+   const der=require('node:crypto').createPublicKey(fixture.public_key_pem).export({type:'spki',format:'der'});
+   der[der.length-1]^=1;
+   s.config.keys[0].public_key_pem=require('node:crypto').createPublicKey({key:der,type:'spki',format:'der'}).export({type:'spki',format:'pem'});
+   s.save();
+  }
+ });
+ assert.equal(s.target.call(params(valid)).code,'consumed_not_started');t.mock.restoreAll();
+ assert.equal(s.count(),0);assert.equal(s.bytes(),'preserve-existing\n');
+ assert.equal(fs.readdirSync(s.file+'.spends').length,2);
+});

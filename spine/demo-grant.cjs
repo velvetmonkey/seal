@@ -105,6 +105,14 @@ function verify(params, config, interval) {
   const effect = { profile: 'seal-demo-effect/v1', audience: config.audience, resource: 'demo-data',
     tool: params.name, arguments: { line: params.arguments.line }, receipt_sha256: params.receipt_sha256 };
   if (sha(canonical(effect)) !== g.effect_sha256) fail('effect_mismatch');
-  return { g, body_sha256: sha(body), effect, bytes: Buffer.from(params.arguments.line + '\n', 'ascii') };
+  return { g, key_sha256: sha(publicKey.export({ type: 'spki', format: 'der' })), body_sha256: sha(body), effect, bytes: Buffer.from(params.arguments.line + '\n', 'ascii') };
 }
-module.exports = { PROFILE, ID, exact, fail, sha, canonical, parse, policy, scope, time, verify };
+// A key ID is a lookup name, not permission to substitute its key mid-call.
+function recheck(frozen, config, interval) {
+  let current;
+  try { current = policy(frozen.g, config); } catch { fail('key_revoked'); }
+  if (sha(current.publicKey.export({ type: 'spki', format: 'der' })) !== frozen.key_sha256) fail('key_revoked');
+  scope(current.key, config);
+  time(frozen.g, interval);
+}
+module.exports = { PROFILE, ID, exact, fail, sha, canonical, parse, policy, scope, time, verify, recheck };

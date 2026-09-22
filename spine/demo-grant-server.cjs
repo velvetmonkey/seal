@@ -112,10 +112,10 @@ function createTarget(dataFile, { clock = () => { const n = Date.now()/1000; ret
     try {
       const {c,t}=ready();
       const frozen=v.verify(params,c,t); resources();
-      const latest=ready(); const {key}=v.policy(frozen.g,latest.c); v.scope(key,latest.c); v.time(frozen.g,latest.t);
+      const latest=ready(); v.recheck(frozen,latest.c,latest.t);
       spend(frozen,latest.t);
       let count;
-      try { const now=ready(); const {key:k}=v.policy(frozen.g,now.c); v.scope(k,now.c); v.time(frozen.g,now.t); count=resources(); }
+      try { const now=ready(); v.recheck(frozen,now.c,now.t); count=resources(); }
       catch { v.fail('consumed_not_started'); }
       // Count invocation BEFORE attempting append. A failed write may be partial;
       // neither this count nor the response claims transactional completion.
