@@ -148,6 +148,37 @@ function installedProxyPath() {
   return installedProxy;
 }
 
+test("relative protected command activates from project, nested and unrelated directories", () => {
+  const root = testTmpdir("seal-relative-activation-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "nested");
+  const unrelated = path.join(root, "unrelated");
+  for (const dir of [project, home, nested, unrelated]) fs.mkdirSync(dir);
+  const fakeBin = fakeClaudeBin(root);
+  const serverPath = path.join(project, "server");
+  fs.symlinkSync(process.execPath, serverPath);
+  writeProject(project, { command: "./server", args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const env = { ...process.env, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = statePathFor(project, env);
+  assert.equal(readState(file).state, "PENDING RESTART");
+  assert.equal(readState(file).projectRoot, fs.realpathSync(project));
+  for (const cwd of [nested, unrelated, project]) {
+    assert.equal(fs.existsSync(serverPath), true);
+    const activated = run(cwd, home, ["__proxy", "--protect-state", file], env);
+    assert.equal(activated.code, 0, `${cwd}: ${activated.out}`);
+    assert.equal(readState(file).state, "ACTIVE");
+  }
+  // A caller-local executable must not hide a missing saved-project command.
+  fs.unlinkSync(serverPath);
+  fs.symlinkSync(process.execPath, path.join(unrelated, "server"));
+  const refused = run(unrelated, home, ["__proxy", "--protect-state", file], env);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /protected_server_missing/);
+});
+
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
   const root = testTmpdir("seal-protect3b-hash-");
   const project = path.join(root, "project");
@@ -171,6 +202,78 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash before unprotect: ${beforeHash}`));
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash after unprotect: ${beforeHash}`));
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
+});
+
+test("protect, unprotect, recover, status and coverage share the git root from nested and symlinked directories", () => {
+  const root = testTmpdir("seal-protect3b-status-root-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "src", "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(home);
+  execFileSync("git", ["init", "--quiet", project]);
+  const linked = path.join(root, "linked");
+  fs.symlinkSync(nested, linked, "dir");
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: home };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const rootConfigPath = path.join(project, ".mcp.json");
+  const rootConfig = JSON.parse(fs.readFileSync(rootConfigPath, "utf8"));
+  rootConfig.mcpServers.cache = { command: "root-cache-server" };
+  fs.writeFileSync(rootConfigPath, JSON.stringify(rootConfig));
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const baseline = run(project, home, ["status"], env);
+  assert.equal(baseline.code, 0, baseline.out);
+  const coverage = run(project, home, ["coverage"], env);
+  assert.equal(coverage.code, 0, coverage.out);
+  for (const cwd of [project, nested, linked]) {
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    assert.equal(withoutObservationTime(status.out), withoutObservationTime(baseline.out));
+    const observed = run(cwd, home, ["coverage"], env);
+    assert.equal(observed.code, 0, observed.out);
+    assert.match(observed.out, /selected MCP tools on db: demo.mutate — protection state is PENDING RESTART/);
+    assert.equal(observed.out, coverage.out);
+  }
+  const sourceBefore = fs.readFileSync(path.join(project, ".mcp.json"), "utf8");
+  const nestedSource = writeProject(nested, { command: "nested-server-must-not-run" });
+  const stateEnv = { XDG_DATA_HOME: path.join(home, ".local", "share") };
+  const file = statePathFor(project, stateEnv, "db");
+  for (const cwd of [nested, linked]) {
+    const unprotected = run(cwd, home, ["unprotect", "db"], env);
+    assert.equal(unprotected.code, 0, unprotected.out);
+    assert.ok(unprotected.out.includes(file), unprotected.out);
+    assert.ok(unprotected.out.includes(`Project .mcp.json hash before unprotect: ${sha256(sourceBefore)}`), unprotected.out);
+    assert.equal(readState(file).state, "UNPROTECTED");
+    const protectedAgain = run(cwd, home, ["protect", "db", "demo.mutate"], env);
+    assert.equal(protectedAgain.code, 0, protectedAgain.out);
+    assert.ok(protectedAgain.out.includes(file), protectedAgain.out);
+    assert.match(protectedAgain.out, /configured MCP servers not routed through this Seal wrapper: cache/);
+    assert.equal(readState(file).projectRoot, project);
+    assert.equal(fs.existsSync(statePathFor(nested, stateEnv, "db")), false);
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.ok(status.out.includes(file), status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    const incompatible = JSON.stringify({ ...readState(file), schema: "seal.protect/v99" });
+    fs.writeFileSync(file, incompatible);
+    const recoveryArgs = cwd === nested ? ["recover", "--archive", "db"] : ["recover", "--archive"];
+    const recovered = run(cwd, home, recoveryArgs, env);
+    assert.equal(recovered.code, 0, recovered.out);
+    const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+    assert.ok(archive?.startsWith(`${file}.recovered-`), recovered.out);
+    assert.equal(fs.readFileSync(archive, "utf8"), incompatible);
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), sourceBefore);
+    assert.equal(fs.readFileSync(path.join(nested, ".mcp.json"), "utf8"), nestedSource);
+    const outside = run(cwd, home, ["status"], env);
+    assert.equal(outside.code, 0, outside.out);
+    assert.match(outside.out, /Sealed MCP route: - outside Seal/);
+    assert.equal(run(cwd, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  }
+
 });
 
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {

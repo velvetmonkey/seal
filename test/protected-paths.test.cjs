@@ -8,10 +8,9 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = resolve(__dirname, "..");
 const SCRIPT = join(ROOT, "scripts", "check-protected-paths.cjs");
 const RANGE_SCRIPT = join(ROOT, "scripts", "resolve-ci-diff-range.cjs");
-// Local evidence stays under the required scratch root. GitHub-hosted CI has
-// no /home/monkey, so it supplies its own runner-managed scratch directory.
+// Honour explicit and CI scratch roots; otherwise use an isolated local temp directory.
 const SCRATCH_ROOT = process.env.SEAL_PINPROTECT_TEST_ROOT
-  || (process.env.GITHUB_ACTIONS ? process.env.RUNNER_TEMP : "/home/monkey/scratch");
+  || (process.env.GITHUB_ACTIONS ? process.env.RUNNER_TEMP : testTmpdir("pinprotect-test-"));
 
 function git(root, args) {
   const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
@@ -21,7 +20,8 @@ function git(root, args) {
 
 function fixture() {
   const root = testTmpdir(join(SCRATCH_ROOT, "pinprotect-path-test-"));
-  git(root, ["init", "-q"]);
+  // Merge fixtures create main themselves; never inherit the host's default branch.
+  git(root, ["init", "-q", "-b", "master"]);
   git(root, ["config", "user.email", "pinprotect@example.invalid"]);
   git(root, ["config", "user.name", "Pinprotect Test"]);
   writeFileSync(join(root, "README.md"), "base\n");

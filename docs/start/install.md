@@ -85,13 +85,15 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 78d0e09dec7d2706341bab0e4202b563990fa48d477acc8b9a2d61ddbe7fdcde
+tree: cda35108997c4330323e6d12a1b0a3fe25836108978340c56127d12b3c7f19c3
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
 packs from this tree. It is not a captured command transcript. It will
 change when a payload member changes; it does not change when only docs
 change.
+
+Before scripting receipt checks, read the [v0.4.0 standalone checker exit-status notice](../verify/README.md#v040-standalone-checker-exit-status).
 
 ### Installed-tree hash definition
 

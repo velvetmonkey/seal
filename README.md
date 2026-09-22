@@ -73,6 +73,8 @@ after replay:    1 call - refused
 outside Seal:    effect succeeded, 0 Seal decisions
 ```
 
+Read the [v0.4.0 standalone checker exit-status notice](docs/verify/README.md#v040-standalone-checker-exit-status) before scripting receipt checks.
+
 The demo also prints its receipt directory and public key. Those records are
 useful for inspecting the decision, but they do not establish that the recorded
 effect happened.
@@ -132,8 +134,8 @@ remembering:
 seal status
 ```
 
-Receipts contain the complete parsed arguments for protected tools and child
-command metadata, so sharing a receipt shares those values.
+Receipts contain the complete parsed arguments for protected tools, so sharing a
+receipt shares those arguments.
 
 ## Remove it
 

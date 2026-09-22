@@ -7,6 +7,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { LEGACY_RELEASE_TAGS, sha256 } from "../scripts/release-manifest-lib.mjs";
+import { fetchPublishedAsset } from "../scripts/fetch-published-asset.mjs";
 import tempRoot from "../scripts/temp-root.cjs";
 const { testTmpdir } = tempRoot;
 
@@ -16,6 +17,92 @@ const VERSION_PATTERN = VERSION.replaceAll(".", "\\.");
 const GENERATOR = path.join(ROOT, "scripts", "generate-release-docs.mjs");
 const MACOS_PROTECT_CLAIMS = path.join(ROOT, "scripts", "check-macos-protect-claims.mjs");
 const COMMIT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+test("published asset retries preserve native responses and stop at permanent failures", async (t) => {
+  const payload = Buffer.from([0, 255, 128, 13, 10, 65, 0]);
+  const counts = new Map();
+  const times = new Map();
+  const server = http.createServer((request, response) => {
+    const route = request.url;
+    const count = (counts.get(route) || 0) + 1;
+    counts.set(route, count);
+    times.set(route, [...(times.get(route) || []), Date.now()]);
+    const [mode, code] = route.slice(1).split('/');
+    if (mode === 'reset' && count <= 2) return request.socket.destroy();
+    if (mode === 'redirect') {
+      response.writeHead(302, { location: '/direct/200' });
+      return response.end();
+    }
+    response.writeHead(mode === 'recover' && count > 2 ? 200 : Number(code) || 200,
+      { 'content-type': 'application/octet-stream', 'x-asset-fidelity': 'native' });
+    if (mode === 'broken-body') {
+      response.flushHeaders();
+      setTimeout(() => response.destroy(), 20);
+      return;
+    }
+    response.end(payload);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const nativeFetch = globalThis.fetch;
+  let lastResponse;
+  const signals = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    signals.push(options.signal);
+    lastResponse = await nativeFetch(url, options);
+    return lastResponse;
+  });
+  for (const route of ['/direct/200', '/redirect/200',
+    ...[429, 500, 502, 503, 504].map(status => `/recover/${status}`), '/reset/200']) {
+    const response = await fetchPublishedAsset(`${base}${route}`);
+    assert.equal(response, lastResponse, 'must return the identical native response');
+    assert.equal(response.ok, true);
+    assert.equal(response.status, 200);
+    assert.equal(response.statusText, 'OK');
+    assert.equal(response.headers.get('x-asset-fidelity'), 'native');
+    assert.equal(response.redirected, route.startsWith('/redirect'));
+    assert.equal(response.url, base + (response.redirected ? '/direct/200' : route));
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), payload);
+    if (route.startsWith('/recover') || route.startsWith('/reset')) {
+      assert.equal(counts.get(route), 3);
+      const [first, second, third] = times.get(route);
+      assert.ok(second - first >= 450, 'first retry must back off');
+      assert.ok(third - second >= 950, 'second retry must back off longer');
+    }
+  }
+  for (const status of [400, 401, 403, 404, 408, 410, 422, 501, 503]) {
+    const route = `/permanent/${status}`;
+    const response = await fetchPublishedAsset(base + route);
+    assert.equal(response, lastResponse);
+    assert.equal(response.ok, false);
+    assert.equal(response.status, status);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), payload);
+    assert.equal(counts.get(route), status === 503 ? 3 : 1);
+  }
+  const response = await fetchPublishedAsset(`${base}/broken-body/200`);
+  await assert.rejects(response.arrayBuffer());
+  assert.equal(counts.get('/broken-body/200'), 1, 'body failures are not retried');
+  assert.equal(new Set(signals).size, signals.length, 'each fetch has a fresh timeout signal');
+});
+
+test("published asset retries bound DNS and timeout rejections and preserve the final error", async (t) => {
+  for (const error of [new TypeError('fetch failed', { cause: Object.assign(new Error('DNS'), { code: 'ENOTFOUND' }) }),
+    new DOMException('timed out', 'TimeoutError')]) {
+    const signals = [];
+    const mocked = t.mock.method(globalThis, 'fetch', async (_url, options) => {
+      signals.push(options.signal);
+      throw error;
+    });
+    await assert.rejects(fetchPublishedAsset('https://example.invalid/asset'), actual => actual === error);
+    assert.equal(mocked.mock.callCount(), 3);
+    assert.equal(new Set(signals).size, 3);
+    mocked.mock.restore();
+  }
+});
 
 function run(args, env) {
   return new Promise((resolve) => {
