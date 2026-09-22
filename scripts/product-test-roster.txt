@@ -100,3 +100,4 @@ test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
 test/workflow-gh-repo-context.test.cjs
 test/workflow-host-paths.test.cjs
+test/demo-grant.test.cjs
