@@ -68,8 +68,9 @@ from this checkout's own `seal demo`: it reproduces the same
 READ/VALIDATE/REPLAY rows as the checkout checker above and leaves authority
 and event occurrence equally unverified. Open the page, choose the receipt
 JSON file, then choose the signer public key file printed above (or paste its
-64 hex characters). The landing page has **zero `<button>` controls**.
-File pickers drive the check, not a click. See
+64 hex characters). File pickers drive the check itself, not a button click; the page's
+only buttons are a dark-mode toggle and six informational tooltips, none of which
+take part in the verification. See
 [seal-check's README](https://github.com/velvetmonkey/seal-check#protect-and-spine-receipts)
 for the exact commit its checker follows. Use the checkout-root command above
 if you would rather stay in the terminal.

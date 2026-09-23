@@ -73,6 +73,65 @@ Two constraints to know before you choose:
   refuses `already_protected`. To change the list, unprotect the server, then
   protect the complete replacement set.
 
+## When Seal fits, and when it does not
+
+**The route boundary shapes the audience.** Seal is strongest where a
+consequential operation already has one deliberate MCP entry point. It gates
+a decision at that tool call; it does not close off every other way an agent
+or a person could reach the same effect. It is weaker where the same
+capability is reachable through several uncontrolled routes.
+
+Before choosing tools, ask: *does the operation I care about actually have to
+cross this MCP route?* A deliberate approval point is useful when your
+workflow already concentrates that operation there. If you need to prevent
+the effect by every possible route, gating one call is not enough.
+
+Here are two worked calls to the bundled server, with both tools selected
+for approval using the [complete-set setup below](#what-seal-protect-does).
+The JSON shows MCP tool-call parameters, not shell commands. These calls were
+exercised through Seal's shared proxy against the bundled demo server.
+
+1. **Appending a line with `demo.mutate`.** Call with:
+
+   ```json
+   {"name":"demo.mutate","arguments":{"line":"keep this line"}}
+   ```
+
+   While approval waited, the file was empty and the server's call count was
+   zero. After approval, it contained `keep this line` followed by a newline,
+   and the count was one. This is a useful gate if the decision you need is
+   whether this exact append may pass through the deliberate MCP entry point.
+
+2. **Discarding those contents with `demo.erase`.** Call with:
+
+   ```json
+   {"name":"demo.erase","arguments":{}}
+   ```
+
+   Declining preserved the line and left the server's count at one. A fresh
+   call, approved, emptied the file and raised the count to two. This is a
+   different consequence from appending: if losing the contents needs your
+   decision, select erase as well. For how a decline applies to a request,
+   see [declined](when-something-looks-wrong.md#declined).
+
+**Weak fit: treating that same file as protected from all changes.** If the
+agent can also write it through a shell, direct file access or another server,
+gating these MCP calls gives a false sense of safety if you take it to mean
+that every change needs approval. The bundled demo demonstrates the gap:
+
+```bash
+$ seal demo
+```
+
+Answer `y` at its approval prompt. After the approved append and blocked
+replay, the demo writes directly to the same file: the file changes, the
+protected-server call count stays at one, and there are zero new Seal
+decisions. That is a weak fit for preventing unapproved file changes, even
+though the MCP approval gate works. See [What it leaves alone](#what-it-leaves-alone)
+for the boundary, and [What is protected right now](what-is-protected-right-now.md)
+for interpreting the route's current state. A live wrapper does not establish
+that every route to the capability is controlled.
+
 ## What `seal protect` does
 
 Run it in the project directory, naming the server and the complete tool set.

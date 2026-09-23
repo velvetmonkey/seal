@@ -24,7 +24,8 @@ const SCRATCH = testTmpdir(path.join(os.tmpdir(), "seal-proxy-lock-"));
 
 function project() {
   const root = testTmpdir(path.join(SCRATCH, "test-"));
-  return { root, lockPath: lockPathFor(root) };
+  const env = { ...process.env, HOME: path.join(root, "home"), XDG_DATA_HOME: path.join(root, "data") };
+  return { root, env, lockPath: lockPathFor(root, env) };
 }
 
 function waitForExit(child) {
@@ -32,23 +33,30 @@ function waitForExit(child) {
 }
 
 test("two concurrent writers: the second writer lock refuses while the first keeps working", async () => {
-  const { root } = project();
+  const { root, env } = project();
   const first = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
     const lock = acquireProjectLock(${JSON.stringify(root)});
     process.stdout.write("FIRST_READY\\n");
-    setTimeout(() => { lock.release(); process.exit(0); }, 300);
-  `], { stdio: ["ignore", "pipe", "pipe"] });
+    process.stdin.resume();
+    process.stdin.on("end", () => { lock.release(); process.exit(0); });
+  `], { env, stdio: ["pipe", "pipe", "pipe"] });
+  const firstExit = waitForExit(first);
   await new Promise((resolve) => first.stdout.once("data", resolve));
   let secondStderr = "";
   const second = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
+    // Model a contender scheduled after the old 300 ms release window.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     try { acquireProjectLock(${JSON.stringify(root)}); } catch (error) {
       process.stderr.write(error.code + "\\n" + error.message + "\\n"); process.exit(1);
     }
-  `], { stdio: ["ignore", "ignore", "pipe"] });
+  `], { env, stdio: ["ignore", "ignore", "pipe"] });
   second.stderr.on("data", (chunk) => { secondStderr += chunk; });
-  const [result, firstResult] = await Promise.all([waitForExit(second), waitForExit(first)]);
+  // Hold the first writer until the contender has actually finished.
+  const result = await waitForExit(second);
+  first.stdin.end();
+  const firstResult = await firstExit;
   assert.equal(result.code, 1);
   assert.match(result.signal || "", /^$|^null$/);
   assert.match(secondStderr, /^proxy_lease_active\nproject lock held by pid \d+ for another Seal operation on this project; retry after that operation finishes/);
@@ -56,35 +64,35 @@ test("two concurrent writers: the second writer lock refuses while the first kee
 });
 
 test("a cleanly exited proxy leaves a lock that a new proxy acquires", () => {
-  const { root } = project();
-  const first = acquireProjectLock(root);
+  const { root, env } = project();
+  const first = acquireProjectLock(root, env);
   first.release();
-  const second = acquireProjectLock(root);
+  const second = acquireProjectLock(root, env);
   assert.equal(second.recovered, false);
   second.release();
 });
 
 test("a killed proxy leaves a stale lock that the next proxy recovers", async () => {
-  const { root } = project();
+  const { root, env } = project();
   const owner = spawn(process.execPath, ["-e", `
     const { acquireProjectLock } = require(${JSON.stringify(path.join(__dirname, "../spine/protection.cjs"))});
     acquireProjectLock(${JSON.stringify(root)}); process.stdout.write("READY\\n"); setInterval(() => {}, 1000);
-  `], { stdio: ["ignore", "pipe", "ignore"] });
+  `], { env, stdio: ["ignore", "pipe", "ignore"] });
   await new Promise((resolve) => owner.stdout.once("data", resolve));
   owner.kill("SIGKILL");
   await waitForExit(owner);
-  const recovered = acquireProjectLock(root);
+  const recovered = acquireProjectLock(root, env);
   assert.equal(recovered.recovered, true);
   recovered.release();
 });
 
 test("a live PID with a different process-start witness is stale", () => {
-  const { root, lockPath } = project();
+  const { root, env, lockPath } = project();
   const unrelated = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   try {
     fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(lockPath, JSON.stringify({ pid: unrelated.pid, startWitness: "not-that-process" }) + "\n", { mode: 0o600 });
-    const acquired = acquireProjectLock(root);
+    const acquired = acquireProjectLock(root, env);
     assert.equal(acquired.recovered, true);
     acquired.release();
   } finally {
@@ -126,7 +134,7 @@ function pendingServers(names) {
   fs.mkdirSync(project);
   const servers = Object.fromEntries(names.map((name) => [name, { command: process.execPath, args: ["-e", SLOW_SERVER] }]));
   fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: servers }) + "\n");
-  const env = { XDG_DATA_HOME: dataHome };
+  const env = { HOME: path.join(root, "home"), XDG_DATA_HOME: dataHome };
   const states = {};
   for (const name of names) {
     const projectServer = readProjectServer(project, name);
@@ -167,7 +175,7 @@ function startActivation(statePath, env) {
       (state) => { process.stdout.write("ACTIVE " + state.lease.pid + " " + state.lease.generation + "\\n"); process.stdin.on("end", () => process.exit(0)); },
       (error) => { process.stdout.write("REFUSED " + error.code + "\\n" + error.message + "\\n"); process.stdin.on("end", () => process.exit(1)); },
     );
-  `], { stdio: ["pipe", "pipe", "inherit"] });
+  `], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "inherit"] });
   let stdout = "";
   const reported = new Promise((resolve) => {
     child.stdout.on("data", (chunk) => {
@@ -383,9 +391,9 @@ const DEPARTING_SERVER = `
   });
 `;
 
-function departureProject() {
+function departureProject(serverCode = DEPARTING_SERVER) {
   const ctx = pendingServers(["alpha"]);
-  const server = { command: process.execPath, args: ["-e", DEPARTING_SERVER] };
+  const server = { command: process.execPath, args: ["-e", serverCode] };
   fs.writeFileSync(path.join(ctx.project, ".mcp.json"), JSON.stringify({mcpServers:{alpha:server}}));
   const observed = readProjectServer(ctx.project, "alpha");
   const state = readState(ctx.states.alpha);
@@ -604,3 +612,46 @@ test("child departure control: a write failure survives the deliberate child sto
     assert.doesNotMatch(run.err, /protected server exited/);
   } finally { await departureCleanup(run); }
 });
+
+
+for (const escaped of [false, true]) {
+  test(`client EOF bounds CLI shutdown with an inherited stdout descendant (escaped=${escaped})`, async () => {
+    const leaf = `process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);
+      require('node:fs').writeFileSync(process.argv[1], String(process.pid));`;
+    const intermediate = `const child = require('node:child_process').spawn(process.execPath,
+      ['-e', ${JSON.stringify(leaf)}, process.argv[1]], {detached:true, stdio:['ignore',1,'ignore']}); child.unref();`;
+    const code = DEPARTING_SERVER.replace('if (f.method === "depart") {', `
+      if (f.method === "spawn-descendant") {
+        const child = require('node:child_process').spawn(process.execPath,
+          ['-e', ${JSON.stringify(escaped ? intermediate : leaf)}, f.params.pidFile],
+          {stdio:['ignore',1,'ignore']});
+        let exited = false;
+        child.on('exit', () => exited = true);
+        const timer = setInterval(() => {
+          if (!require('node:fs').existsSync(f.params.pidFile) || (${escaped} && !exited)) return;
+          clearInterval(timer); reply({ready:true});
+        }, 10);
+      }
+      if (f.method === "depart") {`);
+    const ctx = departureProject(code);
+    const pidFile = path.join(ctx.project, "descendant.pid");
+    const run = departureWrapper(ctx);
+    let descendantPid;
+    try {
+      await departureReady(run);
+      run.send({id:"spawn", method:"spawn-descendant", params:{pidFile}});
+      await departureUntil(() => run.frames.some(frame => frame.id === "spawn"), "descendant ready");
+      descendantPid = Number(fs.readFileSync(pidFile));
+      const started = performance.now();
+      run.child.stdin.end();
+      await departureUntil(() => run.closed, () => `CLI still waiting: ${run.err}`, 2500);
+      const elapsed = performance.now() - started;
+      assert.equal(run.code, 0);
+      assert.ok(elapsed < 2500, `CLI shutdown exceeded budget: ${elapsed}ms`);
+      assert.equal(lockOwnerIsLive(readState(ctx.states.alpha).lease), false);
+    } finally {
+      if (descendantPid) { try { process.kill(descendantPid, "SIGKILL"); } catch {} }
+      await departureCleanup(run);
+    }
+  });
+}

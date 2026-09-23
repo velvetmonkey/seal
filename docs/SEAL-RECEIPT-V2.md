@@ -51,6 +51,25 @@ the compact canonical JSON envelope with the `signature` member omitted.
 The omitted member is removed before canonicalization; it is not represented
 by `null` or an empty value.
 
+### History time contract (`seal.history-time/v1`)
+
+The approval contract supplies `floor(Date.now() / 1000)`: epoch seconds.
+Receipt `now` preserves that exact kernel input, including for signature checking
+and replay. History's `--since`, `--until`, displayed times, chronological ordering,
+and future-time check use epoch milliseconds with inclusive window endpoints.
+
+V2 has no signed time-unit discriminator, and existing callers can supply kernel
+inputs in milliseconds. For v2 history only, values below `1_000_000_000_000`
+are projected as seconds multiplied by 1000; values at or above that boundary
+are treated as milliseconds. This fixed compatibility rule does not infer units
+from the unsigned filename, file modification time, or the query window. It does
+not modify stored receipts or claim to verify their timestamps. Seconds have
+one-second precision; history uses the start of that second without widening the
+window. Untagged millisecond dates before 2001-09-09T01:46:40Z are ambiguous and
+are interpreted as seconds under this rule; seconds at or above the boundary
+are likewise unsupported. A future envelope that supports those ranges needs a
+signed unit discriminator. Unknown envelope versions remain UNKNOWN in history.
+
 Replay passes `approvals`, `votes`, `grants`, `forecasts`, and
 `granted_capabilities` to the decision input. `granted_capabilities` must
 contain `{ "target": string }` entries in the same order and with the same

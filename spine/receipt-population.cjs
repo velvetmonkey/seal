@@ -127,6 +127,14 @@ const QUERY_ENTRIES = 10000;
 const QUERY_FILE_BYTES = 65536;
 const QUERY_TOTAL_BYTES = 16 * 1024 * 1024;
 
+// seal.history-time/v1 for v2 receipts (docs/SEAL-RECEIPT-V2.md).
+// The approval producer uses epoch seconds; legacy millisecond inputs remain
+// readable. This compatibility rule is only a query projection, never a change
+// to the signed kernel input or to replay. V2 has no signed unit discriminator.
+function historyTimeMs(now) {
+  return now < 1_000_000_000_000 ? now * 1000 : now;
+}
+
 async function query(directory, { limit = 20, since = 0, until = Date.now(), tool } = {}) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100 ||
       !Number.isSafeInteger(since) || since < 0 || !Number.isSafeInteger(until) || until < since ||
@@ -162,14 +170,15 @@ async function query(directory, { limit = 20, since = 0, until = Date.now(), too
           !Number.isSafeInteger(receipt.now) || receipt.now < 0 ||
           !["ALLOW", "BLOCK", "ERROR"].includes(receipt.verdict) ||
           (receipt.action !== undefined && typeof receipt.action !== "string")) throw new Error("unknown decision");
-      if (receipt.now > observedAt) { unknown += 1; future += 1; continue; }
+      const nowMs = historyTimeMs(receipt.now);
+      if (nowMs > observedAt) { unknown += 1; future += 1; continue; }
       // action describes the proxy decision; verdict is the underlying kernel claim.
       const decision = receipt.action ?? receipt.verdict;
       if (decision !== "ALLOW" && decision !== "BLOCK") { other += 1; continue; }
-      if (receipt.now < since || receipt.now > until || (tool !== undefined && receipt.tool !== tool)) continue;
+      if (nowMs < since || nowMs > until || (tool !== undefined && receipt.tool !== tool)) continue;
       matched += 1;
       if (decision === "ALLOW") allow += 1; else block += 1;
-      rows.push({ now: receipt.now, decision, tool: receipt.tool, name: entry.name });
+      rows.push({ now: nowMs, decision, tool: receipt.tool, name: entry.name });
       rows.sort((a, b) => b.now - a.now || a.name.localeCompare(b.name));
       if (rows.length > limit) rows.pop();
     } catch { unknown += 1; }
@@ -189,7 +198,7 @@ async function query(directory, { limit = 20, since = 0, until = Date.now(), too
     `Decision contents UNKNOWN: ${unknown}; future timestamps: ${future}; other actions: ${other}`,
     `Matching decision claims observed: ${matched}; ALLOW ${allow}; BLOCK ${block}; additional matches ${unknown || population.truncated ? "UNKNOWN" : "not observed"}`,
     `Signature, event occurrence, current route and server: UNKNOWN (claims only; use seal verify with a trusted key for signature checking)`,
-    `Most recent observed claims: ${rows.length}/${limit}; kernel now in epoch milliseconds; inclusive window ${since}..${until}; read bytes ${bytesRead}/${QUERY_TOTAL_BYTES}`,
+    `Most recent observed claims: ${rows.length}/${limit}; history time in epoch milliseconds (seal.history-time/v1); inclusive window ${since}..${until}; read bytes ${bytesRead}/${QUERY_TOTAL_BYTES}`,
     ...rows.map((row) => `${row.now} ${row.decision} tool ${quote(row.tool)}`),
   ];
 }

@@ -68,6 +68,7 @@ if (args[1] === "add") {
   config.projects[cwd].mcpServers ||= {};
   config.projects[cwd].mcpServers[name] = { type: "stdio", command: args[split + 1], args: args.slice(split + 2), env: {} };
   writeConfig(config);
+  if (process.env.SEAL_TEST_CLAUDE_PARTIAL === "1") process.exit(23);
   console.log("Added stdio MCP server " + name + " to local config");
   process.exit(0);
 }
@@ -147,6 +148,37 @@ function installedProxyPath() {
   return installedProxy;
 }
 
+test("relative protected command activates from project, nested and unrelated directories", () => {
+  const root = testTmpdir("seal-relative-activation-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "nested");
+  const unrelated = path.join(root, "unrelated");
+  for (const dir of [project, home, nested, unrelated]) fs.mkdirSync(dir);
+  const fakeBin = fakeClaudeBin(root);
+  const serverPath = path.join(project, "server");
+  fs.symlinkSync(process.execPath, serverPath);
+  writeProject(project, { command: "./server", args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const env = { ...process.env, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = statePathFor(project, env);
+  assert.equal(readState(file).state, "PENDING RESTART");
+  assert.equal(readState(file).projectRoot, fs.realpathSync(project));
+  for (const cwd of [nested, unrelated, project]) {
+    assert.equal(fs.existsSync(serverPath), true);
+    const activated = run(cwd, home, ["__proxy", "--protect-state", file], env);
+    assert.equal(activated.code, 0, `${cwd}: ${activated.out}`);
+    assert.equal(readState(file).state, "ACTIVE");
+  }
+  // A caller-local executable must not hide a missing saved-project command.
+  fs.unlinkSync(serverPath);
+  fs.symlinkSync(process.execPath, path.join(unrelated, "server"));
+  const refused = run(unrelated, home, ["__proxy", "--protect-state", file], env);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /protected_server_missing/);
+});
+
 test("protect and unprotect leave project .mcp.json byte-identical by hash", () => {
   const root = testTmpdir("seal-protect3b-hash-");
   const project = path.join(root, "project");
@@ -170,6 +202,78 @@ test("protect and unprotect leave project .mcp.json byte-identical by hash", () 
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash before unprotect: ${beforeHash}`));
   assert.match(unprotectedRun.out, new RegExp(`Project \\.mcp\\.json hash after unprotect: ${beforeHash}`));
   assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), beforeBytes);
+});
+
+test("protect, unprotect, recover, status and coverage share the git root from nested and symlinked directories", () => {
+  const root = testTmpdir("seal-protect3b-status-root-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  const nested = path.join(project, "src", "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(home);
+  execFileSync("git", ["init", "--quiet", project]);
+  const linked = path.join(root, "linked");
+  fs.symlinkSync(nested, linked, "dir");
+  const fakeBin = fakeClaudeBin(root);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: home };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const rootConfigPath = path.join(project, ".mcp.json");
+  const rootConfig = JSON.parse(fs.readFileSync(rootConfigPath, "utf8"));
+  rootConfig.mcpServers.cache = { command: "root-cache-server" };
+  fs.writeFileSync(rootConfigPath, JSON.stringify(rootConfig));
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const baseline = run(project, home, ["status"], env);
+  assert.equal(baseline.code, 0, baseline.out);
+  const coverage = run(project, home, ["coverage"], env);
+  assert.equal(coverage.code, 0, coverage.out);
+  for (const cwd of [project, nested, linked]) {
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    assert.equal(withoutObservationTime(status.out), withoutObservationTime(baseline.out));
+    const observed = run(cwd, home, ["coverage"], env);
+    assert.equal(observed.code, 0, observed.out);
+    assert.match(observed.out, /selected MCP tools on db: demo.mutate — protection state is PENDING RESTART/);
+    assert.equal(observed.out, coverage.out);
+  }
+  const sourceBefore = fs.readFileSync(path.join(project, ".mcp.json"), "utf8");
+  const nestedSource = writeProject(nested, { command: "nested-server-must-not-run" });
+  const stateEnv = { XDG_DATA_HOME: path.join(home, ".local", "share") };
+  const file = statePathFor(project, stateEnv, "db");
+  for (const cwd of [nested, linked]) {
+    const unprotected = run(cwd, home, ["unprotect", "db"], env);
+    assert.equal(unprotected.code, 0, unprotected.out);
+    assert.ok(unprotected.out.includes(file), unprotected.out);
+    assert.ok(unprotected.out.includes(`Project .mcp.json hash before unprotect: ${sha256(sourceBefore)}`), unprotected.out);
+    assert.equal(readState(file).state, "UNPROTECTED");
+    const protectedAgain = run(cwd, home, ["protect", "db", "demo.mutate"], env);
+    assert.equal(protectedAgain.code, 0, protectedAgain.out);
+    assert.ok(protectedAgain.out.includes(file), protectedAgain.out);
+    assert.match(protectedAgain.out, /configured MCP servers not routed through this Seal wrapper: cache/);
+    assert.equal(readState(file).projectRoot, project);
+    assert.equal(fs.existsSync(statePathFor(nested, stateEnv, "db")), false);
+    const status = run(cwd, home, ["status"], env);
+    assert.equal(status.code, 0, status.out);
+    assert.ok(status.out.includes(file), status.out);
+    assert.match(status.out, /Sealed MCP route db: PENDING RESTART/);
+    const incompatible = JSON.stringify({ ...readState(file), schema: "seal.protect/v99" });
+    fs.writeFileSync(file, incompatible);
+    const recoveryArgs = cwd === nested ? ["recover", "--archive", "db"] : ["recover", "--archive"];
+    const recovered = run(cwd, home, recoveryArgs, env);
+    assert.equal(recovered.code, 0, recovered.out);
+    const archive = recovered.out.match(/^Archived incompatible protection state: (.+)$/m)?.[1];
+    assert.ok(archive?.startsWith(`${file}.recovered-`), recovered.out);
+    assert.equal(fs.readFileSync(archive, "utf8"), incompatible);
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.readFileSync(path.join(project, ".mcp.json"), "utf8"), sourceBefore);
+    assert.equal(fs.readFileSync(path.join(nested, ".mcp.json"), "utf8"), nestedSource);
+    const outside = run(cwd, home, ["status"], env);
+    assert.equal(outside.code, 0, outside.out);
+    assert.match(outside.out, /Sealed MCP route: - outside Seal/);
+    assert.equal(run(cwd, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  }
+
 });
 
 test("unprotect refuses a developer-replaced local override and preserves it byte-identically", () => {
@@ -1037,4 +1141,302 @@ test("status continues past a broken server record and server-selected recovery 
   assert.equal(recovered.code, 0, recovered.out);
   assert.deepEqual(fs.readFileSync(beta), survivor);
   assert.equal(fs.existsSync(alpha), false);
+});
+
+test("F03 expands project launch fields and binds resolved values to drift", () => {
+  const root = testTmpdir("seal-expansion-");
+  const { readProjectServer } = require("../spine/protection.cjs");
+  writeProject(root, { command: "${SEAL_EXP_CMD}", args: ["${SEAL_EXP_ARG}", "${SEAL_EXP_UNSET:-fallback}"], env: { TOKEN: "${SEAL_EXP_TOKEN}" } });
+  const env = { SEAL_EXP_CMD: process.execPath, SEAL_EXP_ARG: "argument", SEAL_EXP_TOKEN: "token" };
+  const resolved = readProjectServer(root, "db", env);
+  assert.deepEqual(resolved.childArgv, [process.execPath, "argument", "fallback"]);
+  assert.deepEqual(resolved.childEnv, { TOKEN: "token" });
+  assert.notEqual(readProjectServer(root, "db", { ...env, SEAL_EXP_TOKEN: "changed" }).serverDigest, resolved.serverDigest);
+  assert.throws(() => readProjectServer(root, "db", {}), { code: "project_environment_missing" });
+});
+
+function lifecycleContext() {
+  const root = testTmpdir("seal-lifecycle-");
+  const project = path.join(root, "project"), home = path.join(root, "home");
+  fs.mkdirSync(project); fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  return { root, project, home, env };
+}
+
+test("F04 failed absent installation permits protect retry", () => {
+  const { project, home, env } = lifecycleContext();
+  const failed = run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_ADD_FAIL: "1" });
+  assert.match(failed.out, /claude_install_failed/);
+  const retry = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(retry.code, 0, retry.out);
+  assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
+});
+
+for (const source of ["absent", "invalid"]) test(`F05 unprotect tolerates ${source} project source`, () => {
+  const { root, project, home, env } = lifecycleContext();
+  const protectedRun = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(protectedRun.code, 0, protectedRun.out);
+  const file = path.join(project, ".mcp.json");
+  if (source === "absent") fs.unlinkSync(file); else fs.writeFileSync(file, "{invalid");
+  const result = run(project, home, ["unprotect", "db"], env);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, new RegExp(`Project .mcp.json source before unprotect: ${source}`));
+  assert.equal(JSON.parse(fs.readFileSync(fakeLocalOverridePath(root))).projects[project].mcpServers.db, undefined);
+  if (source === "absent") assert.equal(fs.existsSync(file), false);
+  else assert.equal(fs.readFileSync(file, "utf8"), "{invalid");
+});
+
+test("F04 partial installation retains ownership and supports cleanup before retry", () => {
+  const { project, home, env } = lifecycleContext();
+  const failed = run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_PARTIAL: "1" });
+  assert.match(failed.out, /claude_install_failed/);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  assert.equal(readState(statePath).localOverride.installed, true);
+  // Also recover a historical partial install whose record never observed success.
+  const state = readState(statePath);
+  state.localOverride.installed = false;
+  fs.writeFileSync(statePath, JSON.stringify(state));
+  const cleanup = run(project, home, ["unprotect", "db"], env);
+  assert.equal(cleanup.code, 0, cleanup.out);
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+});
+
+test("F04 failed installation refuses a foreign override and a live lease", () => {
+  const { root, project, home, env } = lifecycleContext();
+  assert.match(run(project, home, ["protect", "db", "demo.mutate"], { ...env, SEAL_TEST_CLAUDE_ADD_FAIL: "1" }).out, /claude_install_failed/);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const original = readState(statePath);
+  fs.writeFileSync(statePath, JSON.stringify({ ...original, lease: { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 1 } }));
+  assert.match(run(project, home, ["protect", "db", "demo.mutate"], env).out, /proxy_lease_active/);
+  fs.writeFileSync(statePath, JSON.stringify(original));
+  const configPath = fakeLocalOverridePath(root);
+  const foreign = JSON.stringify({ projects: { [project]: { mcpServers: { db: { command: "foreign", args: [] } } } } });
+  fs.writeFileSync(configPath, foreign);
+  assert.match(run(project, home, ["protect", "db", "demo.mutate"], env).out, /already_protected/);
+  assert.match(run(project, home, ["unprotect", "db"], env).out, /local_override_drifted/);
+  assert.equal(fs.readFileSync(configPath, "utf8"), foreign);
+});
+
+test("F03 expansion uses set empty values, one pass, and refuses unsupported syntax", () => {
+  const root = testTmpdir("seal-expansion-boundaries-");
+  const { readProjectServer } = require("../spine/protection.cjs");
+  writeProject(root, { command: "node", args: ["${EMPTY:-fallback}", "${UNSET:-}", "${VALUE}"], env: { VALUE: "sibling" } });
+  assert.deepEqual(readProjectServer(root, "db", { EMPTY: "", VALUE: "${LITERAL}" }).childArgv, ["node", "", "", "${LITERAL}"]);
+  writeProject(root, { command: "${VALUE:+other}" });
+  assert.throws(() => readProjectServer(root, "db", { VALUE: "set" }), { code: "project_environment_unsupported" });
+});
+
+test("F03 protect discovers expanded launch and activation refuses changed resolution", async () => {
+  const { project, home, env, root } = lifecycleContext();
+  writeProject(project, { command: "${SEAL_LIFECYCLE_NODE}", args: ["${SEAL_LIFECYCLE_BIN}", "__demo-server", "${SEAL_LIFECYCLE_DATA}"], env: { TOKEN: "${SEAL_LIFECYCLE_TOKEN:-default}" } });
+  const launchEnv = { ...env, SEAL_LIFECYCLE_NODE: process.execPath, SEAL_LIFECYCLE_BIN: SEAL, SEAL_LIFECYCLE_DATA: path.join(root, "data.txt") };
+  const result = run(project, home, ["protect", "db", "demo.mutate"], launchEnv);
+  assert.equal(result.code, 0, result.out);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const state = readState(statePath);
+  assert.deepEqual(state.childArgv, [process.execPath, SEAL, "__demo-server", path.join(root, "data.txt")]);
+  assert.deepEqual(state.childEnv, { TOKEN: "default" });
+  const { activationLease } = require("../spine/protection.cjs");
+  await assert.rejects(activationLease(statePath, { ...process.env, ...launchEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local/share"), SEAL_LIFECYCLE_TOKEN: "changed" }), { code: "drifted" });
+  assert.equal(readState(statePath).state, "DRIFTED");
+});
+
+test("F05 missing source does not bypass live lease or ownership refusal", () => {
+  const { root, project, home, env } = lifecycleContext();
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  fs.unlinkSync(path.join(project, ".mcp.json"));
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local/share") });
+  const state = readState(statePath);
+  fs.writeFileSync(statePath, JSON.stringify({ ...state, lease: { pid: process.pid, startWitness: processStartWitness(process.pid), generation: 1 } }));
+  const configPath = fakeLocalOverridePath(root);
+  const before = fs.readFileSync(configPath, "utf8");
+  assert.match(run(project, home, ["unprotect", "db"], env).out, /active_claude_session/);
+  assert.equal(fs.readFileSync(configPath, "utf8"), before);
+  fs.writeFileSync(statePath, JSON.stringify(state));
+  const config = JSON.parse(before);
+  config.projects[project].mcpServers.db.command = "foreign";
+  fs.writeFileSync(configPath, JSON.stringify(config));
+  const foreign = fs.readFileSync(configPath, "utf8");
+  assert.match(run(project, home, ["unprotect", "db"], env).out, /local_override_drifted/);
+  assert.equal(fs.readFileSync(configPath, "utf8"), foreign);
+});
+
+test("initialize observations are unsigned, session-local and absent for malformed clientInfo", { timeout: 20000 }, async (t) => {
+  const root = testTmpdir("seal-observed-client-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    HOME: home, CLAUDE_CONFIG_DIR: home, XDG_DATA_HOME: path.join(home, ".local", "share") };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const installed = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(installed.code, 0, installed.out);
+  const statePath = statePathFor(project, env);
+  const observe = (command) => {
+    const result = run(project, home, [command], env);
+    assert.equal(result.code, 0, result.out);
+    return withoutObservationTime(result.out);
+  };
+  for (const command of ["status", "coverage"]) assert.doesNotMatch(observe(command), /Observed client:|Elicitation declared:/);
+  let child;
+  let closed;
+  let lines;
+  const start = async () => {
+    child = spawn(SEAL, ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
+    closed = new Promise((resolve) => child.once("close", resolve));
+    child.stderr.resume();
+    lines = readline.createInterface({ input: child.stdout });
+    // The previous session's ACTIVE record may still be on disk.
+    for (let i = 0; i < 500 && readState(statePath)?.lease?.pid !== child.pid; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(readState(statePath).lease.pid, child.pid);
+  };
+  const stop = async () => { child.stdin.end(); assert.equal(await closed, 0); lines.close(); };
+  let id = 0;
+  const initialize = async (params) => {
+    const response = new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "initialize", params: { protocolVersion: "2025-06-18", ...params } }) + "\n");
+    assert.equal((await response).id, id);
+  };
+  try {
+    await start();
+    const baseline = Object.fromEntries(["status", "coverage"].map((command) => [command, observe(command)]));
+    const info = { name: "codex-cli", version: "1.2.3" };
+    await initialize({ clientInfo: info, capabilities: { elicitation: {} } });
+    assert.deepEqual(readState(statePath).observedClient, { ...info, elicitationDeclared: true });
+    const extra = "Observed client: codex-cli 1.2.3 (self-asserted, unsigned)\nElicitation declared: yes\n";
+    for (const command of ["status", "coverage"]) {
+      const output = observe(command);
+      assert.ok(output.includes(extra), output);
+      assert.equal(output.replace(extra, ""), baseline[command]);
+      t.diagnostic(`${command}, valid initialize:\n${output}`);
+    }
+    const unsafe = "\u2028\u2029\u202e\u2060\u200c\u200d\ufe0f\n\u001b";
+    const escaped = "\\u2028\\u2029\\u202e\\u2060\\u200c\\u200d\\ufe0f\\u000a\\u001b";
+    await initialize({ clientInfo: { name: `client${unsafe}`, version: `version${unsafe}` }, capabilities: {} });
+    const escapedExtra = `Observed client: client${escaped} version${escaped} (self-asserted, unsigned)\nElicitation declared: no\n`;
+    for (const command of ["status", "coverage"]) {
+      const output = observe(command);
+      assert.ok(output.includes(escapedExtra), `${command} must escape U+2028 and other invisible client characters: ${output}`);
+      assert.equal(output.replace(escapedExtra, ""), baseline[command]);
+    }
+    for (const params of [{ capabilities: {} }, { clientInfo: "malformed", capabilities: {} }, { clientInfo: { name: 42, version: "1" } }, { clientInfo: [] }]) {
+      await initialize(params);
+      assert.equal(Object.hasOwn(readState(statePath), "observedClient"), false);
+      for (const command of ["status", "coverage"]) {
+        const output = observe(command);
+        assert.equal(output, baseline[command]);
+        t.diagnostic(`${command}, ${JSON.stringify(params)}: byte-identical to pre-initialize output (observation time normalized)`);
+      }
+    }
+    await initialize({ clientInfo: info, capabilities: {} });
+    for (const command of ["status", "coverage"]) assert.match(observe(command), /^Elicitation declared: no$/m);
+    await stop();
+    await start();
+    assert.equal(Object.hasOwn(readState(statePath), "observedClient"), false);
+    for (const command of ["status", "coverage"]) assert.doesNotMatch(observe(command), /Observed client:|Elicitation declared:/);
+    await stop();
+  } finally {
+    if (child && child.exitCode === null) { child.kill(); await closed; }
+    lines?.close();
+  }
+});
+
+test("attacker-sized identity is bounded in storage and both status surfaces", { timeout: 60000 }, async (t) => {
+  const root = testTmpdir("seal-observed-client-");
+  const project = path.join(root, "project");
+  const home = path.join(root, "home");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--quiet", project]);
+  fs.mkdirSync(home);
+  const fakeBin = fakeClaudeBin(root);
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    HOME: home, CLAUDE_CONFIG_DIR: home, XDG_DATA_HOME: path.join(home, ".local", "share") };
+  writeProject(project, { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] });
+  const installed = run(project, home, ["protect", "db", "demo.mutate"], env);
+  assert.equal(installed.code, 0, installed.out);
+  const statePath = statePathFor(project, env);
+  const observe = (command) => {
+    const result = run(project, home, [command], env);
+    assert.equal(result.code, 0, result.out);
+    return withoutObservationTime(result.out);
+  };
+  for (const command of ["status", "coverage"]) assert.doesNotMatch(observe(command), /Observed client:|Elicitation declared:/);
+  let child;
+  let closed;
+  let lines;
+  const start = async () => {
+    child = spawn(SEAL, ["__proxy", "--protect-state", statePath], { cwd: project, env, stdio: ["pipe", "pipe", "pipe"] });
+    closed = new Promise((resolve) => child.once("close", resolve));
+    child.stderr.resume();
+    lines = readline.createInterface({ input: child.stdout });
+    // The previous session's ACTIVE record may still be on disk.
+    for (let i = 0; i < 500 && readState(statePath)?.lease?.pid !== child.pid; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(readState(statePath).lease.pid, child.pid);
+  };
+  const stop = async () => { child.stdin.end(); assert.equal(await closed, 0); lines.close(); };
+  let id = 0;
+  const initialize = async (params) => {
+    const response = new Promise((resolve) => lines.once("line", (line) => resolve(JSON.parse(line))));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "initialize", params: { protocolVersion: "2025-06-18", ...params } }) + "\n");
+    assert.equal((await response).id, id);
+  };
+  try {
+    await start();
+    const baseline = Object.fromEntries(["status", "coverage"].map((command) => [command, observe(command)]));
+    const failures = [];
+    const marker = "...[truncated]";
+    const budget = 128 - Buffer.byteLength(marker);
+    const cases = [
+      ["ascii attack", "N".repeat(10240), "V".repeat(20480), "N".repeat(budget) + marker, "V".repeat(budget) + marker],
+      ["unicode attack", "😀".repeat(4096), "é".repeat(8192), "😀".repeat(Math.floor(budget / 4)) + marker, "é".repeat(Math.floor(budget / 2)) + marker],
+      ["below bound", "n".repeat(127), "v".repeat(127), "n".repeat(127), "v".repeat(127)],
+      ["at bound", "é".repeat(64), "v".repeat(128), "é".repeat(64), "v".repeat(128)],
+      ["above bound", "n".repeat(129), "v".repeat(129), "n".repeat(budget) + marker, "v".repeat(budget) + marker],
+      ["escape expansion", "\u001b".repeat(10240), "\n".repeat(10240)],
+    ];
+    const check = (ok, message) => { if (!ok) failures.push(message); };
+    for (const [label, name, version, expectedName, expectedVersion] of cases) {
+      await initialize({ clientInfo: { name, version }, capabilities: {} });
+      const stored = readState(statePath).observedClient;
+      for (const field of ["name", "version"]) {
+        check(Buffer.byteLength(stored[field]) <= 128, `${label}: persisted ${field} exceeds 128 bytes`);
+        check(!stored[field].includes("\ufffd"), `${label}: split Unicode in ${field}`);
+      }
+      if (expectedName !== undefined) {
+        check(stored.name === expectedName && stored.version === expectedVersion, `${label}: persisted identity or marker differs`);
+      }
+      // Also plant a pre-fix state record: rendering must bound existing data
+      // independently of the initialize/persistence path.
+      for (const source of ["initialize", "legacy state"]) {
+        if (source === "legacy state") {
+          const state = readState(statePath);
+          state.observedClient = { name, version, elicitationDeclared: false };
+          fs.writeFileSync(statePath, JSON.stringify(state));
+        }
+        for (const command of ["status", "coverage"]) {
+          const output = observe(command);
+          const line = output.split("\n").find((line) => line.startsWith("Observed client: "));
+          const overhead = Buffer.byteLength("Observed client:   (self-asserted, unsigned)");
+          check(!!line && Buffer.byteLength(line) <= overhead + 256, `${label}/${source}: ${command} exceeds two 128-byte fields`);
+          if (expectedName !== undefined) {
+            check(line === `Observed client: ${expectedName} ${expectedVersion} (self-asserted, unsigned)`, `${label}/${source}: ${command} identity or marker differs`);
+          } else {
+            check(line?.includes(marker), `${label}/${source}: ${command} lacks truncation marker`);
+          }
+          const observation = `${line}\nElicitation declared: no\n`;
+          check(output.replace(observation, "") === baseline[command], `${label}/${source}: ${command} injected extra output`);
+          t.diagnostic(`${label}/${source}/${command}: observed line ${Buffer.byteLength(line || "")} bytes`);
+        }
+      }
+    }
+    assert.deepEqual(failures, []);
+    await stop();
+  } finally {
+    if (child && child.exitCode === null) { child.kill(); await closed; }
+    lines?.close();
+  }
 });

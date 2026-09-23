@@ -28,11 +28,14 @@ test("README is classified as claim-bearing, including the hosted seal-check beh
     writeFileSync(join(worktree, "scripts", "claim-bearing-file-inventory.mjs"), readFileSync(GUARD));
     writeFileSync(join(worktree, "scripts", "claim-bearing-files.json"), '{"files":{}}\n');
     writeFileSync(join(worktree, "novel.md"), "Seal calibrates every satellite relay before dawn.\n");
+    mkdirSync(join(worktree, "docs/check"), { recursive: true });
+    writeFileSync(join(worktree, "docs/check/results.md"), "A successful replay is not proof of occurrence.\n");
     spawnSync("git", ["init", "-q"], { cwd: worktree, env: HERMETIC_GIT_ENV });
     spawnSync("git", ["add", "."], { cwd: worktree, env: HERMETIC_GIT_ENV });
     const result = spawnSync(process.execPath, ["scripts/claim-bearing-file-inventory.mjs"], { cwd: worktree, encoding: "utf8" });
     assert.equal(result.status, 1, result.stderr);
     assert.match(result.stderr, /novel\.md: new claim-bearing file is neither covered nor allowlisted/);
+    assert.match(result.stderr, /docs\/check\/results\.md: new claim-bearing file is neither covered nor allowlisted/);
   } finally {
     rmSync(worktree, { recursive: true, force: true });
   }

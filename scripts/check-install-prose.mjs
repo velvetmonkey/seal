@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import tempRoot from './temp-root.cjs';
 import { carriesClaim } from './claim-bearing-file-inventory.mjs';
+import { fetchPublishedAsset } from './fetch-published-asset.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCS_ROOT = process.env.SEAL_INSTALL_PROSE_ROOT || ROOT;
@@ -144,7 +145,7 @@ async function main() {
     const names = [value('artifact_name'), value('checker_name'), value('sums_name')];
     for (const name of names) assert.equal(path.basename(name), name, 'asset name must be a basename');
     await Promise.all(names.map(async name => {
-      const response = await fetch(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`, { signal: AbortSignal.timeout(30000) });
+      const response = await fetchPublishedAsset(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`);
       assert.ok(response.ok, `cannot fetch published ${name}: HTTP ${response.status}`);
       fs.writeFileSync(path.join(assets, name), Buffer.from(await response.arrayBuffer()), { mode: 0o644 });
       // The suite uses umask 077. Give the refusal experiment an explicit
