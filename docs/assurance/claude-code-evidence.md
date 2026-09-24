@@ -201,9 +201,9 @@ use `v0.4.0`. No Tailscale connection is needed.
 
 1. Check the tools with `git --version`, `node --version`,
    `node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'`,
-   `claude --version`, `claude auth status`, and `command -v script`. Each
-   command must succeed. Open `claude`, use `/login` if asked, and confirm the
-   interactive screen is signed in; then use `/exit`. For any Desktop-specific
+   `claude --version`, and `command -v script`. Each command must succeed.
+   Open `claude`, use `/login` if asked, and confirm the interactive screen is
+   signed in; then use `/exit` and run `claude auth status`. For any Desktop-specific
    cells, run `open -a Claude` and confirm the Desktop app launches. The
    separate CLI is still required.
 2. In Terminal, run `git clone https://github.com/velvetmonkey/seal.git` and
