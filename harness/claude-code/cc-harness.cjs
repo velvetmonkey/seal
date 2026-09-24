@@ -16,7 +16,7 @@
 //
 // Nothing here proves a future Claude Code version works, and nothing here is
 // automated in CI. It records that ONE named client version, on ONE pinned
-// artifact, on Linux x86-64, was exercised — and it makes that record
+// artifact, on a named supported host, was exercised — and it makes that record
 // checkable by `scripts/check-cc-evidence.mjs`.
 //
 // Usage:
@@ -257,7 +257,7 @@ function assertPinnedClient(state) {
 
 // Judge only starts added by this invocation. The probe PID survives exec,
 // so a replacement binary cannot hide behind the pinned version or argv[0].
-// This is a boundary check of the fixture's /proc evidence, not a sandbox:
+// This is a boundary check of the fixture's /proc or ps evidence, not a sandbox:
 // a refused probe's first start remains in the raw log for diagnosis.
 function assertObservedClient(state, records, pid = null) {
   if (state.synthetic) return;
@@ -331,10 +331,8 @@ function rawRecordingText(castPath) {
   return rawCastOutputText(castPath);
 }
 
-// util-linux `script` is the recorder because it is present on a stock Linux
-// box; the cast is written in asciinema v2 so the recording is replayable by a
-// standard tool. The conversion is mechanical: one cast event per timing
-// record, reading exactly that record's byte count out of the output log.
+// `script` records the terminal on Linux and macOS. The cast is asciinema v2.
+// Conversion reads exactly the byte count recorded in each timing line.
 function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner }) {
   const out = fs.readFileSync(outPath);
   const timing = fs.readFileSync(timingPath, "utf8").split("\n").filter((line) => line.trim() !== "");
@@ -448,16 +446,20 @@ function recordSession(state, caseId, instructions) {
   assertPinnedClient(state);
   const beforeSession = readChildLog(state).records.length;
   const startedAt = new Date().toISOString();
-  const result = spawnSync("script", [
-    "--quiet",
-    "--log-out", outPath,
-    "--log-timing", timingPath,
-    "--logging-format", "advanced",
-    "--command", shellQuote(state.claude.command),
-  ], { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
+  const darwin = process.platform === "darwin";
+  const result = spawnSync("script", darwin
+    ? ["-q", outPath, state.claude.command]
+    : ["--quiet", "--log-out", outPath, "--log-timing", timingPath,
+      "--logging-format", "advanced", "--command", shellQuote(state.claude.command)],
+  { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
   assertObservedClient(state, readChildLog(state).records.slice(beforeSession));
   assertPinnedClient(state);
   if (result.error) refuse("recorder_failed", `terminal recorder could not start: ${result.error.message}`);
+  if (darwin) {
+    const out = fs.readFileSync(outPath);
+    const bannerEnd = out.subarray(0, 14).toString("utf8") === "Script started" ? out.indexOf(0x0a) + 1 : 0;
+    fs.writeFileSync(timingPath, `O 0 ${out.length - bannerEnd}\n`);
+  }
   const conversion = {
     columns: columns || MIN_COLUMNS,
     rows,
@@ -467,7 +469,7 @@ function recordSession(state, caseId, instructions) {
   fs.writeFileSync(castPath, castFromScript(outPath, timingPath, conversion));
   state.recordings ||= {};
   state.recordings[caseId] = {
-    format: "util-linux script output+advanced-timing → asciinema/v2",
+    format: darwin ? "macOS script output+derived timing → asciinema/v2" : "util-linux script output+advanced-timing → asciinema/v2",
     conversion,
     typescript: digestOf(outPath),
     timing: digestOf(timingPath),
@@ -516,7 +518,7 @@ function proxyEvidenceForStart(record, protectStatePath, expectedDigest) {
   for (const step of candidates) {
     // ASSUMED BOUNDARY — This step tests NO FALLBACK OCCURRED UNDER A
     // CARELESS CLIENT. It does NOT prove NO FALLBACK OCCURRED under a HOSTILE
-    // PARENT. The ancestry record is self-reported from /proc. Nothing
+    // PARENT. The ancestry record is self-reported from /proc or ps. Nothing
     // authenticates it. Tightening this match further cannot close this limit
     // because this class of evidence is self-reported. This is an assumed
     // boundary, not a proven property.
@@ -1000,10 +1002,10 @@ const STEPS = [
 
 // ------------------------------------------------------------------ commands
 
-function requireLinuxX64() {
-  if (process.platform !== "linux" || process.arch !== "x64") {
-    refuse("unsupported_platform", `this acceptance run is pinned to Linux x86-64; this host is ${process.platform}-${process.arch}`);
-  }
+function platformName() {
+  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
+  if (process.platform === "darwin" && ["arm64", "x64"].includes(process.arch)) return `darwin-${process.arch}`;
+  refuse("unsupported_platform", `this acceptance run needs Linux x86-64, Darwin arm64, or Darwin x86-64; this host is ${process.platform}-${process.arch}`);
 }
 
 function gitRevision(root) {
@@ -1024,6 +1026,12 @@ function clientExecutableFormat(executable) {
     if (descriptor !== undefined) fs.closeSync(descriptor);
   }
   const observed = Array.from(header.subarray(0, count), (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ") || "<empty>";
+  if (process.platform === "darwin") {
+    if (header.subarray(0, 2).toString() === "#!") return "script-shebang";
+    const magic = header.readUInt32BE(0);
+    if ([0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca].includes(magic)) return "mach-o";
+    refuse("client_not_darwin", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected Mach-O or a shebang`);
+  }
   if (count < header.length) {
     refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected 20 readable header bytes`);
   }
@@ -1109,7 +1117,7 @@ function clientIdentity(env, explicitClient) {
 }
 
 function init(argv) {
-  requireLinuxX64();
+  platformName();
   const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client", "client-command", "synthetic-client", "stub-bin"]);
   if (options.client === true) refuse("usage", "cc-harness init needs a path after --client");
   for (const required of ["artifact", "sha256", "bytes", "run-dir"]) {
@@ -1436,7 +1444,7 @@ function labelFor(state, observations) {
       "Not automated in CI.";
   }
   return `Claude Code ${state.claude.version} integration:\n` +
-    `${allObserved ? "PASS" : "FAIL"} — manually exercised on Linux x86-64 against artifact sha256 ${state.artifact.sha256}\n` +
+    `${allObserved ? "PASS" : "FAIL"} — manually exercised on ${platformName() === "linux-x64" ? "Linux x86-64" : platformName()} against artifact sha256 ${state.artifact.sha256}\n` +
     "Not automated in CI.";
 }
 
@@ -1465,7 +1473,7 @@ function childRecord(state) {
   const raw = (() => { try { return fs.readFileSync(state.paths.childLog, "utf8"); } catch { return ""; } })();
   // This is the fixture's byte-for-byte log. In particular, finish does not
   // prepend a synthetic label: realness is derived by the checker from the
-  // process identities the fixture read from /proc while each session lived.
+  // process identities the fixture read from /proc or ps while each session lived.
   return raw;
 }
 
@@ -1520,7 +1528,7 @@ function finish(state, options) {
     refuse("finish_cannot_certify", `CANNOT CERTIFY evidence pack; missing cases: ${missing.join(", ")}. No evidence pack was written.`);
   }
   const outRoot = path.resolve(options.out || path.join(state.paths.run, "pack"));
-  const packDir = path.join(outRoot, "evidence", "claude-code", state.claude.version, "linux-x64", state.artifact.sha256);
+  const packDir = path.join(outRoot, "evidence", "claude-code", state.claude.version, platformName(), state.artifact.sha256);
   fs.mkdirSync(path.join(packDir, "receipts"), { recursive: true });
 
   // A synthetic pack carries its disclaimer as a FILE beside the manifest, in
@@ -1618,13 +1626,13 @@ function finish(state, options) {
       executable_format: state.claude.executable_format,
     },
     environment: {
-      platform: "linux-x64",
+      platform: platformName(),
       os_release: os.release(),
       node: process.version,
       home: state.paths.home,
       xdg_data_home: state.paths.data,
       project: state.paths.project,
-      recorder: "util-linux script → asciinema cast v2; the pack publishes any retained scrollback followed by the last visible frame, and raw casts remain in the run directory",
+      recorder: `${process.platform === "darwin" ? "macOS script" : "util-linux script"} → asciinema cast v2; the pack publishes any retained scrollback followed by the last visible frame, and raw casts remain in the run directory`,
       recordings: transcriptFiles,
     },
     fixture: {
