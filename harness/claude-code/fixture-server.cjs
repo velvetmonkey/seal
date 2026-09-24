@@ -75,7 +75,7 @@ function appendRecord(record) {
 
 function commandLine(pid) {
   if (process.platform === "darwin") {
-    const result = spawnSync("/bin/ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    const result = spawnSync("/bin/ps", ["-ww", "-p", String(pid), "-o", "command="], { encoding: "utf8" });
     return result.status === 0 ? result.stdout.trim().split(/\s+/).filter(Boolean) : null;
   }
   try {

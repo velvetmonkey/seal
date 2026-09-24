@@ -53,21 +53,26 @@ jobs:
           "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note
           echo 'protect succeeded'
           test "$(shasum -a 256 .mcp.json)" = "$before"
-          launcher="$(node -p 'const fs=require("fs");const path=require("path");const home=process.env.HOME;const project=process.cwd();const doc=JSON.parse(fs.readFileSync(path.join(home,".claude.json")));console.log(doc.projects[project].mcpServers.notes.command)')"
+          launcher="$(node -p 'const fs=require("fs");const path=require("path");const home=process.env.HOME;const project=process.cwd();const doc=JSON.parse(fs.readFileSync(path.join(home,".claude.json")));doc.projects[project].mcpServers.notes.command')"
           parked="$launcher.parked-by-rehearsal"
+          chmod u+w "$(dirname "$launcher")"
           mv "$launcher" "$parked"
           test ! -e "$launcher"
           echo 'missing launcher observed'
           mv "$parked" "$launcher"
+          chmod u-w "$(dirname "$launcher")"
           "$RUNNER_TEMP/prefix/bin/seal" unprotect notes
           echo 'unprotect succeeded'
           test "$(shasum -a 256 .mcp.json)" = "$before"
           cd "$GITHUB_WORKSPACE"
           node harness/claude-code/cc-harness.cjs init --artifact "$RUNNER_TEMP/$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$RUNNER_TEMP/acceptance-run"
           echo 'harness init succeeded; interactive next requires human login and dialog'
-          printf 'Human login and dialog were not run on this noninteractive runner.\n' > "$RUNNER_TEMP/pack/REHEARSAL.txt"
+          node harness/claude-code/synthetic-run.cjs --artifact "$RUNNER_TEMP/$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$RUNNER_TEMP/synthetic-run" --out "$RUNNER_TEMP/pack"
+          synthetic_pack="$(find "$RUNNER_TEMP/pack/evidence/claude-code" -name manifest.json -print -quit)"
+          node scripts/check-cc-evidence.mjs "$(dirname "$synthetic_pack")" --allow-synthetic
+          echo 'synthetic pack checked; no human login or dialog was exercised'
           cd "$RUNNER_TEMP"
-          zip -qr seal-evidence.zip pack
+          zip -qr seal-evidence.zip pack/evidence/claude-code
           unzip -l seal-evidence.zip
           echo 'zip assembly succeeded'
 
