@@ -55,6 +55,7 @@ function validate(r) {
   let orderIndex = -1;
   for (const k of Object.keys(r)) { const next = ORDER.indexOf(k); if (next <= orderIndex) fail("member order is not the v2 order", "member_order"); orderIndex = next; }
   if (typeof r.tool !== "string" || !r.tool || r.arguments === null || typeof r.arguments !== "object" || Array.isArray(r.arguments)) fail("tool and arguments are required");
+  if (typeof r.action !== "string" || r.action.length === 0) fail("action must be a non-empty string", "invalid_action");
   if (!Number.isSafeInteger(r.now) || r.now < 0) fail("now must be a non-negative safe integer");
   if (!r.kernel_config || typeof r.kernel_config !== "object" || Array.isArray(r.kernel_config)) fail("kernel_config is required");
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
@@ -85,6 +86,8 @@ export async function replay(r) {
   return x;
 }
 
+export function hasPublicKey(keyHex) { return /^[0-9a-f]{64}$/.test(keyHex || ""); }
+
 function checkSignature(r, keyHex) {
   if (!r.signature) return false;
   const signatureKeys = Object.keys(r.signature).sort();
@@ -95,7 +98,7 @@ function checkSignature(r, keyHex) {
   if (JSON.stringify(signatureKeys) !== JSON.stringify(SIGNATURE_KEYS_SORTED))
     fail("signature: exactly the members algorithm,value required", "signature_mismatch");
   if (r.signature.algorithm !== "ed25519" || typeof r.signature.value !== "string" || !/^[0-9a-f]{128}$/.test(r.signature.value)) fail("signature is malformed", "signature_mismatch");
-  if (!/^[0-9a-f]{64}$/.test(keyHex || "")) return false;
+  if (!hasPublicKey(keyHex)) return false;
   const unsigned = { ...r }; delete unsigned.signature;
   const key = createPublicKey({ key: Buffer.concat([SPKI, Buffer.from(keyHex, "hex")]), type: "spki", format: "der" });
   if (!edVerify(null, Buffer.from(canonical(unsigned), "utf8"), key, Buffer.from(r.signature.value, "hex"))) fail("signature mismatch", "signature_mismatch");
@@ -129,6 +132,6 @@ export function format(result) { return `Document structure       ${result.read 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
-  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); }
+  try { const out = await verify(readFileSync(file), { publicKeyHex: keyAt > 0 ? process.argv[keyAt + 1] : undefined }); console.log(format(out)); if (!out.signature) process.exitCode = 1; }
   catch (e) { console.log(`REFUSE ${e.code || "invalid_receipt"}: ${e.message}`); process.exitCode = 1; }
 }

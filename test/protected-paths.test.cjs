@@ -20,7 +20,8 @@ function git(root, args) {
 
 function fixture() {
   const root = testTmpdir(join(SCRATCH_ROOT, "pinprotect-path-test-"));
-  git(root, ["init", "-q"]);
+  // Merge fixtures create main themselves; never inherit the host's default branch.
+  git(root, ["init", "-q", "-b", "master"]);
   git(root, ["config", "user.email", "pinprotect@example.invalid"]);
   git(root, ["config", "user.name", "Pinprotect Test"]);
   writeFileSync(join(root, "README.md"), "base\n");

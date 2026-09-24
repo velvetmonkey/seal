@@ -24,12 +24,14 @@ const { createApprovalContract } = require("../contract/contract.cjs");
 const { sha256Hex } = require("../contract/canonical.cjs");
 const { KERNEL_SECURITY_PHASE_NAMES } = require("./presentation.cjs");
 const { openJournal, StoreError } = require("./store.cjs");
+const { stopStdioServer } = require("./protection.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
 const { ReceiptRefusal, canonical } = require("./receipt-v2.cjs");
 const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
+const CLIENT_FORM_ELICITATION_UNSUPPORTED = "client_form_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Session-only transport metadata: never passed to the contract or receipts.
@@ -94,6 +96,7 @@ function createProxy(options) {
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
+    onObservedClient, // unsigned initialize metadata, never passed to the contract
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
@@ -134,6 +137,7 @@ function createProxy(options) {
   // unknown-ID child route, but have no approval state left to authorize a call.
   const retiredElicitationIds = new Set();
   let clientCapabilities = null;
+  let observedClient = null;
 
   function retireElicitation(id) {
     retiredElicitationIds.add(id);
@@ -194,10 +198,12 @@ function createProxy(options) {
 
   const child = spawn(childCommand, childArgv.slice(1), {
     cwd: spawnCwd,
+    detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "inherit"],
     env: childEnv ? { ...process.env, ...childEnv } : process.env,
   });
   let stopping = false;
+  let stopTask;
   let childClosed = false;
   let childSpawnError = null;
   child.once("error", (error) => {
@@ -479,6 +485,17 @@ function createProxy(options) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
       return;
     }
+    const elicitation = clientCapabilities.elicitation;
+    // MCP 2025-11-25 client/elicitation: an empty capability retains legacy
+    // form support; a nonempty declaration must explicitly support form mode.
+    const supportsForm = elicitation !== null && typeof elicitation === "object" && !Array.isArray(elicitation)
+      && (Object.keys(elicitation).length === 0
+        || (Object.hasOwn(elicitation, "form") && elicitation.form !== null
+          && typeof elicitation.form === "object" && !Array.isArray(elicitation.form)));
+    if (!supportsForm) {
+      blockForward(frame, CLIENT_FORM_ELICITATION_UNSUPPORTED, "the client did not declare form elicitation support; this guarded call requires form-mode approval");
+      return;
+    }
     if (receiptCorrelations.size >= receiptCorrelationCapacity) {
       const detail = `receipt correlation capacity ${receiptCorrelationCapacity} is full; answer an existing approval before opening another`;
       blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
@@ -558,8 +575,22 @@ function createProxy(options) {
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
           ? capabilities
           : {};
+        const info = frame.params?.clientInfo;
+        observedClient = info && typeof info === "object" && !Array.isArray(info)
+          && typeof info.name === "string" && typeof info.version === "string"
+          ? { name: info.name, version: info.version,
+              elicitationDeclared: Object.hasOwn(clientCapabilities, "elicitation") }
+          : null;
+        onObservedClient?.(observedClient);
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
+        // The branch already requires a non-empty method string. Refuse an
+        // invalid request envelope before normalizing arguments or selecting.
+        if (frame.jsonrpc !== "2.0" || !Object.hasOwn(frame, "id")
+          || (typeof frame.id !== "string" && typeof frame.id !== "number")) {
+          blockMalformedClientFrame(frame, "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id");
+          return;
+        }
         // MCP arguments is optional. Normalize omission on the parsed frame
         // before selection and approval so every guarded stage shares it.
         // Explicit null and other non-object values still reach the renderer.
@@ -577,15 +608,11 @@ function createProxy(options) {
       if (canForward(frame)) child.stdin.write(line + "\n");
     },
     stop() {
+      if (stopTask) return stopTask;
       stopping = true;
       clearElicitationState();
-      return new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) return resolve();
-        child.once("close", () => resolve());
-        try { child.stdin.end(); } catch {}
-        child.kill("SIGTERM");
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 2000).unref();
-      });
+      stopTask = stopStdioServer(child, childOut, () => childClosed);
+      return stopTask;
     },
   };
 }

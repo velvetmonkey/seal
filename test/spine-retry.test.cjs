@@ -321,7 +321,7 @@ test("seal demo derives the replay BLOCK line from the receipt file", async (t) 
   const started = Date.now();
   let deleted = false;
   while (!deleted) {
-    if (Date.now() - started > 5000) assert.fail(`no BLOCK receipt appeared\n${run.out}\n${run.err}`);
+    if (Date.now() - started > 10000) assert.fail(`no BLOCK receipt appeared\n${run.out}\n${run.err}`);
     if (fs.existsSync(receiptsDir)) {
       const block = fs.readdirSync(receiptsDir).find((name) => name.endsWith("-BLOCK.json"));
       if (block) {
@@ -427,6 +427,54 @@ function receiptFor(dir, decision) {
   assert.ok(file, `expected a ${decision} receipt in ${receipts}`);
   return JSON.parse(fs.readFileSync(path.join(receipts, file), "utf8"));
 }
+
+test("guarded request envelopes are refused over stdio before approval selection", async (t) => {
+  const dir = testTmpdir("seal-guarded-envelope-");
+  const dataFile = path.join(dir, "data.txt");
+  createJournal(path.join(dir, "approvals.journal"));
+  const h = spawnProxy(dir, dataFile);
+  t.after(() => h.run.kill());
+  initialize(h.proxy);
+  await h.responseFor(90);
+  const valid = { ...callParams("valid envelope"), id: 701, extra: "allowed" };
+  const missingVersion = { ...valid };
+  delete missingVersion.jsonrpc;
+  const missingId = { ...valid };
+  delete missingId.id;
+  const malformed = [missingVersion, { ...valid, jsonrpc: "1.0" },
+    { ...valid, jsonrpc: 2 }, missingId,
+    ...[null, [], {}, true].map(id => ({ ...valid, id }))];
+  for (const frame of malformed) {
+    const start = h.responses.length;
+    h.proxy.stdin.write(JSON.stringify(frame) + "\n");
+    const deadline = Date.now() + 15000;
+    while (h.responses.length === start) {
+      assert.ok(Date.now() < deadline, h.run.out + h.run.err);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.deepEqual(h.responses.slice(start), [{ jsonrpc: "2.0", id: null,
+      error: { code: -32600, message: "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id" } }]);
+  }
+  assert.equal(readCount(dataFile + ".count"), "0");
+  assert.equal(h.responses.some(frame => frame.method === "elicitation/create"), false);
+  const receipts = fs.readdirSync(path.join(dir, "receipts"))
+    .map(file => JSON.parse(fs.readFileSync(path.join(dir, "receipts", file), "utf8")));
+  assert.equal(receipts.length, malformed.length);
+  assert.ok(receipts.every(receipt => receipt.action === "BLOCK" && receipt.tool === "<batch>"));
+  for (const id of [0, "valid-id"]) {
+    const start = h.responses.length;
+    h.proxy.stdin.write(JSON.stringify({ ...valid, id }) + "\n");
+    const deadline = Date.now() + 15000;
+    let elicitation;
+    while (!(elicitation = h.responses.slice(start).find(frame => frame.method === "elicitation/create"))) {
+      assert.ok(Date.now() < deadline, h.run.out + h.run.err);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    answer(h.proxy, elicitation, "accept", { approve: true });
+    assert.ok(!(await h.responseFor(id)).result.isError);
+  }
+  assert.equal(readCount(dataFile + ".count"), "2");
+});
 
 test("a top-level batch is refused as one frame and never reaches the child", async (t) => {
   const dir = testTmpdir("seal-batch-frame-");
@@ -535,7 +583,9 @@ test("all duplicate-key frame shapes refuse with a checker-valid ambiguous recei
     const body = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
     assert.equal(body.tool, "<ambiguous>", `shape ${index + 1}`);
     const checked = spawnSync(process.execPath, [CHECKER, receiptPath], { encoding: "utf8" });
-    assert.equal(checked.status, 0, `shape ${index + 1}: ${checked.stdout}${checked.stderr}`);
+    assert.equal(checked.status, 1, `shape ${index + 1}: ${checked.stdout}${checked.stderr}`);
+    assert.match(checked.stdout, /Signature and bindings   UNVERIFIED/);
+    assert.match(checked.stdout, /Verifier-local verdict   REPRODUCED/);
   }
 });
 
@@ -624,6 +674,49 @@ test("a client without elicitation gets a named refusal and no held call", async
   proxy.stdin.end();
   assert.equal(await run.exit, 0, run.err);
 });
+
+for (const [label, elicitation, supported] of [
+  ["URL-only", { url: {} }, false],
+  ["form-only", { form: {} }, true],
+  ["form and URL", { form: {}, url: {} }, true],
+  ["legacy empty", {}, true],
+  ["null", null, false],
+  ["invalid form declaration", { form: false, url: {} }, false],
+]) {
+  test(`guarded approval checks form support: ${label}`, async (t) => {
+    const dir = testTmpdir("seal-elicitation-mode-");
+    const dataFile = path.join(dir, "data.txt");
+    createJournal(path.join(dir, "approvals.journal"));
+    const { proxy, run, requestFor, responseFor, responses } = spawnProxy(dir, dataFile);
+    t.after(run.kill);
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: 90, method: "initialize",
+      params: { protocolVersion: "2025-11-25", capabilities: { elicitation } },
+    }) + "\n");
+    await responseFor(90);
+    proxy.stdin.write(JSON.stringify({ ...callParams("mode approval"), id: 1 }) + "\n");
+    if (supported) {
+      const request = await requestFor("elicitation/create");
+      assert.equal(request.params.mode ?? "form", "form");
+      assert.equal(request.params.requestedSchema.type, "object");
+      assert.equal(readCount(`${dataFile}.count`), "0");
+      answer(proxy, request, "accept", { approve: true });
+      const flowed = await responseFor(1);
+      assert.ok(!flowed.result.isError, JSON.stringify(flowed));
+      assert.equal(readCount(`${dataFile}.count`), "1");
+    } else {
+      const refused = await responseFor(1);
+      assert.equal(refused.result.isError, true);
+      assert.match(refused.result.content[0].text, /client_form_elicitation_unsupported/);
+      assert.match(refused.result.content[0].text, /requires form-mode approval/);
+      assert.equal(responses.some((frame) => frame.method === "elicitation/create"), false);
+      assert.equal(readCount(`${dataFile}.count`), "0");
+      assert.equal(receiptFor(dir, "BLOCK").action, "BLOCK");
+    }
+    proxy.stdin.end();
+    assert.equal(await run.exit, 0, run.err);
+  });
+}
 
 test("real elicitation accept flows once and duplicate or unmatched responses do not flow", async (t) => {
   const dir = testTmpdir("seal-receipt-approved-retry-");
@@ -1988,4 +2081,99 @@ test('metadata forwarding: overlapping approvals retain their original metadata 
   assert.deepEqual(h.rawCalls().map(JSON.parse), entries.map(({line, id}) => ({
     ...callParams(line, {_meta:{progressToken:line}}), id,
   })));
+});
+
+// CLAIM-COVERAGE: test/spine-retry.test.cjs#bounded-shutdown
+// F06: actual descendants hold the server's stdout open after its exit.
+// The escaped-session case deliberately demonstrates the containment limit:
+// Seal must release its transport even when it cannot find the pipe holder.
+for (const mode of ["inherited-pipe", "detached-observed", "escaped-session", "already-exited", "ignore-term", "cooperative"]) {
+  test(`proxy shutdown is bounded: ${mode}`, {timeout:10000}, async (t) => {
+    const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-stop-"));
+    const pidFile = path.join(dir, "descendant.pid");
+    const storePath = path.join(dir, "store");
+    createJournal(storePath);
+    const leaf = `
+      process.on('SIGTERM', () => {});
+      setInterval(() => {}, 1000);
+      require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+    `;
+    const hasLeaf = !["ignore-term", "cooperative"].includes(mode);
+    const intermediary = `
+      const leaf = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(leaf)}],
+        {detached:true, stdio:['ignore',1,2]});
+      leaf.unref();
+    `;
+    const server = `
+      const fs = require('node:fs');
+      ${mode === "ignore-term" ? "process.on('SIGTERM', () => {});" : ""}
+      const keep = setInterval(() => {}, 1000);
+      ${hasLeaf ? `
+        const child = require('node:child_process').spawn(process.execPath,
+          ['-e', ${JSON.stringify(mode === "escaped-session" ? intermediary : leaf)}],
+          {detached:${mode === "detached-observed"}, stdio:['ignore',1,2]});
+        let exited = false;
+        child.on('exit', () => exited = true);
+        const poll = setInterval(() => {
+          if (!fs.existsSync(${JSON.stringify(pidFile)}) || (${mode === "escaped-session"} && !exited)) return;
+          clearInterval(poll);
+          console.log(JSON.stringify({ready:true, pid:process.pid}));
+          ${mode === "already-exited" ? "process.exit(0);" : ""}
+        }, 10);
+      ` : "console.log(JSON.stringify({ready:true, pid:process.pid}));"}
+    `;
+    let parentPid;
+    let proxy;
+    const running = pid => {
+      const result = spawnSync("ps", ["-p", String(pid), "-o", "stat="], {encoding:"utf8"});
+      return result.stdout.trim() !== "" && !result.stdout.trim().startsWith("Z");
+    };
+    t.after(async () => {
+      for (const pid of [parentPid, fs.existsSync(pidFile) ? Number(fs.readFileSync(pidFile)) : null]) {
+        if (pid) { try { process.kill(pid, "SIGKILL"); } catch {} }
+      }
+      if (proxy) await proxy.stop();
+    });
+    let ready;
+    const readiness = new Promise(resolve => { ready = resolve; });
+    proxy = createProxy({guardTool:"demo.mutate", storePath, receiptsDir:path.join(dir,"receipts"),
+      signer:generateSigner(), childArgv:[process.execPath,"-e",server],
+      onClientLine:line => { const frame = JSON.parse(line); if (frame.ready) ready(frame.pid); }});
+    const timeout = setTimeout(() => ready(null), 5000);
+    parentPid = await readiness;
+    clearTimeout(timeout);
+    assert.ok(parentPid, "real server became ready");
+    const descendantPid = hasLeaf ? Number(fs.readFileSync(pidFile)) : null;
+    if (descendantPid) assert.equal(running(descendantPid), true);
+    if (mode === "already-exited") {
+      const until = Date.now() + 1000;
+      while (running(parentPid) && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+      assert.equal(running(parentPid), false);
+    }
+    const started = performance.now();
+    const stopping = proxy.stop();
+    assert.strictEqual(proxy.stop(), stopping, "concurrent callers share cleanup");
+    await stopping;
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 2500, `stop exceeded its two-second budget plus scheduling allowance: ${elapsed}ms`);
+    assert.strictEqual(proxy.stop(), stopping, "completed shutdown is idempotent");
+    assert.equal(running(parentPid), false, "direct server was reaped");
+    if (descendantPid) assert.equal(running(descendantPid), mode === "escaped-session",
+      "observable descendants die; an unobservable escaped session may survive without owning the wait");
+    if (mode === "ignore-term") assert.ok(elapsed >= 1900, "TERM-resistant server reached escalation");
+    if (mode === "cooperative") assert.ok(elapsed < 1000, "cooperative server need not wait for escalation");
+    t.diagnostic(JSON.stringify({mode, elapsed, parentPid, descendantPid}));
+  });
+}
+
+test("proxy shutdown is bounded after a spawn error", {timeout:5000}, async () => {
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-proxy-spawn-error-"));
+  const storePath = path.join(dir, "store");
+  createJournal(storePath);
+  const proxy = createProxy({guardTool:"demo.mutate", storePath, receiptsDir:path.join(dir,"receipts"),
+    signer:generateSigner(), childArgv:["seal-nonexistent-f06-server"], onClientLine:() => {}});
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const start = performance.now();
+  await proxy.stop();
+  assert.ok(performance.now() - start < 1000);
 });

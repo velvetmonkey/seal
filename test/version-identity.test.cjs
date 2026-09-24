@@ -201,6 +201,7 @@ test("sync leaves no old product version in human-maintained reader-facing prose
   });
   const publishedDocs = [
     "README.md",
+    "docs/verify/README.md", // Historical published checker behavior, not the current product version.
     "docs/start/install.md",
     "docs/start/evaluator-walk.md",
     "docs/guide/README.md",
