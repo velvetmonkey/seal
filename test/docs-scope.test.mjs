@@ -45,3 +45,23 @@ test("each scoped document carries its exact scope signpost", () => {
     assert.equal(text.includes("The authorization rule is PROVED."), false, `${name} contains cut claim: The authorization rule is PROVED.`);
   }
 });
+
+test("v0.4.0 standalone checker notice and both install links remain available", () => {
+  // CLAIM-COVERAGE: docs/verify/README.md#v040-standalone-checker-exit-status
+  const checker = readFileSync(resolve(ROOT, "docs/verify/README.md"), "utf8");
+  assert.match(checker, /^## v0\.4\.0 standalone checker exit status$/m);
+  for (const statement of [
+    "can exit 0", "`Signature and bindings` line says `UNVERIFIED`",
+    "require both exit 0", "`VALID`", "fixed on main, not in v0.4.0",
+    "main exits 1", "deleted-signature and no-key cases", "`VERIFY    UNVERIFIED`",
+    "neither operator authority nor event", "occurrence",
+  ]) assert.ok(checker.replace(/\s+/g, " ").includes(statement.replace(/\s+/g, " ")), statement);
+  for (const [page, target] of [
+    ["README.md", "docs/verify/README.md"],
+    ["docs/start/install.md", "../verify/README.md"],
+  ]) {
+    const text = readFileSync(resolve(ROOT, page), "utf8");
+    assert.ok(text.includes(`[v0.4.0 standalone checker exit-status notice](${target}#v040-standalone-checker-exit-status)`), `${page} must link to the notice`);
+    assert.equal(resolve(ROOT, page, "..", target), resolve(ROOT, "docs/verify/README.md"));
+  }
+});

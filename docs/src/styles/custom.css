@@ -180,6 +180,27 @@
   margin-bottom: 0;
 }
 
+/* Dark-mode code/terminal window background: keep it near-black instead of
+   the repainted --seal-border tone above. --sl-color-gray-6 is intentionally
+   shared with search, mobile-menu and file-tree surfaces via the repaint at
+   the top of this file, but Expressive Code's frame backgrounds
+   (`--ec-frm-edBg`/`--ec-frm-trmBg`) also read --sl-color-gray-6 by default,
+   which pulled the code-block background from the bundled Night Owl dark
+   theme's near-black editor background (#23262f, still exposed as
+   `--ec-codeBg` and untouched by the repaint) up to the much lighter
+   charcoal border color (#414b45). That crushed contrast for Night Owl's
+   own light token colors (measured: blue #82AAFF 3.95:1, orange #F78C6C
+   3.85:1, purple #C792EA 3.77:1 against #414b45 — all below WCAG AA 4.5:1),
+   sitewide, on every dark-mode code block and terminal window. Pinning these
+   two frame backgrounds back to the theme's own editor background restores
+   the contrast the syntax palette was designed for (same three tokens land
+   at 6.58:1 / 6.42:1 / 6.28:1 against #23262f) without touching the other
+   surfaces that share --sl-color-gray-6. */
+:root[data-theme='dark'] {
+  --ec-frm-edBg: var(--ec-codeBg);
+  --ec-frm-trmBg: var(--ec-codeBg);
+}
+
 /* Explicit, never color-only, status labels shared by DecisionReceipt.astro
    and (per spec) any future ScopedResult.astro result panel. Each status
    already carries its own text ("Valid", "Not established", "Reproduced");

@@ -12,7 +12,8 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal`, `seal --help`, `seal -h` | Print help. | 0 |
 | `seal --version`, `seal -V` | Print the version agreed by VERSION and package.json. | 0; 1 if the version cannot be read or disagrees |
 | `seal demo [--dir PATH]` | Run the embedded exact-call and replay demonstration. | 0 on completion, including declining approval; 1 on EOF, refusal or failure |
-| `seal verify PATH [--pubkey HEX]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 otherwise, including no trusted key |
+| `seal verify PATH [--pubkey HEX] [--json]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 for signature, binding or replay failure (including no usable key), or unavailable runtime; 2 for unreadable input or invalid receipt schema |
+| `seal seal_block [--pubkey HEX] < receipt.json` | Check stdin receipt bytes and emit a v1 JSON result. | 0 for validation, signature and replay success; 3 for kernel integrity failure; 5 for missing/malformed key; 1 otherwise |
 | `seal reproduce TAG [--source PATH] [--platform linux-x64] [--authority same-authority\|independent] [--authority-name NAME]` | Compare a published artifact's kernel with a rebuild from source; print the comparison JSON. Requires a source checkout. | 0 for matching kernel bytes; 1 for mismatch, refusal or failure |
 | `seal reproduce build-pinned-kernel TAG --output PATH [--source PATH] [--manifest PATH]` | Build the selected kernel and copy it to PATH; print the build result. | 0 on successful build and copy; 1 on refusal or failure |
 | `seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]` | Install a local Claude Code override for selected calls on the named project stdio MCP server. | 0 on success; 1 on usage error, refusal or failure |
@@ -20,6 +21,8 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal recover --archive [SERVER]` | Archive incompatible state and remove the owned local override. Stop Claude Code first. Retain journals, receipts and signing keys. | 0 on success; 1 on usage error, refusal or failure |
 | `seal history DIRECTORY [--limit N] [--since EPOCH_MS] [--until EPOCH_MS] [--tool NAME]` | Count observed receipt files and list recent decision claims; see bounds below. | 0 for a report including UNKNOWN; 1 for invalid arguments or unavailable directory |
 | `seal receipts DIRECTORY` | Inspect receipt filenames for sequence gaps; DIRECTORY must exist and be a directory. | 0 if the scan finds no rejected names or gaps; 1 on rejected names, gaps, usage error or read failure |
+| `seal coverage` | Report known mediated, unmediated and unknown routes from this deployment. Does not discover every alternate route. | 0 for a report; 1 for unreadable/refused configuration; 2 for extra arguments |
+| `seal uninstall` | Preview and confirm removal of an installed distribution and its owned overrides. Retain history, journals, receipts and signing keys. | 0 on completion or cancellation; 1 on refusal/failure |
 | `seal doctor` | Report approval-origin assumptions and local readiness. | 0 for reportable assumptions; 1 for an automatic elicitation hook, failed readiness or failure |
 | `seal status` | Report project protection, local runtime and receipt observations. | 0 for reportable route state; 1 for unreadable/refused protection state or failure; 2 if any argument follows `status` |
 
@@ -30,7 +33,7 @@ or complete client-route coverage; read the observations, as explained in
 
 An unknown command prints `seal: unknown command: NAME` to stderr, prints help to
 stdout, and exits **2**. Ordinary command usage failures exit **1**, except extra
-arguments to `status`, which exit **2**. These are command outcomes, not a promise
+arguments to `status` or `coverage`, which exit **2**. These are command outcomes, not a promise
 about OS signals or a process that cannot start.
 
 ## Flags and argument ranges
@@ -39,7 +42,7 @@ about OS signals or a process that cannot start.
 |---|---|
 | `--help`, `-h` | No value; first argument only. Extra arguments after the alias are ignored. |
 | `--version`, `-V` | No value; first argument only. Extra arguments after the alias are ignored. |
-| `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and cleaned up. An explicitly supplied directory is retained. |
+| `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and retained for receipt inspection. An explicitly supplied directory is also retained. |
 | `verify --pubkey HEX` | Trusted Ed25519 public key, 32 bytes encoded as 64 lowercase hexadecimal characters. Place after PATH. Omission or an invalid key cannot yield exit 0. |
 | `protect --timeout-ms MILLISECONDS` | Decimal integer **1 through 2147483647 inclusive**, default **30000**, applied per discovery phase. No sign, leading zero, decimal point or exponent. May occur among positional arguments; the last occurrence wins. |
 | `recover --archive` | Required literal switch, first after `recover`; no value. Optional SERVER selects the record to archive. |
@@ -68,9 +71,38 @@ There are no general per-command help aliases or `--flag=value` forms. `demo`
 accepts only `--dir` pairs (the first directory wins). `protect` and `reproduce`
 reject unknown long options. `recover` requires its exact one- or two-argument
 shape; `receipts` requires exactly one argument. `verify` uses the first positional
-path and first later `--pubkey` value, ignoring other trailing words; `unprotect`
+path and first later `--pubkey` value, recognizes `--json`, and ignores other
+trailing words; `unprotect`
 uses only its first argument, and `doctor` ignores trailing arguments. These
 existing parsing rules do not add flags to those commands.
+
+
+### Machine-readable receipt checks
+
+`seal verify PATH [--pubkey HEX] --json` writes exactly one JSON object to stdout.
+It retains the checker's `read`, `validate`, `replay`, `signature`, `authority`,
+`occurrence`, `verify` and `receipt` fields on a completed check, plus `ok` and
+`code`. `ok` is validation AND signature AND replay; `code` is null when `ok` is
+true. As in text mode, `verify` remains false: a caller-supplied key does not
+establish authority or event occurrence.
+
+On refusal, `code` preserves the checker's typed error and `message` explains it.
+The boolean fields report only established checks; false can also mean a check
+was not reached or no partial result was returned. In particular, a thrown
+verification error does not return partial validation/signature/replay results.
+An absent signature or absent/invalid public key reports
+`signature_unverifiable` when the other checks complete. File-access failures
+report `read_failed`; an unavailable or damaged local runtime reports
+`runtime_unavailable`. Human-readable verification output is unchanged.
+
+The exit classes apply in both output modes. Exit 1 retains the existing
+signature/binding/replay failure meaning, including `commitment_mismatch`,
+`verdict_mismatch`, `action_verdict_mismatch` and `inert_input`. Exit 2 distinguishes
+unreadable or schema-invalid input, following the CLI's existing use of 2 for
+invalid `status`/`coverage` arguments; there was no existing three-class receipt
+exit convention. Missing PATH in text mode retains the legacy usage exit 1.
+Consumers that formerly asserted exactly 1 for schema errors must accept 2;
+consumers checking zero versus nonzero remain compatible.
 
 
 ### `seal history DIRECTORY`
@@ -99,5 +131,36 @@ rows are the newest observed claims, not a snapshot guarantee. Ties use filename
 order. The command opens regular files read-only without taking writer locks.
 It exits 0 for a report (including UNKNOWN), and 1 for invalid arguments or an
 unavailable directory. Underlying filesystem stalls are outside these work caps.
+
+### `seal seal_block [--pubkey HEX]`
+
+The `seal_block` command reads one v2 receipt from stdin as raw bytes and passes
+those bytes directly to the existing verifier. It does not parse and reserialize
+the request first. The verifier still applies the v2 canonical signature and
+commitment rules; whitespace in the transport is not signed. Invalid UTF-8 and
+duplicate JSON members are refused by the verifier.
+
+The response is one JSON object with `seal_block: "v1"`, `ok`, `authority`,
+`occurrence`, and `verify`. Completed checks also include the existing verifier
+fields (`read`, `validate`, `signature`, `replay`, `receipt`); refusals include
+`error` and `message`. The existing labelled `authority`/`occurrence` convention
+is retained to distinguish caller-key signature success from authority and event
+occurrence. Even exit 0 leaves `verify: false`, authority
+`"UNPINNED / CALLER-SUPPLIED"`, and occurrence `"NOT ESTABLISHED"`.
+
+Only no arguments or one `--pubkey` option are accepted. After reading stdin,
+runtime inspection takes precedence: a kernel hash mismatch exits 3
+(`kernel_integrity`), while an absent runtime exits 1 (`runtime_absent`). Next,
+an omitted key, missing option value, or value other than 64 lowercase hexadecimal
+characters exits 5 (`no_key`), before receipt validation. A well-formed wrong key,
+missing signature, malformed receipt, usage error, or other failure exits 1.
+These new exit classes belong only to `seal_block`; `seal verify` is unchanged.
+
+The existing receipt verdict `BLOCK` describes a kernel decision. It is distinct
+from the `seal_block` command: a correctly signed, reproducible `BLOCK` receipt
+can yield command exit 0. Exit meanings are command-local across the family:
+seal-check uses 3 for unpinned results, while seal-assurance-kit uses 3 for its
+uncaught-exception handler. Neither meaning is this command's kernel-integrity
+class.
 
 Up: [Reference](README.md).
