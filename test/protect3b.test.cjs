@@ -443,6 +443,7 @@ test("project server fields reject malformed shapes without coercion", () => {
     ...[null, false, 0, {}, []].map((type) => ({ ...valid, type })),
     ...[null, false, 0, {}, "argument", [1], [{}], [null], [false], [[]], ["ok", 1]].map((args) => ({ ...valid, args })),
     ...[null, false, 0, "value", [], { A: 1 }, { A: null }, { A: false }, { A: {} }, { A: [] }].map((env) => ({ ...valid, env })),
+    ...[false, 0, {}, [], null].map((cwd) => ({ ...valid, cwd })),
   ];
   for (const server of invalid) {
     writeProject(project, server);
@@ -474,6 +475,7 @@ test("protect refuses malformed launch fields before starting the MCP child", ()
     { ...valid, args: [script, 17, { unexpected: true }] },
     { ...valid, type: false },
     { ...valid, env: { A: { unexpected: true } } },
+    ...[false, 0, {}, [], null].map((cwd) => ({ ...valid, cwd })),
   ]) {
     const bytes = writeProject(project, server);
     const refused = run(project, home, ["protect", "db", "demo.mutate"], env);
@@ -486,6 +488,25 @@ test("protect refuses malformed launch fields before starting the MCP child", ()
   const accepted = run(project, home, ["protect", "db", "demo.mutate"], env);
   assert.equal(accepted.code, 0, accepted.out);
   assert.deepEqual(JSON.parse(fs.readFileSync(marker, "utf8")).slice(1), valid.args);
+  assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
+});
+
+test("malformed project server after protect refuses by name without recording drift", () => {
+  const root = testTmpdir("seal-malformed-after-protect-");
+  const project = path.join(root, "project"), home = path.join(root, "home");
+  fs.mkdirSync(project); fs.mkdirSync(home);
+  const env = { PATH: `${fakeClaudeBin(root)}${path.delimiter}${process.env.PATH}` };
+  const valid = { command: process.execPath, args: [SEAL, "__demo-server", path.join(root, "data.txt")] };
+  writeProject(project, valid);
+  assert.equal(run(project, home, ["protect", "db", "demo.mutate"], env).code, 0);
+  const statePath = statePathFor(project, { XDG_DATA_HOME: path.join(home, ".local", "share") });
+  const before = readState(statePath);
+  writeProject(project, { ...valid, args: [...valid.args, 17] });
+  const refusal = require("../spine/protection.cjs").beforeForwardFromState(statePath)();
+  assert.equal(refusal.refusal, "project_server_malformed");
+  assert.match(refusal.detail, /args must be an array of strings/);
+  assert.doesNotMatch(refusal.detail, /changed since protect/);
+  assert.deepEqual(readState(statePath), before);
   assert.equal(run(project, home, ["unprotect", "db"], env).code, 0);
 });
 
@@ -1338,6 +1359,18 @@ for (const field of ["args", "env"]) {
     });
   }
 }
+
+test("malformed cwd refuses before project expansion", () => {
+  const root = testTmpdir("seal-malformed-cwd-expansion-");
+  writeProject(root, { command: "${SEAL_EXP_VALUE}", args: ["${SEAL_EXP_VALUE}"], cwd: { nested: "${SEAL_EXP_VALUE}" } });
+  let expansionReads = 0;
+  const env = { get SEAL_EXP_VALUE() { expansionReads++; return "expanded"; } };
+  assert.throws(() => require("../spine/protection.cjs").readProjectServer(root, "db", env), {
+    code: "project_server_invalid",
+    message: 'project server "db" cwd must be a string',
+  });
+  assert.equal(expansionReads, 0);
+});
 test("initialize observations are unsigned, session-local and absent for malformed clientInfo", { timeout: 20000 }, async (t) => {
   const root = testTmpdir("seal-observed-client-");
   const project = path.join(root, "project");

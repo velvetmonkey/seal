@@ -343,6 +343,9 @@ function readProjectServer(projectRoot, serverName, env = process.env) {
   if (server.env !== undefined && Object.values(server.env).some((value) => typeof value !== "string")) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" env values must be strings`);
   }
+  if (server.cwd !== undefined && typeof server.cwd !== "string") {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" cwd must be a string`);
+  }
   const resolved = { ...server, command: expandProjectValue(server.command, env, "command") };
   if (server.args !== undefined) resolved.args = server.args.map((value, index) => expandProjectValue(value, env, `args[${index}]`));
   if (server.env !== undefined) resolved.env = Object.fromEntries(Object.entries(server.env).map(([key, value]) => [key, expandProjectValue(value, env, `env.${key}`)]));
@@ -1448,8 +1451,8 @@ function markDrifted(statePath, state, gotDigest) {
 function currentDigestForState(state, env = process.env) {
   try {
     return readProjectServer(state.projectRoot, state.serverName, env).serverDigest;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new ProtectionError("project_server_malformed", `project .mcp.json server is malformed: ${error.message}`);
   }
 }
 
@@ -1689,7 +1692,12 @@ function beforeForwardFromState(statePath, leaseToken) {
     if (leaseToken && !leaseMatches(state.lease, leaseToken)) {
       return { ok: false, refusal: "lease_generation_mismatch", detail: "this proxy no longer owns the active lease generation" };
     }
-    const got = currentDigestForState(state);
+    let got;
+    try {
+      got = currentDigestForState(state);
+    } catch (error) {
+      return { ok: false, refusal: error.code, detail: `${error.message}; fix .mcp.json and run seal status` };
+    }
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);
       return { ok: false, refusal: "project_server_drifted", detail: "project .mcp.json server changed since protect; run seal status" };
