@@ -14,6 +14,28 @@ const SYNTHETIC_CLIENT = path.join(ROOT, "harness", "claude-code", "synthetic-cl
 const { parseCast, rawCastOutputText } = require(path.join(ROOT, "harness", "claude-code", "terminal-renderer.cjs"));
 const REAL_ACCEPT_CAST = path.join(ROOT, "test", "fixtures", "rendercheck-accept.cast");
 
+test("Mac walk refuses a Rosetta uname and Node architecture mismatch before download", () => {
+  const doc = fs.readFileSync(path.join(ROOT, "docs", "assurance", "claude-code-evidence.md"), "utf8");
+  const block = /```bash\n(case "\$\(uname -sm\)"[\s\S]*?)\n```/.exec(doc)?.[1];
+  assert.ok(block, "the documented download block is present");
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-cc-rosetta-"));
+  const bin = path.join(scratch, "bin");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "uname"), "#!/bin/sh\nprintf 'Darwin arm64\\n'\n", { mode: 0o755 });
+  const marker = path.join(scratch, "curl-called");
+  fs.writeFileSync(path.join(bin, "curl"), "#!/bin/sh\nprintf 'called\\n' >> \"$SEAL_CURL_MARKER\"\n", { mode: 0o755 });
+  const preload = path.join(scratch, "rosetta-node.cjs");
+  fs.writeFileSync(preload, 'Object.defineProperty(process, "platform", { value: "darwin" }); Object.defineProperty(process, "arch", { value: "x64" });\n');
+  const result = spawnSync("bash", ["-c", block], {
+    cwd: scratch,
+    encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, NODE_OPTIONS: `--require=${preload}`, SEAL_CURL_MARKER: marker },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /uname -sm selects darwin-arm64; Node process\.platform\/process\.arch reports darwin-x64/);
+  assert.equal(fs.existsSync(marker), false, "download did not start");
+});
+
 function buildArtifact(workspace) {
   const out = path.join(workspace, "dist");
   const built = spawnSync(process.execPath, [path.join(ROOT, "scripts", "build-dist.cjs"), "--out", out], { encoding: "utf8" });

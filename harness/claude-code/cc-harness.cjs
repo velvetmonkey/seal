@@ -257,7 +257,7 @@ function assertPinnedClient(state) {
 
 // Judge only starts added by this invocation. The probe PID survives exec,
 // so a replacement binary cannot hide behind the pinned version or argv[0].
-// This is a boundary check of the fixture's /proc evidence, not a sandbox:
+// This is a boundary check of the fixture's /proc or ps evidence, not a sandbox:
 // a refused probe's first start remains in the raw log for diagnosis.
 function assertObservedClient(state, records, pid = null) {
   if (state.synthetic) return;
@@ -518,7 +518,7 @@ function proxyEvidenceForStart(record, protectStatePath, expectedDigest) {
   for (const step of candidates) {
     // ASSUMED BOUNDARY — This step tests NO FALLBACK OCCURRED UNDER A
     // CARELESS CLIENT. It does NOT prove NO FALLBACK OCCURRED under a HOSTILE
-    // PARENT. The ancestry record is self-reported from /proc. Nothing
+    // PARENT. The ancestry record is self-reported from /proc or ps. Nothing
     // authenticates it. Tightening this match further cannot close this limit
     // because this class of evidence is self-reported. This is an assumed
     // boundary, not a proven property.
@@ -1473,7 +1473,7 @@ function childRecord(state) {
   const raw = (() => { try { return fs.readFileSync(state.paths.childLog, "utf8"); } catch { return ""; } })();
   // This is the fixture's byte-for-byte log. In particular, finish does not
   // prepend a synthetic label: realness is derived by the checker from the
-  // process identities the fixture read from /proc while each session lived.
+  // process identities the fixture read from /proc or ps while each session lived.
   return raw;
 }
 

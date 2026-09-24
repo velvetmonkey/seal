@@ -189,15 +189,15 @@ below before executing this block.
 
 ```bash
 case "$(uname -sm)" in "Linux x86_64") SEAL_PLATFORM=linux-x64 ;; "Darwin arm64") SEAL_PLATFORM=darwin-arm64 ;; "Darwin x86_64") SEAL_PLATFORM=darwin-x64 ;; *) SEAL_PLATFORM=; printf 'Unsupported host: %s (need Linux x86_64, Darwin arm64, or Darwin x86_64)\n' "$(uname -sm)" >&2 ;; esac
-test -n "$SEAL_PLATFORM" && printf '%s' 'Published release tag (for example vX.Y.Z): ' && read -r SEAL_VERSION && test -n "$SEAL_VERSION" && SEAL_ARTIFACT="seal-${SEAL_VERSION}-${SEAL_PLATFORM}" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" && SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" && SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" && test -n "$SEAL_SHA256" && if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi && test "${actual_sha256%% *}" = "$SEAL_SHA256" && actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" && test "$actual_bytes" -eq "$SEAL_BYTES" && chmod +x "$SEAL_ARTIFACT" && printf '%s' 'New absolute run directory outside every Git tree: ' && read -r run_dir && case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac && mkdir "$run_dir" && command -v git >/dev/null && if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi && node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
+test -n "$SEAL_PLATFORM" && SEAL_NODE_PLATFORM="$(node -p 'process.platform + "-" + process.arch')" && { test "$SEAL_PLATFORM" = "$SEAL_NODE_PLATFORM" || { printf 'REFUSE platform mismatch: uname -sm selects %s; Node process.platform/process.arch reports %s\n' "$SEAL_PLATFORM" "$SEAL_NODE_PLATFORM" >&2; false; }; } && printf '%s' 'Published release tag (for example vX.Y.Z): ' && read -r SEAL_VERSION && test -n "$SEAL_VERSION" && SEAL_ARTIFACT="seal-${SEAL_VERSION}-${SEAL_PLATFORM}" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" && SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" && SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" && test -n "$SEAL_SHA256" && if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi && test "${actual_sha256%% *}" = "$SEAL_SHA256" && actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" && test "$actual_bytes" -eq "$SEAL_BYTES" && chmod +x "$SEAL_ARTIFACT" && printf '%s' 'New absolute run directory outside every Git tree: ' && read -r run_dir && case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac && mkdir "$run_dir" && command -v git >/dev/null && if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi && node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
 
 ### Mac operator checklist
 
 The person at the Mac needs a separate `claude` command; the Desktop app alone
 does not provide it. Open a fresh Terminal at least 80 columns wide. Use the
-release tag Ben supplies for `SEAL_VERSION`; if no new release is available,
-use `v0.4.0`. No Tailscale connection is needed.
+published release tag Ben supplies for `SEAL_VERSION`. No Tailscale connection
+is needed.
 
 1. Check the tools with `git --version`, `node --version`,
    `node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'`,
@@ -369,6 +369,7 @@ not the label the observations produce. It also strictly parses the fixture's
 numbered digest chain, compares the complete log to the independent final
 boundary digest, length, and record count in `snapshots.json`, and derives the
 client executable identity from process ancestry the fixture read from `/proc`
+on Linux or `ps` on macOS
 while the client and Seal proxy were alive. It also reads every rendered
 transcript; a synthetic fixture banner in a transcript is synthetic evidence,
 not ignored data. It refuses a transcript that contains a Claude Code session
@@ -398,12 +399,14 @@ release fails.
 
 ```text
 Claude Code <version> integration:
-PASS — manually exercised on Linux x86-64 against artifact sha256 …
+PASS — manually exercised on <platform recorded in manifest.environment.platform> against artifact sha256 …
 Not automated in CI.
 ```
 
-That sentence claims exactly one thing: this combination of client version and
-artifact was exercised, once, by hand, on Linux x86-64. It is not independent
+The platform in that sentence comes from `platformName()` in the harness and
+`manifest.environment.platform` in the checker (`linux-x64` is displayed as
+`Linux x86-64`). It claims this combination of client version, platform, and
+artifact was exercised once by hand. It is not independent
 assurance, it is not a CI result, and it says nothing about any other Claude
 Code version. Until such a pack exists and verifies, the row reads
 `UNTESTED — real Claude Code call not observed`.

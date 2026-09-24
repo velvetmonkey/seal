@@ -5,6 +5,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to rehearse
+        required: true
+        type: string
 
 jobs:
   acceptance-walk-rehearsal:
@@ -27,9 +32,10 @@ jobs:
       - name: Download, verify, install, protect, unprotect, and zip
         shell: bash
         env:
-          SEAL_VERSION: v0.4.0
+          SEAL_VERSION: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
+          test -n "$SEAL_VERSION"
           cd "$RUNNER_TEMP"
           case "$(uname -sm)" in
             "Linux x86_64") SEAL_PLATFORM=linux-x64 ;;
@@ -37,6 +43,11 @@ jobs:
             "Darwin x86_64") SEAL_PLATFORM=darwin-x64 ;;
             *) printf 'Unsupported host: %s\n' "$(uname -sm)" >&2; exit 1 ;;
           esac
+          SEAL_NODE_PLATFORM="$(node -p 'process.platform + "-" + process.arch')"
+          if test "$SEAL_PLATFORM" != "$SEAL_NODE_PLATFORM"; then
+            printf 'REFUSE platform mismatch: uname -sm selects %s; Node process.platform/process.arch reports %s\n' "$SEAL_PLATFORM" "$SEAL_NODE_PLATFORM" >&2
+            exit 1
+          fi
           echo "platform $SEAL_PLATFORM"
           SEAL_ARTIFACT="seal-${SEAL_VERSION}-${SEAL_PLATFORM}"
           curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"

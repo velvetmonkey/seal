@@ -76,7 +76,22 @@ function appendRecord(record) {
 function commandLine(pid) {
   if (process.platform === "darwin") {
     const result = spawnSync("/bin/ps", ["-ww", "-p", String(pid), "-o", "command="], { encoding: "utf8" });
-    return result.status === 0 ? result.stdout.trim().split(/\s+/).filter(Boolean) : null;
+    if (result.status !== 0) return null;
+    const command = result.stdout.trim();
+    // ps prints a display string, not an argv vector. Resolve the longest
+    // executable prefix so a path such as /Applications/Claude Code.app/...
+    // remains one argv word. If none resolves, leave the chain unverifiable.
+    for (let end = command.length; end > 0; end = command.lastIndexOf(" ", end - 1)) {
+      const prefix = command.slice(0, end);
+      if (!prefix.startsWith("/")) break;
+      try {
+        if (fs.statSync(fs.realpathSync(prefix)).isFile()) {
+          return [prefix, ...command.slice(end).trim().split(/\s+/).filter(Boolean)];
+        }
+      } catch { /* Try a shorter prefix. */ }
+      if (command.lastIndexOf(" ", end - 1) < 0) break;
+    }
+    return null;
   }
   try {
     return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
