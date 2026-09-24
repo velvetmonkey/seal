@@ -218,7 +218,7 @@ test("CLI contract: every public parser flag appears in help and the reference",
     + fs.readFileSync(path.join(root, "spine/demo.cjs"), "utf8").split("async function run(")[1].split("const dataFile")[0]
     + fs.readFileSync(path.join(root, "scripts/seal-reproduce.cjs"), "utf8").split("function parseArguments(")[1].split("function validateRequest(")[0];
   const flags = [...new Set([...parser.matchAll(/(?:===|!==|indexOf\()\s*["'](-{1,2}[A-Za-z][A-Za-z-]*)["']/g)].map((match) => match[1]))].sort();
-  assert.deepEqual(flags, ["--archive", "--authority", "--authority-name", "--dir", "--help", "--manifest", "--output", "--platform", "--pubkey", "--source", "--timeout-ms", "--version", "-V", "-h"].sort());
+  assert.deepEqual(flags, ["--archive", "--authority", "--authority-name", "--dir", "--help", "--json", "--manifest", "--output", "--platform", "--pubkey", "--source", "--timeout-ms", "--version", "-V", "-h"].sort());
   const help = contractContext().run(["--help"]);
   assert.equal(help.code, 0, help.out);
   const reference = fs.readFileSync(path.join(root, "docs/reference/cli.md"), "utf8");

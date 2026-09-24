@@ -31,6 +31,7 @@ const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } 
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
+const CLIENT_FORM_ELICITATION_UNSUPPORTED = "client_form_elicitation_unsupported";
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Session-only transport metadata: never passed to the contract or receipts.
@@ -94,6 +95,7 @@ function createProxy(options) {
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
+    onObservedClient, // unsigned initialize metadata, never passed to the contract
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
@@ -134,6 +136,7 @@ function createProxy(options) {
   // unknown-ID child route, but have no approval state left to authorize a call.
   const retiredElicitationIds = new Set();
   let clientCapabilities = null;
+  let observedClient = null;
 
   function retireElicitation(id) {
     retiredElicitationIds.add(id);
@@ -453,6 +456,17 @@ function createProxy(options) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
       return;
     }
+    const elicitation = clientCapabilities.elicitation;
+    // MCP 2025-11-25 client/elicitation: an empty capability retains legacy
+    // form support; a nonempty declaration must explicitly support form mode.
+    const supportsForm = elicitation !== null && typeof elicitation === "object" && !Array.isArray(elicitation)
+      && (Object.keys(elicitation).length === 0
+        || (Object.hasOwn(elicitation, "form") && elicitation.form !== null
+          && typeof elicitation.form === "object" && !Array.isArray(elicitation.form)));
+    if (!supportsForm) {
+      blockForward(frame, CLIENT_FORM_ELICITATION_UNSUPPORTED, "the client did not declare form elicitation support; this guarded call requires form-mode approval");
+      return;
+    }
     if (receiptCorrelations.size >= receiptCorrelationCapacity) {
       const detail = `receipt correlation capacity ${receiptCorrelationCapacity} is full; answer an existing approval before opening another`;
       blockForward(frame, RECEIPT_CORRELATION_CAPACITY_EXCEEDED, detail);
@@ -531,6 +545,13 @@ function createProxy(options) {
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
           ? capabilities
           : {};
+        const info = frame.params?.clientInfo;
+        observedClient = info && typeof info === "object" && !Array.isArray(info)
+          && typeof info.name === "string" && typeof info.version === "string"
+          ? { name: info.name, version: info.version,
+              elicitationDeclared: Object.hasOwn(clientCapabilities, "elicitation") }
+          : null;
+        onObservedClient?.(observedClient);
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
         // The branch already requires a non-empty method string. Refuse an

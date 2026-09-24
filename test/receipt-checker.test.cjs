@@ -136,7 +136,7 @@ for (const [label, command] of [["seal verify", [SEAL, "verify"]], ["standalone 
     const corrupt = path.join(real.dir, "corrupt.json");
     fs.writeFileSync(corrupt, Buffer.concat([bytes.subarray(0, at), Buffer.from([0xff]), bytes.subarray(at + 3)]));
     const refused = spawnSync(process.execPath, [...command, corrupt, "--pubkey", signer.publicKeyHex], { encoding: "utf8" });
-    assert.equal(refused.status, 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
+    assert.equal(refused.status, command[0] === SEAL ? 2 : 1, `corrupt bytes accepted: ${refused.stdout}${refused.stderr}`);
     assert.match(refused.stdout + refused.stderr, /read_failed|ill-formed UTF-8/);
   });
 }
@@ -151,7 +151,7 @@ for (const [label, value] of [["1", 1], ["1.5", 1.5], ["true", true], ["false", 
     fs.writeFileSync(file, JSON.stringify(body));
     for (const command of [[SEAL, "verify"], [CHECKER]]) {
       const refused = spawnSync(process.execPath, [...command, file, "--pubkey", real.publicKey], { encoding: "utf8" });
-      assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+      assert.equal(refused.status, command[0] === SEAL ? 2 : 1, refused.stdout + refused.stderr);
       assert.match(refused.stdout + refused.stderr, /tool and arguments are required/);
     }
   });
@@ -185,4 +185,140 @@ test("checkerexit caller-supplied key changes failure to exit 0 without claiming
   assert.match(result.stdout, /Signature and bindings   VALID/);
   assert.match(result.stdout, /Authority key            UNPINNED \/ CALLER-SUPPLIED/);
   assert.match(result.stdout, /VERIFY    UNVERIFIED/);
+});
+
+test("seal_verify speaks stdio MCP and returns read-only JSON verdicts and refusals", async () => {
+  const { spawn } = require("node:child_process");
+  const { createHash } = require("node:crypto");
+  const { once } = require("node:events");
+  const { createInterface } = require("node:readline");
+  const { pathToFileURL } = require("node:url");
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-verify-mcp-"));
+  const fixtureDirectory = path.join(ROOT, "docs/public/examples");
+  const receiptPath = path.join(fixtureDirectory, "protect-block.receipt.json");
+  const pubkeyHex = fs.readFileSync(path.join(fixtureDirectory, "protect-signer.pub"), "utf8").trim();
+  const hashes = (directory) => Object.fromEntries(fs.readdirSync(directory, { recursive: true })
+    .map((name) => path.join(directory, name)).filter((file) => fs.statSync(file).isFile())
+    .sort().map((file) => [file, createHash("sha256").update(fs.readFileSync(file)).digest("hex")]));
+  const before = { checker: hashes(path.join(ROOT, "checker")), fixtures: hashes(fixtureDirectory) };
+  const status = () => spawnSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: ROOT, encoding: "utf8" }).stdout;
+  const beforeStatus = status();
+  const child = spawn(process.execPath, [SEAL, "__verify-server"], { stdio: ["pipe", "pipe", "pipe"] });
+  const closed = once(child, "close");
+  const waiting = new Map();
+  let sequence = 0;
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const lines = createInterface({ input: child.stdout });
+  lines.on("line", (line) => {
+    const reply = JSON.parse(line);
+    const resolve = waiting.get(reply.id);
+    assert.ok(resolve, `unexpected reply: ${line}`);
+    waiting.delete(reply.id);
+    resolve(reply);
+  });
+  const request = (method, params) => new Promise((resolve, reject) => {
+    const id = ++sequence;
+    const timer = setTimeout(() => reject(new Error(`MCP timeout: ${method}; ${stderr}`)), 30000);
+    waiting.set(id, (reply) => { clearTimeout(timer); resolve(reply); });
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+  });
+  const call = async (args) => {
+    const reply = await request("tools/call", { name: "seal_verify", arguments: args });
+    assert.equal(reply.error, undefined);
+    assert.equal(reply.result.content.length, 1);
+    assert.equal(reply.result.content[0].type, "text");
+    const value = JSON.parse(reply.result.content[0].text);
+    assert.equal(typeof value.ok, "boolean");
+    return value;
+  };
+  try {
+    const initialized = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test-agent", version: "1" } });
+    assert.equal(initialized.result.protocolVersion, "2025-06-18");
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+    const listed = await request("tools/list", {});
+    assert.equal(listed.result.tools.length, 1);
+    assert.equal(listed.result.tools[0].name, "seal_verify");
+    assert.deepEqual(listed.result.tools[0].inputSchema, {
+      type: "object", properties: { receiptPath: { type: "string" }, pubkeyHex: { type: "string" } }, required: ["receiptPath"],
+    });
+    const result = await call({ receiptPath, pubkeyHex });
+    const verifier = await import(pathToFileURL(CHECKER).href);
+    const expected = await verifier.verify(fs.readFileSync(receiptPath), { publicKeyHex: pubkeyHex });
+    expected.ok = expected.validate && expected.signature && expected.replay;
+    expected.code = null;
+    assert.deepEqual(result, expected);
+    assert.equal(result.ok, true);
+    const cli = spawnSync(process.execPath, [SEAL, "verify", receiptPath, "--pubkey", pubkeyHex], { encoding: "utf8" });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(cli.stdout.trim(), verifier.format(result));
+    assert.equal((await call({ receiptPath })).ok, false, "no key does not establish signature");
+    const empty = path.join(scratch, "empty.json");
+    fs.writeFileSync(empty, "");
+    const unreadable = path.join(scratch, "unreadable.json");
+    fs.copyFileSync(receiptPath, unreadable);
+    fs.chmodSync(unreadable, 0);
+    for (const [args, code] of [
+      [{ receiptPath: path.join(scratch, "absent") }, "read_failed"],
+      [{ receiptPath: empty }, "read_failed"],
+      [{ receiptPath: scratch }, "read_failed"],
+      [{ receiptPath: unreadable }, "read_failed"],
+      [{}, "read_failed"],
+      [{ receiptPath, pubkeyHex: 42 }, "invalid_arguments"],
+      // A different real Ed25519 public key fails the fixture's signature.
+      [{ receiptPath, pubkeyHex: require("node:crypto").generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("hex") }, "signature_mismatch"],
+    ]) {
+      const failure = await call(args);
+      assert.equal(failure.ok, false);
+      assert.equal(failure.code, code);
+    }
+    assert.equal((await request("unknown", {})).error.code, -32601);
+    assert.equal((await request("tools/call", { name: "other" })).error.code, -32602);
+    assert.equal((await call({ receiptPath, pubkeyHex })).ok, true, "server survives all refusals");
+    assert.deepEqual({ checker: hashes(path.join(ROOT, "checker")), fixtures: hashes(fixtureDirectory) }, before);
+    assert.equal(status(), beforeStatus);
+    child.stdin.end();
+    const [code] = await closed;
+    assert.equal(code, 0, stderr);
+  } finally {
+    child.kill();
+    lines.close();
+  }
+});
+
+test("packaged seal_verify drains EOF and refuses missing or changed runtime as JSON", () => {
+  const scratch = testTmpdir(path.join(os.tmpdir(), "seal-verify-package-"));
+  const { PAYLOAD_PATHS } = require("../scripts/build-dist.cjs");
+  const npmFiles = require("../package.json").files;
+  for (const file of PAYLOAD_PATHS) {
+    assert.ok(npmFiles.includes(file), `npm package must include ${file}`);
+    const target = path.join(scratch, file);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, file), target);
+  }
+  const receiptPath = path.join(ROOT, "docs/public/examples/protect-block.receipt.json");
+  const pubkeyHex = fs.readFileSync(path.join(ROOT, "docs/public/examples/protect-signer.pub"), "utf8").trim();
+  const request = () => {
+    const result = spawnSync(process.execPath, [path.join(scratch, "bin/seal"), "__verify-server"], {
+      input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "seal_verify", arguments: { receiptPath, pubkeyHex } } }) + "\n",
+      encoding: "utf8", timeout: 30000,
+      env: { ...process.env, SEAL_CACHE_DIR: path.join(scratch, "absent-cache") },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const reply = JSON.parse(result.stdout);
+    assert.equal(reply.error, undefined);
+    return JSON.parse(reply.result.content[0].text);
+  };
+  assert.equal(request().ok, true);
+  const wasm = path.join(scratch, "runtime/kernel/wasm/seal.wasm");
+  fs.appendFileSync(wasm, "tamper");
+  let result = request();
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "runtime_unavailable");
+  assert.match(result.message, /integrity check failed/);
+  fs.unlinkSync(wasm);
+  result = request();
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "runtime_unavailable");
+  assert.match(result.message, /absent/);
 });
