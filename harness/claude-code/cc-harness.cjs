@@ -16,7 +16,7 @@
 //
 // Nothing here proves a future Claude Code version works, and nothing here is
 // automated in CI. It records that ONE named client version, on ONE pinned
-// artifact, on Linux x86-64, was exercised — and it makes that record
+// artifact, on a named supported host, was exercised — and it makes that record
 // checkable by `scripts/check-cc-evidence.mjs`.
 //
 // Usage:
@@ -331,10 +331,8 @@ function rawRecordingText(castPath) {
   return rawCastOutputText(castPath);
 }
 
-// util-linux `script` is the recorder because it is present on a stock Linux
-// box; the cast is written in asciinema v2 so the recording is replayable by a
-// standard tool. The conversion is mechanical: one cast event per timing
-// record, reading exactly that record's byte count out of the output log.
+// `script` records the terminal on Linux and macOS. The cast is asciinema v2.
+// Conversion reads exactly the byte count recorded in each timing line.
 function castFromScript(outPath, timingPath, { columns, rows, startedAt, banner }) {
   const out = fs.readFileSync(outPath);
   const timing = fs.readFileSync(timingPath, "utf8").split("\n").filter((line) => line.trim() !== "");
@@ -1634,7 +1632,7 @@ function finish(state, options) {
       home: state.paths.home,
       xdg_data_home: state.paths.data,
       project: state.paths.project,
-      recorder: "util-linux script → asciinema cast v2; the pack publishes any retained scrollback followed by the last visible frame, and raw casts remain in the run directory",
+      recorder: `${process.platform === "darwin" ? "macOS script" : "util-linux script"} → asciinema cast v2; the pack publishes any retained scrollback followed by the last visible frame, and raw casts remain in the run directory`,
       recordings: transcriptFiles,
     },
     fixture: {

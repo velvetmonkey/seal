@@ -214,7 +214,8 @@ use `v0.4.0`. No Tailscale connection is needed.
    hash the printed client path with `shasum -a 256 "<printed client executable path>"`
    and confirm it equals the harness line. Keep the 64-character hash for the
    release checker.
-3. In the first recorded session, accept the project's `.mcp.json` prompt,
+3. In the first recorded session, use `/login` if the clean harness HOME asks
+   you to sign in again. Then accept the project's `.mcp.json` prompt,
    use `/mcp` to confirm local `notes` is connected, and use `/exit`. This is
    `activation`: the protected route should be selected. The later pack records
    the process ancestry.

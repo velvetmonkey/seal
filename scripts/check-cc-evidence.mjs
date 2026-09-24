@@ -508,7 +508,7 @@ function identityDigests(step) {
     .filter((digest) => typeof digest === "string");
 }
 
-// Realness comes from what the fixture read from /proc while the launcher
+// Realness comes from what the fixture read from the host process list while the launcher
 // chain existed. The self-declared client hash must occur above the Seal proxy
 // in every start record, and the checked-in stand-in's hash is independently
 // recognized from those raw process identities.

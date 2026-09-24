@@ -14,7 +14,7 @@
 //      exact arguments and the resulting effect digest. Zero calls therefore
 //      look like zero records, not like a silent success.
 //   2. Every start leaves the process ancestry it was launched under
-//      (/proc, Linux only). That is how the run distinguishes "Claude Code
+//      (/proc on Linux, ps on macOS). That is how the run distinguishes "Claude Code
 //      started the Seal proxy, which started me" from "Claude Code started
 //      me directly out of .mcp.json" — the fallback the run must rule out.
 //
