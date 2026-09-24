@@ -27,9 +27,6 @@ including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
 <!-- generated from published release; do not edit -->
-> The current source is the unreleased `v0.4.0` candidate. The install commands below fetch the
-> published `v0.5.1`, which carries the previous receipt format and Linux-only Protect support.
-
 ```bash
 SEAL_VERSION=v0.5.1
 artifact_name="seal-v0.5.1-linux-x64" \
