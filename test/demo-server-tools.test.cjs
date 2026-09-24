@@ -116,6 +116,72 @@ for (const existing of ["data", "count"]) {
   });
 }
 
+for (const [label, contents] of [["non-numeric", "not-a-number\n"], ["empty", ""]]) {
+  test(`demo startup refuses a ${label} count before serving calls`, () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-count-"));
+    const dataFile = path.join(root, "data.txt");
+    fs.writeFileSync(dataFile, "important data\n");
+    fs.writeFileSync(`${dataFile}.count`, contents);
+    const child = spawnSync(process.execPath, [SEAL, "__demo-server", dataFile], {
+      input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "demo.mutate", arguments: { line: "new" } } }) + "\n",
+      encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(child.status, 2, child.stderr);
+    assert.match(child.stderr, /invalid DATAFILE\.count/);
+    assert.equal(child.stdout, "");
+    assert.equal(fs.readFileSync(dataFile, "utf8"), "important data\n");
+    assert.equal(fs.readFileSync(`${dataFile}.count`, "utf8"), contents);
+  });
+}
+
+for (const delay of [1500, 2300]) {
+  test(`a live initializer stalled ${delay}ms is named as in progress`, async () => {
+    const root = testTmpdir(path.join(os.tmpdir(), "seal-demo-slow-"));
+    const dataFile = path.join(root, "data.txt");
+    const ready = `${dataFile}.ready`;
+    const winner = spawn(process.execPath, ["-e", `
+      const fs = require("node:fs");
+      const file = ${JSON.stringify(dataFile)};
+      const open = fs.openSync;
+      fs.openSync = (target, flags, ...args) => {
+        if (target === file + ".count" && flags === "wx") {
+          fs.writeFileSync(${JSON.stringify(ready)}, "");
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${delay});
+        }
+        return open(target, flags, ...args);
+      };
+      require(${JSON.stringify(path.join(__dirname, "..", "spine", "demo-server.cjs"))}).run(file);
+    `], { stdio: ["pipe", "pipe", "pipe"] });
+    let winnerOut = "", winnerErr = "";
+    winner.stdout.on("data", chunk => { winnerOut += chunk; });
+    winner.stderr.on("data", chunk => { winnerErr += chunk; });
+    try {
+      const deadline = Date.now() + 5000;
+      while (!fs.existsSync(ready)) {
+        assert.ok(Date.now() < deadline, `winner did not reach count write: ${winnerErr}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      const loser = spawnSync(process.execPath, [SEAL, "__demo-server", dataFile], {
+        input: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "initialize" }) + "\n",
+        encoding: "utf8", timeout: 10000,
+      });
+      assert.equal(loser.status, 2, loser.stderr);
+      assert.match(loser.stderr, /another start is in progress/);
+      assert.doesNotMatch(loser.stderr, /orphan|inconsistent state/);
+      assert.equal(loser.stdout, "");
+      winner.stdin.end(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }) + "\n");
+      const code = await new Promise(resolve => winner.once("close", resolve));
+      assert.equal(code, 0, winnerErr);
+      assert.match(winnerOut, /serverInfo/);
+      assert.equal(fs.readFileSync(dataFile, "utf8"), "");
+      assert.equal(fs.readFileSync(`${dataFile}.count`, "utf8"), "0\n");
+    } finally {
+      if (winner.exitCode === null) winner.kill();
+    }
+  });
+}
+
 // Exercise the private persistence boundaries without expanding the server API.
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
