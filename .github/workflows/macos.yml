@@ -48,7 +48,7 @@ jobs:
           export HOME="$RUNNER_TEMP/operator-home"
           mkdir -p "$HOME" "$RUNNER_TEMP/project" "$RUNNER_TEMP/pack"
           cd "$RUNNER_TEMP/project"
-          printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"]}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" > .mcp.json
+          printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"],"env":{"SEAL_CC_FIXTURE_LOG":"%s/fixture.jsonl","SEAL_CC_FIXTURE_EFFECT":"%s/effect.txt"}}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TEMP" > .mcp.json
           before="$(shasum -a 256 .mcp.json)"
           "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note
           echo 'protect succeeded'
