@@ -51,6 +51,9 @@ the Node CLI this repository ships.
 
 The dated [archive/pass2-captures.md](../archive/pass2-captures.md) preserves the version-specific walkthrough measurement.
 
+The published v0.4.0 record remains at
+[assurance/RELEASE-NOTES-v0.4.0.md](RELEASE-NOTES-v0.4.0.md).
+
 ## Family task guides
 
 - [check/README.md](../check/README.md) — Check receipts.
