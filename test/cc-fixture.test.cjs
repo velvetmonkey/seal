@@ -82,6 +82,33 @@ test("the fixture records zero child calls when the guarded tool is never called
   assert.ok(kinds.filter((kind) => kind === "frame").length >= 3, "the log records every frame it received");
 });
 
+test("Darwin ps ancestry preserves a client executable path containing spaces", () => {
+  const space = workspace();
+  const client = path.join(space.dir, "Claude Code.app", "Contents", "MacOS", "claude");
+  fs.mkdirSync(path.dirname(client), { recursive: true });
+  fs.writeFileSync(client, "client bytes");
+  const preload = path.join(space.dir, "darwin-ps.cjs");
+  fs.writeFileSync(preload, `
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    require("node:child_process").spawnSync = (file, args) => {
+      if (file !== "/bin/ps") throw new Error("unexpected child process");
+      const field = args[args.indexOf("-o") + 1];
+      return { status: 0, stdout: field === "ppid="
+        ? (args[args.indexOf("-p") + 1] === "77" ? "1\\n" : "77\\n")
+        : ${JSON.stringify(`${client} --version\n`)} };
+    };
+  `);
+  const result = spawnSync(process.execPath, ["-r", preload, FIXTURE], {
+    encoding: "utf8",
+    env: { ...process.env, SEAL_CC_FIXTURE_LOG: space.log, SEAL_CC_FIXTURE_EFFECT: space.effect },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const parent = records(space.log).find((record) => record.kind === "start").ancestry[0];
+  assert.deepEqual(parent.argv, [client, "--version"]);
+  assert.equal(parent.executable.path, fs.realpathSync(client));
+  assert.equal(parent.executable.sha256, crypto.createHash("sha256").update("client bytes").digest("hex"));
+});
+
 test("the fixture records exactly one child call for one guarded call, with the effect digest", async () => {
   const space = workspace();
   const link = driver(space);
