@@ -29,7 +29,7 @@ const CLAIM_MANIFEST = [
 
 const ARCHIVE_CLAIM_PAGE = "docs/archive/README.md"; // CLAIM-COVERAGE: docs/archive/README.md#archive-count
 const ARCHIVE_CLAIM_MANIFEST = "scripts/claim-bearing-files.json";
-const EXPECTED_ARCHIVE_CLAIM_FILES = 19;
+const EXPECTED_ARCHIVE_CLAIM_FILES = 20;
 const LINKCHECK_SCRIPT = "scripts/linkcheck.mjs";
 const LINKCHECK_TEST = "test/linkcheck.test.mjs";
 

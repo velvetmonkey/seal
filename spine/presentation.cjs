@@ -52,4 +52,22 @@ function printKernelTiming(error, writeLine = (line) => console.error(line)) {
   }
 }
 
-module.exports = { KERNEL_SECURITY_PHASE_NAMES, printKernelTiming };
+// Bound unsigned client identity in storage and on both terminal surfaces.
+// Include the marker in the byte budget and never split a Unicode code point.
+const CLIENT_METADATA_BYTES = 128;
+function capClientMetadata(value) {
+  if (Buffer.byteLength(value, "utf8") <= CLIENT_METADATA_BYTES) return value;
+  const marker = "...[truncated]";
+  const budget = CLIENT_METADATA_BYTES - Buffer.byteLength(marker, "utf8");
+  let prefix = "";
+  let bytes = 0;
+  for (const character of value) {
+    const size = Buffer.byteLength(character, "utf8");
+    if (bytes + size > budget) break;
+    prefix += character;
+    bytes += size;
+  }
+  return prefix + marker;
+}
+
+module.exports = { KERNEL_SECURITY_PHASE_NAMES, printKernelTiming, capClientMetadata };

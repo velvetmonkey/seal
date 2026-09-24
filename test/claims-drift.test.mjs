@@ -150,21 +150,21 @@ test("the archive count guard reads registrations in both directions", (t) => {
   const source = readFileSync(manifestPath, "utf8");
   const manifest = JSON.parse(source);
   const archiveFiles = Object.keys(manifest.files).filter((file) => file.startsWith("docs/archive/"));
-  assert.equal(archiveFiles.length, 19, "test baseline must contain nineteen registered archive files");
+  assert.equal(archiveFiles.length, 20, "test baseline must contain twenty registered archive files");
 
   const added = structuredClone(manifest);
   added.files["docs/archive/EXTRA.md"] = { allowlistReason: "count guard mutation" };
   writeFileSync(manifestPath, `${JSON.stringify(added, null, 2)}\n`);
   const addedRun = runFixture(root);
   assert.equal(addedRun.status, 1, `${addedRun.stdout}${addedRun.stderr}`);
-  assert.match(addedRun.stderr, /registers 20 archive files; expected 19/u);
+  assert.match(addedRun.stderr, /registers 21 archive files; expected 20/u);
 
   const removed = structuredClone(manifest);
   delete removed.files[archiveFiles[0]];
   writeFileSync(manifestPath, `${JSON.stringify(removed, null, 2)}\n`);
   const removedRun = runFixture(root);
   assert.equal(removedRun.status, 1, `${removedRun.stdout}${removedRun.stderr}`);
-  assert.match(removedRun.stderr, /registers 18 archive files; expected 19/u);
+  assert.match(removedRun.stderr, /registers 19 archive files; expected 20/u);
 });
 
 test("converted guards do not depend on their assertion sentences", (t) => {
@@ -174,7 +174,7 @@ test("converted guards do not depend on their assertion sentences", (t) => {
   const archiveReadme = readFileSync(archiveReadmePath, "utf8");
   const linkcheckControl = readFileSync(linkcheckControlPath, "utf8");
   const withoutArchiveAssertion = archiveReadme.replace(
-    "Seal registers nineteen archive files with claim-bearing-file-inventory.\n",
+    "Seal registers twenty archive files with claim-bearing-file-inventory.\n",
     "",
   );
   const withoutLinkcheckAssertion = linkcheckControl.replace(
