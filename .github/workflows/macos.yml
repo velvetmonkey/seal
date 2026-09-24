@@ -45,7 +45,7 @@ jobs:
           esac
           SEAL_NODE_PLATFORM="$(node -p 'process.platform + "-" + process.arch')"
           if test "$SEAL_PLATFORM" != "$SEAL_NODE_PLATFORM"; then
-            printf 'REFUSE platform mismatch: uname -sm selects %s; Node process.platform/process.arch reports %s\n' "$SEAL_PLATFORM" "$SEAL_NODE_PLATFORM" >&2
+            printf 'REFUSE platform mismatch: uname -sm selects %s; Node reports %s from process.platform and process.arch\n' "$SEAL_PLATFORM" "$SEAL_NODE_PLATFORM" >&2
             exit 1
           fi
           echo "platform $SEAL_PLATFORM"

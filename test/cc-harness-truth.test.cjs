@@ -32,7 +32,7 @@ test("Mac walk refuses a Rosetta uname and Node architecture mismatch before dow
     env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, NODE_OPTIONS: `--require=${preload}`, SEAL_CURL_MARKER: marker },
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /uname -sm selects darwin-arm64; Node process\.platform\/process\.arch reports darwin-x64/);
+  assert.match(result.stderr, /uname -sm selects darwin-arm64; Node reports darwin-x64 from process\.platform and process\.arch/);
   assert.equal(fs.existsSync(marker), false, "download did not start");
 });
 
