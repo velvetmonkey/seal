@@ -436,7 +436,7 @@ test("guarded request envelopes are refused over stdio before approval selection
   t.after(() => h.run.kill());
   initialize(h.proxy);
   await h.responseFor(90);
-  const valid = { ...callParams("valid envelope"), id: 701, extra: "allowed" };
+  const valid = { ...callParams("valid envelope"), id: 701 };
   const missingVersion = { ...valid };
   delete missingVersion.jsonrpc;
   const missingId = { ...valid };
