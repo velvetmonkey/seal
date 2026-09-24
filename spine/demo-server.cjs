@@ -9,12 +9,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 const { writeCompleteSync } = require("./write.cjs");
+const { processStartWitness, lockOwnerIsLive } = require("./protection.cjs");
 
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
 
-function writeFileSyncedTo(filePath, text) {
-  const fd = fs.openSync(filePath, "w", 0o600);
+function writeFileSyncedTo(filePath, text, flags = "w") {
+  const fd = fs.openSync(filePath, flags, 0o600);
   try {
     writeCompleteSync(fd, text);
     fs.fsyncSync(fd);
@@ -56,9 +57,40 @@ function appendSyncedTo(filePath, text) {
 }
 
 function incrementCount(countFile) {
-  const count = Number.parseInt(fs.readFileSync(countFile, "utf8").trim(), 10) + 1;
+  const count = readCount(countFile) + 1;
+  if (!Number.isSafeInteger(count)) refuseCount("count exceeds the safe integer range");
   writeFileSyncedTo(countFile, `${count}\n`);
   return count;
+}
+
+function refuseCount(reason) {
+  process.stderr.write(`seal __demo-server: invalid DATAFILE.count: ${reason}\n`);
+  process.exit(2);
+}
+
+function readCount(countFile) {
+  const text = fs.readFileSync(countFile, "utf8");
+  if (text.length === 0) refuseCount("empty count file");
+  if (!/^(0|[1-9][0-9]*)\n?$/.test(text)) refuseCount("expected a non-negative decimal integer");
+  const count = Number(text.trim());
+  if (!Number.isSafeInteger(count)) refuseCount("count exceeds the safe integer range");
+  return count;
+}
+
+function liveInitializer(dataFile, ownMarker) {
+  const directory = path.dirname(dataFile);
+  const prefix = `${path.basename(dataFile)}.initializing.`;
+  return fs.readdirSync(directory).some((name) => {
+    if (!name.startsWith(prefix)) return false;
+    const marker = path.join(directory, name);
+    if (marker === ownMarker) return false;
+    try {
+      const owner = JSON.parse(fs.readFileSync(marker, "utf8"));
+      return lockOwnerIsLive(owner, "demo initializer");
+    } catch {
+      return false;
+    }
+  });
 }
 
 function respond(message) {
@@ -72,8 +104,55 @@ function run(dataFile) {
   }
   const countFile = `${dataFile}.count`;
   fs.mkdirSync(path.dirname(dataFile), { recursive: true, mode: 0o700 });
-  writeFileSyncedTo(dataFile, "");
-  writeFileSyncedTo(countFile, "0\n");
+  const refuseOrphan = () => {
+    process.stderr.write("seal __demo-server: inconsistent state: orphaned DATAFILE or DATAFILE.count; both must exist or both be absent; refusing initialization\n");
+    process.exit(2);
+  };
+  // Read the count first: it is created last. A data-only observation may
+  // belong to a live initializer, so only refuse it after the bounded wait.
+  let created = false;
+  let marker;
+  if (fs.existsSync(countFile)) {
+    if (!fs.existsSync(dataFile)) refuseOrphan();
+  } else {
+    marker = `${dataFile}.initializing.${process.pid}`;
+    const startWitness = processStartWitness(process.pid);
+    if (startWitness === null) throw new Error("cannot establish demo initializer process-start witness");
+    writeFileSyncedTo(marker, `${JSON.stringify({ pid: process.pid, startWitness })}\n`, "wx");
+    try {
+      writeFileSyncedTo(dataFile, "", "wx");
+      created = true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+    if (!created) {
+      fs.unlinkSync(marker);
+      marker = undefined;
+    }
+  }
+  try {
+    if (created) {
+      writeFileSyncedTo(countFile, "0\n", "wx");
+    } else {
+    const sleeper = new Int32Array(new SharedArrayBuffer(4));
+    const deadline = performance.now() + 1000;
+    // An open count file can still be empty before the winner writes 0.
+    while (!fs.existsSync(countFile) || fs.statSync(countFile).size === 0) {
+      if (performance.now() >= deadline) {
+        if (liveInitializer(dataFile, marker)) {
+          process.stderr.write("seal __demo-server: another start is in progress; retry after it completes\n");
+          process.exit(2);
+        }
+        if (!fs.existsSync(countFile)) refuseOrphan();
+        refuseCount("empty count file");
+      }
+      Atomics.wait(sleeper, 0, 0, 10);
+    }
+    }
+    readCount(countFile);
+  } finally {
+    if (marker) fs.unlinkSync(marker);
+  }
 
   const input = readline.createInterface({ input: process.stdin, terminal: false });
   input.on("line", (line) => {
