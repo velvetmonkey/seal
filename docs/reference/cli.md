@@ -23,7 +23,7 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal receipts DIRECTORY` | Inspect receipt filenames for sequence gaps; DIRECTORY must exist and be a directory. | 0 if the scan finds no rejected names or gaps; 1 on rejected names, gaps, usage error or read failure |
 | `seal coverage` | Report known mediated, unmediated and unknown routes from this deployment. Does not discover every alternate route. | 0 for a report; 1 for unreadable/refused configuration; 2 for extra arguments |
 | `seal uninstall` | Preview and confirm removal of an installed distribution and its owned overrides. Retain history, journals, receipts and signing keys. | 0 on completion or cancellation; 1 on refusal/failure |
-| `seal doctor` | Report approval-origin assumptions and local readiness. | 0 for reportable assumptions; 1 for an automatic elicitation hook, failed readiness or failure |
+| `seal doctor` | Report approval-origin assumptions and local readiness. | 0 for reportable assumptions; 1 for an automatic elicitation hook, failed readiness or failure; 2 if any argument follows `doctor` |
 | `seal status` | Report project protection, local runtime and receipt observations. | 0 for reportable route state; 1 for unreadable/refused protection state or failure; 2 if any argument follows `status` |
 
 `seal status` exits **0 for an unprotected route**, and can also exit 0 for a stale
@@ -33,7 +33,7 @@ or complete client-route coverage; read the observations, as explained in
 
 An unknown command prints `seal: unknown command: NAME` to stderr, prints help to
 stdout, and exits **2**. Ordinary command usage failures exit **1**, except extra
-arguments to `status` or `coverage`, which exit **2**. These are command outcomes, not a promise
+arguments to `doctor`, `status` or `coverage`, which exit **2**. These are command outcomes, not a promise
 about OS signals or a process that cannot start.
 
 ## Flags and argument ranges
@@ -73,7 +73,8 @@ reject unknown long options. `recover` requires its exact one- or two-argument
 shape; `receipts` requires exactly one argument. `verify` uses the first positional
 path and first later `--pubkey` value, recognizes `--json`, and ignores other
 trailing words; `unprotect`
-uses only its first argument, and `doctor` ignores trailing arguments. These
+uses only its first argument. `doctor` rejects any trailing argument with
+`seal doctor takes no arguments` on stderr, no stdout, and exit 2. These
 existing parsing rules do not add flags to those commands.
 
 

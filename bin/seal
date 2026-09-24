@@ -727,7 +727,10 @@ async function main() {
   if (command === "recover") return recoverCommand(process.argv.slice(3));
   if (command === "history") return receiptPopulation.queryCommand(process.argv.slice(3));
   if (command === "receipts") return receiptCommand(process.argv.slice(3));
-  if (command === "doctor") return doctorCommand();
+  if (command === "doctor") {
+    if (process.argv.length > 3) { console.error("seal doctor takes no arguments"); process.exitCode = 2; return; }
+    return doctorCommand();
+  }
   if (command === "coverage") {
     if (process.argv.length > 3) { console.error("seal coverage takes no arguments"); process.exitCode = 2; return; }
     return coverage();
