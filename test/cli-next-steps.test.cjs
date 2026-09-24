@@ -229,6 +229,22 @@ test("CLI contract: every public parser flag appears in help and the reference",
   }
 });
 
+test("CLI reference: doctor extra arguments have the documented exit and diagnostic", () => {
+  const root = path.resolve(__dirname, "..");
+  const reference = fs.readFileSync(path.join(root, "docs/reference/cli.md"), "utf8");
+  const row = reference.split("\n").find((line) => line.startsWith("| `seal doctor` |"));
+  assert.ok(row, "doctor command row is present");
+  assert.match(row, /2 if any argument follows `doctor`/);
+  assert.match(reference, /`doctor` rejects any trailing argument with\s+`seal doctor takes no arguments` on stderr, no stdout, and exit 2/);
+  assert.doesNotMatch(reference, /`doctor` ignores trailing arguments/);
+  for (const extra of ["--json", "unexpected", ""]) {
+    const result = contractContext().run(["doctor", extra]);
+    assert.equal(result.code, 2);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "seal doctor takes no arguments\n");
+  }
+});
+
 test("CLI contract: unknown command exits 2 and prints diagnostic plus help", () => {
   const ctx = contractContext();
   const result = ctx.run(["not-a-command"]);
@@ -327,6 +343,13 @@ test("CLI contract: protect, unprotect, recover, doctor and status exact exits",
   assert.match(unprotected.out, /Sealed MCP route: - outside Seal/);
   assert.equal(ctx.run(["doctor"]).code, 0);
   assert.equal(ctx.run(["doctor"], "", { SEAL_ELICITATION_AUTO_RESPONSE: "automatic" }).code, 1);
+  for (const command of ["doctor", "coverage"]) {
+    for (const argument of ["--bogus-flag", "unexpected", ""]) {
+      const rejected = ctx.run([command, argument]);
+      assert.equal(rejected.code, 2, rejected.out);
+      assert.equal(rejected.out, `seal ${command} takes no arguments\n`);
+    }
+  }
   const protectedRun = ctx.run(["protect", "--timeout-ms", "2147483647", "db", "demo.mutate"]);
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.equal(ctx.run(["protect", "db", "demo.mutate"]).code, 1);
