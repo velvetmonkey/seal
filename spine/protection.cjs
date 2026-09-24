@@ -1648,6 +1648,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
         startedAt: new Date().toISOString(),
       },
     };
+    delete next.observedClient; // A new session has not observed initialize yet.
     writeState(statePath, next, {
       beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
     });
@@ -1655,6 +1656,30 @@ async function activationLease(statePath, env = process.env, validateState = () 
     Object.defineProperty(next, "lockRecovered", { value: preflight.recovered || lock.recovered });
     return next;
   }, wait);
+}
+
+// Informational metadata shares the existing atomic state writer and lease fence.
+function recordObservedClient(statePath, leaseToken, observedClient) {
+  const initial = readState(statePath);
+  if (!initial) return;
+  const lock = acquireProjectLock(initial.projectRoot);
+  try {
+    const state = readState(statePath);
+    if (!state || !leaseMatches(state.lease, leaseToken)) return;
+    const next = { ...state };
+    if (observedClient) {
+      const { capClientMetadata } = require("./presentation.cjs");
+      next.observedClient = {
+        name: capClientMetadata(observedClient.name),
+        version: capClientMetadata(observedClient.version),
+        elicitationDeclared: observedClient.elicitationDeclared,
+      };
+    }
+    else delete next.observedClient;
+    writeState(statePath, next);
+  } finally {
+    lock.release();
+  }
 }
 
 function beforeForwardFromState(statePath, leaseToken) {
@@ -1736,6 +1761,7 @@ module.exports = {
   projectId,
   readProjectServer,
   readState,
+  recordObservedClient,
   recover,
   receiptKeyPaths,
   realProjectRoot,

@@ -95,6 +95,7 @@ function createProxy(options) {
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
+    onObservedClient, // unsigned initialize metadata, never passed to the contract
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
@@ -135,6 +136,7 @@ function createProxy(options) {
   // unknown-ID child route, but have no approval state left to authorize a call.
   const retiredElicitationIds = new Set();
   let clientCapabilities = null;
+  let observedClient = null;
 
   function retireElicitation(id) {
     retiredElicitationIds.add(id);
@@ -543,6 +545,13 @@ function createProxy(options) {
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
           ? capabilities
           : {};
+        const info = frame.params?.clientInfo;
+        observedClient = info && typeof info === "object" && !Array.isArray(info)
+          && typeof info.name === "string" && typeof info.version === "string"
+          ? { name: info.name, version: info.version,
+              elicitationDeclared: Object.hasOwn(clientCapabilities, "elicitation") }
+          : null;
+        onObservedClient?.(observedClient);
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
         // The branch already requires a non-empty method string. Refuse an
