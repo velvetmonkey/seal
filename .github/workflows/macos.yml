@@ -51,7 +51,7 @@ jobs:
           echo "artifact sha256 $SEAL_SHA256 bytes $SEAL_BYTES"
           chmod +x "$SEAL_ARTIFACT"
           "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix "$RUNNER_TEMP/prefix"
-          export HOME="$RUNNER_TEMP/operator-home"
+          HOME="$RUNNER_TEMP/operator-home"; export HOME
           mkdir -p "$HOME" "$RUNNER_TEMP/project" "$RUNNER_TEMP/pack"
           cd "$RUNNER_TEMP/project"
           printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"],"env":{"SEAL_CC_FIXTURE_LOG":"%s/fixture.jsonl","SEAL_CC_FIXTURE_EFFECT":"%s/effect.txt"}}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TEMP" > .mcp.json
