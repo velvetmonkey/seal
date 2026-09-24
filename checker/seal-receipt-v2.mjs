@@ -55,6 +55,7 @@ function validate(r) {
   let orderIndex = -1;
   for (const k of Object.keys(r)) { const next = ORDER.indexOf(k); if (next <= orderIndex) fail("member order is not the v2 order", "member_order"); orderIndex = next; }
   if (typeof r.tool !== "string" || !r.tool || r.arguments === null || typeof r.arguments !== "object" || Array.isArray(r.arguments)) fail("tool and arguments are required");
+  if (typeof r.action !== "string" || r.action.length === 0) fail("action must be a non-empty string", "invalid_action");
   if (!Number.isSafeInteger(r.now) || r.now < 0) fail("now must be a non-negative safe integer");
   if (!r.kernel_config || typeof r.kernel_config !== "object" || Array.isArray(r.kernel_config)) fail("kernel_config is required");
   if (!Array.isArray(r.granted_capabilities) || !r.kernel_inputs || typeof r.kernel_inputs !== "object") fail("kernel inputs are required");
