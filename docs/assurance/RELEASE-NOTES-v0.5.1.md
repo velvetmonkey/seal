@@ -1,10 +1,10 @@
 # Seal v0.5.1 release notes
 
+These notes describe the v0.5.1 release candidate based on the v0.5.0 tagged source (`5975bc68`) plus the release-branch CI provenance fix from PR 400 (`ad722eb0`, cherry-picked as `a1974c9`). Neither v0.4.1 nor v0.5.0 was published; the changes since published v0.4.0 are listed below. These are source claims until the v0.5.1 artifact is built and verified by the Release workflow.
+
 ## What changed since v0.4.0
 
 - The release workflow accepts a successful CI run on the exact tagged commit from its matching release candidate branch, while still accepting main. This permits release source to carry its own CI provenance (`ad722eb0`, PR 400; cherry-pick `a1974c9`).
-
-These notes describe the v0.5.1 release candidate based on the v0.5.0 tagged source (`5975bc68`) plus the release-branch CI provenance fix from PR 400 (`ad722eb0`, cherry-picked as `a1974c9`). Neither v0.4.1 nor v0.5.0 was published; the changes since published v0.4.0 are listed below. These are source claims until the v0.5.1 artifact is built and verified by the Release workflow.
 
 - The standalone receipt checker now exits 1 when the signature is absent or cannot be verified with the supplied key, including when no key is supplied (`79939a3`).
 - `seal verify PATH --json` adds structured results and failure codes, with exit 0 for successful structure, signature and replay checks, 1 for verification/runtime failures, and 2 for invalid input; text-mode missing PATH retains exit 1, and callers that expected exactly 1 for schema errors must now accept 2 (`bf95358`; `docs/reference/cli.md:85-105`).
