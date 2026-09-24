@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 const { writeCompleteSync } = require("./write.cjs");
+const { processStartWitness, lockOwnerIsLive } = require("./protection.cjs");
 
 const TOOL = "demo.mutate";
 const ERASE_TOOL = "demo.erase";
@@ -83,10 +84,12 @@ function liveInitializer(dataFile, ownMarker) {
     if (!name.startsWith(prefix)) return false;
     const marker = path.join(directory, name);
     if (marker === ownMarker) return false;
-    const pid = Number(name.slice(prefix.length));
-    if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-    try { process.kill(pid, 0); return true; }
-    catch (error) { return error.code === "EPERM"; }
+    try {
+      const owner = JSON.parse(fs.readFileSync(marker, "utf8"));
+      return lockOwnerIsLive(owner, "demo initializer");
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -113,7 +116,9 @@ function run(dataFile) {
     if (!fs.existsSync(dataFile)) refuseOrphan();
   } else {
     marker = `${dataFile}.initializing.${process.pid}`;
-    writeFileSyncedTo(marker, "", "wx");
+    const startWitness = processStartWitness(process.pid);
+    if (startWitness === null) throw new Error("cannot establish demo initializer process-start witness");
+    writeFileSyncedTo(marker, `${JSON.stringify({ pid: process.pid, startWitness })}\n`, "wx");
     try {
       writeFileSyncedTo(dataFile, "", "wx");
       created = true;
