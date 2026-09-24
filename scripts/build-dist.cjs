@@ -29,6 +29,8 @@ const PAYLOAD_PATHS = [
   "spine/integrity.cjs",
   "spine/demo.cjs",
   "spine/demo-server.cjs",
+  "spine/verify-server.cjs",
+  "spine/runtime-inspection.cjs",
   "spine/protection.cjs",
   "spine/uninstall.cjs",
   "spine/proxy.cjs",
@@ -102,10 +104,12 @@ function main() {
       .replace(/^#!\/usr\/bin\/env node\n/, "");
     // A shell stub so Node never parses the binary payload. `node FILE`
     // would treat the payload as JavaScript; the stranger runs THIS file.
+    // Lane installnodemissingstderr fixed this stub's historical stdout
+    // refusal to match generate-bootstrap.mjs: both now print to stderr.
     const header = [
       "#!/bin/sh",
       "if ! command -v node >/dev/null 2>&1; then",
-      `  printf '%s\\n' "REFUSE node_missing: Seal requires Node >= 20 on ${platform}"`,
+      `  printf '%s\\n' "REFUSE node_missing: Seal requires Node >= 20 on ${platform}" >&2`,
       "  exit 1",
       "fi",
       "exec node - \"$0\" \"$@\" <<'SEAL_INSTALL_JS'",

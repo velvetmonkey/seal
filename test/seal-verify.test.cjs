@@ -143,11 +143,168 @@ test("verify refuses a changed local kernel before reporting a verdict", () => {
         ? Buffer.from([0, 2, 1, 120]) : "\n// changed local glue\n");
       const changed = verify();
       assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+      const blocked = spawnSync(process.execPath, [path.join(tree, "bin/seal"), "seal_block", "--pubkey", real.publicKey], {
+        input: fs.readFileSync(real.receipt), encoding: "utf8",
+        env: { ...process.env, SEAL_CACHE_DIR: path.join(real.dir, "empty-cache") },
+      });
+      assert.equal(blocked.status, 3, blocked.stdout + blocked.stderr);
+      assert.equal(JSON.parse(blocked.stdout).error, "kernel_integrity");
       assert.match(changed.stderr, /local kernel runtime integrity check failed/);
       assert.ok(changed.stderr.includes(`${relative} hash mismatch`), changed.stderr);
       assert.doesNotMatch(changed.stdout + changed.stderr, /REPRODUCED|Document structure/);
+      const json = spawnSync(process.execPath, [path.join(tree, "bin/seal"), "verify", real.receipt, "--pubkey", real.publicKey, "--json"], {
+        encoding: "utf8", env: { ...process.env, SEAL_CACHE_DIR: path.join(real.dir, "empty-cache") },
+      });
+      assert.equal(json.status, 1, json.stdout + json.stderr);
+      assert.equal(json.stderr, "");
+      const refused = JSON.parse(json.stdout);
+      assert.equal(refused.code, "runtime_unavailable");
+      assert.equal(refused.ok, false);
+      assert.equal(refused.replay, false);
     } finally {
       fs.writeFileSync(target, pinned);
     }
   }
+});
+
+test("verify JSON preserves checker results and legacy text for signed and unverifiable receipts", async () => {
+  const { spawnSync } = require("node:child_process");
+  const verifier = await import("../checker/seal-receipt-v2.mjs");
+  const real = realReceipt();
+  const body = JSON.parse(fs.readFileSync(real.receipt));
+  const unsigned = path.join(real.dir, "unsigned.json");
+  delete body.signature;
+  fs.writeFileSync(unsigned, JSON.stringify(body));
+  for (const [file, key, exit, code] of [
+    [real.receipt, real.publicKey, 0, null],
+    [real.receipt, undefined, 1, "signature_unverifiable"],
+    [real.receipt, "bad-key", 1, "signature_unverifiable"],
+    [unsigned, real.publicKey, 1, "signature_unverifiable"],
+  ]) {
+    const args = [CLI, "verify", file, ...(key === undefined ? [] : ["--pubkey", key])];
+    const expected = await verifier.verify(fs.readFileSync(file), { publicKeyHex: key });
+    const json = spawnSync(process.execPath, [...args, "--json"], { encoding: "utf8" });
+    assert.equal(json.status, exit, json.stdout + json.stderr);
+    assert.equal(json.stderr, "");
+    assert.equal(json.stdout.trim().split("\n").length, 1);
+    assert.deepEqual(JSON.parse(json.stdout), { ...expected, ok: exit === 0, code });
+    const text = spawnSync(process.execPath, args, { encoding: "utf8" });
+    assert.equal(text.status, exit, text.stderr);
+    assert.equal(text.stderr, "");
+    assert.equal(text.stdout, verifier.format(expected) + "\n");
+  }
+});
+
+test("verify JSON retains typed input, signature and replay refusals with distinct exit classes", () => {
+  const { spawnSync } = require("node:child_process");
+  const { generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
+  const real = realReceipt();
+  const text = fs.readFileSync(real.receipt, "utf8");
+  const body = JSON.parse(text);
+  const signer = generateSigner();
+  const tampered = structuredClone(body);
+  tampered.signature.value = (tampered.signature.value[0] === "0" ? "1" : "0") + tampered.signature.value.slice(1);
+  const unexpected = structuredClone(body);
+  unexpected.signature.extra = true;
+  const commitment = structuredClone(body);
+  commitment.arguments.line = "tampered";
+  const replay = sealReceipt(signer, { ...body, verdict: "BLOCK" }, "BLOCK");
+  for (const [name, contents, key, exit, code] of [
+    ["missing", undefined, real.publicKey, 2, "read_failed"],
+    ["empty", "", real.publicKey, 2, "read_failed"],
+    ["json", "{", real.publicKey, 2, "read_failed"],
+    ["utf8", Buffer.from([0xff]), real.publicKey, 2, "read_failed"],
+    ["schema", text.replace('"v2"', '"v3"'), real.publicKey, 2, "invalid_receipt"],
+    ["duplicate", text.replace('"seal_receipt":', '"seal_receipt":"v2","seal_receipt":'), real.publicKey, 2, "duplicate_member"],
+    ["extra", JSON.stringify(unexpected), real.publicKey, 2, "unexpected_member"],
+    ["signature", JSON.stringify(tampered), real.publicKey, 1, "signature_mismatch"],
+    ["commitment", JSON.stringify(commitment), real.publicKey, 1, "commitment_mismatch"],
+    ["replay", JSON.stringify(replay), signer.publicKeyHex, 1, "verdict_mismatch"],
+  ]) {
+    const file = path.join(real.dir, `${name}.json`);
+    if (contents !== undefined) fs.writeFileSync(file, contents);
+    const args = [CLI, "verify", file, "--pubkey", key];
+    const json = spawnSync(process.execPath, [...args, "--json"], { encoding: "utf8" });
+    assert.equal(json.status, exit, `${name}: ${json.stdout}${json.stderr}`);
+    assert.equal(json.stderr, "", name);
+    assert.equal(json.stdout.trim().split("\n").length, 1, name);
+    const out = JSON.parse(json.stdout);
+    assert.equal(out.code, code, name);
+    for (const check of ["read", "validate", "signature", "replay", "verify"]) assert.equal(typeof out[check], "boolean", name);
+    assert.equal(out.ok, false, name);
+    assert.equal(out.verify, false, name);
+    assert.equal(out.authority, "NOT ESTABLISHED", name);
+    assert.equal(out.occurrence, "NOT ESTABLISHED", name);
+    const plain = spawnSync(process.execPath, args, { encoding: "utf8" });
+    assert.equal(plain.status, exit, name);
+    assert.equal(plain.stdout, "", name);
+    assert.equal(plain.stderr, `seal: ${["missing", "empty"].includes(name) ? "" : `${code}: `}${out.message}\n`, name);
+  }
+});
+
+test("CLI and MCP verification have identical typed results including code", async (t) => {
+  const real = realReceipt();
+  const unsigned = path.join(real.dir, "unsigned-parity.json");
+  const body = JSON.parse(fs.readFileSync(real.receipt));
+  delete body.signature;
+  fs.writeFileSync(unsigned, JSON.stringify(body));
+  const malformed = path.join(real.dir, "malformed-parity.json");
+  fs.writeFileSync(malformed, "{");
+  const wrong = crypto.generateKeyPairSync("ed25519").publicKey
+    .export({ type: "spki", format: "der" }).subarray(-32).toString("hex");
+  for (const [name, file, key, code, exit] of [
+    ["signed", real.receipt, real.publicKey, null, 0],
+    ["no key", real.receipt, undefined, "signature_unverifiable", 1],
+    ["wrong key", real.receipt, wrong, "signature_mismatch", 1],
+    ["unsigned", unsigned, real.publicKey, "signature_unverifiable", 1],
+    ["malformed JSON", malformed, real.publicKey, "read_failed", 2],
+    ["missing file", path.join(real.dir, "absent"), real.publicKey, "read_failed", 2],
+    ["non-regular file", real.dir, real.publicKey, "read_failed", 2],
+  ]) await t.test(name, () => {
+    const cli = run(["verify", file, "--json", ...(key === undefined ? [] : ["--pubkey", key])]);
+    assert.equal(cli.code, exit, cli.out);
+    const mcp = run(["__verify-server"], JSON.stringify({ jsonrpc: "2.0", id: 1,
+      method: "tools/call", params: { name: "seal_verify", arguments: { receiptPath: file, pubkeyHex: key } } }) + "\n");
+    assert.equal(mcp.code, 0, mcp.out);
+    const result = JSON.parse(JSON.parse(mcp.out).result.content[0].text);
+    assert.deepEqual(result, JSON.parse(cli.out));
+    // Equality alone cannot detect both transports losing a required field.
+    assert.equal(result.code, code);
+    assert.equal(result.ok, exit === 0);
+  });
+});
+
+test("seal_block preserves stdin bytes and separates missing keys from invalid signatures", () => {
+  const real = realReceipt();
+  const bytes = fs.readFileSync(real.receipt);
+  const good = run(["seal_block", "--pubkey", real.publicKey], bytes);
+  assert.equal(good.code, 0, good.out);
+  const result = JSON.parse(good.out);
+  assert.equal(result.seal_block, "v1");
+  assert.equal(result.ok, true);
+  assert.equal(result.verify, false);
+  assert.equal(result.authority, "UNPINNED / CALLER-SUPPLIED");
+  assert.equal(result.occurrence, "NOT ESTABLISHED");
+  for (const args of [[], ["--pubkey"], ["--pubkey", "bad"]]) {
+    const missing = run(["seal_block", ...args], bytes);
+    assert.equal(missing.code, 5, missing.out);
+    assert.equal(JSON.parse(missing.out).error, "no_key");
+  }
+  const wrong = crypto.generateKeyPairSync("ed25519").publicKey
+    .export({ type: "spki", format: "der" }).subarray(-32).toString("hex");
+  const mismatch = run(["seal_block", "--pubkey", wrong], bytes);
+  assert.equal(mismatch.code, 1, mismatch.out);
+  assert.equal(JSON.parse(mismatch.out).error, "signature_mismatch");
+  // Parsing/reserializing stdin would hide a duplicate; lossy UTF-8 decoding
+  // would replace the invalid byte and turn its refusal into a different error.
+  for (const [input, error] of [
+    [Buffer.from(bytes.toString().replace('"tool":', '"tool":"duplicate","tool":')), "duplicate_member"],
+    [Buffer.concat([Buffer.from([0xff]), bytes]), "read_failed"],
+  ]) {
+    const bad = run(["seal_block", "--pubkey", real.publicKey], input);
+    assert.equal(bad.code, 1, bad.out);
+    assert.equal(JSON.parse(bad.out).error, error);
+  }
+  const legacy = run(["verify", real.receipt, "--pubkey", "bad"]);
+  assert.equal(legacy.code, 1, legacy.out);
 });
