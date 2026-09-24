@@ -201,10 +201,11 @@ use `v0.4.0`. No Tailscale connection is needed.
 
 1. Check the tools with `git --version`, `node --version`,
    `node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'`,
-   `claude --version`, and `command -v script`. Each command must succeed.
-   Open `claude`, use `/login` if asked, and confirm the interactive screen is
-   signed in; then use `/exit`. For any Desktop-specific cells, open Claude Code
-   Desktop and confirm that it launches. The separate CLI is still required.
+   `claude --version`, `claude auth status`, and `command -v script`. Each
+   command must succeed. Open `claude`, use `/login` if asked, and confirm the
+   interactive screen is signed in; then use `/exit`. For any Desktop-specific
+   cells, run `open -a Claude` and confirm the Desktop app launches. The
+   separate CLI is still required.
 2. In Terminal, run `git clone https://github.com/velvetmonkey/seal.git` and
    `cd seal`. Run the download and `init` block above, entering the release tag
    and a new absolute directory such as `/Users/yourname/seal-walk-1`. The block prints the artifact
@@ -307,7 +308,7 @@ Two cautions for the operator:
 ```text
 <separately captured evidence-pack directory>/
   <client-version>/
-    linux-x64/
+    <platform: linux-x64, darwin-arm64, or darwin-x64>/
       <seal-artifact-sha256>/
         manifest.json
         rendered-transcript.txt

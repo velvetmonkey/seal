@@ -17,7 +17,13 @@ jobs:
         with:
           node-version: '22'
       - name: Install separate Claude Code command
-        run: npm install -g @anthropic-ai/claude-code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          git --version
+          node --version
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+          claude --version
+          command -v script
       - name: Download, verify, install, protect, unprotect, and zip
         shell: bash
         env:
