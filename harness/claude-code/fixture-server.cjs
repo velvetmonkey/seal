@@ -23,6 +23,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const readline = require("node:readline");
+const { spawnSync } = require("node:child_process");
 
 const FIXTURE_SCHEMA = "seal.cc-fixture/v1";
 const GUARDED_TOOL = "append_note";
@@ -73,6 +74,10 @@ function appendRecord(record) {
 }
 
 function commandLine(pid) {
+  if (process.platform === "darwin") {
+    const result = spawnSync("/bin/ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    return result.status === 0 ? result.stdout.trim().split(/\s+/).filter(Boolean) : null;
+  }
   try {
     return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
   } catch {
@@ -81,6 +86,10 @@ function commandLine(pid) {
 }
 
 function parentOf(pid) {
+  if (process.platform === "darwin") {
+    const result = spawnSync("/bin/ps", ["-p", String(pid), "-o", "ppid="], { encoding: "utf8" });
+    return result.status === 0 ? Number(result.stdout.trim()) || null : null;
+  }
   try {
     const match = /^PPid:\s*(\d+)$/m.exec(fs.readFileSync(`/proc/${pid}/status`, "utf8"));
     return match ? Number(match[1]) : null;
@@ -104,7 +113,7 @@ function fileIdentity(filePath) {
 function processIdentity(pid) {
   const argv = commandLine(pid);
   let executable = null;
-  try { executable = fileIdentity(`/proc/${pid}/exe`); } catch { executable = null; }
+  try { executable = fileIdentity(process.platform === "darwin" ? argv?.[0] : `/proc/${pid}/exe`); } catch { executable = null; }
   const argvFiles = [];
   for (const word of argv || []) {
     const identity = fileIdentity(word);

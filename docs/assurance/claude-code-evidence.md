@@ -63,13 +63,14 @@ elicitation, or declines to fall back.
 
 ### Run conditions, pinned and recorded
 
-- Node.js 20 or later, and util-linux's `script` command. Confirm both before
+- Node.js 20 or later, and the `script` command (util-linux on Linux, the
+  system recorder on macOS). Confirm both before
   starting; `script` records each terminal session that the harness checks:
 
   ```bash
   $ node --version
   $ node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
-  $ script --version
+  $ command -v script
   ```
 - One frozen Seal artifact, identified by SHA-256, byte length **and** the
   installed-tree digest the installer records.
@@ -78,7 +79,7 @@ elicitation, or declines to fall back.
   Otherwise it resolves every executable `claude` entry on `PATH`.
   It continues only when those entries resolve to one real path.
   It refuses ambiguous client paths and lists each path and SHA-256.
-- Linux x86-64.
+- Linux x86-64, macOS Apple silicon, or macOS Intel, with the matching artifact.
 - A clean temporary `HOME`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME` and project.
 - `seal doctor` reporting no elicitation auto-response hook; with one
   configured, the harness refuses to start, because human approval origin
@@ -164,7 +165,7 @@ Use this procedure and the harness from current `main`, even when accepting an
 older artifact; tagged copies of this page can predate the `SEAL_VERSION` prompt.
 Do not check out the artifact tag to follow this walk.
 
-First download one published Linux x86-64 artifact and the `SHA256SUMS` asset
+First download the published artifact for this machine and the `SHA256SUMS` asset
 attached to that same GitHub release. Set `SEAL_VERSION` to the release tag being
 accepted, chosen explicitly from the
 [published releases](https://github.com/velvetmonkey/seal/releases).
@@ -187,8 +188,65 @@ Read the sign-in, MCP-scope, workspace-trust, and manual-mode instructions
 below before executing this block.
 
 ```bash
-printf '%s' 'Published release tag (for example vX.Y.Z): ' && read -r SEAL_VERSION && test -n "$SEAL_VERSION" && SEAL_ARTIFACT="seal-${SEAL_VERSION}-linux-x64" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" && SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" && SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" && test -n "$SEAL_SHA256" && if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi && test "${actual_sha256%% *}" = "$SEAL_SHA256" && actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" && test "$actual_bytes" -eq "$SEAL_BYTES" && chmod +x "$SEAL_ARTIFACT" && printf '%s' 'New absolute run directory outside every Git tree: ' && read -r run_dir && case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac && mkdir "$run_dir" && command -v git >/dev/null && if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi && node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
+case "$(uname -sm)" in "Linux x86_64") SEAL_PLATFORM=linux-x64 ;; "Darwin arm64") SEAL_PLATFORM=darwin-arm64 ;; "Darwin x86_64") SEAL_PLATFORM=darwin-x64 ;; *) printf 'Unsupported host: %s (need Linux x86_64, Darwin arm64, or Darwin x86_64)\n' "$(uname -sm)" >&2; return 1 2>/dev/null || exit 1 ;; esac
+printf '%s' 'Published release tag (for example vX.Y.Z): ' && read -r SEAL_VERSION && test -n "$SEAL_VERSION" && SEAL_ARTIFACT="seal-${SEAL_VERSION}-${SEAL_PLATFORM}" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT" && SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)" && SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)" && test -n "$SEAL_SHA256" && if command -v shasum >/dev/null 2>&1; then actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"; else actual_sha256="$(sha256sum "$SEAL_ARTIFACT")"; fi && test "${actual_sha256%% *}" = "$SEAL_SHA256" && actual_bytes="$(wc -c < "$SEAL_ARTIFACT")" && test "$actual_bytes" -eq "$SEAL_BYTES" && chmod +x "$SEAL_ARTIFACT" && printf '%s' 'New absolute run directory outside every Git tree: ' && read -r run_dir && case "$run_dir" in /*) true ;; *) printf '%s\n' 'Run directory must be absolute.' >&2; false ;; esac && mkdir "$run_dir" && command -v git >/dev/null && if git -C "$run_dir" rev-parse --show-toplevel >/dev/null 2>&1; then printf '%s\n' 'Run directory is inside a Git tree; choose one outside.' >&2; false; else true; fi && node harness/claude-code/cc-harness.cjs init --artifact "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$run_dir" && node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"
 ```
+
+### Mac operator checklist
+
+The person at the Mac needs a separate `claude` command; the Desktop app alone
+does not provide it. Open a fresh Terminal at least 80 columns wide. Use the
+release tag Ben supplies for `SEAL_VERSION`; if no new release is available,
+use `v0.4.0`. No Tailscale connection is needed.
+
+1. Check the tools with `git --version`, `node --version`,
+   `node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'`,
+   `claude --version`, and `command -v script`. Each command must succeed.
+   Open `claude`, use `/login` if asked, and confirm the interactive screen is
+   signed in; then use `/exit`. For any Desktop-specific cells, open Claude Code
+   Desktop and confirm that it launches. The separate CLI is still required.
+2. In Terminal, run `git clone https://github.com/velvetmonkey/seal.git` and
+   `cd seal`. Run the download and `init` block above, entering the release tag
+   and a new absolute directory such as `/Users/yourname/seal-walk-1`. The block prints the artifact
+   SHA-256, installed tree digest, Claude Code version, client executable path,
+   and client executable SHA-256. Copy those lines into a note for Ben. Independently
+   hash the printed client path with `shasum -a 256 "<printed client executable path>"`
+   and confirm it equals the harness line. Keep the 64-character hash for the
+   release checker.
+3. In the first recorded session, accept the project's `.mcp.json` prompt,
+   use `/mcp` to confirm local `notes` is connected, and use `/exit`. This is
+   `activation`: the protected route should be selected. The later pack records
+   the process ancestry.
+4. Run `node harness/claude-code/cc-harness.cjs next --run-dir "$run_dir"`.
+   Before the `decline` instruction, press Shift-Tab until `manual mode on`.
+   Type the exact instruction printed by the harness. Read the approval dialog,
+   choose **Decline**, then use `/exit` immediately. This supplies `decline`
+   and `before_approval`; the child call count should stay zero.
+5. Run the same `next` command. Confirm `manual mode on` again. Type the
+   printed accept instruction, read the complete call and scope in the dialog,
+   choose **Accept**, then use `/exit` immediately. This supplies
+   `approval_shown`, `negotiation`, and `accept`; the child call count should
+   become one and the expected effect digest should match.
+6. Run the same `next` command. The harness parks the Seal launcher. Type
+   the printed fallback instruction, observe that the tool fails, do not repair
+   anything, then use `/exit`. This is `missing_launcher`: the original
+   `.mcp.json` server must not run. The harness restores the launcher.
+7. Run the same `next` command. This is `unprotect`: the local override should
+   disappear and `.mcp.json` should remain byte-identical.
+8. Run `node harness/claude-code/cc-harness.cjs finish --run-dir "$run_dir" --out .`.
+   Read every `rendered-transcript*.txt` in the printed pack directory before
+   sending it. Then check the exact pack in release mode, using the artifact
+   digest, byte length, and independently checked client executable hash from
+   step 2:
+
+   ```bash
+   pack_dir="evidence/claude-code/$(claude --version | awk '{print $1}')/$SEAL_PLATFORM/$SEAL_SHA256"
+   node scripts/check-cc-evidence.mjs "$pack_dir" --release --artifact-sha256 "$SEAL_SHA256" --artifact-bytes "$SEAL_BYTES" --client-executable-sha256 "<64-character client executable SHA-256>"
+   zip -qr "$HOME/Desktop/seal-evidence-${SEAL_VERSION}-${SEAL_PLATFORM}.zip" "$pack_dir"
+   ```
+
+   Attach that one zip file to an email to Ben, or send it as a Telegram
+   **file**. Do not send screenshots instead of the pack.
 
 **At the finishing prompt, run `finish --out .`, not another `next`.**
 

@@ -448,16 +448,20 @@ function recordSession(state, caseId, instructions) {
   assertPinnedClient(state);
   const beforeSession = readChildLog(state).records.length;
   const startedAt = new Date().toISOString();
-  const result = spawnSync("script", [
-    "--quiet",
-    "--log-out", outPath,
-    "--log-timing", timingPath,
-    "--logging-format", "advanced",
-    "--command", shellQuote(state.claude.command),
-  ], { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
+  const darwin = process.platform === "darwin";
+  const result = spawnSync("script", darwin
+    ? ["-q", outPath, state.claude.command]
+    : ["--quiet", "--log-out", outPath, "--log-timing", timingPath,
+      "--logging-format", "advanced", "--command", shellQuote(state.claude.command)],
+  { stdio: "inherit", env: runEnv(state), cwd: state.paths.project });
   assertObservedClient(state, readChildLog(state).records.slice(beforeSession));
   assertPinnedClient(state);
   if (result.error) refuse("recorder_failed", `terminal recorder could not start: ${result.error.message}`);
+  if (darwin) {
+    const out = fs.readFileSync(outPath);
+    const bannerEnd = out.subarray(0, 14).toString("utf8") === "Script started" ? out.indexOf(0x0a) + 1 : 0;
+    fs.writeFileSync(timingPath, `O 0 ${out.length - bannerEnd}\n`);
+  }
   const conversion = {
     columns: columns || MIN_COLUMNS,
     rows,
@@ -467,7 +471,7 @@ function recordSession(state, caseId, instructions) {
   fs.writeFileSync(castPath, castFromScript(outPath, timingPath, conversion));
   state.recordings ||= {};
   state.recordings[caseId] = {
-    format: "util-linux script output+advanced-timing → asciinema/v2",
+    format: darwin ? "macOS script output+derived timing → asciinema/v2" : "util-linux script output+advanced-timing → asciinema/v2",
     conversion,
     typescript: digestOf(outPath),
     timing: digestOf(timingPath),
@@ -1000,10 +1004,10 @@ const STEPS = [
 
 // ------------------------------------------------------------------ commands
 
-function requireLinuxX64() {
-  if (process.platform !== "linux" || process.arch !== "x64") {
-    refuse("unsupported_platform", `this acceptance run is pinned to Linux x86-64; this host is ${process.platform}-${process.arch}`);
-  }
+function platformName() {
+  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
+  if (process.platform === "darwin" && ["arm64", "x64"].includes(process.arch)) return `darwin-${process.arch}`;
+  refuse("unsupported_platform", `this acceptance run needs Linux x86-64, Darwin arm64, or Darwin x86-64; this host is ${process.platform}-${process.arch}`);
 }
 
 function gitRevision(root) {
@@ -1024,6 +1028,12 @@ function clientExecutableFormat(executable) {
     if (descriptor !== undefined) fs.closeSync(descriptor);
   }
   const observed = Array.from(header.subarray(0, count), (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ") || "<empty>";
+  if (process.platform === "darwin") {
+    if (header.subarray(0, 2).toString() === "#!") return "script-shebang";
+    const magic = header.readUInt32BE(0);
+    if ([0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca].includes(magic)) return "mach-o";
+    refuse("client_not_darwin", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected Mach-O or a shebang`);
+  }
   if (count < header.length) {
     refuse("client_unreadable", `client executable ${JSON.stringify(executable)} has observed header bytes ${observed}; expected 20 readable header bytes`);
   }
@@ -1109,7 +1119,7 @@ function clientIdentity(env, explicitClient) {
 }
 
 function init(argv) {
-  requireLinuxX64();
+  platformName();
   const options = parseFlags(argv, ["artifact", "sha256", "bytes", "run-dir", "client", "client-command", "synthetic-client", "stub-bin"]);
   if (options.client === true) refuse("usage", "cc-harness init needs a path after --client");
   for (const required of ["artifact", "sha256", "bytes", "run-dir"]) {
@@ -1436,7 +1446,7 @@ function labelFor(state, observations) {
       "Not automated in CI.";
   }
   return `Claude Code ${state.claude.version} integration:\n` +
-    `${allObserved ? "PASS" : "FAIL"} — manually exercised on Linux x86-64 against artifact sha256 ${state.artifact.sha256}\n` +
+    `${allObserved ? "PASS" : "FAIL"} — manually exercised on ${platformName() === "linux-x64" ? "Linux x86-64" : platformName()} against artifact sha256 ${state.artifact.sha256}\n` +
     "Not automated in CI.";
 }
 
@@ -1520,7 +1530,7 @@ function finish(state, options) {
     refuse("finish_cannot_certify", `CANNOT CERTIFY evidence pack; missing cases: ${missing.join(", ")}. No evidence pack was written.`);
   }
   const outRoot = path.resolve(options.out || path.join(state.paths.run, "pack"));
-  const packDir = path.join(outRoot, "evidence", "claude-code", state.claude.version, "linux-x64", state.artifact.sha256);
+  const packDir = path.join(outRoot, "evidence", "claude-code", state.claude.version, platformName(), state.artifact.sha256);
   fs.mkdirSync(path.join(packDir, "receipts"), { recursive: true });
 
   // A synthetic pack carries its disclaimer as a FILE beside the manifest, in
@@ -1618,7 +1628,7 @@ function finish(state, options) {
       executable_format: state.claude.executable_format,
     },
     environment: {
-      platform: "linux-x64",
+      platform: platformName(),
       os_release: os.release(),
       node: process.version,
       home: state.paths.home,

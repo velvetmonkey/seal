@@ -32,7 +32,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MANIFEST_SCHEMA = "seal.claude-code-evidence/v2";
-const PLATFORM_DIRECTORY = "linux-x64";
+const PLATFORM_DIRECTORIES = new Set(["linux-x64", "darwin-arm64", "darwin-x64"]);
 const EVIDENCE_ROOT_NAME = "claude-code";
 const SYNTHETIC_MARKER_FILE = "SYNTHETIC-NOT-A-REAL-RUN.txt";
 const SYNTHETIC_BANNER = "SEAL-SYNTHETIC-FIXTURE";
@@ -188,14 +188,14 @@ function checkPackPath(packDir, manifest, report) {
   const parts = resolve(packDir).split(sep);
   const [artifactDirectory, platformDirectory, clientDirectory, rootDirectory] = [parts.at(-1), parts.at(-2), parts.at(-3), parts.at(-4)];
   if (rootDirectory !== EVIDENCE_ROOT_NAME) {
-    report.refuse("pack_path_mismatch", `a pack lives under ${EVIDENCE_ROOT_NAME}/<client-version>/${PLATFORM_DIRECTORY}/<artifact-sha256>; this one sits in ${packDir}`);
+    report.refuse("pack_path_mismatch", `a pack lives under ${EVIDENCE_ROOT_NAME}/<client-version>/<platform>/<artifact-sha256>; this one sits in ${packDir}`);
     return;
   }
   if (clientDirectory !== manifest.client?.version) {
     report.refuse("pack_path_mismatch", `the manifest names client version ${manifest.client?.version} but the pack sits under ${clientDirectory}`);
   }
-  if (platformDirectory !== PLATFORM_DIRECTORY) {
-    report.refuse("pack_path_mismatch", `the pack sits under ${platformDirectory}, not ${PLATFORM_DIRECTORY}`);
+  if (!PLATFORM_DIRECTORIES.has(platformDirectory) || platformDirectory !== manifest.environment?.platform) {
+    report.refuse("pack_path_mismatch", `the pack sits under ${platformDirectory}, not its supported manifest platform ${manifest.environment?.platform}`);
   }
   if (artifactDirectory !== manifest.artifact?.sha256) {
     report.refuse("pack_path_mismatch", `the manifest names artifact sha256 ${manifest.artifact?.sha256} but the pack sits under ${artifactDirectory}`);
@@ -597,7 +597,7 @@ function labelFor(manifest, observed) {
       "Not automated in CI.";
   }
   return `Claude Code ${manifest.client?.version} integration:\n` +
-    `${allObserved ? "PASS" : "FAIL"} — manually exercised on Linux x86-64 against artifact sha256 ${manifest.artifact?.sha256}\n` +
+    `${allObserved ? "PASS" : "FAIL"} — manually exercised on ${manifest.environment?.platform === "linux-x64" ? "Linux x86-64" : manifest.environment?.platform} against artifact sha256 ${manifest.artifact?.sha256}\n` +
     "Not automated in CI.";
 }
 
