@@ -737,6 +737,12 @@ A receipt-embedded key is never trusted as authority.
 Replaying the exact recorded inputs through the WASM kernel produced a
 different verdict. The receipt does not establish the decision it records.
 
+### `invalid_action`
+
+The receipt's action is missing, empty, or not a string. The checker requires a
+non-empty string before checking signatures or replaying the recorded inputs.
+Preserve the malformed receipt and report it to its producer.
+
 ### `action_verdict_mismatch`
 
 The receipt's signed action says ALLOW, but replaying its recorded kernel inputs
