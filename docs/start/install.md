@@ -1,6 +1,6 @@
 <!-- generated from published release; do not edit -->
-# Install Seal v0.4.0
-The [v0.4.0 release](https://github.com/velvetmonkey/seal/releases/tag/v0.4.0) publishes `seal-v0.4.0-darwin-arm64`, `seal-v0.4.0-darwin-x64`, `seal-v0.4.0-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`dabac65caaa999a789be9329e02a70a5173fd7d0`](https://github.com/velvetmonkey/seal/commit/dabac65caaa999a789be9329e02a70a5173fd7d0). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
+# Install Seal v0.5.1
+The [v0.5.1 release](https://github.com/velvetmonkey/seal/releases/tag/v0.5.1) publishes `seal-v0.5.1-darwin-arm64`, `seal-v0.5.1-darwin-x64`, `seal-v0.5.1-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`1989d894906fb2f49d31361a737ca845a53e08b8`](https://github.com/velvetmonkey/seal/commit/1989d894906fb2f49d31361a737ca845a53e08b8). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
 The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node 20+ is required.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
@@ -25,15 +25,15 @@ answer "did I download the bytes the release named?" They do not answer
 
 <!-- generated from published release; do not edit -->
 ```bash
-SEAL_VERSION=v0.4.0
-artifact_name="seal-v0.4.0-linux-x64" \
-&& artifact_sha256="5b49ea26d29b608fcb4e3e370062b96e8c4a81d7fb5ce1fd30a2cbe737c69d3b" \
-&& artifact_bytes=6301771 \
+SEAL_VERSION=v0.5.1
+artifact_name="seal-v0.5.1-linux-x64" \
+&& artifact_sha256="f69b97677b131ff2df26d4a8af04ddf1f6d511c86445d83d44b98d9365361b78" \
+&& artifact_bytes=6363710 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="0552373fc3cb7f7257b4cf491395425a1ce2f7126cc60142a961f53ff29026ce" \
+&& sums_sha256="ca8660caf11faccb149a4e5e685181fbf90d902eaa65420b003cd2042d663008" \
 && checker_name="seal-receipt-v2.mjs" \
-&& checker_sha256="d0767c186e5a284ab1a78ea27b75d3a3d6a91101a96874b6c4936776ba4850ac" \
-&& checker_bytes=10498 \
+&& checker_sha256="a38230609bc881c3ade74edb7f39b99355c73035eeb03be5136f70ffcf836b5b" \
+&& checker_bytes=10667 \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \
@@ -54,16 +54,16 @@ artifact_name="seal-v0.4.0-linux-x64" \
 && chmod +x "$artifact_name" \
 && ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local
 ```
-Success prints `installed seal 0.4.0 linux-x64` and the store, command,
+Success prints `installed seal 0.5.1 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
-The tree hash of the published v0.4.0 asset is pinned here:
+The tree hash of the published v0.5.1 asset is pinned here:
 
 **Seal installed-tree pin role:** `published-asset`
 ```output
-installed seal 0.4.0 linux-x64
-store: /home/you/.local/lib/seal/store/261324816077d3ab04cd55640ec79b605f2845dadb7b56d057892111601ffe32
+installed seal 0.5.1 linux-x64
+store: /home/you/.local/lib/seal/store/2b82c92e1d3bf1d9e7fc2ed869092daeb4358bdf0df37bbcf99f0f66193916f2
 command: /home/you/.local/bin/seal
-tree: 261324816077d3ab04cd55640ec79b605f2845dadb7b56d057892111601ffe32
+tree: 2b82c92e1d3bf1d9e7fc2ed869092daeb4358bdf0df37bbcf99f0f66193916f2
 ```
 
 Add `~/.local/bin` to PATH:
@@ -85,7 +85,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 59a10c58f391890c47b831851286c77be56f376f1d1850d539db499ce3210f49
+tree: 8018be632b4e95ede7dd7c17e5d08d0495721e6a9187ab0538664866b39150e3
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`

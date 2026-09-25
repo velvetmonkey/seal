@@ -18,6 +18,26 @@ const GENERATOR = path.join(ROOT, "scripts", "generate-release-docs.mjs");
 const MACOS_PROTECT_CLAIMS = path.join(ROOT, "scripts", "check-macos-protect-claims.mjs");
 const COMMIT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+// CLAIM-COVERAGE: scripts/release-notes-install-template.md#candidate-install-template
+test("candidate install notes are generated and a reversed command is refused", () => {
+  const notes = fs.readFileSync(path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md`), "utf8");
+  const template = fs.readFileSync(path.join(ROOT, "scripts", "release-notes-install-template.md"), "utf8");
+  for (const command of ["curl -fsSLO", "sha256sum --check", "chmod +x", "checker_store=", "node \"$checker\""]) {
+    assert.ok(template.includes(command), `candidate notes template must explain ${command}`);
+  }
+  const copy = testTmpdir(path.join(os.tmpdir(), "seal-candidate-notes-"));
+  const pathToNotes = path.join(copy, "notes.md");
+  const runCheck = () => spawnSync(process.execPath, [GENERATOR, "--notes-only", "--check"], {
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, SEAL_RELEASE_NOTES_FILE: pathToNotes },
+  });
+  fs.writeFileSync(pathToNotes, notes);
+  assert.equal(runCheck().status, 0, "generated candidate commands must match the template");
+  fs.writeFileSync(pathToNotes, notes.replace("sha256sum --check artifact.sha256.check", "true"));
+  assert.equal(runCheck().status, 1, "reversing the artifact digest command must fail the workflow precondition");
+  fs.writeFileSync(pathToNotes, notes);
+  assert.equal(runCheck().status, 0, "restoring the generated command must clear the check");
+});
+
 test("published asset retries preserve native responses and stop at permanent failures", async (t) => {
   const payload = Buffer.from([0, 255, 128, 13, 10, 65, 0]);
   const counts = new Map();
@@ -226,7 +246,7 @@ test("legacy docs state release-listing facts and check compares claims with tha
       `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
     );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
-    assert.match(readme, new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, which carries the previous receipt format and Linux-only Protect support\\."));
+    assert.match(readme, new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
     assert.equal(equalVersion.code, 0, equalVersion.stderr);
     assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the unreleased/);
