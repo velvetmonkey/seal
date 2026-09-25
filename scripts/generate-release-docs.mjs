@@ -348,7 +348,7 @@ function readmeRegions({ manifest }) {
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
     `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the`,
-    `> published \`${manifest.tag}\`, which carries the previous receipt format and Linux-only Protect support.`,
+    `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
   return [[

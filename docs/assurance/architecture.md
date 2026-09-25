@@ -79,7 +79,7 @@ flowchart LR
     receipt -.-> verify["seal verify — CLI\n(seal-assurance-kit;\nshared kernel wasm)"]
     receipt -.-> browser["seal-check — browser\nshared kernel wasm"]
     receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
-    verify -.-> action["seal-verify-action:\ndownstream-stricter fork of\nthe verify closure, as a CI gate"]
+    verify -.-> action["seal-verify-action:\narchived historical fork;\nnot a supported CI gate"]
 
     conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven [seal-host] seal-host kernel"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw
@@ -104,8 +104,9 @@ flowchart LR
   interfaces over a shared verification lineage, not two implementations that
   can be expected to catch one another's faults: their current published
   artifacts use byte-identical kernel WASM and common receipt-format semantics.
-  `seal-verify-action` is derived from the CLI closure as a downstream-stricter
-  fork. Agreement between these surfaces is useful conformance evidence, but a
+  The archived `seal-verify-action` was derived from the CLI closure as a
+  downstream-stricter fork; it is not a supported CI gate. Agreement between
+  the current interfaces is useful conformance evidence, but a
   defect in shared kernel or format logic can make them agree on the same wrong
   answer.
 - **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
@@ -113,14 +114,13 @@ flowchart LR
   Evidence, not a universal theorem.
 - **Coverage** (`seal scan`) — audits a policy against a tool inventory: uncovered tools,
   redundant rules, calls the policy cannot distinguish.
-- **Drift** (`seal receipt-diff`) — field-level diff between two receipts, every difference
-  classified authorization-surface vs minor, integrity-checked against each receipt's own
-  hashes before diffing. Reports change; it does not re-verify a seal.
-- **CI gate** (`seal-verify-action`) — the `seal verify` closure vendored into a GitHub
-  Action as a maintained downstream-stricter fork of the kit verifier (base kit revision
-  pinned, every vendored file sha256-checked in CI; the fork additionally requires a valid
-  `signed_config` for an authorised outcome — see seal-verify-action/VENDORED.md): receipts
-  are re-verified on every push and an unverifiable receipt fails the build.
+- **Drift** (`seal receipt-diff`) — field-level diff for supported kit and host
+  receipt families, classifying differences as authorization-surface or minor
+  after checking each receipt's own hashes. Other families, including spine-v2
+  pairs, are refused. It reports change; it does not re-verify a seal.
+- **Historical CI fork** (`seal-verify-action`) — this repository is archived.
+  Its stricter `signed_config` profile describes historical verification work;
+  it is not a supported gate for current deployments.
 - **Sufficiency** (`seal adequacy`) — the prior question: do the committed fields carry enough
   information to identify the effect they authorize? A found collision indicts the field set
   itself — no implementation reading those fields can fix it. This check caught Seal's own
@@ -128,7 +128,7 @@ flowchart LR
 
 Claim-status per box: [CLAIMS-MATRIX.md](../archive/CLAIMS-MATRIX.md). Honesty boundary:
 [What Seal is NOT](https://github.com/velvetmonkey/seal-assurance-kit/blob/main/docs/WHAT-SEAL-IS-NOT.md).
-Fleet links are public and resolve for everyone; `witness-check` remains proprietary.
+Fleet links are public and resolve for everyone; `collision-check` is public.
 
 Previous: [Evaluator truth surface](evaluator-start.md).
 Up: [Assurance](README.md).

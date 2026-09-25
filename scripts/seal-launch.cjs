@@ -39,7 +39,7 @@ if (!host.ok) {
   process.stderr.write([
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v0.5.1.",
+    "Seal v0.5.2.",
     "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",
