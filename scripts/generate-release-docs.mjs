@@ -16,6 +16,8 @@ const { protectPlatformSupported } = require("../spine/platform.cjs");
 const ROOT = path.resolve(process.env.SEAL_RELEASE_DOCS_ROOT || path.join(import.meta.dirname, ".."));
 const SENTINEL = "<!-- generated from published release; do not edit -->";
 const END = "<!-- end generated release docs -->";
+const NOTES_START = "<!-- generated candidate release notes; do not edit -->";
+const NOTES_END = "<!-- end generated candidate release notes -->";
 const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
@@ -482,6 +484,28 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function candidateNotesChange(required = false) {
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
+  const relative = `docs/assurance/RELEASE-NOTES-v${sourceVersion}.md`;
+  const target = process.env.SEAL_RELEASE_NOTES_FILE || path.join(ROOT, relative);
+  if (!fs.existsSync(target)) {
+    if (required) refuse("candidate_notes_absent", `${target} is absent`);
+    return undefined;
+  }
+  const original = fs.readFileSync(target, "utf8");
+  const begin = original.indexOf(NOTES_START);
+  const finish = original.indexOf(NOTES_END);
+  if (begin < 0 || finish < begin || original.indexOf(NOTES_START, begin + 1) >= 0 || original.indexOf(NOTES_END, finish + 1) >= 0) {
+    if (required) refuse("candidate_notes_region", `${target} needs exactly one generated candidate notes region`);
+    return undefined; // Dated notes created before this template remain immutable.
+  }
+  const template = fs.readFileSync(new URL("./release-notes-install-template.md", import.meta.url), "utf8");
+  const region = `${NOTES_START}\n${template.replaceAll("@VERSION@", sourceVersion).trimEnd()}\n${NOTES_END}`;
+  const rewritten = original.slice(0, begin) + region + original.slice(finish + NOTES_END.length);
+  return { relative, target, original, rewritten };
+}
+
 const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`;
 const CHECKER_ASSET = String.raw`seal-receipt-(?:check|v2)\.mjs`;
 const HISTORICAL_LIMITATIONS_NOTES = "RELEASE-NOTES-v0.2.0-rc.3.md";
@@ -682,6 +706,17 @@ function option(name) {
 }
 
 async function main() {
+  if (process.argv.includes("--notes-only")) {
+    const change = candidateNotesChange(true);
+    if (process.argv.includes("--check")) {
+      if (change.original !== change.rewritten) refuse("candidate_notes_stale", `${change.target} differs from the generated candidate commands`);
+      process.stdout.write(`PASS candidate release notes match VERSION ${process.env.SEAL_RELEASE_SOURCE_VERSION ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim()}\n`);
+    } else if (change.original !== change.rewritten) {
+      fs.writeFileSync(change.target, change.rewritten);
+      process.stdout.write(`updated ${change.relative}\n`);
+    }
+    return;
+  }
   const manifestPath = option("--manifest");
   const assetsDir = option("--assets-dir");
   const localCommit = option("--tag-commit");
@@ -696,12 +731,14 @@ async function main() {
     replaceRegions("docs/start/install.md", installRegions(facts)),
   ];
   const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
-  const changes = [...generatedRegionChanges, ...publishedPointerChanges];
+  const notesChange = candidateNotesChange();
+  const changes = [...generatedRegionChanges, ...publishedPointerChanges, ...(notesChange ? [notesChange] : [])];
   if (process.argv.includes("--check")) {
     // Legacy generated regions are checked by their published facts below;
     // forcing old prose through today's template would rewrite history. The
     // separately owned navigation pointers do have one canonical current form.
-    const stale = publishedPointerChanges.filter((change) => change.original !== change.rewritten);
+    const stale = [...publishedPointerChanges, ...(notesChange ? [notesChange] : [])]
+      .filter((change) => change.original !== change.rewritten);
     for (const change of stale) process.stderr.write(`FAIL release docs stale: ${change.relative}\n`);
     if (!verifyDocsAgainstRelease(facts) || stale.length) {
       process.exitCode = 1;
