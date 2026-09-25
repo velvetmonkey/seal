@@ -576,6 +576,11 @@ function publishedSurfaceChanges(manifest) {
     ]),
     replacePublishedSurface("docs/guide/README.md", [
       [/^Download and independently verify the pinned Linux x86-64 release, then install\.(?: Fetch .* from the same release\.)?$/m, `Download and independently verify the pinned Linux x86-64 release, then install. Fetch the release's \`${manifest.checksums.name}\` asset from the same release.`, "published checksum asset provenance"],
+      [new RegExp(`(?<=^SEAL_VERSION=)v${SEMVER}$`, "m"), tag, "install fence release tag"],
+      [new RegExp(`(?<=^artifact_name=")seal-v${SEMVER}-linux-x64(?=" \\\\$)`, "m"), manifest.artifact.name, "install fence artifact name"],
+      [new RegExp(`(?<=^&& artifact_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.artifact.sha256, "install fence artifact digest"],
+      [new RegExp(`(?<=^&& artifact_bytes=)\\d+(?= \\\\$)`, "m"), manifest.artifact.bytes, "install fence artifact byte count"],
+      [new RegExp(`(?<=^&& sums_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.checksums.sha256, "install fence SHA256SUMS digest"],
       [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
       [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
       [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],
