@@ -631,6 +631,28 @@ function reproduce(args) {
   return reproduceOwner.main(args);
 }
 
+// The launcher supplies its path only after judging the installed tree. Treat
+// the environment as a hint: bind it to this product's registered installation
+// and the exact launcher payload before allowing it into a client override.
+function protectionSealBin() {
+  const fallback = fs.realpathSync(process.argv[1]);
+  const candidate = process.env.SEAL_INSTALLED_LAUNCHER;
+  if (!candidate || !path.isAbsolute(candidate)) return fallback;
+  try {
+    const installation = require(path.join(ROOT, "spine", "uninstall.cjs")).installation(ROOT);
+    if (!installation) return fallback;
+    const expected = path.join(installation.prefix, "bin", "seal");
+    if (!fs.lstatSync(expected).isFile() || !fs.statSync(candidate).isFile() ||
+        fs.realpathSync(candidate) !== expected) return fallback;
+    const bytes = fs.readFileSync(expected);
+    const entry = installation.record.files.find(file => file.path === "scripts/seal-launch.cjs");
+    const digest = require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+    if (!entry || bytes.length !== entry.bytes || digest !== entry.sha256 ||
+        !bytes.equals(fs.readFileSync(path.join(ROOT, "scripts", "seal-launch.cjs")))) return fallback;
+    return expected;
+  } catch { return fallback; }
+}
+
 async function protectCommand(args) {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
@@ -656,7 +678,7 @@ async function protectCommand(args) {
   }
   const [serverName, ...requestedTools] = positional;
   const guardTools = [...new Set(requestedTools)];
-  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
+  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(result.state.guardTools);

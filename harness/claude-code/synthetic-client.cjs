@@ -121,6 +121,7 @@ function connect(entry, onServerRequest) {
   const child = spawn(entry.command, entry.args || [], {
     cwd: project,
     stdio: ["pipe", "pipe", "inherit"],
+    detached: process.platform !== "win32",
     env: { ...process.env, ...(entry.env || {}) },
   });
   const pending = new Map();
@@ -159,9 +160,22 @@ function connect(entry, onServerRequest) {
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
       return waited;
     },
-    close() {
-      try { child.stdin.end(); } catch { /* the child may already be gone */ }
-      child.kill("SIGTERM");
+    async close() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const exited = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("the protected server did not close within 20s"));
+        }, 20000);
+        child.once("close", () => { clearTimeout(timeout); resolve(); });
+      });
+      // The installed launcher and its product belong to this session's group.
+      // Terminate both; killing only the launcher can orphan the product. The
+      // fixture has its own group and records EOF when the product's pipes close.
+      try {
+        if (process.platform === "win32") child.kill("SIGTERM");
+        else process.kill(-child.pid, "SIGTERM");
+      } catch (error) { if (error.code !== "ESRCH") throw error; }
+      await exited;
     },
   };
 }
@@ -226,7 +240,7 @@ async function session() {
     process.stdout.write(`session error: ${error.message}\n`);
     throw error;
   } finally {
-    link.close();
+    await link.close();
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 }
