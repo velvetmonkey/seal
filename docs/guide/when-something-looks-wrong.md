@@ -296,9 +296,20 @@ The server answered `tools/list`, but the tool named on `seal protect` was not
 among the observed names. Check the spelling or fix the server so it exposes
 that tool, then protect again.
 
+### `claude_unusable`
+
+Before protect, unprotect or recovery changes state, Seal requires the resolved
+`claude --version` command to exit zero and name Claude Code on stdout or stderr.
+The refusal reports the resolved path, output and exit status. Fix `PATH` to
+select a working Claude Code installation, then retry. On WSL, select the Linux
+installation rather than a Windows shim that exits silently.
+
 ### `claude_unavailable`
 
-The `claude` command is not on `PATH`. `seal protect` installs the gate
+The `claude` command became unavailable when Seal checked for a local override
+(`claude command is not available`). A command missing from `PATH` at the initial
+check instead prints `seal: REFUSE claude_unusable: Claude Code command "claude
+(not found on PATH)" failed identification`. `seal protect` installs the gate
 *through* Claude Code, so it needs it. Install Claude Code or fix `PATH`,
 then re-run.
 

@@ -24,7 +24,9 @@ test("the Protect and Remove sections identify Claude Code's retained home files
   const noSealWrite = "Seal invokes Claude Code but writes neither file";
   const removal = ["Unprotect asks Claude Code to remove only Seal's local override", "It does not delete `~/.claude.json` or backups under `~/.claude/backups/`", "Those files remain until you or Claude Code remove them"].join(". ") + ".";
 
-  assert.match(protection, /spawnSync\("claude", args/);
+  assert.match(protection, /spawnSync\(command, args/);
+  assert.match(protection, /function runClaude\(args, env = process.env, cwd = process.cwd\(\), command = "claude"\)/);
+  assert.match(protection, /const claude = identifyClaude\(env, root\)/);
   assert.match(protection, /"mcp", "add", "--scope", "local", serverName/);
   assert.match(protection, /"mcp", "remove", "--scope", "local", serverName/);
   assert.ok(prose.includes(retainedFiles + noSealWrite + "."), "protection guide must state that Seal invokes Claude Code but writes neither retained file");
