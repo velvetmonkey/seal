@@ -137,6 +137,18 @@ async function run(argv, sealBinPath) {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
     demoCreatedDirectory = true;
   }
+  const signer = generateSigner();
+  let pubkeyPath = path.join(dir, "receipt-signer.pub");
+  try {
+    // Claim the run before creating any other files. Another first run can
+    // pass the existence check above, but only one can create this key.
+    fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o644, flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    dir = fs.mkdtempSync(path.join(dir, "seal-demo-"));
+    pubkeyPath = path.join(dir, "receipt-signer.pub");
+    fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o644, flag: "wx" });
+  }
   const dataFile = path.join(dir, "child", "data.txt");
   const countFile = `${dataFile}.count`;
   const storePath = path.join(dir, "approvals.journal");
@@ -148,10 +160,6 @@ async function run(argv, sealBinPath) {
   const pendingById = new Map();
   const elicitationRequests = [];
   const elicitationWaiters = [];
-
-  const signer = generateSigner();
-  const pubkeyPath = path.join(dir, "receipt-signer.pub");
-  fs.writeFileSync(pubkeyPath, signer.publicKeyHex + "\n", { mode: 0o644 });
 
   let proxy;
   try {
