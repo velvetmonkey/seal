@@ -369,11 +369,12 @@ test("verify argument boundaries keep one JSON result and support dash paths", (
   assert.equal(empty.code, 2, empty.out);
   assert.equal(JSON.parse(empty.out).message, "usage: seal verify PATH");
   const { spawnSync } = require("node:child_process");
-  const dash = "-receipt.json";
+  for (const dash of ["-receipt.json", "--json"]) {
   fs.copyFileSync(real.receipt, path.join(real.dir, dash));
   const result = spawnSync(process.execPath, [CLI, "verify", "--json", "--pubkey", real.publicKey, "--", dash], {
     cwd: real.dir, encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(JSON.parse(result.stdout).ok, true);
+  }
 });

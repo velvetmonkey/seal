@@ -593,7 +593,7 @@ async function verify(args) {
     } else if (arg.startsWith("-")) argumentError ||= `unknown option: ${arg}; use -- before a path starting with a dash`;
     else paths.push(arg);
   }
-  if (paths.length > 1) argumentError ||= `unexpected extra receipt paths: ${paths.slice(1).map((file) => JSON.stringify(file)).join(", ")}`;
+  if (paths.length > 1) argumentError = `unexpected extra receipt paths: ${paths.slice(1).map((file) => JSON.stringify(file)).join(", ")}`;
   if (argumentError) {
     if (!json) throw Object.assign(new Error(argumentError), { exitCode: 2 });
     console.log(JSON.stringify({
@@ -604,7 +604,7 @@ async function verify(args) {
     process.exitCode = 2;
     return;
   }
-  const receiptPath = paths[0];
+  const receiptPath = paths[0] && path.resolve(paths[0]);
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
   const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))

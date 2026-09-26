@@ -70,7 +70,8 @@ A bare tool selection gates the whole tool; duplicate selections are collapsed.
 There are no general per-command help aliases or `--flag=value` forms. `demo`
 accepts only `--dir` pairs (the first directory wins). `protect` and `reproduce`
 reject unknown long options. `recover` requires its exact one- or two-argument
-shape; `receipts` requires exactly one argument. `verify` accepts exactly one positional path, one optional `--pubkey` value,
+shape; `receipts` requires exactly one argument. `verify` accepts exactly one
+positional path, one optional `--pubkey` value,
 `--json`, and a `--` separator. It refuses extra paths and unknown options; `unprotect`
 uses only its first argument. `doctor` rejects any trailing argument with
 `seal doctor takes no arguments` on stderr, no stdout, and exit 2. These
