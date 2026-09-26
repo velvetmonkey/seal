@@ -936,16 +936,27 @@ const STEPS = [
     name: "missing_launcher",
     machine: (state) => {
       takeSnapshot(state, "missing_launcher", "begin");
-      const launcher = path.join(state.paths.store, "bin", "seal");
+      const overrideCommand = readLocalOverride(state).entry?.command;
+      if (typeof overrideCommand !== "string" || !path.isAbsolute(overrideCommand)) {
+        refuse("local_override_absent", "missing_launcher requires a local override with an absolute command path");
+      }
+      const launcher = overrideCommand;
       const parked = `${launcher}.parked-by-harness`;
-      const storeBin = path.dirname(launcher);
-      fs.chmodSync(storeBin, 0o755);
-      fs.renameSync(launcher, parked);
-      fs.chmodSync(storeBin, 0o555);
+      const launcherParent = path.dirname(launcher);
+      const parentMode = fs.statSync(launcherParent).mode & 0o7777;
+      fs.chmodSync(launcherParent, parentMode | 0o200);
+      try {
+        fs.renameSync(launcher, parked);
+        if (fs.existsSync(overrideCommand)) {
+          fs.renameSync(parked, launcher);
+          refuse("launcher_not_parked", "the local override command is still present after parking");
+        }
+      } finally { fs.chmodSync(launcherParent, parentMode); }
       const while_absent = run(state, path.join(state.paths.prefix, "bin", "seal"), ["--version"]);
       state.steps.missing_launcher = {
         launcher_path: launcher,
         parked_path: parked,
+        launcher_parent_mode: parentMode,
         launcher_absent_during_window: !fs.existsSync(launcher),
         seal_version_while_absent: { code: while_absent.code, stderr: while_absent.stderr.trim() },
       };
@@ -969,10 +980,11 @@ const STEPS = [
     },
     after: (state) => {
       const window = state.steps.missing_launcher;
-      const storeBin = path.dirname(window.launcher_path);
-      fs.chmodSync(storeBin, 0o755);
-      fs.renameSync(window.parked_path, window.launcher_path);
-      fs.chmodSync(storeBin, 0o555);
+      const launcherParent = path.dirname(window.launcher_path);
+      const parentMode = window.launcher_parent_mode ?? (fs.statSync(launcherParent).mode & 0o7777);
+      fs.chmodSync(launcherParent, parentMode | 0o200);
+      try { fs.renameSync(window.parked_path, window.launcher_path); }
+      finally { fs.chmodSync(launcherParent, parentMode); }
       const after = run(state, path.join(state.paths.prefix, "bin", "seal"), ["--version"]);
       window.installed_tree_restored = after.code === 0 && after.stdout.trim() === state.artifact.version;
       window.seal_version_after_restore = { code: after.code, stdout: after.stdout.trim(), stderr: after.stderr.trim() };
