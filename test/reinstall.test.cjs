@@ -17,10 +17,10 @@ function run(command, args) {
   return { code: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
-function buildArtifact() {
+function buildArtifact(buildScript = BUILD) {
   fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
   const out = testTmpdir(path.join(SCRATCH_ROOT, "seal-reinstall-test-"));
-  const built = run(process.execPath, [BUILD, "--out", out]);
+  const built = run(process.execPath, [buildScript, "--out", out]);
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
   const [digest, bytes, name] = fs.readFileSync(path.join(out, "SHA256SUMS"), "utf8").trim().split(/\s+/);
   return { out, artifact: path.join(out, name), digest, bytes };
@@ -144,7 +144,7 @@ else if(a[1]==='remove') {delete servers[name];} else process.exit(2);
 fs.writeFileSync(file,JSON.stringify(config,null,2)+'\\n');
 `, { mode: 0o755 });
   const invoke = (argv, options = {}) => {
-    const result = spawnSync(process.execPath, [path.join(prefix, 'bin/seal'), ...argv], { cwd: options.project || project, env: { ...env, ...options.env }, input: options.input ?? '', encoding: 'utf8', timeout: 20000 });
+    const result = spawnSync(process.execPath, [options.binary || path.join(prefix, 'bin/seal'), ...argv], { cwd: options.project || project, env: { ...env, ...options.env }, input: options.input ?? '', encoding: 'utf8', timeout: 20000 });
     return { code: result.status, out: (result.stdout || '') + (result.stderr || '') };
   };
   const installed = install(uninstallArtifact, prefix);
@@ -488,10 +488,11 @@ test("authorization rechecks the fixed installed tree and refuses without a kern
 
 // Exercise the installed dispatcher, real approval/kernel path and lifecycle
 // lock together. The client shim only stands in for Claude's config writes.
-function installedSession(box, statePath) {
+function installedSession(box, statePath, entry) {
   const { spawn } = require('node:child_process');
-  const child = spawn(process.execPath, [path.join(box.prefix, 'bin/seal'), '__proxy', '--protect-state', statePath],
-    { cwd: box.project, env: box.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(entry ? entry.command : process.execPath,
+    entry ? entry.args : [path.join(box.prefix, 'bin/seal'), '__proxy', '--protect-state', statePath],
+    { cwd: box.project, env: { ...box.env, ...entry?.env }, stdio: ['pipe', 'pipe', 'pipe'] });
   const frames = [];
   let stderr = '';
   child.stderr.on('data', b => { stderr += b; });
@@ -655,4 +656,101 @@ test('reinstall preserves the separate mutable route registry', () => {
   assert.deepEqual(fs.readFileSync(registryPath), before);
   assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
   assertUninstallRouteRestored(box);
+});
+
+
+test('installed protect records the launcher and client startup checks the current tree', async () => {
+  const box = uninstallBox();
+  const launcher = fs.realpathSync(path.join(box.prefix, 'bin/seal'));
+  const entry = JSON.parse(fs.readFileSync(box.config)).projects[box.project].mcpServers.warehouse;
+  async function startClientEntry() {
+    const session = installedSession(box, box.statePath, entry);
+    try {
+      await session.initialize();
+      const observed = box.invoke(['status']);
+      assert.equal(observed.code, 0, observed.out);
+      assert.match(observed.out, /LEASE ACTIVE/);
+    } finally { await session.stop(); }
+  }
+  await startClientEntry();
+  assert.equal(entry.command, launcher, 'protect must record the installed launcher, not the immutable product');
+  assert.equal(install(uninstallArtifact, box.prefix).code, 0);
+  await startClientEntry();
+  const oldProduct = path.join(box.prefix, box.record().store, 'bin/seal');
+  // A local copy simulates a second release; build the artifact normally rather
+  // than editing any installed digest or record.
+  const nextSource = path.join(box.root, 'next-source');
+  fs.cpSync(ROOT, nextSource, { recursive: true,
+    filter: source => !['.git', '.seal-tmp', '.lake'].includes(path.basename(source)) });
+  const nextVersion = `${VERSION}-launcher-probe`;
+  fs.writeFileSync(path.join(nextSource, 'VERSION'), nextVersion + '\n');
+  const pkgPath = path.join(nextSource, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath)); pkg.version = nextVersion;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg) + '\n');
+  const nextArtifact = buildArtifact(path.join(nextSource, 'scripts/build-dist.cjs'));
+  const upgraded = install(nextArtifact, box.prefix);
+  assert.equal(upgraded.code, 0, upgraded.stderr);
+  assert.ok(fs.existsSync(oldProduct), 'upgrade must retain the old immutable store for this reproduction');
+  assert.equal(run(process.execPath, [oldProduct, '--version']).stdout.trim(), VERSION);
+  assert.equal(run(entry.command, ['--version']).stdout.trim(), nextVersion);
+  await startClientEntry();
+  const notice = path.join(box.prefix, box.record().store, 'NOTICE');
+  const original = fs.readFileSync(notice);
+  fs.chmodSync(notice, 0o644);
+  const changed = Buffer.from(original); changed[0] ^= 1;
+  fs.writeFileSync(notice, changed);
+  try {
+    const refused = spawnSync(entry.command, entry.args, { cwd: box.project, env: { ...box.env, ...entry.env }, encoding: 'utf8', timeout: 15000 });
+    assert.equal(refused.status, 1, refused.stderr);
+    assert.match(refused.stderr, /^REFUSE artifact_digest_mismatch:/m);
+  } finally { fs.writeFileSync(notice, original); fs.chmodSync(notice, 0o444); }
+  await startClientEntry();
+  assert.equal(box.invoke(['unprotect', 'warehouse']).code, 0);
+  assert.equal(JSON.parse(fs.readFileSync(box.config)).projects[box.project].mcpServers.warehouse, undefined);
+});
+
+
+test('protect launcher hint handles source, invalid paths and a symlinked prefix', async t => {
+  const cases = ['launcher with unrelated user hint', 'source checkout', 'source with installed hint',
+    'direct product without hint', 'unrelated file', 'relative path', 'directory', 'unrelated symlink', 'symlinked prefix'];
+  for (const kind of cases) await t.test(kind, async () => {
+    const box = uninstallBox();
+    assert.equal(box.invoke(['unprotect', 'warehouse']).code, 0);
+    const launcher = fs.realpathSync(path.join(box.prefix, 'bin/seal'));
+    const product = path.join(box.prefix, box.record().store, 'bin/seal');
+    const unrelated = path.join(box.root, 'unrelated.cjs');
+    fs.writeFileSync(unrelated, 'throw new Error("unrelated hint executed");\n');
+    let binary = product;
+    let hint = '';
+    let expected = product;
+    if (kind === 'launcher with unrelated user hint') { binary = launcher; hint = unrelated; expected = launcher; }
+    if (kind.startsWith('source')) { binary = path.join(ROOT, 'bin/seal'); expected = fs.realpathSync(binary); hint = kind === 'source with installed hint' ? launcher : ''; }
+    if (kind === 'unrelated file') hint = unrelated;
+    if (kind === 'relative path') hint = path.relative(box.project, launcher);
+    if (kind === 'directory') hint = box.prefix;
+    if (kind === 'unrelated symlink') { hint = path.join(box.root, 'unrelated-link'); fs.symlinkSync(unrelated, hint); }
+    if (kind === 'symlinked prefix') {
+      const alias = path.join(box.root, 'prefix-alias'); fs.symlinkSync(box.prefix, alias);
+      binary = path.join(alias, 'bin/seal'); expected = launcher;
+    }
+    const protectedResult = box.invoke(['protect', 'warehouse', 'inspect'], { binary, env: { SEAL_INSTALLED_LAUNCHER: hint } });
+    assert.equal(protectedResult.code, 0, protectedResult.out);
+    const entry = JSON.parse(fs.readFileSync(box.config)).projects[box.project].mcpServers.warehouse;
+    assert.equal(entry.command, expected);
+    const session = installedSession(box, box.statePath, entry);
+    try {
+      await session.initialize();
+      const observed = box.invoke(['status'], { binary });
+      assert.equal(observed.code, 0, observed.out);
+      assert.match(observed.out, /LEASE ACTIVE/);
+    } finally { await session.stop(); }
+    const undone = box.invoke(['unprotect', 'warehouse'], { binary });
+    assert.equal(undone.code, 0, undone.out);
+    assert.equal(JSON.parse(fs.readFileSync(box.config)).projects[box.project].mcpServers.warehouse, undefined);
+    const reinstalled = install(uninstallArtifact, box.prefix);
+    assert.equal(reinstalled.code, 0, reinstalled.stderr);
+    const observed = box.invoke(['status']);
+    assert.equal(observed.code, 0, observed.out);
+    assert.doesNotMatch(observed.out, /LEASE ACTIVE/);
+  });
 });
