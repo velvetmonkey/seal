@@ -44,7 +44,8 @@ async function verifyReceipt({ receiptPath, pubkeyHex } = {}) {
     return { result, exitCode: result.ok ? 0 : 1, verifier };
   } catch (error) {
     const verificationFailure = new Set([
-      "signature_mismatch", "commitment_mismatch", "verdict_mismatch",
+      "signature_mismatch", "public_key_small_order", "public_key_noncanonical",
+      "commitment_mismatch", "verdict_mismatch",
       "action_verdict_mismatch", "inert_input",
     ]).has(error.code);
     const exitCode = phase === "runtime" || verificationFailure ? 1 : 2;
