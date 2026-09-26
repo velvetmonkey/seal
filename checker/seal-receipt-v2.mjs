@@ -88,7 +88,26 @@ export async function replay(r) {
 
 export function hasPublicKey(keyHex) { return /^[0-9a-f]{64}$/.test(keyHex || ""); }
 
+// Ed25519 compresses y in little endian, with the x sign in bit 255.
+// Compare y without that sign; never reduce a noncanonical coordinate mod p.
+const ED25519_P = (1n << 255n) - 19n;
+const SMALL_ORDER_Y = new Set([
+  "00".repeat(32), "01" + "00".repeat(31), "ec" + "ff".repeat(30) + "7f",
+  "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+  "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+]);
+
+function checkPublicKey(keyHex) {
+  const yBytes = Buffer.from(keyHex, "hex");
+  yBytes[31] &= 0x7f;
+  const yHex = yBytes.toString("hex");
+  const y = BigInt("0x" + Buffer.from(yBytes).reverse().toString("hex"));
+  if (y >= ED25519_P) fail("Ed25519 public key has a noncanonical y coordinate", "public_key_noncanonical");
+  if (SMALL_ORDER_Y.has(yHex)) fail("Ed25519 public key has small order", "public_key_small_order");
+}
+
 function checkSignature(r, keyHex) {
+  if (hasPublicKey(keyHex)) checkPublicKey(keyHex);
   if (!r.signature) return false;
   const signatureKeys = Object.keys(r.signature).sort();
   const unexpectedKeys = signatureKeys.filter((key) => !SIGNATURE_KEYS_SORTED.includes(key));
