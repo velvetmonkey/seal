@@ -526,6 +526,41 @@ function replacePublishedSurface(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function previousPrimaryReleaseNotes(text) {
+  const match = text.match(
+    new RegExp(`^4\\. \\[assurance/(RELEASE-NOTES-v${SEMVER}\\.md)\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$`, "m"),
+  );
+  return match?.[1];
+}
+
+function historicalPrimaryCitation(filename) {
+  return `   The earlier [assurance/${filename}](${filename}) remains the historical record of that tag.`;
+}
+
+function ensureHistoricalPrimaryCitation(original, rewritten, currentReleaseNotes) {
+  const previous = previousPrimaryReleaseNotes(original);
+  if (!previous) {
+    refuse("published_surface_marker", "docs/assurance/README.md: primary release-note label marker is absent");
+  }
+  if (previous === currentReleaseNotes) return rewritten;
+  if (rewritten.includes(`assurance/${previous}`)) return rewritten;
+  const citation = historicalPrimaryCitation(previous);
+  const needle = "   that holds it.\n";
+  const at = rewritten.indexOf(needle);
+  if (at < 0) {
+    refuse("published_surface_marker", "docs/assurance/README.md: primary release-note body is absent");
+  }
+  const from = at + needle.length;
+  return rewritten.slice(0, from) + `${citation}\n` + rewritten.slice(from);
+}
+
+function withHistoricalPrimaryCitation(change, currentReleaseNotes) {
+  return {
+    ...change,
+    rewritten: ensureHistoricalPrimaryCitation(change.original, change.rewritten, currentReleaseNotes),
+  };
+}
+
 function publishedSurfaceChanges(manifest) {
   const tag = manifest.tag;
   const releaseNotes = `RELEASE-NOTES-${tag}.md`;
@@ -548,7 +583,7 @@ function publishedSurfaceChanges(manifest) {
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
       [notePattern, releaseNotes, "published release-note route"],
     ]),
-    replacePublishedSurface("docs/assurance/README.md", [
+    withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
@@ -557,7 +592,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^5\\. \\[The \\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
-    ]),
+    ]), releaseNotes),
     replacePublishedSurface("docs/assurance/distribution.md", [
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],

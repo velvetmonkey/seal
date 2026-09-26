@@ -382,13 +382,18 @@ function createProxy(options) {
     // the request, so its correlation capacity must be released on every
     // outcome rather than only on contract-terminal outcomes.
     try {
-      finishGuarded(
+      const decision = finishGuarded(
         pending.frame,
         pending.requestState,
         pending.correlation,
         { approval: answer },
         detail,
       );
+      // Retain only the outcome, never kernel evidence to reuse for a reply.
+      pending.completion = decision && { kind: decision.kind, refusal: decision.refusal };
+    } catch (error) {
+      pending.completion = { kind: "refuse", refusal: error.code || "response_malformed" };
+      throw error;
     } finally {
       // `finishGuarded` may throw after a kernel timing refusal. Cleanup is
       // deliberately unconditional so no processed answer can strand the
@@ -426,23 +431,24 @@ function createProxy(options) {
     if (!completed) return false;
     completedElicitations.delete(frame.id);
     retireElicitation(frame.id);
-    const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
-    const params = completed.frame.params || {};
-    const decision = contract.retry({
-      tool: params.name,
-      args: params.arguments ?? {},
-      requestState: completed.requestState,
-      inputResponses: { approval: answer },
-    });
-    const refusal = decision.kind === "refuse" ? decision.refusal : "response_malformed";
-    const detail = envelopeDetail || (decision.kind === "refuse"
-      ? decision.detail
-      : "a duplicate elicitation response cannot authorize another execution");
-    emitReceipt("BLOCK", completed.frame, {
-      refusal,
-      detail,
-      approvalRequest: { correlation: completed.correlation },
-    }, decision.receipt);
+    // One answer has already completed this elicitation. A non-terminal
+    // refusal leaves the handle pending, so retrying even to classify a
+    // duplicate could consume it. Use only the recorded first outcome.
+    const decision = completed.completion;
+    const refusal = decision?.kind === "allow" ? "already_consumed"
+      : decision?.refusal || "response_malformed";
+    if (decision && isTerminalDecision(decision)) {
+      // Preserve terminal replay reporting with a fresh, non-accepting
+      // kernel decision. No approval handle or duplicate answer is retried.
+      emitReceipt("BLOCK", completed.frame, {
+        refusal,
+        detail: "a duplicate elicitation response cannot authorize another execution",
+        approvalRequest: { correlation: completed.correlation },
+      });
+    } else {
+      // A non-terminal first refusal has no new decision to sign.
+      decisionSink({ decision: "BLOCK", refusal });
+    }
     return true;
   }
 

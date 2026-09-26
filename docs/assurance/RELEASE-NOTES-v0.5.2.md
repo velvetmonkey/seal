@@ -1,10 +1,10 @@
 # Seal v0.5.2 release notes
 
-These are candidate notes for the next release. No v0.5.2 tag or asset is published yet. The install commands below apply after v0.5.2 is published, and use that release's `SHA256SUMS` asset. The current published install instructions remain tied to the live Latest release.
+These notes describe the published v0.5.2 release. The install commands below use that release's `SHA256SUMS` asset.
 
 ## Changes since v0.5.1
 
-- The candidate combines the source changes reviewed in PR 401 and PR 403. Its source identity is v0.5.2; the release workflow has not published those bytes.
+- This release combines the source changes reviewed in PR 401 and PR 403.
 - Reader-facing assurance text records that `collision-check` is public, `seal-verify-action` is archived, and `seal receipt-diff` accepts supported kit and host receipt families rather than arbitrary pairs.
 - The live seal-check page guard is pinned to the page proposed in seal-check PR 48, combining the CSP correction and receipt result layout.
 
