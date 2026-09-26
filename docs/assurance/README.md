@@ -20,10 +20,10 @@ the Node CLI this repository ships.
 4. [assurance/RELEASE-NOTES-v0.5.2.md](RELEASE-NOTES-v0.5.2.md) — what v0.5.2 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
+   The earlier [assurance/RELEASE-NOTES-v0.5.1.md](RELEASE-NOTES-v0.5.1.md) remains the historical record of that tag.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
    v0.2.0 was withdrawn before publication. Its record remains historical at
    [assurance/RELEASE-NOTES-v0.2.0.md](RELEASE-NOTES-v0.2.0.md).
-   The current candidate [assurance/RELEASE-NOTES-v0.5.2.md](RELEASE-NOTES-v0.5.2.md) describes this checkout.
    The earlier [assurance/RELEASE-NOTES-v0.5.0.md](RELEASE-NOTES-v0.5.0.md) remains the historical record of the unpublished tag.
    The v0.3.0 release record is
    [assurance/RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
