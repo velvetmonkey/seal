@@ -127,6 +127,12 @@ async function run(argv, sealBinPath) {
     if (!dir) fail("--dir needs a path");
     dir = refuseRealReceiptStore(dir);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // A prior run's receipts belong to its key. Preserve both, and give
+    // this run its own journal, child files, receipts and printed key path.
+    if (fs.existsSync(path.join(dir, "receipt-signer.pub"))
+      || fs.existsSync(path.join(dir, "receipts"))) {
+      dir = fs.mkdtempSync(path.join(dir, "seal-demo-"));
+    }
   } else {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
     demoCreatedDirectory = true;
