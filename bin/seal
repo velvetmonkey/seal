@@ -573,13 +573,42 @@ async function demo(args) {
   return require(path.join(ROOT, "spine", "demo.cjs")).run(args, __filename);
 }
 async function verify(args) {
-  const receiptPath = args[0];
-  const keyAt = args.indexOf("--pubkey");
-  const json = args.indexOf("--json") !== -1;
+  const paths = [];
+  let pubkeyHex;
+  let keySeen = false;
+  let json = false;
+  let positional = false;
+  let argumentError;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (positional) paths.push(arg);
+    else if (arg === "--") positional = true;
+    else if (arg === "--json") json = true;
+    else if (arg === "--pubkey") {
+      if (keySeen) argumentError ||= "--pubkey may be given only once";
+      keySeen = true;
+      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+        argumentError ||= "--pubkey requires a value";
+      } else pubkeyHex = args[++i];
+    } else if (arg.startsWith("-")) argumentError ||= `unknown option: ${arg}; use -- before a path starting with a dash`;
+    else paths.push(arg);
+  }
+  if (paths.length > 1) argumentError ||= `unexpected extra receipt paths: ${paths.slice(1).map((file) => JSON.stringify(file)).join(", ")}`;
+  if (argumentError) {
+    if (!json) throw Object.assign(new Error(argumentError), { exitCode: 2 });
+    console.log(JSON.stringify({
+      read: false, validate: false, replay: false, signature: false,
+      authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
+      ok: false, code: "invalid_arguments", message: argumentError,
+    }));
+    process.exitCode = 2;
+    return;
+  }
+  const receiptPath = paths[0];
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
   const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
-    .verifyReceipt({ receiptPath, pubkeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+    .verifyReceipt({ receiptPath, pubkeyHex });
   if (json) console.log(JSON.stringify(result));
   else if (error) {
     // Keep the outer handler's legacy stderr and debug presentation.

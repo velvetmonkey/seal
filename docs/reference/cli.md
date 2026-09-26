@@ -12,7 +12,7 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal`, `seal --help`, `seal -h` | Print help. | 0 |
 | `seal --version`, `seal -V` | Print the version agreed by VERSION and package.json. | 0; 1 if the version cannot be read or disagrees |
 | `seal demo [--dir PATH]` | Run the embedded exact-call and replay demonstration. | 0 on completion, including declining approval; 1 on EOF, refusal or failure |
-| `seal verify PATH [--pubkey HEX] [--json]` | Validate a saved receipt, check its signature and replay its decision locally. PATH must be a readable, nonempty regular file. | 0 only when validation, signature and replay all succeed; 1 for signature, binding or replay failure (including no usable key), or unavailable runtime; 2 for unreadable input or invalid receipt schema |
+| `seal verify PATH [--pubkey HEX] [--json]` | Validate a saved receipt, check its signature and replay its decision locally. Exactly one PATH is accepted and must be a readable, nonempty regular file. Flags may precede PATH; use `--` before a path starting with a dash. Extra paths (including duplicates), unknown flags, missing `--pubkey` values and repeated `--pubkey` flags are refused with exit 2. | 0 only when validation, signature and replay all succeed; 1 for signature, binding or replay failure (including no usable key), or unavailable runtime; 2 for invalid arguments, unreadable input or invalid receipt schema |
 | `seal seal_block [--pubkey HEX] < receipt.json` | Check stdin receipt bytes and emit a v1 JSON result. | 0 for validation, signature and replay success; 3 for kernel integrity failure; 5 for missing/malformed key; 1 otherwise |
 | `seal reproduce TAG [--source PATH] [--platform linux-x64] [--authority same-authority\|independent] [--authority-name NAME]` | Compare a published artifact's kernel with a rebuild from source; print the comparison JSON. Requires a source checkout. | 0 for matching kernel bytes; 1 for mismatch, refusal or failure |
 | `seal reproduce build-pinned-kernel TAG --output PATH [--source PATH] [--manifest PATH]` | Build the selected kernel and copy it to PATH; print the build result. | 0 on successful build and copy; 1 on refusal or failure |
@@ -43,7 +43,7 @@ about OS signals or a process that cannot start.
 | `--help`, `-h` | No value; first argument only. Extra arguments after the alias are ignored. |
 | `--version`, `-V` | No value; first argument only. Extra arguments after the alias are ignored. |
 | `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and retained for receipt inspection. An explicitly supplied directory is also retained. |
-| `verify --pubkey HEX` | Trusted Ed25519 public key, 32 bytes encoded as 64 lowercase hexadecimal characters. Place after PATH. Omission or an invalid key cannot yield exit 0. |
+| `verify --pubkey HEX` | Trusted Ed25519 public key, 32 bytes encoded as 64 lowercase hexadecimal characters. May appear before or after PATH. Omission or an invalid key cannot yield exit 0. |
 | `protect --timeout-ms MILLISECONDS` | Decimal integer **1 through 2147483647 inclusive**, default **30000**, applied per discovery phase. No sign, leading zero, decimal point or exponent. May occur among positional arguments; the last occurrence wins. |
 | `recover --archive` | Required literal switch, first after `recover`; no value. Optional SERVER selects the record to archive. |
 | `reproduce --source PATH` | Nonempty source-checkout path, resolved to an absolute path. Available in both reproduce forms. Source provenance must match the selected release. |
@@ -70,9 +70,8 @@ A bare tool selection gates the whole tool; duplicate selections are collapsed.
 There are no general per-command help aliases or `--flag=value` forms. `demo`
 accepts only `--dir` pairs (the first directory wins). `protect` and `reproduce`
 reject unknown long options. `recover` requires its exact one- or two-argument
-shape; `receipts` requires exactly one argument. `verify` uses the first positional
-path and first later `--pubkey` value, recognizes `--json`, and ignores other
-trailing words; `unprotect`
+shape; `receipts` requires exactly one argument. `verify` accepts exactly one positional path, one optional `--pubkey` value,
+`--json`, and a `--` separator. It refuses extra paths and unknown options; `unprotect`
 uses only its first argument. `doctor` rejects any trailing argument with
 `seal doctor takes no arguments` on stderr, no stdout, and exit 2. These
 existing parsing rules do not add flags to those commands.
@@ -95,6 +94,10 @@ An absent signature or absent/invalid public key reports
 `signature_unverifiable` when the other checks complete. File-access failures
 report `read_failed`; an unavailable or damaged local runtime reports
 `runtime_unavailable`. Human-readable verification output is unchanged.
+
+Argument refusals emit one JSON object with `ok: false`, `code: "invalid_arguments"`
+and a message naming extra paths when present. No receipt is checked on these
+refusals. Zero paths with `--json` retains the JSON usage result.
 
 The exit classes apply in both output modes. Exit 1 retains the existing
 signature/binding/replay failure meaning, including `commitment_mismatch`,

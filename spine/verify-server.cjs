@@ -106,7 +106,7 @@ function run() {
           return;
         }
         const { result } = await verifyReceipt(frame.params?.arguments || {});
-        respond({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } });
+        respond({ jsonrpc: "2.0", id, result: { isError: !result.ok, content: [{ type: "text", text: JSON.stringify(result) }] } });
         return;
       }
       respond({ jsonrpc: "2.0", id, error: { code: -32601, message: `unknown method: ${frame.method}` } });
