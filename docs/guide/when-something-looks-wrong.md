@@ -727,6 +727,20 @@ The granted capabilities do not exactly match the approval targets, or a
 reserved input channel was populated even though the current kernel does not
 consume it.
 
+### `public_key_small_order`
+
+The supplied Ed25519 receipt verification key is a small-order point. Such a
+key can accept forged signatures, so the checker refuses it before checking
+the signature. Obtain the receipt signer's ordinary public key from a trusted
+source; retrying with the same key cannot establish a valid signature.
+
+### `public_key_noncanonical`
+
+The supplied Ed25519 receipt verification key encodes a y coordinate at or
+above 2^255 - 19. The checker refuses this noncanonical encoding before
+checking the signature. Obtain the signer's public key from a trusted source;
+do not reduce or rewrite the supplied key to make verification pass.
+
 ### `signature_mismatch`
 
 The signature is malformed or does not verify under the caller-supplied key.
