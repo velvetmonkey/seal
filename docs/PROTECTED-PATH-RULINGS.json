@@ -1,19 +1,20 @@
 {
   "version": 1,
   "ruling": {
-    "base": "3d94c2322507c5ec6ca9b9df935b2a493ec26e70",
+    "base": "e5d901fc7183485bf9565ded4f3ccb73ee71efde",
     "author": "Ben",
-    "date": "2026-09-17",
-    "scope": "Ben ruled 2026-09-17, \"do it\", in briefs/protectedpathrangefix.md: fix the protected-path history range while retaining reverted-edit and merge-only defenses.",
+    "date": "2026-09-26",
+    "scope": "Ben ruled 2026-09-26 17:01, \"yes, authorise installed-tree-pin in 408 and the tree-hash refresh\": authorise the PR 408 edit to test/installed-tree-pin.test.cjs, and the refresh of the derived installed-tree hash in docs/start/install.md that seal code changes move.",
     "retires": [
+      "The 2026-09-17 ruling at base 3d94c2322507c5ec6ca9b9df935b2a493ec26e70 for scripts/check-protected-paths.cjs, whose blob 894f520cee6802abf171ffd7554693b5e41ce9f6 is on origin/main at e5d901fc7183485bf9565ded4f3ccb73ee71efde (verified 2026-09-26). This replaces the active candidate-range record; it does not revoke Ben's prior authorisation.",
       "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306.",
       "The previous candidate-range record at base ce9c7cac42a200452b03dad0ccf5e3651ff0de64 covered imported main history, now excluded by this fix; prior human authorisations are not revoked.",
       "The candidate-range record at base 34c56ffa5cce44f52e3b5afdb3a555648f3d4812 was superseded by an ordinary rebase onto current main after PR 346 landed; the file and its blob are unchanged, only the base moved. Prior authorisation is not revoked."
     ],
     "files": [
       {
-        "path": "scripts/check-protected-paths.cjs",
-        "blob": "894f520cee6802abf171ffd7554693b5e41ce9f6"
+        "path": "test/installed-tree-pin.test.cjs",
+        "blob": "f4daafd0656a7258e73f2686993a18324835faf5"
       }
     ]
   }
