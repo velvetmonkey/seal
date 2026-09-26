@@ -268,6 +268,31 @@ test("the approval message is the fixed dialog and fits the envelope", () => {
   assert.equal(rendered.lines.length, 4);
 });
 
+test("sealargbudget: a routed create_pull_request offers all six arguments and forwards after approval", async (t) => {
+  const child = await startChild(t);
+  const tool = "create_pull_request";
+  const args = { owner: "octocat", repo: "hello", title: "Fix typo", head: "fix", base: "main", body: "Small fix." };
+  const contract = createApprovalContract({ serverId: "github" });
+  const opened = contract.begin({ tool, args });
+  assert.equal(opened.kind, "input_required");
+  const rendered = renderApprovalMessage(tool, args, { serverId: "github" });
+  assertInsideEnvelope(rendered);
+  for (const line of rendered.argLines) assert.ok(opened.elicitationParams.message.includes(line.trim()));
+  assert.ok(opened.elicitationParams.message.includes("Route (configured, not authenticated): github"));
+  assert.equal(child.count(), "0");
+  const allowed = await attempt(contract, child, { tool, args, requestState: opened.result.requestState, inputResponses: ACCEPT });
+  assert.equal(allowed.kind, "allow");
+  assert.equal(child.count(), "1");
+  assert.deepEqual(allowed.receipt.arguments, args);
+  assert.equal(allowed.receipt.tool, tool);
+  const signed = sealReceipt(generateSigner(), allowed.receipt, "ALLOW");
+  const receiptPath = path.join(testTmpdir("sealargbudget-receipt-"), "receipt.json");
+  fs.writeFileSync(receiptPath, canonical(signed));
+  assert.deepEqual(JSON.parse(fs.readFileSync(receiptPath, "utf8")), signed);
+  assert.deepEqual(Object.keys(signed), ["seal_receipt", "tool", "action", "arguments", "now", "kernel_config", "granted_capabilities", "kernel_inputs", "verdict", "reason", "replay", "signature"]);
+  assert.equal(signed.replay.args_sha256, sha256Hex(canonical(args)));
+});
+
 test("a configured route is rendered within the universal seven-line budget", () => {
   const args = { a: 1, b: 2, c: 3, d: 4 };
   const withoutRoute = renderApprovalMessage(TOOL, args);
@@ -275,13 +300,14 @@ test("a configured route is rendered within the universal seven-line budget", ()
   assert.equal(withoutRoute.lines.length, MESSAGE_LINE_CAP);
 
   const withRoute = renderApprovalMessage(TOOL, args, { serverId: "local-db" });
-  assert.equal(withRoute.ok, false);
-  assert.match(withRoute.reason, /need 8 lines; Seal permits 7/);
+  assertInsideEnvelope(withRoute);
+  assert.equal(withRoute.lines.length, MESSAGE_LINE_CAP);
+  for (const line of withRoute.argLines) assert.ok(withRoute.message.includes(line.trim()));
+  assert.ok(withRoute.message.includes("Route (configured, not authenticated): local-db"));
 
-  const refused = createApprovalContract({ serverId: "local-db" }).begin({ tool: TOOL, args });
-  assert.equal(refused.kind, "refuse");
-  assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
-  assert.match(refused.detail, /need 8 lines; Seal permits 7/);
+  const opened = createApprovalContract({ serverId: "local-db" }).begin({ tool: TOOL, args });
+  assert.equal(opened.kind, "input_required");
+  assert.equal(opened.elicitationParams.message, withRoute.message);
 });
 
 test("a configured route uses the renderer's escaped name presentation", () => {
@@ -386,10 +412,10 @@ test("an effect that cannot be shown completely is refused, not truncated — an
   const atLimit = renderApprovalMessage(TOOL, { a: 1, b: 2, c: 3, d: 4 });
   assertInsideEnvelope(atLimit);
   assert.equal(atLimit.lines.length, MESSAGE_LINE_CAP);
-  const overLimit = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4, e: 5 } });
+  const overLimit = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4, e: "x".repeat(MESSAGE_CHARACTER_CAP) } });
   assert.equal(overLimit.kind, "refuse");
   assert.equal(overLimit.refusal, REFUSALS.UNRENDERABLE);
-  assert.match(overLimit.detail, /need 8 lines; Seal permits 7/);
+  assert.match(overLimit.detail, /characters; Seal permits 200000/);
   assert.equal(overLimit.elicitationParams, undefined);
   assert.equal(child.count(), "0");
 });
@@ -485,8 +511,10 @@ test("renderline checks the complete logical presentation including selection", 
   assert.ok(opened.elicitationParams.message.includes("Selection predicate: db.mutate (selected)"));
   assert.equal(opened.result.content[0].text, opened.elicitationParams.message);
   const overflow = contract.begin({ tool: TOOL, args: { a: 1, b: 2, c: 3, d: 4, e: 5 }, selection });
-  assert.equal(overflow.refusal, REFUSALS.UNRENDERABLE);
-  assert.match(overflow.detail, /need 8 lines/);
+  assert.equal(overflow.kind, "input_required");
+  assert.equal(overflow.elicitationParams.message.split("\n").length, MESSAGE_LINE_CAP);
+  for (const entry of ["a: 1", "b: 2", "c: 3", "d: 4", "e: 5"]) assert.ok(overflow.elicitationParams.message.includes(entry));
+  assert.ok(overflow.elicitationParams.message.includes("Selection predicate: db.mutate (selected)"));
   assert.equal(contract.begin({ tool: TOOL, args: {}, selection: { label: "x".repeat(200), detail: "selected" } }).refusal, REFUSALS.UNRENDERABLE);
 });
 
@@ -672,10 +700,14 @@ test("configured route budgets all mandatory fields and arguments within seven l
     for (const line of after.argLines) assert.ok(after.lines.includes(line));
   }
   const many = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`arg${i}`, i]));
-  const refused = createApprovalContract({ serverId: "prod-db_01" }).begin({ tool: TOOL, args: many });
+  const offered = createApprovalContract({ serverId: "prod-db_01" }).begin({ tool: TOOL, args: many });
+  assert.equal(offered.kind, "input_required");
+  assert.equal(offered.elicitationParams.message.split("\n").length, MESSAGE_LINE_CAP);
+  for (const [key, value] of Object.entries(many)) assert.ok(offered.elicitationParams.message.includes(`${key}: ${value}`));
+  const refused = createApprovalContract({ serverId: "prod-db_01" }).begin({ tool: TOOL, args: { ...many, long: "x".repeat(MESSAGE_CHARACTER_CAP) } });
   assert.equal(refused.kind, "refuse");
   assert.equal(refused.refusal, REFUSALS.UNRENDERABLE);
-  assert.match(refused.detail, /need 104 lines; Seal permits 7/);
+  assert.match(refused.detail, /characters; Seal permits 200000/);
   assert.equal(refused.elicitationParams, undefined);
   for (const serverId of ["payroll\u202etxt.exe", "\u202e".repeat(13), "x".repeat(100)]) {
     const rendered = renderApprovalMessage(TOOL, { operation: "delete" }, { serverId });
@@ -701,4 +733,29 @@ test("route refusal boundary measures complete characters and lines independentl
       assert.match(refused.reason, /200001 characters; Seal permits 200000/);
     }
   }
+});
+
+
+test("sealargbudget: folding preserves newline, nested, Unicode, invisible and seven-plus arguments with selection", () => {
+  const args = { a: "first\nsecond", b: { nested: ["100", 100] }, c: "می\u200cروم", d: "👩\u200d💻", e: "hidden\u202eend", f: "literal\\u202e", g: "short", h: 100 };
+  const selection = { label: TOOL, detail: "selected" };
+  const rendered = renderApprovalMessage(TOOL, args, { serverId: "github", selection });
+  assertInsideEnvelope(rendered);
+  assert.equal(rendered.lines.length, MESSAGE_LINE_CAP);
+  for (const line of rendered.argLines) assert.ok(rendered.message.includes(line.trim()));
+  assert.equal(rendered.message.includes("\u202e"), false);
+  assert.ok(rendered.message.includes('a: "first\\nsecond"'));
+  assert.ok(rendered.message.includes('c: "می\u200cروم"'));
+  assert.ok(rendered.message.includes('d: "👩\u200d💻"'));
+  assert.ok(rendered.message.includes("Selection predicate: demo.mutate (selected)"));
+  const contract = createApprovalContract({ serverId: "github" });
+  const opened = contract.begin({ tool: TOOL, args, selection });
+  assert.equal(opened.kind, "input_required");
+  const allowed = contract.retry({ tool: TOOL, args, requestState: opened.result.requestState, inputResponses: ACCEPT });
+  assert.equal(allowed.kind, "allow");
+  assert.deepEqual(allowed.receipt.arguments, args);
+  assert.equal(renderApprovalMessage(allowed.receipt.tool, allowed.receipt.arguments, { serverId: "github", selection }).message, opened.elicitationParams.message);
+  const refused = renderApprovalMessage(TOOL, { ...args, long: "x".repeat(MESSAGE_CHARACTER_CAP) }, { serverId: "github", selection });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /characters; Seal permits 200000/);
 });

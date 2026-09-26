@@ -79,6 +79,14 @@ function appendApprovalContext(message, context) {
   }
   const contextLines = escapedContext.split(/\r\n|[\n\r\u0085\u2028\u2029]/u);
   const lines = [...message.split("\n"), ...contextLines];
+  return measureArgumentLayout(lines);
+}
+
+// Fold only complete, already escaped argument entries. The envelope counts
+// logical lines and code points, never an assumed client width. Keep separate
+// lines when they fit; join adjacent entries only to make room for mandatory
+// scope, boundary, route and selection context, then measure the final text.
+function measureArgumentLayout(lines) {
   while (lines.length > MESSAGE_LINE_CAP) {
     const index = lines.findIndex((line, i) => line.startsWith("  ") &&
       lines[i + 1]?.startsWith("  "));
@@ -120,7 +128,7 @@ function renderApprovalMessage(tool, args, { ttlMs = 120000, firstLine = "Approv
   const lines = [`Tool: ${renderName(tool)}; ${escapeInvisible(firstLine)}`, ...argLines, scopeLine, OUTSIDE_LINE];
   if (routeLine) lines.push(routeLine);
 
-  let measured = measureApprovalMessage(lines.join("\n"));
+  let measured = measureArgumentLayout(lines);
   if (!measured.ok) return measured;
   if (selection) {
     const label = selection.label.startsWith(tool)
