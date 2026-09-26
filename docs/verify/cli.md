@@ -29,7 +29,7 @@ verbatim:
 | --- | --- | --- |
 | `seal verify RECEIPT` | Re-derives one receipt from its own bytes: schema, kernel-binary match, canonical request hash, verdict. | `PASS VERIFIED`, exit 0; a failing check, exit 1. |
 | `seal scan TOOLS POLICY` | Finds every mutating tool no approval policy covers. | `FAIL` and exit 1 when coverage is incomplete; exit 0 only for a fully covered catalogue. |
-| `seal receipt-diff A B` | Classifies every field change between two receipts as an authorization-surface change or a minor one. | Exit 1 on an authorization-surface change. |
+| `seal receipt-diff A B` | Classifies changes between supported kit or host receipt pairs as authorization-surface or minor; unsupported pairs are refused. | Exit 1 on an authorization-surface change; exit 2 on unsupported input. |
 | `seal adequacy check LABELS` | Checks whether the supplied evidence actually separates the labels it claims to, rather than merely looking like it does. | A named adequacy verdict, not a bare pass/fail. |
 
 ## Real terminal output, one command at a time
