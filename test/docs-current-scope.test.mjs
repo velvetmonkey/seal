@@ -9,7 +9,7 @@
 // CLAIM-COVERAGE: docs/assurance/current-scope.md#current-scope
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -152,3 +152,24 @@ test('format guide keeps decimals in the product contract and names checker comp
 // CLAIM-COVERAGE: docs/evidence/sources.md#family-content-scope
 
 // CLAIM-COVERAGE: docs/archive/pass2-captures.md#family-content-scope
+
+// Guide commands must be runnable away from the maintainer's machine.
+test('guide command blocks contain no maintainer home paths', () => {
+  function checkDirectory(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        checkDirectory(file);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        const text = readFileSync(file, 'utf8');
+        const fences = text.matchAll(/^ {0,3}(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)^ {0,3}\1[ \t]*$/gm);
+        for (const [, , info, body] of fences) {
+          if (['bash', 'sh', 'shell', 'console'].includes(info.trim().split(/\s+/)[0])) {
+            assert.doesNotMatch(body, /\/home\/monkey/, `${file}: command block contains a maintainer home path`);
+          }
+        }
+      }
+    }
+  }
+  checkDirectory(resolve(ROOT, 'docs/guide'));
+});

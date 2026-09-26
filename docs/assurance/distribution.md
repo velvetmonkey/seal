@@ -1,6 +1,6 @@
 # Distribution (roadmap 3D)
 
-Seal v0.4.0.
+Seal v0.5.2.
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.
 Windows, Linux ARM and other platforms are not supported.
 It ships **three** installable artifacts, for **Linux x86-64**, **macOS x64**, and **macOS arm64**.
@@ -30,12 +30,12 @@ Copy the whole POSIX command, including its backslashes and `&&` operators.
 A failed comparison skips both `chmod` and execution.
 
 ```bash
-SEAL_VERSION=v0.4.0
-artifact_name="seal-v0.4.0-linux-x64" \
-&& artifact_sha256="5b49ea26d29b608fcb4e3e370062b96e8c4a81d7fb5ce1fd30a2cbe737c69d3b" \
-&& artifact_bytes=6301771 \
+SEAL_VERSION=v0.5.2
+artifact_name="seal-v0.5.2-linux-x64" \
+&& artifact_sha256="693c901376f4f1d4f6584fc106fea301d3707d78f698bc905ec87221a8714f52" \
+&& artifact_bytes=6370451 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="0552373fc3cb7f7257b4cf491395425a1ce2f7126cc60142a961f53ff29026ce" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -78,7 +78,7 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The current install payload includes `seal-receipt-v2.mjs`. Download the sibling
-[`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.4.0/seal-receipt-v2.mjs)
+[`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.5.2/seal-receipt-v2.mjs)
 to verify its digest against the `SHA256SUMS` asset attached to that same release.
 The sibling is not standalone: it imports the kernel decision runner from the
 Seal tree. Run `node checker/seal-receipt-v2.mjs RECEIPT` from the installed

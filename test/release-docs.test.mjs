@@ -18,6 +18,26 @@ const GENERATOR = path.join(ROOT, "scripts", "generate-release-docs.mjs");
 const MACOS_PROTECT_CLAIMS = path.join(ROOT, "scripts", "check-macos-protect-claims.mjs");
 const COMMIT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+// CLAIM-COVERAGE: scripts/release-notes-install-template.md#candidate-install-template
+test("candidate install notes are generated and a reversed command is refused", () => {
+  const notes = fs.readFileSync(path.join(ROOT, "docs", "assurance", `RELEASE-NOTES-v${VERSION}.md`), "utf8");
+  const template = fs.readFileSync(path.join(ROOT, "scripts", "release-notes-install-template.md"), "utf8");
+  for (const command of ["curl -fsSLO", "sha256sum --check", "chmod +x", "checker_store=", "node \"$checker\""]) {
+    assert.ok(template.includes(command), `candidate notes template must explain ${command}`);
+  }
+  const copy = testTmpdir(path.join(os.tmpdir(), "seal-candidate-notes-"));
+  const pathToNotes = path.join(copy, "notes.md");
+  const runCheck = () => spawnSync(process.execPath, [GENERATOR, "--notes-only", "--check"], {
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, SEAL_RELEASE_NOTES_FILE: pathToNotes },
+  });
+  fs.writeFileSync(pathToNotes, notes);
+  assert.equal(runCheck().status, 0, "generated candidate commands must match the template");
+  fs.writeFileSync(pathToNotes, notes.replace("sha256sum --check artifact.sha256.check", "true"));
+  assert.equal(runCheck().status, 1, "reversing the artifact digest command must fail the workflow precondition");
+  fs.writeFileSync(pathToNotes, notes);
+  assert.equal(runCheck().status, 0, "restoring the generated command must clear the check");
+});
+
 test("published asset retries preserve native responses and stop at permanent failures", async (t) => {
   const payload = Buffer.from([0, 255, 128, 13, 10, 65, 0]);
   const counts = new Map();
@@ -226,7 +246,7 @@ test("legacy docs state release-listing facts and check compares claims with tha
       `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
     );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
-    assert.match(readme, new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, which carries the previous receipt format and Linux-only Protect support\\."));
+    assert.match(readme, new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
     assert.equal(equalVersion.code, 0, equalVersion.stderr);
     assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the unreleased/);
@@ -291,6 +311,58 @@ test("release workflow pushes a review branch and reports a moving-main exhausti
   assert.match(workflow, /gh pr create --base main --head "\$branch"/);
   assert.doesNotMatch(workflow, /git push origin HEAD:main/);
   assert.match(workflow, /::error::main kept moving while release documentation PR #\$pr_number was refreshed/);
+});
+
+function markdownFilesUnder(directory, relativeTo = directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return markdownFilesUnder(entryPath, relativeTo);
+    return entry.isFile() && entry.name.endsWith(".md")
+      ? [path.relative(relativeTo, entryPath).split(path.sep).join("/")]
+      : [];
+  });
+}
+
+function omittedFromDocsIndex(docs) {
+  const index = fs.readFileSync(path.join(docs, "docs", "assurance", "README.md"), "utf8");
+  return markdownFilesUnder(path.join(docs, "docs")).filter((file) => !index.includes(file));
+}
+
+test("retargeting the primary release-notes pointer keeps a historical citation of the previous notes", async () => {
+  const docs = docsRoot();
+  const readmePath = path.join(docs, "docs", "assurance", "README.md");
+  const previousNotes = "RELEASE-NOTES-v0.9.0.md";
+  fs.writeFileSync(
+    path.join(docs, "docs", "assurance", previousNotes),
+    "# Seal v0.9.0 release notes\n\nPlanted previous published notes.\n",
+  );
+  const original = fs.readFileSync(readmePath, "utf8");
+  const planted = original.replace(
+    /^4\. \[assurance\/RELEASE-NOTES-v\d+\.\d+\.\d+[^\]]*\]\(RELEASE-NOTES-v\d+\.\d+\.\d+[^)]*\) — what v\d+\.\d+\.\d+ contains and$/m,
+    `4. [assurance/${previousNotes}](${previousNotes}) — what v0.9.0 contains and`,
+  );
+  assert.notEqual(planted, original, "fixture must move the primary pointer off the current notes");
+  assert.match(planted, new RegExp(`^4\\. \\[assurance/${previousNotes.replaceAll(".", "\\.")}\\]\\(${previousNotes.replaceAll(".", "\\.")}\\) — what v0\\.9\\.0 contains and$`, "m"));
+  fs.writeFileSync(readmePath, planted);
+  assert.ok(omittedFromDocsIndex(docs).includes("assurance/RELEASE-NOTES-v0.9.0.md") === false);
+  const generated = await run([], { SEAL_RELEASE_DOCS_ROOT: docs });
+  assert.equal(generated.code, 0, generated.stderr);
+  const rewritten = fs.readFileSync(readmePath, "utf8");
+  const primary = rewritten.match(/^4\. \[assurance\/(RELEASE-NOTES-v[^\]]+)\]\((RELEASE-NOTES-v[^)]+)\) — what (v[^\s]+) contains and$/m);
+  assert.ok(primary, "generator must leave one primary release-notes pointer");
+  assert.equal(primary[1], primary[2]);
+  assert.notEqual(primary[1], previousNotes);
+  assert.match(
+    rewritten,
+    /The earlier \[assurance\/RELEASE-NOTES-v0\.9\.0\.md\]\(RELEASE-NOTES-v0\.9\.0\.md\) remains the historical record of that tag\./,
+  );
+  assert.equal(
+    omittedFromDocsIndex(docs).includes("assurance/RELEASE-NOTES-v0.9.0.md"),
+    false,
+    "previous published notes must stay reachable from the docs index",
+  );
+  const currentHits = [...rewritten.matchAll(/^4\. \[assurance\/RELEASE-NOTES-v/gm)];
+  assert.equal(currentHits.length, 1, "exactly one notes file is named as the current release");
 });
 
 // CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
