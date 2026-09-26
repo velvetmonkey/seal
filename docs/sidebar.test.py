@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import os
 import unittest
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit, unquote
 
 
 class Sidebar(HTMLParser):
@@ -45,6 +45,20 @@ class Sidebar(HTMLParser):
             self.depth -= 1
         if tag == 'sl-sidebar-state-persist':
             self.active = False
+
+
+class Pagination(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.links = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'a':
+            for direction in ('next', 'prev'):
+                if direction in attrs.get('rel', '').split():
+                    self.links.append((direction, attrs.get('href', '')))
 
 
 # Captured from the live/baseline built sidebar at main 94e9b5de7abe57fe2a4d5a89b796f0b4dd96fc85.
@@ -121,6 +135,53 @@ GROUPS = ['Get started', 'Use Seal', 'Check receipts', 'Reference', 'Assurance']
 
 
 class BuiltSidebarTest(unittest.TestCase):
+    def test_pagination_leaves_page(self):
+        site = os.environ.get('SITE_URL', 'https://velvetmonkey.github.io/seal/')
+        dist = Path(__file__).parent / 'dist'
+        files = sorted(dist.rglob('*.html'))
+        self.assertTrue(files, 'Build the documentation first')
+        checked_links = 0
+        for file in files:
+            relative = file.relative_to(dist).as_posix()
+            route = relative.removesuffix('index.html') if relative.endswith('index.html') else relative
+            current = urljoin(site, route)
+            for direction, href in Pagination(file.read_text()).links:
+                checked_links += 1
+                with self.subTest(page=relative, direction=direction, href=href):
+                    self.assertNotEqual(
+                        unquote(urlsplit(urljoin(current, href)).path).rstrip('/'),
+                        unquote(urlsplit(current).path).rstrip('/'),
+                        'Pagination must leave the current page')
+        print(f'Pagination checked {len(files)} pages and {checked_links} links', flush=True)
+        self.assertGreater(checked_links, 0, 'Expected rendered pagination links')
+
+    def test_next_walk(self):
+        site = os.environ.get('SITE_URL', 'https://velvetmonkey.github.io/seal/')
+        base = urlsplit(site).path.rstrip('/')
+        dist = Path(__file__).parent / 'dist'
+        sidebar = Sidebar((dist / 'start/install/index.html').read_text())
+        expected = ['/'] + [urlsplit(e['href']).path.removeprefix(base)
+                            for e in sidebar.entries if e['kind'] == 'a'
+                            and e['href'].removeprefix(base) not in DUPLICATE_PAGE_ALLOWLIST]
+        walked = []
+        route = '/'
+        while True:
+            self.assertNotIn(route, walked, 'Next must not loop')
+            walked.append(route)
+            file = dist / route.lstrip('/') / 'index.html'
+            self.assertTrue(file.is_file(), f'Next destination missing: {route}')
+            links = dict(Pagination(file.read_text()).links)
+            if 'next' not in links:
+                break
+            route = urlsplit(urljoin(site, links['next'])).path.removeprefix(base)
+        self.assertEqual(walked, expected, 'Next must visit every sidebar page in order')
+        install = dict(Pagination((dist / 'start/install/index.html').read_text()).links)
+        protect = dict(Pagination((dist / 'guide/choosing-what-to-protect/index.html').read_text()).links)
+        self.assertEqual(urlsplit(install['next']).path.removeprefix(base),
+                         '/guide/choosing-what-to-protect/')
+        self.assertEqual(urlsplit(protect['prev']).path.removeprefix(base), '/start/install/')
+        print(f'Next walk: {len(walked)} pages; ends at {walked[-1]}', flush=True)
+
     def test_built_sidebars(self):
         base = urlsplit(os.environ.get('SITE_URL', 'https://velvetmonkey.github.io/seal/')).path.rstrip('/')
         files = list((Path(__file__).parent / 'dist').rglob('*.html'))
