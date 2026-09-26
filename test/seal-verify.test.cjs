@@ -266,6 +266,7 @@ test("CLI and MCP verification have identical typed results including code", asy
     const mcp = run(["__verify-server"], JSON.stringify({ jsonrpc: "2.0", id: 1,
       method: "tools/call", params: { name: "seal_verify", arguments: { receiptPath: file, pubkeyHex: key } } }) + "\n");
     assert.equal(mcp.code, 0, mcp.out);
+    assert.equal(JSON.parse(mcp.out).result.isError, exit !== 0);
     const result = JSON.parse(JSON.parse(mcp.out).result.content[0].text);
     assert.deepEqual(result, JSON.parse(cli.out));
     // Equality alone cannot detect both transports losing a required field.
@@ -307,4 +308,73 @@ test("seal_block preserves stdin bytes and separates missing keys from invalid s
   }
   const legacy = run(["verify", real.receipt, "--pubkey", "bad"]);
   assert.equal(legacy.code, 1, legacy.out);
+});
+
+// Regression witnesses: these fail against the original CLI/MCP boundary.
+test("verify refuses extra receipt paths by name", () => {
+  const real = realReceipt();
+  const tampered = path.join(real.dir, "extra-tampered.json");
+  const body = JSON.parse(fs.readFileSync(real.receipt));
+  body.now = 1;
+  fs.writeFileSync(tampered, JSON.stringify(body));
+  const result = run(["verify", real.receipt, tampered, "--pubkey", real.publicKey]);
+  assert.notEqual(result.code, 0, result.out);
+  assert.ok(result.out.includes(tampered), result.out);
+});
+
+test("verify checks the receipt with flags before the path", () => {
+  const real = realReceipt();
+  const result = run(["verify", "--pubkey", real.publicKey, "--json", real.receipt]);
+  assert.equal(result.code, 0, result.out);
+  assert.equal(JSON.parse(result.out).ok, true);
+});
+
+test("MCP verification failures mark tool errors and permit a corrected next call", () => {
+  const real = realReceipt();
+  const tampered = path.join(real.dir, "mcp-tampered.json");
+  const body = JSON.parse(fs.readFileSync(real.receipt));
+  body.now = 1;
+  fs.writeFileSync(tampered, JSON.stringify(body));
+  const calls = [
+    { receiptPath: tampered, pubkeyHex: real.publicKey },
+    { receiptPath: path.join(real.dir, "missing") },
+    { receiptPath: 17 },
+    { receiptPath: real.receipt, pubkeyHex: real.publicKey },
+  ];
+  const response = run(["__verify-server"], calls.map((arguments_, id) => JSON.stringify({
+    jsonrpc: "2.0", id, method: "tools/call", params: { name: "seal_verify", arguments: arguments_ },
+  })).join("\n") + "\n");
+  assert.equal(response.code, 0, response.out);
+  const replies = response.out.trim().split("\n").map(JSON.parse);
+  for (const reply of replies.slice(0, 3)) assert.equal(reply.result.isError, true);
+  assert.equal(JSON.parse(replies[0].result.content[0].text).code, "signature_mismatch");
+  assert.equal(JSON.parse(replies[1].result.content[0].text).code, "read_failed");
+  assert.equal(JSON.parse(replies[3].result.content[0].text).ok, true);
+  assert.notEqual(replies[3].result.isError, true);
+});
+
+test("verify argument boundaries keep one JSON result and support dash paths", () => {
+  const real = realReceipt();
+  for (const args of [
+    [real.receipt, "--pubkey"],
+    [real.receipt, "--pubkey", real.publicKey, "--pubkey", real.publicKey],
+    [real.receipt, real.receipt],
+    [real.receipt, "--unknown"],
+  ]) {
+    const result = run(["verify", "--json", ...args]);
+    assert.equal(result.code, 2, result.out);
+    assert.equal(JSON.parse(result.out).code, "invalid_arguments");
+  }
+  const empty = run(["verify", "--json"]);
+  assert.equal(empty.code, 2, empty.out);
+  assert.equal(JSON.parse(empty.out).message, "usage: seal verify PATH");
+  const { spawnSync } = require("node:child_process");
+  for (const dash of ["-receipt.json", "--json"]) {
+  fs.copyFileSync(real.receipt, path.join(real.dir, dash));
+  const result = spawnSync(process.execPath, [CLI, "verify", "--json", "--pubkey", real.publicKey, "--", dash], {
+    cwd: real.dir, encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(JSON.parse(result.stdout).ok, true);
+  }
 });
