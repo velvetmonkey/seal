@@ -5,7 +5,7 @@ Run a disposable exact-call example before configuring a real MCP server. Use th
 Seal · Linux Bash · working directory: the Seal checkout:
 
 ```bash
-node bin/seal demo --dir /home/monkey/scratch/sealdocspass2/demo
+demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && node bin/seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
 ```
 
 The demo prints the selected tool, arguments and approval scope, then asks Approve? Answer y interactively. The run used for these guides observed one child call, then a BLOCK receipt when the identical approval response was replayed. The directory remains after completion so you can inspect its receipts and receipt-signer.pub.
