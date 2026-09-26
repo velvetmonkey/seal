@@ -675,6 +675,49 @@ test("a client without elicitation gets a named refusal and no held call", async
   assert.equal(await run.exit, 0, run.err);
 });
 
+for (const [label, elicitation, supported] of [
+  ["URL-only", { url: {} }, false],
+  ["form-only", { form: {} }, true],
+  ["form and URL", { form: {}, url: {} }, true],
+  ["legacy empty", {}, true],
+  ["null", null, false],
+  ["invalid form declaration", { form: false, url: {} }, false],
+]) {
+  test(`guarded approval checks form support: ${label}`, async (t) => {
+    const dir = testTmpdir("seal-elicitation-mode-");
+    const dataFile = path.join(dir, "data.txt");
+    createJournal(path.join(dir, "approvals.journal"));
+    const { proxy, run, requestFor, responseFor, responses } = spawnProxy(dir, dataFile);
+    t.after(run.kill);
+    proxy.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id: 90, method: "initialize",
+      params: { protocolVersion: "2025-11-25", capabilities: { elicitation } },
+    }) + "\n");
+    await responseFor(90);
+    proxy.stdin.write(JSON.stringify({ ...callParams("mode approval"), id: 1 }) + "\n");
+    if (supported) {
+      const request = await requestFor("elicitation/create");
+      assert.equal(request.params.mode ?? "form", "form");
+      assert.equal(request.params.requestedSchema.type, "object");
+      assert.equal(readCount(`${dataFile}.count`), "0");
+      answer(proxy, request, "accept", { approve: true });
+      const flowed = await responseFor(1);
+      assert.ok(!flowed.result.isError, JSON.stringify(flowed));
+      assert.equal(readCount(`${dataFile}.count`), "1");
+    } else {
+      const refused = await responseFor(1);
+      assert.equal(refused.result.isError, true);
+      assert.match(refused.result.content[0].text, /client_form_elicitation_unsupported/);
+      assert.match(refused.result.content[0].text, /requires form-mode approval/);
+      assert.equal(responses.some((frame) => frame.method === "elicitation/create"), false);
+      assert.equal(readCount(`${dataFile}.count`), "0");
+      assert.equal(receiptFor(dir, "BLOCK").action, "BLOCK");
+    }
+    proxy.stdin.end();
+    assert.equal(await run.exit, 0, run.err);
+  });
+}
+
 test("real elicitation accept flows once and duplicate or unmatched responses do not flow", async (t) => {
   const dir = testTmpdir("seal-receipt-approved-retry-");
   const dataFile = path.join(dir, "data.txt");

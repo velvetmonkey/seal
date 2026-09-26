@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { requireMatchingVersion } = require(path.join(path.resolve(__dirname, ".."), "spine", "version.cjs"));
@@ -14,32 +13,8 @@ const receiptPopulation = require(path.join(path.resolve(__dirname, ".."), "spin
 const ROOT = path.resolve(__dirname, "..");
 const reproduceOwner = require(path.join(ROOT, "scripts", "seal-reproduce.cjs"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
-const cache = path.join(process.env.SEAL_CACHE_DIR || path.join(os.homedir(), ".cache", "seal"), "runtime", manifest.commit);
-const shippedRuntime = path.join(ROOT, "runtime");
-const shippedRuntimeFiles = Object.entries(manifest.files).filter(([relative]) => relative.startsWith("kernel/"));
+const { inspectRuntime } = require(path.join(ROOT, "spine", "runtime-inspection.cjs"));
 
-function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
-function inspectRuntimeAt(directory, files) {
-  for (const [relative, expected] of files) {
-    const target = path.join(directory, relative);
-    try {
-      if (!fs.statSync(target).isFile()) return { present: false, state: "absent", reason: `${relative} is not a file` };
-      const got = sha256(fs.readFileSync(target));
-      if (got !== expected) return { present: false, state: "integrity check failed", reason: `${relative} hash mismatch` };
-    } catch (error) {
-      return { present: false, state: "absent", reason: `${relative} is unavailable` };
-    }
-  }
-  return { present: true };
-}
-function inspectRuntime() {
-  // The installed artifact ships the kernel, while src/verify.cjs is fetched
-  // into the cache for the optional verification command. Never treat a bad
-  // shipped kernel as a reason to use an unchecked fallback.
-  const shipped = inspectRuntimeAt(shippedRuntime, shippedRuntimeFiles);
-  if (shipped.present || shipped.state === "integrity check failed") return shipped;
-  return inspectRuntimeAt(cache, Object.entries(manifest.files));
-}
 function status() {
   // Status derives ACTIVE/STALE from Linux process-start witnesses. Keep this
   // product path behind the same platform refusal as `seal __proxy`.
@@ -271,6 +246,7 @@ function coverage() {
         if (!local) throw new Error("no inspected local wrapper establishes ownership");
         const state = statePath ? protection.readState(statePath) : matching[0]?.[1].state;
         if (!state) throw new Error("installed wrapper protection record is unavailable");
+        printObservedClient(state);
         if (state.serverName !== name || typeof state.projectRoot !== "string" ||
             protection.claudeProjectRoot(state.projectRoot) !== projectRoot) throw new Error("installed wrapper server or project scope does not match the inspected entry");
         if (protection.canonical(local.definition) !== protection.canonical(state.localOverride?.definition)) throw new Error("local definition does not match the installed wrapper");
@@ -297,6 +273,7 @@ function coverage() {
   // Retain diagnostics for orphaned records without duplicating configured rows.
   for (const [statePath, record] of records) {
     if (usedRecords.has(statePath)) continue;
+    printObservedClient(record.state);
     console.log(`UNKNOWN selected MCP tools at ${statePath} — wrapper enforcement could not be established: ${record.error?.message || "record has no matching configured server"}`);
     process.exitCode = 1;
   }
@@ -338,6 +315,19 @@ function coverageOutsideRoutes() {
   console.log("UNKNOWN server-to-client requests (sampling/createMessage) — wrapper relays server output without filtering; downstream effects were not established");
 }
 
+function printObservedClient(state) {
+  const client = state?.observedClient;
+  if (!client || typeof client.name !== "string" || typeof client.version !== "string"
+      || typeof client.elicitationDeclared !== "boolean") return;
+  // Self-asserted strings must not inject additional terminal lines or controls.
+  const { escapeInvisible } = require(path.join(ROOT, "contract", "renderer.cjs"));
+  const { capClientMetadata } = require(path.join(ROOT, "spine", "presentation.cjs"));
+  // Re-cap legacy state too; escaping controls can expand the stored byte count.
+  const display = (value) => capClientMetadata(escapeInvisible(capClientMetadata(value), { preserveShaping: false }));
+  console.log(`Observed client: ${display(client.name)} ${display(client.version)} (self-asserted, unsigned)`);
+  console.log(`Elicitation declared: ${client.elicitationDeclared ? "yes" : "no"}`);
+}
+
 function statusRecord(recordPath, projectRoot, readError) {
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let receiptDir;
@@ -352,6 +342,7 @@ function statusRecord(recordPath, projectRoot, readError) {
     const state = filePath ? protection.readState(filePath) : null;
     stateRead = true;
     storedState = state;
+    printObservedClient(state);
     stateRoot = root;
     statePath = filePath;
     if (typeof state?.receiptsDir === "string") receiptDir = state.receiptsDir;
@@ -584,22 +575,47 @@ async function demo(args) {
 async function verify(args) {
   const receiptPath = args[0];
   const keyAt = args.indexOf("--pubkey");
-  if (!receiptPath) throw new Error("usage: seal verify PATH");
-  const absolute = path.resolve(receiptPath);
-  let stat;
-  try { stat = fs.statSync(absolute); } catch { throw new Error(`cannot inspect receipt path: ${absolute}`); }
-  if (!stat.isFile()) throw new Error(`receipt path is not a regular file: ${absolute}`);
-  if ((stat.mode & 0o444) === 0) throw new Error(`receipt file has no read permission bits: ${absolute}`);
-  let text;
-  try { text = fs.readFileSync(absolute); } catch { throw new Error(`cannot read receipt contents: ${absolute}`); }
-  if (text.length === 0) throw new Error(`receipt is empty: ${absolute}`);
-  const runtime = inspectRuntime();
-  if (!runtime.present) throw new Error(`cannot verify receipt: local kernel runtime ${runtime.state} (${runtime.reason})`);
-  const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
-  const result = await verifier.verify(text, { publicKeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
-  result.ok = result.validate && result.signature && result.replay;
-  console.log(verifier.format(result));
-  if (!result.ok) process.exitCode = 1;
+  const json = args.indexOf("--json") !== -1;
+  // Keep the established usage diagnostic and exit outside JSON mode.
+  if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
+  const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
+    .verifyReceipt({ receiptPath, pubkeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+  if (json) console.log(JSON.stringify(result));
+  else if (error) {
+    // Keep the outer handler's legacy stderr and debug presentation.
+    error.exitCode = exitCode;
+    throw error;
+  } else console.log(verifier.format(result));
+  if (exitCode) process.exitCode = exitCode;
+}
+
+async function sealBlock(args) {
+  const emit = (code, fields) => {
+    console.log(JSON.stringify({ seal_block: "v1", ok: false, authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false, ...fields }));
+    process.exitCode = code;
+  };
+  try {
+    if (args.length !== 0 && !(args[0] === "--pubkey" && args.length <= 2)) {
+      return emit(1, { error: "usage", message: "usage: seal seal_block [--pubkey HEX] < receipt.json" });
+    }
+    // Keep stdin as bytes: the verifier owns UTF-8 decoding, duplicate-member
+    // rejection and the receipt specification's canonical signature checks.
+    const bytes = fs.readFileSync(0);
+    const runtime = inspectRuntime();
+    if (!runtime.present) {
+      return emit(runtime.state === "integrity check failed" ? 3 : 1,
+        { error: runtime.state === "integrity check failed" ? "kernel_integrity" : "runtime_absent", message: runtime.reason });
+    }
+    const verifier = await import(pathToFileURL(path.join(ROOT, "checker", "seal-receipt-v2.mjs")).href);
+    if (!verifier.hasPublicKey(args[1])) {
+      return emit(5, { error: "no_key", message: "--pubkey requires 64 lowercase hexadecimal characters" });
+    }
+    const result = await verifier.verify(bytes, { publicKeyHex: args[1] });
+    const ok = result.validate && result.signature && result.replay;
+    emit(ok ? 0 : 1, { ...result, ok });
+  } catch (error) {
+    emit(1, { error: error.code || "invalid_receipt", message: error.message });
+  }
 }
 
 function reproduce(args) {
@@ -700,8 +716,10 @@ async function main() {
   if (command === "demo") return demo(process.argv.slice(3));
   // Private spine subcommands: not part of the command surface, not listed.
   if (command === "__demo-server") return require(path.join(ROOT, "spine", "demo-server.cjs")).run(process.argv[3]);
+  if (command === "__verify-server") return require(path.join(ROOT, "spine", "verify-server.cjs")).run(process.argv[3]);
   if (command === "__proxy") return require(path.join(ROOT, "spine", "proxy-cli.cjs")).run(process.argv.slice(3));
   if (command === "verify") return verify(process.argv.slice(3));
+  if (command === "seal_block") return sealBlock(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
@@ -709,7 +727,10 @@ async function main() {
   if (command === "recover") return recoverCommand(process.argv.slice(3));
   if (command === "history") return receiptPopulation.queryCommand(process.argv.slice(3));
   if (command === "receipts") return receiptCommand(process.argv.slice(3));
-  if (command === "doctor") return doctorCommand();
+  if (command === "doctor") {
+    if (process.argv.length > 3) { console.error("seal doctor takes no arguments"); process.exitCode = 2; return; }
+    return doctorCommand();
+  }
   if (command === "coverage") {
     if (process.argv.length > 3) { console.error("seal coverage takes no arguments"); process.exitCode = 2; return; }
     return coverage();
@@ -746,7 +767,9 @@ function printHelp() {
       report known mediated and unmediated routes for this deployment
   seal demo [--dir PATH]
       show one exact call run once and its replay blocked
-  seal verify PATH [--pubkey HEX]
+  seal seal_block [--pubkey HEX] < receipt.json
+      check stdin receipt bytes and emit a v1 JSON result
+  seal verify PATH [--pubkey HEX] [--json]
       inspect a saved kernel receipt and re-derive its recorded decision
   seal reproduce TAG [--source PATH] [--platform linux-x64]
       [--authority same-authority|independent] [--authority-name NAME]
@@ -763,7 +786,7 @@ function printHelp() {
 
   Exit codes: 0 success/reportable state;
               1 refusal, failure or incomplete verification;
-              2 unknown command or arguments to status.
+              2 invalid input, unknown command or arguments to status.
   Unknown commands also print help.
   Status exits 0 for an unprotected or stale route;
   inspect its text to judge protection.
@@ -784,5 +807,5 @@ if (require.main === module) main().catch((error) => {
   printKernelTiming(error);
   printFailureGuidance(process.argv[2], error);
   if (process.env.SEAL_DEBUG) console.error(error.stack);
-  process.exitCode = 1;
+  process.exitCode = error.exitCode || 1;
 });

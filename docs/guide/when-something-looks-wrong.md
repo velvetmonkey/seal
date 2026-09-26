@@ -557,7 +557,7 @@ select.
 ### `unsupported_platform`
 
 Printed by the installer, the installed launcher, and the demo alike for Seal
-v0.4.0. Seal supports install, demo and receipt checking on Linux x86-64 and
+v0.5.2. Seal supports install, demo and receipt checking on Linux x86-64 and
 macOS x64/arm64. Protect is supported on Linux x86-64 and macOS x64/arm64;
 macOS Protect execution is not exercised in CI.
 Windows, Linux ARM and other unsupported installations refuse without changing files.
@@ -736,6 +736,12 @@ A receipt-embedded key is never trusted as authority.
 
 Replaying the exact recorded inputs through the WASM kernel produced a
 different verdict. The receipt does not establish the decision it records.
+
+### `invalid_action`
+
+The receipt's action is missing, empty, or not a string. The checker requires a
+non-empty string before checking signatures or replaying the recorded inputs.
+Preserve the malformed receipt and report it to its producer.
 
 ### `action_verdict_mismatch`
 

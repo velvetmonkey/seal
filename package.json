@@ -1,6 +1,6 @@
 {
   "name": "@velvetmonkey/seal",
-  "version": "0.4.0",
+  "version": "0.5.2",
   "description": "The Seal developer CLI",
   "bin": {
     "seal": "bin/seal"
@@ -28,6 +28,8 @@
     "spine/integrity.cjs",
     "spine/demo.cjs",
     "spine/demo-server.cjs",
+    "spine/verify-server.cjs",
+    "spine/runtime-inspection.cjs",
     "spine/protection.cjs",
     "spine/uninstall.cjs",
     "spine/proxy.cjs",

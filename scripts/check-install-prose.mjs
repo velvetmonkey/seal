@@ -135,7 +135,16 @@ async function main() {
     'Further distribution detail, including what each payload contains, is in [DISTRIBUTION.md](../assurance/distribution.md).',
   ]) prose = prose.replace(nonClaim, '');
   assert.equal(normalize(prose), '', 'unreviewed generated install prose');
-  assert.equal(normalize(readmeParts[0].replace(/```[^\n]*\n[\s\S]*?```/g, '')), '',
+  // The divergence sentence is tied to VERSION and the independently fetched
+  // published release; it must disappear when those identities agree.
+  const sourceVersion = fs.readFileSync(
+    fs.existsSync(path.join(DOCS_ROOT, 'VERSION')) ? path.join(DOCS_ROOT, 'VERSION') : path.join(ROOT, 'VERSION'),
+    'utf8').trim();
+  const readmeProse = normalize(readmeParts[0].replace(/```[^\n]*\n[\s\S]*?```/g, ''));
+  const divergence = sourceVersion === version ? '' : normalize(
+    `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the\n` +
+    `> published \`v${version}\`, the live Latest release whose assets the commands below install.`);
+  assert.equal(readmeProse, divergence,
     'new generated README prose needs a claim and observable');
 
   const root = tempRoot.makeTempRoot(ROOT, 'install-prose');
