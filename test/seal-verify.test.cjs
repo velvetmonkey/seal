@@ -308,3 +308,89 @@ test("seal_block preserves stdin bytes and separates missing keys from invalid s
   const legacy = run(["verify", real.receipt, "--pubkey", "bad"]);
   assert.equal(legacy.code, 1, legacy.out);
 });
+
+// Published torsion-coordinate list: libsodium 1.0.18,
+// src/libsodium/crypto_core/ed25519/ref10/ed25519_ref10.c,
+// ge25519_has_small_order (https://github.com/jedisct1/libsodium/blob/1.0.18/src/libsodium/crypto_core/ed25519/ref10/ed25519_ref10.c).
+// The two order-8 and the order-4 coordinates each have two x signs;
+// identity and order-2 have x=0. These give all eight torsion points.
+function torsionKeys() {
+  const signs = (hex) => [hex, hex.slice(0, -2) + (parseInt(hex.slice(-2), 16) | 128).toString(16)];
+  return ["01" + "00".repeat(31), "ec" + "ff".repeat(30) + "7f",
+    ...signs("00".repeat(32)),
+    ...signs("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"),
+    ...signs("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")];
+}
+
+test("all torsion and noncanonical public keys are refused across checker CLI and MCP", async (t) => {
+  const verifier = await import("../checker/seal-receipt-v2.mjs");
+  const { spawnSync } = require("node:child_process");
+  const dir = testTmpdir(path.join(os.tmpdir(), "seal-torsion-"));
+  const template = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/public/examples/protect-block.receipt.json")));
+  const keys = [...torsionKeys(), "ed" + "ff".repeat(30) + "7f", "ee" + "ff".repeat(30) + "7f"];
+  for (const [index, key] of keys.entries()) await t.test(key, () => {
+    const body = { ...template }; delete body.signature;
+    const signature = "01" + "00".repeat(63); // R=identity, S=0
+    const imported = crypto.createPublicKey({ key: Buffer.from("302a300506032b6570032100" + key, "hex"), format: "der", type: "spki" });
+    let found = false;
+    for (let now = 0; now < 1024; now++) {
+      body.now = now;
+      if (crypto.verify(null, Buffer.from(verifier.canonical(body)), imported, Buffer.from(signature, "hex"))) { found = true; break; }
+    }
+    assert.ok(found, "construct an OpenSSL-accepted forgery before testing the guard");
+    body.signature = { algorithm: "ed25519", value: signature };
+    const file = path.join(dir, `${index}.json`);
+    fs.writeFileSync(file, JSON.stringify(body));
+    const expected = index < 8 ? "public_key_small_order" : "public_key_noncanonical";
+    const checker = spawnSync(process.execPath, [path.join(__dirname, "../checker/seal-receipt-v2.mjs"), file, "--pubkey", key], { encoding: "utf8" });
+    const cli = run(["verify", file, "--json", "--pubkey", key]);
+    const mcp = run(["__verify-server"], JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "seal_verify", arguments: { receiptPath: file, pubkeyHex: key } } }) + "\n");
+    if (process.env.SEAL_TORSION_EVIDENCE) fs.appendFileSync(process.env.SEAL_TORSION_EVIDENCE, JSON.stringify({ key, checker: checker.stdout, cli: cli.out, mcp: mcp.out }) + "\n");
+    assert.equal(checker.status, 1, checker.stdout);
+    assert.match(checker.stdout, new RegExp(expected));
+    assert.equal(cli.code, 1, cli.out);
+    assert.equal(JSON.parse(cli.out).code, expected, cli.out);
+    assert.equal(JSON.parse(JSON.parse(mcp.out).result.content[0].text).code, expected, mcp.out);
+  });
+});
+
+test("public key guard preserves ordinary keys and existing input boundaries", async () => {
+  const verifier = await import("../checker/seal-receipt-v2.mjs");
+  const { generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");
+  const example = path.join(__dirname, "../docs/public/examples/protect-block.receipt.json");
+  const exampleKey = fs.readFileSync(path.join(__dirname, "../docs/public/examples/protect-signer.pub"), "utf8").trim();
+  assert.equal((await verifier.verify(fs.readFileSync(example), { publicKeyHex: exampleKey })).signature, true);
+  const unsigned = JSON.parse(fs.readFileSync(example)); delete unsigned.signature;
+  let signer;
+  do { signer = generateSigner(); } while (!(parseInt(signer.publicKeyHex.slice(-2), 16) & 128));
+  const signed = JSON.stringify(sealReceipt(signer, unsigned, unsigned.action));
+  assert.equal((await verifier.verify(signed, { publicKeyHex: signer.publicKeyHex })).signature, true, "ordinary key with x sign set");
+  for (const key of [signer.publicKeyHex.toUpperCase(), signer.publicKeyHex.slice(2), signer.publicKeyHex + "00"]) {
+    assert.equal((await verifier.verify(signed, { publicKeyHex: key })).signature, false, "existing lowercase 32-byte boundary");
+  }
+  // v2 has no in-receipt public-key member and never treats one as authority.
+  const embedded = { ...JSON.parse(signed), publicKeyHex: "01" + "00".repeat(31) };
+  await assert.rejects(verifier.verify(JSON.stringify(embedded)), { code: "member_order" });
+  const real = realReceipt();
+  for (const name of fs.readdirSync(path.join(real.dir, "receipts")).filter(x => x.endsWith(".json"))) {
+    const checked = run(["verify", path.join(real.dir, "receipts", name), "--pubkey", real.publicKey]);
+    assert.equal(checked.code, 0, checked.out);
+  }
+});
+
+test("noncanonical coordinate range and torsion signs fail before signature parsing", async () => {
+  const verifier = await import("../checker/seal-receipt-v2.mjs");
+  const body = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/public/examples/protect-block.receipt.json")));
+  body.signature.value = "malformed";
+  const text = JSON.stringify(body);
+  const p = (1n << 255n) - 19n;
+  for (let y = p; y < (1n << 255n); y++) {
+    for (const sign of [0n, 1n << 255n]) {
+      const key = Buffer.from((y | sign).toString(16).padStart(64, "0"), "hex").reverse().toString("hex");
+      await assert.rejects(verifier.verify(text, { publicKeyHex: key }), { code: "public_key_noncanonical" });
+    }
+  }
+  for (const key of torsionKeys()) {
+    await assert.rejects(verifier.verify(text, { publicKeyHex: key }), { code: "public_key_small_order" });
+  }
+});
