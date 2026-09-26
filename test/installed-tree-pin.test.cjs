@@ -354,6 +354,34 @@ function assertInstalledTreeHash(hit, expected) {
   );
 }
 
+// Rewrite only the 64-hex hash whose PIN_PATTERN match on hit.line starts at
+// hit.column. A first-occurrence String.replace(hash) rewrites a published-asset
+// pin when that role and fresh-build share a digest after a release.
+function rewritePinAtSite(text, hit, replacement) {
+  assert.match(replacement, /^[0-9a-f]{64}$/);
+  const lines = text.split("\n");
+  assert.ok(hit.line >= 1 && hit.line <= lines.length, `${hit.file}:${hit.line} is outside the page`);
+  const line = lines[hit.line - 1];
+  const crlf = line.endsWith("\r");
+  const body = crlf ? line.slice(0, -1) : line;
+  const pattern = new RegExp(PIN_PATTERN.source, "g");
+  let match;
+  while ((match = pattern.exec(body)) !== null) {
+    if (match.index + 1 !== hit.column) continue;
+    const hash = match[1] || match[2];
+    assert.equal(
+      hash,
+      hit.hash,
+      `${hit.file}:${hit.line}:${hit.column} quotes ${hash}, population has ${hit.hash}`,
+    );
+    const hashAt = match.index + match[0].length - hash.length;
+    const next = `${body.slice(0, hashAt)}${replacement}${body.slice(hashAt + hash.length)}`;
+    lines[hit.line - 1] = crlf ? `${next}\r` : next;
+    return lines.join("\n");
+  }
+  assert.fail(`population site ${hit.file}:${hit.line}:${hit.column} ${hit.kind} ${hit.role} is not on that line`);
+}
+
 test("declared installed-tree sites found by git grep match built artifacts", (t) => {
   const { out, built, identity } = buildDist();
   t.after(() => removeScratch(out));
@@ -413,8 +441,10 @@ test("record streams leave the independent population while stale documentation 
   t.after(() => removeScratch(built.out));
   const expected = externalTreeSha256FromArtifact(namedArtifact(built.out, built.built.stdout));
   assertInstalledTreeHash(fresh, expected);
-  fs.writeFileSync(page, text.replace(fresh.hash, "0".repeat(64)));
-  assert.throws(() => assertInstalledTreeHash(externalPinPopulation(root).find((hit) => hit.role === "fresh-build"), expected), /installed-tree hash mismatch/);
+  fs.writeFileSync(page, rewritePinAtSite(text, fresh, "0".repeat(64)));
+  const afterTamper = externalPinPopulation(root);
+  const tampered = afterTamper.find((hit) => hit.file === fresh.file && hit.line === fresh.line && hit.column === fresh.column);
+  assert.throws(() => assertInstalledTreeHash(tampered, expected), /installed-tree hash mismatch/);
   fs.writeFileSync(page, text);
   assertInstalledTreeHash(externalPinPopulation(root).find((hit) => hit.role === "fresh-build"), expected);
 
