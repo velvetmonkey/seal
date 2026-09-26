@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// Case-folded keys and re-serialized forwarding through the installed
-// `seal __proxy`. The protected server is a fake that appends every line it
-// receives, byte for byte, to its own log; "the child received" is always read
-// from that log, never inferred from proxy output.
+// Case-folded keys and re-serialized forwarding through the installed proxy
+// CLI (`__proxy --protect-state`). The protected server is a fake that appends
+// every line it receives, byte for byte, to its own log; "the child received"
+// is always read from that log, never inferred from proxy output.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");

@@ -70,9 +70,9 @@ const isPlainObject = (value) => value !== null && typeof value === "object" && 
 // The request id is never re-spelled; everything else in a forwarded
 // tools/call is rebuilt from the parsed, allowlisted fields. The client's raw
 // bytes, unknown envelope members and unknown params members never reach the
-// child. `_meta` (for example a progressToken) is kept only for a tool Seal
-// does not guard; a guarded tool's call carries only the name and arguments
-// that the approval or the kernel judged.
+// child. `_meta` (for example a progressToken) is kept only for tools outside
+// the selected set; for a selected tool only the name and arguments that the
+// approval or the kernel judged are forwarded.
 function toolsCallLine(frame, { keepMeta }) {
   const params = { name: frame.params.name };
   if (Object.hasOwn(frame.params, "arguments")) params.arguments = frame.params.arguments;
