@@ -1907,12 +1907,13 @@ for (const [label, token] of [['string', '"9007199254740993"'], ['small', '42']]
   });
 }
 
-test('reqident control unguarded line is byte-identical', async t => {
+test('reqident control unguarded line is re-serialized with its exact identity', async t => {
   const h = await identityHarness(t);
-  const line = '  ' + h.call('9007199254740993', {line:'unguarded'}, 'other.tool') + '  ';
+  const line = '  ' + h.call('9007199254740993', {line:'unguarded'}, 'other.tool')
+    .replace('"method"', '"extra":1,"method"') + '  ';
   h.proxy.write(line);
   await h.fence();
-  assert.deepEqual(h.rawCalls(), [line]);
+  assert.deepEqual(h.rawCalls(), [h.call('9007199254740993', {line:'unguarded'}, 'other.tool')]);
 });
 
 for (const reverse of [false, true]) test(`reqident control argument binding, reverse acceptance ${reverse}`, async t => {
