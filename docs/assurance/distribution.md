@@ -30,12 +30,12 @@ Copy the whole POSIX command, including its backslashes and `&&` operators.
 A failed comparison skips both `chmod` and execution.
 
 ```bash
-SEAL_VERSION=v0.5.1
-artifact_name="seal-v0.5.1-linux-x64" \
-&& artifact_sha256="f69b97677b131ff2df26d4a8af04ddf1f6d511c86445d83d44b98d9365361b78" \
-&& artifact_bytes=6363710 \
+SEAL_VERSION=v0.5.2
+artifact_name="seal-v0.5.2-linux-x64" \
+&& artifact_sha256="693c901376f4f1d4f6584fc106fea301d3707d78f698bc905ec87221a8714f52" \
+&& artifact_bytes=6370451 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="ca8660caf11faccb149a4e5e685181fbf90d902eaa65420b003cd2042d663008" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -78,7 +78,7 @@ no JavaScript authorization fallback. Each kernel worker invocation has a
 guarded call refuses as `kernel_execution_refused` and does not fall back to
 Node authorization.
 The current install payload includes `seal-receipt-v2.mjs`. Download the sibling
-[`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.5.1/seal-receipt-v2.mjs)
+[`seal-receipt-v2.mjs` release asset](https://github.com/velvetmonkey/seal/releases/download/v0.5.2/seal-receipt-v2.mjs)
 to verify its digest against the `SHA256SUMS` asset attached to that same release.
 The sibling is not standalone: it imports the kernel decision runner from the
 Seal tree. Run `node checker/seal-receipt-v2.mjs RECEIPT` from the installed

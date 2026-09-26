@@ -192,6 +192,14 @@ stopped — for the guarded tool and everything else on that server. `seal
 status` will show `DRIFTED`; the ways out are on
 [the status page](what-is-protected-right-now.md#drifted).
 
+### `project_server_malformed`
+
+The protected server's `.mcp.json` entry can no longer be read as a valid
+launch configuration. The refusal includes the specific reason, such as an
+`args` member that is not a string. Seal does not forward the call or record
+this as drift. Fix the file, stop the current Claude Code session, then
+unprotect and protect the server again.
+
 ### `state_absent`
 
 The recorded protection state file disappeared while the wrapper was
@@ -222,7 +230,8 @@ does.
 
 A defensive fallback: a pre-forward check refused without naming a token.
 The shipped checks always name one (`project_server_drifted`,
-`state_absent`), so meeting this token would itself be worth reporting.
+`project_server_malformed`, `state_absent`), so meeting this token would
+itself be worth reporting.
 
 ### `key_case_fold_collision`
 
@@ -269,8 +278,9 @@ gave. Run in the project directory, and spell the server exactly as
 ### `project_server_invalid`
 
 `.mcp.json` exists but could not be used: not valid JSON, or the named
-server entry is malformed (a non-array `args`, a non-object `env`, a missing
-command). The message names the specific problem; fix the file.
+server entry is malformed (a non-array `args`, a non-object `env`, a non-string
+`cwd`, or a missing command). The message names the specific problem; fix the
+file.
 
 ### `project_environment_missing`
 
