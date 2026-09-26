@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "test": "node -e \"console.error('Run the complete product suite: bash scripts/' + 'run-complete-product-suite.sh'); process.exit(1)\" --",
     "check-installed-tree-pin-manifest-review": "node scripts/check-installed-tree-pin-manifest-review.cjs",
     "prepack": "node scripts/prepack.cjs",
     "sync-installed-tree-pin": "node scripts/sync-installed-tree-pin.cjs"
