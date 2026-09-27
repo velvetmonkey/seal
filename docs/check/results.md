@@ -20,3 +20,5 @@ The kit's verification process uses exits 0 (pass), 1 (failed check), 2 (usage),
 Previous: [From a Seal demo to the browser](from-seal.md).
 Up: [Check receipts](README.md).
 Next: [Receipt formats and compatibility](formats.md).
+
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

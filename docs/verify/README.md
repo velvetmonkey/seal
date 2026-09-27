@@ -66,3 +66,5 @@ common code, not independent confirmation. See
 Previous: [Current guarantees and limits](../assurance/current-scope.md).
 Up: [Documentation map](../README.md).
 Next: [Browser receipt checks](browser.md).
+
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

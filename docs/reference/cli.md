@@ -169,3 +169,5 @@ uncaught-exception handler. Neither meaning is this command's kernel-integrity
 class.
 
 Up: [Reference](README.md).
+
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

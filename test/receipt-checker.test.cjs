@@ -322,3 +322,36 @@ test("packaged seal_verify drains EOF and refuses missing or changed runtime as 
   assert.equal(result.code, "runtime_unavailable");
   assert.match(result.message, /absent/);
 });
+
+const signedMainOutput = [
+  "Document structure       VALID", "Signature and bindings   VALID",
+  "Verifier-local verdict   REPRODUCED", "Authority key            UNPINNED / CALLER-SUPPLIED",
+  "Event occurrence         NOT ESTABLISHED", "                         ------------------",
+  "READ      available", "VALIDATE  available", "REPLAY    available", "VERIFY    UNVERIFIED", "",
+].join("\n");
+for (const [label, command] of [["seal verify", [SEAL, "verify"]], ["standalone checker", [CHECKER]]]) {
+  for (const [kind, code] of [["signature", "signature_absent"], ["key", "public_key_absent"]]) {
+    test(`refuseline ${label} names absent ${kind}`, () => {
+      const real = makeRealReceipt();
+      const receipt = kind === "signature"
+        ? writeMutation(real, "unsigned.json", (body) => { delete body.signature; }) : real.receipt;
+      const args = [...command, receipt];
+      if (kind === "signature") args.push("--pubkey", real.publicKey);
+      const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      const lines = result.stdout.split("\n").filter((line) => /^REFUSE [a-z_]+: /.test(line));
+      assert.equal(lines.length, 1, "unsigned or keyless receipt must print exactly one REFUSE line");
+      assert.match(lines[0], new RegExp(`^REFUSE ${code}: .+`), "REFUSE must name the missing signature or public key");
+      assert.match(result.stdout, /VERIFY    UNVERIFIED\nREFUSE /);
+      assert.equal(result.stderr, "");
+    });
+  }
+  test(`refuseline ${label} preserves signed main output byte for byte`, () => {
+    const real = makeRealReceipt();
+    const result = spawnSync(process.execPath, [...command, real.receipt, "--pubkey", real.publicKey], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(result.stdout, signedMainOutput);
+    assert.equal(result.stderr, "");
+    assert.doesNotMatch(result.stdout, /^REFUSE /m);
+  });
+}

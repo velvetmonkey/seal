@@ -46,6 +46,7 @@ READ      available
 VALIDATE  available
 REPLAY    available
 VERIFY    UNVERIFIED
+REFUSE signature_absent: receipt has no signature
 ```
 
 The five rows are independent: structure, signature and bindings, Verifier-local
@@ -67,3 +68,5 @@ four operational verbs and the trust ceiling of the shipped verifier.
 Previous: [Reference](README.md).
 Up: [Reference](README.md).
 Next: [Multi-tool semantics](multi-tool-semantics.md).
+
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

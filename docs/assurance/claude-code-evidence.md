@@ -467,3 +467,5 @@ this page's status row together.
 Previous: [Version identity](version-identity.md).
 Up: [Assurance](README.md).
 Next: [Current guarantees and limits](current-scope.md).
+
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

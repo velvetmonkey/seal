@@ -251,7 +251,7 @@ printed command, `SEAL_DEMO_DIR` to the printed temporary demo directory, and
 $ (cd "$SEAL_STORE" && node checker/seal-receipt-v2.mjs "$SEAL_BLOCK_RECEIPT" --pubkey "$(cat "$SEAL_DEMO_DIR/receipt-signer.pub")")
 ```
 
-A missing or invalid signature, or no supplied verification key, makes the checker exit 1.
+A receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1. An invalid signature also makes the checker exit 1.
 The checker exits 0 and prints:
 
 ```output
