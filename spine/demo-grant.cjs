@@ -71,7 +71,9 @@ function policy(g, config) {
   return { key, publicKey };
 }
 function scope(key, config) {
-  if (!key.audiences?.includes(config.audience) || !key.profiles?.includes(PROFILE) || !key.tools?.includes('demo.mutate')) fail('issuer_scope_refused');
+  for (const [members, required] of [[key.audiences, config.audience], [key.profiles, PROFILE], [key.tools, 'demo.mutate']]) {
+    if (!Array.isArray(members) || !members.every(member => typeof member === 'string') || !members.includes(required)) fail('issuer_scope_refused');
+  }
 }
 function time(g, interval) {
   const { L, U } = interval;

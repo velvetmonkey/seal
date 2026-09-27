@@ -145,3 +145,42 @@ test('single-user demonstration: replacing enrolled key bytes after spend preven
  assert.equal(s.count(),0);assert.equal(s.bytes(),'preserve-existing\n');
  assert.equal(fs.readdirSync(s.file+'.spends').length,2);
 });
+
+// Malformed enrollment must fail closed at both authorization boundaries.
+for(const [field,required] of [['audiences',fixture.audience],['profiles',v.PROFILE],['tools','demo.mutate']]) {
+ for(const [kind,value] of [
+  ['substring string','wrong-prefix-'+required+'-wrong-suffix'],
+  ['number',42],['object',{}],['null',null],['missing',undefined],
+  ['non-string member',[required,42]],['near array',['x-'+required]]]) {
+  test(`single-user demonstration: malformed scope ${field} ${kind}`,t=>{
+   const s=setup(t),before=s.bytes();s.config.keys[0][field]=value;s.save();
+   assert.equal(s.target.call(params(valid)).code,'issuer_scope_refused');
+   assert.equal(s.count(),0);assert.equal(s.bytes(),before);
+  });
+ }
+ test(`single-user demonstration: scope recheck ${field} string before effect`,t=>{
+  const s=setup(t),before=s.bytes();const original=fs.fsyncSync;
+  t.mock.method(fs,'fsyncSync',fd=>{
+   original(fd);
+   if(fs.fstatSync(fd).isDirectory()) {
+    s.config.keys[0][field]='wrong-prefix-'+required+'-wrong-suffix';s.save();
+   }
+  });
+  assert.equal(s.target.call(params(valid)).code,'consumed_not_started');t.mock.restoreAll();
+  assert.equal(s.count(),0);assert.equal(s.bytes(),before);
+  assert.throws(()=>v.recheck(v.verify(params(valid),{...s.config,keys:[{...s.config.keys[0],[field]:[required]}]},{L:valid.now,U:valid.now}),s.config,{L:valid.now,U:valid.now}),e=>e.code==='issuer_scope_refused');
+ });
+}
+test('single-user demonstration: unrelated malformed enrollment does not replace matched key scope',t=>{
+ const s=setup(t);s.config.keys.unshift({id:'unrelated',key_id:'unrelated',audiences:null,profiles:42,tools:'demo.mutate'});s.save();
+ assert.equal(s.target.call(params(valid)).code,'ALLOW');assert.equal(s.count(),1);
+ assert.equal(s.bytes(),'preserve-existing\n'+valid.effect.arguments.line+'\n');
+});
+test('single-user demonstration: corrected enrollment fresh grant allows once after refusal',t=>{
+ const s=setup(t),before=s.bytes();s.config.keys[0].tools='wrong-prefix-demo.mutate-wrong-suffix';s.save();
+ assert.equal(s.target.call(params(valid)).code,'issuer_scope_refused');assert.equal(s.count(),0);assert.equal(s.bytes(),before);
+ s.config.keys[0].tools=['demo.mutate'];s.save();
+ assert.equal(s.target.call(params(valid)).code,'ALLOW');assert.equal(s.count(),1);
+ assert.equal(s.target.call(params(valid)).code,'already_spent');assert.equal(s.count(),1);
+ assert.equal(s.bytes(),before+valid.effect.arguments.line+'\n');
+});
