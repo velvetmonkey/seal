@@ -38,6 +38,26 @@ const CLIENT_FORM_ELICITATION_UNSUPPORTED = "client_form_elicitation_unsupported
 const KEY_CASE_FOLD_COLLISION = "key_case_fold_collision";
 const CASE_VARIANT_NAME = "case_variant_name";
 const NUMBER_NOT_REPRESENTABLE = "number_not_representable";
+const METHOD_NOT_ALLOWED = "method_not_allowed";
+// The only client-to-server methods the proxy forwards. A frame that carries a
+// method is forwarded only when that method is byte-equal to one entry; any
+// other method, including case variants, look-alikes and non-strings, is
+// refused as method_not_allowed. Each entry names why it is needed.
+const FORWARDED_METHODS = Object.freeze([
+  "initialize", // MCP lifecycle; the initialize branch below reads client capabilities
+  "notifications/initialized", // MCP lifecycle; sent by clients after initialize (test/receipt-checker.test.cjs)
+  "ping", // MCP ping utility; the fences in test/spine-retry.test.cjs and test/key-fold-forwarding.test.cjs
+  "tools/list", // Claude Code tool discovery; test-support/tool-list-server.cjs
+  "tools/call", // the guarded path; test/approval-contract.test.cjs, test/key-fold-forwarding.test.cjs
+  "notifications/cancelled", // cancelPendingRequest below; the reqident cancellation tests in test/spine-retry.test.cjs
+  "resources/list", // Claude Code ListMcpResourcesTool (client listResources call)
+  "resources/read", // Claude Code ReadMcpResourceTool (client readResource call)
+  "prompts/list", // Claude Code MCP prompt commands (client listPrompts call)
+  "prompts/get", // Claude Code MCP prompt commands (client getPrompt call)
+  "completion/complete", // Claude Code argument completion (client complete call with a ref/resource)
+  "notifications/roots/list_changed", // Claude Code sends it to live servers when its roots change
+]);
+const FORWARDED_METHOD_SET = new Set(FORWARDED_METHODS);
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Names a server may match case-insensitively. A client key or method that
@@ -347,11 +367,27 @@ function createProxy(options) {
     onClientLine(request ? withWireId(frame, body) : JSON.stringify(body));
   }
 
+  // A method outside FORWARDED_METHODS: a BLOCK receipt as for every other
+  // refused frame; a request also gets a JSON-RPC "Method not found" error that
+  // names the refusal and echoes the method as a JSON string. A notification
+  // gets no response, because JSON-RPC forbids one.
+  function refuseMethod(frame) {
+    const method = typeof frame.method === "string" ? frame.method : JSON.stringify(frame.method);
+    const detail = `method ${JSON.stringify(method)} is not on the forwarded method allowlist`;
+    emitReceipt("BLOCK", { params: { name: "<method-not-allowed>", arguments: {} } }, { refusal: METHOD_NOT_ALLOWED, detail });
+    if (!Object.hasOwn(frame, "id")) return;
+    const request = typeof frame.id === "string" || typeof frame.id === "number";
+    const body = { jsonrpc: "2.0", id: request ? frame.id : null,
+      error: { code: -32601, message: `seal proxy: ${METHOD_NOT_ALLOWED}: ${detail}`, data: { refusal: METHOD_NOT_ALLOWED, method } } };
+    onClientLine(request ? withWireId(frame, body) : JSON.stringify(body));
+  }
+
   // Refuse a client frame whose keys or names a lenient server could read
   // differently: keys equal under Unicode case folding in the envelope, in
-  // params, or anywhere inside a tools/call's arguments or _meta; and a key,
-  // method or tool name that equals a known or guarded name only under case
-  // folding. Exact duplicates are refused earlier by the JSON scanner.
+  // params, or anywhere inside a tools/call's arguments or _meta; and a key or
+  // tool name that equals a known or guarded name only under case folding.
+  // Exact duplicates are refused earlier by the JSON scanner, and a method
+  // that is not byte-equal to an allowlisted one never reaches this check.
   function envelopeRefusal(frame) {
     const describe = ([first, second], where) => `${where} keys ${JSON.stringify(first)} and ${JSON.stringify(second)} are equal under Unicode case folding`;
     const topCollision = foldCollision(Object.keys(frame));
@@ -359,10 +395,6 @@ function createProxy(options) {
     for (const key of Object.keys(frame)) {
       const known = caseVariantOf(key, ENVELOPE_KEYS);
       if (known) return { refusal: CASE_VARIANT_NAME, detail: `envelope key ${JSON.stringify(key)} equals ${JSON.stringify(known)} only under case folding` };
-    }
-    const methodVariant = caseVariantOf(frame.method, ["tools/call", ...guardedToolNames]);
-    if (methodVariant) {
-      return { refusal: CASE_VARIANT_NAME, detail: `method ${JSON.stringify(frame.method)} equals ${JSON.stringify(methodVariant)} only under case folding` };
     }
     if (!isPlainObject(frame.params)) return null;
     const paramsCollision = foldCollision(Object.keys(frame.params));
@@ -663,6 +695,12 @@ function createProxy(options) {
         if (refuseDuplicateElicitation(frame)) return;
         if (retiredElicitationIds.has(frame.id)) return;
       }
+      // Answers to this proxy's own elicitation requests were handled above.
+      // Every other frame that carries a method must name an allowlisted one.
+      if (Object.hasOwn(frame, "method") && !FORWARDED_METHOD_SET.has(frame.method)) {
+        refuseMethod(frame);
+        return;
+      }
       if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
         && Object.hasOwn(frame.params || {}, "requestId")
         && cancelPendingRequest(frame.params.requestId, requestToken)) return;
@@ -749,4 +787,4 @@ function createProxy(options) {
   };
 }
 
-module.exports = { createProxy, StoreError };
+module.exports = { createProxy, FORWARDED_METHODS, StoreError };

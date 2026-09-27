@@ -30,8 +30,9 @@ installer or a failed external command can have made partial changes first.
 ## While using the protected tool
 
 Minted in `contract/contract.cjs` and `spine/proxy.cjs`; delivered as the
-tool's error result, except `key_case_fold_collision`, `case_variant_name` and
-`number_not_representable`, which arrive as a JSON-RPC error. The first group is the approval contract judging a
+tool's error result, except `method_not_allowed`, `key_case_fold_collision`,
+`case_variant_name` and `number_not_representable`, which arrive as a JSON-RPC
+error. The first group is the approval contract judging a
 retry; unless a token says otherwise, the way to proceed is simply to make a
 fresh call and approve it fresh.
 
@@ -233,6 +234,17 @@ The shipped checks always name one (`project_server_drifted`,
 `project_server_malformed`, `state_absent`), so meeting this token would
 itself be worth reporting.
 
+### `method_not_allowed`
+
+The wrapper forwards to the protected server only the MCP methods on its fixed
+list (`FORWARDED_METHODS` in `spine/proxy.cjs`: the lifecycle, ping, tools,
+resources, prompts and completion methods a client uses) and refuses any other
+method by name with `method_not_allowed`. The match is exact, so `tools/invoke`,
+`TOOLS/CALL`, `tools/call ` with a trailing space, a look-alike character, an
+empty method and a method that is not a string are all refused. A request gets
+a JSON-RPC error naming the method; a notification gets no response. Both write
+a BLOCK receipt, and nothing reaches the server.
+
 ### `key_case_fold_collision`
 
 One object in the message held two keys that are equal under Unicode case
@@ -243,10 +255,10 @@ than the one Seal judged, so nothing was forwarded. Send each key once.
 
 ### `case_variant_name`
 
-A method, envelope key, `tools/call` params key or tool name equals a name
-Seal acts on only under case folding: for example `TOOLS/CALL`, `Method`,
-`Arguments`, or `Write_File` when `write_file` is protected. Nothing was
-forwarded. Use the exact spelling.
+An envelope key, `tools/call` params key or tool name equals a name Seal acts
+on only under case folding: for example `Method`, `Arguments`, or `Write_File`
+when `write_file` is protected. A method spelled that way is refused as
+`method_not_allowed` instead. Nothing was forwarded. Use the exact spelling.
 
 ### `number_not_representable`
 

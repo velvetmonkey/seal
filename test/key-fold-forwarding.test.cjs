@@ -102,10 +102,11 @@ function session(t) {
     await waitFor((frame) => frame.id === id && !frame.method);
   };
   const childCalls = () => fs.readFileSync(childLog, "utf8").split("\n").filter((line) => line.includes("tools/call"));
+  const childFrames = () => fs.readFileSync(childLog, "utf8").split("\n").filter(Boolean);
   const receipts = () => fs.existsSync(receiptsDir)
     ? fs.readdirSync(receiptsDir).sort().map((name) => JSON.parse(fs.readFileSync(path.join(receiptsDir, name), "utf8")))
     : [];
-  return { write, waitFor, fence, childCalls, receipts, frames, lineCount: () => lines.length };
+  return { write, waitFor, fence, childCalls, childFrames, receipts, frames, lineCount: () => lines.length };
 }
 
 async function started(t) {
@@ -186,8 +187,8 @@ test("case-variant methods, envelope keys, params keys and tool names are refuse
   const call = (id, extra) => JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call",
     params: { name: "write_file", arguments: { path: "/prod/db" } }, ...extra });
   const cases = [
-    [10, call(10, { method: "TOOLS/CALL" }), "case_variant_name", /method "TOOLS\/CALL" equals "tools\/call"/],
-    [11, call(11, { method: "Tools/Call" }), "case_variant_name", /method "Tools\/Call"/],
+    [10, call(10, { method: "TOOLS/CALL" }), "method_not_allowed", /method "TOOLS\/CALL" is not on the forwarded method allowlist/],
+    [11, call(11, { method: "Tools/Call" }), "method_not_allowed", /method "Tools\/Call" is not on the forwarded method allowlist/],
     [null, '{"jsonrpc":"2.0","id":12,"Method":"tools/call","params":{"name":"write_file","arguments":{"path":"/prod/db"}}}', "case_variant_name", /envelope key "Method" equals "method"/],
     [13, '{"jsonrpc":"2.0","id":13,"method":"ping","Method":"tools/call","params":{"name":"write_file","arguments":{"path":"/prod/db"}}}', "key_case_fold_collision", /envelope keys "method" and "Method"/],
     [14, '{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"Write_File","arguments":{"path":"/prod/db"}}}', "case_variant_name", /tool name "Write_File" equals guarded tool "write_file"/],
@@ -238,4 +239,85 @@ test("a number whose value would change on re-serialization is refused, not rewr
   assert.deepEqual(s.childCalls(), [
     '{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"other.tool","arguments":{"n":9007199254740992,"f":0.1}}}',
   ]);
+});
+
+// --- method allowlist --------------------------------------------------------
+// Every client frame that carries a method is forwarded only when the method is
+// byte-equal to an allowlisted MCP method. The child's own log is the evidence:
+// after a refused frame and a ping fence, the only new child frame is the ping.
+
+async function assertRefusedMethod(s, method, id) {
+  await s.fence();
+  const before = s.childFrames().length;
+  const receiptsBefore = s.receipts().length;
+  const frame = { jsonrpc: "2.0", ...(id === undefined ? {} : { id }), method,
+    params: { name: "write_file", arguments: { path: "/prod/db" } } };
+  const clientBefore = s.lineCount();
+  s.write(JSON.stringify(frame));
+  await s.fence();
+  const received = s.childFrames().slice(before);
+  assert.equal(received.length, 1, `child received the refused ${JSON.stringify(method)} frame: ${received.join("\n")}`);
+  assert.equal(JSON.parse(received[0]).method, "ping", received[0]);
+  const replies = s.frames(clientBefore).filter((reply) => !String(reply.id).startsWith("fence-"));
+  if (id === undefined) {
+    assert.deepEqual(replies, [], "a refused notification gets no response");
+  } else {
+    assert.equal(replies.length, 1, JSON.stringify(replies));
+    assert.equal(replies[0].id, id);
+    assert.equal(replies[0].error?.code, -32601, JSON.stringify(replies[0]));
+    assert.equal(replies[0].error.data.refusal, "method_not_allowed");
+    assert.equal(replies[0].error.data.method, typeof method === "string" ? method : JSON.stringify(method));
+    assert.ok(replies[0].error.message.includes(JSON.stringify(typeof method === "string" ? method : JSON.stringify(method))),
+      replies[0].error.message);
+  }
+  const written = s.receipts().slice(receiptsBefore);
+  assert.equal(written.length, 1, "one BLOCK receipt per refused frame");
+  assert.equal(written[0].action, "BLOCK");
+}
+
+test("tools/invoke write_file never reaches the child", async (t) => {
+  const s = await started(t);
+  await assertRefusedMethod(s, "tools/invoke", 40);
+  await assertRefusedMethod(s, "tools/invoke");
+});
+
+test("case variants, look-alikes and non-string methods are refused by name", async (t) => {
+  const s = await started(t);
+  const methods = [
+    "Tools/call", "TOOLS/CALL", "tools/Call", "tools/call ", " tools/call", "tools/call\u0000",
+    "tools\u2215call", "tools\u2044call", "tools\uff0fcall", "t\u043eols/call", "tools/ca\u217cl",
+    "", 42, null, true, {}, ["tools/call"],
+  ];
+  let id = 50;
+  for (const method of methods) await assertRefusedMethod(s, method, id++);
+  await assertRefusedMethod(s, "TOOLS/CALL");
+  // The session stays usable: tools/call still reaches the guard, and an
+  // unguarded tool still forwards.
+  s.write('{"jsonrpc":"2.0","id":80,"method":"tools/call","params":{"name":"write_file","arguments":{"path":"/prod/db"}}}');
+  await s.waitFor((frame) => frame.method === "elicitation/create");
+  s.write('{"jsonrpc":"2.0","id":81,"method":"tools/call","params":{"name":"other.tool","arguments":{"q":1}}}');
+  await s.waitFor((frame) => frame.id === 81 && frame.result);
+  await s.fence();
+  assert.deepEqual(s.childCalls(), ['{"jsonrpc":"2.0","id":81,"method":"tools/call","params":{"name":"other.tool","arguments":{"q":1}}}']);
+});
+
+test("every allowlisted method reaches the child byte-for-byte or re-serialized", async (t) => {
+  const { FORWARDED_METHODS } = require("../spine/proxy.cjs");
+  assert.ok(Array.isArray(FORWARDED_METHODS) && Object.isFrozen(FORWARDED_METHODS));
+  const s = await started(t);
+  let id = 90;
+  for (const method of FORWARDED_METHODS) {
+    if (method === "initialize" || method === "tools/call") continue; // exercised above
+    await s.fence();
+    const before = s.childFrames().length;
+    const notification = method.startsWith("notifications/");
+    const frame = notification
+      ? { jsonrpc: "2.0", method, params: method === "notifications/cancelled" ? { requestId: "none" } : {} }
+      : { jsonrpc: "2.0", id: id++, method, params: {} };
+    s.write(JSON.stringify(frame));
+    await s.fence();
+    const received = s.childFrames().slice(before);
+    assert.equal(received.length, 2, `${method}: ${received.join("\n")}`);
+    assert.deepEqual(JSON.parse(received[0]), frame, method);
+  }
 });

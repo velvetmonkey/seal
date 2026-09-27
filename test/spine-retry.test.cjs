@@ -1825,7 +1825,7 @@ async function harness(t, observeMaps = false, childRequestId = null, capacity =
   const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
     receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: capacity,
     onChildExit(code, signal) { exited({code, signal, sizes: maps.map(m => m.size), timers: timers.size}); },
-    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='test/exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
+    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='tools/call'&&f.params&&f.params.name==='test.exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
     onClientLine(line) { frames.push(JSON.parse(line)); },
   });
   t.after(() => proxy.stop());
@@ -1985,7 +1985,8 @@ test('cancelbind child exit clears pending timers and correlations before callba
   await h.begin(3);
   assert.deepEqual(h.maps.map(m => m.size), [2, 2, 1]);
   assert.equal(h.timers.size, 2);
-  h.send({jsonrpc:'2.0', method:'test/exit'});
+  // The child exit control rides an allowlisted, unguarded tools/call.
+  h.send({jsonrpc:'2.0', id:'test-exit', method:'tools/call', params:{name:'test.exit', arguments:{}}});
   const exit = await h.exit;
   t.diagnostic(JSON.stringify(exit));
   assert.equal(exit.code, 7);
