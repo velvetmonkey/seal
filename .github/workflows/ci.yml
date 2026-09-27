@@ -133,6 +133,8 @@ jobs:
           else
             sudo ln -s "$selected_node" /usr/bin/node
           fi
+      # The driver compares temporary directories after every test has run;
+      # both Node versions exercise the leak check without a second full suite.
       - name: Run and count the complete product suite
         shell: bash
         run: scripts/run-complete-product-suite.sh
