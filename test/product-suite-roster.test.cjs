@@ -9,6 +9,15 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = resolve(__dirname, "..");
 const DRIVER = join(ROOT, "scripts", "run-complete-product-suite.sh");
 const CRITICAL_MANIFEST = join(ROOT, "scripts", "critical-property-manifest.tsv");
+const TEST_GUIDANCE = /Run the complete product suite: bash scripts\/run-complete-product-suite\.sh/;
+
+test("npm test keeps its portable next step when Node flags are forwarded", () => {
+  for (const args of [[], ["--help"], ["--version"], ["--check"]]) {
+    const result = spawnSync("npm", ["test", "--", ...args], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(result.status, 1, `npm test -- ${args.join(" ")} exited ${result.status}`);
+    assert.match(result.stderr, TEST_GUIDANCE, `npm test -- ${args.join(" ")} omitted guidance`);
+  }
+});
 
 function fixture() {
   const root = testTmpdir(join(tmpdir(), "seal-product-suite-roster-"));
