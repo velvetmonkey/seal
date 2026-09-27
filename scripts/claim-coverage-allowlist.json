@@ -1,6 +1,9 @@
 {
   "version": 1,
   "uncovered": [
+    "seal/docs/ARCHITECTURE.md",
+    "seal/docs/CLAIMS-MATRIX.md",
+    "seal/docs/EVALUATOR-START.md",
     "seal/README.md",
     "seal/docs/assurance/claude-code-evidence.md",
     "seal/docs/assurance/distribution.md",
