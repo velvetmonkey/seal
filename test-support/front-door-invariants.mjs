@@ -41,3 +41,17 @@ export function checkDocsRouteTable(document) {
     throw new Error("docs/README.md must contain only the heading, the route table, and the Start link");
   }
 }
+
+// Compare whole stdout lines; only explicitly documented placeholders vary.
+export function checkReadmeDemoOutput(readme, stdout, demoDir) {
+  const section = readme.split("## What you should see\n")[1]?.split("\n## ")[0];
+  const fences = [...(section ?? "").matchAll(/```text\n([\s\S]*?)\n```/g)];
+  if (fences.length === 0) throw new Error("README demo output fence absent");
+  const normalize = (text) => text.replaceAll(demoDir, "<demo-dir>")
+    .replaceAll(/receipt-\d+-\d+-\d+-(INPUT_REQUIRED|ALLOW|BLOCK)\.json/g, "receipt-<id>-$1.json");
+  const observed = new Set(normalize(stdout).split("\n"));
+  const lines = fences.flatMap((match) => match[1].split("\n"));
+  if (lines.some((line) => line.length === 0)) throw new Error("README demo output fence contains an empty line");
+  const missing = lines.filter((line) => !observed.has(normalize(line)));
+  if (missing.length) throw new Error(`README demo output: ${missing.length} of ${lines.length} lines absent from real stdout:\n${missing.join("\n")}`);
+}
