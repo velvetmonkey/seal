@@ -758,6 +758,9 @@ test('protect launcher hint handles source, invalid paths and a symlinked prefix
 test('installed lock recovery: SIGKILL owner, printed command, protect and launcher startup recover', async () => {
   const { spawn } = require('node:child_process');
   const box = uninstallBox("prefix space ' quote");
+  const projectConfig = JSON.parse(fs.readFileSync(path.join(box.project, '.mcp.json')));
+  projectConfig.mcpServers.recovery = projectConfig.mcpServers.warehouse;
+  fs.writeFileSync(path.join(box.project, '.mcp.json'), JSON.stringify(projectConfig));
   const lockPath = path.join(box.prefix, 'lib/seal/lifecycle.lock');
   const modulePath = path.join(box.prefix, box.record().store, 'spine/uninstall.cjs');
   const holder = spawn(process.execPath, ['-e', `require(${JSON.stringify(modulePath)}).installLock(); console.log('locked'); setInterval(()=>{},1000)`],
@@ -773,7 +776,7 @@ test('installed lock recovery: SIGKILL owner, printed command, protect and launc
     await exited;
     const owner = fs.readFileSync(lockPath);
     const state = fs.readFileSync(box.statePath);
-    const protect = box.invoke(['protect', 'warehouse', 'inspect']);
+    const protect = box.invoke(['protect', 'recovery', 'inspect']);
     const startup = box.invoke(['__proxy', '--protect-state', box.statePath]);
     for (const [operation, result] of [['protect', protect], ['startup', startup]]) {
       assert.equal(result.code, 1, result.out);
@@ -788,13 +791,18 @@ test('installed lock recovery: SIGKILL owner, printed command, protect and launc
     const removed = spawnSync('/bin/sh', ['-c', command], { env: box.env, encoding: 'utf8' });
     assert.equal(removed.status, 0, removed.stderr);
     assert.equal(fs.existsSync(lockPath), false);
-    const recovered = box.invoke(['protect', 'warehouse', 'inspect']);
+    const recovered = box.invoke(['protect', 'recovery', 'inspect']);
     assert.equal(recovered.code, 0, recovered.out);
-    const session = installedSession(box, box.statePath);
-    try { await session.initialize(); } finally { await session.stop(); }
-    const status = box.invoke(['status']);
-    assert.equal(status.code, 0, status.out);
-    assert.match(status.out, /PROTECTED/i);
+    const protection = require(path.join(box.prefix, box.record().store, 'spine/protection.cjs'));
+    const recoveredState = protection.statePathFor(box.project, box.env, 'recovery');
+    const session = installedSession(box, recoveredState);
+    try {
+      await session.initialize();
+      const status = box.invoke(['status']);
+      assert.equal(status.code, 0, status.out);
+      assert.match(status.out, /Sealed MCP route recovery: LEASE ACTIVE/);
+      assert.match(status.out, /BROKERED — Local MCP entry "recovery"/);
+    } finally { await session.stop(); }
     const stateB = secondInstalledRoute(box);
     const entry = JSON.parse(fs.readFileSync(box.config)).projects[box.project].mcpServers.second;
     const client = installedSession(box, stateB, entry);
@@ -807,13 +815,16 @@ test('installed lock recovery: SIGKILL owner, printed command, protect and launc
 test('installed lock recovery: invalid owner printed command recovers and live owner has no removal command', () => {
   const box = uninstallBox();
   const lifecycle = require(path.join(box.prefix, box.record().store, 'spine/uninstall.cjs'));
+  const projectConfig = JSON.parse(fs.readFileSync(path.join(box.project, '.mcp.json')));
+  projectConfig.mcpServers.recovery = projectConfig.mcpServers.warehouse;
+  fs.writeFileSync(path.join(box.project, '.mcp.json'), JSON.stringify(projectConfig));
   const lockPath = path.join(box.prefix, 'lib/seal/lifecycle.lock');
   const state = fs.readFileSync(box.statePath);
   const lock = lifecycle.installLock();
   try {
     const owner = fs.readFileSync(lockPath);
     assert.throws(() => lifecycle.installLock(undefined, 'protect'), error => error.code === 'installation_lock_active');
-    const refused = box.invoke(['protect', 'warehouse', 'inspect']);
+    const refused = box.invoke(['protect', 'recovery', 'inspect']);
     assert.equal(refused.code, 1, refused.out);
     assert.match(refused.out, /protect refused: installation lock held by pid/);
     assert.doesNotMatch(refused.out, /Recovery command:|rm --/);
@@ -821,13 +832,13 @@ test('installed lock recovery: invalid owner printed command recovers and live o
     assert.deepEqual(fs.readFileSync(box.statePath), state);
   } finally { lock.release(); }
   fs.writeFileSync(lockPath, JSON.stringify({ pid: -1, startWitness: 'invalid' }));
-  const refused = box.invoke(['protect', 'warehouse', 'inspect']);
+  const refused = box.invoke(['protect', 'recovery', 'inspect']);
   assert.equal(refused.code, 1, refused.out);
   assert.match(refused.out, /invalid owner record/);
   const command = refused.out.match(/^Recovery command: (.+)$/m)?.[1];
   assert.ok(command, refused.out);
   const removed = spawnSync('/bin/sh', ['-c', command], { env: box.env, encoding: 'utf8' });
   assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(box.invoke(['protect', 'warehouse', 'inspect']).code, 0);
+  assert.equal(box.invoke(['protect', 'recovery', 'inspect']).code, 0);
   assert.equal(box.invoke(['uninstall'], { input: 'yes\n' }).code, 0);
 });
