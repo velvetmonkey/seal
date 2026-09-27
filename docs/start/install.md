@@ -179,6 +179,8 @@ Start Claude Code from the `seal-protect-demo` project directory:
 claude
 ```
 
+On the first run, Claude Code may show a theme picker before the session starts.
+
 MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
 asks you to approve the project's MCP server, accept it. Keep Claude Code running
 and open a second terminal in `seal-protect-demo`, then check the route:
@@ -187,8 +189,8 @@ and open a second terminal in `seal-protect-demo`, then check the route:
 PATH="$HOME/.local/bin:$PATH" seal status
 ```
 
-Look for `ACTIVE` on the sealed `db` route before using its tools. If it still
-says `PENDING RESTART`, follow the [troubleshooting guide](../guide/when-something-looks-wrong.md).
+Look for `LEASE ACTIVE` on the sealed `db` route before using its tools. If it still
+says `PENDING RESTART`, follow the [protection state guide](../guide/what-is-protected-right-now.md#pending-restart).
 
 Previous: [Start](README.md).
 Up: [Start](README.md).
