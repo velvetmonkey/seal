@@ -47,6 +47,7 @@ const TOOLS_CALL_PARAMS_KEYS = ["name", "arguments", "_meta"];
 // Session-only transport metadata: never passed to the contract or receipts.
 // Symbols also survive the spread used for duplicate-key refusals.
 const WIRE_ID = Symbol("wire request id");
+const WIRE_PROGRESS = Symbol("wire progress token");
 
 function withWireId(frame, body) {
   const token = frame[WIRE_ID];
@@ -67,17 +68,33 @@ function wireIdentity(token, parsed) {
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
-// The request id is never re-spelled; everything else in a forwarded
-// tools/call is rebuilt from the parsed, allowlisted fields. The client's raw
-// bytes, unknown envelope members and unknown params members never reach the
-// child. `_meta` (for example a progressToken) is kept only for tools outside
-// the selected set; for a selected tool only the name and arguments that the
-// approval or the kernel judged are forwarded.
-function toolsCallLine(frame, { keepMeta }) {
-  const params = { name: frame.params.name };
-  if (Object.hasOwn(frame.params, "arguments")) params.arguments = frame.params.arguments;
-  if (keepMeta && Object.hasOwn(frame.params, "_meta")) params._meta = frame.params._meta;
-  return withWireId(frame, { jsonrpc: "2.0", id: frame.id, method: "tools/call", params });
+// The request id and a numeric progressToken are never re-spelled: both are
+// opaque identities a JavaScript Number could round. Everything else in a
+// forwarded tools/call is rebuilt from the parsed, allowlisted fields. The
+// client's raw bytes, unknown envelope members and unknown params members never
+// reach the child. A tool outside the selected set keeps its whole `_meta`
+// object; a selected tool's call keeps only `_meta.progressToken`, the one
+// metadata member guarded approval supports.
+function toolsCallLine(frame, { meta }) {
+  const base = { name: frame.params.name };
+  if (Object.hasOwn(frame.params, "arguments")) base.arguments = frame.params.arguments;
+  let paramsText = JSON.stringify(base);
+  const source = frame.params._meta;
+  if (Object.hasOwn(frame.params, "_meta") && isPlainObject(source)) {
+    const forwarded = meta === "all" ? { ...source }
+      : Object.hasOwn(source, "progressToken") ? { progressToken: source.progressToken } : {};
+    let metaText;
+    if (typeof forwarded.progressToken === "number" && frame[WIRE_PROGRESS] !== undefined) {
+      const marker = `seal-progress-token-${randomBytes(16).toString("hex")}`;
+      metaText = JSON.stringify({ ...forwarded, progressToken: marker })
+        .replace(JSON.stringify(marker), frame[WIRE_PROGRESS]);
+    } else {
+      metaText = JSON.stringify(forwarded);
+    }
+    paramsText = `${paramsText.slice(0, -1)},"_meta":${metaText}}`;
+  }
+  const envelope = withWireId(frame, { jsonrpc: "2.0", id: frame.id, method: "tools/call" });
+  return `${envelope.slice(0, -1)},"params":${paramsText}}`;
 }
 const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "runtime_tree_unknown",
@@ -416,7 +433,7 @@ function createProxy(options) {
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
-    child.stdin.write(toolsCallLine(frame, { keepMeta: false }) + "\n");
+    child.stdin.write(toolsCallLine(frame, { meta: "progress" }) + "\n");
     return decision;
   }
 
@@ -524,6 +541,32 @@ function createProxy(options) {
       blockForward(frame, "response_malformed", "client-supplied approval continuations are not accepted; answer the elicitation/create request");
       return;
     }
+    // Approval binds the tool and arguments through the contract. Only progress
+    // correlation is supported outside that identity: it cannot add execution
+    // semantics, and stays on this session's saved frame until its answer arrives.
+    // Unknown metadata (including task relationships), task augmentation and
+    // extension fields must be refused before creating any approval.
+    const unsupported = [
+      ...Object.keys(frame).filter((key) => !["jsonrpc", "id", "method", "params"].includes(key)),
+      ...Object.keys(params).filter((key) => !["name", "arguments", "_meta"].includes(key)),
+    ];
+    if (unsupported.length > 0) {
+      blockForward(frame, "request_field_unsupported", `unsupported guarded tools/call field: ${JSON.stringify(unsupported[0])}`);
+      return;
+    }
+    if (Object.hasOwn(params, "_meta")) {
+      const meta = params._meta;
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)
+        || Object.keys(meta).some((key) => key !== "progressToken")) {
+        blockForward(frame, "request_metadata_unsupported", "guarded tools/call metadata supports only progressToken");
+        return;
+      }
+      if (Object.hasOwn(meta, "progressToken") && typeof meta.progressToken !== "string"
+        && typeof meta.progressToken !== "number") {
+        blockForward(frame, "progress_token_unsupported", "progressToken must be a string or a number");
+        return;
+      }
+    }
     if (!clientCapabilities || !Object.hasOwn(clientCapabilities, "elicitation")) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
       return;
@@ -593,8 +636,12 @@ function createProxy(options) {
       try {
         hasDuplicateKeys = jsonHasDuplicateObjectKeys(line, (path, token) => {
           if (path.length === 1 && path[0] === "id") frame[WIRE_ID] = token;
+          const progressPath = path.length === 3 && path[0] === "params" && path[1] === "_meta" && path[2] === "progressToken";
+          if (progressPath) frame[WIRE_PROGRESS] = token;
           if (path.length === 2 && path[0] === "params" && path[1] === "requestId") requestToken = token;
-          if (path[0] === "params" && /^-?\d/.test(token)) paramsNumberTokens.push(token);
+          // A numeric progressToken is forwarded in its original spelling, so
+          // re-serialization cannot change its value.
+          if (path[0] === "params" && !progressPath && /^-?\d/.test(token)) paramsNumberTokens.push(token);
         });
       } catch {
         blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
@@ -644,7 +691,9 @@ function createProxy(options) {
             : "seal proxy: tools/call requires jsonrpc 2.0, a string or number id, and params naming the tool");
           return;
         }
-        if (Object.hasOwn(frame.params, "_meta") && !isPlainObject(frame.params._meta)) {
+        // A guarded call's _meta is judged by the guarded field policy below,
+        // which names its own refusals.
+        if (!guarded && Object.hasOwn(frame.params, "_meta") && !isPlainObject(frame.params._meta)) {
           blockMalformedClientFrame(frame, "seal proxy: tools/call params._meta must be an object when present");
           return;
         }
@@ -657,7 +706,7 @@ function createProxy(options) {
           }
         }
         if (!guarded) {
-          if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { keepMeta: true }) + "\n");
+          if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { meta: "all" }) + "\n");
           return;
         }
         // MCP arguments is optional. Normalize omission on the parsed frame
@@ -685,7 +734,7 @@ function createProxy(options) {
           respond(frame, refusalResult(check.refusal, check.detail, check.timing));
           return;
         }
-        if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { keepMeta: false }) + "\n");
+        if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { meta: "progress" }) + "\n");
         return;
       }
       if (canForward(frame)) child.stdin.write(line + "\n");

@@ -44,7 +44,8 @@ async function verifyReceipt({ receiptPath, pubkeyHex } = {}) {
     return { result, exitCode: result.ok ? 0 : 1, verifier };
   } catch (error) {
     const verificationFailure = new Set([
-      "signature_mismatch", "commitment_mismatch", "verdict_mismatch",
+      "signature_mismatch", "public_key_small_order", "public_key_noncanonical",
+      "commitment_mismatch", "verdict_mismatch",
       "action_verdict_mismatch", "inert_input",
     ]).has(error.code);
     const exitCode = phase === "runtime" || verificationFailure ? 1 : 2;
@@ -106,7 +107,7 @@ function run() {
           return;
         }
         const { result } = await verifyReceipt(frame.params?.arguments || {});
-        respond({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } });
+        respond({ jsonrpc: "2.0", id, result: { isError: !result.ok, content: [{ type: "text", text: JSON.stringify(result) }] } });
         return;
       }
       respond({ jsonrpc: "2.0", id, error: { code: -32601, message: `unknown method: ${frame.method}` } });

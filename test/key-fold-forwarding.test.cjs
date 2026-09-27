@@ -135,8 +135,10 @@ test("the case-folded predicate bypass is refused and the child receives nothing
 
 test("the control line still prompts, and after approval the child receives the re-serialized call", async (t) => {
   const s = await started(t);
-  s.write('{ "jsonrpc":"2.0", "id":2, "method":"tools/call", "x-envelope":1,'
-    + ' "params":{ "name":"write_file", "arguments":{ "path":"\\/prod\\/db", "n":1.0 }, "_meta":{"progressToken":3}, "x-params":2 } }');
+  // Extra envelope and params members on a guarded call are refused before
+  // approval by the guarded field policy (spine-retry "metadata forwarding").
+  s.write('{ "jsonrpc":"2.0", "id":2, "method":"tools/call",'
+    + ' "params":{ "name":"write_file", "arguments":{ "path":"\\/prod\\/db", "n":1.0 }, "_meta":{ "progressToken":3 } } }');
   const prompt = await s.waitFor((frame) => frame.method === "elicitation/create");
   assert.match(prompt.params.message, /path: \/prod\/db/);
   await s.fence();
@@ -145,7 +147,7 @@ test("the control line still prompts, and after approval the child receives the 
   await s.waitFor((frame) => frame.id === 2 && !frame.method);
   await s.fence();
   assert.deepEqual(s.childCalls(), [
-    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"write_file","arguments":{"path":"/prod/db","n":1}}}',
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"write_file","arguments":{"path":"/prod/db","n":1},"_meta":{"progressToken":3}}}',
   ]);
 });
 
@@ -158,7 +160,7 @@ test("a non-matching guarded call reaches the child only as its allowlisted re-s
   assert.deepEqual(reply.result, { content: [{ type: "text", text: "CALLED write_file" }] });
   await s.fence();
   assert.deepEqual(s.childCalls(), [
-    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"write_file","arguments":{"2":2,"path":"/tmp/x","b":1,"note":"café"}}}',
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"write_file","arguments":{"2":2,"path":"/tmp/x","b":1,"note":"café"},"_meta":{"progressToken":"p"}}}',
   ]);
   assert.equal(s.frames().some((frame) => frame.method === "elicitation/create"), false);
 });
