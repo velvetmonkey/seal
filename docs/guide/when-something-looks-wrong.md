@@ -773,5 +773,13 @@ The receipt's signed action says ALLOW, but replaying its recorded kernel inputs
 does not produce ALLOW. The checker refuses the receipt rather than reporting a
 decision the kernel did not make. Preserve the receipt and report the mismatch.
 
+### `signature_absent`
+
+The receipt has no signature; obtain a signed receipt from its producer. The checker and `seal verify` keep the UNVERIFIED table, print `REFUSE signature_absent: receipt has no signature`, and exit 1.
+
+### `public_key_absent`
+
+No usable public key was supplied; pass the separately obtained signer key with `--pubkey` (64 lowercase hexadecimal characters). The checker and `seal verify` keep the UNVERIFIED table, print `REFUSE public_key_absent: no usable public key supplied to check the signature`, and exit 1.
+
 Up: [Guide](README.md).
 Next: [What is protected right now](what-is-protected-right-now.md).
