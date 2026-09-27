@@ -13,7 +13,16 @@ const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
 
 test("README shows the terminal approval capture instead of the process graphic", () => {
   assert.doesNotMatch(readme, /assets\/seal-flow\.svg/);
-  assert.match(readme, /before approval: 0 calls\nafter approval:  1 call\nafter replay:    1 call - refused\noutside Seal:    effect succeeded, 0 Seal decisions/);
+  const capture = readme.split("## What you should see\n")[1].split("\n## ")[0];
+  for (const line of [
+    "child calls observed: 0 (read from <demo-dir>/child/data.txt.count)",
+    "child calls observed: 1 (read from <demo-dir>/child/data.txt.count)",
+    "BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK",
+    "one-use held: the replay did not run the call again; child calls observed: still 1 (read from <demo-dir>/child/data.txt.count)",
+    "File changed: yes",
+    "Protected-server call count: still 1",
+    "New Seal decisions: 0",
+  ]) assert.ok(capture.includes(line), `README missing demo observation: ${line}`);
 });
 
 test("renderer reproduces the committed SVG bytes", () => {
