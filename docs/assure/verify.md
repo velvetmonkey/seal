@@ -31,8 +31,8 @@ VERIFY    UNVERIFIED
 
 These outputs can coexist: the tools report different scopes. Keep the original result language when recording evidence. For a portable first run with no user data, use [the bundled sample](start.md). See [format support](../check/formats.md), especially the pinned revisions' decimal gap, before interpreting a refusal.
 
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+
 Previous: [First assurance check](start.md).
 Up: [Assurance CLI](README.md).
 Next: [Scan policy coverage](scan.md).
-
-For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.

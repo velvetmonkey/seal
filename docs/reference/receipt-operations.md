@@ -65,8 +65,8 @@ The normative envelope and canonicalisation rules remain in
 [SEAL-RECEIPT-V2.md](../SEAL-RECEIPT-V2.md). This page owns the meaning of the
 four operational verbs and the trust ceiling of the shipped verifier.
 
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+
 Previous: [Reference](README.md).
 Up: [Reference](README.md).
 Next: [Multi-tool semantics](multi-tool-semantics.md).
-
-For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
