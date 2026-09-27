@@ -60,6 +60,7 @@ const outsideClaims = text => text.replace(generatedRegion, '\n\n')
 // the full suite; limits remain explicit instead of claiming a local proof.
 const outsideReviews = {
   'docs/start/install.md': [
+    ['44', 'docs/check-links.py: same-page Start Protect anchor; onboarding steps reviewed below', 'Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.'],
     ['38', 'README onboarding check and existing Protect recipe; ACTIVE remains unverified without login', 'Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set) to install Claude Code, create `seal-protect-demo`, and run `seal protect`.'],
     ['39', 'Claude Code 2.1.283 --help: starts an interactive session by default; no session started by this check', 'Start Claude Code from the `seal-protect-demo` project directory:'],
     ['40', 'test/readme-protect-state-witness.test.cjs: status inspects the live route; instruction keeps that session running', 'Keep Claude Code running and open a second terminal in `seal-protect-demo`, then check the route:'],

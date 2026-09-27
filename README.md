@@ -148,8 +148,7 @@ asks you to approve the project's MCP server, accept it. Keep Claude Code runnin
 and open a second terminal in `seal-protect-demo`, then check the route:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-seal status
+PATH="$HOME/.local/bin:$PATH" seal status
 ```
 
 Look for `ACTIVE` on the sealed `db` route before using its tools. If it still

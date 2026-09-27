@@ -22,7 +22,7 @@ answer "did I download the bytes the release named?" They do not answer
 
 ## Verify, then install
 <!-- end generated release docs -->
-
+Protect needs Claude Code, which needs Node 22 or newer. Check `node --version` before installing Claude Code; if it is below 22, upgrade Node first. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.5.2
@@ -77,37 +77,6 @@ Further distribution detail, including what each payload contains, is in
 only checked against `SHA256SUMS`; from a source checkout, run
 `node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.
 <!-- end generated release docs -->
-
-## Start Protect in a project
-
-Protect needs Claude Code, which needs Node 22 or newer. Check `node --version`
-before installing Claude Code; if it is below 22, upgrade Node first.
-Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set)
-to install Claude Code, create `seal-protect-demo`, and run `seal protect`.
-If Claude Code is already running in that project, exit that session first.
-For your first sign-in, run this in the terminal and follow the login prompts:
-
-```bash
-claude auth login
-```
-
-Start Claude Code from the `seal-protect-demo` project directory:
-
-```bash
-claude
-```
-
-MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
-asks you to approve the project's MCP server, accept it. Keep Claude Code running
-and open a second terminal in `seal-protect-demo`, then check the route:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-seal status
-```
-
-Look for `ACTIVE` on the sealed `db` route before using its tools. If it still
-says `PENDING RESTART`, follow the [troubleshooting guide](../guide/when-something-looks-wrong.md).
 
 ## Source-build tree pin
 A build of this checkout (not the published release asset) writes
@@ -192,6 +161,34 @@ This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native m
 If you installed the published release, continue with
 [Choosing what to protect](../guide/choosing-what-to-protect.md). If you built
 and installed this checkout, continue with the [Evaluator walk](evaluator-walk.md).
+
+## Start Protect in a project
+
+Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set)
+to install Claude Code, create `seal-protect-demo`, and run `seal protect`.
+If Claude Code is already running in that project, exit that session first.
+For your first sign-in, run this in the terminal and follow the login prompts:
+
+```bash
+claude auth login
+```
+
+Start Claude Code from the `seal-protect-demo` project directory:
+
+```bash
+claude
+```
+
+MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
+asks you to approve the project's MCP server, accept it. Keep Claude Code running
+and open a second terminal in `seal-protect-demo`, then check the route:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" seal status
+```
+
+Look for `ACTIVE` on the sealed `db` route before using its tools. If it still
+says `PENDING RESTART`, follow the [troubleshooting guide](../guide/when-something-looks-wrong.md).
 
 Previous: [Start](README.md).
 Up: [Start](README.md).
