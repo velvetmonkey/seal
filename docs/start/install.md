@@ -1,7 +1,7 @@
 <!-- generated from published release; do not edit -->
 # Install Seal v0.5.2
 The [v0.5.2 release](https://github.com/velvetmonkey/seal/releases/tag/v0.5.2) publishes `seal-v0.5.2-darwin-arm64`, `seal-v0.5.2-darwin-x64`, `seal-v0.5.2-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`e5d901fc7183485bf9565ded4f3ccb73ee71efde`](https://github.com/velvetmonkey/seal/commit/e5d901fc7183485bf9565ded4f3ccb73ee71efde). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
-The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node 20+ is required.
+The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Seal itself requires Node 20 or newer.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -77,6 +77,37 @@ Further distribution detail, including what each payload contains, is in
 only checked against `SHA256SUMS`; from a source checkout, run
 `node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.
 <!-- end generated release docs -->
+
+## Start Protect in a project
+
+Protect needs Claude Code, which needs Node 22 or newer. Check `node --version`
+before installing Claude Code; if it is below 22, upgrade Node first.
+Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set)
+to install Claude Code, create `seal-protect-demo`, and run `seal protect`.
+If Claude Code is already running in that project, exit that session first.
+For your first sign-in, run this in the terminal and follow the login prompts:
+
+```bash
+claude auth login
+```
+
+Start Claude Code from the `seal-protect-demo` project directory:
+
+```bash
+claude
+```
+
+MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
+asks you to approve the project's MCP server, accept it. Keep Claude Code running
+and open a second terminal in `seal-protect-demo`, then check the route:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+seal status
+```
+
+Look for `ACTIVE` on the sealed `db` route before using its tools. If it still
+says `PENDING RESTART`, follow the [troubleshooting guide](../guide/when-something-looks-wrong.md).
 
 ## Source-build tree pin
 A build of this checkout (not the published release asset) writes
