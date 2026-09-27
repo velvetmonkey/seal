@@ -29,6 +29,7 @@ test/docs-index.test.cjs
 test/docs-navigation.test.mjs
 test/docs-scope.test.mjs
 test/durability-lock.test.cjs
+test/ed25519-key-differential.test.cjs
 test/executable-population.test.mjs
 test/failure5.test.cjs
 test/four-beats.test.cjs
