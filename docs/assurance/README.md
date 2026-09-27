@@ -8,6 +8,9 @@ Files in the last two groups describe the Seal *family* of research repositories
 or a past design state — they are kept for the record and are not claims about
 the Node CLI this repository ships.
 
+Legacy move notices: [CLAIMS-MATRIX.md](../CLAIMS-MATRIX.md),
+[EVALUATOR-START.md](../EVALUATOR-START.md), and [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 ## I want to use this
 
 1. [The README](../../README.md) — requirements, short install, demo, protect,
