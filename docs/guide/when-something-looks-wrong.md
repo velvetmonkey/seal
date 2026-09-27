@@ -182,6 +182,14 @@ stopped — for the guarded tool and everything else on that server. `seal
 status` will show `DRIFTED`; the ways out are on
 [the status page](what-is-protected-right-now.md#drifted).
 
+### `project_server_malformed`
+
+The protected server's `.mcp.json` entry can no longer be read as a valid
+launch configuration. The refusal includes the specific reason, such as an
+`args` member that is not a string. Seal does not forward the call or record
+this as drift. Fix the file, stop the current Claude Code session, then
+unprotect and protect the server again.
+
 ### `state_absent`
 
 The recorded protection state file disappeared while the wrapper was
@@ -212,7 +220,8 @@ does.
 
 A defensive fallback: a pre-forward check refused without naming a token.
 The shipped checks always name one (`project_server_drifted`,
-`state_absent`), so meeting this token would itself be worth reporting.
+`project_server_malformed`, `state_absent`), so meeting this token would
+itself be worth reporting.
 
 ## Running `seal protect` and `seal unprotect`
 
@@ -236,8 +245,9 @@ gave. Run in the project directory, and spell the server exactly as
 ### `project_server_invalid`
 
 `.mcp.json` exists but could not be used: not valid JSON, or the named
-server entry is malformed (a non-array `args`, a non-object `env`, a missing
-command). The message names the specific problem; fix the file.
+server entry is malformed (a non-array `args`, a non-object `env`, a non-string
+`cwd`, or a missing command). The message names the specific problem; fix the
+file.
 
 ### `project_environment_missing`
 
@@ -726,6 +736,20 @@ commitment. Keep the receipt as tamper evidence and do not rely on it.
 The granted capabilities do not exactly match the approval targets, or a
 reserved input channel was populated even though the current kernel does not
 consume it.
+
+### `public_key_small_order`
+
+The supplied Ed25519 receipt verification key is a small-order point. Such a
+key can accept forged signatures, so the checker refuses it before checking
+the signature. Obtain the receipt signer's ordinary public key from a trusted
+source; retrying with the same key cannot establish a valid signature.
+
+### `public_key_noncanonical`
+
+The supplied Ed25519 receipt verification key encodes a y coordinate at or
+above 2^255 - 19. The checker refuses this noncanonical encoding before
+checking the signature. Obtain the signer's public key from a trusted source;
+do not reduce or rewrite the supplied key to make verification pass.
 
 ### `signature_mismatch`
 
