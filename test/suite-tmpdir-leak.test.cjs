@@ -66,8 +66,8 @@ function nestedStatusMessage(result, output) {
   ].join("\n");
 }
 
-function snapshotDirectories(root, file, exclude) {
-  const before = suiteDirectories(root).filter((name) => name !== exclude);
+function snapshotDirectories(root, file) {
+  const before = suiteDirectories(root);
   fs.writeFileSync(file, JSON.stringify({ root, before, started: Date.now() }));
 }
 

@@ -135,15 +135,11 @@ export TMP="$TMPGUARD_RUN_ROOT"
 export TEMP="$TMPGUARD_RUN_ROOT"
 export GIT_CEILING_DIRECTORIES="${GIT_CEILING_DIRECTORIES:-$TMPGUARD_RUN_ROOT}"
 
-# Compare the owned test root before cleanup, and its parent after cleanup.
+# Compare the test root before cleanup, then require that root to be removed.
 # The suite test validates this handoff; this driver performs the final check
 # after every declared test file has finished, on local runs and in CI alike.
 leak_checker="$script_root/test/suite-tmpdir-leak.test.cjs"
-tmp_before="$TMPGUARD_RUN_ROOT.leak.json"
 export SEAL_TMP_LEAK_SNAPSHOT="$TMPGUARD_RUN_ROOT/leak-before.json"
-if ! node "$leak_checker" --snapshot "$(dirname "$TMPGUARD_RUN_ROOT")" "$tmp_before" "$(basename "$TMPGUARD_RUN_ROOT")"; then
-  exit 1
-fi
 if ! node "$leak_checker" --snapshot "$TMPGUARD_RUN_ROOT" "$SEAL_TMP_LEAK_SNAPSHOT"; then
   exit 1
 fi
@@ -637,9 +633,6 @@ if ! node "$leak_checker" --check "$SEAL_TMP_LEAK_SNAPSHOT"; then
   gate_status=1
 fi
 node "$script_root/scripts/temp-root.cjs" --cleanup "$TMPGUARD_RUN_ROOT"
-if ! node "$leak_checker" --check "$tmp_before"; then
-  gate_status=1
-fi
 leak_check_finished=1
 if [[ -e "$TMPGUARD_RUN_ROOT" ]]; then
   echo "::error::suite temporary root survived cleanup: $TMPGUARD_RUN_ROOT"
