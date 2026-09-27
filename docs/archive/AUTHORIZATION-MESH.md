@@ -43,4 +43,4 @@ All four carry the axiom footprint `{propext, Classical.choice, Quot.sound}`, ze
 
 - Abstract theorems + product doc: [crdt-lean](https://github.com/velvetmonkey/crdt-lean) (`Crdt/AuthorityFrontier.lean`, `docs/AUTHORITY-FRONTIER.md`).
 - Receipt non-interference + the applicability bridge: [seal-host](https://github.com/velvetmonkey/seal-host) (`Host/StatefulNI.lean`, `Host/AuthorityFrontierBridge.lean`).
-- Theorem-to-file index: `seal-host/docs/PROOF-REFERENCE.md`. Claims index: `docs/CLAIMS-MATRIX.md`.
+- Theorem-to-file index: `seal-host/docs/PROOF-REFERENCE.md`. Claims index: `docs/archive/CLAIMS-MATRIX.md`.
