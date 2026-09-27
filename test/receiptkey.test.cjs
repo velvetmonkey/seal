@@ -11,7 +11,7 @@ const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
 const SCRATCH = process.env.RUNNER_TEMP
   ? path.join(process.env.RUNNER_TEMP, "receiptkey")
-  : "/home/monkey/scratch/receiptkey";
+  : testTmpdir("seal-receiptkey-");
 const { createJournal } = require("../spine/store.cjs");
 const { createProxy } = require("../spine/proxy.cjs");
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
