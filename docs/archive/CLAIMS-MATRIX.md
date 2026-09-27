@@ -22,13 +22,14 @@ import-and-pin closure; mcp-seal-dev: `Test/Axioms.lean` + `Test/AxiomAllowlist.
 the `Test/ModuleAxiomScan.lean` gate, which scans exactly the modules assigned in its
 `kernelBaselineModuleNames` list — an explicit list, not the whole build, so check the list at
 the rev you are auditing rather than trusting any frozen count; crdt-lean: `Test/Axioms.lean` `#guard_msgs`
-pins, a default target). That coverage is not total. Named exceptions, checked against the
-pin sources on 2026-08-06: `guarded_allow_iff_live` and `approval_not_transferable_across_targets`
-(both `SealCore/Safety.lean`) appear in no mcp-seal-dev pin, and `SealCore.Safety` is not one
-of the module gate's assigned modules (`SealCore.Safety` does not appear in
-`kernelBaselineModuleNames`) — those two theorems compile in the build but their
-axiom footprints are not CI-pinned. Adding them to the pins is a gate change reserved for the
-maintainer.
+pins, a default target). That coverage is not total. The former pin gap for
+`guarded_allow_iff_live` and `approval_not_transferable_across_targets`
+(both `SealCore/Safety.lean`) is closed in mcp-seal-dev main at
+`7cc762ededc62016c0475cfea2896484679c129d`, checked on 2026-09-27:
+`Test/Axioms.lean` names both in its printed footprints and executable pin list,
+and `Test/ModuleAxiomScan.lean` assigns `SealCore.Safety` to its kernel baseline.
+That gate checks 50 assigned kernel-baseline modules at this revision, not the whole build.
+Changes to the pins are gate changes reserved for the maintainer.
 Each pinned theorem uses **at most** the minimal classical fragment
 `{propext, Classical.choice, Quot.sound}` — no `sorry`, no `native_decide` — and some use less
 (seal-host's record-chain theorems are axiom-free; several crdt-lean merge lemmas use `propext`
@@ -59,7 +60,7 @@ seal-host/CLAIMS.md ("Proof build-wire scope").
 | The live demo's evidence is real: the blocked destructive request and the bypass-executed one are **byte-identical** (`canonical_request_sha256` equal), and all phase receipts are v2. | **Tested** | `scripts/assert.mjs` (17 invariants, +1 when the optional obfuscation gauntlet ran; gates the docker run) | seal-live-demo |
 | The approval field set carries enough information to identify the exact effect it authorizes (receipt-field **sufficiency**). The pre-v2 field set **failed** this check — a concrete collision: two different effects indistinguishable through the committed fields — and v2's `args_hash` is the field that closes it. A collision indicts the field set, not one implementation; no implementation reading insufficient fields can fix it. | **Tested** (finite refinement analysis) | `seal adequacy` (anchored on `witness_computable_iff_refines` / `witness_separation_fails`); `witness-check`, the private sufficiency analyzer | seal-assurance-kit / witness-check |
 | Differences between two receipts are detected and classified against the authorization surface (integrity-checked against each receipt's own hashes before diffing; a pre-v2 → v2 pair is called out as the approval surface widening). | **Tested** | `seal receipt-diff` test suite (11 cases in the kit's npm chain) | seal-assurance-kit |
-| The `seal verify` closure runs in CI, vendored into the GitHub Action as a maintained **downstream-stricter fork** of the kit verifier: pinned to a base kit revision with five named fork-delta files (the action requires a valid `signed_config` for an authorised outcome; kit HEAD's verifier is trust-rootless), kernel wasm byte-identical to the kit's, every vendored file sha256-checked in CI against `VENDORED.md`, exercised by a fixture selftest workflow. | **Tested** | seal-verify-action ci + selftest workflows | seal-verify-action |
+| The `seal verify` closure was vendored into seal-verify-action as a **downstream-stricter fork** of the kit verifier: pinned to a base kit revision with four named fork-delta files (the action requires a valid `signed_config` for an authorised outcome; the cited kit verifier is trust-rootless), kernel wasm byte-identical to the cited kit revision, every vendored file sha256-checked by its CI workflow against `VENDORED.md`, and exercised by a fixture selftest workflow. seal-verify-action is archived as measured with the GitHub API on 2026-09-27; its CI no longer runs. | **Not claimed** (current CI) | Historical ci + selftest workflows and `VENDORED.md`; no current CI evidence | seal-verify-action |
 | SHA-256 collision resistance. | **Assumed** (named, scoped: A-CR) | docs/archive/LIMITATIONS.md, TCB docs | family-wide |
 | Rust glue, wasm/JS mirror bodies, Lean toolchain, OS, Ed25519 provider, human operators. | **Assumed** (TCB) | seal-host/docs/TCB.md, SEAL-SYSTEM-TCB.md | seal-host |
 | MCP is the sole effect channel; an unconfined shell bypasses the gate by design scope. | **Assumed** | docs/assurance/evaluator-start.md §7 | umbrella |
