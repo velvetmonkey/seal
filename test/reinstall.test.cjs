@@ -8,7 +8,7 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
-const SCRATCH_ROOT = path.join(os.tmpdir(), "seal-reinstall-tests");
+const SCRATCH_ROOT = testTmpdir("seal-reinstall-tests-");
 const BUILD = path.join(ROOT, "scripts", "build-dist.cjs");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
