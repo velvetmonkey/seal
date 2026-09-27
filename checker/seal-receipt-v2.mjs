@@ -147,7 +147,11 @@ export async function verify(text, { publicKeyHex, authorityRoot, occurrenceWitn
   };
 }
 
-export function format(result) { return `Document structure       ${result.read ? "VALID" : "INVALID"}\nSignature and bindings   ${result.signature ? "VALID" : "UNVERIFIED"}\nVerifier-local verdict   ${result.replay ? "REPRODUCED" : "NOT REPRODUCED"}\nAuthority key            ${result.authority}\nEvent occurrence         ${result.occurrence}\n                         ------------------\nREAD      ${result.read ? "available" : "unavailable"}\nVALIDATE  ${result.validate ? "available" : "unavailable"}\nREPLAY    ${result.replay ? "available" : "unavailable"}\nVERIFY    ${result.verify ? "VERIFIED" : "UNVERIFIED"}`; }
+export function format(result) {
+  const refusal = result.signature ? "" : result.receipt?.signature
+    ? "\nREFUSE public_key_absent: no usable public key supplied to check the signature"
+    : "\nREFUSE signature_absent: receipt has no signature";
+  return `Document structure       ${result.read ? "VALID" : "INVALID"}\nSignature and bindings   ${result.signature ? "VALID" : "UNVERIFIED"}\nVerifier-local verdict   ${result.replay ? "REPRODUCED" : "NOT REPRODUCED"}\nAuthority key            ${result.authority}\nEvent occurrence         ${result.occurrence}\n                         ------------------\nREAD      ${result.read ? "available" : "unavailable"}\nVALIDATE  ${result.validate ? "available" : "unavailable"}\nREPLAY    ${result.replay ? "available" : "unavailable"}\nVERIFY    ${result.verify ? "VERIFIED" : "UNVERIFIED"}${refusal}`; }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const file = process.argv[2]; const keyAt = process.argv.indexOf("--pubkey");
