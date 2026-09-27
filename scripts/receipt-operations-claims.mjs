@@ -2,6 +2,7 @@
 // This is intentionally data, so the test can reject a new behavioral sentence
 // that has neither executable evidence nor an honest declared gap.
 export const claims = [
+  { file: "docs/reference/receipt-operations.md", status: "CHECKED", text: "For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.", reason: "test/receipt-checker.test.cjs: refuseline seal verify names absent signature/key and refuseline standalone checker names absent signature/key assert exit 1, exactly one named REFUSE line after the table, and empty stderr." },
   { file: "docs/reference/receipt-operations.md", status: "DECLARED", text: "Seal is the canonical reference for the four operations of the shipped v2 receipt verifier, `checker/seal-receipt-v2.mjs`.", reason: "Canonical ownership is a documentation relationship, not a runtime property that this repository can derive from the verifier." },
   { file: "docs/reference/receipt-operations.md", status: "CHECKED", text: "It describes TESTED behaviour of that checker, not a claim that a receipt makes an outside event true.", reason: "The coverage test executes the shipped checker and separately asserts the explicit occurrence ceiling; no outside event is treated as evidence." },
   { file: "docs/reference/receipt-operations.md", status: "CHECKED", text: "READ parses and displays the receipt.", reason: "The parsed vector reaches verify() and the rendered output is compared with format()." },
