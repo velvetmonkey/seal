@@ -436,7 +436,7 @@ test("guarded request envelopes are refused over stdio before approval selection
   t.after(() => h.run.kill());
   initialize(h.proxy);
   await h.responseFor(90);
-  const valid = { ...callParams("valid envelope"), id: 701, extra: "allowed" };
+  const valid = { ...callParams("valid envelope"), id: 701 };
   const missingVersion = { ...valid };
   delete missingVersion.jsonrpc;
   const missingId = { ...valid };
@@ -821,6 +821,189 @@ test("duplicate acceptance after runtime-tree refusal cannot mint a kernel recei
   assert.equal(readCount(`${dataFile}.count`), "0");
   assert.equal(afterDuplicate, 1, "duplicate runtime-tree refusal must not enter the kernel for a BLOCK receipt");
   assert.equal(afterNext, 2, "fresh request adds only its INPUT_REQUIRED receipt");
+});
+
+// Every completed answer closes its elicitation. A later answer must never
+// retry its handle; non-terminal first refusals must also produce no receipt.
+const duplicateAnswerCases = [
+  { label: "missing approve", result: { action: "accept" } },
+  ...[
+    { result: { action: "decline" } },
+    { result: { action: "cancel" } },
+    { error: { code: -32603, message: "duplicate error" } },
+    { jsonrpc: "1.0", method: "tools/call", params: { name: "write_file", arguments: {} } },
+  ].map((duplicate, index) => ({ label: `duplicate envelope ${index}`, result: { action: "accept" }, duplicate })),
+  { label: "missing action", result: {} },
+  { label: "non-string action", result: { action: 7 } },
+  { label: "unknown action", result: { action: "reconsider-sealdupelicit" } },
+  { label: "array answer", result: [] },
+  { label: "missing content approve", result: { action: "accept", content: {} } },
+  { label: "string approve", result: { action: "accept", content: { approve: "true" } } },
+  { label: "null approve", result: { action: "accept", content: { approve: null } } },
+  { label: "numeric approve", result: { action: "accept", content: { approve: 1 } } },
+  ...["runtime_tree_fail", "runtime_tree_unknown", "lease_generation_mismatch",
+    "kernel_integrity_refused", "kernel_manifest_refused", "kernel_execution_refused",
+    "kernel_output_refused", "authorization_disagreement", "kernel timing throw"].map(fault => ({
+      label: fault, fault, result: { action: "accept", content: { approve: true } },
+    })),
+  { label: "first valid accept", result: { action: "accept", content: { approve: true } }, status: "consumed" },
+  { label: "decline", result: { action: "decline" }, status: "declined" },
+  { label: "cancel", result: { action: "cancel" }, status: "cancelled" },
+  { label: "expired", expired: true, result: { action: "accept", content: { approve: true } }, status: "expired" },
+  { label: "pending timeout", timeout: true, status: "cancelled" },
+  { label: "negative accept", result: { action: "accept", content: { approve: false } }, status: "declined" },
+  { label: "malformed envelope", envelope: { jsonrpc: "1.0", result: { action: "accept", content: { approve: true } } }, status: "cancelled" },
+  { label: "client error", envelope: { error: { code: -32603, message: "cannot present form" } }, status: "cancelled" },
+  { label: "non-object result", result: null, status: "cancelled" },
+];
+
+// Isolate adapter fault injection to this proxy's module closure. The real
+// adapter supplies all ordinary receipts and all subsequent authorizations.
+function proxyWithRetryFault(fault, active) {
+  if (!fault || fault.startsWith("runtime_tree_") || fault === "lease_generation_mismatch") return createProxy;
+  const Module = require("node:module");
+  const adapterPath = require.resolve("../contract/kernel-authorization.cjs");
+  const contractPath = require.resolve("../contract/contract.cjs");
+  const proxyPath = require.resolve("../spine/proxy.cjs");
+  const adapter = require(adapterPath);
+  const savedContract = require.cache[contractPath];
+  const savedProxy = require.cache[proxyPath];
+  const load = Module._load;
+  delete require.cache[contractPath];
+  delete require.cache[proxyPath];
+  Module._load = function(request, parent, isMain) {
+    if (Module._resolveFilename(request, parent) === adapterPath) return {
+      ...adapter,
+      createKernelAuthorizationAdapter(...args) {
+        const real = adapter.createKernelAuthorizationAdapter(...args);
+        return { authorize(input) {
+          if (active() && input.accepted) {
+            if (fault === "authorization_disagreement") return real.authorize({ ...input, accepted: false });
+            const error = new adapter.KernelAuthorizationError(
+              fault === "kernel timing throw" ? "kernel_execution_refused" : fault, "injected retry refusal");
+            if (fault === "kernel timing throw") {
+              error.kernel_timing_timestamps = {};
+              error.kernel_timing_ms = {};
+              error.kernel_timing_active_phase = "wasm_load";
+              error.kernel_timing_deadline_ms = 30000;
+            }
+            throw error;
+          }
+          return real.authorize(input);
+        } };
+      },
+    };
+    return load.apply(this, arguments);
+  };
+  try { return require(proxyPath).createProxy; }
+  finally {
+    Module._load = load;
+    require.cache[contractPath] = savedContract;
+    require.cache[proxyPath] = savedProxy;
+  }
+}
+
+for (const scenario of duplicateAnswerCases) test(`completed answer duplicate preserves approval: ${scenario.label}`, async (t) => {
+  const dir = testTmpdir("seal-completed-answer-duplicate-");
+  const storePath = path.join(dir, "approvals.journal");
+  const countFile = path.join(dir, "child.count");
+  const childLines = path.join(dir, "child.lines");
+  const receiptsDir = path.join(dir, "receipts");
+  createJournal(storePath);
+  const frames = [];
+  let faultActive = false;
+  let clock = 1700000000000;
+  const makeProxy = proxyWithRetryFault(scenario.fault, () => faultActive);
+  const proxy = makeProxy({
+    signer: generateSigner(), guardTool: "write_file", storePath, receiptsDir,
+    now: () => clock,
+    ...(scenario.timeout ? { elicitationTimeoutMs: 100 } : {}),
+    ...(scenario.fault?.startsWith("runtime_tree_") ? { runtimeTreeCheck: () => faultActive
+      ? { ok: false, code: scenario.fault, detail: "injected runtime refusal" }
+      : { ok: true, band: "PASS", detail: "restored" } } : {}),
+    ...(scenario.fault === "lease_generation_mismatch" ? { leaseFence: () => ({ ok: !faultActive, detail: "injected lease refusal" }) } : {}),
+    childArgv: [process.execPath, "-e", `
+      const fs = require('node:fs');
+      let count = 0;
+      fs.writeFileSync(process.argv[1], '0');
+      fs.writeFileSync(process.argv[2], '');
+      require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+        fs.appendFileSync(process.argv[2], line + '\\n');
+        const frame = JSON.parse(line);
+        if (frame.method === 'tools/call') fs.writeFileSync(process.argv[1], String(++count));
+        if (frame.method) console.log(JSON.stringify({jsonrpc:'2.0',id:frame.id,result:{content:[]}}));
+      });`, countFile, childLines],
+    onClientLine(line) { frames.push(JSON.parse(line)); },
+  });
+  t.after(() => proxy.stop());
+  const waitFor = async predicate => {
+    const deadline = Date.now() + 5000;
+    while (!frames.some(predicate)) {
+      if (Date.now() >= deadline) assert.fail(JSON.stringify(frames));
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return frames.find(predicate);
+  };
+  const events = () => fs.readFileSync(storePath, "utf8").trim().split("\n").map(JSON.parse);
+  const receipts = () => fs.readdirSync(receiptsDir).filter(name => name.endsWith(".json")).sort();
+  const call = id => ({ jsonrpc: "2.0", id, method: "tools/call", params: {
+    name: "write_file", arguments: { path: "example.txt", content: "approved bytes" },
+  } });
+  const accept = id => JSON.stringify({ jsonrpc: "2.0", id, result: { action: "accept", content: { approve: true } } });
+  proxy.write(JSON.stringify({ jsonrpc: "2.0", id: 90, method: "initialize", params: { capabilities: { elicitation: {} } } }));
+  await waitFor(frame => frame.id === 90 && frame.result);
+  proxy.write(JSON.stringify(call(1)));
+  const elicitation = await waitFor(frame => frame.method === "elicitation/create");
+  assert.equal(readCount(countFile), "0");
+  faultActive = true;
+  if (scenario.expired) clock += 120001;
+  const first = JSON.stringify({ jsonrpc: "2.0", id: elicitation.id,
+    ...(scenario.envelope || { result: scenario.result }) });
+  if (scenario.fault === "kernel timing throw") assert.throws(() => proxy.write(first), { code: "kernel_execution_refused" });
+  else if (!scenario.timeout) proxy.write(first);
+  const response = await waitFor(frame => frame.id === 1 && frame.result);
+  assert.equal(!!response.result.isError, scenario.status !== "consumed");
+  const before = events();
+  const statuses = before.filter(event => event.type === "status").map(event => event.status);
+  assert.deepEqual(statuses, scenario.status ? [scenario.status] : [], "first answer journal state");
+  const beforeReceipts = receipts();
+  const beforeLines = fs.readFileSync(childLines, "utf8");
+  faultActive = false;
+  proxy.write(scenario.duplicate ? JSON.stringify({ jsonrpc: "2.0", id: elicitation.id, ...scenario.duplicate }) : accept(elicitation.id));
+  // A retired third answer must also remain inert.
+  proxy.write(accept(elicitation.id));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const after = events();
+  const afterReceipts = receipts();
+  const afterChildCount = readCount(countFile);
+  const afterChildLines = fs.readFileSync(childLines, "utf8");
+  t.diagnostic(JSON.stringify({ scenario: scenario.label, statuses,
+    afterDuplicateStatuses: after.filter(event => event.type === "status").map(event => event.status),
+    receiptsBefore: beforeReceipts.length, receiptsAfter: afterReceipts.length, childCalls: readCount(countFile),
+    receiptClaims: afterReceipts.map(name => { const r = JSON.parse(fs.readFileSync(path.join(receiptsDir, name))); return [r.action, r.verdict]; }) }));
+  // The ordinary recovery is the same tools/call with a fresh request ID.
+  proxy.write(JSON.stringify(call(2)));
+  const fresh = await waitFor(frame => frame.method === "elicitation/create" && frame.id !== elicitation.id);
+  proxy.write(accept(fresh.id));
+  const allowed = await waitFor(frame => frame.id === 2 && frame.result);
+  assert.equal(allowed.result.isError, undefined, JSON.stringify(allowed));
+  assert.equal(readCount(countFile), scenario.status === "consumed" ? "2" : "1");
+  assert.deepEqual(events().filter(event => event.type === "status").map(event => event.status), [...after.filter(event => event.type === "status").map(event => event.status), "consumed"]);
+  const allowReceipts = receipts().map(name => JSON.parse(fs.readFileSync(path.join(receiptsDir, name)))).filter(receipt => receipt.action === "ALLOW");
+  assert.equal(allowReceipts.length, scenario.status === "consumed" ? 2 : 1);
+  t.diagnostic(JSON.stringify({ freshCall: scenario.label, childCalls: readCount(countFile),
+    journalStatuses: events().filter(event => event.type === "status").map(event => event.status), allowReceipts: allowReceipts.length }));
+  assert.deepEqual(after, before, "duplicate answer adds no journal event or consumed status");
+  if (scenario.status && !scenario.timeout) {
+    assert.equal(afterReceipts.length, beforeReceipts.length + 1, "terminal duplicate retains its BLOCK receipt");
+    const duplicateReceipt = JSON.parse(fs.readFileSync(path.join(receiptsDir, afterReceipts.find(name => !beforeReceipts.includes(name)))));
+    assert.equal(duplicateReceipt.action, "BLOCK");
+    assert.equal(duplicateReceipt.verdict, "BLOCK");
+  } else {
+    assert.deepEqual(afterReceipts, beforeReceipts, "non-terminal or retired duplicate produces no receipt");
+  }
+  assert.equal(afterChildCount, scenario.status === "consumed" ? "1" : "0", "duplicate never forwards");
+  assert.equal(afterChildLines, beforeLines, "duplicate never reaches child stdin");
 });
 
 for (const action of ["decline", "cancel"]) test(`real elicitation ${action} refuses and does not flow`, async (t) => {
@@ -2006,6 +2189,82 @@ for (const token of ['-9007199254740993', '9007199254740993e0', '"90071992547409
     assert.deepEqual(h.rawCalls(), [h.call(token,args)]);
   });
 }
+
+// F02: the peer writes its actual input to disk; approval output alone is not
+// evidence that request metadata made it through the wrapper.
+for (const meta of ['{}', '{"progressToken":"f02-progress"}', '{"progressToken":0}',
+  '{"progressToken":9007199254740993}', '{"progressToken":1.0000000000000001}']) {
+  test(`metadata forwarding: child observes exact progress metadata ${meta}`, async t => {
+    const h = await identityHarness(t);
+    const original = h.call('101');
+    const wire = original.slice(0, -2) + ',"_meta":' + meta + '}}';
+    h.proxy.write(wire);
+    const approval = h.lines.map(JSON.parse).find(frame => frame.method === 'elicitation/create');
+    assert.ok(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [], 'no child call before approval');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [wire], 'child must receive the original opaque progress token');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [wire], 'duplicate approval must not forward again');
+  });
+}
+
+for (const [label, extra, top, refusal] of [
+  ['task', {task:{ttl:60000}}, {}, 'request_field_unsupported'],
+  ['null task', {task:null}, {}, 'request_field_unsupported'],
+  ['parameter extension', {extension:{mode:'test'}}, {}, 'request_field_unsupported'],
+  ['envelope extension', {}, {extension:true}, 'request_field_unsupported'],
+  ['empty parameter key', {'':true}, {}, 'request_field_unsupported'],
+  ['empty envelope key', {}, {'':true}, 'request_field_unsupported'],
+  ['metadata extension', {_meta:{progressToken:'p', 'example.com/mode':'execute'}}, {}, 'request_metadata_unsupported'],
+  ['task relationship', {_meta:{'io.modelcontextprotocol/related-task':{taskId:'task-1'}}}, {}, 'request_metadata_unsupported'],
+  ['null metadata', {_meta:null}, {}, 'request_metadata_unsupported'],
+  ['array metadata', {_meta:[]}, {}, 'request_metadata_unsupported'],
+  ['boolean token', {_meta:{progressToken:true}}, {}, 'progress_token_unsupported'],
+  ['null token', {_meta:{progressToken:null}}, {}, 'progress_token_unsupported'],
+  ['object token', {_meta:{progressToken:{}}}, {}, 'progress_token_unsupported'],
+]) {
+  test(`metadata forwarding: ${label} refused before approval`, async t => {
+    const decisions = [];
+    const h = await identityHarness(t, {onDecision: decision => decisions.push(decision)});
+    h.send({...callParams('unsupported', extra), id:101, ...top});
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), []);
+    assert.equal(h.lines.map(JSON.parse).some(frame => frame.method === 'elicitation/create'), false);
+    assert.deepEqual(decisions.map(({decision, refusal}) => ({decision, refusal})), [{decision:'BLOCK', refusal}]);
+    assert.match(h.lines.find(line => JSON.parse(line).id === 101), new RegExp(refusal));
+    const approval = h.begin('102');
+    h.answer(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), [h.call('102')], 'refusal must leave the session usable');
+  });
+}
+
+test('metadata forwarding: overlapping approvals retain their original metadata and arguments', async t => {
+  const h = await identityHarness(t);
+  const entries = ['first', 'second'].map((line, index) => {
+    const frame = {...callParams(line, {_meta:{progressToken:line}}), id:101 + index};
+    const before = h.lines.length;
+    h.send(frame);
+    const approval = h.lines.slice(before).map(JSON.parse).find(frame => frame.method === 'elicitation/create');
+    assert.ok(approval);
+    assert.match(approval.params.message, new RegExp(line));
+    // Mutating the caller's object cannot modify the proxy's saved wire frame.
+    frame.params.arguments.line = 'changed';
+    frame.params._meta.progressToken = 'changed';
+    return {line, id:101 + index, approval};
+  });
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  for (const entry of entries.reverse()) h.answer(entry.approval);
+  await h.fence();
+  assert.deepEqual(h.rawCalls().map(JSON.parse), entries.map(({line, id}) => ({
+    ...callParams(line, {_meta:{progressToken:line}}), id,
+  })));
+});
 
 // CLAIM-COVERAGE: test/spine-retry.test.cjs#bounded-shutdown
 // F06: actual descendants hold the server's stdout open after its exit.

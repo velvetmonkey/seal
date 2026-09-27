@@ -39,7 +39,7 @@ if (!host.ok) {
   process.stderr.write([
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v0.4.0.",
+    "Seal v0.5.2.",
     "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",
@@ -129,7 +129,7 @@ if (version !== record.version) {
 const product = path.join(storeRoot, "bin", "seal");
 const run = spawnSync(process.execPath, [product, ...process.argv.slice(2)], {
   stdio: "inherit",
-  env: process.env,
+  env: { ...process.env, SEAL_INSTALLED_LAUNCHER: fs.realpathSync(__filename) },
 });
 if (run.error) refuse("artifact_unreadable", `could not execute the installed product: ${run.error.message}`);
 process.exit(run.status === null ? 1 : run.status);

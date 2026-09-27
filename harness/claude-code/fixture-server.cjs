@@ -14,7 +14,7 @@
 //      exact arguments and the resulting effect digest. Zero calls therefore
 //      look like zero records, not like a silent success.
 //   2. Every start leaves the process ancestry it was launched under
-//      (/proc, Linux only). That is how the run distinguishes "Claude Code
+//      (/proc on Linux, ps on macOS). That is how the run distinguishes "Claude Code
 //      started the Seal proxy, which started me" from "Claude Code started
 //      me directly out of .mcp.json" — the fallback the run must rule out.
 //
@@ -23,6 +23,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const readline = require("node:readline");
+const { spawnSync } = require("node:child_process");
 
 const FIXTURE_SCHEMA = "seal.cc-fixture/v1";
 const GUARDED_TOOL = "append_note";
@@ -73,6 +74,25 @@ function appendRecord(record) {
 }
 
 function commandLine(pid) {
+  if (process.platform === "darwin") {
+    const result = spawnSync("/bin/ps", ["-ww", "-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    if (result.status !== 0) return null;
+    const command = result.stdout.trim();
+    // ps prints a display string, not an argv vector. Resolve the longest
+    // executable prefix so a path such as /Applications/Claude Code.app/...
+    // remains one argv word. If none resolves, leave the chain unverifiable.
+    for (let end = command.length; end > 0; end = command.lastIndexOf(" ", end - 1)) {
+      const prefix = command.slice(0, end);
+      if (!prefix.startsWith("/")) break;
+      try {
+        if (fs.statSync(fs.realpathSync(prefix)).isFile()) {
+          return [prefix, ...command.slice(end).trim().split(/\s+/).filter(Boolean)];
+        }
+      } catch { /* Try a shorter prefix. */ }
+      if (command.lastIndexOf(" ", end - 1) < 0) break;
+    }
+    return null;
+  }
   try {
     return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
   } catch {
@@ -81,6 +101,10 @@ function commandLine(pid) {
 }
 
 function parentOf(pid) {
+  if (process.platform === "darwin") {
+    const result = spawnSync("/bin/ps", ["-p", String(pid), "-o", "ppid="], { encoding: "utf8" });
+    return result.status === 0 ? Number(result.stdout.trim()) || null : null;
+  }
   try {
     const match = /^PPid:\s*(\d+)$/m.exec(fs.readFileSync(`/proc/${pid}/status`, "utf8"));
     return match ? Number(match[1]) : null;
@@ -104,7 +128,7 @@ function fileIdentity(filePath) {
 function processIdentity(pid) {
   const argv = commandLine(pid);
   let executable = null;
-  try { executable = fileIdentity(`/proc/${pid}/exe`); } catch { executable = null; }
+  try { executable = fileIdentity(process.platform === "darwin" ? argv?.[0] : `/proc/${pid}/exe`); } catch { executable = null; }
   const argvFiles = [];
   for (const word of argv || []) {
     const identity = fileIdentity(word);

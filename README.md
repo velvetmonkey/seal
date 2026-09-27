@@ -28,12 +28,12 @@ including its backslashes and `&&` operators; a failed comparison skips both
 
 <!-- generated from published release; do not edit -->
 ```bash
-SEAL_VERSION=v0.4.0
-artifact_name="seal-v0.4.0-linux-x64" \
-&& artifact_sha256="5b49ea26d29b608fcb4e3e370062b96e8c4a81d7fb5ce1fd30a2cbe737c69d3b" \
-&& artifact_bytes=6301771 \
+SEAL_VERSION=v0.5.2
+artifact_name="seal-v0.5.2-linux-x64" \
+&& artifact_sha256="693c901376f4f1d4f6584fc106fea301d3707d78f698bc905ec87221a8714f52" \
+&& artifact_bytes=6370451 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="0552373fc3cb7f7257b4cf491395425a1ce2f7126cc60142a961f53ff29026ce" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -64,20 +64,38 @@ When you are finished, remove the directory printed as `Demo directory: /absolut
 ## What you should see
 
 Seal holds each exact call, asks once, permits at most one execution, and writes
-a signed receipt. The demo reduces that path to four observations:
+a signed receipt. Here are selected lines from a run where you answer `y`.
+`<demo-dir>` stands for the printed absolute demo directory; `<id>` stands for
+the generated receipt identifier.
 
 ```text
-before approval: 0 calls
-after approval:  1 call
-after replay:    1 call - refused
-outside Seal:    effect succeeded, 0 Seal decisions
+child calls observed: 0 (read from <demo-dir>/child/data.txt.count)
+child calls observed: 1 (read from <demo-dir>/child/data.txt.count)
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from <demo-dir>/child/data.txt.count)
+receipt written: <demo-dir>/receipts/receipt-<id>-INPUT_REQUIRED.json
+receipt written: <demo-dir>/receipts/receipt-<id>-ALLOW.json
+receipt written: <demo-dir>/receipts/receipt-<id>-BLOCK.json
+File changed: yes
+Protected-server call count: still 1
+New Seal decisions: 0
 ```
+
+Before approval, the child has received no tool calls.
+After approval, the child has received one tool call.
+The replay is refused and the child call count stays at one.
+The three receipt paths record the approval request, allowed call and blocked replay.
+The direct write changes the file without another protected-server call or Seal decision.
 
 Read the [v0.4.0 standalone checker exit-status notice](docs/verify/README.md#v040-standalone-checker-exit-status) before scripting receipt checks.
 
-The demo also prints its receipt directory and public key. Those records are
-useful for inspecting the decision, but they do not establish that the recorded
-effect happened.
+The demo also prints its receipt directory and the path of the public key file,
+`<demo-dir>/receipt-signer.pub`, rather than the key itself.
+Copy the printed `Run:` command to check the replay receipt.
+It reads that file and checks the signature and recorded decision against the
+checker's verifier-local kernel.
+Because the demo supplies its own signing key, this establishes self-consistency,
+not a trusted signer's identity or proof that the recorded effect happened.
 
 ## Protect a real tool set
 

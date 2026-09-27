@@ -26,7 +26,7 @@ For a real pipeline, replace the public fixture with the intended input and inde
 
 Receipt diff and adequacy have their own semantics, including no-drift and vacuous outcomes. Evaluate the command-specific result, not a family-wide green label.
 
-The separate seal-verify-action uses a stricter production profile. Do not substitute it blindly for the kit or assume identical receipt-family support. A complete hosted workflow was not executed for this guide; the local command and its exit were captured.
+The separate `seal-verify-action` repository is archived and is not a supported CI gate. Its stricter historical profile is not a substitute for the kit. A complete hosted workflow was not executed for this guide; the local command and its exit were captured.
 
 Previous: [Run the boundary conformance corpus](conformance.md).
 Up: [Assurance CLI](README.md).

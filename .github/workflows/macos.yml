@@ -5,8 +5,94 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to rehearse
+        required: true
+        type: string
 
 jobs:
+  acceptance-walk-rehearsal:
+    if: github.event_name == 'workflow_dispatch'
+    name: Published artifact acceptance walk command rehearsal
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install separate Claude Code command
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          git --version
+          node --version
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+          claude --version
+          command -v script
+      - name: Download, verify, install, protect, unprotect, and zip
+        shell: bash
+        env:
+          SEAL_VERSION: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          test -n "$SEAL_VERSION"
+          cd "$RUNNER_TEMP"
+          case "$(uname -sm)" in
+            "Linux x86_64") SEAL_PLATFORM=linux-x64 ;;
+            "Darwin arm64") SEAL_PLATFORM=darwin-arm64 ;;
+            "Darwin x86_64") SEAL_PLATFORM=darwin-x64 ;;
+            *) printf 'Unsupported host: %s\n' "$(uname -sm)" >&2; exit 1 ;;
+          esac
+          SEAL_NODE_PLATFORM="$(node -p 'process.platform + "-" + process.arch')"
+          if test "$SEAL_PLATFORM" != "$SEAL_NODE_PLATFORM"; then
+            printf 'REFUSE platform mismatch: uname -sm selects %s; Node reports %s from process.platform and process.arch\n' "$SEAL_PLATFORM" "$SEAL_NODE_PLATFORM" >&2
+            exit 1
+          fi
+          echo "platform $SEAL_PLATFORM"
+          SEAL_ARTIFACT="seal-${SEAL_VERSION}-${SEAL_PLATFORM}"
+          curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS"
+          curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$SEAL_ARTIFACT"
+          SEAL_SHA256="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $1 }' SHA256SUMS)"
+          SEAL_BYTES="$(awk -v name="$SEAL_ARTIFACT" '$3 == name { print $2 }' SHA256SUMS)"
+          test -n "$SEAL_SHA256"
+          actual_sha256="$(shasum -a 256 "$SEAL_ARTIFACT")"
+          test "${actual_sha256%% *}" = "$SEAL_SHA256"
+          actual_bytes="$(wc -c < "$SEAL_ARTIFACT")"
+          test "$actual_bytes" -eq "$SEAL_BYTES"
+          echo "artifact sha256 $SEAL_SHA256 bytes $SEAL_BYTES"
+          chmod +x "$SEAL_ARTIFACT"
+          "./$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --prefix "$RUNNER_TEMP/prefix"
+          HOME="$RUNNER_TEMP/operator-home"; export HOME
+          mkdir -p "$HOME" "$RUNNER_TEMP/project" "$RUNNER_TEMP/pack"
+          cd "$RUNNER_TEMP/project"
+          printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"],"env":{"SEAL_CC_FIXTURE_LOG":"%s/fixture.jsonl","SEAL_CC_FIXTURE_EFFECT":"%s/effect.txt"}}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TEMP" > .mcp.json
+          before="$(shasum -a 256 .mcp.json)"
+          "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note
+          echo 'protect succeeded'
+          test "$(shasum -a 256 .mcp.json)" = "$before"
+          launcher="$(node -p 'const fs=require("fs");const path=require("path");const home=process.env.HOME;const project=process.cwd();const doc=JSON.parse(fs.readFileSync(path.join(home,".claude.json")));doc.projects[project].mcpServers.notes.command')"
+          parked="$launcher.parked-by-rehearsal"
+          chmod u+w "$(dirname "$launcher")"
+          mv "$launcher" "$parked"
+          test ! -e "$launcher"
+          echo 'missing launcher observed'
+          mv "$parked" "$launcher"
+          chmod u-w "$(dirname "$launcher")"
+          "$RUNNER_TEMP/prefix/bin/seal" unprotect notes
+          echo 'unprotect succeeded'
+          test "$(shasum -a 256 .mcp.json)" = "$before"
+          cd "$GITHUB_WORKSPACE"
+          node harness/claude-code/cc-harness.cjs init --artifact "$RUNNER_TEMP/$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$RUNNER_TEMP/acceptance-run"
+          echo 'harness init succeeded; interactive next requires human login and dialog'
+          node harness/claude-code/synthetic-run.cjs --artifact "$RUNNER_TEMP/$SEAL_ARTIFACT" --sha256 "$SEAL_SHA256" --bytes "$SEAL_BYTES" --run-dir "$RUNNER_TEMP/synthetic-run" --out "$RUNNER_TEMP/pack"
+          synthetic_pack="$(find "$RUNNER_TEMP/pack/evidence/claude-code" -name manifest.json -print -quit)"
+          node scripts/check-cc-evidence.mjs "$(dirname "$synthetic_pack")" --allow-synthetic
+          echo 'synthetic pack checked; no human login or dialog was exercised'
+          cd "$RUNNER_TEMP"
+          zip -qr seal-evidence.zip pack/evidence/claude-code
+          unzip -l seal-evidence.zip
+          echo 'zip assembly succeeded'
+
   macos-install-demo-receipt:
     name: ${{ matrix.platform }} install, demo, Protect helper, and receipt check
     strategy:

@@ -100,14 +100,24 @@ jobs:
           fetch-depth: 0
       - name: Require the tag to identify this exact commit
         run: test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
-      - name: Require successful default-branch CI on this exact commit
+      - name: Require successful CI on this exact commit and source branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release_branch=""
+          while IFS= read -r remote_branch; do
+            case "$remote_branch" in
+              "origin/release/$GITHUB_REF_NAME"|"origin/release/$GITHUB_REF_NAME-candidate")
+                release_branch="${remote_branch#origin/}"
+                break
+                ;;
+            esac
+          done < <(git branch -r --contains "$GITHUB_SHA" --format='%(refname:short)')
           run_id="$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status success \
-            --json databaseId,headBranch --jq '[.[] | select(.headBranch == "main")][0].databaseId')"
+            --json databaseId,headBranch | jq -r --arg branch "$release_branch" \
+            '[.[] | select(.headBranch == "main" or (.headBranch == $branch and $branch != ""))][0].databaseId // empty')"
           test -n "$run_id"
-          echo "Exact-commit default-branch CI run: $run_id"
+          echo "Exact-commit CI run on main or $release_branch: $run_id"
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

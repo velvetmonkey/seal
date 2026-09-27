@@ -319,11 +319,14 @@ function expandProjectValue(value, env, field) {
 function readProjectServer(projectRoot, serverName, env = process.env) {
   const config = readProjectConfig(projectRoot);
   const server = config.parsed.mcpServers[serverName];
-  if (!server) throw new ProtectionError("project_server_absent", `project server "${serverName}" is absent from .mcp.json`);
+  if (!Object.hasOwn(config.parsed.mcpServers, serverName)) throw new ProtectionError("project_server_absent", `project server "${serverName}" is absent from .mcp.json`);
   if (!server || typeof server !== "object" || Array.isArray(server)) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" is not an object`);
   }
-  const type = server.type || "stdio";
+  if (server.type !== undefined && typeof server.type !== "string") {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" type must be a string`);
+  }
+  const type = server.type === undefined ? "stdio" : server.type;
   if (type !== "stdio") throw new ProtectionError("project_server_non_stdio", `project server "${serverName}" is ${type}, not stdio`);
   if (typeof server.command !== "string" || server.command.length === 0) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" has no stdio command`);
@@ -331,12 +334,21 @@ function readProjectServer(projectRoot, serverName, env = process.env) {
   if (server.args !== undefined && !Array.isArray(server.args)) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" args must be an array`);
   }
+  if (server.args !== undefined && server.args.some((value) => typeof value !== "string")) {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" args must be an array of strings`);
+  }
   if (server.env !== undefined && (!server.env || typeof server.env !== "object" || Array.isArray(server.env))) {
     throw new ProtectionError("project_server_invalid", `project server "${serverName}" env must be an object`);
   }
+  if (server.env !== undefined && Object.values(server.env).some((value) => typeof value !== "string")) {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" env values must be strings`);
+  }
+  if (server.cwd !== undefined && typeof server.cwd !== "string") {
+    throw new ProtectionError("project_server_invalid", `project server "${serverName}" cwd must be a string`);
+  }
   const resolved = { ...server, command: expandProjectValue(server.command, env, "command") };
-  if (server.args !== undefined) resolved.args = server.args.map((value, index) => expandProjectValue(String(value), env, `args[${index}]`));
-  if (server.env !== undefined) resolved.env = Object.fromEntries(Object.entries(server.env).map(([key, value]) => [key, expandProjectValue(String(value), env, `env.${key}`)]));
+  if (server.args !== undefined) resolved.args = server.args.map((value, index) => expandProjectValue(value, env, `args[${index}]`));
+  if (server.env !== undefined) resolved.env = Object.fromEntries(Object.entries(server.env).map(([key, value]) => [key, expandProjectValue(value, env, `env.${key}`)]));
   // Preserve existing digests for literal configurations. For interpolated
   // configurations bind both source and resolution: either kind of drift must
   // refuse activation/forwarding of the stored launch snapshot.
@@ -1439,8 +1451,8 @@ function markDrifted(statePath, state, gotDigest) {
 function currentDigestForState(state, env = process.env) {
   try {
     return readProjectServer(state.projectRoot, state.serverName, env).serverDigest;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new ProtectionError("project_server_malformed", `project .mcp.json server is malformed: ${error.message}`);
   }
 }
 
@@ -1639,6 +1651,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
         startedAt: new Date().toISOString(),
       },
     };
+    delete next.observedClient; // A new session has not observed initialize yet.
     writeState(statePath, next, {
       beforeCommit: () => requireMacosHelperIdentity(witness.helperIdentity, "before ACTIVE lease commit"),
     });
@@ -1648,6 +1661,30 @@ async function activationLease(statePath, env = process.env, validateState = () 
   }, wait);
 }
 
+// Informational metadata shares the existing atomic state writer and lease fence.
+function recordObservedClient(statePath, leaseToken, observedClient) {
+  const initial = readState(statePath);
+  if (!initial) return;
+  const lock = acquireProjectLock(initial.projectRoot);
+  try {
+    const state = readState(statePath);
+    if (!state || !leaseMatches(state.lease, leaseToken)) return;
+    const next = { ...state };
+    if (observedClient) {
+      const { capClientMetadata } = require("./presentation.cjs");
+      next.observedClient = {
+        name: capClientMetadata(observedClient.name),
+        version: capClientMetadata(observedClient.version),
+        elicitationDeclared: observedClient.elicitationDeclared,
+      };
+    }
+    else delete next.observedClient;
+    writeState(statePath, next);
+  } finally {
+    lock.release();
+  }
+}
+
 function beforeForwardFromState(statePath, leaseToken) {
   return () => {
     const state = readState(statePath);
@@ -1655,7 +1692,12 @@ function beforeForwardFromState(statePath, leaseToken) {
     if (leaseToken && !leaseMatches(state.lease, leaseToken)) {
       return { ok: false, refusal: "lease_generation_mismatch", detail: "this proxy no longer owns the active lease generation" };
     }
-    const got = currentDigestForState(state);
+    let got;
+    try {
+      got = currentDigestForState(state);
+    } catch (error) {
+      return { ok: false, refusal: error.code, detail: `${error.message}; fix .mcp.json and run seal status` };
+    }
     if (got !== state.projectServerDigest) {
       markDrifted(statePath, state, got);
       return { ok: false, refusal: "project_server_drifted", detail: "project .mcp.json server changed since protect; run seal status" };
@@ -1727,6 +1769,7 @@ module.exports = {
   projectId,
   readProjectServer,
   readState,
+  recordObservedClient,
   recover,
   receiptKeyPaths,
   realProjectRoot,

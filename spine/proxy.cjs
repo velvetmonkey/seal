@@ -37,6 +37,7 @@ const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // Session-only transport metadata: never passed to the contract or receipts.
 // Symbols also survive the spread used for duplicate-key refusals.
 const WIRE_ID = Symbol("wire request id");
+const WIRE_META = Symbol("wire request metadata");
 
 function withWireId(frame, body) {
   const token = frame[WIRE_ID];
@@ -95,6 +96,7 @@ function createProxy(options) {
     beforeForward,    // optional fail-closed live drift check
     runtimeTreeCheck, onRuntimeObservation, // pre-decision disk observation, never signed
     leaseFence,       // optional durable lease-generation fence
+    onObservedClient, // unsigned initialize metadata, never passed to the contract
     onClientLine,     // (line) => void — what the MCP client receives
     onDecision,       // ({decision, refusal?, receiptPath}) => void
     onChildExit,      // (code, signal) => void
@@ -135,6 +137,7 @@ function createProxy(options) {
   // unknown-ID child route, but have no approval state left to authorize a call.
   const retiredElicitationIds = new Set();
   let clientCapabilities = null;
+  let observedClient = null;
 
   function retireElicitation(id) {
     retiredElicitationIds.add(id);
@@ -345,10 +348,12 @@ function createProxy(options) {
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
-    child.stdin.write(withWireId(frame, {
-      jsonrpc: "2.0", id: frame.id, method: frame.method,
-      params: { name: tool, arguments: args },
-    }) + "\n");
+    const envelope = withWireId(frame, { jsonrpc: "2.0", id: frame.id, method: frame.method });
+    // Preserve the validated metadata's original JSON, including opaque numeric
+    // progress tokens that would lose precision through a JavaScript Number.
+    const forwardedParams = JSON.stringify({ name: tool, arguments: args });
+    const metadata = Object.hasOwn(params, "_meta") ? `,"_meta":${frame[WIRE_META]}` : "";
+    child.stdin.write(`${envelope.slice(0, -1)},"params":${forwardedParams.slice(0, -1)}${metadata}}}\n`);
     return decision;
   }
 
@@ -380,13 +385,18 @@ function createProxy(options) {
     // the request, so its correlation capacity must be released on every
     // outcome rather than only on contract-terminal outcomes.
     try {
-      finishGuarded(
+      const decision = finishGuarded(
         pending.frame,
         pending.requestState,
         pending.correlation,
         { approval: answer },
         detail,
       );
+      // Retain only the outcome, never kernel evidence to reuse for a reply.
+      pending.completion = decision && { kind: decision.kind, refusal: decision.refusal };
+    } catch (error) {
+      pending.completion = { kind: "refuse", refusal: error.code || "response_malformed" };
+      throw error;
     } finally {
       // `finishGuarded` may throw after a kernel timing refusal. Cleanup is
       // deliberately unconditional so no processed answer can strand the
@@ -424,23 +434,24 @@ function createProxy(options) {
     if (!completed) return false;
     completedElicitations.delete(frame.id);
     retireElicitation(frame.id);
-    const { answer, detail: envelopeDetail } = elicitationAnswer(frame);
-    const params = completed.frame.params || {};
-    const decision = contract.retry({
-      tool: params.name,
-      args: params.arguments ?? {},
-      requestState: completed.requestState,
-      inputResponses: { approval: answer },
-    });
-    const refusal = decision.kind === "refuse" ? decision.refusal : "response_malformed";
-    const detail = envelopeDetail || (decision.kind === "refuse"
-      ? decision.detail
-      : "a duplicate elicitation response cannot authorize another execution");
-    emitReceipt("BLOCK", completed.frame, {
-      refusal,
-      detail,
-      approvalRequest: { correlation: completed.correlation },
-    }, decision.receipt);
+    // One answer has already completed this elicitation. A non-terminal
+    // refusal leaves the handle pending, so retrying even to classify a
+    // duplicate could consume it. Use only the recorded first outcome.
+    const decision = completed.completion;
+    const refusal = decision?.kind === "allow" ? "already_consumed"
+      : decision?.refusal || "response_malformed";
+    if (decision && isTerminalDecision(decision)) {
+      // Preserve terminal replay reporting with a fresh, non-accepting
+      // kernel decision. No approval handle or duplicate answer is retried.
+      emitReceipt("BLOCK", completed.frame, {
+        refusal,
+        detail: "a duplicate elicitation response cannot authorize another execution",
+        approvalRequest: { correlation: completed.correlation },
+      });
+    } else {
+      // A non-terminal first refusal has no new decision to sign.
+      decisionSink({ decision: "BLOCK", refusal });
+    }
     return true;
   }
 
@@ -449,6 +460,32 @@ function createProxy(options) {
     if (params.requestState !== undefined || params.inputResponses !== undefined) {
       blockForward(frame, "response_malformed", "client-supplied approval continuations are not accepted; answer the elicitation/create request");
       return;
+    }
+    // Approval binds the tool and arguments through the contract. Only progress
+    // correlation is supported outside that identity: it cannot add execution
+    // semantics, and stays on this session's saved frame until its answer arrives.
+    // Unknown metadata (including task relationships), task augmentation and
+    // extension fields must be refused before creating any approval.
+    const unsupported = [
+      ...Object.keys(frame).filter((key) => !["jsonrpc", "id", "method", "params"].includes(key)),
+      ...Object.keys(params).filter((key) => !["name", "arguments", "_meta"].includes(key)),
+    ];
+    if (unsupported.length > 0) {
+      blockForward(frame, "request_field_unsupported", `unsupported guarded tools/call field: ${JSON.stringify(unsupported[0])}`);
+      return;
+    }
+    if (Object.hasOwn(params, "_meta")) {
+      const meta = params._meta;
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)
+        || Object.keys(meta).some((key) => key !== "progressToken")) {
+        blockForward(frame, "request_metadata_unsupported", "guarded tools/call metadata supports only progressToken");
+        return;
+      }
+      if (Object.hasOwn(meta, "progressToken") && typeof meta.progressToken !== "string"
+        && typeof meta.progressToken !== "number") {
+        blockForward(frame, "progress_token_unsupported", "progressToken must be a string or a number");
+        return;
+      }
     }
     if (!clientCapabilities || !Object.hasOwn(clientCapabilities, "elicitation")) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
@@ -518,6 +555,7 @@ function createProxy(options) {
       try {
         hasDuplicateKeys = jsonHasDuplicateObjectKeys(line, (path, token) => {
           if (path.length === 1 && path[0] === "id") frame[WIRE_ID] = token;
+          if (path.length === 2 && path[0] === "params" && path[1] === "_meta") frame[WIRE_META] = token;
           if (path.length === 2 && path[0] === "params" && path[1] === "requestId") requestToken = token;
         });
       } catch {
@@ -543,6 +581,13 @@ function createProxy(options) {
         clientCapabilities = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
           ? capabilities
           : {};
+        const info = frame.params?.clientInfo;
+        observedClient = info && typeof info === "object" && !Array.isArray(info)
+          && typeof info.name === "string" && typeof info.version === "string"
+          ? { name: info.name, version: info.version,
+              elicitationDeclared: Object.hasOwn(clientCapabilities, "elicitation") }
+          : null;
+        onObservedClient?.(observedClient);
       }
       if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
         // The branch already requires a non-empty method string. Refuse an

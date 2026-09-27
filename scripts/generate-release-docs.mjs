@@ -16,6 +16,8 @@ const { protectPlatformSupported } = require("../spine/platform.cjs");
 const ROOT = path.resolve(process.env.SEAL_RELEASE_DOCS_ROOT || path.join(import.meta.dirname, ".."));
 const SENTINEL = "<!-- generated from published release; do not edit -->";
 const END = "<!-- end generated release docs -->";
+const NOTES_START = "<!-- generated candidate release notes; do not edit -->";
+const NOTES_END = "<!-- end generated candidate release notes -->";
 const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
@@ -348,7 +350,7 @@ function readmeRegions({ manifest }) {
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
     `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the`,
-    `> published \`${manifest.tag}\`, which carries the previous receipt format and Linux-only Protect support.`,
+    `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
   return [[
@@ -482,6 +484,28 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function candidateNotesChange(required = false) {
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
+  const relative = `docs/assurance/RELEASE-NOTES-v${sourceVersion}.md`;
+  const target = process.env.SEAL_RELEASE_NOTES_FILE || path.join(ROOT, relative);
+  if (!fs.existsSync(target)) {
+    if (required) refuse("candidate_notes_absent", `${target} is absent`);
+    return undefined;
+  }
+  const original = fs.readFileSync(target, "utf8");
+  const begin = original.indexOf(NOTES_START);
+  const finish = original.indexOf(NOTES_END);
+  if (begin < 0 || finish < begin || original.indexOf(NOTES_START, begin + 1) >= 0 || original.indexOf(NOTES_END, finish + 1) >= 0) {
+    if (required) refuse("candidate_notes_region", `${target} needs exactly one generated candidate notes region`);
+    return undefined; // Dated notes created before this template remain immutable.
+  }
+  const template = fs.readFileSync(new URL("./release-notes-install-template.md", import.meta.url), "utf8");
+  const region = `${NOTES_START}\n${template.replaceAll("@VERSION@", sourceVersion).trimEnd()}\n${NOTES_END}`;
+  const rewritten = original.slice(0, begin) + region + original.slice(finish + NOTES_END.length);
+  return { relative, target, original, rewritten };
+}
+
 const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`;
 const CHECKER_ASSET = String.raw`seal-receipt-(?:check|v2)\.mjs`;
 const HISTORICAL_LIMITATIONS_NOTES = "RELEASE-NOTES-v0.2.0-rc.3.md";
@@ -500,6 +524,41 @@ function replacePublishedSurface(relative, replacements) {
     rewritten = rewritten.replace(everyOccurrence, replacement);
   }
   return { relative, target, original, rewritten };
+}
+
+function previousPrimaryReleaseNotes(text) {
+  const match = text.match(
+    new RegExp(`^4\\. \\[assurance/(RELEASE-NOTES-v${SEMVER}\\.md)\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$`, "m"),
+  );
+  return match?.[1];
+}
+
+function historicalPrimaryCitation(filename) {
+  return `   The earlier [assurance/${filename}](${filename}) remains the historical record of that tag.`;
+}
+
+function ensureHistoricalPrimaryCitation(original, rewritten, currentReleaseNotes) {
+  const previous = previousPrimaryReleaseNotes(original);
+  if (!previous) {
+    refuse("published_surface_marker", "docs/assurance/README.md: primary release-note label marker is absent");
+  }
+  if (previous === currentReleaseNotes) return rewritten;
+  if (rewritten.includes(`assurance/${previous}`)) return rewritten;
+  const citation = historicalPrimaryCitation(previous);
+  const needle = "   that holds it.\n";
+  const at = rewritten.indexOf(needle);
+  if (at < 0) {
+    refuse("published_surface_marker", "docs/assurance/README.md: primary release-note body is absent");
+  }
+  const from = at + needle.length;
+  return rewritten.slice(0, from) + `${citation}\n` + rewritten.slice(from);
+}
+
+function withHistoricalPrimaryCitation(change, currentReleaseNotes) {
+  return {
+    ...change,
+    rewritten: ensureHistoricalPrimaryCitation(change.original, change.rewritten, currentReleaseNotes),
+  };
 }
 
 function publishedSurfaceChanges(manifest) {
@@ -524,7 +583,7 @@ function publishedSurfaceChanges(manifest) {
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
       [notePattern, releaseNotes, "published release-note route"],
     ]),
-    replacePublishedSurface("docs/assurance/README.md", [
+    withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
@@ -533,7 +592,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^5\\. \\[The \\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
-    ]),
+    ]), releaseNotes),
     replacePublishedSurface("docs/assurance/distribution.md", [
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
@@ -552,6 +611,11 @@ function publishedSurfaceChanges(manifest) {
     ]),
     replacePublishedSurface("docs/guide/README.md", [
       [/^Download and independently verify the pinned Linux x86-64 release, then install\.(?: Fetch .* from the same release\.)?$/m, `Download and independently verify the pinned Linux x86-64 release, then install. Fetch the release's \`${manifest.checksums.name}\` asset from the same release.`, "published checksum asset provenance"],
+      [new RegExp(`(?<=^SEAL_VERSION=)v${SEMVER}$`, "m"), tag, "install fence release tag"],
+      [new RegExp(`(?<=^artifact_name=")seal-v${SEMVER}-linux-x64(?=" \\\\$)`, "m"), manifest.artifact.name, "install fence artifact name"],
+      [new RegExp(`(?<=^&& artifact_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.artifact.sha256, "install fence artifact digest"],
+      [new RegExp(`(?<=^&& artifact_bytes=)\\d+(?= \\\\$)`, "m"), manifest.artifact.bytes, "install fence artifact byte count"],
+      [new RegExp(`(?<=^&& sums_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.checksums.sha256, "install fence SHA256SUMS digest"],
       [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
       [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
       [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],
@@ -682,6 +746,17 @@ function option(name) {
 }
 
 async function main() {
+  if (process.argv.includes("--notes-only")) {
+    const change = candidateNotesChange(true);
+    if (process.argv.includes("--check")) {
+      if (change.original !== change.rewritten) refuse("candidate_notes_stale", `${change.target} differs from the generated candidate commands`);
+      process.stdout.write(`PASS candidate release notes match VERSION ${process.env.SEAL_RELEASE_SOURCE_VERSION ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim()}\n`);
+    } else if (change.original !== change.rewritten) {
+      fs.writeFileSync(change.target, change.rewritten);
+      process.stdout.write(`updated ${change.relative}\n`);
+    }
+    return;
+  }
   const manifestPath = option("--manifest");
   const assetsDir = option("--assets-dir");
   const localCommit = option("--tag-commit");
@@ -696,12 +771,14 @@ async function main() {
     replaceRegions("docs/start/install.md", installRegions(facts)),
   ];
   const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
-  const changes = [...generatedRegionChanges, ...publishedPointerChanges];
+  const notesChange = candidateNotesChange();
+  const changes = [...generatedRegionChanges, ...publishedPointerChanges, ...(notesChange ? [notesChange] : [])];
   if (process.argv.includes("--check")) {
     // Legacy generated regions are checked by their published facts below;
     // forcing old prose through today's template would rewrite history. The
     // separately owned navigation pointers do have one canonical current form.
-    const stale = publishedPointerChanges.filter((change) => change.original !== change.rewritten);
+    const stale = [...publishedPointerChanges, ...(notesChange ? [notesChange] : [])]
+      .filter((change) => change.original !== change.rewritten);
     for (const change of stale) process.stderr.write(`FAIL release docs stale: ${change.relative}\n`);
     if (!verifyDocsAgainstRelease(facts) || stale.length) {
       process.exitCode = 1;

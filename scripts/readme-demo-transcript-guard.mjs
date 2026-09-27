@@ -3,6 +3,7 @@
 // Compare the README's demo Output fences with a transcript from a real run.
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { checkReadmeDemoOutput } from "../test-support/front-door-invariants.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const README = process.env.SEAL_DEMO_README ?? resolve(ROOT, "README.md");
@@ -51,14 +52,14 @@ try {
 
 const sectionStart = readme.indexOf("## What you should see");
 const capture = sectionStart === -1 ? null : readme.slice(sectionStart).match(/```text\n([\s\S]*?)\n```/);
-if (!capture) fail("PROOF_FENCE_ABSENT: README has no four-line visual proof");
-const expectedProof = [
-  "before approval: 0 calls",
-  "after approval:  1 call",
-  "after replay:    1 call - refused",
-  "outside Seal:    effect succeeded, 0 Seal decisions",
-].join("\n");
-if (capture[1] !== expectedProof) fail("PROOF_MISMATCH: README four-line visual proof changed");
+if (!capture) fail("PROOF_FENCE_ABSENT: README has no demo output capture");
+const demoDir = transcript.match(/^(?:temporary )?demo directory: (.+) \(remains after/m)?.[1];
+if (!demoDir) fail("MISSING_DEMO_EVIDENCE: printed demo directory");
+try {
+  checkReadmeDemoOutput(readme, transcript, demoDir);
+} catch (error) {
+  fail(`PROOF_MISMATCH: ${error.message}`);
+}
 
 function stable(text) {
   return text
@@ -79,4 +80,4 @@ for (const [label, pattern] of [
   if (!pattern.test(actual)) fail(`MISSING_DEMO_EVIDENCE: ${label}`);
 }
 
-console.log("PASS  README four-line proof agrees with the demo transcript");
+console.log("PASS  README output capture agrees with the demo transcript");

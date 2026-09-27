@@ -12,7 +12,7 @@ const cfg = { epoch: 1, safety: { approval: { control_file: "X", ttl_seconds: 12
 const keys = generateKeyPairSync("ed25519");
 const pub = Buffer.from(keys.publicKey.export({ type: "spki", format: "der" })).subarray(-32).toString("hex");
 
-function envelope(verdict = "BLOCK", action) {
+function envelope(verdict = "BLOCK", action = "BLOCK") {
   const r = { seal_receipt: "v2", tool: "db.execute" };
   if (action !== undefined) r.action = action;
   Object.assign(r, { arguments: { database: "prod", sql: "drop table users" }, now: 1000, kernel_config: cfg, granted_capabilities: [], kernel_inputs: { approvals: [], votes: "", grants: "", forecasts: "" }, verdict, reason: "safety kernel denied", replay: { args_sha256: "", config_sha256: "" } });
@@ -67,6 +67,17 @@ test("ALLOW action refuses when replayed verdict is not ALLOW, while pending app
   assert.equal(pendingResult.replay, true);
   assert.equal(pendingResult.receipt.action, "INPUT_REQUIRED");
   assert.equal(pendingResult.receipt.verdict, "BLOCK");
+});
+
+test("action must be a non-empty string before signature checks or replay", async () => {
+  for (const action of [1, true, {}, ["ALLOW"], null, "", undefined]) {
+    const malformed = { ...envelope(), action };
+    await assert.rejects(() => verify(text(malformed), { publicKeyHex: pub }),
+      (error) => error.code === "invalid_action" && error.message === "action must be a non-empty string");
+  }
+  const custom = await verify(text(envelope("BLOCK", "CUSTOM_ACTION")), { publicKeyHex: pub });
+  assert.equal(custom.signature, true);
+  assert.equal(custom.replay, true);
 });
 
 test("unchecked trust inputs are refused rather than counted as evidence", async () => {
@@ -154,7 +165,7 @@ test("every recorded input channel is consumed or refuses tampering", async () =
   const args = { amount: 40000, to: "supplier-77" };
   const target = guardTarget("payments.send", args);
   const quorum = '{"acceptor":1,"value":"payments.send"}\n{"acceptor":2,"value":"payments.send"}\n';
-  const base = { seal_receipt: "v2", tool: "payments.send", arguments: args, now: 1000,
+  const base = { seal_receipt: "v2", tool: "payments.send", action: "ALLOW", arguments: args, now: 1000,
     kernel_config: CFG_STANDARD, granted_capabilities: [{ target }],
     kernel_inputs: { approvals: [target], votes: quorum, grants: "", forecasts: "" },
     verdict: "ALLOW", reason: "consensus satisfied", replay: { args_sha256: sha256(canonical(args)), config_sha256: sha256(canonical(CFG_STANDARD)) } };
