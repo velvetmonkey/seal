@@ -68,6 +68,7 @@ const outsideReviews = {
     ['20', 'test/dist3d.test.cjs: built artifact payload; UNPROVABLE here: hash algorithm across every payload', "The installed tree is exactly the regular payload files named by the artifact's payload manifest (a fresh build includes `checker/seal-receipt-v2.mjs` for `seal verify`)."],
   ],
   'README.md': [
+    ['38', 'test/frontdoor.test.mjs: real demo stdout fence includes file change, protected-server count and new decision count', 'The direct write changes the file without another protected-server call or Seal decision.'],
     ['41', 'published artifact shell stub: Seal requires Node >= 20; measured below', 'Seal itself requires Node 20 or newer.'],
     ['42', 'Claude Code 2.1.283 --help: starts an interactive session by default; README onboarding check binds the project and command', 'Start Claude Code from the `seal-protect-demo` project directory (the `cd` command above puts you there):'],
     ['43', 'test/readme-protect-state-witness.test.cjs: status inspects the live route; instruction keeps that session running', 'Keep Claude Code running and open a second terminal in `seal-protect-demo`, then check the route:'],

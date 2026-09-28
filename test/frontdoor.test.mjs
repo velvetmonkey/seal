@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import {
   checkDocsRouteTable,
   checkReadmeFrontDoor,
+  checkReadmeDemoOutput,
   DOCS_ROUTE_TABLE,
   README_SECTIONS,
 } from "../test-support/front-door-invariants.mjs";
@@ -144,6 +145,7 @@ test("README claim: Seal holds one exact call and permits at most one execution"
       input: "y\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
     });
   }, claim); // CLAIM-COVERAGE: README.md#readme
+  checkReadmeDemoOutput(readFileSync(resolve(ROOT, "README.md"), "utf8"), output, dir);
   assert.match(output, /INPUT REQUIRED.*approval/s, claim);
   assert.match(output, /BLOCKED\s+the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK[\s\S]*one-use held:[^\n]*child calls observed: still 1/, claim);
   assert.equal(readFileSync(join(dir, "child", "data.txt.count"), "utf8").trim(), "1", claim);

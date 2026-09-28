@@ -66,20 +66,38 @@ When you are finished, remove the directory printed as `Demo directory: /absolut
 ## What you should see
 
 Seal holds each exact call, asks once, permits at most one execution, and writes
-a signed receipt. The demo reduces that path to four observations:
+a signed receipt. Here are selected lines from a run where you answer `y`.
+`<demo-dir>` stands for the printed absolute demo directory; `<id>` stands for
+the generated receipt identifier.
 
 ```text
-before approval: 0 calls
-after approval:  1 call
-after replay:    1 call - refused
-outside Seal:    effect succeeded, 0 Seal decisions
+child calls observed: 0 (read from <demo-dir>/child/data.txt.count)
+child calls observed: 1 (read from <demo-dir>/child/data.txt.count)
+BLOCKED   the shared proxy recorded a BLOCK receipt for the replay: verdict BLOCK
+one-use held: the replay did not run the call again; child calls observed: still 1 (read from <demo-dir>/child/data.txt.count)
+receipt written: <demo-dir>/receipts/receipt-<id>-INPUT_REQUIRED.json
+receipt written: <demo-dir>/receipts/receipt-<id>-ALLOW.json
+receipt written: <demo-dir>/receipts/receipt-<id>-BLOCK.json
+File changed: yes
+Protected-server call count: still 1
+New Seal decisions: 0
 ```
+
+Before approval, the child has received no tool calls.
+After approval, the child has received one tool call.
+The replay is refused and the child call count stays at one.
+The three receipt paths record the approval request, allowed call and blocked replay.
+The direct write changes the file without another protected-server call or Seal decision.
 
 Read the [v0.4.0 standalone checker exit-status notice](docs/verify/README.md#v040-standalone-checker-exit-status) before scripting receipt checks.
 
-The demo also prints its receipt directory and public key. Those records are
-useful for inspecting the decision, but they do not establish that the recorded
-effect happened.
+The demo also prints its receipt directory and the path of the public key file,
+`<demo-dir>/receipt-signer.pub`, rather than the key itself.
+Copy the printed `Run:` command to check the replay receipt.
+It reads that file and checks the signature and recorded decision against the
+checker's verifier-local kernel.
+Because the demo supplies its own signing key, this establishes self-consistency,
+not a trusted signer's identity or proof that the recorded effect happened.
 
 ## Protect a real tool set
 

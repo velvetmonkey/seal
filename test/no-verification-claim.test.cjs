@@ -128,7 +128,9 @@ test("seal verify output claims re-derivation, never an outside verification", a
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   const out = `${result.stdout}${result.stderr}`;
   for (const needle of BANNED) assert.ok(!out.includes(needle), `seal verify printed a banned claim: ${needle}`);
-  assert.equal(out.includes("REFUSE"), false);
+  assert.equal(result.status, 1, out);
+  assert.equal(out.split("\n").filter((line) => line.startsWith("REFUSE ")).length, 1);
+  assert.match(result.stdout, /^REFUSE public_key_absent: no usable public key supplied to check the signature$/m);
 });
 
 test("seal help claims neither an outside verification nor a passing verdict", () => {
