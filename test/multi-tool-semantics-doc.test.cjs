@@ -27,6 +27,7 @@ function setup(mode = "ok", source = DECLARED_TOOLS.join(",")) {
   fs.mkdirSync(project); fs.mkdirSync(home); fs.mkdirSync(bin);
   const claude = path.join(bin, "claude");
   fs.writeFileSync(claude, `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const fs=require("node:fs"),path=require("node:path");
 const a=process.argv.slice(2), cwd=process.cwd(), f=path.join(process.env.HOME,".claude.json");
 function read(){try{return JSON.parse(fs.readFileSync(f,"utf8"))}catch{return {}}}

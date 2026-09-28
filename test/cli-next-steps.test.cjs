@@ -13,6 +13,7 @@ function fakeClaudeBin(root) {
   fs.mkdirSync(bin, { recursive: true });
   const script = path.join(bin, "claude");
   fs.writeFileSync(script, `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
 const fs = require("node:fs");
 const path = require("node:path");
 const cwd = process.cwd();
