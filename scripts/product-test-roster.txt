@@ -50,6 +50,7 @@ test/installed-tree-pin.test.cjs
 test/json-arguments.test.cjs
 test/kernel-bridge.test.cjs
 test/kernel-timing-message.test.cjs
+test/key-fold-forwarding.test.cjs
 test/lean-proof-source.test.mjs
 test/lease-generation.test.cjs
 test/limits-list.test.cjs
@@ -100,3 +101,4 @@ test/version-identity-gate.test.cjs
 test/version-identity.test.cjs
 test/workflow-gh-repo-context.test.cjs
 test/workflow-host-paths.test.cjs
+test/demo-grant.test.cjs

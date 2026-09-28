@@ -83,16 +83,32 @@ async function main() {
 
   // The guarded entry follows the retry tool so even an altered tool is
   // mediated. Only the issue-time target is granted, so alteration denies.
+  // An unapproved forward instead guards only the selections' kernel matches
+  // and explicitly allows the rest, so the kernel blocks exactly the calls a
+  // matching selection would have held for approval.
+  const unapprovedForward = Array.isArray(request.forwardMatches);
+  if (unapprovedForward && request.accepted !== false) throw new Error("an unapproved forward cannot carry an approval");
+  const tools = unapprovedForward
+    ? [
+      ...request.forwardMatches.map((match) => ({
+        name: request.retryTool,
+        mode: "guarded",
+        match,
+        target: [{ full_arguments: true }],
+      })),
+      { name: request.retryTool, mode: "allow", match: { type: "always" }, target: [] },
+    ]
+    : [{
+      name: request.retryTool,
+      mode: "guarded",
+      match: { type: "always" },
+      target: [{ full_arguments: true }],
+    }];
   const config = {
     epoch: request.epoch,
     safety: {
       approval: { control_file: "product-adapter", ttl_seconds: 120 },
-      tools: [{
-        name: request.retryTool,
-        mode: "guarded",
-        match: { type: "always" },
-        target: [{ full_arguments: true }],
-      }],
+      tools,
     },
     temporal: { policies: [] },
   };

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
@@ -119,4 +119,41 @@ test("demo preserves a hand-written signer file and prints a checkable new run",
   const runDirectory = output.match(/^demo directory: (.+) \(remains after the demo/m)?.[1];
   assert.ok(runDirectory?.startsWith(directory + path.sep), output);
   verifyDemoReceipts(output, runDirectory);
+});
+
+function concurrentDemo(directory) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [SEAL, "demo", "--dir", directory], {
+      cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], timeout: 30000,
+    });
+    let output = "";
+    child.stdout.on("data", (data) => {
+      output += data;
+      if (output.includes("Approve? [y/N]")) child.stdin.end("y\n");
+    });
+    child.stderr.on("data", (data) => { output += data; });
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, output }));
+  });
+}
+
+test("concurrent first demo runs retain receipts verifiable with each printed key", async () => {
+  const parent = testTmpdir(path.join(os.tmpdir(), "seal-demo-concurrent-"));
+  const failures = [];
+  // Exercise the first-run race repeatedly: both processes start before either
+  // is awaited, and both approve using the same interaction as the CLI user.
+  for (let pair = 0; pair < 32; pair += 1) {
+    const directory = path.join(parent, `pair-${pair}`);
+    fs.mkdirSync(directory);
+    const runs = await Promise.all([concurrentDemo(directory), concurrentDemo(directory)]);
+    for (const run of runs) {
+      try {
+        assert.equal(run.status, 0, run.output);
+        const runDirectory = run.output.match(/^demo directory: (.+) \(remains after the demo/m)?.[1];
+        assert.ok(runDirectory, run.output);
+        verifyDemoReceipts(run.output, runDirectory);
+      } catch (error) { failures.push(`pair ${pair}: ${error.message}`); }
+    }
+  }
+  assert.deepEqual(failures, [], failures.join("\n"));
 });

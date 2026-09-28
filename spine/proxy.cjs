@@ -27,16 +27,47 @@ const { openJournal, StoreError } = require("./store.cjs");
 const { stopStdioServer } = require("./protection.cjs");
 const { openReceiptEmitter } = require("./receipts.cjs");
 const { ReceiptRefusal, canonical } = require("./receipt-v2.cjs");
-const { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection } = require("./tool-selection.cjs");
+const {
+  caseVariantOf, decimalIdentity, evaluateSelection, foldCollision, jsonHasDuplicateObjectKeys, kernelMatchFor,
+  nestedFoldCollision, normalizeToolSelection, numberNotRepresentable,
+} = require("./tool-selection.cjs");
 
 const RECEIPT_CORRELATION_CAPACITY_EXCEEDED = "receipt_correlation_capacity_exceeded";
 const CLIENT_ELICITATION_UNSUPPORTED = "client_elicitation_unsupported";
 const CLIENT_FORM_ELICITATION_UNSUPPORTED = "client_form_elicitation_unsupported";
+const KEY_CASE_FOLD_COLLISION = "key_case_fold_collision";
+const CASE_VARIANT_NAME = "case_variant_name";
+const NUMBER_NOT_REPRESENTABLE = "number_not_representable";
+const METHOD_NOT_ALLOWED = "method_not_allowed";
+// The only client-to-server methods the proxy forwards. A frame that carries a
+// method is forwarded only when that method is byte-equal to one entry; any
+// other method, including case variants, look-alikes and non-strings, is
+// refused as method_not_allowed. Each entry names why it is needed.
+const FORWARDED_METHODS = Object.freeze([
+  "initialize", // MCP lifecycle; the initialize branch below reads client capabilities
+  "notifications/initialized", // MCP lifecycle; sent by clients after initialize (test/receipt-checker.test.cjs)
+  "ping", // MCP ping utility; the fences in test/spine-retry.test.cjs and test/key-fold-forwarding.test.cjs
+  "tools/list", // Claude Code tool discovery; test-support/tool-list-server.cjs
+  "tools/call", // the guarded path; test/approval-contract.test.cjs, test/key-fold-forwarding.test.cjs
+  "notifications/cancelled", // cancelPendingRequest below; the reqident cancellation tests in test/spine-retry.test.cjs
+  "resources/list", // Claude Code ListMcpResourcesTool (client listResources call)
+  "resources/read", // Claude Code ReadMcpResourceTool (client readResource call)
+  "prompts/list", // Claude Code MCP prompt commands (client listPrompts call)
+  "prompts/get", // Claude Code MCP prompt commands (client getPrompt call)
+  "completion/complete", // Claude Code argument completion (client complete call with a ref/resource)
+  "notifications/roots/list_changed", // Claude Code sends it to live servers when its roots change
+]);
+const FORWARDED_METHOD_SET = new Set(FORWARDED_METHODS);
 const DEFAULT_RECEIPT_CORRELATION_CAPACITY = 1024;
 const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
+// Names a server may match case-insensitively. A client key or method that
+// equals one of these only under case folding is refused, never forwarded.
+const ENVELOPE_KEYS = ["jsonrpc", "id", "method", "params", "result", "error"];
+const TOOLS_CALL_PARAMS_KEYS = ["name", "arguments", "_meta"];
 // Session-only transport metadata: never passed to the contract or receipts.
 // Symbols also survive the spread used for duplicate-key refusals.
 const WIRE_ID = Symbol("wire request id");
+const WIRE_PROGRESS = Symbol("wire progress token");
 
 function withWireId(frame, body) {
   const token = frame[WIRE_ID];
@@ -52,14 +83,38 @@ function wireIdentity(token, parsed) {
   if (typeof parsed !== "number" || token === undefined) return parsed;
   // Compare numeric values exactly, including equivalent integer spellings
   // (42, 42.0, 4.2e1). Never expand a potentially enormous exponent.
-  const [, sign, whole, fraction = "", exponent = "0"] =
-    token.match(/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
-  let digits = (whole + fraction).replace(/^0+/, "");
-  if (!digits) return "number:0";
-  const trailing = digits.match(/0*$/)[0].length;
-  digits = digits.slice(0, digits.length - trailing);
-  const power = BigInt(exponent) - BigInt(fraction.length) + BigInt(trailing);
-  return `number:${sign}${digits}e${power}`;
+  return decimalIdentity(token);
+}
+
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+// The request id and a numeric progressToken are never re-spelled: both are
+// opaque identities a JavaScript Number could round. Everything else in a
+// forwarded tools/call is rebuilt from the parsed, allowlisted fields. The
+// client's raw bytes, unknown envelope members and unknown params members never
+// reach the child. A tool outside the selected set keeps its whole `_meta`
+// object; a selected tool's call keeps only `_meta.progressToken`, the one
+// metadata member guarded approval supports.
+function toolsCallLine(frame, { meta }) {
+  const base = { name: frame.params.name };
+  if (Object.hasOwn(frame.params, "arguments")) base.arguments = frame.params.arguments;
+  let paramsText = JSON.stringify(base);
+  const source = frame.params._meta;
+  if (Object.hasOwn(frame.params, "_meta") && isPlainObject(source)) {
+    const forwarded = meta === "all" ? { ...source }
+      : Object.hasOwn(source, "progressToken") ? { progressToken: source.progressToken } : {};
+    let metaText;
+    if (typeof forwarded.progressToken === "number" && frame[WIRE_PROGRESS] !== undefined) {
+      const marker = `seal-progress-token-${randomBytes(16).toString("hex")}`;
+      metaText = JSON.stringify({ ...forwarded, progressToken: marker })
+        .replace(JSON.stringify(marker), frame[WIRE_PROGRESS]);
+    } else {
+      metaText = JSON.stringify(forwarded);
+    }
+    paramsText = `${paramsText.slice(0, -1)},"_meta":${metaText}}`;
+  }
+  const envelope = withWireId(frame, { jsonrpc: "2.0", id: frame.id, method: "tools/call" });
+  return `${envelope.slice(0, -1)},"params":${paramsText}}`;
 }
 const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "runtime_tree_unknown",
@@ -297,6 +352,69 @@ function createProxy(options) {
     onClientLine(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32600, message: detail } }));
   }
 
+  // A frame refused before any tool decision: a signed BLOCK receipt and a
+  // named JSON-RPC error. Only a request with a usable id is answered by id;
+  // a response or notification is answered with id null so the reply cannot
+  // collide with one of the client's own requests.
+  function refuseFrame(frame, refusal, detail, { tool = "<ambiguous>", recordArguments = true } = {}) {
+    const params = isPlainObject(frame.params) ? frame.params : {};
+    const args = recordArguments && isPlainObject(params.arguments) ? params.arguments : {};
+    emitReceipt("BLOCK", { params: { name: tool, arguments: args } }, { refusal, detail });
+    const request = typeof frame.method === "string"
+      && (typeof frame.id === "string" || typeof frame.id === "number");
+    const body = { jsonrpc: "2.0", id: request ? frame.id : null,
+      error: { code: -32600, message: `seal proxy: ${refusal}: ${detail}`, data: { refusal } } };
+    onClientLine(request ? withWireId(frame, body) : JSON.stringify(body));
+  }
+
+  // A method outside FORWARDED_METHODS: a BLOCK receipt as for every other
+  // refused frame; a request also gets a JSON-RPC "Method not found" error that
+  // names the refusal and echoes the method as a JSON string. A notification
+  // gets no response, because JSON-RPC forbids one.
+  function refuseMethod(frame) {
+    const method = typeof frame.method === "string" ? frame.method : JSON.stringify(frame.method);
+    const detail = `method ${JSON.stringify(method)} is not on the forwarded method allowlist`;
+    emitReceipt("BLOCK", { params: { name: "<method-not-allowed>", arguments: {} } }, { refusal: METHOD_NOT_ALLOWED, detail });
+    if (!Object.hasOwn(frame, "id")) return;
+    const request = typeof frame.id === "string" || typeof frame.id === "number";
+    const body = { jsonrpc: "2.0", id: request ? frame.id : null,
+      error: { code: -32601, message: `seal proxy: ${METHOD_NOT_ALLOWED}: ${detail}`, data: { refusal: METHOD_NOT_ALLOWED, method } } };
+    onClientLine(request ? withWireId(frame, body) : JSON.stringify(body));
+  }
+
+  // Refuse a client frame whose keys or names a lenient server could read
+  // differently: keys equal under Unicode case folding in the envelope, in
+  // params, or anywhere inside a tools/call's arguments or _meta; and a key or
+  // tool name that equals a known or guarded name only under case folding.
+  // Exact duplicates are refused earlier by the JSON scanner, and a method
+  // that is not byte-equal to an allowlisted one never reaches this check.
+  function envelopeRefusal(frame) {
+    const describe = ([first, second], where) => `${where} keys ${JSON.stringify(first)} and ${JSON.stringify(second)} are equal under Unicode case folding`;
+    const topCollision = foldCollision(Object.keys(frame));
+    if (topCollision) return { refusal: KEY_CASE_FOLD_COLLISION, detail: describe(topCollision, "envelope") };
+    for (const key of Object.keys(frame)) {
+      const known = caseVariantOf(key, ENVELOPE_KEYS);
+      if (known) return { refusal: CASE_VARIANT_NAME, detail: `envelope key ${JSON.stringify(key)} equals ${JSON.stringify(known)} only under case folding` };
+    }
+    if (!isPlainObject(frame.params)) return null;
+    const paramsCollision = foldCollision(Object.keys(frame.params));
+    if (paramsCollision) return { refusal: KEY_CASE_FOLD_COLLISION, detail: describe(paramsCollision, "params") };
+    if (frame.method !== "tools/call") return null;
+    for (const key of Object.keys(frame.params)) {
+      const known = caseVariantOf(key, TOOLS_CALL_PARAMS_KEYS);
+      if (known) return { refusal: CASE_VARIANT_NAME, detail: `params key ${JSON.stringify(key)} equals ${JSON.stringify(known)} only under case folding` };
+    }
+    const toolVariant = guardedToolNames.has(frame.params.name) ? null : caseVariantOf(frame.params.name, guardedToolNames);
+    if (toolVariant) {
+      return { refusal: CASE_VARIANT_NAME, detail: `tool name ${JSON.stringify(frame.params.name)} equals guarded tool ${JSON.stringify(toolVariant)} only under case folding` };
+    }
+    for (const member of ["arguments", "_meta"]) {
+      const collision = nestedFoldCollision(frame.params[member]);
+      if (collision) return { refusal: KEY_CASE_FOLD_COLLISION, detail: describe(collision, member) };
+    }
+    return null;
+  }
+
   function canForward(frame) {
     if (childSpawnError) {
       blockForward(frame, childSpawnError, `protected server command failed to start: ${childArgv[0]}`);
@@ -347,10 +465,7 @@ function createProxy(options) {
     const receiptExtra = { evidence: decision.evidence };
     receiptExtra.approvalRequest = approvalRequest;
     emitReceipt("ALLOW", frame, receiptExtra, decision.receipt);
-    child.stdin.write(withWireId(frame, {
-      jsonrpc: "2.0", id: frame.id, method: frame.method,
-      params: { name: tool, arguments: args },
-    }) + "\n");
+    child.stdin.write(toolsCallLine(frame, { meta: "progress" }) + "\n");
     return decision;
   }
 
@@ -458,6 +573,32 @@ function createProxy(options) {
       blockForward(frame, "response_malformed", "client-supplied approval continuations are not accepted; answer the elicitation/create request");
       return;
     }
+    // Approval binds the tool and arguments through the contract. Only progress
+    // correlation is supported outside that identity: it cannot add execution
+    // semantics, and stays on this session's saved frame until its answer arrives.
+    // Unknown metadata (including task relationships), task augmentation and
+    // extension fields must be refused before creating any approval.
+    const unsupported = [
+      ...Object.keys(frame).filter((key) => !["jsonrpc", "id", "method", "params"].includes(key)),
+      ...Object.keys(params).filter((key) => !["name", "arguments", "_meta"].includes(key)),
+    ];
+    if (unsupported.length > 0) {
+      blockForward(frame, "request_field_unsupported", `unsupported guarded tools/call field: ${JSON.stringify(unsupported[0])}`);
+      return;
+    }
+    if (Object.hasOwn(params, "_meta")) {
+      const meta = params._meta;
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)
+        || Object.keys(meta).some((key) => key !== "progressToken")) {
+        blockForward(frame, "request_metadata_unsupported", "guarded tools/call metadata supports only progressToken");
+        return;
+      }
+      if (Object.hasOwn(meta, "progressToken") && typeof meta.progressToken !== "string"
+        && typeof meta.progressToken !== "number") {
+        blockForward(frame, "progress_token_unsupported", "progressToken must be a string or a number");
+        return;
+      }
+    }
     if (!clientCapabilities || !Object.hasOwn(clientCapabilities, "elicitation")) {
       blockForward(frame, CLIENT_ELICITATION_UNSUPPORTED, "the client did not declare the elicitation capability and cannot present an approval");
       return;
@@ -523,10 +664,16 @@ function createProxy(options) {
       }
       let hasDuplicateKeys;
       let requestToken;
+      const paramsNumberTokens = [];
       try {
         hasDuplicateKeys = jsonHasDuplicateObjectKeys(line, (path, token) => {
           if (path.length === 1 && path[0] === "id") frame[WIRE_ID] = token;
+          const progressPath = path.length === 3 && path[0] === "params" && path[1] === "_meta" && path[2] === "progressToken";
+          if (progressPath) frame[WIRE_PROGRESS] = token;
           if (path.length === 2 && path[0] === "params" && path[1] === "requestId") requestToken = token;
+          // A numeric progressToken is forwarded in its original spelling, so
+          // re-serialization cannot change its value.
+          if (path[0] === "params" && !progressPath && /^-?\d/.test(token)) paramsNumberTokens.push(token);
         });
       } catch {
         blockMalformedClientFrame(frame, "seal proxy: malformed JSON frame refused");
@@ -536,12 +683,23 @@ function createProxy(options) {
         blockForward({ ...frame, params: { ...(frame.params || {}), name: "<ambiguous>" } }, "response_malformed", "duplicate JSON object key");
         return;
       }
+      const shapeRefusal = envelopeRefusal(frame);
+      if (shapeRefusal) {
+        refuseFrame(frame, shapeRefusal.refusal, shapeRefusal.detail);
+        return;
+      }
       if (Object.hasOwn(frame, "id") && (!frame.method
         || pendingElicitations.has(frame.id) || completedElicitations.has(frame.id)
         || retiredElicitationIds.has(frame.id))) {
         if (completeElicitation(frame)) return;
         if (refuseDuplicateElicitation(frame)) return;
         if (retiredElicitationIds.has(frame.id)) return;
+      }
+      // Answers to this proxy's own elicitation requests were handled above.
+      // Every other frame that carries a method must name an allowlisted one.
+      if (Object.hasOwn(frame, "method") && !FORWARDED_METHOD_SET.has(frame.method)) {
+        refuseMethod(frame);
+        return;
       }
       if (frame.method === "notifications/cancelled" && !Object.hasOwn(frame, "id")
         && Object.hasOwn(frame.params || {}, "requestId")
@@ -559,12 +717,34 @@ function createProxy(options) {
           : null;
         onObservedClient?.(observedClient);
       }
-      if (frame.method === "tools/call" && guardedToolNames.has(frame.params?.name)) {
-        // The branch already requires a non-empty method string. Refuse an
-        // invalid request envelope before normalizing arguments or selecting.
+      if (frame.method === "tools/call") {
+        // Every tools/call is forwarded re-serialized, so it must first have
+        // an envelope that can be rebuilt: a request id and a named tool.
+        const guarded = guardedToolNames.has(frame.params?.name);
         if (frame.jsonrpc !== "2.0" || !Object.hasOwn(frame, "id")
-          || (typeof frame.id !== "string" && typeof frame.id !== "number")) {
-          blockMalformedClientFrame(frame, "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id");
+          || (typeof frame.id !== "string" && typeof frame.id !== "number")
+          || !isPlainObject(frame.params) || typeof frame.params.name !== "string") {
+          blockMalformedClientFrame(frame, guarded
+            ? "seal proxy: guarded tools/call requires jsonrpc 2.0, a non-empty method, and a string or number id"
+            : "seal proxy: tools/call requires jsonrpc 2.0, a string or number id, and params naming the tool");
+          return;
+        }
+        // A guarded call's _meta is judged by the guarded field policy below,
+        // which names its own refusals.
+        if (!guarded && Object.hasOwn(frame.params, "_meta") && !isPlainObject(frame.params._meta)) {
+          blockMalformedClientFrame(frame, "seal proxy: tools/call params._meta must be an object when present");
+          return;
+        }
+        for (const token of paramsNumberTokens) {
+          const problem = numberNotRepresentable(token);
+          if (problem) {
+            refuseFrame(frame, NUMBER_NOT_REPRESENTABLE, `number ${token.length > 64 ? `${token.slice(0, 64)}...` : token} ${problem}; re-serializing it would change its value`,
+              { tool: "<malformed>", recordArguments: false });
+            return;
+          }
+        }
+        if (!guarded) {
+          if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { meta: "all" }) + "\n");
           return;
         }
         // MCP arguments is optional. Normalize omission on the parsed frame
@@ -572,14 +752,28 @@ function createProxy(options) {
         // Explicit null and other non-object values still reach the renderer.
         if (!Object.hasOwn(frame.params, "arguments")) frame.params.arguments = {};
         const args = frame.params.arguments;
-        const matching = selections
-          .filter((selection) => selection.name === frame.params.name)
+        const toolSelections = selections.filter((selection) => selection.name === frame.params.name);
+        const matching = toolSelections
           .map((selection) => evaluateSelection(selection, args, line))
           .find((result) => result.gate);
         if (matching) {
           decideGuarded(frame, matching);
           return;
         }
+        // No predicate matched, so Node would forward without approval. The
+        // kernel must agree before anything reaches the child.
+        const check = contract.authorizeUnapprovedForward({
+          tool: frame.params.name,
+          args,
+          forwardMatches: toolSelections.map(kernelMatchFor).filter(Boolean),
+        });
+        if (check.kind === "refuse") {
+          emitReceipt("BLOCK", frame, { refusal: check.refusal, detail: check.detail }, check.receipt);
+          respond(frame, refusalResult(check.refusal, check.detail, check.timing));
+          return;
+        }
+        if (canForward(frame)) child.stdin.write(toolsCallLine(frame, { meta: "progress" }) + "\n");
+        return;
       }
       if (canForward(frame)) child.stdin.write(line + "\n");
     },
@@ -593,4 +787,4 @@ function createProxy(options) {
   };
 }
 
-module.exports = { createProxy, StoreError };
+module.exports = { createProxy, FORWARDED_METHODS, StoreError };

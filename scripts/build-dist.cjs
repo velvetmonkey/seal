@@ -29,6 +29,8 @@ const PAYLOAD_PATHS = [
   "spine/integrity.cjs",
   "spine/demo.cjs",
   "spine/demo-server.cjs",
+    "spine/demo-grant.cjs",
+    "spine/demo-grant-server.cjs",
   "spine/verify-server.cjs",
   "spine/runtime-inspection.cjs",
   "spine/protection.cjs",

@@ -65,3 +65,22 @@ test("v0.4.0 standalone checker notice and both install links remain available",
     assert.equal(resolve(ROOT, page, "..", target), resolve(ROOT, "docs/verify/README.md"));
   }
 });
+
+// The archive fact is committed evidence, checked against the row without network access.
+test("archived action row does not claim maintenance or current CI", () => {
+  const text = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8");
+  assert.match(text, /seal-verify-action.*archived.*2026-09-27/);
+  const row = text.split("\n").find(line => line.startsWith("| The `seal verify` closure"));
+  assert.ok(row);
+  assert.doesNotMatch(row, /maintained|runs in CI|\*\*Tested\*\*/);
+  assert.match(row, /CI no longer runs/);
+});
+for (const [oldPath, currentPath] of [
+  ["CLAIMS-MATRIX.md", "archive/CLAIMS-MATRIX.md"],
+  ["EVALUATOR-START.md", "assurance/evaluator-start.md"],
+  ["ARCHITECTURE.md", "assurance/architecture.md"],
+]) test(`legacy docs/${oldPath} resolves to its current page`, () => {
+  const notice = readFileSync(resolve(ROOT, "docs", oldPath), "utf8");
+  assert.ok(notice.includes(`](${currentPath})`));
+  assert.ok(readFileSync(resolve(ROOT, "docs", currentPath), "utf8").length);
+});

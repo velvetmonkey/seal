@@ -9,12 +9,14 @@ by its configured source patterns, which omit some emitted tokens, including
 `client_elicitation_unsupported`, `receipt_correlation_capacity_exceeded`,
 and `receipt_signer_absent`.
 
-Refusal output includes the four shapes below, plus un-tokened `seal: <message>`
+Refusal output includes the five shapes below, plus un-tokened `seal: <message>`
 errors, `seal: REFUSE <token>: <message>` protection errors, and
 `REFUSED <token>` lines with a separate message when supplied:
 
 - as the protected tool's error result in Claude Code:
   `approval refused: <token> — <detail>`
+- as a JSON-RPC error when the wrapper refuses a message before any tool
+  decision: `seal proxy: <token>: <detail>`
 - from a `seal` command on stderr: `seal: <token>: <message>`
 - from the wrapper as Claude Code starts the protected server (visible in
   Claude Code's MCP logs): `seal __proxy: <token>: <message>`
@@ -28,7 +30,9 @@ installer or a failed external command can have made partial changes first.
 ## While using the protected tool
 
 Minted in `contract/contract.cjs` and `spine/proxy.cjs`; delivered as the
-tool's error result. The first group is the approval contract judging a
+tool's error result, except `method_not_allowed`, `key_case_fold_collision`,
+`case_variant_name` and `number_not_representable`, which arrive as a JSON-RPC
+error. The first group is the approval contract judging a
 retry; unless a token says otherwise, the way to proceed is simply to make a
 fresh call and approve it fresh.
 
@@ -119,6 +123,13 @@ detail names the side that refused. Seal fails closed and does not consume or
 forward the call. Preserve the receipt and report the disagreement; retrying
 without understanding it is not a remedy.
 
+The same token refuses a call to a selected tool that Node would forward
+without approval because no argument predicate matched, when the kernel
+blocks that call. The kernel re-checks the predicates its match language can
+express (exact strings, booleans, safe integers and prefix-only patterns on
+undotted argument names) and its own checks of the call's JSON, such as a lone
+surrogate escape or nesting deeper than it accepts.
+
 ### `runtime_tree_fail`
 
 The installed files no longer match the fixed install record, an unrecorded
@@ -182,6 +193,14 @@ stopped — for the guarded tool and everything else on that server. `seal
 status` will show `DRIFTED`; the ways out are on
 [the status page](what-is-protected-right-now.md#drifted).
 
+### `project_server_malformed`
+
+The protected server's `.mcp.json` entry can no longer be read as a valid
+launch configuration. The refusal includes the specific reason, such as an
+`args` member that is not a string. Seal does not forward the call or record
+this as drift. Fix the file, stop the current Claude Code session, then
+unprotect and protect the server again.
+
 ### `state_absent`
 
 The recorded protection state file disappeared while the wrapper was
@@ -212,7 +231,42 @@ does.
 
 A defensive fallback: a pre-forward check refused without naming a token.
 The shipped checks always name one (`project_server_drifted`,
-`state_absent`), so meeting this token would itself be worth reporting.
+`project_server_malformed`, `state_absent`), so meeting this token would
+itself be worth reporting.
+
+### `method_not_allowed`
+
+The wrapper forwards to the protected server only the MCP methods on its fixed
+list (`FORWARDED_METHODS` in `spine/proxy.cjs`: the lifecycle, ping, tools,
+resources, prompts and completion methods a client uses) and refuses any other
+method by name with `method_not_allowed`. The match is exact, so `tools/invoke`,
+`TOOLS/CALL`, `tools/call ` with a trailing space, a look-alike character, an
+empty method and a method that is not a string are all refused. A request gets
+a JSON-RPC error naming the method; a notification gets no response. Both write
+a BLOCK receipt, and nothing reaches the server.
+
+### `key_case_fold_collision`
+
+One object in the message held two keys that are equal under Unicode case
+folding, such as `path` and `Path`. The check covers the message envelope,
+`params`, and every object inside a `tools/call`'s `arguments` and `_meta`.
+Some servers match keys case-insensitively and would read a different value
+than the one Seal judged, so nothing was forwarded. Send each key once.
+
+### `case_variant_name`
+
+An envelope key, `tools/call` params key or tool name equals a name Seal acts
+on only under case folding: for example `Method`, `Arguments`, or `Write_File`
+when `write_file` is protected. A method spelled that way is refused as
+`method_not_allowed` instead. Nothing was forwarded. Use the exact spelling.
+
+### `number_not_representable`
+
+A `tools/call` carried a number that Seal cannot forward unchanged. Seal
+forwards every `tools/call` rebuilt from its parsed fields, so a literal that
+overflows a double, or an integer with more precision than a double holds
+(such as `9007199254740993`), would reach the server as a different value.
+Send such a value as a string.
 
 ## Running `seal protect` and `seal unprotect`
 
@@ -236,8 +290,9 @@ gave. Run in the project directory, and spell the server exactly as
 ### `project_server_invalid`
 
 `.mcp.json` exists but could not be used: not valid JSON, or the named
-server entry is malformed (a non-array `args`, a non-object `env`, a missing
-command). The message names the specific problem; fix the file.
+server entry is malformed (a non-array `args`, a non-object `env`, a non-string
+`cwd`, or a missing command). The message names the specific problem; fix the
+file.
 
 ### `project_environment_missing`
 
@@ -473,6 +528,12 @@ owner, malformed lock record or unavailable process-start witness requires
 inspection; startup does not remove the lock or wait out this refusal. Check
 the named lock and operation before retrying. A live PID with a different
 process-start witness is stale, even if that PID still exists.
+
+For a stale or invalid owner record, the refusal prints `Recovery command:`
+followed by `rm --` and the exact shell-quoted lock path. Stop all Seal
+operations, inspect and recheck that lock, then run the printed command and
+retry. The command can remove a replacement live lock; Seal never runs it
+automatically.
 
 ### `activation_state_changed`
 
@@ -738,6 +799,20 @@ The granted capabilities do not exactly match the approval targets, or a
 reserved input channel was populated even though the current kernel does not
 consume it.
 
+### `public_key_small_order`
+
+The supplied Ed25519 receipt verification key is a small-order point. Such a
+key can accept forged signatures, so the checker refuses it before checking
+the signature. Obtain the receipt signer's ordinary public key from a trusted
+source; retrying with the same key cannot establish a valid signature.
+
+### `public_key_noncanonical`
+
+The supplied Ed25519 receipt verification key encodes a y coordinate at or
+above 2^255 - 19. The checker refuses this noncanonical encoding before
+checking the signature. Obtain the signer's public key from a trusted source;
+do not reduce or rewrite the supplied key to make verification pass.
+
 ### `signature_mismatch`
 
 The signature is malformed or does not verify under the caller-supplied key.
@@ -759,6 +834,14 @@ Preserve the malformed receipt and report it to its producer.
 The receipt's signed action says ALLOW, but replaying its recorded kernel inputs
 does not produce ALLOW. The checker refuses the receipt rather than reporting a
 decision the kernel did not make. Preserve the receipt and report the mismatch.
+
+### `signature_absent`
+
+The receipt has no signature; obtain a signed receipt from its producer. The checker and `seal verify` keep the UNVERIFIED table, print `REFUSE signature_absent: receipt has no signature`, and exit 1.
+
+### `public_key_absent`
+
+No usable public key was supplied; pass the separately obtained signer key with `--pubkey` (64 lowercase hexadecimal characters). The checker and `seal verify` keep the UNVERIFIED table, print `REFUSE public_key_absent: no usable public key supplied to check the signature`, and exit 1.
 
 Up: [Guide](README.md).
 Next: [What is protected right now](what-is-protected-right-now.md).

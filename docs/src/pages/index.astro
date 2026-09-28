@@ -6,6 +6,7 @@ import DecisionReceipt from '../components/DecisionReceipt.astro';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const link = (path: string) => `${base}/${path}`;
 const frontmatter = {
+  next: { label: 'Install', link: link('start/install/') },
   title: 'Seal — approval for selected AI-agent tool calls',
   description: 'Seal is a local approval gate for selected Claude Code MCP tool calls.',
   template: 'splash' as const,

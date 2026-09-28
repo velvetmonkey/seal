@@ -90,6 +90,33 @@ function createApprovalContract({
     return { kind: "refuse", refusal, detail, ...(timing === undefined ? {} : { timing }) };
   }
 
+  function kernelRefusal(error, suffix = "") {
+    if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
+      const timing = error.kernel_timing_timestamps === undefined ? undefined : {
+        kernel_timing_timestamps: error.kernel_timing_timestamps,
+        kernel_timing_ms: error.kernel_timing_ms,
+        kernel_timing_active_phase: error.kernel_timing_active_phase,
+        kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
+        kernel_timing_lifecycle: error.kernel_timing_lifecycle,
+        kernel_timing_unmeasured: error.kernel_timing_unmeasured,
+      };
+      return refuse(error.code, `${error.message}${suffix}`, timing);
+    }
+    return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, `${error.message}${suffix}`);
+  }
+
+  // The one Node/kernel comparison. Either side refusing while the other
+  // allows fails closed, whichever path asked.
+  function authorizationDisagreement(nodeAuthorized, kernel) {
+    const kernelAuthorized = kernel.verdict === "ALLOW";
+    if (nodeAuthorized === kernelAuthorized) return null;
+    const side = nodeAuthorized ? "kernel" : "Node";
+    return refuse(
+      REFUSALS.AUTHORIZATION_DISAGREEMENT,
+      `${side} refused while ${side === "kernel" ? "Node" : "kernel"} allowed; authorization disagreement fails closed`,
+    );
+  }
+
   function receiptFor({ tool, args, accepted = false }) {
     const kernelNow = Math.floor(now() / 1000);
     try {
@@ -106,19 +133,33 @@ function createApprovalContract({
       // The kernel produced no result. retryUnlocked already returns a
       // Node-side refusal with no receipt for this failure; minting a
       // signed BLOCK here would claim a decision the kernel did not make.
-      if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
-        const timing = error.kernel_timing_timestamps === undefined ? undefined : {
-          kernel_timing_timestamps: error.kernel_timing_timestamps,
-          kernel_timing_ms: error.kernel_timing_ms,
-          kernel_timing_active_phase: error.kernel_timing_active_phase,
-          kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
-          kernel_timing_lifecycle: error.kernel_timing_lifecycle,
-          kernel_timing_unmeasured: error.kernel_timing_unmeasured,
-        };
-        return refuse(error.code, error.message, timing);
-      }
-      return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, error.message);
+      return kernelRefusal(error);
     }
+  }
+
+  // Node has decided to forward a selected tool's call without approval
+  // because no selection predicate matched it. The kernel answers the same
+  // question with the predicates it can express (`forwardMatches`) guarded
+  // and every other call of the tool allowed. Its BLOCK is a disagreement.
+  function authorizeUnapprovedForward({ tool, args, forwardMatches }) {
+    let kernel;
+    try {
+      kernel = kernelAdapter.authorize({
+        epoch: 1,
+        issuedTool: tool,
+        issuedArgs: args ?? {},
+        retryTool: tool,
+        retryArgs: args ?? {},
+        accepted: false,
+        now: Math.floor(now() / 1000),
+        forwardMatches,
+      });
+    } catch (error) {
+      return kernelRefusal(error, "; Node did not forward without the kernel");
+    }
+    const disagreement = authorizationDisagreement(true, kernel);
+    if (disagreement) return { ...disagreement, receipt: kernel.receipt_record };
+    return { kind: "allow" };
   }
 
   // Persist a status transition BEFORE it takes effect in memory: an append
@@ -296,28 +337,11 @@ function createApprovalContract({
         now: kernelNow,
       });
     } catch (error) {
-      if (error instanceof KernelAuthorizationError || typeof error?.code === "string") {
-        const timing = error.kernel_timing_timestamps === undefined ? undefined : {
-          kernel_timing_timestamps: error.kernel_timing_timestamps,
-          kernel_timing_ms: error.kernel_timing_ms,
-          kernel_timing_active_phase: error.kernel_timing_active_phase,
-          kernel_timing_deadline_ms: error.kernel_timing_deadline_ms,
-          kernel_timing_lifecycle: error.kernel_timing_lifecycle,
-          kernel_timing_unmeasured: error.kernel_timing_unmeasured,
-        };
-        return refuse(error.code, `${error.message}; Node authorization did not override the kernel refusal`, timing);
-      }
-      return refuse(REFUSALS.KERNEL_EXECUTION_REFUSED, `${error.message}; Node authorization did not override the kernel refusal`);
+      return kernelRefusal(error, "; Node authorization did not override the kernel refusal");
     }
-    const kernelAuthorized = kernel.verdict === "ALLOW";
     const receipt = bindApprovalIdentity(kernel.receipt_record, record);
-    if (nodeAuthorized !== kernelAuthorized) {
-      const side = nodeAuthorized ? "kernel" : "Node";
-      return { ...refuse(
-        REFUSALS.AUTHORIZATION_DISAGREEMENT,
-        `${side} refused while ${side === "kernel" ? "Node" : "kernel"} allowed; authorization disagreement fails closed`,
-      ), receipt };
-    }
+    const disagreement = authorizationDisagreement(nodeAuthorized, kernel);
+    if (disagreement) return { ...disagreement, receipt };
     if (!nodeAuthorized) {
       if (!contextMatches) return { ...refuse(REFUSALS.CONTEXT_MISMATCH, "Node and kernel refused: retry context differs from the issue-time binding"), receipt };
       if (!toolMatches) return { ...refuse(REFUSALS.TOOL_ALTERED, "Node and kernel refused: retry tool differs from the issue-time tool"), receipt };
@@ -378,7 +402,7 @@ function createApprovalContract({
     });
   }
 
-  return { begin, retry, receiptFor, REFUSALS, connectionEpoch };
+  return { begin, retry, receiptFor, authorizeUnapprovedForward, REFUSALS, connectionEpoch };
 }
 
 module.exports = { createApprovalContract, REFUSALS };
