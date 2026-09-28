@@ -9,12 +9,14 @@ by its configured source patterns, which omit some emitted tokens, including
 `client_elicitation_unsupported`, `receipt_correlation_capacity_exceeded`,
 and `receipt_signer_absent`.
 
-Refusal output includes the four shapes below, plus un-tokened `seal: <message>`
+Refusal output includes the five shapes below, plus un-tokened `seal: <message>`
 errors, `seal: REFUSE <token>: <message>` protection errors, and
 `REFUSED <token>` lines with a separate message when supplied:
 
 - as the protected tool's error result in Claude Code:
   `approval refused: <token> — <detail>`
+- as a JSON-RPC error when the wrapper refuses a message before any tool
+  decision: `seal proxy: <token>: <detail>`
 - from a `seal` command on stderr: `seal: <token>: <message>`
 - from the wrapper as Claude Code starts the protected server (visible in
   Claude Code's MCP logs): `seal __proxy: <token>: <message>`
@@ -28,7 +30,9 @@ installer or a failed external command can have made partial changes first.
 ## While using the protected tool
 
 Minted in `contract/contract.cjs` and `spine/proxy.cjs`; delivered as the
-tool's error result. The first group is the approval contract judging a
+tool's error result, except `method_not_allowed`, `key_case_fold_collision`,
+`case_variant_name` and `number_not_representable`, which arrive as a JSON-RPC
+error. The first group is the approval contract judging a
 retry; unless a token says otherwise, the way to proceed is simply to make a
 fresh call and approve it fresh.
 
@@ -118,6 +122,13 @@ Node and the WASM kernel gave different answers to an authorization row. The
 detail names the side that refused. Seal fails closed and does not consume or
 forward the call. Preserve the receipt and report the disagreement; retrying
 without understanding it is not a remedy.
+
+The same token refuses a call to a selected tool that Node would forward
+without approval because no argument predicate matched, when the kernel
+blocks that call. The kernel re-checks the predicates its match language can
+express (exact strings, booleans, safe integers and prefix-only patterns on
+undotted argument names) and its own checks of the call's JSON, such as a lone
+surrogate escape or nesting deeper than it accepts.
 
 ### `runtime_tree_fail`
 
@@ -222,6 +233,40 @@ A defensive fallback: a pre-forward check refused without naming a token.
 The shipped checks always name one (`project_server_drifted`,
 `project_server_malformed`, `state_absent`), so meeting this token would
 itself be worth reporting.
+
+### `method_not_allowed`
+
+The wrapper forwards to the protected server only the MCP methods on its fixed
+list (`FORWARDED_METHODS` in `spine/proxy.cjs`: the lifecycle, ping, tools,
+resources, prompts and completion methods a client uses) and refuses any other
+method by name with `method_not_allowed`. The match is exact, so `tools/invoke`,
+`TOOLS/CALL`, `tools/call ` with a trailing space, a look-alike character, an
+empty method and a method that is not a string are all refused. A request gets
+a JSON-RPC error naming the method; a notification gets no response. Both write
+a BLOCK receipt, and nothing reaches the server.
+
+### `key_case_fold_collision`
+
+One object in the message held two keys that are equal under Unicode case
+folding, such as `path` and `Path`. The check covers the message envelope,
+`params`, and every object inside a `tools/call`'s `arguments` and `_meta`.
+Some servers match keys case-insensitively and would read a different value
+than the one Seal judged, so nothing was forwarded. Send each key once.
+
+### `case_variant_name`
+
+An envelope key, `tools/call` params key or tool name equals a name Seal acts
+on only under case folding: for example `Method`, `Arguments`, or `Write_File`
+when `write_file` is protected. A method spelled that way is refused as
+`method_not_allowed` instead. Nothing was forwarded. Use the exact spelling.
+
+### `number_not_representable`
+
+A `tools/call` carried a number that Seal cannot forward unchanged. Seal
+forwards every `tools/call` rebuilt from its parsed fields, so a literal that
+overflows a double, or an integer with more precision than a double holds
+(such as `9007199254740993`), would reach the server as a different value.
+Send such a value as a string.
 
 ## Running `seal protect` and `seal unprotect`
 
