@@ -159,3 +159,6 @@ VERIFY    UNVERIFIED
 
 Positive `VERIFY` is unreachable in the v2 verifier: `verify` is always false,
 and no receipt bytes can establish authority or occurrence.
+
+A receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+The table is followed by exactly one `REFUSE signature_absent: receipt has no signature` or `REFUSE public_key_absent: no usable public key supplied to check the signature` line; a valid supplied-key signature leaves the output unchanged.

@@ -168,4 +168,6 @@ seal-check uses 3 for unpinned results, while seal-assurance-kit uses 3 for its
 uncaught-exception handler. Neither meaning is this command's kernel-integrity
 class.
 
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+
 Up: [Reference](README.md).
