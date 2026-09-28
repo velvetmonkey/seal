@@ -249,6 +249,7 @@ async function protectWhileStarting(t, delayMs, expectTimeout) {
   fs.mkdirSync(home);
   const marker = path.join(ctx.root, "claude-add-started");
   fs.writeFileSync(path.join(bin, "claude"), `#!/usr/bin/env node
+if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); process.exit(0); }
     const fs = require("node:fs"), path = require("node:path");
     const args = process.argv.slice(2);
     if (args[1] === "get") process.exit(1);
@@ -374,7 +375,10 @@ test("two-loop activation refusal states the total measured lock wait", async (t
 });
 
 // Real CLI lifecycle controls. Discovery and the protected child use the same
-// server; only a client command makes the latter depart.
+// server; only a client command makes the latter depart. The proxy forwards
+// only allowlisted MCP methods, so each control rides one: a request is an
+// unguarded tools/call named for the control, and the one notification-only
+// departure is a notifications/cancelled whose reason names it.
 const DEPARTING_SERVER = `
   const rl = require("node:readline").createInterface({ input: process.stdin });
   rl.on("line", line => {
@@ -382,9 +386,12 @@ const DEPARTING_SERVER = `
     const reply = result => process.stdout.write(JSON.stringify({jsonrpc:"2.0", id:f.id, result}) + "\\n");
     if (f.method === "initialize") reply({protocolVersion:"2025-06-18", capabilities:{tools:{}}, serverInfo:{name:"depart",version:"1"}, pid:process.pid});
     if (f.method === "tools/list") reply({tools:[{name:"demo.mutate",inputSchema:{type:"object"}}]});
-    if (f.method === "depart") {
-      if (f.params.answer) reply({done:true, padding:"x".repeat(256 * 1024)});
-      process.exitCode = f.params.code;
+    const control = f.method === "tools/call" ? f.params.name
+      : f.method === "notifications/cancelled" ? f.params.reason : null;
+    const args = f.method === "tools/call" ? f.params.arguments : f.params;
+    if (control === "depart") {
+      if (args.answer) reply({done:true, padding:"x".repeat(256 * 1024)});
+      process.exitCode = args.code;
       rl.close();
       process.stdin.destroy();
     }
@@ -463,7 +470,9 @@ for (const outstanding of [false, true]) {
       assert.equal(before.state, "ACTIVE");
       assert.equal(before.lease.pid, first.child.pid);
       assert.equal(lockOwnerIsLive(before.lease), true);
-      first.send({...(outstanding ? {id:"abandoned-id"} : {}), method:"depart", params:{code:0}});
+      first.send(outstanding
+        ? {id:"abandoned-id", method:"tools/call", params:{name:"depart", arguments:{code:0}}}
+        : {method:"notifications/cancelled", params:{requestId:"none", reason:"depart", code:0}});
       await departureUntil(() => !lockOwnerIsLive({pid,startWitness:witness}), "protected child must actually exit");
       // Capture the main regression with process and stored-state evidence
       // before asserting the desired transport result.
@@ -505,7 +514,7 @@ for (const control of [
         setTimeout(() => run.child.stdout.resume(), 200);
       }
       if (control.stop) run.child.stdin.end();
-      else run.send({id:"final-id",method:"depart",params:{code:control.code,answer:control.answer}});
+      else run.send({id:"final-id",method:"tools/call",params:{name:"depart",arguments:{code:control.code,answer:control.answer}}});
       await departureUntil(() => run.closed, () => `wrapper did not close: ${run.err}`, 4000);
       assert.equal(run.code, control.expected);
       assert.equal(lockOwnerIsLive(readState(ctx.states.alpha).lease), false);
@@ -578,7 +587,7 @@ test("child departure control: pending approval writes survive exit and replacem
     assert.equal(receipts.length, 1);
     const file = path.join(state.receiptsDir, receipts[0]);
     const receiptBytes = fs.readFileSync(file);
-    run.send({method:"depart",params:{code:0}});
+    run.send({method:"notifications/cancelled",params:{requestId:"none",reason:"depart",code:0}});
     await departureUntil(() => run.closed, "pending approval timer must not keep wrapper alive");
     assert.equal(run.code, 0);
     assert.equal(fs.readFileSync(state.storePath, "utf8"), journalBefore);
@@ -620,26 +629,26 @@ for (const escaped of [false, true]) {
       require('node:fs').writeFileSync(process.argv[1], String(process.pid));`;
     const intermediate = `const child = require('node:child_process').spawn(process.execPath,
       ['-e', ${JSON.stringify(leaf)}, process.argv[1]], {detached:true, stdio:['ignore',1,'ignore']}); child.unref();`;
-    const code = DEPARTING_SERVER.replace('if (f.method === "depart") {', `
-      if (f.method === "spawn-descendant") {
+    const code = DEPARTING_SERVER.replace('if (control === "depart") {', `
+      if (control === "spawn-descendant") {
         const child = require('node:child_process').spawn(process.execPath,
-          ['-e', ${JSON.stringify(escaped ? intermediate : leaf)}, f.params.pidFile],
+          ['-e', ${JSON.stringify(escaped ? intermediate : leaf)}, args.pidFile],
           {stdio:['ignore',1,'ignore']});
         let exited = false;
         child.on('exit', () => exited = true);
         const timer = setInterval(() => {
-          if (!require('node:fs').existsSync(f.params.pidFile) || (${escaped} && !exited)) return;
+          if (!require('node:fs').existsSync(args.pidFile) || (${escaped} && !exited)) return;
           clearInterval(timer); reply({ready:true});
         }, 10);
       }
-      if (f.method === "depart") {`);
+      if (control === "depart") {`);
     const ctx = departureProject(code);
     const pidFile = path.join(ctx.project, "descendant.pid");
     const run = departureWrapper(ctx);
     let descendantPid;
     try {
       await departureReady(run);
-      run.send({id:"spawn", method:"spawn-descendant", params:{pidFile}});
+      run.send({id:"spawn", method:"tools/call", params:{name:"spawn-descendant", arguments:{pidFile}}});
       await departureUntil(() => run.frames.some(frame => frame.id === "spawn"), "descendant ready");
       descendantPid = Number(fs.readFileSync(pidFile));
       const started = performance.now();

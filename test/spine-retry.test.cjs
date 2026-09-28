@@ -1080,7 +1080,12 @@ function blockedReceipts(dir) {
     .map((name) => JSON.parse(fs.readFileSync(path.join(dir, "receipts", name), "utf8")));
 }
 
-async function refuseShapeThenServe(t, label, writeCall) {
+function assertToolRefusal(refused, label) {
+  assert.equal(refused.result.isError, true, `${label}: ${JSON.stringify(refused)}`);
+  assert.match(refused.result.content[0].text, /approval refused:/);
+}
+
+async function refuseShapeThenServe(t, label, writeCall, assertRefusal = assertToolRefusal) {
   const dir = testTmpdir(`seal-value-shape-${label}-`);
   const dataFile = path.join(dir, "data.txt");
   execFileSync(process.execPath, [SEAL, "__proxy", "--init-store", "--store", path.join(dir, "approvals.journal")]);
@@ -1090,8 +1095,7 @@ async function refuseShapeThenServe(t, label, writeCall) {
   await responseFor(90);
   writeCall(proxy);
   const refused = await responseFor(1);
-  assert.equal(refused.result.isError, true, `${label}: ${JSON.stringify(refused)}`);
-  assert.match(refused.result.content[0].text, /approval refused:/);
+  assertRefusal(refused, label);
   assert.equal(readCount(`${dataFile}.count`), "0", label);
   assert.equal(proxy.exitCode, null, `proxy exited under ${label}: ${run.err}`);
   const beforeFollow = blockedReceipts(dir);
@@ -1124,13 +1128,6 @@ for (const shape of [
     },
     pattern: /number outside the safe canonical range/,
   },
-  {
-    label: "nonfinite-1e400",
-    write(proxy) {
-      proxy.stdin.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":1e400}}}\n');
-    },
-    pattern: /no canonical form|non-finite number/,
-  },
 ]) {
   test(`a ${shape.label} argument is refused without taking down the protected server`, async (t) => {
     const { refused } = await refuseShapeThenServe(t, shape.label, shape.write);
@@ -1138,6 +1135,17 @@ for (const shape of [
     assert.match(refused.result.content[0].text, shape.pattern);
   });
 }
+
+// A literal that overflows binary64 would be forwarded as null after
+// re-serialization, so it is refused before selection with a named error.
+test("a nonfinite-1e400 argument is refused without taking down the protected server", async (t) => {
+  await refuseShapeThenServe(t, "nonfinite-1e400", (proxy) => {
+    proxy.stdin.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"demo.mutate","arguments":{"line":1e400}}}\n');
+  }, (refused, label) => {
+    assert.equal(refused.error?.data?.refusal, "number_not_representable", `${label}: ${JSON.stringify(refused)}`);
+    assert.match(refused.error.message, /number 1e400 overflows binary64/);
+  });
+});
 
 test("a very long argument string is refused without taking down the protected server", async (t) => {
   const dir = testTmpdir("seal-value-shape-long-string-");
@@ -1817,7 +1825,7 @@ async function harness(t, observeMaps = false, childRequestId = null, capacity =
   const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
     receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: capacity,
     onChildExit(code, signal) { exited({code, signal, sizes: maps.map(m => m.size), timers: timers.size}); },
-    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='test/exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
+    childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='tools/call'&&f.params&&f.params.name==='test.exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],
     onClientLine(line) { frames.push(JSON.parse(line)); },
   });
   t.after(() => proxy.stop());
@@ -1977,7 +1985,8 @@ test('cancelbind child exit clears pending timers and correlations before callba
   await h.begin(3);
   assert.deepEqual(h.maps.map(m => m.size), [2, 2, 1]);
   assert.equal(h.timers.size, 2);
-  h.send({jsonrpc:'2.0', method:'test/exit'});
+  // The child exit control rides an allowlisted, unguarded tools/call.
+  h.send({jsonrpc:'2.0', id:'test-exit', method:'tools/call', params:{name:'test.exit', arguments:{}}});
   const exit = await h.exit;
   t.diagnostic(JSON.stringify(exit));
   assert.equal(exit.code, 7);
@@ -2090,12 +2099,13 @@ for (const [label, token] of [['string', '"9007199254740993"'], ['small', '42']]
   });
 }
 
-test('reqident control unguarded line is byte-identical', async t => {
+test('reqident control unguarded line is re-serialized with its exact identity', async t => {
   const h = await identityHarness(t);
-  const line = '  ' + h.call('9007199254740993', {line:'unguarded'}, 'other.tool') + '  ';
+  const line = '  ' + h.call('9007199254740993', {line:'unguarded'}, 'other.tool')
+    .replace('"method"', '"extra":1,"method"') + '  ';
   h.proxy.write(line);
   await h.fence();
-  assert.deepEqual(h.rawCalls(), [line]);
+  assert.deepEqual(h.rawCalls(), [h.call('9007199254740993', {line:'unguarded'}, 'other.tool')]);
 });
 
 for (const reverse of [false, true]) test(`reqident control argument binding, reverse acceptance ${reverse}`, async t => {
