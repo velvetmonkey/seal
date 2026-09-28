@@ -5,11 +5,12 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { pathToFileURL } = require("node:url");
 
 const ROOT = path.resolve(__dirname);
 const WASM_DIR = path.join(ROOT, "wasm");
 let moduleInstance;
-const authorization = import(require("node:url").pathToFileURL(path.join(ROOT, "authorization.js")).href);
+const authorization = import(pathToFileURL(path.join(ROOT, "authorization.js")).href);
 
 // Independently encode the kernel wire form. Fractions use scientific
 // notation to satisfy its mantissa-digit bound without rounding their values.
