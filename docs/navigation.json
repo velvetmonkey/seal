@@ -568,6 +568,17 @@
   ],
   "exceptions": [
     {
+      "path": "docs/guide/protect-your-first-tool.md",
+      "reason": "standalone selective first-tool walkthrough linked from the guide index",
+      "footer": [
+        {
+          "role": "Up",
+          "label": "Guide",
+          "target": "README.md"
+        }
+      ]
+    },
+    {
       "path": "docs/reference/cli.md",
       "reason": "standalone public CLI contract",
       "footer": [
