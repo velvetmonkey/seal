@@ -43,6 +43,9 @@ function installation(root = path.resolve(__dirname, '..')) {
 }
 // Shared by all installed project mutations, including activation. A crashed
 // lock is a refusal requiring inspection, never permission to delete a file.
+function lockRecoveryCommand(file) {
+  return `rm -- '${file.replace(/'/g, "'\\''")}'`;
+}
 function installLock(install = installation(), operation = 'uninstall') {
   if (!install) return { release() {} };
   const { ProtectionError, processStartWitness, lockOwnerIsLive } = require('./protection.cjs');
@@ -69,7 +72,7 @@ function installLock(install = installation(), operation = 'uninstall') {
     } catch (invalid) {
       // A holder can release between EEXIST and reading its record.
       if (invalid.code === 'ENOENT') return installLock(install, operation);
-      refuse('installation_lock_invalid', `stale or invalid installation lock ${file}: ${invalid.message}; inspect the lock before retrying`);
+      refuse('installation_lock_invalid', `stale or invalid installation lock ${file}: ${invalid.message}; inspect the lock before retrying; stop all Seal operations and recheck the named lock before running this command (it can remove a replacement live lock):\nRecovery command: ${lockRecoveryCommand(file)}`);
     }
     const contention = new ProtectionError('installation_lock_active', `${operation} refused: installation lock held by pid ${existing.pid}; retry after that Seal operation finishes`);
     contention.lockHolderPid = existing.pid;
