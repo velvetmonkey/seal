@@ -464,6 +464,8 @@ appears in this repository at all. Committing a real pack is the deliberate act
 of the person who performed the run, in a commit that changes that test and
 this page's status row together.
 
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+
 Previous: [Version identity](version-identity.md).
 Up: [Assurance](README.md).
 Next: [Current guarantees and limits](current-scope.md).

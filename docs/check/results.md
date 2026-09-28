@@ -17,6 +17,8 @@ BLOCK can be the correct recorded decision in a successfully checked receipt. It
 
 The kit's verification process uses exits 0 (pass), 1 (failed check), 2 (usage), 3 (internal error), and 4 (reduced scope). These are not the checker's browser states or every other kit command's exit contract. See [the kit reference](../assure/reference/README.md).
 
+For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
+
 Previous: [From a Seal demo to the browser](from-seal.md).
 Up: [Check receipts](README.md).
 Next: [Receipt formats and compatibility](formats.md).
