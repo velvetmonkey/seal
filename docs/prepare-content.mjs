@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { siteUrl } from './site-url.mjs';
+import navigation from './navigation.json' with { type: 'json' };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
@@ -123,6 +124,32 @@ function prepareMarkdown(sourceName, markdown) {
   return markdown;
 }
 
+// Anchor shortcuts remain visible in the sidebar, but are not page turns.
+// Override only the neighbours of a shortcut explicitly excluded from pagination.
+function paginationFrontmatter() {
+  const flatten = (groups) => groups.flatMap((group) => [
+    ...group.pages, ...flatten(group.groups ?? []),
+  ]);
+  const entries = flatten(navigation.presentation ?? navigation.sections);
+  const pages = entries.filter((entry) => entry.pagination !== false);
+  const overrides = new Map();
+  for (let index = 0; index < pages.length; index++) {
+    const page = pages[index];
+    const sidebarIndex = entries.indexOf(page);
+    let fields = '';
+    for (const [direction, offset] of [['prev', -1], ['next', 1]]) {
+      if (entries[sidebarIndex + offset]?.pagination !== false) continue;
+      const neighbour = pages[index + offset];
+      const value = neighbour
+        ? { label: neighbour.label, link: `${siteBase}${routeFor(neighbour.path)}` }
+        : false;
+      fields += `${direction}: ${JSON.stringify(value)}\n`;
+    }
+    if (fields) overrides.set(page.path, fields);
+  }
+  return overrides;
+}
+
 function main() {
   emptyGenerated(output);
   fs.mkdirSync(output, { recursive: true });
@@ -131,6 +158,7 @@ function main() {
   // (a Starlight custom page, see astro.config.mjs). This generator must
   // never also write a competing src/content/docs/index.md: the root has
   // exactly one owner.
+  const pagination = paginationFrontmatter();
   const slugs = new Map();
   for (const source of sources) {
     const sourceName = path.relative(root, source).split(path.sep).join('/');
@@ -159,7 +187,7 @@ function main() {
     const warning = archive ? `> **Archive — not current documentation.** ${archiveWarning}\n\n` : '';
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     const prepared = stripSourceH1(prepareMarkdown(sourceName, original));
-    fs.writeFileSync(destination, `---\ntitle: ${JSON.stringify(title)}\n${archiveFrontmatter}---\n\n${warning}${rewriteLinks(source, prepared)}`);
+    fs.writeFileSync(destination, `---\ntitle: ${JSON.stringify(title)}\n${archiveFrontmatter}${pagination.get(sourceName) ?? ''}---\n\n${warning}${rewriteLinks(source, prepared)}`);
   }
 
   console.log(`Prepared ${sources.length} markdown sources without modifying them; homepage is src/pages/index.astro`);

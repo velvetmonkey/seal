@@ -223,10 +223,10 @@ test("renderline proxy refuses selection overflow before sending any approval", 
   const run = session("db.mutate");
   t.after(() => run.close());
   await waitFor(run.frames, (frame) => frame.id === "init");
-  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "overflow", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3, d: 4, e: 5 } } }));
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "overflow", method: "tools/call", params: { name: "db.mutate", arguments: { a: 1, b: 2, c: 3, d: 4, e: "x".repeat(200000) } } }));
   const refused = await waitFor(run.frames, (frame) => frame.id === "overflow");
   assert.equal(refused.result.isError, true);
-  assert.match(refused.result.content[0].text, /unrenderable_effect.*need 8 lines/);
+  assert.match(refused.result.content[0].text, /unrenderable_effect.*characters; Seal permits 200000/);
   assert.equal(run.frames.some((frame) => frame.method === "elicitation/create"), false);
 });
 
@@ -350,4 +350,33 @@ test("renderline proxy preserves mandatory fields and gates arguments at the uni
   const declined = await waitFor(run.frames, (frame) => frame.id === "at-cap");
   assert.equal(declined.result.isError, true);
   assert.match(declined.result.content[0].text, /declined/);
+});
+
+
+test("sealargbudget: routed seven-argument approval forwards and writes the ordinary receipt", async (t) => {
+  const run = session("db.mutate", "github");
+  t.after(() => run.close());
+  await waitFor(run.frames, frame => frame.id === "init");
+  const args = { owner: "octocat", repo: "hello", title: "Fix typo", head: "fix", base: "main", body: "Small fix.", draft: true };
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: "folded", method: "tools/call", params: { name: "db.mutate", arguments: args } }));
+  const prompt = await waitFor(run.frames, frame => frame.method === "elicitation/create");
+  assert.equal(prompt.params.message.split("\n").length, 7);
+  assert.ok(prompt.params.message.includes("Route (configured, not authenticated): github"));
+  assert.ok(prompt.params.message.includes("Selection predicate: db.mutate (bare tool name selects all calls)"));
+  const { renderApprovalMessage } = require("../contract/renderer.cjs");
+  for (const line of renderApprovalMessage("db.mutate", args).argLines) assert.ok(prompt.params.message.includes(line.trim()));
+  run.proxy.write(JSON.stringify({ jsonrpc: "2.0", id: prompt.id, result: { action: "accept", content: { approve: true } } }));
+  const response = await waitFor(run.frames, frame => frame.id === "folded");
+  assert.match(response.result.content[0].text, /CALLED db\.mutate/);
+  const directory = path.join(run.dir, "receipts");
+  const receipts = fs.readdirSync(directory).map(name => JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")));
+  assert.equal(receipts.length, 2);
+  assert.deepEqual(receipts.map(receipt => receipt.action).sort(), ["ALLOW", "INPUT_REQUIRED"]);
+  const receipt = receipts.find(receipt => receipt.action === "ALLOW");
+  assert.equal(receipt.seal_receipt, "v2");
+  assert.deepEqual(receipt.arguments, args);
+  assert.equal(receipt.tool, "db.mutate");
+  assert.equal(receipt.verdict, "ALLOW");
+  assert.equal(receipt.signature.algorithm, "ed25519");
+  assert.deepEqual(Object.keys(receipt), ["seal_receipt", "tool", "action", "arguments", "now", "kernel_config", "granted_capabilities", "kernel_inputs", "verdict", "reason", "replay", "signature"]);
 });

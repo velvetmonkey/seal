@@ -1266,7 +1266,7 @@ async function protect({
     );
   }
 
-  const lock = acquireProjectLock(root, env);
+  const lock = acquireProjectLock(root, env, "protect");
   try {
     const latest = readState(statePath);
     if (latest && latest.state !== STATES.UNPROTECTED && !retryableAbsentInstall(latest, root, serverName, env)) {
@@ -1348,7 +1348,7 @@ function unprotect({ serverName, projectRoot = process.cwd(), env = process.env 
   if (!serverName) throw new ProtectionError("usage", "usage: seal unprotect SERVER");
   const root = claudeProjectRoot(projectRoot);
   const statePath = statePathFor(root, env, serverName);
-  const lock = acquireProjectLock(root, env);
+  const lock = acquireProjectLock(root, env, "unprotect");
   try {
     const state = readState(statePath);
     assertSealOwnedLocalOverride(state, root, serverName, env, { allowAbsent: true, allowFailedInstall: true });
@@ -1388,7 +1388,7 @@ function recover({ serverName, projectRoot = process.cwd(), env = process.env })
     throw new ProtectionError("recovery_not_needed", "state is compatible or absent; seal recover --archive only recovers incompatible state; no state or configuration was changed");
   };
   requireIncompatible();
-  const lock = acquireProjectLock(root, env);
+  const lock = acquireProjectLock(root, env, "recover");
   try {
     requireIncompatible();
     const bytes = fs.readFileSync(statePath);
@@ -1665,7 +1665,7 @@ async function activationLease(statePath, env = process.env, validateState = () 
 function recordObservedClient(statePath, leaseToken, observedClient) {
   const initial = readState(statePath);
   if (!initial) return;
-  const lock = acquireProjectLock(initial.projectRoot);
+  const lock = acquireProjectLock(initial.projectRoot, process.env, "client-record");
   try {
     const state = readState(statePath);
     if (!state || !leaseMatches(state.lease, leaseToken)) return;

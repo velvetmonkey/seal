@@ -5,7 +5,9 @@ import { pageSlug, siteDescription } from './prepare-content.mjs';
 import { siteUrl } from './site-url.mjs';
 
 const site = siteUrl();
-const item = ({ path, label }) => ({ label, slug: pageSlug(path) });
+const item = ({ path, label, anchor }) => anchor
+  ? { label, link: `/${pageSlug(path)}/#${anchor}` }
+  : { label, slug: pageSlug(path) };
 
 // The Starlight sidebar is reader-facing presentation: it groups pages by task
 // (spec section 5) using navigation.json's "presentation" field when present.
@@ -17,6 +19,12 @@ const sidebarGroups = navigation.presentation ?? navigation.sections.map((sectio
   label: section.name,
   pages: section.pages,
 }));
+
+const sidebarGroup = (group) => ({
+  label: group.label,
+  collapsed: group.collapsed ?? true,
+  items: [...group.pages.map(item), ...(group.groups ?? []).map(sidebarGroup)],
+});
 
 export default defineConfig({
   // Astro's JSX whitespace mode drops line breaks beside inline elements.
@@ -31,12 +39,6 @@ export default defineConfig({
     description: siteDescription,
     components: { Header: './src/components/Header.astro', Hero: './src/components/Hero.astro' },
     customCss: ['./src/styles/custom.css'],
-    sidebar: [
-      item(navigation.root),
-      ...sidebarGroups.map((group) => ({
-        label: group.label,
-        items: group.pages.map(item),
-      })),
-    ],
+    sidebar: sidebarGroups.map(sidebarGroup),
   })],
 });

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Small, shell-owned tool-call selection. This module does not authorize a
 // call. It only decides whether the existing approval contract must see it.
-// The kernel does not evaluate or prove the predicate.
+// The kernel does not prove the predicate. When Node forwards a selected
+// tool's call without approval, the kernel re-checks the predicates its match
+// language can express exactly (see kernelMatchFor).
 // String values match exactly: "delete" does not match "delete ".
 
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
@@ -137,4 +139,99 @@ function evaluateSelection(selection, args, rawFrame) {
   return sameScalar ? { gate: true, label, detail: "predicate matched" } : { gate: false };
 }
 
-module.exports = { evaluateSelection, jsonHasDuplicateObjectKeys, normalizeToolSelection, parsePredicate, parseToolSelection };
+// Unicode case folding for key and name comparison. Lower, upper, lower
+// over-approximates simple folding (K/k/U+212A, s/S/U+017F) and also joins
+// full-folding pairs such as ss/U+00DF, so it may refuse more, never less.
+function caseFold(value) {
+  return value.toLowerCase().toUpperCase().toLowerCase();
+}
+
+// The exact name in `names` that `value` equals only under case folding.
+function caseVariantOf(value, names) {
+  if (typeof value !== "string") return null;
+  for (const name of names) {
+    if (value !== name && caseFold(value) === caseFold(name)) return name;
+  }
+  return null;
+}
+
+function foldCollision(keys) {
+  const seen = new Map();
+  for (const key of keys) {
+    const folded = caseFold(key);
+    if (seen.has(folded)) return [seen.get(folded), key];
+    seen.set(folded, key);
+  }
+  return null;
+}
+
+// Every object in the parsed value, at any depth, must hold keys that stay
+// distinct under case folding. Returns the first colliding pair, else null.
+function nestedFoldCollision(root) {
+  const stack = [root];
+  while (stack.length) {
+    const current = stack.pop();
+    if (current === null || typeof current !== "object") continue;
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item);
+      continue;
+    }
+    const keys = Object.keys(current);
+    const collision = foldCollision(keys);
+    if (collision) return collision;
+    for (const key of keys) stack.push(current[key]);
+  }
+  return null;
+}
+
+// Exact decimal identity of a validated JSON number token, without expanding
+// a potentially enormous exponent: 42, 42.0 and 4.2e1 share one identity.
+function decimalIdentity(token) {
+  const [, sign, whole, fraction = "", exponent = "0"] =
+    token.match(/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  let digits = (whole + fraction).replace(/^0+/, "");
+  if (!digits) return "number:0";
+  const trailing = digits.match(/0*$/)[0].length;
+  digits = digits.slice(0, digits.length - trailing);
+  const power = BigInt(exponent) - BigInt(fraction.length) + BigInt(trailing);
+  return `number:${sign}${digits}e${power}`;
+}
+
+// Re-serialization forwards the binary64 value JSON.parse produced. That
+// keeps every fraction's binary64 value, but loses a value outright when the
+// literal overflows binary64 (it would serialize as null) or when an integer
+// literal has more precision than binary64 holds (9007199254740993 would
+// arrive as 9007199254740992). Those two cases are refused, not rewritten.
+function numberNotRepresentable(token) {
+  const value = Number(token);
+  if (!Number.isFinite(value)) return "overflows binary64";
+  if (/^-?\d+$/.test(token) && decimalIdentity(token) !== decimalIdentity(JSON.stringify(value))) {
+    return "is an integer binary64 cannot hold exactly";
+  }
+  return null;
+}
+
+// Express a selection as a kernel match only where the kernel's match
+// language agrees with evaluateSelection on every call Node leaves ungated:
+// exact strings, booleans and safe integers, and prefix-only patterns. Kernel
+// argument paths split on ".", and the kernel has no suffix match; those
+// selections return null and the kernel checks the call without them.
+function kernelMatchFor(selection) {
+  if (!selection?.ok || !selection.parsedPredicate) return null;
+  const predicate = selection.parsedPredicate;
+  if (predicate.argument.includes(".")) return null;
+  if (predicate.operator === "~") {
+    return predicate.suffix === "" ? { type: "starts_with", arg: predicate.argument, value: predicate.prefix } : null;
+  }
+  const value = predicate.value;
+  if (typeof value === "string") return { type: "equals", arg: predicate.argument, value };
+  if (typeof value === "boolean" || Number.isSafeInteger(value)) {
+    return { type: "equals", arg: predicate.argument, value: String(value) };
+  }
+  return null;
+}
+
+module.exports = {
+  caseFold, caseVariantOf, decimalIdentity, evaluateSelection, foldCollision, jsonHasDuplicateObjectKeys,
+  kernelMatchFor, nestedFoldCollision, normalizeToolSelection, numberNotRepresentable, parsePredicate, parseToolSelection,
+};
