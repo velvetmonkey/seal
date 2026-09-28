@@ -104,42 +104,38 @@ function checkOutsideClaims(file, text) {
   }
 }
 
-// Resolve exactly the package spec the reader installs; compare the document
-// against installed metadata, rather than a second hard-coded Node major.
+// Resolve the reader's package spec at the registry. Installing an unpinned spec
+// under this runner can select an older, engine-compatible version instead.
 function checkProtectOnboarding(readme, install) {
   const section = readme.split('## Protect a real tool set')[1]?.split('## Remove it')[0] || '';
   const spec = section.match(/npm install --prefix "\$HOME\/\.local" (@anthropic-ai\/claude-code(?:@[^\s]+)?)/)?.[1];
   assert.ok(spec, 'Protect must install Claude Code');
-  const root = tempRoot.makeTempRoot(ROOT, 'claude-requirement');
-  try {
-    const home = path.join(root, 'home');
-    fs.mkdirSync(home);
-    const result = spawnSync('npm', ['install', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', '--prefix', root, spec], {
-      env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 120000,
-    });
-    fs.writeFileSync(path.join(root, 'exit-status'), String(result.status));
-    assert.equal(Number(fs.readFileSync(path.join(root, 'exit-status'), 'utf8')), 0, result.stderr);
-    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'node_modules/@anthropic-ai/claude-code/package.json'), 'utf8'));
-    const minimum = pkg.engines.node.match(/^>=(\d+)\.0\.0$/)?.[1];
-    assert.ok(minimum, `review changed Claude Code engines syntax: ${pkg.engines.node}`);
-    const failures = [];
-    if (!/```bash\nclaude\n```/.test(section) || !section.includes('from the `seal-protect-demo` project directory')
-      || section.indexOf('```bash\nclaude\n```') < section.indexOf('seal protect db'))
-      failures.push('README must start Claude Code from the protected project with `claude`');
-    if (!/```bash\nclaude auth login\n```/.test(section)
-      || section.indexOf('claude auth login') < section.indexOf('seal protect db'))
-      failures.push('README must give the first-start login command');
-    for (const [file, text] of [['README.md', readme], ['docs/start/install.md', install]]) {
-      const majors = [...text.matchAll(/Protect needs Claude Code, which needs Node (\d+) or newer\./g)];
-      if (majors.length !== 1 || majors[0][1] !== minimum)
-        failures.push(`${file}: Protect Node requirement must match installed ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
-    }
-    for (const failure of failures) console.error(`RED Protect onboarding: ${failure}`);
-    assert.equal(failures.length, 0, `Protect onboarding: ${failures.length} RED checks`);
-    console.log(`PASS Protect onboarding: 4 checks; ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
-  } finally {
-    tempRoot.cleanup(root);
+  const registrySpec = spec === '@anthropic-ai/claude-code' ? `${spec}@latest` : spec;
+  const result = spawnSync('npm', ['view', registrySpec, 'name', 'version', 'engines', '--json', '--prefer-online'], {
+    encoding: 'utf8', timeout: 120000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const pkg = JSON.parse(result.stdout);
+  assert.equal(pkg.name, '@anthropic-ai/claude-code', 'Protect package identity');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'Protect package version');
+  assert.ok(pkg.engines && typeof pkg.engines.node === 'string', 'Protect package Node engines');
+  const minimum = pkg.engines.node.match(/^>=(\d+)\.0\.0$/)?.[1];
+  assert.ok(minimum, `review changed Claude Code engines syntax: ${pkg.engines.node}`);
+  const failures = [];
+  if (!/```bash\nclaude\n```/.test(section) || !section.includes('from the `seal-protect-demo` project directory')
+    || section.indexOf('```bash\nclaude\n```') < section.indexOf('seal protect db'))
+    failures.push('README must start Claude Code from the protected project with `claude`');
+  if (!/```bash\nclaude auth login\n```/.test(section)
+    || section.indexOf('claude auth login') < section.indexOf('seal protect db'))
+    failures.push('README must give the first-start login command');
+  for (const [file, text] of [['README.md', readme], ['docs/start/install.md', install]]) {
+    const majors = [...text.matchAll(/Protect needs Claude Code, which needs Node (\d+) or newer\./g)];
+    if (majors.length !== 1 || majors[0][1] !== minimum)
+      failures.push(`${file}: Protect Node requirement must match published ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
   }
+  for (const failure of failures) console.error(`RED Protect onboarding: ${failure}`);
+  assert.equal(failures.length, 0, `Protect onboarding: ${failures.length} RED checks`);
+  console.log(`PASS Protect onboarding: 4 checks; ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
 }
 
 async function main() {
