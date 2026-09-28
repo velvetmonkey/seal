@@ -36,6 +36,9 @@ stdout, and exits **2**. Ordinary command usage failures exit **1**, except extr
 arguments to `doctor`, `status` or `coverage`, which exit **2**. These are command outcomes, not a promise
 about OS signals or a process that cannot start.
 
+For typed refusal codes, see [When something looks wrong](../guide/when-something-looks-wrong.md).
+For receipt fields and validation rules, see the [Seal receipt v2 schema](../SEAL-RECEIPT-V2.md).
+
 ## Flags and argument ranges
 
 | Flag | Accepted value and scope |
