@@ -15,7 +15,9 @@ The [documentation map](docs/README.md) helps you choose a route through Seal. R
 ## Supported path
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
-macOS x64/arm64. Protect also needs Claude Code's `claude` command. Windows,
+macOS x64/arm64. Seal itself requires Node 20 or newer.
+Protect needs Claude Code, which needs Node 22 or newer. Check `node --version`
+before installing either tool; if it is below 22, upgrade Node before using Protect. Windows,
 Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
@@ -99,7 +101,7 @@ not a trusted signer's identity or proof that the recorded effect happened.
 
 ## Protect a real tool set
 
-Install Claude Code and confirm that its command is available:
+With Node 22 or newer, install Claude Code and confirm that its command is available:
 
 ```bash
 npm install --prefix "$HOME/.local" @anthropic-ai/claude-code
@@ -145,12 +147,32 @@ Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
 ```
 
-Restart Claude Code before using the tools, then ask the machine rather than
-remembering:
+If Claude Code is already running in this project, exit that session first.
+For your first sign-in, run this in the terminal and follow the login prompts:
 
 ```bash
-seal status
+claude auth login
 ```
+
+Start Claude Code from the `seal-protect-demo` project directory (the `cd`
+command above puts you there):
+
+```bash
+claude
+```
+
+On the first run, Claude Code may show a theme picker before the session starts.
+
+MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
+asks you to approve the project's MCP server, accept it. Keep Claude Code running
+and open a second terminal in `seal-protect-demo`, then check the route:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" seal status
+```
+
+Look for `LEASE ACTIVE` on the sealed `db` route before using its tools. If it still
+says `PENDING RESTART`, follow the [protection state guide](docs/guide/what-is-protected-right-now.md#pending-restart).
 
 Receipts contain the complete parsed arguments for protected tools, so sharing a
 receipt shares those arguments.

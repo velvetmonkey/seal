@@ -1,7 +1,7 @@
 <!-- generated from published release; do not edit -->
 # Install Seal v0.5.2
 The [v0.5.2 release](https://github.com/velvetmonkey/seal/releases/tag/v0.5.2) publishes `seal-v0.5.2-darwin-arm64`, `seal-v0.5.2-darwin-x64`, `seal-v0.5.2-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`e5d901fc7183485bf9565ded4f3ccb73ee71efde`](https://github.com/velvetmonkey/seal/commit/e5d901fc7183485bf9565ded4f3ccb73ee71efde). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
-The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node 20+ is required.
+The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Seal itself requires Node 20 or newer.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
 This page is the SHA256SUMS verification wall. The [README](../../README.md)
@@ -22,7 +22,7 @@ answer "did I download the bytes the release named?" They do not answer
 
 ## Verify, then install
 <!-- end generated release docs -->
-
+Protect needs Claude Code, which needs Node 22 or newer. Check `node --version` before installing Claude Code; if it is below 22, upgrade Node first. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.5.2
@@ -161,6 +161,36 @@ This checkout supports Protect on Linux x86-64 and macOS x64/arm64. The native m
 If you installed the published release, continue with
 [Choosing what to protect](../guide/choosing-what-to-protect.md). If you built
 and installed this checkout, continue with the [Evaluator walk](evaluator-walk.md).
+
+## Start Protect in a project
+
+Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set)
+to install Claude Code, create `seal-protect-demo`, and run `seal protect`.
+If Claude Code is already running in that project, exit that session first.
+For your first sign-in, run this in the terminal and follow the login prompts:
+
+```bash
+claude auth login
+```
+
+Start Claude Code from the `seal-protect-demo` project directory:
+
+```bash
+claude
+```
+
+On the first run, Claude Code may show a theme picker before the session starts.
+
+MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
+asks you to approve the project's MCP server, accept it. Keep Claude Code running
+and open a second terminal in `seal-protect-demo`, then check the route:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" seal status
+```
+
+Look for `LEASE ACTIVE` on the sealed `db` route before using its tools. If it still
+says `PENDING RESTART`, follow the [protection state guide](../guide/what-is-protected-right-now.md#pending-restart).
 
 Previous: [Start](README.md).
 Up: [Start](README.md).

@@ -27,7 +27,7 @@ const claims = [
   ['01', 'UNPROVABLE: full Protect execution on all named hosts', 'This checkout supports Protect on Linux x86-64 and macOS x64/arm64.'],
   ['02', 'UNPROVABLE: independent reproduction is external evidence', 'The native macOS process-start witness helper is release-produced, not independently reproduced.'],
   ['03', 'platform refusal', 'Windows and Linux ARM are unsupported.'],
-  ['04', 'UNPROVABLE: minimum Node major across supported hosts', 'Node 20+ is required.'],
+  ['04', 'published artifact shell stub: REFUSE node_missing requires Node >= 20; UNPROVABLE here: every supported host', 'Seal itself requires Node 20 or newer.'],
   ['05', 'platform refusal', 'The installer refuses before changing anything on an unsupported or mismatched platform.'],
   ['06', 'both fences: success and corruption', 'The [README](../../README.md) short form uses the same shell gate.'],
   ['07', 'both fences: corruption, status, mode, no install', 'In every install command below, a failed checksum comparison prevents both `chmod` and execution of the artifact.'],
@@ -60,11 +60,18 @@ const outsideClaims = text => text.replace(generatedRegion, '\n\n')
 // the full suite; limits remain explicit instead of claiming a local proof.
 const outsideReviews = {
   'docs/start/install.md': [
+    ['44', 'docs/check-links.py: same-page Start Protect anchor; onboarding steps reviewed below', 'Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.'],
+    ['38', 'README onboarding check and existing Protect recipe; ACTIVE remains unverified without login', 'Follow [Protect a real tool set in the README](../../README.md#protect-a-real-tool-set) to install Claude Code, create `seal-protect-demo`, and run `seal protect`.'],
+    ['39', 'Claude Code 2.1.283 --help: starts an interactive session by default; no session started by this check', 'Start Claude Code from the `seal-protect-demo` project directory:'],
+    ['40', 'test/readme-protect-state-witness.test.cjs: status inspects the live route; instruction keeps that session running', 'Keep Claude Code running and open a second terminal in `seal-protect-demo`, then check the route:'],
     ['37', 'test/dist3d.test.cjs: fresh distribution build output', 'A build of this checkout (not the published release asset) writes `dist/seal-v<identity>-linux-x64`.'],
     ['20', 'test/dist3d.test.cjs: built artifact payload; UNPROVABLE here: hash algorithm across every payload', "The installed tree is exactly the regular payload files named by the artifact's payload manifest (a fresh build includes `checker/seal-receipt-v2.mjs` for `seal verify`)."],
   ],
   'README.md': [
     ['38', 'test/frontdoor.test.mjs: real demo stdout fence includes file change, protected-server count and new decision count', 'The direct write changes the file without another protected-server call or Seal decision.'],
+    ['41', 'published artifact shell stub: Seal requires Node >= 20; measured below', 'Seal itself requires Node 20 or newer.'],
+    ['42', 'Claude Code 2.1.283 --help: starts an interactive session by default; README onboarding check binds the project and command', 'Start Claude Code from the `seal-protect-demo` project directory (the `cd` command above puts you there):'],
+    ['43', 'test/readme-protect-state-witness.test.cjs: status inspects the live route; instruction keeps that session running', 'Keep Claude Code running and open a second terminal in `seal-protect-demo`, then check the route:'],
     ['21', 'test/frontdoor.test.mjs: README exact-call demo', 'Seal is a local approval boundary for AI-agent tool calls.'],
     ['22', 'test/frontdoor.test.mjs: README exact-call demo', 'Seal decides whether that exact call may cross the boundary.'],
     ['23', 'UNPROVABLE: full Protect execution on all named hosts (claim 01)', 'Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.'],
@@ -97,9 +104,44 @@ function checkOutsideClaims(file, text) {
   }
 }
 
+// Resolve the reader's package spec at the registry. Installing an unpinned spec
+// under this runner can select an older, engine-compatible version instead.
+function checkProtectOnboarding(readme, install) {
+  const section = readme.split('## Protect a real tool set')[1]?.split('## Remove it')[0] || '';
+  const spec = section.match(/npm install --prefix "\$HOME\/\.local" (@anthropic-ai\/claude-code(?:@[^\s]+)?)/)?.[1];
+  assert.ok(spec, 'Protect must install Claude Code');
+  const registrySpec = spec === '@anthropic-ai/claude-code' ? `${spec}@latest` : spec;
+  const result = spawnSync('npm', ['view', registrySpec, 'name', 'version', 'engines', '--json', '--prefer-online'], {
+    encoding: 'utf8', timeout: 120000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const pkg = JSON.parse(result.stdout);
+  assert.equal(pkg.name, '@anthropic-ai/claude-code', 'Protect package identity');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'Protect package version');
+  assert.ok(pkg.engines && typeof pkg.engines.node === 'string', 'Protect package Node engines');
+  const minimum = pkg.engines.node.match(/^>=(\d+)\.0\.0$/)?.[1];
+  assert.ok(minimum, `review changed Claude Code engines syntax: ${pkg.engines.node}`);
+  const failures = [];
+  if (!/```bash\nclaude\n```/.test(section) || !section.includes('from the `seal-protect-demo` project directory')
+    || section.indexOf('```bash\nclaude\n```') < section.indexOf('seal protect db'))
+    failures.push('README must start Claude Code from the protected project with `claude`');
+  if (!/```bash\nclaude auth login\n```/.test(section)
+    || section.indexOf('claude auth login') < section.indexOf('seal protect db'))
+    failures.push('README must give the first-start login command');
+  for (const [file, text] of [['README.md', readme], ['docs/start/install.md', install]]) {
+    const majors = [...text.matchAll(/Protect needs Claude Code, which needs Node (\d+) or newer\./g)];
+    if (majors.length !== 1 || majors[0][1] !== minimum)
+      failures.push(`${file}: Protect Node requirement must match published ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
+  }
+  for (const failure of failures) console.error(`RED Protect onboarding: ${failure}`);
+  assert.equal(failures.length, 0, `Protect onboarding: ${failures.length} RED checks`);
+  console.log(`PASS Protect onboarding: 4 checks; ${pkg.name}@${pkg.version} engines ${pkg.engines.node}`);
+}
+
 async function main() {
   const install = fs.readFileSync(path.join(DOCS_ROOT, 'docs/start/install.md'), 'utf8');
   const readme = fs.readFileSync(path.join(DOCS_ROOT, 'README.md'), 'utf8');
+  checkProtectOnboarding(readme, install);
   checkOutsideClaims('docs/start/install.md', install);
   checkOutsideClaims('README.md', readme);
   const parts = regions(install);
@@ -165,6 +207,8 @@ async function main() {
     for (const [name, pin] of [[names[0], 'artifact_sha256'], [names[1], 'checker_sha256'], [names[2], 'sums_sha256']]) {
       assert.equal(digest(fs.readFileSync(path.join(assets, name))), value(pin), `published ${name} digest`);
     }
+    assert.ok(fs.readFileSync(path.join(assets, names[0]), 'utf8').startsWith('#!/bin/sh\nif ! command -v node'), 'published artifact requires external Node');
+    assert.ok(fs.readFileSync(path.join(assets, names[0]), 'utf8').includes('Seal requires Node >= 20 on linux-x64'), 'published Seal Node requirement');
     const shells = process.platform === 'linux' ? ['sh', 'dash', 'bash'] : ['sh', 'bash', 'zsh'];
     if (spawnSync('zsh', ['-c', 'exit 0']).status === 0 && !shells.includes('zsh')) shells.push('zsh');
     if (!shells.includes('zsh')) console.log('UNPROVABLE claim 08 in this run: zsh is unavailable; sh/dash/bash execute below');
@@ -262,7 +306,7 @@ async function main() {
       console.log(`PASS claim 14 ${label}: exit ${status}`);
     }
     for (const [id, evidence] of claims.filter(([, evidence]) => evidence.startsWith('UNPROVABLE'))) console.log(`UNPROVABLE claim ${id}: ${evidence.slice(12)}`);
-    console.log('PASS install prose: 19 reviewed behavioural claims (20 sentences after pin clarification), 15 probe-bound, 4 UNPROVABLE; all generated prose accounted for');
+    console.log('PASS install prose: 19 reviewed behavioural claims (20 sentences after pin clarification), 16 probe-bound, 3 UNPROVABLE; all generated prose accounted for');
   } finally {
     tempRoot.cleanup(root);
   }

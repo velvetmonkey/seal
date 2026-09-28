@@ -224,7 +224,7 @@ function installPlatformParagraphs(manifest, platform) {
   if (!darwinX64) {
     return [
       "macOS source portability is CI-exercised for install, demo and receipt checking.",
-      `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+      `Protect is not supported on macOS yet. The published release asset and supported Protect path are ${platform}; Windows and Linux ARM are unsupported. Seal itself requires Node ${manifest.minimumNodeMajor} or newer.`,
     ];
   }
   return [
@@ -232,8 +232,8 @@ function installPlatformParagraphs(manifest, platform) {
       ? "This checkout supports Protect on Linux x86-64 and macOS x64/arm64."
       : `The published release asset is ${platform}. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.`,
     manifest.artifacts
-      ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`
-      : `Windows and Linux ARM are unsupported. Node ${manifest.minimumNodeMajor}+ is required.`,
+      ? `The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Seal itself requires Node ${manifest.minimumNodeMajor} or newer.`
+      : `Windows and Linux ARM are unsupported. Seal itself requires Node ${manifest.minimumNodeMajor} or newer.`,
   ];
 }
 
