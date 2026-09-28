@@ -573,13 +573,42 @@ async function demo(args) {
   return require(path.join(ROOT, "spine", "demo.cjs")).run(args, __filename);
 }
 async function verify(args) {
-  const receiptPath = args[0];
-  const keyAt = args.indexOf("--pubkey");
-  const json = args.indexOf("--json") !== -1;
+  const paths = [];
+  let pubkeyHex;
+  let keySeen = false;
+  let json = false;
+  let positional = false;
+  let argumentError;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (positional) paths.push(arg);
+    else if (arg === "--") positional = true;
+    else if (arg === "--json") json = true;
+    else if (arg === "--pubkey") {
+      if (keySeen) argumentError ||= "--pubkey may be given only once";
+      keySeen = true;
+      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+        argumentError ||= "--pubkey requires a value";
+      } else pubkeyHex = args[++i];
+    } else if (arg.startsWith("-")) argumentError ||= `unknown option: ${arg}; use -- before a path starting with a dash`;
+    else paths.push(arg);
+  }
+  if (paths.length > 1) argumentError = `unexpected extra receipt paths: ${paths.slice(1).map((file) => JSON.stringify(file)).join(", ")}`;
+  if (argumentError) {
+    if (!json) throw Object.assign(new Error(argumentError), { exitCode: 2 });
+    console.log(JSON.stringify({
+      read: false, validate: false, replay: false, signature: false,
+      authority: "NOT ESTABLISHED", occurrence: "NOT ESTABLISHED", verify: false,
+      ok: false, code: "invalid_arguments", message: argumentError,
+    }));
+    process.exitCode = 2;
+    return;
+  }
+  const receiptPath = paths[0] && path.resolve(paths[0]);
   // Keep the established usage diagnostic and exit outside JSON mode.
   if (!receiptPath && !json) throw new Error("usage: seal verify PATH");
   const { result, exitCode, error, verifier } = await require(path.join(ROOT, "spine", "verify-server.cjs"))
-    .verifyReceipt({ receiptPath, pubkeyHex: keyAt > 0 ? args[keyAt + 1] : undefined });
+    .verifyReceipt({ receiptPath, pubkeyHex });
   if (json) console.log(JSON.stringify(result));
   else if (error) {
     // Keep the outer handler's legacy stderr and debug presentation.
@@ -631,6 +660,28 @@ function reproduce(args) {
   return reproduceOwner.main(args);
 }
 
+// The launcher supplies its path only after judging the installed tree. Treat
+// the environment as a hint: bind it to this product's registered installation
+// and the exact launcher payload before allowing it into a client override.
+function protectionSealBin() {
+  const fallback = fs.realpathSync(process.argv[1]);
+  const candidate = process.env.SEAL_INSTALLED_LAUNCHER;
+  if (!candidate || !path.isAbsolute(candidate)) return fallback;
+  try {
+    const installation = require(path.join(ROOT, "spine", "uninstall.cjs")).installation(ROOT);
+    if (!installation) return fallback;
+    const expected = path.join(installation.prefix, "bin", "seal");
+    if (!fs.lstatSync(expected).isFile() || !fs.statSync(candidate).isFile() ||
+        fs.realpathSync(candidate) !== expected) return fallback;
+    const bytes = fs.readFileSync(expected);
+    const entry = installation.record.files.find(file => file.path === "scripts/seal-launch.cjs");
+    const digest = require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+    if (!entry || bytes.length !== entry.bytes || digest !== entry.sha256 ||
+        !bytes.equals(fs.readFileSync(path.join(ROOT, "scripts", "seal-launch.cjs")))) return fallback;
+    return expected;
+  } catch { return fallback; }
+}
+
 async function protectCommand(args) {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
@@ -656,7 +707,7 @@ async function protectCommand(args) {
   }
   const [serverName, ...requestedTools] = positional;
   const guardTools = [...new Set(requestedTools)];
-  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: fs.realpathSync(process.argv[1]), env: process.env, timeoutMs });
+  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(result.state.guardTools);
