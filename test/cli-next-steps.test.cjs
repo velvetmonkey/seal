@@ -217,8 +217,15 @@ test("CLI contract: every public parser flag appears in help and the reference",
   const parser = cli.slice(cli.indexOf("async function verify("), cli.indexOf("function printHelp()"))
     + fs.readFileSync(path.join(root, "spine/demo.cjs"), "utf8").split("async function run(")[1].split("const dataFile")[0]
     + fs.readFileSync(path.join(root, "scripts/seal-reproduce.cjs"), "utf8").split("function parseArguments(")[1].split("function validateRequest(")[0];
-  const flags = [...new Set([...parser.matchAll(/(?:===|!==|indexOf\()\s*["'](-{1,2}[A-Za-z][A-Za-z-]*)["']/g)].map((match) => match[1]))].sort();
-  assert.deepEqual(flags, ["--archive", "--authority", "--authority-name", "--dir", "--help", "--json", "--manifest", "--output", "--platform", "--pubkey", "--source", "--timeout-ms", "--version", "-V", "-h"].sort());
+  const history = fs.readFileSync(path.join(root, "spine/receipt-population.cjs"), "utf8")
+    .split("async function queryCommand(args) {")[1].split("module.exports.query =")[0];
+  const historyNames = history.match(/\["[a-z]+"(?:, "[a-z]+")+\]\.includes\(name\)/)?.[0];
+  assert.ok(historyNames, "history option allowlist is visible in its parser");
+  const flags = [...new Set([
+    ...[...parser.matchAll(/(?:===|!==|indexOf\()\s*["'](-{1,2}[A-Za-z][A-Za-z-]*)["']/g)].map((match) => match[1]),
+    ...[...historyNames.matchAll(/"([a-z]+)"/g)].map((match) => `--${match[1]}`),
+  ])].sort();
+  assert.deepEqual(flags, ["--archive", "--authority", "--authority-name", "--dir", "--help", "--json", "--limit", "--manifest", "--output", "--platform", "--pubkey", "--since", "--source", "--timeout-ms", "--tool", "--until", "--version", "-V", "-h"].sort());
   const help = contractContext().run(["--help"]);
   assert.equal(help.code, 0, help.out);
   const reference = fs.readFileSync(path.join(root, "docs/reference/cli.md"), "utf8");
@@ -226,6 +233,84 @@ test("CLI contract: every public parser flag appears in help and the reference",
     const token = new RegExp(`(?<![A-Za-z-])${flag}(?![A-Za-z-])`);
     assert.match(help.stdout, token, `parser flag missing from help: ${flag}`);
     assert.match(reference, token, `parser flag missing from reference: ${flag}`);
+  }
+});
+
+function referenceCommandRows(reference) {
+  const table = reference.split("## Commands and exit codes\n")[1]?.split("\n## ")[0];
+  assert.ok(table, "Commands and exit codes table is present");
+  return table.split("\n").filter((line) => line.startsWith("| `seal"))
+    .map((line) => {
+      const cells = line.split(/(?<!\\)\|/).slice(1, -1).map((cell) => cell.trim());
+      assert.equal(cells.length, 3, `three cells in command row: ${line}`);
+      const first = cells[0].match(/^`seal(?:\s+([^\s`]+))?/);
+      assert.ok(first, `command row starts with seal: ${line}`);
+      return { invocation: cells[0], command: first[1] || "--help", exits: cells[2] };
+    });
+}
+
+test("CLI reference: dispatch, help and command rows name the same public commands", () => {
+  const source = fs.readFileSync(process.env.SEAL_CLI_DISPATCH_SOURCE || SEAL, "utf8");
+  const main = source.split("async function main() {")[1]?.split("function printHelp() {")[0];
+  assert.ok(main, "CLI main dispatch is visible");
+  const dispatch = new Set([...main.matchAll(/^  if \(command === "([^"]+)"/gm)]
+    .map((match) => match[1]).filter((name) => !name.startsWith("__")));
+  dispatch.delete("-h");
+  dispatch.delete("-V");
+  const help = execFileSync(SEAL, ["--help"], { encoding: "utf8" });
+  const helpCommands = new Set([...help.matchAll(/^\s+seal\s+([a-z_-][\w-]*|--help|--version)\b/gm)]
+    .map((match) => match[1]));
+  const reference = fs.readFileSync(path.join(__dirname, "../docs/reference/cli.md"), "utf8");
+  const rows = referenceCommandRows(reference);
+  const rowCommands = new Set(rows.map((row) => row.command));
+  assert.deepEqual([...rowCommands].sort(), [...dispatch].sort(), "reference rows versus dispatch");
+  assert.deepEqual([...helpCommands].sort(), [...dispatch].sort(), "help versus dispatch");
+  assert.equal(rows.filter((row) => row.command === "reproduce").length, 2,
+    "both reproduce forms have command rows");
+});
+
+test("CLI reference: each row names an observed offline exit code", () => {
+  const reference = fs.readFileSync(path.join(__dirname, "../docs/reference/cli.md"), "utf8");
+  const rows = referenceCommandRows(reference);
+  const cases = [
+    ["seal`, `seal --help", ["--help"]],
+    ["seal --version", ["--version"]],
+    ["seal demo", ["demo", "--dir"]],
+    ["seal verify", ["verify"]],
+    ["seal seal_block", ["seal_block"]],
+    ["seal reproduce TAG", ["reproduce"]],
+    ["seal reproduce build-pinned-kernel", ["reproduce", "build-pinned-kernel"]],
+    ["seal protect", ["protect"]],
+    ["seal unprotect", ["unprotect"]],
+    ["seal recover", ["recover"]],
+    ["seal history", ["history"]],
+    ["seal receipts", ["receipts"]],
+    ["seal coverage", ["coverage", "extra"]],
+    ["seal uninstall", ["uninstall", "extra"]],
+    ["seal doctor", ["doctor", "extra"]],
+    ["seal status", ["status", "extra"]],
+  ];
+  assert.equal(cases.length, rows.length, "one refusal or report invocation per row");
+  for (const [prefix, args] of cases) {
+    const row = rows.find((candidate) => candidate.invocation.startsWith(`\`${prefix}`));
+    assert.ok(row, `missing command row for ${prefix}`);
+    const ctx = contractContext();
+    const result = require("node:child_process").spawnSync(process.execPath, [SEAL, ...args], {
+      cwd: ctx.project, env: { ...ctx.env, PATH: path.join(ctx.root, "no-claude") },
+      input: "", encoding: "utf8", timeout: 5000,
+    });
+    assert.ifError(result.error);
+    const codes = [...row.exits.matchAll(/(?<!\d)[0-9]+(?!\d)/g)].map((match) => Number(match[0]));
+    assert.ok(codes.includes(result.status), `${prefix}: exit ${result.status} is absent from row ${row.exits}; ${result.stderr}`);
+  }
+});
+
+test("CLI reference: refusal-code and receipt-schema links resolve", () => {
+  const referencePath = path.join(__dirname, "../docs/reference/cli.md");
+  const reference = fs.readFileSync(referencePath, "utf8");
+  for (const target of ["../guide/when-something-looks-wrong.md", "../SEAL-RECEIPT-V2.md"]) {
+    assert.ok(reference.includes(`](${target})`), `reference link missing: ${target}`);
+    assert.ok(fs.statSync(path.resolve(path.dirname(referencePath), target)).isFile(), `link target missing: ${target}`);
   }
 });
 
