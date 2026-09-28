@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Lean tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean-tests:
+    name: Lean kernel tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SEAL_CI_READ_TOKEN: ${{ secrets.SEAL_CI_READ_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Configure private dependency source access
+        run: |
+          test -n "$SEAL_CI_READ_TOKEN"
+          git config --global \
+            url."https://x-access-token:${SEAL_CI_READ_TOKEN}@github.com/velvetmonkey/".insteadOf \
+            "https://github.com/velvetmonkey/"
+
+      # Same pinned provisioning and Mathlib cache as kernel-reproduce.yml.
+      - name: Install repository-pinned elan and restore Mathlib cache
+        run: python3 scripts/install_pinned_elan.py --mathlib-cache
+
+      - name: Build the C crypto object before Lean linking
+        run: bash kernel-source/c/build.sh
+
+      - name: Run shipped kernel tests and axiom checks
+        run: bash scripts/run-lean-tests.sh
