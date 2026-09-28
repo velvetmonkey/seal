@@ -150,7 +150,7 @@ def sigRed (name : String) (e : EffectEnvelope) (sig : String)
   let gates : List (String × Bool) :=
     [("adapterGate", adapterGate med e),
      ("sessionGate", sessionGate st e),
-     ("effectGate", effectGate med e),
+     ("effectGate", effectGate st.tools med e),
      ("expiryGate", expiryGate st e),
      ("issuedAtGate", issuedAtGate st e),
      ("policyVersionGate", policyVersionGate st e)]
@@ -231,22 +231,22 @@ def main : IO UInt32 := do
         resource := "", action := "", args := "", metadata := .absent } }
   results := results ++ [← control "effect=some(\"\",\"\",\"\") (retired sentinel is now a checked claim)"
     emptyClaim sigEmptyStringClaim s false
-    (some ("effectGate", effectGate mediator emptyClaim))
+    (some ("effectGate", effectGate baseState.tools mediator emptyClaim))
     (sigValid := some true)]
   results := results ++ [← control "effect.resource=fs.read"
     { baseEnvelope with effect := some { baseClaim with resource := "fs.read" } } sigEffectResource s false
-    (some ("effectGate", effectGate mediator
+    (some ("effectGate", effectGate baseState.tools mediator
       { baseEnvelope with effect := some { baseClaim with resource := "fs.read" } }))
     (sigValid := some true)]
   results := results ++ [← control "effect.action=delete"
     { baseEnvelope with effect := some { baseClaim with action := "delete" } } sigEffectAction s false
-    (some ("effectGate", effectGate mediator
+    (some ("effectGate", effectGate baseState.tools mediator
       { baseEnvelope with effect := some { baseClaim with action := "delete" } }))
     (sigValid := some true)]
   let tamperedArgs := "{\"database\":\"prod\",\"table\":\"users\",\"amount\":99}"
   results := results ++ [← control "effect.args amount=99"
     { baseEnvelope with effect := some { baseClaim with args := tamperedArgs } } sigEffectArgs s false
-    (some ("effectGate", effectGate mediator
+    (some ("effectGate", effectGate baseState.tools mediator
       { baseEnvelope with effect := some { baseClaim with args := tamperedArgs } }))
     (sigValid := some true)]
   -- (The "line swapped to fs.read" effectGate red was removed: the swapped

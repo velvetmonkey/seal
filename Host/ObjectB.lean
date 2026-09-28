@@ -140,6 +140,8 @@ def CorePayload.decisionInputs (p : CorePayload) : DecisionInputs :=
     logicalTime := p.logicalTime }
 
 structure EstablishmentContext where
+  /-- The list from the authenticated configuration whose digest the payload binds. -/
+  tools : List SealV2.ToolSpec
   kernelProduced : DecisionInputs → ByteArray → Verdict → Bool
   delegated : DeploymentId → ReceiptKeyDelegationRef → Bool
   durablyRecorded : DurabilityClass → CorePayload → Bool
@@ -164,7 +166,7 @@ def verdictOfRaw (raw : ByteArray) : Option Verdict := do
   | _ => none
 
 def Established (ctx : EstablishmentContext) (p : CorePayload) : Bool :=
-  decide (SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString = some p.effectClaim) &&
+  decide (SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString ctx.tools = some p.effectClaim) &&
   decide (verdictOfRaw p.rawKernelOutputBytes = some p.verdict) &&
   ctx.kernelProduced p.decisionInputs p.rawKernelOutputBytes p.verdict &&
   ctx.delegated p.deploymentId p.receiptKeyDelegationRef &&
@@ -183,7 +185,7 @@ def check (ctx : EstablishmentContext) (p : CorePayload) : Option (ObjectB ctx) 
 
 theorem kernel_effect_boundary_matches_payload
     {ctx : EstablishmentContext} (r : ObjectB ctx) :
-    SealV2.Effect.deriveEffect r.payload.stepInput.trimAscii.toString =
+    SealV2.Effect.deriveEffect r.payload.stepInput.trimAscii.toString ctx.tools =
       some r.payload.effectClaim :=
   by
     have h := r.established
@@ -200,14 +202,14 @@ theorem verdict_decoder_matches_payload
 
 theorem check_refuses_kernel_effect_mismatch
     (ctx : EstablishmentContext) (p : CorePayload) (got : SealV2.Effect.EffectClaim)
-    (hgot : SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString = some got)
+    (hgot : SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString ctx.tools = some got)
     (hne : got ≠ p.effectClaim) :
     check ctx p = none := by
   unfold check
   split
   next hvalid =>
     have heffect :
-        SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString =
+        SealV2.Effect.deriveEffect p.stepInput.trimAscii.toString ctx.tools =
           some p.effectClaim := by
       simp only [Established, Bool.and_eq_true, decide_eq_true_eq] at hvalid
       exact hvalid.1.1.1.1.1.1.1
@@ -336,7 +338,8 @@ def inputs : DecisionInputs :=
     logicalTime := 41 }
 
 def context : EstablishmentContext :=
-  { kernelProduced := fun seenInputs raw verdict =>
+  { tools := [{ tool := "db.execute", version := "v1", actions := ["call"] }]
+    kernelProduced := fun seenInputs raw verdict =>
       decide (seenInputs = inputs) && decide (raw = rawAllow) && decide (verdict = .allow)
     delegated := fun dep ref => decide (dep = deployment) && decide (ref = delegation)
     durablyRecorded := fun durability p =>
@@ -392,7 +395,8 @@ def undelegatedContext : EstablishmentContext :=
   { context with delegated := fun _ _ => false }
 
 def liarContext : EstablishmentContext :=
-  { kernelProduced := fun _ _ _ => true
+  { tools := context.tools
+    kernelProduced := fun _ _ _ => true
     delegated := fun _ _ => true
     durablyRecorded := fun _ _ => true }
 
@@ -400,7 +404,7 @@ def forged : CorePayload :=
   { payload with rawKernelOutputBytes := rawBlock, verdict := .allow }
 
 #guard (check context payload).isSome
-#guard SealV2.Effect.deriveEffect payload.stepInput.trimAscii.toString ==
+#guard SealV2.Effect.deriveEffect payload.stepInput.trimAscii.toString context.tools ==
   some payload.effectClaim
 #guard verdictOfRaw payload.rawKernelOutputBytes == some payload.verdict
 #guard verdictOfRaw "{\"route\":\"block\",\"route\":\"forward\"}".toUTF8 == none

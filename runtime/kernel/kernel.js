@@ -10,8 +10,10 @@
 // exported symbols (seal_init / seal_decide), hashes the binary, and wraps the result.
 // All decision semantics live inside the compiled wasm; all input/output shaping is
 // reused verbatim from seal-config.js.
-import { buildEnvelope, buildStepInput, parseVerdict, PUBKEY } from "./seal-config.js";
+import { buildStepInput, parseVerdict } from "./seal-config.js";
 import { assembleReceiptV2, canonicalRequest, canonicalRequestSha256 } from "./receipt-format.js";
+
+import { authorizationSession } from "./authorization.js";
 
 // --- pinned kernel identity (see AUDIT.md) ----------------------------------
 // sha256 of wasm/seal.wasm, repinned 2026-07-21 to the P6 byte-carrier kernel
@@ -108,11 +110,12 @@ export async function verifyKernelSha() {
 
 // --- decide, capturing the raw emitted bytes --------------------------------
 // Single self-contained decision (seal_init resets state, then one seal_decide).
-export async function decideRaw(config, { tool, args = {}, approvals = [], now = 1000, votes = "" }) {
+export async function decideRaw(config, { tool, args = {}, action, line, signedApprovals = [], approvals = [], now = 1000, votes = "" }) {
   const M = await mod();
-  const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [buildEnvelope(config), PUBKEY]));
+  const session = await authorizationSession(config);
+  const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [session.envelope, session.publicKey]));
   if (ir.ok !== true) throw new Error("seal_init failed: " + (ir.error || JSON.stringify(ir)));
-  const step = buildStepInput({ tool, args, approvals, now, votes });
+  const step = await session.approve(M, buildStepInput({ tool, args, action, line, signedApprovals, approvals, now, votes }));
   const raw = M.ccall("seal_decide", "string", ["string"], [step]);
   return { raw, step, parsed: parseVerdict(raw, tool) };
 }
@@ -122,13 +125,14 @@ export async function decideRaw(config, { tool, args = {}, approvals = [], now =
 // `steps` = [{tool, args, approvals?, now?}].
 export async function decideSeqRaw(config, steps, tool) {
   const M = await mod();
-  const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [buildEnvelope(config), PUBKEY]));
+  const session = await authorizationSession(config);
+  const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [session.envelope, session.publicKey]));
   if (ir.ok !== true) throw new Error("seal_init failed: " + (ir.error || JSON.stringify(ir)));
   let raw, step;
-  steps.forEach((s, i) => {
-    step = buildStepInput({ ...s, id: i + 1 });
+  for (const [i, s] of steps.entries()) {
+    step = await session.approve(M, buildStepInput({ ...s, id: i + 1 }));
     raw = M.ccall("seal_decide", "string", ["string"], [step]);
-  });
+  }
   return { raw, step, parsed: parseVerdict(raw, tool) };
 }
 

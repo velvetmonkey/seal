@@ -3,6 +3,7 @@
 import Lean.Data.Json
 import SealV2.Parser
 import SealV2.Crypto
+import SealV2.Control
 import Seal.Policy
 import Seal.PolicyBundle
 import Seal.JsonUtil
@@ -44,6 +45,8 @@ structure TrustedConfig where
       (kernel PB). Defaulted so existing config literals stay valid; the
       `ofBundle_principals` tripwire pins that the mapping is not forgotten. -/
   principals : Option Kernels.PrincipalsConfig := none
+  /-- The single authenticated V2 tool list and approval-key context. -/
+  authorization : Option SealV2.Control.Config := none
 
 /-- Config lints for the `principals` section, fail-closed in `ofBundle`:
     1. duplicate principal ids with DIFFERENT pubkeys — an ambiguous registry
@@ -275,7 +278,13 @@ def parseCanonicalConfigPayload (payload : String) :
   if (SealV2.parse payload).isNone then
     throw "config payload is not canonical (SealV2 parse rejected it)"
   let json ← Json.parse payload
-  ofBundle (← Seal.parsePolicyBundle json)
+  match (json.getObjVal? "policy").toOption with
+  | none => ofBundle (← Seal.parsePolicyBundle json)
+  | some policy =>
+      expectObjKeys json ["policy", "authorization"] "signed host configuration"
+      let authorization ← SealV2.Control.parseConfig (← json.getObjVal? "authorization")
+      let config ← ofBundle (← Seal.parsePolicyBundle policy)
+      pure { config with authorization := some authorization }
 
 /-- Pure, fail-closed config check. The payload must
     1. carry a real Ed25519 signature binding it to the trusted public key,

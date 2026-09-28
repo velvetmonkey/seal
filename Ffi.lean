@@ -11,6 +11,7 @@ import Seal.Block
 -- M.7 branch dependency: requires kernel commit 564c21f (or its merge) and
 -- cannot build against the current pin before the single repin.
 import SealV2.McpVersionGate
+import SealV2.Control
 import Kernels
 
 /-!
@@ -52,6 +53,7 @@ structure Session where
   budgetRef : IO.Ref Kernels.BudgetState
   principalBudgetRef : IO.Ref Kernels.PBState
   unitRef : IO.Ref Unit
+  consumedRef : IO.Ref (List SealV2.ConsumedNonce)
 
 initialize sessionRef : IO.Ref (Option Session) ← IO.mkRef none
 
@@ -150,6 +152,7 @@ private def initFromConfig (config : TrustedConfig)
     budgetRef := ← IO.mkRef []
     principalBudgetRef := ← IO.mkRef []
     unitRef := ← IO.mkRef ()
+    consumedRef := ← IO.mkRef []
   }
   sessionRef.set (some session)
   -- M.2: a fresh session has observed no entry call — the gate's selection
@@ -170,6 +173,7 @@ private def initFromConfig (config : TrustedConfig)
     summary the Rust host needs for evidence gathering (file paths, TTL), or
     `{ok: false, error}` — fail-closed, no session on any failure. -/
 private def initImpl (envelopeText publicKey : String) : IO String := do
+  sessionRef.set none
   match checkEnvelope envelopeText publicKey with
   | .error err => pure (errJson s!"trusted config rejected: {err}")
   | .ok config =>
@@ -537,6 +541,53 @@ unsafe def sealHostMcpVersionGateStep (inputText : String) : String :=
 def sealHostFirstAgreementUnsafeNumber (line : String) : String :=
   (Seal.JsonUtil.firstAgreementUnsafeNumber? line.trimAscii.toString).getD ""
 
+/-- The shipped WASM authorization entrypoint: the V2 decision and replay
+    store are mandatory for mediated calls, followed by the existing host gates.
+    Both the resolver and effect observers use the session's authenticated list. -/
+private def authorizedStepImpl (inputText : String) : IO String := do
+  let block := (Json.mkObj [("route", Json.str "block")]).compress
+  let some session ← sessionRef.get | pure (errJson "session not initialised")
+  if !Seal.JsonUtil.wireNumbersSafe inputText then return block
+  let .ok input := Json.parse inputText | return block
+  let line := getStrD input "line" ""
+  match classifyLine line with
+  | .passthrough => stepImpl inputText
+  | .refuse => pure block
+  | .act _ =>
+      let some configured := session.config.authorization | return block
+      let .ok now := (input.getObjVal? "now").bind Json.getNat? | return block
+      let .ok tokens := (input.getObjVal? "signedApprovals").bind Json.getArr? | return block
+      let .ok approvals := tokens.toList.mapM SealV2.Control.parseApproval | return block
+      let consumed ← session.consumedRef.get
+      let state := { configured.toState with now, approvals, consumedNonces := consumed }
+      match SealV2.decide line state with
+      | .Block => pure block
+      | .Allow _ =>
+          let some ast := SealV2.parse line | return block
+          let some (store, _) := SealV2.validateAndConsumeWithStore
+            SealV2.listReplayStore consumed ast state | return block
+          session.consumedRef.set store
+          stepImpl inputText
+
+@[export seal_host_authorized_step]
+unsafe def sealHostAuthorizedStep (inputText : String) : String :=
+  unsafeBaseIO <| (authorizedStepImpl inputText).catchExceptions
+    (fun e => pure (errJson (toString e)))
+
+private def challengeImpl (line issuedText expiryText nonce : String) : IO String := do
+  let some session ← sessionRef.get | pure (errJson "session not initialised")
+  let some state := session.config.authorization | pure (errJson "authorization not configured")
+  let some issued := issuedText.toNat? | pure (errJson "invalid issuedAt")
+  let some expiry := expiryText.toNat? | pure (errJson "invalid expiry")
+  let some bytes := SealV2.Control.challenge state.toState line issued expiry nonce
+    | pure (errJson "no unambiguous configured tool/action")
+  pure (Json.mkObj [("ok", Json.bool true), ("signed_bytes", Json.str bytes)]).compress
+
+@[export seal_host_challenge]
+unsafe def sealHostChallenge (line issued expiry nonce : String) : String :=
+  unsafeBaseIO <| (challengeImpl line issued expiry nonce).catchExceptions
+    (fun e => pure (errJson (toString e)))
+
 /-! ### Cross-implementation canonical-byte containment
 
 The V2.3 transport reconstructs the signed effect tuple independently in
@@ -556,8 +607,12 @@ private def canonicalSeatJson : Option String → Json
     observation seam only: `SealV2.Effect.deriveEffect` remains the sole Lean
     derivation and no Rust spelling is imported or reproduced here. -/
 @[export seal_host_canonical_effect]
-def sealHostCanonicalEffect (line : String) : String :=
-  match SealV2.Effect.deriveEffect line.trimAscii.toString with
+def sealHostCanonicalEffect (envelope publicKey line : String) : String :=
+  let claim := do
+    let config ← (Host.checkEnvelope envelope publicKey).toOption
+    let authorization ← config.authorization
+    SealV2.Effect.deriveEffect line.trimAscii.toString authorization.tools
+  match claim with
   | none => (Json.mkObj [
       ("ok", Json.bool false),
       ("error", Json.str "kernel could not classify a canonical signed effect")]).compress

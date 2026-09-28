@@ -96,13 +96,13 @@ private def identityFromRequest (raw : String) : Except String Identity := do
 
   let some ast := SealV2.parse raw
     | throw "V2 parser rejected fixture"
-  let some req := SealV2.requestFromAst ast
+  let some req := SealV2.requestFromAst ast v2State.tools
     | throw "V2 did not parse fixture as tools/call"
   let some spec := SealV2.findToolSpec v2State req
     | throw "V2 tool lookup rejected fixture"
   let target := SealV2.targetFor v2State req spec
   let approval := approvalFor target
-  let some claim := SealV2.Effect.deriveEffect raw
+  let some claim := SealV2.Effect.deriveEffect raw v2State.tools
     | throw "signed effect derivation rejected fixture"
 
   pure {

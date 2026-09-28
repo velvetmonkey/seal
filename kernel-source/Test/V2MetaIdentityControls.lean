@@ -61,7 +61,7 @@ private def identityFromRequest (raw : String) : Except String Identity := do
 
   let some ast := SealV2.parse raw
     | throw "V2 fixture did not parse"
-  let some v2Request := requestFromAst ast
+  let some v2Request := requestFromAst ast v2State.tools
     | throw "V2 fixture did not parse as tools/call"
   let some spec := findToolSpec v2State v2Request
     | throw "V2 fixture had no tool spec"
@@ -70,7 +70,7 @@ private def identityFromRequest (raw : String) : Except String Identity := do
   unless MetaValue.ofStage1 stage1Metadata == v2Request.metadata do
     throw "CROSS-LAYER RED: stage-1 and V2 parsed different metadata values"
 
-  let some claim := deriveEffect raw
+  let some claim := deriveEffect raw v2State.tools
     | throw "V2 envelope effect derivation failed"
   unless claim.metadata == target.metadata do
     throw "ENVELOPE RED: derived effect metadata differs from typed target"
@@ -174,7 +174,7 @@ private def stage1Accepts (raw : String) : Bool :=
 
 private def v2Accepts (raw : String) : Bool :=
   match SealV2.parse raw with
-  | some ast => (requestFromAst ast).isSome
+  | some ast => (requestFromAst ast v2State.tools).isSome
   | none => false
 
 private def requireSharedRejection : IO Unit := do

@@ -1,6 +1,7 @@
 /- SPDX-License-Identifier: Apache-2.0 -/
 
 import SealV2
+import SealV2.Control
 import Lean.Data.Json
 
 /-!
@@ -47,37 +48,19 @@ private def decisionJson (decision : String) (out : Option String) : String :=
 
 /-! ## Config / tool-spec marshalling (host CONTROL only — A3 glue, not the security parser) -/
 
-private def parseToolSpec (j : Json) : Except String ToolSpec := do
-  let tool ← (← j.getObjVal? "tool").getStr?
-  let version ← (← j.getObjVal? "version").getStr?
-  let actionsArr ← (← j.getObjVal? "actions").getArr?
-  let actions ← actionsArr.toList.mapM (fun a => a.getStr?)
-  pure { tool, version, actions }
-
-private def parseConfig (j : Json) : Except String ApprovalState := do
-  let session ← (← j.getObjVal? "session").getStr?
-  let publicKey ← (← j.getObjVal? "publicKey").getStr?
-  let manifestDigest ← (← j.getObjVal? "manifestDigest").getStr?
-  let policyVersion ← (← j.getObjVal? "policyVersion").getStr?
-  let maxTtl ← (← j.getObjVal? "maxApprovalTtl").getNat?
-  let toolsArr ← (← j.getObjVal? "tools").getArr?
-  let tools ← toolsArr.toList.mapM parseToolSpec
-  pure {
-    session, now := 0, publicKey, manifestDigest, tools,
-    approvals := [], policyVersion, maxApprovalTtl := maxTtl, consumedNonces := []
-  }
-
 /-! ## Exports -/
 
 /-- Initialise the session from a config JSON envelope. Fail-closed: no session on
     any parse failure. -/
 private def initImpl (configText : String) : IO String := do
+  stateRef.set none
+  if (SealV2.parse configText).isNone then return errJson "config not canonical"
   match Json.parse configText with
   | .error e => pure (errJson s!"config json: {e}")
   | .ok j =>
-      match parseConfig j with
+      match SealV2.Control.parseConfig j with
       | .error e => pure (errJson s!"config: {e}")
-      | .ok st => stateRef.set (some st); pure okJson
+      | .ok config => stateRef.set (some config.toState); pure okJson
 
 /-- Inject an approval token the host received off-band, given its canonical
     signed-message bytes + hex signature. The `Approval` is reconstructed via the
@@ -133,7 +116,7 @@ private def challengeImpl (rawRequest issuedAtText expiryText nonceHex : String)
       match parse rawRequest with
       | none => pure (errJson "parse failed")
       | some ast =>
-          match requestFromAst ast with
+          match requestFromAst ast st.tools with
           | none => pure (errJson "not a tools/call request")
           | some req =>
               match findToolSpec st req with
