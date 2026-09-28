@@ -473,6 +473,12 @@ inspection; startup does not remove the lock or wait out this refusal. Check
 the named lock and operation before retrying. A live PID with a different
 process-start witness is stale, even if that PID still exists.
 
+For a stale or invalid owner record, the refusal prints `Recovery command:`
+followed by `rm --` and the exact shell-quoted lock path. Stop all Seal
+operations, inspect and recheck that lock, then run the printed command and
+retry. The command can remove a replacement live lock; Seal never runs it
+automatically.
+
 ### `activation_state_changed`
 
 The stored protection record changed while the wrapper was discovering the
