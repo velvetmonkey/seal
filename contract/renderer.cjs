@@ -76,6 +76,10 @@ function renderName(name) {
       if (renderName.scriptCache.size >= 2048) renderName.scriptCache.clear();
       renderName.scriptCache.set(ch, scripts);
     }
+    // A Common or Inherited letter absent from the supported script list
+    // contributes no script evidence. An unlisted concrete script still breaks
+    // the intersection so it cannot hide a mixed-script name.
+    if (scripts.size === 0 && /[\p{Script=Common}\p{Script=Inherited}]/u.test(ch)) continue;
     resolved = resolved === undefined ? scripts : new Set([...resolved].filter((script) => scripts.has(script)));
     if (resolved.size === 0) break;
   }
