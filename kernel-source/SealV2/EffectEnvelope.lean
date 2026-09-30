@@ -1117,11 +1117,11 @@ theorem mcp_entry_eras_distinct :
     Kernel twin of the host receipt's `seal.effect-view/v0` (which is
     explicitly `authoritative: false`); THIS derivation is the authoritative
     comparand for the F3 equality gate. -/
-def deriveEffect (line : RawBytes) : Option EffectClaim :=
+def deriveEffect (line : RawBytes) (tools : List ToolSpec) : Option EffectClaim :=
   match parse line with
   | none => none
   | some ast =>
-      match requestFromAst ast with
+      match requestFromAst ast tools with
       | none => none
       | some req => some {
           resource := req.tool,
@@ -1180,10 +1180,10 @@ def issuedAtGate (state : ApprovalState) (e : EffectEnvelope) : Bool :=
     an uncheckable claim would authenticate a lie. Note `some ⟨"", "", ""⟩`
     is a PRESENT claim and is checked like any other: the retired all-empty
     sentinel buys nothing. -/
-def effectGate (mediator : AdapterId) (e : EffectEnvelope) : Bool :=
+def effectGate (tools : List ToolSpec) (mediator : AdapterId) (e : EffectEnvelope) : Bool :=
   e.effect.all fun c =>
     mediator.type == mcpAdapterType
-      && (deriveEffect e.line == some c)
+      && (deriveEffect e.line tools == some c)
 
 /-- **The V2.3 judgment step** — the spec the host binds to at repin. -/
 def effectStep (authority : ByteArray) (reg : PrincipalRegistry)
@@ -1192,7 +1192,7 @@ def effectStep (authority : ByteArray) (reg : PrincipalRegistry)
   match verifyEffect authority reg e sigHex with
   | none => .Block
   | some _ =>
-      if adapterGate mediator e && sessionGate state e && effectGate mediator e
+      if adapterGate mediator e && sessionGate state e && effectGate state.tools mediator e
           && expiryGate state e && issuedAtGate state e
           && policyVersionGate state e
       then decide e.line state
@@ -1206,7 +1206,7 @@ theorem effect_step_gates {authority : ByteArray} {reg : PrincipalRegistry}
     (∃ p, verifyEffect authority reg e sigHex = some p)
       ∧ adapterGate mediator e = true
       ∧ sessionGate state e = true
-      ∧ effectGate mediator e = true
+      ∧ effectGate state.tools mediator e = true
       ∧ expiryGate state e = true
       ∧ issuedAtGate state e = true
       ∧ policyVersionGate state e = true := by
@@ -1493,7 +1493,7 @@ theorem mcp_effect_equality {authority : ByteArray} {reg : PrincipalRegistry}
     {state : ApprovalState} {c : EffectClaim}
     (hm : mediator.type = mcpAdapterType) (hc : e.effect = some c)
     (h : effectStep authority reg mediator e sigHex state ≠ .Block) :
-    deriveEffect e.line = some c := by
+    deriveEffect e.line state.tools = some c := by
   obtain ⟨_, _, _, hg, _, _, _⟩ := effect_step_gates h
   unfold effectGate at hg
   rw [hc] at hg
@@ -1507,7 +1507,7 @@ theorem mcp_effect_mismatch_blocks {authority : ByteArray}
     {reg : PrincipalRegistry} {mediator : AdapterId} {e : EffectEnvelope}
     {sigHex : String} {state : ApprovalState} {c : EffectClaim}
     (hm : mediator.type = mcpAdapterType) (hc : e.effect = some c)
-    (hmis : deriveEffect e.line ≠ some c) :
+    (hmis : deriveEffect e.line state.tools ≠ some c) :
     effectStep authority reg mediator e sigHex state = .Block := by
   rcases effect_step_block_or_not authority reg mediator e sigHex state
     with hb | hnb

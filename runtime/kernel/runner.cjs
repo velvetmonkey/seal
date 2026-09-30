@@ -11,16 +11,7 @@ const { pathToFileURL } = require("node:url");
 const ROOT = path.resolve(__dirname);
 const WASM_DIR = path.join(ROOT, "wasm");
 let _M = null, _cfg = null, _K = null;
-const configKeys = crypto.generateKeyPairSync("ed25519");
-const configPublicKey = Buffer.from(configKeys.publicKey.export({ type: "spki", format: "der" }))
-  .subarray(-32).toString("hex");
-
-function signedEnvelope(config) {
-  const payload = JSON.stringify(config);
-  const signature = crypto.sign(null, Buffer.from(payload, "utf8"), configKeys.privateKey).toString("hex");
-  return JSON.stringify({ payload, signature });
-}
-
+const authorization = import(pathToFileURL(path.join(ROOT, "authorization.js")).href);
 async function load() {
   if (_M) return { M: _M, cfg: _cfg, K: _K };
   globalThis.require = require;            // wasm glue's NODE branch needs these
@@ -43,12 +34,13 @@ function kernelSha() {
 // One self-contained decision. Returns { raw, verdict, receipt } — receipt
 // is schema v1 (seal-host/docs/DECISION-RECEIPT-SCHEMA.md) via the vendored
 // kernel.js buildReceipt.
-async function decide(config, { tool, args = {}, approvals = [], now = 1000 }) {
+async function decide(config, { tool, args = {}, action, line, signedApprovals = [], approvals = [], now = 1000 }) {
   const { M, cfg, K } = await load();
+  const session = await (await authorization).authorizationSession(config);
   const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"],
-    [signedEnvelope(config), configPublicKey]));
+    [session.envelope, session.publicKey]));
   if (ir.ok !== true) throw new Error("seal_init failed: " + JSON.stringify(ir));
-  const step = cfg.buildStepInput({ tool, args, approvals, now });
+  const step = await session.approve(M, cfg.buildStepInput({ tool, args, action, line, signedApprovals, approvals, now }));
   const raw = M.ccall("seal_decide", "string", ["string"], [step]);
   const parsed = cfg.parseVerdict(raw, tool);
   const computed = kernelSha();
@@ -63,14 +55,15 @@ async function decide(config, { tool, args = {}, approvals = [], now = 1000 }) {
 // only fire across a trace). Returns the LAST step's verdict.
 async function decideSeq(config, steps, tool) {
   const { M, cfg } = await load();
+  const session = await (await authorization).authorizationSession(config);
   const ir = JSON.parse(M.ccall("seal_init", "string", ["string", "string"],
-    [signedEnvelope(config), configPublicKey]));
+    [session.envelope, session.publicKey]));
   if (ir.ok !== true) throw new Error("seal_init failed: " + JSON.stringify(ir));
   let raw, step;
-  steps.forEach((s, i) => {
-    step = cfg.buildStepInput({ ...s, id: i + 1 });
+  for (const [i, s] of steps.entries()) {
+    step = await session.approve(M, cfg.buildStepInput({ ...s, id: i + 1 }));
     raw = M.ccall("seal_decide", "string", ["string"], [step]);
-  });
+  }
   const parsed = cfg.parseVerdict(raw, tool);
   const verdict = parsed.verdict === "DENY" ? "BLOCK" : parsed.verdict;
   return { raw, verdict, parsed };

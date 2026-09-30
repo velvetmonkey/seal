@@ -228,7 +228,7 @@ structure Control where
 def gateValue : GateSel → AdapterId → ApprovalState → EffectEnvelope → Bool
   | .adapter, m, _, e => adapterGate m e
   | .session, _, s, e => sessionGate s e
-  | .effect, m, _, e => effectGate m e
+  | .effect, m, s, e => effectGate s.tools m e
   | .expiry, _, s, e => expiryGate s e
   | .issuedAt, _, s, e => issuedAtGate s e
   | .policyVersion, _, s, e => policyVersionGate s e

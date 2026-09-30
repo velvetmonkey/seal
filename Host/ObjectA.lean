@@ -126,6 +126,8 @@ structure Candidate where
   deriving BEq, DecidableEq
 
 structure VerificationContext where
+  /-- Supplied by the authenticated host configuration, never the judged request. -/
+  tools : List SealV2.ToolSpec
   now : Nat
   requestSignerDelegated :
     DeploymentId → Digest256 → Digest256 → RequestSignerRef → Bool
@@ -174,9 +176,9 @@ def judgedRequestDigest (bytes : ByteArray) : Digest256 :=
 
 /-- The imported C0 parser is the only request-effect interpretation used by
     Object A. -/
-def judgedEffect (bytes : ByteArray) : Option SealV2.Effect.EffectClaim := do
+def judgedEffect (tools : List SealV2.ToolSpec) (bytes : ByteArray) : Option SealV2.Effect.EffectClaim := do
   let text ← String.fromUTF8? bytes
-  SealV2.Effect.deriveEffect text.trimAscii.toString
+  SealV2.Effect.deriveEffect text.trimAscii.toString tools
 
 def validAt (now issuedAt expiresAt : Nat) : Bool :=
   expiresAt < 2 ^ 64 && issuedAt ≤ now && now ≤ expiresAt
@@ -185,7 +187,7 @@ def Accepted (ctx : VerificationContext) (candidate : Candidate) : Bool :=
   decide (parsePayload candidate.statementBytes = some candidate.payload) &&
   decide (candidate.payload.judgedRequestSha256 =
     judgedRequestDigest candidate.payload.judgedRequestBytes) &&
-  (judgedEffect candidate.payload.judgedRequestBytes).isSome &&
+  (judgedEffect ctx.tools candidate.payload.judgedRequestBytes).isSome &&
   validAt ctx.now candidate.payload.issuedAt candidate.payload.expiresAt &&
   ctx.requestSignerDelegated candidate.payload.deploymentId candidate.payload.configRef
     candidate.payload.keyEpoch candidate.signer &&
@@ -219,7 +221,7 @@ theorem judged_request_digest_matches_bytes
 
 theorem kernel_effect_boundary_accepts_judged_request
     {ctx : VerificationContext} (request : ObjectA ctx) :
-    (judgedEffect request.candidate.payload.judgedRequestBytes).isSome = true := by
+    (judgedEffect ctx.tools request.candidate.payload.judgedRequestBytes).isSome = true := by
   have h := request.accepted
   simp only [Accepted, Bool.and_eq_true, decide_eq_true_eq] at h
   exact h.1.1.1.1.2
@@ -481,7 +483,8 @@ def requestCandidate : ObjectA.Candidate :=
     statementBytes := requestStatementBytes }
 
 def requestContext : ObjectA.VerificationContext :=
-  { now := 150
+  { tools := [{ tool := "database.drop", version := "v1", actions := ["call"] }]
+    now := 150
     requestSignerDelegated := fun dep cfg epoch signer =>
       decide (dep = deployment) && decide (cfg = configRef) &&
       decide (epoch = keyEpoch) && decide (signer = requestSigner)
@@ -530,7 +533,8 @@ def requestPermissiveSignatureContext : ObjectA.VerificationContext :=
   { requestContext with signatureVerified := fun _ _ _ => true }
 
 def permissiveRequestContext : ObjectA.VerificationContext :=
-  { now := 150
+  { tools := requestContext.tools
+    now := 150
     requestSignerDelegated := fun _ _ _ _ => true
     adapterProfileAccepted := fun _ _ _ => true
     signatureVerified := fun _ _ _ => true }
@@ -648,7 +652,7 @@ the Object A layer retains its original 26-control census. -/
 #guard ObjectA.parsePayload requestStatementBytes = some requestPayload
 #guard ApprovalStatement.parsePayload approvalStatementBytes = some approvalPayload
 #guard ObjectA.judgedRequestDigest "abc".toUTF8 = fipsAbcDigest
-#guard ObjectA.judgedEffect requestBytes = some expectedRequestEffect
+#guard ObjectA.judgedEffect requestContext.tools requestBytes = some expectedRequestEffect
 #guard StatementParsing.presentedJson? "{\"issued_at\":1e9999999}".toUTF8 = none
 #guard StatementParsing.presentedJson? "{\"schema\":\"v1\",\"schema\":\"v2\"}".toUTF8 = none
 #guard ObjectA.parsePayload

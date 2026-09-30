@@ -33,7 +33,7 @@ open SealV2 SealV2.Effect Test.V2ValidationFixtures
     is exercised here at runtime. `none` if the fixture line stops parsing
     as a capability request (that is a RED). -/
 def aliceEffectful : Option EffectEnvelope :=
-  match deriveEffect wAlice.line with
+  match deriveEffect wAlice.line wState.tools with
   | none => none
   | some claim => some { wAlice with effect := some claim }
 

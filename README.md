@@ -220,7 +220,7 @@ effects.
 
 Lean proves non-bypass and default-deny properties of the authorization decision model; correspondence to the shipped authorization path is not yet tested.
 Release incorporation: The theorem artifact does not yet ship and run in the released build graph.
-Semantic correspondence: The theorem concerns `SealV2.decide`. The shipped authorization path is `sealHostStep -> stepImpl -> Host.dispatch`. Their correspondence is not yet tested or proved. The `interpreted Lean vs shipped WASM` job compares verdicts from the shipped implementation interpreted through `Ffi.modelStep` with verdicts from its compiled WASM on a corpus; it asserts their agreement, with no independent expected verdict. It does not compare `SealV2.decide` with the shipped path.
+Semantic correspondence: The product-built WASM candidate takes `seal_decide -> sealHostAuthorizedStep -> SealV2.decide -> stepImpl -> Host.dispatch`; its seven action-resolution cases agree with native Lean, while general correspondence and incorporation of this candidate into the pinned released artifact remain unproved.
 The proof-bearing source compiles reproducibly to the WASM the product uses,
 and a tested Node runtime enforces it with durable one-use state,
 configuration-drift refusal, concurrent-proxy fencing and signed receipts.

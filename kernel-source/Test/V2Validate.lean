@@ -107,8 +107,32 @@ def expectSignedPathRejects (name raw : String) : IO Unit := do
   | some _ =>
     throw <| IO.userError s!"{name}: expected signedParse rejection"
 
+def omittedActionRaw : String := validRaw.replace "\"action\":\"write\"," ""
+
 def main : IO UInt32 := do
   expectSomeValidate "valid witness" validRaw baseState
+  expectSomeValidate "omitted singleton action" omittedActionRaw baseState
+  expectNoneValidate "wrong tool with action" (validRaw.replace "db.execute" "no.such.tool") baseState
+  expectNoneValidate "wrong tool without action" (omittedActionRaw.replace "db.execute" "no.such.tool") baseState
+  expectNoneValidate "two actions without action" omittedActionRaw
+    { baseState with tools := [{ toolSpec with actions := ["write", "read"] }] }
+  expectNoneValidate "two specs without action" omittedActionRaw
+    { baseState with tools := [toolSpec, toolSpec] }
+  expectNoneValidate "zero actions without action" omittedActionRaw
+    { baseState with tools := [{ toolSpec with actions := [] }] }
+  expectSomeValidate "explicit action for multiple actions" validRaw
+    { baseState with tools := [{ toolSpec with actions := ["write", "read"] }] }
+  expectSomeValidate "explicit action selects only matching spec" validRaw
+    { baseState with tools := [toolSpec, { toolSpec with actions := ["read"] }] }
+  expectNoneValidate "duplicate explicit matches" validRaw
+    { baseState with tools := [toolSpec, toolSpec] }
+  expectNoneValidate "malformed action" (validRaw.replace "\"write\"" "null") baseState
+  if (SealV2.Effect.deriveEffect (validRaw.replace "db.execute" "no.such.tool") baseState.tools).isSome then
+    throw <| IO.userError "unknown tool effect: expected none from the trusted list"
+  if SealV2.Effect.deriveEffect omittedActionRaw baseState.tools !=
+      SealV2.Effect.deriveEffect validRaw baseState.tools then
+    throw <| IO.userError "omitted singleton action: effect differs from explicit action"
+  IO.println "Action resolver corpus passed: 3 accepted, 7 rejected (plus existing unknown-action negative)"
   expectNoneValidate "unknown tool" (requestRaw "db.query" "write" "{\"database\":\"prod\",\"table\":\"users\",\"amount\":12.34}") baseState
   expectNoneValidate "unknown action" (requestRaw "db.execute" "read" "{\"database\":\"prod\",\"table\":\"users\",\"amount\":12.34}") baseState
   expectNoneValidate "no approval" validRaw { baseState with approvals := [] }

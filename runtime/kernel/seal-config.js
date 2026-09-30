@@ -133,6 +133,13 @@ export const CFG_STANDARD = { epoch: 1,
   temporal: { policies: [] }, consensus: CONSENSUS,
   convergence: { tools: [{ tool: "store.update", op_arg: "op" }] } };
 
+// These demo policies are authored host configuration, fixed before any call.
+// Declare their call capability once; no request contributes to this list.
+for (const config of [CFG_DEMO1, CFG_PAY_A, CFG_PAY_B, CFG_STORE, CFG_TEMPORAL, CFG_STANDARD]) {
+  config.toolSpecs = [...new Set(config.safety.tools.map(spec => spec.name))]
+    .map(tool => ({ tool, version: String(config.epoch), actions: ["call"] }));
+}
+
 // scenario key -> {config, tool, args, approvals, demo, label}
 export const SCENARIOS = {
   "destructive-sql": { config: CFG_DEMO1, tool: "db.execute", args: { database: "prod", sql: "drop table users" }, approvals: [], demo: 1, label: "Drop the production users table (no approval)" },
@@ -144,14 +151,14 @@ export const SCENARIOS = {
   "store-subtle":    { config: CFG_STORE, tool: "store.update", args: { op: "assign", key: "k1" }, approvals: [guardTarget("store.update", { op: "assign", key: "k1" })], demo: 3, label: "store.update { op: assign }" },
 };
 
-const rpc = (tool, args, id = 1) => wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
+const rpc = (tool, args, id = 1, action) => wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, ...(action === undefined ? {} : { action }), arguments: args } });
 
 // Build the seal_decide step-input JSON for a scenario (or a custom tool call).
 // `votes` is the raw consensus votes-file text (NDJSON lines
 // `{"acceptor":<nat>,"value":"<tool>"}`); default "" is byte-identical to before, so
 // existing scenarios/conformance are unaffected.
-export function buildStepInput({ tool, args, approvals = [], now = 1000, votes = "", id = 1 }) {
-  return JSON.stringify({ line: rpc(tool, args, id), now,
+export function buildStepInput({ tool, args, action, line, signedApprovals = [], approvals = [], now = 1000, votes = "", id = 1 }) {
+  return JSON.stringify({ line: line ?? rpc(tool, args, id, action), now, signedApprovals,
     approvals: approvals.map((t) => ({ target: t })), votes, grants: "", forecasts: "" });
 }
 

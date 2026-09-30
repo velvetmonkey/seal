@@ -101,7 +101,7 @@ theorem effect_step_presence_form (authority : ByteArray)
     effectStep authority reg mediator e sigHex state
       = (if (verifyEffect authority reg e sigHex).isSome
             && adapterGate mediator e && sessionGate state e
-            && effectGate mediator e && expiryGate state e
+            && effectGate state.tools mediator e && expiryGate state e
             && issuedAtGate state e && policyVersionGate state e
         then decide e.line state
         else .Block) := by
@@ -118,7 +118,7 @@ theorem effect_step_value_of_gates {authority : ByteArray}
     (hv : verifyEffect authority reg e sigHex = some p)
     (hga : adapterGate mediator e = true)
     (hgs : sessionGate state e = true)
-    (hge : effectGate mediator e = true)
+    (hge : effectGate state.tools mediator e = true)
     (hgx : expiryGate state e = true)
     (hgi : issuedAtGate state e = true)
     (hgp : policyVersionGate state e = true) :
@@ -152,13 +152,13 @@ theorem principal_non_influence {authority₁ authority₂ : ByteArray}
     (hline : e₁.line = e₂.line)
     (hga₁ : adapterGate mediator₁ e₁ = true)
     (hgs₁ : sessionGate state e₁ = true)
-    (hge₁ : effectGate mediator₁ e₁ = true)
+    (hge₁ : effectGate state.tools mediator₁ e₁ = true)
     (hgx₁ : expiryGate state e₁ = true)
     (hgi₁ : issuedAtGate state e₁ = true)
     (hgp₁ : policyVersionGate state e₁ = true)
     (hga₂ : adapterGate mediator₂ e₂ = true)
     (hgs₂ : sessionGate state e₂ = true)
-    (hge₂ : effectGate mediator₂ e₂ = true)
+    (hge₂ : effectGate state.tools mediator₂ e₂ = true)
     (hgx₂ : expiryGate state e₂ = true)
     (hgi₂ : issuedAtGate state e₂ = true)
     (hgp₂ : policyVersionGate state e₂ = true) :
@@ -381,12 +381,12 @@ any witness field drifts, the pin (and then the SHOW control) goes red. -/
 /-- info: true -/
 #guard_msgs in
 #eval adapterGate wMcp wAlice && sessionGate wState wAlice
-  && effectGate wMcp wAlice && expiryGate wState wAlice
+  && effectGate wState.tools wMcp wAlice && expiryGate wState wAlice
   && issuedAtGate wState wAlice && policyVersionGate wState wAlice
 
 /-- info: true -/
 #guard_msgs in
-#eval adapterGate wCli wBob && sessionGate wState wBob && effectGate wCli wBob
+#eval adapterGate wCli wBob && sessionGate wState wBob && effectGate wState.tools wCli wBob
   && expiryGate wState wBob && issuedAtGate wState wBob
   && policyVersionGate wState wBob
 

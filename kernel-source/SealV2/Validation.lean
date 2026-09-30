@@ -516,7 +516,24 @@ def astString? : AST → Option String
   | .string value => some value
   | _ => none
 
-def requestFromAst (ast : AST) : Option CapabilityRequest :=
+/-- Resolve only against the host's trusted specs. Ambiguity is a denial,
+    including duplicate specs; an omitted wire action requires a singleton. -/
+def resolveAction (tool : ToolName) (wireAction : Option Action)
+    (tools : List ToolSpec) : Option (ToolSpec × Action) :=
+  match wireAction with
+  | some action =>
+      match tools.filter (fun spec => spec.tool == tool && spec.actions.contains action) with
+      | [spec] => some (spec, action)
+      | _ => none
+  | none =>
+      match tools.filter (fun spec => spec.tool == tool) with
+      | [spec] =>
+          match spec.actions with
+          | [action] => some (spec, action)
+          | _ => none
+      | _ => none
+
+def requestFromAst (ast : AST) (tools : List ToolSpec) : Option CapabilityRequest :=
   match ast with
   | .object fields => do
       let method ← lookupObj "method" fields >>= astString?
@@ -526,7 +543,10 @@ def requestFromAst (ast : AST) : Option CapabilityRequest :=
         match lookupObj "params" fields with
         | some (.object params) =>
             let tool ← lookupObj "name" params >>= astString?
-            let action ← lookupObj "action" params >>= astString?
+            let wireAction ← match lookupObj "action" params with
+              | none => some none
+              | some value => (astString? value).map some
+            let (_, action) ← resolveAction tool wireAction tools
             let arguments ← lookupObj "arguments" params
             let metadata ← MetaValue.fromAst? (lookupObj "_meta" params)
             let requestState ← RequestState.fromAst? (lookupObj "requestState" params)
@@ -539,7 +559,7 @@ def requestFromAst (ast : AST) : Option CapabilityRequest :=
   | _ => none
 
 def findToolSpec (state : ApprovalState) (request : CapabilityRequest) : Option ToolSpec :=
-  state.tools.find? fun spec => spec.tool == request.tool && spec.actions.any (fun action => action == request.action)
+  (resolveAction request.tool (some request.action) state.tools).map Prod.fst
 
 def targetFor (state : ApprovalState) (request : CapabilityRequest) (spec : ToolSpec) : Target :=
   {
@@ -662,7 +682,7 @@ def findApproval (state : ApprovalState) (target : Target) : Option Approval :=
 structure ValidApproval (ast : AST) (state : ApprovalState) where
   ast_canonical : IsCanonical ast
   request : CapabilityRequest
-  request_from_ast : requestFromAst ast = some request
+  request_from_ast : requestFromAst ast state.tools = some request
   toolSpec : ToolSpec
   tool_spec_in_state : state.tools.contains toolSpec = true
   action_allowed : toolSpec.actions.contains request.action = true
@@ -678,7 +698,7 @@ structure ValidApproval (ast : AST) (state : ApprovalState) where
 
 def validate (ast : AST) (state : ApprovalState) : Option (Σ checkedAst, ValidApproval checkedAst state) :=
   if hCanonical : IsCanonical ast then
-    match hReq : requestFromAst ast with
+    match hReq : requestFromAst ast state.tools with
     | none => none
     | some request =>
         match findToolSpec state request with

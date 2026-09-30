@@ -10,7 +10,8 @@ extern void lean_init_task_manager(void);
 extern lean_object* seal_ffi_initialize(uint8_t builtin, lean_object* w);
 extern uint8_t      seal_lean_io_result_is_ok(b_lean_obj_arg r);
 extern lean_object* seal_host_init(lean_object*, lean_object*);
-extern lean_object* seal_host_step(lean_object*);
+extern lean_object* seal_host_authorized_step(lean_object*);
+extern lean_object* seal_host_challenge(lean_object*, lean_object*, lean_object*, lean_object*);
 extern lean_object* seal_host_mcp_version_gate(lean_object*, lean_object*);
 extern lean_object* seal_host_mcp_version_gate_step(lean_object*);
 
@@ -87,7 +88,7 @@ char* seal_decide(const char* input) {
     lean_dec(gate_out);
 
     lean_object* in  = lean_mk_string_from_bytes(input, strlen(input));
-    lean_object* out = seal_host_step(in);
+    lean_object* out = seal_host_authorized_step(in);
     char* ret = strdup(lean_string_cstr(out));
     lean_dec(out);
     return ret;
@@ -101,6 +102,17 @@ char* seal_mcp_version_gate(const char* line, const char* selected_revision) {
     lean_object* in  = lean_mk_string_from_bytes(line, strlen(line));
     lean_object* rev = lean_mk_string_from_bytes(selected_revision, strlen(selected_revision));
     lean_object* out = seal_host_mcp_version_gate(in, rev);
+    char* ret = strdup(lean_string_cstr(out));
+    lean_dec(out);
+    return ret;
+}
+
+/* Canonical approval bytes; action selection remains entirely in Lean. */
+EMSCRIPTEN_KEEPALIVE
+char* seal_challenge(const char* line, const char* issued, const char* expiry, const char* nonce) {
+    if (!ensure_init()) return strdup("{\"ok\":false}");
+    lean_object* out = seal_host_challenge(lean_mk_string(line), lean_mk_string(issued),
+        lean_mk_string(expiry), lean_mk_string(nonce));
     char* ret = strdup(lean_string_cstr(out));
     lean_dec(out);
     return ret;

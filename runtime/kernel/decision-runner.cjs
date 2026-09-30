@@ -5,19 +5,12 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { pathToFileURL } = require("node:url");
 
 const ROOT = path.resolve(__dirname);
 const WASM_DIR = path.join(ROOT, "wasm");
 let moduleInstance;
-const keys = crypto.generateKeyPairSync("ed25519");
-const publicKey = Buffer.from(keys.publicKey.export({ type: "spki", format: "der" }))
-  .subarray(-32).toString("hex");
-
-function buildEnvelope(config) {
-  const payload = JSON.stringify(config);
-  const signature = crypto.sign(null, Buffer.from(payload, "utf8"), keys.privateKey).toString("hex");
-  return JSON.stringify({ payload, signature });
-}
+const authorization = import(pathToFileURL(path.join(ROOT, "authorization.js")).href);
 
 // Independently encode the kernel wire form. Fractions use scientific
 // notation to satisfy its mantissa-digit bound without rounding their values.
@@ -35,13 +28,13 @@ function wireJson(value) {
   return JSON.stringify(value);
 }
 
-function rpc(tool, args, id = 1) {
-  return wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, arguments: args } });
+function rpc(tool, args, id = 1, action) {
+  return wireJson({ jsonrpc: "2.0", id, method: "tools/call", params: { name: tool, ...(action === undefined ? {} : { action }), arguments: args } });
 }
 
-function buildStepInput({ tool, args, approvals, now, votes, grants, forecasts, granted_capabilities }) {
+function buildStepInput({ tool, args, action, line, signedApprovals = [], approvals, now, votes, grants, forecasts, granted_capabilities }) {
   return JSON.stringify({
-    line: rpc(tool, args), now,
+    line: line ?? rpc(tool, args, 1, action), now, signedApprovals,
     approvals: approvals.map((target) => ({ target })),
     votes, grants, forecasts, granted_capabilities,
   });
@@ -84,9 +77,10 @@ async function load() {
 
 async function decide(config, input) {
   const M = await load();
-  const init = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [buildEnvelope(config), publicKey]));
+  const session = await (await authorization).authorizationSession(config);
+  const init = JSON.parse(M.ccall("seal_init", "string", ["string", "string"], [session.envelope, session.publicKey]));
   if (init.ok !== true) throw new Error("seal_init failed: " + JSON.stringify(init));
-  const raw = M.ccall("seal_decide", "string", ["string"], [buildStepInput(input)]);
+  const raw = M.ccall("seal_decide", "string", ["string"], [await session.approve(M, buildStepInput(input))]);
   return { raw, verdict: parseVerdict(raw) };
 }
 

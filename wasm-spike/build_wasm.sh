@@ -61,7 +61,7 @@ emcc -O2 \
   build-core/*.o build-seal/*.o build-pkg/*.o $STDLIB_O $CLOSURE_O $SPEC_O \
   build-wasm-rt/libleanrt.a \
   -o "$PENDING/seal.js" \
-  -s EXPORTED_FUNCTIONS='["_seal_init","_seal_decide","_seal_mcp_version_gate","_malloc","_free"]' \
+  -s EXPORTED_FUNCTIONS='["_seal_init","_seal_decide","_seal_challenge","_seal_mcp_version_gate","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s MODULARIZE=1 -s EXPORT_NAME=SealModule \
