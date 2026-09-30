@@ -51,10 +51,41 @@ function escapeInvisible(text, { preserveShaping = true } = {}) {
 }
 
 function renderName(name) {
-  // Quoting delimiters also distinguishes a literal backslash escape from
-  // the escaped character, without quoting ordinary international names.
-  return INVISIBLE.test(name) || !/^[\p{L}\p{M}\p{N}\u200c\u200d_.\/@-]+$/u.test(name)
-    ? escapeInvisible(JSON.stringify(name)) : name;
+  // Keep single-script names bare; resolve Script_Extensions with UTS #39
+  // Han augmentations, and visibly escape non-ASCII points when mixed.
+  const bare = /^[\p{L}\p{M}\p{N}\u200c\u200d_.\/@-]+$/u.test(name);
+  renderName.scripts ??= `Adlm Aghb Ahom Arab Armi Armn Avst Bali Bamu Bass Batk Beng Bhks Bopo Brah Brai Bugi Buhd Cakm Cans Cari Cham Cher Chrs Copt Cpmn Cprt Cyrl Deva Diak Dogr Dsrt Dupl Egyp Elba Elym Ethi Gara Geor Glag Gong Gonm Goth Gran Grek Gujr Gukh Guru Hang Hani Hano Hatr Hebr Hira Hluw Hmng Hmnp Hrkt Hung Ital Java Kali Kana Kawi Khar Khmr Khoj Kits Knda Krai Kthi Lana Laoo Latn Lepc Limb Lina Linb Lisu Lyci Lydi Mahj Maka Mand Mani Marc Medf Mend Merc Mero Mlym Modi Mong Mroo Mtei Mult Mymr Nagm Nand Narb Nbat Newa Nkoo Nshu Ogam Olck Onao Orkh Orya Osge Osma Ougr Palm Pauc Perm Phag Phli Phlp Phnx Plrd Prti Rjng Rohg Runr Samr Sarb Saur Sgnw Shaw Shrd Sidd Sind Sinh Sogd Sogo Sora Soyo Sund Sunu Sylo Syrc Tagb Takr Tale Talu Taml Tang Tavt Telu Tfng Tglg Thaa Thai Tibt Tirh Tnsa Todr Toto Tutg Ugar Vaii Vith Wara Wcho Xpeo Xsux Yezi Yiii Zanb`
+    .split(' ').flatMap((script) => {
+      try { return [[script, new RegExp(`\\p{Script_Extensions=${script}}`, 'u')]]; }
+      catch { return []; } // A newer Unicode script may be absent on Node 20.
+    });
+  renderName.scriptCache ??= new Map();
+  let resolved;
+  for (const ch of name) {
+    if (!/\p{L}/u.test(ch)) continue;
+    let scripts = renderName.scriptCache.get(ch);
+    if (!scripts) {
+      scripts = new Set();
+      for (const [script, pattern] of renderName.scripts) {
+        if (pattern.test(ch)) scripts.add(script);
+      }
+      if (scripts.has('Hani')) for (const script of ['Jpan', 'Kore', 'Hanb']) scripts.add(script);
+      if (['Hira', 'Kana', 'Hrkt'].some((script) => scripts.has(script))) scripts.add('Jpan');
+      if (scripts.has('Hang')) scripts.add('Kore');
+      if (scripts.has('Bopo')) scripts.add('Hanb');
+      if (renderName.scriptCache.size >= 2048) renderName.scriptCache.clear();
+      renderName.scriptCache.set(ch, scripts);
+    }
+    resolved = resolved === undefined ? scripts : new Set([...resolved].filter((script) => scripts.has(script)));
+    if (resolved.size === 0) break;
+  }
+  const mixed = resolved?.size === 0;
+  if (!mixed && bare && !INVISIBLE.test(name)) return name;
+  const quoted = escapeInvisible(JSON.stringify(name));
+  return mixed
+    ? quoted.replace(/[^\x00-\x7f]/gu, (ch) =>
+      ch.split('').map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`).join(''))
+    : quoted;
 }
 
 function measureApprovalMessage(message) {

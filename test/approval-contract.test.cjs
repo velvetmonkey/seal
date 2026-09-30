@@ -589,6 +589,65 @@ test("presentation escapes bidi controls but preserves shaping characters", () =
   }
 });
 
+test('mixed Latin and Cyrillic argument name is visibly escaped', () => {
+  const mixed = 'pаth';
+  const shown = renderApprovalMessage(TOOL, { [mixed]: 'customers' });
+  assert.equal(renderName(mixed), '"p\\u0430th"');
+  assert.equal(shown.argLines[0], '  "p\\u0430th": customers');
+  assert.notEqual(renderName(mixed), renderName('path'));
+});
+
+test('mixed Latin and Greek argument name is visibly escaped', () => {
+  const mixed = 'rοot';
+  const shown = renderApprovalMessage(TOOL, { [mixed]: 'customers' });
+  assert.equal(renderName(mixed), '"r\\u03bfot"');
+  assert.equal(shown.argLines[0], '  "r\\u03bfot": customers');
+  assert.notEqual(renderName(mixed), renderName('root'));
+});
+
+test('mixed Cyrillic and Greek argument name is visibly escaped without ASCII letters', () => {
+  const mixed = 'сοр';
+  const shown = renderApprovalMessage(TOOL, { [mixed]: 'customers' });
+  assert.equal(renderName(mixed), '"\\u0441\\u03bf\\u0440"');
+  assert.equal(shown.argLines[0], '  "\\u0441\\u03bf\\u0440": customers');
+  assert.notEqual(renderName(mixed), renderName('cop'));
+});
+
+test('mixed tool name is visibly escaped in the Tool line and approve title', () => {
+  const mixed = 'tοol';
+  const opened = createApprovalContract({ serverId: null }).begin({ tool: mixed, args: {} });
+  assert.equal(opened.kind, 'input_required');
+  assert.equal(opened.elicitationParams.message.split('\n')[0], 'Tool: "t\\u03bfol"; Approval required');
+  assert.equal(opened.elicitationParams.requestedSchema.properties.approve.title, 'Approve one run: "t\\u03bfol"');
+  assert.notEqual(renderName(mixed), renderName('tool'));
+});
+
+test('mixed route label is visibly escaped', () => {
+  const mixed = 'rοute';
+  const shown = renderApprovalMessage(TOOL, {}, { serverId: mixed });
+  assert.equal(shown.lines.at(-1), 'Route (configured, not authenticated): "r\\u03bfute"');
+  assert.notEqual(renderName(mixed), renderName('route'));
+});
+
+test('whole-script Cyrillic name remains bare as a known residual', () => {
+  const name = 'сору';
+  const shown = renderApprovalMessage(TOOL, { [name]: 'customers' });
+  assert.equal(renderName(name), name);
+  assert.equal(shown.argLines[0], `  ${name}: customers`);
+  assert.notEqual(renderName(name), renderName('copy'));
+});
+
+test('augmented Han script sets and common characters remain bare', () => {
+  for (const name of ['顧客かなカナ', '客한글', '客ㄅㄆ', 'かなー']) {
+    assert.equal(renderName(name), name);
+  }
+});
+
+test('mixed-script name escapes non-ASCII even when another character already requires quoting', () => {
+  assert.equal(renderName('pаth name'), '"p\\u0430th name"');
+  assert.equal(renderName('pаth\n'), '"p\\u0430th\\n"');
+});
+
 
 for (const [label, point] of [
   ['format boundary', 0x206a], ['format successor', 0x206b],
