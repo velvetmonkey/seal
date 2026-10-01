@@ -20,6 +20,71 @@ function run(file, args, options = {}) {
   return result.stdout + result.stderr;
 }
 
+function fakeClaudeBin(root) {
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const script = path.join(bin, 'claude');
+  fs.writeFileSync(script, `#!/usr/bin/env node
+if (process.argv[2] === "--version") {
+  console.log("2.1.278 (Claude Code)");
+  process.exit(Number(process.env.SEAL_TEST_VERSION_EXIT || 0));
+}
+const fs = require("node:fs");
+const path = require("node:path");
+const cwd = process.cwd();
+const args = process.argv.slice(2);
+const configPath = path.join(process.env.CLAUDE_CONFIG_DIR || process.env.HOME, ".claude.json");
+function readConfig() { try { return JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { return {}; } }
+function writeConfig(config) {
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\\n");
+}
+function localServer(name) { return readConfig().projects?.[cwd]?.mcpServers?.[name]; }
+function projectHas(name) {
+  try { return !!JSON.parse(fs.readFileSync(path.join(cwd, ".mcp.json"), "utf8")).mcpServers[name]; } catch { return false; }
+}
+if (args[0] !== "mcp") process.exit(2);
+if (args[1] === "get") {
+  const name = args[2];
+  if (localServer(name)) {
+    console.log(name + ":\\n  Scope: Local config (private to you in this project)\\n  Type: stdio");
+    process.exit(0);
+  }
+  if (projectHas(name)) {
+    console.log(name + ":\\n  Scope: Project config (shared via .mcp.json)\\n  Type: stdio");
+    process.exit(0);
+  }
+  console.error('No MCP server named "' + name + '".');
+  process.exit(1);
+}
+if (args[1] === "add") {
+  const name = args[4];
+  const split = args.indexOf("--");
+  const config = readConfig();
+  config.projects ||= {};
+  config.projects[cwd] ||= {};
+  config.projects[cwd].mcpServers ||= {};
+  config.projects[cwd].mcpServers[name] = {
+    type: "stdio", command: args[split + 1], args: args.slice(split + 2), env: {},
+  };
+  writeConfig(config);
+  console.log("Added stdio MCP server " + name + " to local config");
+  process.exit(0);
+}
+if (args[1] === "remove") {
+  const name = args[4];
+  const config = readConfig();
+  if (!config.projects?.[cwd]?.mcpServers?.[name]) process.exit(1);
+  delete config.projects[cwd].mcpServers[name];
+  writeConfig(config);
+  console.log("Removed MCP server " + name + " from local config");
+  process.exit(0);
+}
+process.exit(2);
+`, { mode: 0o755 });
+  return bin;
+}
+
 function adaptedClient(target) {
   let source = fs.readFileSync(path.join(root, 'harness/claude-code/synthetic-client.cjs'), 'utf8');
   source = source.replace('const SERVER_NAME = "notes";', 'const SERVER_NAME = "db";');
@@ -49,6 +114,7 @@ test('guide commands and expected output lines match a selective synthetic walk'
   run(path.join(dist, name), ['--sha256', digest, '--bytes', bytes, '--prefix', prefix], { cwd: scratch });
   const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: config, XDG_DATA_HOME: xdg,
     PATH: `${path.join(prefix, 'bin')}${path.delimiter}${process.env.PATH}` };
+  const sealEnv = { ...env, PATH: `${fakeClaudeBin(scratch)}${path.delimiter}${env.PATH}` };
   const client = path.join(scratch, 'synthetic-db-client.cjs');
   adaptedClient(client);
   const bashBlocks = [...page.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((m) => m[1]);
@@ -62,7 +128,7 @@ test('guide commands and expected output lines match a selective synthetic walk'
     'guide history command drifted from the captured receipts path');
   assert.match(bashBlocks[5], /^seal unprotect db/);
   assert.match(bashBlocks[6], /^seal status$/);
-  const shell = (command) => run('bash', ['-c', command], { cwd: project, env });
+  const shell = (command) => run('bash', ['-c', command], { cwd: project, env: sealEnv });
   const before = shell(bashBlocks[0]);
   const protect = shell(bashBlocks[1]);
   const statePath = protect.match(/Sealed MCP route db: PENDING RESTART \(([^)]+)\)/)?.[1];
