@@ -1,13 +1,9 @@
 # When something looks wrong
 
 Seal prints tokened refusals — a token is a fixed `snake_case` name for
-what happened — and un-tokened errors such as `seal: usage: seal verify PATH`. This page lists the tokens selected by the source patterns in
-`test/guide-tokens.test.mjs`, grouped by where you meet them, with the cause
-and the way out. A test in this repository
-(`test/guide-tokens.test.mjs`) compares the token headings with tokens matched
-by its configured source patterns, which omit some emitted tokens, including
-`client_elicitation_unsupported`, `receipt_correlation_capacity_exceeded`,
-and `receipt_signer_absent`.
+what happened — and un-tokened errors such as `seal: usage: seal verify PATH`. This page lists refusal tokens grouped by where you meet them, with the cause
+and the way out. `test/guide-tokens.test.mjs` checks the original level-three entries and also
+derives runtime keys from source to check the added level-four entries.
 
 Refusal output includes the five shapes below, plus un-tokened `seal: <message>`
 errors, `seal: REFUSE <token>: <message>` protection errors, and
@@ -842,6 +838,238 @@ The receipt has no signature; obtain a signed receipt from its producer. The che
 ### `public_key_absent`
 
 No usable public key was supplied; pass the separately obtained signer key with `--pubkey` (64 lowercase hexadecimal characters). The checker and `seal verify` keep the UNVERIFIED table, print `REFUSE public_key_absent: no usable public key supplied to check the signature`, and exit 1.
+
+## Additional runtime refusal entries
+
+These entries cover source paths beyond the original level-three guide inventory.
+
+#### `already_spent`
+
+From `seal __demo-grant-server`: a grant ID has already been spent for the same grant. Use a new grant ID for a new effect; do not replay the spent one.
+
+#### `artifact_oversized`
+
+From the bootstrap installer: the download exceeded its published byte length. Discard it and check the release asset before retrying.
+
+#### `audience_mismatch`
+
+From `seal __demo-grant-server`: the signed grant names a different audience. Request a grant for this target audience.
+
+#### `bootstrap_malformed`
+
+From the bootstrap installer: embedded release data or its artifact name is malformed. Download a fresh bootstrap script from the release page; do not edit it.
+
+#### `client_elicitation_unsupported`
+
+From `seal __proxy`: the client cannot answer elicitation requests. Use a client with elicitation support before retrying the protected call.
+
+#### `client_form_elicitation_unsupported`
+
+From `seal __proxy`: the client lacks form elicitation support. Use a client that supports form elicitation.
+
+#### `clock_untrusted`
+
+From `seal __demo-grant-server`: the clock interval is invalid or untrusted. Restore a trustworthy clock and restart the demonstration target.
+
+#### `consumed_not_started`
+
+From `seal __demo-grant-server`: the grant was consumed but readiness failed before the effect started. Inspect target health and issue a fresh grant; do not replay this one.
+
+#### `demo_directory_is_real_receipt_store`
+
+From `seal demo --dir`: the chosen directory lies inside the real receipt store. Choose a separate demonstration directory.
+
+#### `download_failed`
+
+From the bootstrap installer: the release download failed or was interrupted. Check the network and release URL, then retry.
+
+#### `effect_invalid`
+
+From `seal __demo-grant-server`: the requested effect has an invalid tool, argument or receipt hash. Send a valid `demo.mutate` request and obtain a matching grant.
+
+#### `effect_mismatch`
+
+From `seal __demo-grant-server`: the effect hash differs from the signed grant. Request a grant for the exact effect you intend.
+
+#### `encoding_noncanonical`
+
+From `seal __demo-grant-server`: the grant JSON differs from its canonical encoding. Have the grant issuer encode and sign the canonical grant.
+
+#### `expiry_too_far`
+
+From `seal __demo-grant-server`: the grant expires beyond the permitted 120-second window. Request a short-lived grant.
+
+#### `flag_missing`
+
+From the bootstrap installer: `--prefix` has no value. Supply a prefix path or omit the flag.
+
+#### `grant_id_conflict`
+
+From `seal __demo-grant-server`: a spent grant ID belongs to different grant bytes. Issue a grant with a fresh ID; investigate the conflicting issuer record.
+
+#### `grant_malformed`
+
+From `seal __demo-grant-server`: the supplied grant cannot be parsed within its bounds. Request a correctly encoded grant from its issuer.
+
+#### `grant_missing`
+
+From `seal __demo-grant-server`: the call has no grant member. Supply the issued grant with the call.
+
+#### `identity_absent`
+
+From `seal __proxy`: protected state lacks its project or server identity. Stop the client and recreate protection with `seal protect`.
+
+#### `installer_launch_failed`
+
+From the bootstrap installer: the verified downloaded installer could not start. Check executable permissions and host support, then retry from a verified asset.
+
+#### `invalid_arguments`
+
+From `seal verify --json`: the command arguments are invalid. Follow `seal verify PATH [--pubkey HEX] [--json]` and supply one path.
+
+#### `invalid_receipt`
+
+From `seal verify --json`: receipt validation failed without a more specific code. Preserve the receipt and inspect its schema against the v2 reference.
+
+#### `issuer_scope_refused`
+
+From `seal __demo-grant-server`: the enrolled key does not cover the audience, profile or tool. Use an issuer enrolled for this scope.
+
+#### `key_not_enrolled`
+
+From `seal __demo-grant-server`: the grant issuer key is absent or unsuitable. Enroll the intended Ed25519 issuer key.
+
+#### `key_revoked`
+
+From `seal __demo-grant-server`: the issuer key was revoked or changed before execution. Obtain a new grant from an active enrolled key.
+
+#### `macos_boot_time_unavailable`
+
+From `seal protect` on macOS: the native helper could not establish a plausible boot time. Check the installed helper and machine clock before retrying.
+
+#### `macos_helper_missing`
+
+From `seal protect` on macOS: the native witness helper is missing or is not a regular file. Repair the installation before protecting.
+
+#### `macos_helper_not_executable`
+
+From `seal protect` on macOS: the native witness helper lacks execute permission. Repair the installed helper permissions.
+
+#### `macos_helper_substituted`
+
+From `seal protect` on macOS: the helper identity changed across a witness check. Stop and inspect the installed helper before retrying.
+
+#### `macos_process_witness_failed`
+
+From `seal protect` on macOS: the helper could not establish a plausible process identity. Repair the helper or investigate its output, then retry.
+
+#### `node_too_old`
+
+From the bootstrap installer: Node is older than the release minimum. Upgrade Node to the version named in the refusal and retry.
+
+#### `outcome_unknown`
+
+From `seal __demo-grant-server`: the effect counter or append failed after grant consumption. Inspect the target and its output before deciding whether to issue a new grant.
+
+#### `profile_unsupported`
+
+From `seal __demo-grant-server`: the grant uses an unsupported profile. Ask the issuer for the demonstration execution-grant profile.
+
+#### `receipt_correlation_capacity_exceeded`
+
+From `seal __proxy`: too many receipt correlations are outstanding. Allow pending calls to finish before sending more.
+
+#### `receipt_key_directory_invalid`
+
+From `seal protect` or `seal __proxy`: the receipt key path is not a directory. Move the conflicting path and retry key creation.
+
+#### `receipt_key_directory_permissions`
+
+From `seal protect` or `seal __proxy`: the receipt key directory is not mode 0700. Set its mode to 0700 after confirming ownership.
+
+#### `receipt_key_directory_unreadable`
+
+From `seal protect` or `seal __proxy`: the receipt key directory cannot be created or inspected. Fix its parent permissions and retry.
+
+#### `receipt_key_empty`
+
+From `seal protect` or `seal __proxy`: a receipt key file is empty. Restore the original key pair from a trusted backup or create a new pair deliberately.
+
+#### `receipt_key_generation_failed`
+
+From `seal protect` or `seal __proxy`: creating the receipt signing pair failed. Fix the key directory or storage problem, then retry.
+
+#### `receipt_key_incomplete`
+
+From `seal protect` or `seal __proxy`: only one of the private and public receipt key files exists. Restore the matching missing file or create a new pair deliberately.
+
+#### `receipt_key_invalid`
+
+From `seal protect` or `seal __proxy`: a receipt key has invalid bytes or format. Restore a valid matching pair; do not edit key bytes.
+
+#### `receipt_key_mismatch`
+
+From `seal protect` or `seal __proxy`: the public receipt key does not match the private key. Restore the matching pair before signing.
+
+#### `receipt_key_not_regular`
+
+From `seal protect` or `seal __proxy`: a receipt key path is not a regular file. Replace it with the intended regular key file.
+
+#### `receipt_key_permissions`
+
+From `seal protect` or `seal __proxy`: a key file has the wrong mode. Use mode 0600 for the private key and 0644 for the public key.
+
+#### `receipt_key_unreadable`
+
+From `seal protect` or `seal __proxy`: a receipt key cannot be inspected or read. Check file ownership and read permissions.
+
+#### `receipt_signer_absent`
+
+From `seal __proxy`: receipt assembly has no signer. Repair receipt-key loading before making protected calls.
+
+#### `receipt_value_absent`
+
+From `seal __proxy`: a receipt value is undefined. Inspect the producer of the missing value and retry after correcting it.
+
+#### `receipt_value_malformed`
+
+From `seal __proxy`: a receipt value has an unsupported type or number. Use canonical JSON values within the supported numeric range.
+
+#### `request_malformed`
+
+From `seal __demo-grant-server`: the request or its frame has an invalid shape. Send a well-formed `demo.mutate` request.
+
+#### `resource_unavailable`
+
+From `seal __demo-grant-server`: the target files or counter cannot be verified. Repair the demonstration target files before retrying.
+
+#### `runtime_unavailable`
+
+From `seal verify --json`: the local kernel runtime is unavailable. Repair the installed runtime and retry verification.
+
+#### `schema_invalid`
+
+From `seal __demo-grant-server`: the grant fields or types violate its schema. Request a valid grant from its issuer.
+
+#### `signature_invalid`
+
+From `seal __demo-grant-server`: the issuer signature does not verify. Obtain a correctly signed grant from the enrolled key.
+
+#### `store_quarantine`
+
+From `seal __demo-grant-server`: the grant store changed or is still inside startup quarantine. Inspect the store identity and wait for readiness before retrying.
+
+#### `store_unavailable`
+
+From `seal __demo-grant-server`: a grant tombstone could not be created. Repair store access before issuing another grant.
+
+#### `store_uncertain`
+
+From `seal __demo-grant-server`: a grant tombstone is unreadable or its write may be partial. Preserve the store for inspection and do not replay the grant.
+
+#### `target_unready`
+
+From `seal __demo-grant-server`: the target configuration or lock is not ready. Repair the target and restart it before issuing a grant.
 
 Up: [Guide](README.md).
 Next: [What is protected right now](what-is-protected-right-now.md).
