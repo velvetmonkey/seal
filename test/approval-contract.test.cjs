@@ -643,6 +643,29 @@ test('augmented Han script sets and common characters remain bare', () => {
   }
 });
 
+test('unmatched Common letters are neutral, while a real script change still escapes', () => {
+  for (const point of [0x02b9, 0x02d0, 0x02c6, 0x02c8]) {
+    const ch = String.fromCodePoint(point);
+    assert.match(ch, /\p{L}/u);
+    assert.match(ch, /\p{Script=Common}/u);
+    assert.equal(renderName(`a${ch}b`), `a${ch}b`);
+    assert.equal(renderName(ch), ch);
+    const mixed = `a${ch}а`;
+    assert.equal(renderName(mixed), `"a\\u${point.toString(16).padStart(4, '0')}\\u0430"`);
+  }
+});
+
+test('a letter from an unlisted concrete script still breaks the intersection', (t) => {
+  const ch = '\u{10940}';
+  if (!/\p{L}/u.test(ch)) {
+    t.diagnostic('U+10940 is not a letter in this Node Unicode table');
+    return;
+  }
+  assert.match(ch, /\p{L}/u);
+  assert.doesNotMatch(ch, /[\p{Script=Common}\p{Script=Inherited}]/u);
+  assert.equal(renderName(`a${ch}`), '"a\\ud802\\udd40"');
+});
+
 test('mixed-script name escapes non-ASCII even when another character already requires quoting', () => {
   assert.equal(renderName('pаth name'), '"p\\u0430th name"');
   assert.equal(renderName('pаth\n'), '"p\\u0430th\\n"');
