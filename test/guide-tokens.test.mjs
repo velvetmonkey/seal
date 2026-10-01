@@ -233,7 +233,7 @@ function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(
       /\b(?:new\s+(?:ProtectionError|ReceiptRefusal)|ownershipRefusal|fail|refuse)\(\s*["']([a-z][a-z0-9_]*)["']/g,
       /\b(?:refusal|code)\s*:\s*["']([a-z][a-z0-9_]*)["']/g,
       /\.code\s*=\s*["']([a-z][a-z0-9_]*)["']/g,
-      /\bREFUSE\s+([a-z][a-z0-9_]*):/g,
+      /REFUSE\s+([a-z][a-z0-9_]*):/g,
       /\b(?:readinessFailure|v\.fail|blockForward)\(\s*["']([a-z][a-z0-9_]*)["']/g,
     ];
     for (const pattern of patterns) for (const match of source.matchAll(pattern)) add(match[1], file, source, match.index);
