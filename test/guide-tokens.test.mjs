@@ -237,6 +237,11 @@ function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(
       /\b(?:readinessFailure|v\.fail|blockForward)\(\s*["']([a-z][a-z0-9_]*)["']/g,
     ];
     for (const pattern of patterns) for (const match of source.matchAll(pattern)) add(match[1], file, source, match.index);
+    for (const assignment of source.matchAll(/\.code\s*=(?!=)\s*([^;\n]*\?[^;\n]+)/g)) {
+      for (const arm of assignment[1].matchAll(/[?:]\s*["']([a-z][a-z0-9_]*)["']/g)) {
+        add(arm[1], file, source, assignment.index + arm.index);
+      }
+    }
     // Named refusal constants feed constructors, returned codes and proxy errors.
     if (["contract/contract.cjs", "spine/protection.cjs"].includes(file)) {
       for (const block of source.matchAll(/const\s+(?:REFUSALS|RECEIPT_KEY_CODES)\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/g)) {

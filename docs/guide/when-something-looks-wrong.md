@@ -1055,6 +1055,10 @@ From `seal __demo-grant-server`: the grant fields or types violate its schema. R
 
 From `seal __demo-grant-server`: the issuer signature does not verify. Obtain a correctly signed grant from the enrolled key.
 
+#### `signature_unverifiable`
+
+From `seal verify --json`: receipt validation completed, but its signature or another verification check did not pass. Supply the correct public key for a signed receipt, or obtain a valid signed receipt before retrying.
+
 #### `store_quarantine`
 
 From `seal __demo-grant-server`: the grant store changed or is still inside startup quarantine. Inspect the store identity and wait for readiness before retrying.
