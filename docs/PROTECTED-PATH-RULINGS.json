@@ -1,25 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "10ca82d6b4020960d2235a60bf9b0fdaf8ac77aa",
+    "base": "b9eed7e74cc68625f07362e23f843449e28654f5",
     "author": "Ben",
-    "date": "2026-09-28",
-    "scope": "Ben ruled 2026-09-28 10:36, \"1 yes\", answering the Monkey's question: \"Seal PR 399 adds test/fixtures/demo-grant/vectors.json (offline vectors, a throwaway key marked \\\"never enroll\\\") and test/fixtures/demo-grant/crash-child.cjs (a crash driver). Neither is on main. Do you authorise these two new protected-path files?\" This authorises exactly these two new files in PR 399 at the blobs below. The named hole stays: the ruling authorises the fixtures; it is not a measurement of power-cut durability.",
+    "date": "2026-10-01 07:57",
+    "scope": "Ben ruled 2026-10-01 07:57, verbatim \"2.  Yes.\", authorizing sealinstallfirstuse to record the three docs/start/install.md pin-site moves in scripts/installed-tree-pin-sites.json and push for review only; it stays off the seal 1.0 list. The moves are store published-asset 64:33 -> 102:33, tree published-asset 66:1 -> 104:1, and tree fresh-build 88:1 -> 148:1. The guide sites and all pin digests remain unchanged by this branch. The fresh-build digest in current main came from merged PR 434.",
     "retires": [
-      "The 2026-09-26 17:01 ruling at base e5d901fc7183485bf9565ded4f3ccb73ee71efde for test/installed-tree-pin.test.cjs, whose blob f4daafd0656a7258e73f2686993a18324835faf5 is on origin/main at 10ca82d6b4020960d2235a60bf9b0fdaf8ac77aa (verified 2026-09-28); this replaces the active candidate-range record and does not revoke Ben's prior authorisation.",
-      "The 2026-09-17 ruling at base 3d94c2322507c5ec6ca9b9df935b2a493ec26e70 for scripts/check-protected-paths.cjs, whose blob 894f520cee6802abf171ffd7554693b5e41ce9f6 is on origin/main at e5d901fc7183485bf9565ded4f3ccb73ee71efde (verified 2026-09-26). This replaces the active candidate-range record; it does not revoke Ben's prior authorisation.",
-      "The 2026-09-11 ruling from PR 306, base 19fa50eb4e1d0b5c9ad273908af6cc972d7486c9, whose change was verified as an ancestor of origin/main on 2026-09-13 and no longer describes this candidate range. This replaces the active candidate-range record; it does not revoke Ben's prior authorisation for PR 306.",
-      "The previous candidate-range record at base ce9c7cac42a200452b03dad0ccf5e3651ff0de64 covered imported main history, now excluded by this fix; prior human authorisations are not revoked.",
-      "The candidate-range record at base 34c56ffa5cce44f52e3b5afdb3a555648f3d4812 was superseded by an ordinary rebase onto current main after PR 346 landed; the file and its blob are unchanged, only the base moved. Prior authorisation is not revoked."
+      "The previous candidate-range record at base 10ca82d6b4020960d2235a60bf9b0fdaf8ac77aa for test/fixtures/demo-grant/crash-child.cjs, test/fixtures/demo-grant/vectors.json is superseded for this branch; prior authorization is not revoked."
     ],
     "files": [
       {
-        "path": "test/fixtures/demo-grant/crash-child.cjs",
-        "blob": "2e25d3b48af888c726ba23f90424c0cc204322b9"
-      },
-      {
-        "path": "test/fixtures/demo-grant/vectors.json",
-        "blob": "82f409a6ccd42fbfe01b890dd5783ae4894d0570"
+        "path": "scripts/installed-tree-pin-sites.json",
+        "blob": "65c773fa026eae5b09376b07274c5682d2ee5e38"
       }
     ]
   }
