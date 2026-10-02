@@ -22,7 +22,7 @@ answer "did I download the bytes the release named?" They do not answer
 
 ## Verify, then install
 <!-- end generated release docs -->
-Protect needs Claude Code, which needs Node 22 or newer. Check `node --version` before installing Claude Code; if it is below 22, upgrade Node first. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
+Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and `node --version` reports below v22, get Node from https://nodejs.org/en/download or use a version manager such as nvm; then run `node --version` again and expect v22 or newer. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
 <!-- generated from published release; do not edit -->
 ```bash
 SEAL_VERSION=v0.5.2
