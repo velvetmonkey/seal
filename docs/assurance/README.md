@@ -91,6 +91,7 @@ The published v0.4.0 record remains at
 - [evidence/correspondence.md](../evidence/correspondence.md) — Model-to-runtime correspondence.
 - [evidence/conformance.md](../evidence/conformance.md) — Finite conformance evidence.
 - [guide/first-approval.md](../guide/first-approval.md) — Your first approval.
+- [guide/protect-your-first-tool.md](../guide/protect-your-first-tool.md) — Protect your first tool.
 - [guide/lifecycle.md](../guide/lifecycle.md) — Change, recover and remove protection.
 - [evidence/sources.md](../evidence/sources.md) — Source versions and captured examples.
 
