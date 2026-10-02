@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// The operating guide's anti-rot gate: docs/guide/when-something-looks-wrong.md
-// documents every refusal token the product can emit, and nothing else.
+// The original operating-guide gate checks its configured refusal sources and
+// level-three headings. The row-4 contract below checks further runtime keys.
 //
-// Both directions are enforced against the SOURCE, not against a copy of the
-// list: a token added to the code without a guide entry fails, and a token
-// documented in the guide without a source of truth fails. The guide marks
-// each documented token as a heading of the exact form `### `token``.
+// For this original population, both directions are enforced against source.
+// The original guide entries use headings of the form `### `token``.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -206,3 +204,142 @@ test("reviewed guide files retain each reviewed claim once", () => {
     }
   }
 });
+
+// Seal 1.0 row 4: source-derived refusal, exit and receipt-document coverage.
+{
+// The 1.0 refusal and exit population is derived from runtime source, not a list of expected keys.
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const root = resolve(import.meta.dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const guide = read("docs/guide/when-something-looks-wrong.md");
+const cli = read("docs/reference/cli.md");
+const runtimeFiles = ["contract/contract.cjs", "bin/seal",
+  ...fs.readdirSync(path.join(root, "spine")).filter((name) => name.endsWith(".cjs")).map((name) => `spine/${name}`),
+  "checker/seal-receipt-v2.mjs", ...["install.cjs", "seal-launch.cjs", "build-dist.cjs", "macos-helper.cjs", "bootstrap-install.cjs"].map((name) => `scripts/${name}`)];
+
+function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(file) }))) {
+  const found = new Map();
+  const add = (key, file, source, offset) => {
+    if (!/^[a-z]+(?:_[a-z0-9]+)*$/.test(key)) return;
+    const line = source.slice(0, offset).split("\n").length;
+    if (!found.has(key)) found.set(key, `${file}:${line}`);
+  };
+  for (const { file, source } of sources) {
+    const patterns = [
+      /\b(?:new\s+(?:ProtectionError|ReceiptRefusal)|ownershipRefusal|fail|refuse)\(\s*["']([a-z][a-z0-9_]*)["']/g,
+      /\b(?:refusal|code)\s*:\s*["']([a-z][a-z0-9_]*)["']/g,
+      /\.code\s*=\s*["']([a-z][a-z0-9_]*)["']/g,
+      /REFUSE\s+([a-z][a-z0-9_]*):/g,
+      /\b(?:readinessFailure|v\.fail|blockForward)\(\s*["']([a-z][a-z0-9_]*)["']/g,
+    ];
+    for (const pattern of patterns) for (const match of source.matchAll(pattern)) add(match[1], file, source, match.index);
+    for (const assignment of source.matchAll(/\.code\s*=(?!=)\s*([^;\n]*\?[^;\n]+)/g)) {
+      for (const arm of assignment[1].matchAll(/[?:]\s*["']([a-z][a-z0-9_]*)["']/g)) {
+        add(arm[1], file, source, assignment.index + arm.index);
+      }
+    }
+    // Named refusal constants feed constructors, returned codes and proxy errors.
+    if (["contract/contract.cjs", "spine/protection.cjs"].includes(file)) {
+      for (const block of source.matchAll(/const\s+(?:REFUSALS|RECEIPT_KEY_CODES)\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/g)) {
+        for (const match of block[1].matchAll(/:\s*["']([a-z][a-z0-9_]*)["']/g)) add(match[1], file, source, block.index + match.index);
+      }
+    }
+    if (file === "spine/proxy.cjs") {
+      for (const match of source.matchAll(/const\s+[A-Z][A-Z_]+\s*=\s*"([a-z][a-z0-9_]*)"/g)) add(match[1], file, source, match.index);
+    }
+    if (file === "spine/demo-grant-server.cjs" || file === "spine/demo-grant.cjs") {
+      for (const match of source.matchAll(/\bpoison\s*=\s*'([a-z][a-z0-9_]*)'/g)) add(match[1], file, source, match.index);
+      for (const match of source.matchAll(/\bv\.fail\([^\n]*?\?\s*'([a-z][a-z0-9_]*)'\s*:\s*'([a-z][a-z0-9_]*)'/g)) {
+        add(match[1], file, source, match.index); add(match[2], file, source, match.index);
+      }
+      for (const match of source.matchAll(/\b(?:v\.)?parse\([^\n]*?,\s*'([a-z][a-z0-9_]*)'\)/g)) add(match[1], file, source, match.index);
+    }
+    if (file === "spine/verify-server.cjs") {
+      for (const fallback of source.matchAll(/code:\s*error\.code\s*\|\|\s*\(([^\n]+)\)/g)) {
+        for (const match of fallback[1].matchAll(/[?:]\s*"([a-z][a-z0-9_]*)"/g)) add(match[1], file, source, fallback.index + match.index);
+      }
+    }
+    if (file === "checker/seal-receipt-v2.mjs") {
+      for (const match of source.matchAll(/\bfail\([^,]+,\s*"([a-z][a-z0-9_]*)"\)/g)) add(match[1], file, source, match.index);
+    }
+    if (file === "spine/proxy.cjs") {
+      for (const expression of source.matchAll(/(?:childSpawnError\s*=|blockForward\(frame,\s*check\.refusal\s*\|\|)([^\n]+?);/g)) {
+        for (const match of expression[1].matchAll(/"([a-z][a-z0-9_]*)"/g)) add(match[1], file, source, expression.index + match.index);
+      }
+    }
+  }
+  return found;
+}
+
+function documentedKeys() {
+  const found = new Set();
+  for (const match of guide.matchAll(/^#{3,4} (.+)$/gm)) {
+    for (const token of match[1].matchAll(/`([a-z][a-z0-9_]*)`/g)) found.add(token[1]);
+  }
+  return found;
+}
+
+function exitCodes(source = read("bin/seal")) {
+  const files = [source, read("checker/seal-receipt-v2.mjs"), read("spine/verify-server.cjs"), read("spine/platform.cjs")];
+  const found = new Set();
+  for (const text of files) {
+    for (const match of text.matchAll(/\b(?:process\.exitCode\s*=|process\.exit\(|\bexitCode\s*[:=]|\bemit\()\s*(\d+)\b/g)) found.add(Number(match[1]));
+    for (const match of text.matchAll(/\b(?:emit\(|exitCode\s*=)[^\n]*?\?\s*(\d+)\s*:\s*(\d+)\b/g)) {
+      found.add(Number(match[1])); found.add(Number(match[2]));
+    }
+  }
+  assert.ok(found.size, "no exit codes extracted from entrypoints");
+  return found;
+}
+
+test("runtime refusal keys all have operating guide entries", () => {
+  const source = refusalKeys();
+  assert.ok(source.size, "no refusal keys extracted from runtime source");
+  const documented = documentedKeys();
+  const missing = [...source].filter(([key]) => !documented.has(key)).map(([key, place]) => `${key} (${place})`).sort();
+  assert.deepEqual(missing, [], `${source.size} source refusal keys; missing guide entries:\n${missing.join("\n")}`);
+});
+
+test("a renamed literal refusal becomes undocumented", () => {
+  const file = "spine/protection.cjs";
+  const source = read(file).replace('new ProtectionError("project_server_absent"', 'new ProtectionError("renamed_row4_refusal"');
+  assert.ok(source.includes('new ProtectionError("renamed_row4_refusal"'), "rename probe missed its source site");
+  const renamed = refusalKeys([{ file, source }]);
+  assert.ok(renamed.has("renamed_row4_refusal"));
+  assert.ok(!documentedKeys().has("renamed_row4_refusal"));
+});
+
+test("entrypoint exit codes all have CLI reference entries", () => {
+  const documented = new Set();
+  for (const line of cli.split("\n")) {
+    if (!line.startsWith("| `seal")) continue;
+    const column = line.split("|").at(-2);
+    for (const match of column.matchAll(/\b\d+\b/g)) documented.add(Number(match[0]));
+  }
+  const missing = [...exitCodes()].filter((code) => !documented.has(code)).sort((a, b) => a - b);
+  assert.deepEqual(missing, [], `source exit codes absent from CLI reference: ${missing.join(", ")}`);
+});
+
+test("the receipt operations vector's fields appear in the normative receipt schema", () => {
+  const vector = JSON.parse(read("docs/reference/receipt-operations-v1/receipt-block.json"));
+  const schema = read("docs/SEAL-RECEIPT-V2.md");
+  const envelope = schema.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(envelope, "normative receipt schema JSON block is absent");
+  const documented = JSON.parse(envelope[1]);
+  function checkFields(value, schema, prefix = "") {
+    for (const field of Object.keys(value)) {
+      assert.ok(Object.hasOwn(schema, field), `receipt field ${prefix}${field} is absent from normative schema`);
+      if (value[field] && typeof value[field] === "object" && !Array.isArray(value[field]) &&
+          schema[field] && typeof schema[field] === "object" && !Array.isArray(schema[field])) {
+        checkFields(value[field], schema[field], `${prefix}${field}.`);
+      }
+    }
+  }
+  checkFields(vector, documented);
+});
+
+}
