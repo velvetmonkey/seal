@@ -96,6 +96,8 @@ published evidence archive. It does not establish the receipt is true.
 
 Read these in order the first time; each one stands alone afterwards.
 
+For a complete disposable setup, start with [Protect your first tool](protect-your-first-tool.md).
+
 1. **[Choosing what to protect](choosing-what-to-protect.md)** — the judgement
    call: which tool earns the gate, what `seal protect` changes, and what it
    deliberately leaves alone.
