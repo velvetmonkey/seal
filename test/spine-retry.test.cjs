@@ -2222,6 +2222,69 @@ for (const meta of ['{}', '{"progressToken":"f02-progress"}', '{"progressToken":
   });
 }
 
+for (const [label, meta, expectedMeta] of [
+  ['toolUseId only', {'claudecode/toolUseId':'toolu_test'}, undefined],
+  ['toolUseId with progressToken', {progressToken:1, 'claudecode/toolUseId':'toolu_test'}, {progressToken:1}],
+  ['toolUseId number', {'claudecode/toolUseId':7}, undefined],
+  ['toolUseId object', {'claudecode/toolUseId':{nested:true}}, undefined],
+  ['toolUseId 1 MB string', {'claudecode/toolUseId':'x'.repeat(1024 * 1024)}, undefined],
+]) {
+  test(`metadata forwarding: ${label} is stripped before approval and child`, async t => {
+    const h = await identityHarness(t);
+    const frame = {...callParams('identity', {_meta:meta}), id:101};
+    h.send(frame);
+    const approval = h.lines.map(JSON.parse).find(line => line.method === 'elicitation/create');
+    assert.ok(approval);
+    await h.fence();
+    assert.deepEqual(h.rawCalls(), []);
+    h.answer(approval);
+    await h.fence();
+    const expected = JSON.parse(h.call('101'));
+    if (expectedMeta !== undefined) expected.params._meta = expectedMeta;
+    assert.deepEqual(h.rawCalls().map(JSON.parse), [expected]);
+  });
+}
+
+test('metadata forwarding: toolUseId leaves approval identity, text and receipt shape unchanged', async t => {
+  const h = await identityHarness(t);
+  const approvals = [];
+  for (const [id, meta] of [[101, undefined], [102, {'claudecode/toolUseId':'toolu_test'}]]) {
+    const frame = {...callParams('identity', meta === undefined ? {} : {_meta:meta}), id};
+    h.send(frame);
+    const approval = h.lines.map(JSON.parse).filter(line => line.method === 'elicitation/create').at(-1);
+    assert.ok(approval);
+    approvals.push(approval);
+  }
+  assert.equal(approvals[0].params.message, approvals[1].params.message);
+  assert.deepEqual(approvals[0].params.requestedSchema, approvals[1].params.requestedSchema);
+  const receipts = fs.readdirSync(path.join(h.dir, 'receipts')).filter(name => name.endsWith('-INPUT_REQUIRED.json'))
+    .sort().map(name => JSON.parse(fs.readFileSync(path.join(h.dir, 'receipts', name))));
+  assert.equal(receipts.length, 2);
+  const stable = receipt => { const {now, signature, ...fields} = receipt; return fields; };
+  assert.deepEqual(stable(receipts[0]), stable(receipts[1]));
+});
+
+for (const [label, meta] of [
+  ['toolUseId plus unknown', {'claudecode/toolUseId':'x', 'example.com/mode':'y'}],
+  ['remoteToolCall', {'claudecode/remoteToolCall':'x'}],
+  ['agentId', {'claudecode/agentId':'x'}],
+  ['agentType', {'claudecode/agentType':'x'}],
+  ['isObserver', {'claudecode/isObserver':true}],
+  ['memory caller', {'anthropic/memory.caller':'x'}],
+  ['memory pass ID', {'anthropic/memory.pass_id':'x'}],
+  ['request ID', {'anthropic/requestId':'x'}],
+  ['related-task', {'io.modelcontextprotocol/related-task':{taskId:'x'}}],
+  ['case variant', {'claudecode/tooluseid':'x'}],
+  ['trailing space', {'claudecode/toolUseId ':'x'}],
+]) test(`metadata forwarding: ${label} refuses before approval`, async t => {
+  const h = await identityHarness(t);
+  h.send({...callParams('identity', {_meta:meta}), id:101});
+  await h.fence();
+  assert.deepEqual(h.rawCalls(), []);
+  assert.equal(h.lines.map(JSON.parse).some(frame => frame.method === 'elicitation/create'), false);
+  assert.match(h.lines.find(line => JSON.parse(line).id === 101), /request_metadata_unsupported/);
+});
+
 for (const [label, extra, top, refusal] of [
   ['task', {task:{ttl:60000}}, {}, 'request_field_unsupported'],
   ['null task', {task:null}, {}, 'request_field_unsupported'],
