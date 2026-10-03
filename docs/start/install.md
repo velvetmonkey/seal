@@ -24,6 +24,7 @@ answer "did I download the bytes the release named?" They do not answer
 <!-- end generated release docs -->
 Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and `node --version` reports below v22, get Node from https://nodejs.org/en/download or use a version manager such as nvm; then run `node --version` again and expect v22 or newer. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
 <!-- generated from published release; do not edit -->
+### Linux x86-64
 ```bash
 SEAL_VERSION=v0.5.2
 artifact_name="seal-v0.5.2-linux-x64" \
@@ -31,12 +32,8 @@ artifact_name="seal-v0.5.2-linux-x64" \
 && artifact_bytes=6370451 \
 && sums_name="SHA256SUMS" \
 && sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
-&& checker_name="seal-receipt-v2.mjs" \
-&& checker_sha256="6576c97c0065a3414cad332a8fa930d4283a57c763dfbfa6ce26aa47abed3636" \
-&& checker_bytes=10789 \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
-&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
 && test "${sums_actual%% *}" = "$sums_sha256" \
 && expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
@@ -45,14 +42,55 @@ artifact_name="seal-v0.5.2-linux-x64" \
 && test "${actual_digest%% *}" = "$artifact_sha256" \
 && actual_bytes="$(wc -c < "$artifact_name")" \
 && test "$actual_bytes" -eq "$artifact_bytes" \
-&& checker_record="$(awk -v name="$checker_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
-&& test "$checker_record" = "$checker_sha256 $checker_bytes $checker_name" \
-&& if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name")"; else checker_actual="$(sha256sum "$checker_name")"; fi \
-&& test "${checker_actual%% *}" = "$checker_sha256" \
-&& checker_count="$(wc -c < "$checker_name")" \
-&& test "$checker_count" -eq "$checker_bytes" \
 && chmod +x "$artifact_name" \
-&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local
+&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local \
+&& export PATH="$HOME/.local/bin:$PATH"
+```
+
+### macOS Apple silicon
+```bash
+SEAL_VERSION=v0.5.2
+artifact_name="seal-v0.5.2-darwin-arm64" \
+&& artifact_sha256="9a7b1550acea60c37271eaaa7bba9bd767a6a88847fdc2ba3969cc134c035eb1" \
+&& artifact_bytes=6404266 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \
+&& test "${actual_digest%% *}" = "$artifact_sha256" \
+&& actual_bytes="$(wc -c < "$artifact_name")" \
+&& test "$actual_bytes" -eq "$artifact_bytes" \
+&& chmod +x "$artifact_name" \
+&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local \
+&& export PATH="$HOME/.local/bin:$PATH"
+```
+
+### macOS Intel
+```bash
+SEAL_VERSION=v0.5.2
+artifact_name="seal-v0.5.2-darwin-x64" \
+&& artifact_sha256="7882a812e25dca52fe5c75a409b7fdf729c27bafe1744a5b8a3eb824b98d3ee0" \
+&& artifact_bytes=6379253 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& expected_record="$(awk -v name="$artifact_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \
+&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \
+&& test "${actual_digest%% *}" = "$artifact_sha256" \
+&& actual_bytes="$(wc -c < "$artifact_name")" \
+&& test "$actual_bytes" -eq "$artifact_bytes" \
+&& chmod +x "$artifact_name" \
+&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local \
+&& export PATH="$HOME/.local/bin:$PATH"
 ```
 Success prints `installed seal 0.5.2 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
@@ -71,10 +109,32 @@ Add `~/.local/bin` to PATH:
 ```bash
 $ export PATH="$HOME/.local/bin:$PATH"
 ```
+Add this export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal finds `seal`.
 
 Further distribution detail, including what each payload contains, is in
-[DISTRIBUTION.md](../assurance/distribution.md). The downloaded checker is
-only checked against `SHA256SUMS`; from a source checkout, run
+[DISTRIBUTION.md](../assurance/distribution.md).
+
+### Optional checker asset download
+The installed tree includes a working checker; this command downloads the published checker file for inspection.
+```bash
+SEAL_VERSION=v0.5.2
+checker_name="seal-receipt-v2.mjs" \
+&& checker_sha256="6576c97c0065a3414cad332a8fa930d4283a57c763dfbfa6ce26aa47abed3636" \
+&& checker_bytes=10789 \
+&& sums_name="SHA256SUMS" \
+&& sums_sha256="aa2f148f990667aa1a3feaa362c87a5e2a767c7a77a6bd45c1904c2239bb42f1" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
+&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \
+&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
+&& test "${sums_actual%% *}" = "$sums_sha256" \
+&& checker_record="$(awk -v name="$checker_name" '$3 == name { print $1, $2, $3 }' "$sums_name")" \
+&& test "$checker_record" = "$checker_sha256 $checker_bytes $checker_name" \
+&& if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name")"; else checker_actual="$(sha256sum "$checker_name")"; fi \
+&& test "${checker_actual%% *}" = "$checker_sha256" \
+&& checker_count="$(wc -c < "$checker_name")" \
+&& test "$checker_count" -eq "$checker_bytes"
+```
+The downloaded checker is only checked against `SHA256SUMS`; from a source checkout, run
 `node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.
 <!-- end generated release docs -->
 
