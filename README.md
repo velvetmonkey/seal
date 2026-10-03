@@ -16,8 +16,10 @@ The [documentation map](docs/README.md) helps you choose a route through Seal. R
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
 macOS x64/arm64. Seal itself requires Node 20 or newer.
-Protect needs Claude Code, which needs Node 22 or newer. Check `node --version`
-before installing either tool; if it is below 22, upgrade Node before using Protect. Windows,
+Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and
+`node --version` reports below v22, get Node from https://nodejs.org/en/download
+or use a version manager such as nvm; then run `node --version` again and expect
+v22 or newer. Windows,
 Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
