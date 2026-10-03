@@ -18,7 +18,19 @@ $ seal status
 
 ```output
 Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
-Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/f245ca9632a2147b4c4f6cbb08d8f8da/servers/db/state.json)
+Observation project: /home/you/seal-protect-demo
+Observation client: Claude Code static configuration; effective client route UNKNOWN
+Observation config: /home/you/.claude/.claude.json
+Observation time: <time of status check>
+MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected
+Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)
+UNKNOWN — user MCP configuration has no inspectable mcpServers object
+Observed MCP definitions (scoped configuration facts; not a complete active inventory):
+  UNKNOWN — entry "db" has conflicting definitions across local, project; scope shadowing and approval eligibility are unresolved
+  BROKERED — Local MCP entry "db" matches Seal's installed wrapper; this wrapper gates demo.mutate, demo.erase. Client use of this entry is UNKNOWN.
+UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.
+Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/9d193cb47c559af13b345293f08ed3b4/servers/db/state.json)
 
 Gated through this route:
   demo.mutate
@@ -36,13 +48,14 @@ Next:
   3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
 Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
-Receipts: 0 stored in /home/you/.local/share/seal/projects/f245ca9632a2147b4c4f6cbb08d8f8da/servers/db/receipts
-Most recent: no receipt yet (receipt directory has no files; no decision has been recorded)
+Receipts: no receipt files observed (receipt directory has no receipt-shaped files)
+Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)
+Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)
 ```
 
-Exit code: `0`.
+Exit code: `0`. This exit code reports that `seal status` ran. It does not mean the route is ACTIVE.
 
-The Runtime line prints once, followed by Protection and Receipts for each stored server record:
+The Runtime line prints once. Observation lines follow it. Protection and Receipts follow for each stored server record:
 
 - **Runtime** — the pinned kernel runtime installed beside the command, which
   `seal verify` uses. Its presence does not decide whether your project is
