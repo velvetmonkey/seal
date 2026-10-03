@@ -120,10 +120,10 @@ gating these MCP calls gives a false sense of safety if you take it to mean
 that every change needs approval. The bundled demo demonstrates the gap:
 
 ```bash
-$ seal demo
+demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
 ```
 
-Answer `y` at its approval prompt. After the approved append and blocked
+The command answers `y` at the approval prompt. After the approved append and blocked
 replay, the demo writes directly to the same file: the file changes, the
 protected-server call count stays at one, and there are zero new Seal
 decisions. That is a weak fit for preventing unapproved file changes, even
