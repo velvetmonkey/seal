@@ -41,6 +41,30 @@ For receipt fields and validation rules, see the [Seal receipt v2 schema](../SEA
 
 ## Flags and argument ranges
 
+The flag inventory below is the public parser contract. Each flag has one row.
+
+| Flag inventory | Scope |
+|---|---|
+| `--archive` | recover |
+| `--authority` | reproduce |
+| `--authority-name` | reproduce |
+| `--dir` | demo |
+| `--help` | main |
+| `--json` | verify |
+| `--limit` | history |
+| `--manifest` | reproduce build-pinned-kernel |
+| `--output` | reproduce build-pinned-kernel |
+| `--platform` | reproduce |
+| `--pubkey` | verify and seal_block |
+| `--since` | history |
+| `--source` | reproduce |
+| `--timeout-ms` | protect |
+| `--tool` | history |
+| `--until` | history |
+| `--version` | main |
+| `-V` | main |
+| `-h` | main |
+
 | Flag | Accepted value and scope |
 |---|---|
 | `--help`, `-h` | No value; first argument only. Extra arguments after the alias are ignored. |
