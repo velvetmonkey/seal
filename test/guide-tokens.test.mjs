@@ -224,7 +224,7 @@ const runtimeFiles = ["contract/contract.cjs", "bin/seal",
 function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(file) }))) {
   const found = new Map();
   const add = (key, file, source, offset) => {
-    if (!/^[a-z]+(?:_[a-z0-9]+)*$/.test(key)) return;
+    if (!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(key)) return;
     const line = source.slice(0, offset).split("\n").length;
     if (!found.has(key)) found.set(key, `${file}:${line}`);
   };
@@ -302,6 +302,8 @@ test("runtime refusal keys all have operating guide entries", () => {
   const documented = documentedKeys();
   const missing = [...source].filter(([key]) => !documented.has(key)).map(([key, place]) => `${key} (${place})`).sort();
   assert.deepEqual(missing, [], `${source.size} source refusal keys; missing guide entries:\n${missing.join("\n")}`);
+  const stale = [...documented].filter((key) => !source.has(key)).sort();
+  assert.deepEqual(stale, [], `guide refusal entries absent from runtime source:\n${stale.join("\n")}`);
 });
 
 test("a renamed literal refusal becomes undocumented", () => {
@@ -322,6 +324,8 @@ test("entrypoint exit codes all have CLI reference entries", () => {
   }
   const missing = [...exitCodes()].filter((code) => !documented.has(code)).sort((a, b) => a - b);
   assert.deepEqual(missing, [], `source exit codes absent from CLI reference: ${missing.join(", ")}`);
+  const stale = [...documented].filter((code) => !exitCodes().has(code)).sort((a, b) => a - b);
+  assert.deepEqual(stale, [], `CLI reference exit codes absent from entrypoints: ${stale.join(", ")}`);
 });
 
 test("the receipt operations vector's fields appear in the normative receipt schema", () => {
