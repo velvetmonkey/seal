@@ -51,7 +51,7 @@ production configuration key.
 This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
 One diagram, five roles: **seal-host decision core** (proven [seal-host]), **enforcement** (deployed), **receipt**
-(evidence), **conformance** (ties bodies to the proof), **coverage** (audits the policy).
+(evidence), **conformance** (historical; archived seal-host finite corpus; no current CI run), **coverage** (audits the policy).
 Solid arrows are the runtime path; dashed arrows are evidence and audit paths.
 
 ```mermaid
