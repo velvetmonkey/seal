@@ -84,7 +84,7 @@ flowchart LR
     conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven [seal-host] seal-host kernel"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw
 
-    demo["seal-live-demo:\none command, real containers,\nBLOCK vs bypass, replayable evidence"] -.-> receipt
+    demo["seal-live-demo:\narchived historical demo evidence,\nBLOCK vs bypass, replayable evidence"] -.-> receipt
 ```
 
 ## What each box is (and what it is not)
