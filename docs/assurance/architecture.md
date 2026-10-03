@@ -81,7 +81,7 @@ flowchart LR
     receipt -.-> rdiff["seal receipt-diff:\nauthorization-surface diff\nbetween two receipts"]
     verify -.-> action["seal-verify-action:\narchived historical fork;\nnot a supported CI gate"]
 
-    conf["Conformance — seal test:\ncorpus ties Rust/wasm/JS bodies\nbyte-for-byte to the proven [seal-host] seal-host kernel"] -.-> gw
+    conf["Historical conformance bridge:\nfinite corpus in archived seal-host;\nno current CI run produces it"] -.-> gw
     scan["Coverage — seal scan:\npolicy audit (uncovered tools,\nindistinguishable calls)"] -.-> gw
 
     demo["seal-live-demo:\narchived historical demo evidence,\nBLOCK vs bypass, replayable evidence"] -.-> receipt
@@ -97,7 +97,9 @@ flowchart LR
   minted by the human you think is a custody assumption (truth box), not a theorem.
 - **Enforcement** (`seal-host`) — the guard at the door. The Rust MCP host that routes every
   guarded call through the kernel and forwards only the exact approved bytes. The Rust glue is
-  **TCB** (trusted, not proven); it is tied to the proof by conformance testing.
+  **TCB** (trusted, not proven); historical conformance testing in archived
+  `seal-host` tied it to the proof over a finite corpus. No current CI run
+  produces that bridge evidence.
 - **Receipt** — every decision emits a v2 receipt (normative spec:
   the host's [authorization decision schema](https://github.com/velvetmonkey/seal-host/blob/main/docs/AUTHORIZATION-DECISION-SCHEMA.md) §11) with derived SHA-256 hashes. Tamper-**evident**,
   not tamper-impossible. `seal verify` (CLI) and `seal-check` (browser) are two
@@ -109,9 +111,10 @@ flowchart LR
   the current interfaces is useful conformance evidence, but a
   defect in shared kernel or format logic can make them agree on the same wrong
   answer.
-- **Conformance** (`seal test`, conformance bridge) — finite, rerunnable evidence that the
-  deployed bodies (Rust, wasm, JS) agree with the proven [seal-host] seal-host kernel byte-for-byte over a corpus.
-  Evidence, not a universal theorem.
+- **Conformance** (historical conformance bridge) — archived `seal-host` holds
+  finite corpus evidence comparing its Lean model, native Rust host, and wasm
+  output. No current CI run produces this bridge evidence. It is evidence over
+  that corpus, not a universal theorem.
 - **Coverage** (`seal scan`) — audits a policy against a tool inventory: uncovered tools,
   redundant rules, calls the policy cannot distinguish.
 - **Drift** (`seal receipt-diff`) — field-level diff for supported kit and host
