@@ -287,8 +287,7 @@ before status can print a Runtime line.
 
 ### The limit, stated plainly
 
-`seal protect` registers the wrapper at
-`prefix/lib/seal/store/<tree>/bin/seal`, bypassing the installed launcher.
+`seal protect` registers the wrapper at `prefix/bin/seal` (the installed launcher), which judges the store then dispatches `prefix/lib/seal/store/<tree>/bin/seal`.
 After Accept, each protected call rechecks every installed payload file,
 including `runtime/kernel/wasm/seal.js`, against the fixed install record
 before kernel authorization. A mismatch or unavailable record refuses the
@@ -308,7 +307,7 @@ Two forms through the installed launcher, both from real runs:
 ## The Receipts lines
 
 ```output
-Receipts: 1 stored in /home/you/.local/share/seal/projects/a055aba8ce9cbe0bd8bbe684f394297b/receipts
+Receipts: 1 receipt files observed in /home/you/.local/share/seal/projects/<id>/servers/<server>/receipts; run `seal receipts <dir>` to inspect sequence gaps; completeness UNKNOWN (receipt filenames are not signed)
 Most recent (by write time): ALLOW at receipt time 1788884426 (receipt-1788884427239-231060-0002-ALLOW.json)
 ```
 
@@ -320,7 +319,7 @@ not of something going wrong. Open the named file to see which call it was.
 Two less happy forms, both from real runs:
 
 ```output
-Receipts: 0 stored in …/seal/receipts (directory does not exist)
+Receipts: no receipt files observed in …/seal/receipts (directory does not exist)
 Most recent: no receipt yet (receipt directory is missing)
 ```
 
