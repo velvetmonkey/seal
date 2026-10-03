@@ -222,7 +222,7 @@ test("CLI contract: every public parser flag appears in help and the reference",
   const historyNames = history.match(/\["[a-z]+"(?:, "[a-z]+")+\]\.includes\(name\)/)?.[0];
   assert.ok(historyNames, "history option allowlist is visible in its parser");
   const flags = [...new Set([
-    ...[...parser.matchAll(/(?:===|!==|indexOf\()\s*["'](-{1,2}[A-Za-z][A-Za-z-]*)["']/g)].map((match) => match[1]),
+    ...[...parser.matchAll(/(?:===|!==|indexOf\()\s*["'](-{1,2}[A-Za-z][A-Za-z0-9-]*)["']/g)].map((match) => match[1]),
     ...[...historyNames.matchAll(/"([a-z]+)"/g)].map((match) => `--${match[1]}`),
   ])].sort();
   const help = contractContext().run(["--help"]);
@@ -230,11 +230,11 @@ test("CLI contract: every public parser flag appears in help and the reference",
   const reference = fs.readFileSync(path.join(root, "docs/reference/cli.md"), "utf8");
   const inventory = reference.split("| Flag inventory | Scope |\n")[1]?.split("\n\n")[0];
   assert.ok(inventory, "public flag inventory is present");
-  const documented = [...inventory.matchAll(/^\| `(-{1,2}[A-Za-z][A-Za-z-]*)` \|/gm)].map((match) => match[1]);
+  const documented = [...inventory.matchAll(/^\| `(-{1,2}[A-Za-z][A-Za-z0-9-]*)` \|/gm)].map((match) => match[1]);
   assert.equal(new Set(documented).size, documented.length, "flag inventory has no duplicates");
   assert.deepEqual(documented.sort(), flags, "reference flag inventory versus runtime parsers");
   for (const flag of flags) {
-    const token = new RegExp(`(?<![A-Za-z-])${flag}(?![A-Za-z-])`);
+    const token = new RegExp(`(?<![A-Za-z0-9-])${flag}(?![A-Za-z0-9-])`);
     assert.match(help.stdout, token, `parser flag missing from help: ${flag}`);
     assert.match(reference, token, `parser flag missing from reference: ${flag}`);
   }
