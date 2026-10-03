@@ -2267,6 +2267,7 @@ test('metadata forwarding: toolUseId leaves approval identity, text and receipt 
 for (const [label, meta] of [
   ['toolUseId plus unknown', {'claudecode/toolUseId':'x', 'example.com/mode':'y'}],
   ['remoteToolCall', {'claudecode/remoteToolCall':'x'}],
+  ['remoteToolExecution', {'anthropic/remoteToolExecution':'x'}],
   ['agentId', {'claudecode/agentId':'x'}],
   ['agentType', {'claudecode/agentType':'x'}],
   ['isObserver', {'claudecode/isObserver':true}],
