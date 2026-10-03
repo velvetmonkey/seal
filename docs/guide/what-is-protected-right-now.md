@@ -247,7 +247,7 @@ assuming it made no partial change.
 What to do about that record is honest but currently not smooth:
 `seal status` reports `REFUSED no_seal_owned_override` for that record, continues
 through any other server records, and exits 1,
-`seal protect` refuses (`already_protected: server "notes" is already BROKEN`) and
+`seal protect` retries that failed install and records PENDING RESTART when no Seal-owned override was written, and
 `seal unprotect` refuses with `no_seal_owned_override`. Unprotect accepts an
 absent Claude Code override only when the recorded Seal ownership checks pass,
 and still requires no live lease and successful removal or Claude Code's exact
