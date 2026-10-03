@@ -12,6 +12,8 @@ These notes describe the v0.5.3 candidate. The install commands below work after
 - Guarded calls preserve MCP progress metadata. Approval text fits complete routed arguments within its line budget, shows mixed-script names with visible escapes, and treats unmatched Common letters as neutral.
 - Installed protected routes use the verified launcher. Verify refuses unchecked paths and reports MCP verification errors. Receipt checks print named refusals for unsigned receipts and missing public keys.
 - The README shows observed demo output. The guide and reference now describe refusal and exit code contracts; contract tests cover those surfaces.
+- Documentation now groups the sidebar into five reader routes, restores legacy documentation paths, and gives a portable first-approval demo command.
+- The development `npm test` command points to the guarded product suite, and CI runs the shipped Lean kernel checks and host tests.
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI. See `spine/platform.cjs`, `test/darwin-readiness.test.cjs`, and `test/release-matrix.test.mjs` for the platform boundary.
 
