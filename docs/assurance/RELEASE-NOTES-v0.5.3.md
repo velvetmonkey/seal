@@ -14,6 +14,9 @@ These notes describe the v0.5.3 candidate. The install commands below work after
 - The README shows observed demo output. The guide and reference now describe refusal and exit code contracts; contract tests cover those surfaces.
 - Documentation now groups the sidebar into five reader routes, restores legacy documentation paths, and gives a portable first-approval demo command.
 - The development `npm test` command points to the guarded product suite, and CI runs the shipped Lean kernel checks and host tests.
+- Claude Code tool calls no longer show the `claudecode/toolUseId` metadata key in guarded approval requests; other call arguments still reach the guard.
+- Source builds use a fixed C locale when ordering kernel WASM files, so the file list stays in the same order across host locales.
+- The Protect and demo guides now match the CLI's setup, status, receipt, and cleanup output; archived claims and architecture pages identify historical evidence as historical.
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI. See `spine/platform.cjs`, `test/darwin-readiness.test.cjs`, and `test/release-matrix.test.mjs` for the platform boundary.
 
