@@ -1,17 +1,17 @@
 {
   "version": 1,
   "ruling": {
-    "base": "dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4",
-    "author": "velvetmonkey",
-    "date": "2026-09-06",
-    "scope": "Ben approved PR 245 on 2026-09-05, in his words: \"Approve\". This is the FIRST use of the pin-manifest review door that PR 249 added, merged to main as dba60d3d. THE CHANGE: scripts/installed-tree-pin-sites.json declares where installed-tree pins live. Its declared sites had drifted from the built artifacts, so assertion 269 failed and blocked four pull requests. This corrects the declared sites to match. I verified the merge-base and the blob digest on disk before writing this record.",
+    "base": "60daaddcc5dc4778b954a061b415ef5a7a6898bb",
+    "author": "Ben",
+    "date": "2026-10-01 07:57",
+    "scope": "Ben ruled 2026-10-01 07:57, verbatim \"2.  Yes.\", authorizing sealinstallfirstuse to record the three docs/start/install.md pin-site moves in scripts/installed-tree-pin-sites.json and push for review only; it stays off the seal 1.0 list. The moves are store published-asset 64:33 -> 102:33, tree published-asset 66:1 -> 104:1, and tree fresh-build 88:1 -> 148:1. The guide sites and all pin digests remain unchanged by this branch. The fresh-build digest now matches current main.",
     "retires": [
-      "The empty placeholder record shipped with PR 249, which recorded no ruling."
+      "The previous candidate-range record at base dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4 for scripts/installed-tree-pin-sites.json is superseded for this branch; prior authorization is not revoked."
     ],
     "files": [
       {
         "path": "scripts/installed-tree-pin-sites.json",
-        "blob": "14d5ee0bb69e1935320bc390d225cd5193bbd4ff"
+        "blob": "65c773fa026eae5b09376b07274c5682d2ee5e38"
       }
     ]
   }
