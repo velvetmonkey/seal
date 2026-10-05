@@ -20,10 +20,37 @@ jobs:
   kernel-reproduce:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        host_locale: [C, en_US.UTF-8]
     env:
       SEAL_CI_READ_TOKEN: ${{ secrets.SEAL_CI_READ_TOKEN }}
+      LANG: ${{ matrix.host_locale }}
+      LC_ALL: ${{ matrix.host_locale }}
     steps:
       - uses: actions/checkout@v7.0.1
+
+      - name: Require the host locale and distinct UTF-8 collation
+        shell: bash
+        run: |
+          locale -a
+          locale
+          installed=$(locale -a)
+          requested=${LANG/.UTF-8/.utf8}
+          if ! grep -Fxiq "$requested" <<< "$installed"; then
+            echo "Requested host locale $LANG is not installed" >&2
+            exit 1
+          fi
+          if [[ "$LANG" != C ]]; then
+            host_order=$(printf '%s\n' stack_overflow.cpp stackinfo.cpp | sort)
+            c_order=$(printf '%s\n' stack_overflow.cpp stackinfo.cpp | LC_ALL=C sort)
+            printf 'host order: %s\nC order: %s\n' "$host_order" "$c_order"
+            if [[ "$host_order" == "$c_order" ]]; then
+              echo "UTF-8 host collation does not expose the known file-order difference" >&2
+              exit 1
+            fi
+          fi
 
       - name: Require private dependency source access
         run: test -n "$SEAL_CI_READ_TOKEN"
@@ -68,4 +95,6 @@ jobs:
       - name: Require rebuilt seal.wasm to match the tracked pin
         run: |
           expected=$(sha256sum runtime/kernel/wasm/seal.wasm | awk '{print $1}')
+          actual=$(sha256sum wasm-spike/build-core/seal.wasm | awk '{print $1}')
+          printf 'tracked pin: %s\nrebuilt wasm: %s\n' "$expected" "$actual"
           (cd wasm-spike/build-core && printf '%s  %s\n' "$expected" seal.wasm | sha256sum -c -)
