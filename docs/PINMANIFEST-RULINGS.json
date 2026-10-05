@@ -1,10 +1,10 @@
 {
   "version": 1,
   "ruling": {
-    "base": "b9eed7e74cc68625f07362e23f843449e28654f5",
+    "base": "60daaddcc5dc4778b954a061b415ef5a7a6898bb",
     "author": "Ben",
     "date": "2026-10-01 07:57",
-    "scope": "Ben ruled 2026-10-01 07:57, verbatim \"2.  Yes.\", authorizing sealinstallfirstuse to record the three docs/start/install.md pin-site moves in scripts/installed-tree-pin-sites.json and push for review only; it stays off the seal 1.0 list. The moves are store published-asset 64:33 -> 102:33, tree published-asset 66:1 -> 104:1, and tree fresh-build 88:1 -> 148:1. The guide sites and all pin digests remain unchanged by this branch. The fresh-build digest in current main came from merged PR 434.",
+    "scope": "Ben ruled 2026-10-01 07:57, verbatim \"2.  Yes.\", authorizing sealinstallfirstuse to record the three docs/start/install.md pin-site moves in scripts/installed-tree-pin-sites.json and push for review only; it stays off the seal 1.0 list. The moves are store published-asset 64:33 -> 102:33, tree published-asset 66:1 -> 104:1, and tree fresh-build 88:1 -> 148:1. The guide sites and all pin digests remain unchanged by this branch. The fresh-build digest now matches current main.",
     "retires": [
       "The previous candidate-range record at base dba60d3d7b4c1c1ea8e6da123684c052eed6c4f4 for scripts/installed-tree-pin-sites.json is superseded for this branch; prior authorization is not revoked."
     ],
