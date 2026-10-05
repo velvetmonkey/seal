@@ -28,6 +28,7 @@ test("the current VERSION has a release note with the same identity", () => {
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.0.md#release-notes-v050
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.1.md#release-notes-v051
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.2.md#release-notes-v052
+// CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.3.md#release-notes-v053
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   for (const record of new Set([NOTES, path.join(ROOT, "docs/assurance/RELEASE-NOTES-v0.3.0.md")])) {
     const notes = fs.readFileSync(record, "utf8");
