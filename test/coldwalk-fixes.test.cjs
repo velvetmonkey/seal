@@ -47,7 +47,7 @@ test("the demo section names the printed directory as the cleanup target", () =>
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const demo = readme.indexOf("## Try Seal in two minutes");
   const protect = readme.indexOf("## Protect a real tool set");
-  const cleanupReminder = "When you are finished, remove the directory printed as `Demo directory: /absolute/path`.";
+  const cleanupReminder = "When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.";
 
   assert.ok(demo >= 0, "README must contain the demo beat");
   assert.ok(protect > demo, "the Protect beat must follow the demo beat");
