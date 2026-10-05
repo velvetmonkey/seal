@@ -384,9 +384,40 @@ function readmeRegions({ manifest }) {
   ].join("\n")];
 }
 
+function platformInstallCommand(manifest, artifact) {
+  return [
+    "```bash",
+    `SEAL_VERSION=${manifest.tag}`,
+    `artifact_name=${JSON.stringify(artifact.name)} \\`,
+    `&& artifact_sha256=${JSON.stringify(artifact.sha256)} \\`,
+    `&& artifact_bytes=${artifact.bytes} \\`,
+    `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
+    `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
+    '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \\',
+    '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \\',
+    '&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \\',
+    '&& test "${sums_actual%% *}" = "$sums_sha256" \\',
+    '&& expected_record="$(awk -v name="$artifact_name" \'$3 == name { print $1, $2, $3 }\' "$sums_name")" \\',
+    '&& test "$expected_record" = "$artifact_sha256 $artifact_bytes $artifact_name" \\',
+    '&& if command -v shasum >/dev/null 2>&1; then actual_digest="$(shasum -a 256 "$artifact_name")"; else actual_digest="$(sha256sum "$artifact_name")"; fi \\',
+    '&& test "${actual_digest%% *}" = "$artifact_sha256" \\',
+    '&& actual_bytes="$(wc -c < "$artifact_name")" \\',
+    '&& test "$actual_bytes" -eq "$artifact_bytes" \\',
+    '&& chmod +x "$artifact_name" \\',
+    '&& ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local \\',
+    '&& export PATH="$HOME/.local/bin:$PATH"',
+    "```",
+  ].join("\n");
+}
+
 function installRegions({ manifest, manifestPublished }) {
   const platform = platformSentence(manifest.platform);
   const [platformSupport, platformLimit] = installPlatformParagraphs(manifest, platform);
+  const artifacts = manifest.artifacts ?? [{ ...manifest.artifact, platform: manifest.platform }];
+  const commandFor = (platformName) => {
+    const artifact = artifacts.find((candidate) => candidate.platform === platformName);
+    return artifact ? platformInstallCommand(manifest, artifact) : `No ${platformName} artifact was published for ${manifest.tag}.`;
+  };
   return [
     [
       SENTINEL,
@@ -416,36 +447,14 @@ function installRegions({ manifest, manifestPublished }) {
     ].join("\n"),
     [
       SENTINEL,
-      "```bash",
-      `SEAL_VERSION=${manifest.tag}`,
-      `artifact_name=${JSON.stringify(manifest.artifact.name)} \\`,
-      `&& artifact_sha256=${JSON.stringify(manifest.artifact.sha256)} \\`,
-      `&& artifact_bytes=${manifest.artifact.bytes} \\`,
-      `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
-      `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
-      `&& checker_name=${JSON.stringify(manifest.checker.name)} \\`,
-      `&& checker_sha256=${JSON.stringify(manifest.checker.sha256)} \\`,
-      `&& checker_bytes=${manifest.checker.bytes} \\`,
-      "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name\" \\",
-      "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name\" \\",
-      "&& curl -fsSLO \"https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name\" \\",
-      "&& if command -v shasum >/dev/null 2>&1; then sums_actual=\"$(shasum -a 256 \"$sums_name\")\"; else sums_actual=\"$(sha256sum \"$sums_name\")\"; fi \\",
-      "&& test \"${sums_actual%% *}\" = \"$sums_sha256\" \\",
-      "&& expected_record=\"$(awk -v name=\"$artifact_name\" '$3 == name { print $1, $2, $3 }' \"$sums_name\")\" \\",
-      "&& test \"$expected_record\" = \"$artifact_sha256 $artifact_bytes $artifact_name\" \\",
-      "&& if command -v shasum >/dev/null 2>&1; then actual_digest=\"$(shasum -a 256 \"$artifact_name\")\"; else actual_digest=\"$(sha256sum \"$artifact_name\")\"; fi \\",
-      "&& test \"${actual_digest%% *}\" = \"$artifact_sha256\" \\",
-      "&& actual_bytes=\"$(wc -c < \"$artifact_name\")\" \\",
-      "&& test \"$actual_bytes\" -eq \"$artifact_bytes\" \\",
-      "&& checker_record=\"$(awk -v name=\"$checker_name\" '$3 == name { print $1, $2, $3 }' \"$sums_name\")\" \\",
-      "&& test \"$checker_record\" = \"$checker_sha256 $checker_bytes $checker_name\" \\",
-      "&& if command -v shasum >/dev/null 2>&1; then checker_actual=\"$(shasum -a 256 \"$checker_name\")\"; else checker_actual=\"$(sha256sum \"$checker_name\")\"; fi \\",
-      "&& test \"${checker_actual%% *}\" = \"$checker_sha256\" \\",
-      "&& checker_count=\"$(wc -c < \"$checker_name\")\" \\",
-      "&& test \"$checker_count\" -eq \"$checker_bytes\" \\",
-      "&& chmod +x \"$artifact_name\" \\",
-      "&& ./\"$artifact_name\" --sha256 \"$artifact_sha256\" --bytes \"$artifact_bytes\" --prefix ~/.local",
-      "```",
+      "### Linux x86-64",
+      commandFor("linux-x64"),
+      "",
+      "### macOS Apple silicon",
+      commandFor("darwin-arm64"),
+      "",
+      "### macOS Intel",
+      commandFor("darwin-x64"),
       `Success prints \`installed seal ${version(manifest)} ${manifest.platform}\` and the store, command,`,
       "and tree lines. Path prefixes on `store:` and `command:` differ per machine.",
       `The tree hash of the published ${manifest.tag} asset is pinned here:`,
@@ -463,10 +472,32 @@ function installRegions({ manifest, manifestPublished }) {
       "```bash",
       '$ export PATH="$HOME/.local/bin:$PATH"',
       "```",
+      "Add this export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal finds `seal`.",
       "",
       "Further distribution detail, including what each payload contains, is in",
-      "[DISTRIBUTION.md](../assurance/distribution.md). The downloaded checker is",
-      "only checked against `SHA256SUMS`; from a source checkout, run",
+      "[DISTRIBUTION.md](../assurance/distribution.md).",
+      "",
+      "### Optional checker asset download",
+      "The installed tree includes a working checker; this command downloads the published checker file for inspection.",
+      "```bash",
+      `SEAL_VERSION=${manifest.tag}`,
+      `checker_name=${JSON.stringify(manifest.checker.name)} \\`,
+      `&& checker_sha256=${JSON.stringify(manifest.checker.sha256)} \\`,
+      `&& checker_bytes=${manifest.checker.bytes} \\`,
+      `&& sums_name=${JSON.stringify(manifest.checksums.name)} \\`,
+      `&& sums_sha256=${JSON.stringify(manifest.checksums.sha256)} \\`,
+      '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \\',
+      '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \\',
+      '&& if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \\',
+      '&& test "${sums_actual%% *}" = "$sums_sha256" \\',
+      '&& checker_record="$(awk -v name="$checker_name" \'$3 == name { print $1, $2, $3 }\' "$sums_name")" \\',
+      '&& test "$checker_record" = "$checker_sha256 $checker_bytes $checker_name" \\',
+      '&& if command -v shasum >/dev/null 2>&1; then checker_actual="$(shasum -a 256 "$checker_name")"; else checker_actual="$(sha256sum "$checker_name")"; fi \\',
+      '&& test "${checker_actual%% *}" = "$checker_sha256" \\',
+      '&& checker_count="$(wc -c < "$checker_name")" \\',
+      '&& test "$checker_count" -eq "$checker_bytes"',
+      "```",
+      "The downloaded checker is only checked against `SHA256SUMS`; from a source checkout, run",
       "`node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.",
       END,
     ].join("\n"),
@@ -664,20 +695,28 @@ function checkPublishedClaims(document, facts) {
     requireAll("artifact", namedArtifacts, manifest.artifact.name);
   }
   requireAll("tag commit", values(document.text, /\b([0-9a-f]{40})\b/g), manifest.commitSha);
-  requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
+  const artifactBytes = values(document.text, /\bartifact_bytes=(\d+)\b/g).map(Number);
+  const publishedArtifacts = manifest.artifacts ?? [manifest.artifact];
+  if (manifest.artifacts) {
+    const expectedBytes = new Set(publishedArtifacts.map((artifact) => artifact.bytes));
+    for (const count of artifactBytes) if (!expectedBytes.has(count)) document.failures.push(`artifact byte count is not published release data: ${count}`);
+    for (const artifact of publishedArtifacts) if (!artifactBytes.includes(artifact.bytes)) document.failures.push(`${artifact.name} byte count is absent`);
+  } else {
+    requireAll("artifact byte count", values(document.text, /\bartifact_bytes=(\d+)\b/g), manifest.artifact.bytes);
+  }
   requireAll("checker byte count", values(document.text, /\bchecker_bytes=(\d+)\b/g), manifest.checker.bytes);
 
   const digests = values(document.text, /\b([0-9a-f]{64})\b/g);
   const allowedDigests = new Set([
-    manifest.artifact.sha256,
+    ...publishedArtifacts.map((artifact) => artifact.sha256),
     manifest.checker.sha256,
     manifest.checksums.sha256,
-    manifest.artifact.installedTreeSha256,
+    ...publishedArtifacts.map((artifact) => artifact.installedTreeSha256),
   ]);
   const unknownDigests = [...new Set(digests.filter((digest) => !allowedDigests.has(digest)))];
   if (unknownDigests.length) document.failures.push(`digest is not published release data: ${unknownDigests.join(", ")}`);
   for (const [label, digest] of [
-    ["artifact digest", manifest.artifact.sha256],
+    ...publishedArtifacts.map((artifact) => [`${artifact.name} digest`, artifact.sha256]),
     ["checker digest", manifest.checker.sha256],
     ["SHA256SUMS digest", manifest.checksums.sha256],
     ["installed-tree digest", manifest.artifact.installedTreeSha256],

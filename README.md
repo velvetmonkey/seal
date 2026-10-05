@@ -57,14 +57,16 @@ artifact_name="seal-v0.5.2-linux-x64" \
 ```
 <!-- end generated release docs -->
 
-Run the harmless approve-once demo and answer `y`:
+Add the PATH export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal finds `seal`.
+
+Run the harmless approve-once demo and answer its prompt in your terminal:
 
 ```bash
-demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
+seal demo
 ```
 
 Keep the demo directory for the printed checker command.
-When you are finished, remove the directory printed as `Demo directory: /absolute/path`.
+When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.
 
 ## What you should see
 

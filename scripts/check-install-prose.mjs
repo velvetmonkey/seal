@@ -43,6 +43,8 @@ const claims = [
   ['17', 'published installer stdout and installed command', 'Success prints `installed seal @VERSION@ linux-x64` and the store, command, and tree lines.'],
   ['18', 'success at two isolated prefixes', 'Path prefixes on `store:` and `command:` differ per machine.'],
   ['19', 'checker corruption and no checker execution', 'The downloaded checker is only checked against `SHA256SUMS`; from a source checkout, run `node checker/seal-receipt-v2.mjs docs/reference/receipt-operations-v1/receipt-block.json`.'],
+  ['40', 'fresh bash and POSIX login shell source the named startup file', 'Add this export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal finds `seal`.'],
+  ['41', 'installed payload contains checker/seal-receipt-v2.mjs; optional file is published release asset', 'The installed tree includes a working checker; this command downloads the published checker file for inspection.'],
 ];
 
 // Reuse the inventory's product-entity/predicate definition, in Markdown mode.
@@ -148,7 +150,9 @@ async function main() {
   assert.equal(parts.length, 2, 'install generated-region population');
   const readmeParts = regions(readme);
   assert.equal(readmeParts.length, 1, 'README generated-region population');
-  const fence = parts.join('\n').match(/```bash\n(SEAL_VERSION=[\s\S]*?)\n```/)?.[1];
+  const fences = [...parts.join('\n').matchAll(/```bash\n(SEAL_VERSION=[\s\S]*?)\n```/g)].map(match => match[1]);
+  assert.equal(fences.length, 4, 'three platform commands and one optional checker command');
+  const [fence, darwinArm64, darwinX64, checkerFence] = fences;
   assert.ok(fence, 'published install fence absent');
   const tag = fence.match(/^SEAL_VERSION=(\S+)/)[1];
   const version = tag.slice(1);
@@ -162,6 +166,10 @@ async function main() {
   let prose = normalize(parts.join('\n').replace(/```[^\n]*\n[\s\S]*?```/g, '')
     .replace(`# Install Seal ${tag}`, '')
     .replace('## Verify, then install', '')
+    .replace('### Linux x86-64', '')
+    .replace('### macOS Apple silicon', '')
+    .replace('### macOS Intel', '')
+    .replace('### Optional checker asset download', '')
     .replace(/The \[v[^\]]+ release\]\([^)]*\) publishes `[^`]+`(?:, `[^`]+`)*, and `[^`]+`; its tag resolves to commit \[\x60[0-9a-f]{40}\x60\]\([^)]*\)\./g, '')
     .replace(/Its `release-manifest\.json` uses schema `seal\.release\/v\d+`\./g, '')
     .replace(/The tree hash of the published v[^ ]+ asset is pinned here:/g, '')
@@ -194,7 +202,8 @@ async function main() {
   try {
     const assets = path.join(root, 'assets');
     fs.mkdirSync(assets);
-    const names = [value('artifact_name'), value('checker_name'), value('sums_name')];
+    const checkerName = checkerFence.match(/checker_name="([^"]+)"/)[1];
+    const names = [value('artifact_name'), checkerName, value('sums_name')];
     for (const name of names) assert.equal(path.basename(name), name, 'asset name must be a basename');
     await Promise.all(names.map(async name => {
       const response = await fetchPublishedAsset(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`);
@@ -204,8 +213,16 @@ async function main() {
       // non-executable starting mode, independent of the caller's umask.
       fs.chmodSync(path.join(assets, name), 0o644);
     }));
-    for (const [name, pin] of [[names[0], 'artifact_sha256'], [names[1], 'checker_sha256'], [names[2], 'sums_sha256']]) {
-      assert.equal(digest(fs.readFileSync(path.join(assets, name))), value(pin), `published ${name} digest`);
+    for (const [name, pin] of [[names[0], value('artifact_sha256')], [names[1], checkerFence.match(/checker_sha256="([^"]+)"/)[1]], [names[2], value('sums_sha256')]]) {
+      assert.equal(digest(fs.readFileSync(path.join(assets, name))), pin, `published ${name} digest`);
+    }
+    for (const command of [darwinArm64, darwinX64]) {
+      const name = command.match(/artifact_name="([^"]+)"/)[1];
+      const response = await fetchPublishedAsset(`https://github.com/velvetmonkey/seal/releases/download/${tag}/${name}`);
+      assert.ok(response.ok, `cannot fetch published ${name}: HTTP ${response.status}`);
+      fs.writeFileSync(path.join(assets, name), Buffer.from(await response.arrayBuffer()), { mode: 0o644 });
+      fs.chmodSync(path.join(assets, name), 0o644);
+      assert.equal(digest(fs.readFileSync(path.join(assets, name))), command.match(/artifact_sha256="([^"]+)"/)[1], `published ${name} digest`);
     }
     assert.ok(fs.readFileSync(path.join(assets, names[0]), 'utf8').startsWith('#!/bin/sh\nif ! command -v node'), 'published artifact requires external Node');
     assert.ok(fs.readFileSync(path.join(assets, names[0]), 'utf8').includes('Seal requires Node >= 20 on linux-x64'), 'published Seal Node requirement');
@@ -245,6 +262,31 @@ async function main() {
       assert.equal(fs.existsSync(path.join(box.cwd, 'node-called')), installerEntered, 'unexpected artifact/checker execution');
       assert.deepEqual(fs.readdirSync(box.home), [], 'refusal created install state');
     }
+    for (const [platform, command] of [['darwin-arm64', darwinArm64], ['darwin-x64', darwinX64]]) {
+      const name = command.match(/artifact_name="([^"]+)"/)[1];
+      assert.ok(!command.includes('checker_name') && !command.includes(`/$${'{'}checker_name}`), `${platform} primary path downloads a checker`);
+      const good = sandbox();
+      const result = execute('sh', command, good);
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      assert.match(result.stderr, new RegExp(`REFUSE unsupported_platform: artifact platform is ${platform}, running host is linux-x64`));
+      assert.ok(fs.existsSync(path.join(good.cwd, 'chmod-called')), `${platform} passed checksum gate`);
+      assert.ok(fs.readFileSync(path.join(good.cwd, 'node-called'), 'utf8').includes(name), `${platform} installer executed`);
+      assert.deepEqual(fs.readdirSync(good.home), [], `${platform} refusal created install state`);
+      for (const [mutation, changed] of [
+        ['digest', command.replace(/artifact_sha256="([0-9a-f])/, 'artifact_sha256="0')],
+        ['bytes', command.replace(/artifact_bytes=(\d+)/, (_, count) => `artifact_bytes=${Number(count) + 1}`)],
+        ['SHA256SUMS', command.replace(/sums_sha256="([0-9a-f])/, 'sums_sha256="0')],
+      ]) {
+        const box = sandbox();
+        const altered = changed === command ? command.replace(/artifact_sha256="([0-9a-f])/, 'artifact_sha256="1') : changed;
+        const refusal = execute('sh', altered, box);
+        assert.equal(refusal.status, 1, `${platform}/${mutation}: ${refusal.stdout}${refusal.stderr}`);
+        assert.equal(fs.statSync(path.join(box.cwd, name)).mode & 0o777, 0o644, `${platform}/${mutation} reached chmod`);
+        assert.equal(fs.existsSync(path.join(box.cwd, 'chmod-called')), false, `${platform}/${mutation} reached chmod`);
+        assert.deepEqual(fs.readdirSync(box.home), [], `${platform}/${mutation} created install state`);
+        console.log(`PASS claim 07 ${platform}/${mutation}: exit 1, mode 644, no chmod, no install`);
+      }
+    }
     const short = readmeParts[0].match(/```bash\n([\s\S]*?)\n```/)[1];
     for (const [label, command] of [['install', fence], ['README', short]]) {
       for (const shell of shells) {
@@ -260,7 +302,7 @@ async function main() {
         assert.ok(success.stdout.includes(`command: ${good.home}/.local/bin/seal\n`));
         const tree = success.stdout.match(/^tree: ([0-9a-f]{64})$/m)?.[1];
         assert.ok(tree && install.includes(`tree: ${tree}`), 'published tree transcript');
-        for (const mutation of ['digest', 'bytes', 'artifact', 'sums', ...(label === 'install' ? ['checker'] : []), 'omit-version']) {
+        for (const mutation of ['digest', 'bytes', 'artifact', 'sums', 'omit-version']) {
           const box = sandbox();
           let changed = command;
           if (mutation === 'digest' || mutation === 'omit-version') changed = changed.replace(value('artifact_sha256'), flip(value('artifact_sha256')));
