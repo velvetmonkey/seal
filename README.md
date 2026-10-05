@@ -60,6 +60,9 @@ artifact_name="seal-v0.5.2-linux-x64" \
 ```
 <!-- end generated release docs -->
 
+The command above installs the published v0.5.2 release under `~/.local`.
+The demo is a separate step.
+
 Run the harmless approve-once demo and answer `y`:
 
 ```bash
