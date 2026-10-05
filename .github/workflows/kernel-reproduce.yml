@@ -95,6 +95,6 @@ jobs:
       - name: Require rebuilt seal.wasm to match the tracked pin
         run: |
           expected=$(sha256sum runtime/kernel/wasm/seal.wasm | awk '{print $1}')
-          actual=$(sha256sum wasm-spike/build-core/seal.wasm | awk '{print $1}')
+          actual=$(cd wasm-spike/build-core && sha256sum seal.wasm | awk '{print $1}')
           printf 'tracked pin: %s\nrebuilt wasm: %s\n' "$expected" "$actual"
           (cd wasm-spike/build-core && printf '%s  %s\n' "$expected" seal.wasm | sha256sum -c -)
