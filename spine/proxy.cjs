@@ -64,6 +64,7 @@ const DEFAULT_ELICITATION_TIMEOUT_MS = 120000;
 // equals one of these only under case folding is refused, never forwarded.
 const ENVELOPE_KEYS = ["jsonrpc", "id", "method", "params", "result", "error"];
 const TOOLS_CALL_PARAMS_KEYS = ["name", "arguments", "_meta"];
+const STRIPPED_GUARDED_META_KEYS = Object.freeze(["claudecode/toolUseId"]);
 // Session-only transport metadata: never passed to the contract or receipts.
 // Symbols also survive the spread used for duplicate-key refusals.
 const WIRE_ID = Symbol("wire request id");
@@ -585,6 +586,19 @@ function createProxy(options) {
     if (unsupported.length > 0) {
       blockForward(frame, "request_field_unsupported", `unsupported guarded tools/call field: ${JSON.stringify(unsupported[0])}`);
       return;
+    }
+    if (Object.hasOwn(params, "_meta")) {
+      const meta = params._meta;
+      if (isPlainObject(meta)) {
+        let stripped = false;
+        for (const key of STRIPPED_GUARDED_META_KEYS) {
+          if (Object.hasOwn(meta, key)) {
+            delete meta[key];
+            stripped = true;
+          }
+        }
+        if (stripped && Object.keys(meta).length === 0) delete params._meta;
+      }
     }
     if (Object.hasOwn(params, "_meta")) {
       const meta = params._meta;

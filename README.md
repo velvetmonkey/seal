@@ -16,8 +16,10 @@ The [documentation map](docs/README.md) helps you choose a route through Seal. R
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and
 macOS x64/arm64. Seal itself requires Node 20 or newer.
-Protect needs Claude Code, which needs Node 22 or newer. Check `node --version`
-before installing either tool; if it is below 22, upgrade Node before using Protect. Windows,
+Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and
+`node --version` reports below v22, get Node from https://nodejs.org/en/download
+or use a version manager such as nvm; then run `node --version` again and expect
+v22 or newer. Windows,
 Linux ARM and other platforms are unsupported. The [full install guide](docs/start/install.md) covers the
 published assets, provenance checks, source builds, and platform limits.
 
@@ -63,6 +65,7 @@ Run the harmless approve-once demo and answer its prompt in your terminal:
 seal demo
 ```
 
+Keep the demo directory for the printed checker command.
 When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.
 
 ## What you should see
@@ -123,7 +126,8 @@ seal protect db demo.mutate demo.erase
 ```
 
 Protect validates both names, installs a private Claude Code local override,
-and leaves the project `.mcp.json` unchanged. It ends with:
+and leaves the project `.mcp.json` unchanged. It creates `data.txt` (0 bytes)
+and `data.txt.count` (`0` followed by a newline). It ends with:
 
 ```output
 Project .mcp.json hash before protect: aacdd2ef4696c853be3fffab5519e6ee5ff1a351c0da6c982b21650d4d349e05
@@ -144,7 +148,7 @@ State: /home/you/.local/share/seal/projects/02a372233b91435a486924d1d5539612/ser
 Next:
   1. Restart Claude Code in this project.
   2. Run `seal status`.
-  3. Confirm the sealed MCP route is ACTIVE.
+  3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
 Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
 ```

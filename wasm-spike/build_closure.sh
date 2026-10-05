@@ -10,6 +10,7 @@
 #    These set up elaboration-time tactic metadata only; nothing the decide path
 #    reads at runtime. Compiling them is infeasible (whole of mathlib).
 set -euo pipefail
+export LC_ALL=C
 cd "$(dirname "$0")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 
@@ -101,7 +102,7 @@ while :; do
     src="$STDLIB/$rel"
     if [ ! -f "$src" ]; then
       # fallback: locate by basename tail
-      cand=$(find "$STDLIB" -path "*/$rel" 2>/dev/null | head -1)
+      cand=$(find "$STDLIB" -path "*/$rel" 2>/dev/null | sort | head -1)
       [ -n "$cand" ] && src="$cand"
     fi
     if [ -f "$src" ]; then

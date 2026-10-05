@@ -142,6 +142,7 @@
     "docs/evidence/correspondence.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/evidence/conformance.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/guide/first-approval.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
+    "docs/guide/protect-your-first-tool.md": { "coveredBy": ["test/protect-your-first-tool-doc.test.cjs#guide-commands-and-output"] },
     "docs/guide/lifecycle.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] },
     "docs/evidence/sources.md": { "coveredBy": ["test/docs-current-scope.test.mjs#family-content-scope"] }
   }

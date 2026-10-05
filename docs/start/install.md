@@ -22,7 +22,7 @@ answer "did I download the bytes the release named?" They do not answer
 
 ## Verify, then install
 <!-- end generated release docs -->
-Protect needs Claude Code, which needs Node 22 or newer. Check `node --version` before installing Claude Code; if it is below 22, upgrade Node first. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
+Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and `node --version` reports below v22, get Node from https://nodejs.org/en/download or use a version manager such as nvm; then run `node --version` again and expect v22 or newer. Continue to [Start Protect in a project](#start-protect-in-a-project) after installing Seal.
 <!-- generated from published release; do not edit -->
 ### Linux x86-64
 ```bash
@@ -145,7 +145,7 @@ from the published-asset pin above:
 
 **Seal installed-tree pin role:** `fresh-build`
 ```text
-tree: 413832b36aad126c11bf5cc617ceee3d1c7b411e6288056becd8c38ce8ffaaa5
+tree: ceacbbbe802c06a9a64ebea2c6df2f53c63a843769008479ef1595b80b34ec35
 ```
 
 That hash is the installed-tree digest of the payload `scripts/build-dist.cjs`
