@@ -32,6 +32,8 @@ current checkout, builds `kernel-source/`, provisions the pinned toolchains, bui
 once through `lake`, runs the `kernel-reproduce` WASM recipe, and hashes that fresh output. It does
 not clone or fetch kernel source. The two compared byte strings therefore come from the published
 artifact and the checked-out source tree.
+Releases built from a tree with byte-ordered WASM file lists use the same file order under different host locales.
+An earlier release can give a different kernel digest on a host with a UTF-8 locale.
 
 `lake` is the portable default. A machine that must serialize Lean builds can select an executable
 launcher by name or path; the value is one executable, not a shell command with arguments:

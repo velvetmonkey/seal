@@ -319,7 +319,7 @@ function main() {
   process.stdout.write(`tree: ${manifest.treeSha256}\n`);
   process.stdout.write("Next:\n");
   process.stdout.write(`  export PATH=${shellWord(path.dirname(launchPath))}:$PATH\n`);
-  process.stdout.write("  seal demo\n");
+  process.stdout.write("  demo_dir=\"$(mktemp -d)\" && demo_dir=\"$(cd \"$demo_dir\" && pwd -P)\" && printf 'y\\n' | seal demo --dir \"$demo_dir\" && printf 'Demo directory: %s\\n' \"$demo_dir\"\n");
 }
 
 main();
