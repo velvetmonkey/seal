@@ -2,6 +2,7 @@
 # Rebuild the non-project object sets required by build_closure/build_wasm.
 # No object directory is assumed to exist from an earlier workstation run.
 set -euo pipefail
+export LC_ALL=C
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$(dirname "$0")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1

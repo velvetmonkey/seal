@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source ./emsdk/emsdk_env.sh >/dev/null 2>&1
 SRC=lean4-src/src
