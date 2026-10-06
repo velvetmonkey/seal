@@ -66,16 +66,19 @@ function run(command, args, options = {}) {
 // Build the real Linux installer and codec-produced Darwin test payloads.
 // All manifest facts and checksum entries are derived from the files on disk;
 // these Darwin payloads exercise selection, not native macOS execution.
-async function buildFixture(root) {
+async function buildFixture(root, { artifactOnlyWithBuiltName = false } = {}) {
   const out = testTmpdir(path.join(os.tmpdir(), "seal-bootstrap-fixture-"));
   const dist = path.join(out, "dist");
   const built = await run(process.execPath, [BUILD, "--out", dist], { cwd: root });
   assert.equal(built.code, 0, `${built.stdout}${built.stderr}`);
   const [digest, bytes, sourceName] = fs.readFileSync(path.join(dist, "SHA256SUMS"), "utf8").trim().split(/\s+/);
   const { releaseArtifactName } = require("../scripts/product-identity.cjs");
-  const name = releaseArtifactName(VERSION);
+  const name = artifactOnlyWithBuiltName ? sourceName : releaseArtifactName(VERSION);
   const artifactPath = path.join(dist, name);
-  fs.copyFileSync(path.join(dist, sourceName), artifactPath);
+  if (sourceName !== name) fs.copyFileSync(path.join(dist, sourceName), artifactPath);
+  if (artifactOnlyWithBuiltName) {
+    return { artifactPath, artifactName: name, sourceName, artifactBytes: Number(bytes), artifactDigest: digest };
+  }
   const checkerPath = path.join(dist, "seal-receipt-v2.mjs");
   fs.copyFileSync(path.join(root, "checker", "seal-receipt-v2.mjs"), checkerPath);
   const checkerBytes = fs.readFileSync(checkerPath);
@@ -152,6 +155,14 @@ function snapshotBootstrapTmp() {
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("seal-bootstrap-"))
     .map((entry) => entry.name);
 }
+
+test("fixture preserves the built artifact when source and target names are equal", async () => {
+  const fixture = await buildFixture(ROOT, { artifactOnlyWithBuiltName: true });
+  assert.equal(fixture.artifactName, fixture.sourceName);
+  const observed = fs.readFileSync(fixture.artifactPath);
+  assert.equal(observed.length, fixture.artifactBytes);
+  assert.equal(sha256(observed), fixture.artifactDigest);
+});
 
 test("bootstrap downloads, verifies, and installs, printing location, version, PATH guidance, and seal demo", async () => {
   const fixture = await buildFixture(ROOT);
