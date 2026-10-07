@@ -380,6 +380,11 @@ test("publishing a second release updates install prose and removes its candidat
     const docs = docsRoot();
     const readmePath = path.join(docs, "README.md");
     const indexPath = path.join(docs, "docs", "assurance", "README.md");
+    const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${secondTag}.md`);
+    fs.writeFileSync(notesPath, fs.readFileSync(notesPath, "utf8").replace(
+      /^# Seal v0\.2\.0-rc\.3 release notes\n/m,
+      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} candidate. The install commands below work after ${secondTag} assets are published.\n`,
+    ));
     const readme = fs.readFileSync(readmePath, "utf8").replace(
       /^The command above installs the published `v[^`]+` release under `~\/\.local`\.$/m,
       `The command above installs the published \`${firstTag}\` release under \`~/.local\`.`,
@@ -391,14 +396,17 @@ test("publishing a second release updates install prose and removes its candidat
       .replace(/^   The \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) describe an unreleased candidate\.$/m,
         `   The [assurance/RELEASE-NOTES-${secondTag}.md](RELEASE-NOTES-${secondTag}.md) describe an unreleased candidate.`);
     fs.writeFileSync(indexPath, index);
-    const env = { SEAL_RELEASE_DOCS_ROOT: docs, SEAL_RELEASES_API_URL: api, SEAL_RELEASE_TAG_COMMIT: COMMIT };
+    const env = { SEAL_RELEASE_DOCS_ROOT: docs, SEAL_RELEASES_API_URL: api, SEAL_RELEASE_TAG_COMMIT: COMMIT, SEAL_RELEASE_SOURCE_VERSION: secondTag.slice(1) };
     const generated = await run([], env);
     assert.equal(generated.code, 0, generated.stderr);
     const afterReadme = fs.readFileSync(readmePath, "utf8");
     const afterIndex = fs.readFileSync(indexPath, "utf8");
+    const afterNotes = fs.readFileSync(notesPath, "utf8");
     assert.match(afterReadme, new RegExp(`The command above installs the published \\x60${secondTag.replaceAll(".", "\\.")}\\x60 release`));
     assert.doesNotMatch(afterReadme, new RegExp(`command above installs the published \\x60${firstTag.replaceAll(".", "\\.")}\\x60`));
     assert.doesNotMatch(afterIndex, new RegExp(`${secondTag.replaceAll(".", "\\.")}\\.md\\) describe an unreleased candidate`));
+    assert.match(afterNotes, new RegExp(`These notes describe the published ${secondTag.replaceAll(".", "\\.")} release`));
+    assert.doesNotMatch(afterNotes, /candidate|unreleased|not published/);
     assert.match(afterIndex, new RegExp(`assurance/RELEASE-NOTES-${firstTag.replaceAll(".", "\\.")}\\.md`));
   });
 });
