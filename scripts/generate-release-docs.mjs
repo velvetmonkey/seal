@@ -522,25 +522,29 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
-function candidateNotesChange(required = false) {
+function candidateNotesChange(required = false, previousChange) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
   const relative = `docs/assurance/RELEASE-NOTES-v${sourceVersion}.md`;
   const target = process.env.SEAL_RELEASE_NOTES_FILE || path.join(ROOT, relative);
+  if (previousChange && previousChange.target !== target) {
+    refuse("notes_target", "published opening and candidate region target different files");
+  }
   if (!fs.existsSync(target)) {
     if (required) refuse("candidate_notes_absent", `${target} is absent`);
     return undefined;
   }
   const original = fs.readFileSync(target, "utf8");
-  const begin = original.indexOf(NOTES_START);
-  const finish = original.indexOf(NOTES_END);
-  if (begin < 0 || finish < begin || original.indexOf(NOTES_START, begin + 1) >= 0 || original.indexOf(NOTES_END, finish + 1) >= 0) {
+  const input = previousChange?.rewritten ?? original;
+  const begin = input.indexOf(NOTES_START);
+  const finish = input.indexOf(NOTES_END);
+  if (begin < 0 || finish < begin || input.indexOf(NOTES_START, begin + 1) >= 0 || input.indexOf(NOTES_END, finish + 1) >= 0) {
     if (required) refuse("candidate_notes_region", `${target} needs exactly one generated candidate notes region`);
     return undefined; // Dated notes created before this template remain immutable.
   }
   const template = fs.readFileSync(new URL("./release-notes-install-template.md", import.meta.url), "utf8");
   const region = `${NOTES_START}\n${template.replaceAll("@VERSION@", sourceVersion).trimEnd()}\n${NOTES_END}`;
-  const rewritten = original.slice(0, begin) + region + original.slice(finish + NOTES_END.length);
+  const rewritten = input.slice(0, begin) + region + input.slice(finish + NOTES_END.length);
   return { relative, target, original, rewritten };
 }
 
@@ -661,7 +665,6 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
     ]), releaseNotes), tag),
-    ...publishedNotesOpeningChange(manifest),
     replacePublishedSurface("docs/assurance/distribution.md", [
       [new RegExp(`(?<=^Seal )v${SEMVER}(?=\\.$)`, "m"), tag, "distribution release identity"],
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
@@ -855,8 +858,12 @@ async function main() {
     replaceRegions("docs/start/install.md", installRegions(facts)),
   ];
   const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
-  const notesChange = candidateNotesChange();
+  const openingChange = publishedNotesOpeningChange(facts.manifest)[0];
+  const notesChange = candidateNotesChange(false, openingChange) ?? openingChange;
   const changes = [...generatedRegionChanges, ...publishedPointerChanges, ...(notesChange ? [notesChange] : [])];
+  if (new Set(changes.map((change) => change.target)).size !== changes.length) {
+    refuse("duplicate_target", "release docs changes must contain at most one write per file");
+  }
   if (process.argv.includes("--check")) {
     // Legacy generated regions are checked by their published facts below;
     // forcing old prose through today's template would rewrite history. The
