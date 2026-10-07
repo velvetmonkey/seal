@@ -93,7 +93,7 @@ artifact_name="seal-v0.5.3-darwin-x64" \
 && export PATH="$HOME/.local/bin:$PATH"
 ```
 Success prints `installed seal 0.5.3 linux-x64` and the store, command,
-tree, and Next lines. Path prefixes on `store:` and `command:` differ per machine.
+and tree lines. Path prefixes on `store:` and `command:` differ per machine.
 The tree hash of the published v0.5.3 asset is pinned here:
 
 **Seal installed-tree pin role:** `published-asset`
@@ -106,9 +106,7 @@ Next:
   export PATH=/home/you/.local/bin:$PATH
   demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
 ```
-
 Add `~/.local/bin` to PATH:
-
 ```bash
 $ export PATH="$HOME/.local/bin:$PATH"
 ```
@@ -116,7 +114,6 @@ Add this export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal fi
 
 Further distribution detail, including what each payload contains, is in
 [DISTRIBUTION.md](../assurance/distribution.md).
-
 ### Optional checker asset download
 The installed tree includes a working checker; this command downloads the published checker file for inspection.
 ```bash
