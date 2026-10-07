@@ -22,6 +22,13 @@ const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
 const TOKEN = ghToken || undefined;
+const V053_DEMO = `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`;
+
+function installDemoLine(manifest) {
+  const parts = manifest.tag.match(/^v(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number);
+  return parts && (parts[0] > 0 || parts[1] > 5 || (parts[1] === 5 && parts[2] >= 3))
+    ? V053_DEMO : "  seal demo";
+}
 
 function refuse(code, reason) {
   const error = new Error(`REFUSE release_docs_${code}: ${reason}`);
@@ -318,7 +325,7 @@ function legacyReadmeRegions({ manifest, manifestPublished }) {
       `tree: ${manifest.artifact.installedTreeSha256}`,
       "Next:",
       "  export PATH=/home/you/.local/bin:$PATH",
-      "  seal demo",
+      installDemoLine(manifest),
       "```",
       END,
     ].join("\n"),
@@ -465,10 +472,11 @@ function installRegions({ manifest, manifestPublished }) {
       `store: /home/you/.local/lib/seal/store/${manifest.artifact.installedTreeSha256}`,
       "command: /home/you/.local/bin/seal",
       `tree: ${manifest.artifact.installedTreeSha256}`,
+      "Next:",
+      "  export PATH=/home/you/.local/bin:$PATH",
+      installDemoLine(manifest),
       "```",
-      "",
       "Add `~/.local/bin` to PATH:",
-      "",
       "```bash",
       '$ export PATH="$HOME/.local/bin:$PATH"',
       "```",
@@ -476,7 +484,6 @@ function installRegions({ manifest, manifestPublished }) {
       "",
       "Further distribution detail, including what each payload contains, is in",
       "[DISTRIBUTION.md](../assurance/distribution.md).",
-      "",
       "### Optional checker asset download",
       "The installed tree includes a working checker; this command downloads the published checker file for inspection.",
       "```bash",
@@ -515,25 +522,29 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
-function candidateNotesChange(required = false) {
+function candidateNotesChange(required = false, previousChange) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
   const relative = `docs/assurance/RELEASE-NOTES-v${sourceVersion}.md`;
   const target = process.env.SEAL_RELEASE_NOTES_FILE || path.join(ROOT, relative);
+  if (previousChange && previousChange.target !== target) {
+    refuse("notes_target", "published opening and candidate region target different files");
+  }
   if (!fs.existsSync(target)) {
     if (required) refuse("candidate_notes_absent", `${target} is absent`);
     return undefined;
   }
   const original = fs.readFileSync(target, "utf8");
-  const begin = original.indexOf(NOTES_START);
-  const finish = original.indexOf(NOTES_END);
-  if (begin < 0 || finish < begin || original.indexOf(NOTES_START, begin + 1) >= 0 || original.indexOf(NOTES_END, finish + 1) >= 0) {
+  const input = previousChange?.rewritten ?? original;
+  const begin = input.indexOf(NOTES_START);
+  const finish = input.indexOf(NOTES_END);
+  if (begin < 0 || finish < begin || input.indexOf(NOTES_START, begin + 1) >= 0 || input.indexOf(NOTES_END, finish + 1) >= 0) {
     if (required) refuse("candidate_notes_region", `${target} needs exactly one generated candidate notes region`);
     return undefined; // Dated notes created before this template remain immutable.
   }
   const template = fs.readFileSync(new URL("./release-notes-install-template.md", import.meta.url), "utf8");
   const region = `${NOTES_START}\n${template.replaceAll("@VERSION@", sourceVersion).trimEnd()}\n${NOTES_END}`;
-  const rewritten = original.slice(0, begin) + region + original.slice(finish + NOTES_END.length);
+  const rewritten = input.slice(0, begin) + region + input.slice(finish + NOTES_END.length);
   return { relative, target, original, rewritten };
 }
 
@@ -555,6 +566,36 @@ function replacePublishedSurface(relative, replacements) {
     rewritten = rewritten.replace(everyOccurrence, replacement);
   }
   return { relative, target, original, rewritten };
+}
+
+function removePublishedCandidateClaim(change, tag) {
+  const note = `RELEASE-NOTES-${tag}.md`;
+  const line = `   The [assurance/${note}](${note}) describe an unreleased candidate.\n`;
+  return { ...change, rewritten: change.rewritten.replace(line, "") };
+}
+
+function withPublishedInstallSentence(change, tag) {
+  const pattern = new RegExp(`(?<=^The command above installs the published \\x60)v${SEMVER}(?=\\x60 release under \\x60~/\\.local\\x60\\.$)`, "m");
+  if (!pattern.test(change.rewritten)) {
+    refuse("published_surface_marker", "README.md: install explanation release marker is absent");
+  }
+  return { ...change, rewritten: change.rewritten.replace(pattern, tag) };
+}
+
+function publishedNotesOpeningChange(manifest) {
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
+  if (manifest.tag !== `v${sourceVersion}`) return [];
+  const relative = `docs/assurance/RELEASE-NOTES-${manifest.tag}.md`;
+  const target = path.join(ROOT, relative);
+  const original = fs.readFileSync(target, "utf8");
+  const candidate = `These notes describe the ${manifest.tag} candidate. The install commands below work after ${manifest.tag} assets are published.`;
+  const published = `These notes describe the published ${manifest.tag} release. The install commands below use that release's \`SHA256SUMS\` asset.`;
+  if (!original.includes(candidate) && !original.includes(published)) {
+    if (isLegacyReleaseTag(manifest.tag)) return []; // Dated notes before this template remain immutable.
+    refuse("published_surface_marker", `${relative}: published notes opening marker is absent`);
+  }
+  return [{ relative, target, original, rewritten: original.replace(candidate, published) }];
 }
 
 function previousPrimaryReleaseNotes(text) {
@@ -614,7 +655,7 @@ function publishedSurfaceChanges(manifest) {
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
       [notePattern, releaseNotes, "published release-note route"],
     ]),
-    withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
+    removePublishedCandidateClaim(withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
@@ -623,8 +664,9 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^5\\. \\[The \\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
-    ]), releaseNotes),
+    ]), releaseNotes), tag),
     replacePublishedSurface("docs/assurance/distribution.md", [
+      [new RegExp(`(?<=^Seal )v${SEMVER}(?=\\.$)`, "m"), tag, "distribution release identity"],
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^\\[\\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\)$)`, "m"), checkerUrl, "checker release route"],
@@ -635,6 +677,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^&& sums_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.checksums.sha256, "install fence SHA256SUMS digest"],
     ]),
     replacePublishedSurface("docs/assurance/index.html", [
+      [new RegExp(`(?<=Seal )v${SEMVER}(?=\\. <strong>)`), tag, "assurance index release identity"],
       [new RegExp(`(?<=href=")RELEASE-NOTES-v${SEMVER}\\.md(?=">Release notes</a>)`), releaseNotes, "release-note navigation"],
     ]),
     replacePublishedSurface("docs/start/evaluator-walk.md", [
@@ -650,6 +693,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
       [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
       [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],
+      [/(?<=^tree: [0-9a-f]{64}\n)(?:Next:\n  export PATH=\/home\/you\/\.local\/bin:\$PATH\n  (?:seal demo|demo_dir=.*)\n)?(?=```)/m, `Next:\n  export PATH=/home/you/.local/bin:$PATH\n${installDemoLine(manifest)}\n`, "published install next steps"],
     ]),
   ];
 }
@@ -744,6 +788,10 @@ function checkPublishedClaims(document, facts) {
 function checkReadmePublishedClaims(facts) {
   const document = generatedClaims("README.md", 1);
   const { manifest } = facts;
+  const installSentence = `The command above installs the published \`${manifest.tag}\` release under \`~/.local\`.`;
+  if (!fs.readFileSync(path.join(ROOT, "README.md"), "utf8").includes(installSentence)) {
+    document.failures.push(`install explanation does not name ${manifest.tag}`);
+  }
   for (const expected of [
     `SEAL_VERSION=${manifest.tag}`,
     `artifact_name=${JSON.stringify(manifest.artifact.name)}`,
@@ -806,12 +854,16 @@ async function main() {
     ? localManifest(path.resolve(manifestPath), path.resolve(assetsDir), localCommit)
     : await remoteManifest();
   const generatedRegionChanges = [
-    replaceRegions("README.md", readmeRegions(facts)),
+    withPublishedInstallSentence(replaceRegions("README.md", readmeRegions(facts)), facts.manifest.tag),
     replaceRegions("docs/start/install.md", installRegions(facts)),
   ];
   const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
-  const notesChange = candidateNotesChange();
+  const openingChange = publishedNotesOpeningChange(facts.manifest)[0];
+  const notesChange = candidateNotesChange(false, openingChange) ?? openingChange;
   const changes = [...generatedRegionChanges, ...publishedPointerChanges, ...(notesChange ? [notesChange] : [])];
+  if (new Set(changes.map((change) => change.target)).size !== changes.length) {
+    refuse("duplicate_target", "release docs changes must contain at most one write per file");
+  }
   if (process.argv.includes("--check")) {
     // Legacy generated regions are checked by their published facts below;
     // forcing old prose through today's template would rewrite history. The

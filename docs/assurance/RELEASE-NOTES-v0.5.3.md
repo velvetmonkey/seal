@@ -1,6 +1,6 @@
 # Seal v0.5.3 release notes
 
-These notes describe the v0.5.3 candidate. The install commands below work after v0.5.3 assets are published.
+These notes describe the published v0.5.3 release. The install commands below use that release's `SHA256SUMS` asset.
 
 ## Changes since v0.5.2
 

@@ -365,6 +365,90 @@ test("retargeting the primary release-notes pointer keeps a historical citation 
   assert.equal(currentHits.length, 1, "exactly one notes file is named as the current release");
 });
 
+test("publishing a second release updates install prose and removes its candidate claim", async () => {
+  const firstTag = "v0.2.0-rc.2";
+  const secondTag = "v0.2.0-rc.3";
+  const assets = releaseAssets(secondTag);
+  const release = {
+    id: 3,
+    tag_name: secondTag,
+    draft: false,
+    published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const readmePath = path.join(docs, "README.md");
+    const indexPath = path.join(docs, "docs", "assurance", "README.md");
+    const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${secondTag}.md`);
+    fs.writeFileSync(notesPath, fs.readFileSync(notesPath, "utf8").replace(
+      /^# Seal v0\.2\.0-rc\.3 release notes\n/m,
+      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} candidate. The install commands below work after ${secondTag} assets are published.\n`,
+    ));
+    const readme = fs.readFileSync(readmePath, "utf8").replace(
+      /^The command above installs the published `v[^`]+` release under `~\/\.local`\.$/m,
+      `The command above installs the published \`${firstTag}\` release under \`~/.local\`.`,
+    );
+    fs.writeFileSync(readmePath, readme);
+    const candidateLine = `   The [assurance/RELEASE-NOTES-${secondTag}.md](RELEASE-NOTES-${secondTag}.md) describe an unreleased candidate.\n`;
+    const index = fs.readFileSync(indexPath, "utf8")
+      .replace(/^4\. \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) — what v[^ ]+ contains and$/m,
+        `4. [assurance/RELEASE-NOTES-${firstTag}.md](RELEASE-NOTES-${firstTag}.md) — what ${firstTag} contains and`)
+      .replace(/^   The \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) describe an unreleased candidate\.\n/gm, "")
+      .replace("   The earlier [assurance/", `${candidateLine}   The earlier [assurance/`);
+    assert.ok(index.includes(candidateLine), "fixture must plant the second release candidate claim");
+    fs.writeFileSync(indexPath, index);
+    const env = { SEAL_RELEASE_DOCS_ROOT: docs, SEAL_RELEASES_API_URL: api, SEAL_RELEASE_TAG_COMMIT: COMMIT, SEAL_RELEASE_SOURCE_VERSION: secondTag.slice(1) };
+    const generated = await run([], env);
+    assert.equal(generated.code, 0, generated.stderr);
+    const afterReadme = fs.readFileSync(readmePath, "utf8");
+    const afterIndex = fs.readFileSync(indexPath, "utf8");
+    const afterNotes = fs.readFileSync(notesPath, "utf8");
+    assert.match(afterReadme, new RegExp(`The command above installs the published \\x60${secondTag.replaceAll(".", "\\.")}\\x60 release`));
+    assert.doesNotMatch(afterReadme, new RegExp(`command above installs the published \\x60${firstTag.replaceAll(".", "\\.")}\\x60`));
+    assert.doesNotMatch(afterIndex, new RegExp(`${secondTag.replaceAll(".", "\\.")}\\.md\\) describe an unreleased candidate`));
+    assert.match(afterNotes, new RegExp(`These notes describe the published ${secondTag.replaceAll(".", "\\.")} release`));
+    assert.doesNotMatch(afterNotes, /candidate|unreleased|not published/);
+    assert.match(afterIndex, new RegExp(`assurance/RELEASE-NOTES-${firstTag.replaceAll(".", "\\.")}\\.md`));
+  });
+});
+
+test("published notes opening and stale candidate region settle in one run", async () => {
+  const tag = "v0.2.0-rc.3";
+  const assets = releaseAssets(tag);
+  const release = {
+    id: 3, tag_name: tag, draft: false, published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${tag}.md`);
+    const original = fs.readFileSync(notesPath, "utf8");
+    const planted = original.replace(
+      `# Seal ${tag} release notes\n`,
+      `# Seal ${tag} release notes\n\nThese notes describe the ${tag} candidate. The install commands below work after ${tag} assets are published.\n`,
+    ) + "\n<!-- generated candidate release notes; do not edit -->\nstale candidate commands\n<!-- end generated candidate release notes -->\n";
+    fs.writeFileSync(notesPath, planted);
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docs,
+      SEAL_RELEASES_API_URL: api,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+      SEAL_RELEASE_SOURCE_VERSION: tag.slice(1),
+    };
+    const first = await run([], env);
+    assert.equal(first.code, 0, first.stderr);
+    const published = fs.readFileSync(notesPath, "utf8");
+    assert.match(published, /These notes describe the published v0\.2\.0-rc\.3 release/);
+    assert.doesNotMatch(published, /stale candidate commands/);
+    const check = await run(["--check"], env);
+    assert.equal(check.code, 0, check.stderr);
+    const second = await run([], env);
+    assert.equal(second.code, 0, second.stderr);
+    assert.equal(fs.readFileSync(notesPath, "utf8"), published, "second run changes zero bytes");
+    assert.match(second.stdout, /unchanged release docs for v0\.2\.0-rc\.3/);
+  });
+});
+
 // CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
 test("generated install prose is bound to published installer observations", () => {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {

@@ -59,9 +59,10 @@ export function carriesClaim(text, path) {
   // sentence-like string literals.  This is syntax-shaped rather than
   // extension-shaped: a .js claim is seen, while identifiers such as
   // sealReceipt() do not turn executable implementation into prose inventory.
-  // README contains shell examples such as `export PATH`; that does not make a
-  // Markdown document source code. Other files retain the syntax-shaped scan.
-  const codeShaped = path !== "README.md" && /^\s*(?:#!|import\s|export\s|(?:const|let|var|function|class)\s|["'](?:files|name)["']\s*:)/m.test(text);
+  // Install transcripts also print `export PATH`; those two Markdown pages
+  // remain prose even when the published installer adds a shell hint.
+  const prosePage = ["README.md", "docs/start/install.md", "docs/guide/README.md"].includes(path);
+  const codeShaped = !prosePage && /^\s*(?:#!|import\s|export\s|(?:const|let|var|function|class)\s|["'](?:files|name)["']\s*:)/m.test(text);
   const units = codeShaped
     ? [...text.matchAll(/(?:\/\/|\/\*+|\*|#)\s*(.*)|(?:"([^"\n]{12,}[.!?])"|'([^'\n]{12,}[.!?])')/g)]
       .map((match) => match[1] ?? match[2] ?? match[3] ?? "")
