@@ -557,6 +557,27 @@ function replacePublishedSurface(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function removePublishedCandidateClaim(change, tag) {
+  const note = `RELEASE-NOTES-${tag}.md`;
+  const line = `   The [assurance/${note}](${note}) describe an unreleased candidate.\n`;
+  return { ...change, rewritten: change.rewritten.replace(line, "") };
+}
+
+function publishedNotesOpeningChange(manifest) {
+  const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
+    ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
+  if (manifest.tag !== `v${sourceVersion}`) return [];
+  const relative = `docs/assurance/RELEASE-NOTES-${manifest.tag}.md`;
+  const target = path.join(ROOT, relative);
+  const original = fs.readFileSync(target, "utf8");
+  const candidate = `These notes describe the ${manifest.tag} candidate. The install commands below work after ${manifest.tag} assets are published.`;
+  const published = `These notes describe the published ${manifest.tag} release. The install commands below use that release's \`SHA256SUMS\` asset.`;
+  if (!original.includes(candidate) && !original.includes(published)) {
+    refuse("published_surface_marker", `${relative}: published notes opening marker is absent`);
+  }
+  return [{ relative, target, original, rewritten: original.replace(candidate, published) }];
+}
+
 function previousPrimaryReleaseNotes(text) {
   const match = text.match(
     new RegExp(`^4\\. \\[assurance/(RELEASE-NOTES-v${SEMVER}\\.md)\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$`, "m"),
@@ -608,13 +629,16 @@ function publishedSurfaceChanges(manifest) {
     "docs/assurance/architecture.md",
   ];
   return [
+    replacePublishedSurface("README.md", [
+      [new RegExp(`(?<=^The command above installs the published \\x60)v${SEMVER}(?=\\x60 release under \\x60~/\\.local\\x60\\.$)`, "m"), tag, "install explanation release"],
+    ]),
     ...archiveScopeFiles.map((relative) => replacePublishedSurface(relative, [
       [notePattern, releaseNotes, "published release-note route"],
     ])),
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
       [notePattern, releaseNotes, "published release-note route"],
     ]),
-    withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
+    removePublishedCandidateClaim(withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\()RELEASE-NOTES-v${SEMVER}\\.md(?=\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note target"],
       [new RegExp(`(?<=^4\\. \\[assurance/${escapeRegExp(releaseNotes)}\\]\\(${escapeRegExp(releaseNotes)}\\) — what )v${SEMVER}(?= contains and$)`, "m"), tag, "primary release-note version"],
@@ -623,7 +647,8 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^5\\. \\[The \\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^5\\. \\[The \\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\) — the$)`, "m"), checkerUrl, "checker release route"],
       [new RegExp(`(?<=^Dated records of how )v${SEMVER}(?= got its shape\\.)`, "m"), tag, "design-history release identity"],
-    ]), releaseNotes),
+    ]), releaseNotes), tag),
+    ...publishedNotesOpeningChange(manifest),
     replacePublishedSurface("docs/assurance/distribution.md", [
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],

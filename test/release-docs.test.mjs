@@ -365,6 +365,44 @@ test("retargeting the primary release-notes pointer keeps a historical citation 
   assert.equal(currentHits.length, 1, "exactly one notes file is named as the current release");
 });
 
+test("publishing a second release updates install prose and removes its candidate claim", async () => {
+  const firstTag = "v0.2.0-rc.2";
+  const secondTag = "v0.2.0-rc.3";
+  const assets = releaseAssets(secondTag);
+  const release = {
+    id: 3,
+    tag_name: secondTag,
+    draft: false,
+    published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const readmePath = path.join(docs, "README.md");
+    const indexPath = path.join(docs, "docs", "assurance", "README.md");
+    const readme = fs.readFileSync(readmePath, "utf8").replace(
+      /^The command above installs the published `v[^`]+` release under `~\/\.local`\.$/m,
+      `The command above installs the published \`${firstTag}\` release under \`~/.local\`.`,
+    );
+    fs.writeFileSync(readmePath, readme);
+    const index = fs.readFileSync(indexPath, "utf8")
+      .replace(/^4\. \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) — what v[^ ]+ contains and$/m,
+        `4. [assurance/RELEASE-NOTES-${firstTag}.md](RELEASE-NOTES-${firstTag}.md) — what ${firstTag} contains and`)
+      .replace(/^   The \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) describe an unreleased candidate\.$/m,
+        `   The [assurance/RELEASE-NOTES-${secondTag}.md](RELEASE-NOTES-${secondTag}.md) describe an unreleased candidate.`);
+    fs.writeFileSync(indexPath, index);
+    const env = { SEAL_RELEASE_DOCS_ROOT: docs, SEAL_RELEASES_API_URL: api, SEAL_RELEASE_TAG_COMMIT: COMMIT };
+    const generated = await run([], env);
+    assert.equal(generated.code, 0, generated.stderr);
+    const afterReadme = fs.readFileSync(readmePath, "utf8");
+    const afterIndex = fs.readFileSync(indexPath, "utf8");
+    assert.match(afterReadme, new RegExp(`The command above installs the published \\x60${secondTag.replaceAll(".", "\\.")}\\x60 release`));
+    assert.doesNotMatch(afterReadme, new RegExp(`command above installs the published \\x60${firstTag.replaceAll(".", "\\.")}\\x60`));
+    assert.doesNotMatch(afterIndex, new RegExp(`${secondTag.replaceAll(".", "\\.")}\\.md\\) describe an unreleased candidate`));
+    assert.match(afterIndex, new RegExp(`assurance/RELEASE-NOTES-${firstTag.replaceAll(".", "\\.")}\\.md`));
+  });
+});
+
 // CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
 test("generated install prose is bound to published installer observations", () => {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
