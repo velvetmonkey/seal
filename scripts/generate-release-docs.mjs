@@ -563,6 +563,14 @@ function removePublishedCandidateClaim(change, tag) {
   return { ...change, rewritten: change.rewritten.replace(line, "") };
 }
 
+function withPublishedInstallSentence(change, tag) {
+  const pattern = new RegExp(`(?<=^The command above installs the published \\x60)v${SEMVER}(?=\\x60 release under \\x60~/\\.local\\x60\\.$)`, "m");
+  if (!pattern.test(change.rewritten)) {
+    refuse("published_surface_marker", "README.md: install explanation release marker is absent");
+  }
+  return { ...change, rewritten: change.rewritten.replace(pattern, tag) };
+}
+
 function publishedNotesOpeningChange(manifest) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
@@ -629,9 +637,6 @@ function publishedSurfaceChanges(manifest) {
     "docs/assurance/architecture.md",
   ];
   return [
-    replacePublishedSurface("README.md", [
-      [new RegExp(`(?<=^The command above installs the published \\x60)v${SEMVER}(?=\\x60 release under \\x60~/\\.local\\x60\\.$)`, "m"), tag, "install explanation release"],
-    ]),
     ...archiveScopeFiles.map((relative) => replacePublishedSurface(relative, [
       [notePattern, releaseNotes, "published release-note route"],
     ])),
@@ -650,6 +655,7 @@ function publishedSurfaceChanges(manifest) {
     ]), releaseNotes), tag),
     ...publishedNotesOpeningChange(manifest),
     replacePublishedSurface("docs/assurance/distribution.md", [
+      [new RegExp(`(?<=^Seal )v${SEMVER}(?=\\.$)`, "m"), tag, "distribution release identity"],
       [new RegExp(`(?<=^The current install payload includes \\x60)${CHECKER_ASSET}(?=\\x60\\. Download the sibling$)`, "m"), manifest.checker.name, "included checker asset label"],
       [new RegExp(`(?<=^\\[\\x60)${CHECKER_ASSET}(?=\\x60 release asset\\]\\()`, "m"), manifest.checker.name, "checker release label"],
       [new RegExp(`(?<=^\\[\\x60${escapeRegExp(manifest.checker.name)}\\x60 release asset\\]\\()https://github\\.com/${REPOSITORY}/releases/download/v${SEMVER}/${CHECKER_ASSET}(?=\\)$)`, "m"), checkerUrl, "checker release route"],
@@ -660,6 +666,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^&& sums_sha256=")[0-9a-f]{64}(?=" \\\\$)`, "m"), manifest.checksums.sha256, "install fence SHA256SUMS digest"],
     ]),
     replacePublishedSurface("docs/assurance/index.html", [
+      [new RegExp(`(?<=Seal )v${SEMVER}(?=\\. <strong>)`), tag, "assurance index release identity"],
       [new RegExp(`(?<=href=")RELEASE-NOTES-v${SEMVER}\\.md(?=">Release notes</a>)`), releaseNotes, "release-note navigation"],
     ]),
     replacePublishedSurface("docs/start/evaluator-walk.md", [
@@ -769,6 +776,10 @@ function checkPublishedClaims(document, facts) {
 function checkReadmePublishedClaims(facts) {
   const document = generatedClaims("README.md", 1);
   const { manifest } = facts;
+  const installSentence = `The command above installs the published \`${manifest.tag}\` release under \`~/.local\`.`;
+  if (!fs.readFileSync(path.join(ROOT, "README.md"), "utf8").includes(installSentence)) {
+    document.failures.push(`install explanation does not name ${manifest.tag}`);
+  }
   for (const expected of [
     `SEAL_VERSION=${manifest.tag}`,
     `artifact_name=${JSON.stringify(manifest.artifact.name)}`,
@@ -831,7 +842,7 @@ async function main() {
     ? localManifest(path.resolve(manifestPath), path.resolve(assetsDir), localCommit)
     : await remoteManifest();
   const generatedRegionChanges = [
-    replaceRegions("README.md", readmeRegions(facts)),
+    withPublishedInstallSentence(replaceRegions("README.md", readmeRegions(facts)), facts.manifest.tag),
     replaceRegions("docs/start/install.md", installRegions(facts)),
   ];
   const publishedPointerChanges = publishedSurfaceChanges(facts.manifest);
