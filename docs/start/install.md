@@ -93,7 +93,7 @@ artifact_name="seal-v0.5.3-darwin-x64" \
 && export PATH="$HOME/.local/bin:$PATH"
 ```
 Success prints `installed seal 0.5.3 linux-x64` and the store, command,
-and tree lines. Path prefixes on `store:` and `command:` differ per machine.
+tree, and Next lines. Path prefixes on `store:` and `command:` differ per machine.
 The tree hash of the published v0.5.3 asset is pinned here:
 
 **Seal installed-tree pin role:** `published-asset`
@@ -102,6 +102,9 @@ installed seal 0.5.3 linux-x64
 store: /home/you/.local/lib/seal/store/6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
 command: /home/you/.local/bin/seal
 tree: 6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
+Next:
+  export PATH=/home/you/.local/bin:$PATH
+  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
 ```
 
 Add `~/.local/bin` to PATH:

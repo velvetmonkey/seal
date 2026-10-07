@@ -22,6 +22,13 @@ const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
 const TOKEN = ghToken || undefined;
+const V053_DEMO = `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`;
+
+function installDemoLine(manifest) {
+  const parts = manifest.tag.match(/^v(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number);
+  return parts && (parts[0] > 0 || parts[1] > 5 || (parts[1] === 5 && parts[2] >= 3))
+    ? V053_DEMO : "  seal demo";
+}
 
 function refuse(code, reason) {
   const error = new Error(`REFUSE release_docs_${code}: ${reason}`);
@@ -318,7 +325,7 @@ function legacyReadmeRegions({ manifest, manifestPublished }) {
       `tree: ${manifest.artifact.installedTreeSha256}`,
       "Next:",
       "  export PATH=/home/you/.local/bin:$PATH",
-      "  seal demo",
+      installDemoLine(manifest),
       "```",
       END,
     ].join("\n"),
@@ -456,7 +463,7 @@ function installRegions({ manifest, manifestPublished }) {
       "### macOS Intel",
       commandFor("darwin-x64"),
       `Success prints \`installed seal ${version(manifest)} ${manifest.platform}\` and the store, command,`,
-      "and tree lines. Path prefixes on `store:` and `command:` differ per machine.",
+      "tree, and Next lines. Path prefixes on `store:` and `command:` differ per machine.",
       `The tree hash of the published ${manifest.tag} asset is pinned here:`,
       "",
       "**Seal installed-tree pin role:** `published-asset`",
@@ -465,6 +472,9 @@ function installRegions({ manifest, manifestPublished }) {
       `store: /home/you/.local/lib/seal/store/${manifest.artifact.installedTreeSha256}`,
       "command: /home/you/.local/bin/seal",
       `tree: ${manifest.artifact.installedTreeSha256}`,
+      "Next:",
+      "  export PATH=/home/you/.local/bin:$PATH",
+      installDemoLine(manifest),
       "```",
       "",
       "Add `~/.local/bin` to PATH:",
@@ -683,6 +693,7 @@ function publishedSurfaceChanges(manifest) {
       [new RegExp(`(?<=^installed seal )${SEMVER}(?= linux-x64$)`, "m"), version, "published install version"],
       [new RegExp(`(?<=^store: /home/you/\\.local/lib/seal/store/)[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published store pin"],
       [new RegExp(`(?<=^tree: )[0-9a-f]{64}$`, "m"), manifest.artifact.installedTreeSha256, "published tree pin"],
+      [/(?<=^tree: [0-9a-f]{64}\n)(?:Next:\n  export PATH=\/home\/you\/\.local\/bin:\$PATH\n  (?:seal demo|demo_dir=.*)\n)?(?=```)/m, `Next:\n  export PATH=/home/you/.local/bin:$PATH\n${installDemoLine(manifest)}\n`, "published install next steps"],
     ]),
   ];
 }

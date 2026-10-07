@@ -11,7 +11,9 @@ const { spawnSync } = require("node:child_process");
 
 const ROOT = path.join(__dirname, "..");
 const README = process.env.SEAL_INSTALL_TRANSCRIPT_README || path.join(ROOT, "README.md");
+const TRANSCRIPT_PAGES = ["docs/start/install.md", "docs/guide/README.md"];
 const ARTIFACT_OVERRIDE = process.env.SEAL_INSTALL_TRANSCRIPT_ARTIFACT;
+const V053_DEMO = `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`;
 
 class CheckFailure extends Error {
   constructor(reason, status) {
@@ -56,6 +58,27 @@ function documentedTag(readme) {
   const match = readme.match(/^(?:\$ )?SEAL_VERSION=(v[0-9.]+(?:-[0-9A-Za-z.-]+)?)$/m);
   if (!match) fail(`README release version command absent: ${README}`);
   return match[1];
+}
+
+function printedTranscript(relative) {
+  const filename = path.join(ROOT, relative);
+  const page = fs.readFileSync(filename, "utf8");
+  const marker = "**Seal installed-tree pin role:** `published-asset`\n```output\n";
+  const start = page.indexOf(marker);
+  if (start === -1 || page.indexOf(marker, start + marker.length) !== -1) fail(`published install transcript absent or duplicated: ${relative}`);
+  const end = page.indexOf("\n```", start + marker.length);
+  if (end === -1) fail(`published install transcript fence unclosed: ${relative}`);
+  return page.slice(start + marker.length, end) + "\n";
+}
+
+function acceptedShape(tag, home) {
+  // The v0.5.2 release prints the original demo hint; v0.5.3 prints a
+  // temporary-directory recipe. Each shape requires every stdout line.
+  if (tag !== "v0.5.2" && tag !== "v0.5.3") fail(`no named installer success shape for ${tag}`);
+  const demo = tag === "v0.5.2" ? "  seal demo" : V053_DEMO;
+  const version = tag.slice(1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const root = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^installed seal ${version} linux-x64\\nstore: (${root}/\\.local/lib/seal/store/([0-9a-f]{64}))\\ncommand: ${root}/\\.local/bin/seal\\ntree: \\2\\nNext:\\n  export PATH=${root}/\\.local/bin:\\$PATH\\n${demo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n$`);
 }
 
 function fetchBytes(url, redirects = 0) {
@@ -120,9 +143,12 @@ async function main() {
     });
     if (result.status !== 0) fail(`installer exited ${result.status}: ${(result.stderr || "").trim()}`);
     if (result.stderr) fail(`installer wrote unexpected stderr on success: ${JSON.stringify(result.stderr)}`);
-    const version = tag.slice(1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const success = new RegExp(`^installed seal ${version} linux-x64\\nstore: (.+/store/([0-9a-f]{64}))\\ncommand: .+/bin/seal\\ntree: \\2\\nNext:\\n  export PATH=.+/bin:\\$PATH\\n  seal demo\\n$`);
-    if (!success.test(result.stdout)) fail(`installer success output has an unrecognised shape: ${JSON.stringify(result.stdout)}`);
+    const shape = tag === "v0.5.2" ? "v0.5.2 installer" : "v0.5.3 installer";
+    if (!acceptedShape(tag, home).test(result.stdout)) fail(`${shape} success output has an unrecognised shape: ${JSON.stringify(result.stdout)}`);
+    const expectedPage = result.stdout.replaceAll(home, "/home/you");
+    for (const relative of TRANSCRIPT_PAGES) {
+      if (printedTranscript(relative) !== expectedPage) fail(`published install transcript differs from ${shape}: ${relative}`);
+    }
     console.log(`PASS  README installer command succeeds; installed-tree transcript stays off the front page: ${README}:${install.line}`);
   } finally {
     try { fs.chmodSync(sandbox, 0o700); } catch { /* cleanup still attempts descendants */ }

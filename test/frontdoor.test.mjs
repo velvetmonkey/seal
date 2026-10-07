@@ -244,9 +244,19 @@ test("README installer check executes the command without restoring the installe
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const readmePath = join(dir, "README.md");
   const artifact = join(dir, "fixture-installer");
-  const tree = "a".repeat(64);
+  const tree = readFileSync(resolve(ROOT, "docs/start/install.md"), "utf8").match(/^tree: ([0-9a-f]{64})$/m)[1];
   writeFileSync(readmePath, readFileSync(resolve(ROOT, "README.md"), "utf8"));
-  writeFileSync(artifact, `#!/bin/sh\nprintf 'installed seal ${PUBLISHED_VERSION} linux-x64\\nstore: %s/.local/lib/seal/store/${tree}\\ncommand: %s/.local/bin/seal\\ntree: ${tree}\\nNext:\\n  export PATH=%s/.local/bin:$PATH\\n  seal demo\\n' "$HOME" "$HOME" "$HOME"\n`, { mode: 0o755 });
+  const actualLines = [
+    `installed seal ${PUBLISHED_VERSION} linux-x64`,
+    `store: <home>/.local/lib/seal/store/${tree}`,
+    "command: <home>/.local/bin/seal",
+    `tree: ${tree}`,
+    "Next:",
+    "  export PATH=<home>/.local/bin:$PATH",
+    `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`,
+  ];
+  const stub = (lines) => writeFileSync(artifact, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(lines)}.join("\\n").replaceAll("<home>", process.env.HOME) + "\\n");\n`, { mode: 0o755 });
+  stub(actualLines);
   const env = {
     ...process.env,
     SEAL_INSTALL_TRANSCRIPT_README: readmePath,
@@ -255,6 +265,18 @@ test("README installer check executes the command without restoring the installe
   const green = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
   assert.equal(green.status, 0, green.stdout + green.stderr);
   assert.match(green.stdout, /installed-tree transcript stays off the front page/);
+
+  for (const [name, lines] of [
+    ["missing tree", actualLines.filter((line) => !line.startsWith("tree: "))],
+    ["wrong version", actualLines.map((line) => line.startsWith("installed seal ") ? line.replace(PUBLISHED_VERSION, "0.5.2") : line)],
+    ["unknown line", [...actualLines, "unexpected line"]],
+  ]) {
+    stub(lines);
+    const bad = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+    assert.equal(bad.status, 1, `${name}: ${bad.stdout}${bad.stderr}`);
+    assert.match(bad.stderr, /success output has an unrecognised shape/, name);
+  }
+  stub(actualLines);
 
   writeFileSync(readmePath, `${readFileSync(readmePath, "utf8")}\n<!-- Seal installed-tree pin role: published-asset -->\n`);
   const red = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
