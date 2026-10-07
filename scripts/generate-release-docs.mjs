@@ -581,6 +581,7 @@ function publishedNotesOpeningChange(manifest) {
   const candidate = `These notes describe the ${manifest.tag} candidate. The install commands below work after ${manifest.tag} assets are published.`;
   const published = `These notes describe the published ${manifest.tag} release. The install commands below use that release's \`SHA256SUMS\` asset.`;
   if (!original.includes(candidate) && !original.includes(published)) {
+    if (isLegacyReleaseTag(manifest.tag)) return []; // Dated notes before this template remain immutable.
     refuse("published_surface_marker", `${relative}: published notes opening marker is absent`);
   }
   return [{ relative, target, original, rewritten: original.replace(candidate, published) }];
