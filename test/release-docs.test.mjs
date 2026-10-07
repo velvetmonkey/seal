@@ -390,11 +390,13 @@ test("publishing a second release updates install prose and removes its candidat
       `The command above installs the published \`${firstTag}\` release under \`~/.local\`.`,
     );
     fs.writeFileSync(readmePath, readme);
+    const candidateLine = `   The [assurance/RELEASE-NOTES-${secondTag}.md](RELEASE-NOTES-${secondTag}.md) describe an unreleased candidate.\n`;
     const index = fs.readFileSync(indexPath, "utf8")
       .replace(/^4\. \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) — what v[^ ]+ contains and$/m,
         `4. [assurance/RELEASE-NOTES-${firstTag}.md](RELEASE-NOTES-${firstTag}.md) — what ${firstTag} contains and`)
-      .replace(/^   The \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) describe an unreleased candidate\.$/m,
-        `   The [assurance/RELEASE-NOTES-${secondTag}.md](RELEASE-NOTES-${secondTag}.md) describe an unreleased candidate.`);
+      .replace(/^   The \[assurance\/RELEASE-NOTES-v[^\]]+\]\(RELEASE-NOTES-v[^)]+\) describe an unreleased candidate\.\n/gm, "")
+      .replace("   The earlier [assurance/", `${candidateLine}   The earlier [assurance/`);
+    assert.ok(index.includes(candidateLine), "fixture must plant the second release candidate claim");
     fs.writeFileSync(indexPath, index);
     const env = { SEAL_RELEASE_DOCS_ROOT: docs, SEAL_RELEASES_API_URL: api, SEAL_RELEASE_TAG_COMMIT: COMMIT, SEAL_RELEASE_SOURCE_VERSION: secondTag.slice(1) };
     const generated = await run([], env);
