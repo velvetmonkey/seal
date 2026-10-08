@@ -692,6 +692,11 @@
       "footer": []
     },
     {
+      "path": "docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md",
+      "reason": "draft candidate release note",
+      "footer": []
+    },
+    {
       "path": "docs/assurance/installed-tree-pin-control.md",
       "reason": "standalone control description",
       "footer": []

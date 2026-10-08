@@ -31,6 +31,9 @@ including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
 <!-- generated from published release; do not edit -->
+> The current source is the unreleased `v1.0.0-rc.1` candidate. The install commands below fetch the
+> published `v0.5.3`, the live Latest release whose assets the commands below install.
+
 ```bash
 SEAL_VERSION=v0.5.3
 artifact_name="seal-v0.5.3-linux-x64" \

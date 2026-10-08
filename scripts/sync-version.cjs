@@ -41,7 +41,7 @@ fs.renameSync(packageTempPath, packagePath);
 // Candidate version materialization must never rename them, rewrite their
 // bytes, or retarget citations to them. Published-release navigation is owned
 // by generate-release-docs.mjs after publication, not by VERSION.
-for (const file of ["docs/assurance/distribution.md", "docs/assurance/index.html", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+for (const file of ["spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
   replace(file, /Seal v\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/g, `Seal v${version}`);
 }
 

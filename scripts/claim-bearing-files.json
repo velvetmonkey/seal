@@ -86,6 +86,7 @@
     "docs/assurance/RELEASE-NOTES-v0.5.1.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-v051"] },
     "docs/assurance/RELEASE-NOTES-v0.5.2.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-v052"] },
     "docs/assurance/RELEASE-NOTES-v0.5.3.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-v053"] },
+    "docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md": { "coveredBy": ["test/release-notes.test.cjs#release-notes-v10rc1"] },
     "scripts/release-notes-install-template.md": { "coveredBy": ["test/release-docs.test.mjs#candidate-install-template"] },
     "docs/archive/REPO-TOPOLOGY.md": { "allowlistReason": "The topology maps a wider Seal family of repositories, most of which are not present here, so local code cannot check its relationship claims." },
     "docs/archive/ROADMAP-KERNEL-OUTWARD.md": { "allowlistReason": "The roadmap contains planned milestones and explicit unverified work; future commitments are not executable claims with a local test oracle." },
