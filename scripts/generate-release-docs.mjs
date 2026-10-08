@@ -98,9 +98,9 @@ async function latestPublishedRelease() {
   const releases = await fetchJson(RELEASES_API);
   if (!Array.isArray(releases)) refuse("release_list", "GitHub releases response is not an array");
   const published = releases
-    .filter((release) => !release.draft && release.published_at)
+    .filter((release) => !release.draft && !release.prerelease && release.published_at)
     .sort((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at) || Number(right.id) - Number(left.id));
-  if (!published.length) refuse("release_absent", "repository has no published release");
+  if (!published.length) refuse("release_absent", "repository has no published non-prerelease release");
   if (process.env.SEAL_EXPECTED_RELEASE_TAG && published[0].tag_name !== process.env.SEAL_EXPECTED_RELEASE_TAG) {
     refuse("release_visibility", `latest published release is ${published[0].tag_name}, expected ${process.env.SEAL_EXPECTED_RELEASE_TAG}`);
   }
