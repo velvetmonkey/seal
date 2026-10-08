@@ -23,6 +23,7 @@ Legacy move notices: [CLAIMS-MATRIX.md](../CLAIMS-MATRIX.md),
 4. [assurance/RELEASE-NOTES-v0.5.3.md](RELEASE-NOTES-v0.5.3.md) — what v0.5.3 contains and
    what it deliberately does not, with each claim citing the test or commit
    that holds it.
+   The draft candidate record is [assurance/RELEASE-NOTES-v1.0.0-rc.1.md](RELEASE-NOTES-v1.0.0-rc.1.md); its install commands apply after candidate publication.
    The earlier [assurance/RELEASE-NOTES-v0.5.2.md](RELEASE-NOTES-v0.5.2.md) remains the historical record of that tag.
    The earlier [assurance/RELEASE-NOTES-v0.5.1.md](RELEASE-NOTES-v0.5.1.md) remains the historical record of that tag.
    The immutable `assurance/RELEASE-NOTES-v0.2.0-rc.2.md` remains available as the historical record for that tag.
