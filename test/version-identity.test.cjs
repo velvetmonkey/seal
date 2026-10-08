@@ -177,9 +177,13 @@ test("every emitted release identity derives from VERSION", () => {
     const text = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.match(text, new RegExp(`installed seal ${publishedVersion.replaceAll(".", "\\.")} linux-x64`));
   }
-  for (const file of ["docs/assurance/distribution.md", "spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
+  for (const file of ["spine/platform.cjs", "scripts/install.cjs", "scripts/seal-launch.cjs"]) {
     assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), new RegExp(`Seal v${VERSION}`));
   }
+  assert.match(fs.readFileSync(path.join(ROOT, "docs/assurance/distribution.md"), "utf8"),
+    new RegExp(`^Seal v${publishedVersion.replaceAll(".", "\\.")}\\.$`, "m"));
+  assert.match(fs.readFileSync(path.join(ROOT, "docs/assurance/index.html"), "utf8"),
+    new RegExp(`Seal v${publishedVersion.replaceAll(".", "\\.")}\\. <strong>`));
   const releaseWorkflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "release.yml"), "utf8");
   assert.match(releaseWorkflow, /Seal v\$\{version\}/);
   assert.doesNotMatch(releaseWorkflow, /seal-vVERSION/);
@@ -206,6 +210,8 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     "docs/start/evaluator-walk.md",
     "docs/guide/README.md",
     "docs/assurance/README.md",
+    "docs/assurance/distribution.md",
+    "docs/assurance/index.html",
     "docs/assurance/architecture.md",
     "docs/archive/AUTHORIZATION-MESH.md",
     "docs/archive/CLAIMS-MATRIX.md",
@@ -252,11 +258,6 @@ test("sync leaves no old product version in human-maintained reader-facing prose
     fs.readFileSync(path.join(scratch, "docs/assurance/index.html"), "utf8").match(/RELEASE-NOTES-v[^\"]+\.md/)?.[0],
     publishedRouteBeforeCut.get("docs/assurance/index.html"),
     "candidate sync must not rewrite release-note navigation",
-  );
-  assert.match(
-    fs.readFileSync(path.join(scratch, "docs/assurance/distribution.md"), "utf8"),
-    new RegExp(`Seal v${bumpedVersion.replaceAll(".", "\\.")}`),
-    "candidate sync must still update the source-version heading around the preserved published route",
   );
   assert.deepEqual(
     staleVersionMatches(scratch, oldVersion).filter((file) => ![...publishedDocs, "docs/assurance/distribution.md"].includes(file)),
