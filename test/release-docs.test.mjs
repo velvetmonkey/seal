@@ -192,10 +192,11 @@ function releaseAssets(tag) {
 }
 
 async function withReleaseServer(release, bytes, callback) {
+  const releases = Array.isArray(release) ? release : [release];
   const server = http.createServer((request, response) => {
     if (request.url === "/releases") {
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify([release]));
+      response.end(JSON.stringify(releases));
       return;
     }
     const name = decodeURIComponent(request.url.slice("/asset/".length));
@@ -210,12 +211,38 @@ async function withReleaseServer(release, bytes, callback) {
   try {
     const address = server.address();
     const base = `http://127.0.0.1:${address.port}`;
-    release.assets = release.assets.map((asset) => ({ ...asset, browser_download_url: `${base}/asset/${encodeURIComponent(asset.name)}` }));
+    for (const item of releases) {
+      item.assets = item.assets.map((asset) => ({ ...asset, browser_download_url: `${base}/asset/${encodeURIComponent(asset.name)}` }));
+    }
     await callback(`${base}/releases`);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 }
+
+test("Latest release selection ignores a newer published prerelease and a draft", async () => {
+  const stable = {
+    id: 53, tag_name: "v0.5.3", draft: false, prerelease: false,
+    published_at: "2026-10-07T08:08:44Z", assets: [],
+  };
+  const prerelease = {
+    id: 100, tag_name: "v1.0.0-rc.1", draft: false, prerelease: true,
+    published_at: "2026-10-08T10:00:00Z", assets: [],
+  };
+  const draft = {
+    id: 101, tag_name: "v1.0.0", draft: true, prerelease: false,
+    published_at: "2026-10-08T11:00:00Z", assets: [],
+  };
+  await withReleaseServer([draft, prerelease, stable], {}, async (api) => {
+    const result = await run(["--check"], {
+      SEAL_RELEASES_API_URL: api,
+      SEAL_EXPECTED_RELEASE_TAG: stable.tag_name,
+    });
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /REFUSE release_docs_manifest_absent: v0\.5\.3 must publish exactly one release-manifest\.json, found 0/);
+    assert.doesNotMatch(result.stderr, /release_docs_release_visibility/);
+  });
+});
 
 test("legacy docs state release-listing facts and check compares claims with that release", async () => {
   const assets = releaseAssets("v0.2.0-rc.3");
