@@ -653,7 +653,8 @@ function publishedSurfaceChanges(manifest) {
       [notePattern, releaseNotes, "published release-note route"],
     ])),
     replacePublishedSurface("docs/archive/TRUTH-BOX.md", [
-      [notePattern, releaseNotes, "published release-note route"],
+      [new RegExp(`(?<=^> For the truth about what you installed, read \\[docs/assurance/)RELEASE-NOTES-v${SEMVER}\\.md`, "m"), releaseNotes, "published release-note label"],
+      [new RegExp(`(?<=^> For the truth about what you installed, read \\[docs/assurance/RELEASE-NOTES-v${SEMVER}\\.md\\]\\(\\.\\./assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\) and the \\[README\\])`, "m"), releaseNotes, "published release-note target"],
     ]),
     removePublishedCandidateClaim(withHistoricalPrimaryCitation(replacePublishedSurface("docs/assurance/README.md", [
       [new RegExp(`(?<=^4\\. \\[assurance/)RELEASE-NOTES-v${SEMVER}\\.md(?=\\]\\(RELEASE-NOTES-v${SEMVER}\\.md\\) — what v${SEMVER} contains and$)`, "m"), releaseNotes, "primary release-note label"],
