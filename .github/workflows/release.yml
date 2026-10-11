@@ -91,6 +91,8 @@ jobs:
   release:
     needs: build-artifacts
     runs-on: ubuntu-24.04
+    outputs:
+      prerelease: ${{ steps.create_draft.outputs.prerelease }}
     permissions:
       contents: write
       actions: read
@@ -172,6 +174,7 @@ jobs:
             "${client_identity_args[@]}"
 
       - name: Create the draft release to be verified
+        id: create_draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -226,6 +229,9 @@ jobs:
           prerelease=()
           if [[ "$version" == *rc* ]]; then
             prerelease+=(--prerelease)
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
           if [[ "$release_is_draft" = true ]]; then
             # A retry must preserve existing bytes.  Accept an existing asset
@@ -375,7 +381,8 @@ jobs:
   release-docs:
     # Publication is complete before this job starts. A documentation failure
     # can report or delay the follow-up commit, but cannot alter the release.
-    needs: publish
+    needs: [publish, release]
+    if: needs.release.outputs.prerelease != 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
