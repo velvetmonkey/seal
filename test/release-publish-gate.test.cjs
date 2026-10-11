@@ -9,6 +9,16 @@ const test = require("node:test");
 
 const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "release.yml"), "utf8");
 
+test("release-docs uses the release job's prerelease decision", () => {
+  const release = workflow.match(/^  release:\n([\s\S]*?)(?=^  \S)/m)?.[1] || "";
+  const releaseDocs = workflow.match(/^  release-docs:\n([\s\S]*)/m)?.[1] || "";
+  assert.match(release, /^    outputs:\n      prerelease: \$\{\{ steps\.create_draft\.outputs\.prerelease \}\}$/m);
+  assert.match(release, /^      - name: Create the draft release to be verified\n        id: create_draft$/m);
+  assert.match(release, /if \[\[ "\$version" == \*rc\* \]\]; then\n            prerelease\+=\(--prerelease\)\n            echo "prerelease=true" >> "\$GITHUB_OUTPUT"\n          else\n            echo "prerelease=false" >> "\$GITHUB_OUTPUT"\n          fi/);
+  assert.match(releaseDocs, /^    needs: \[publish, release\]$/m);
+  assert.match(releaseDocs, /^    if: needs\.release\.outputs\.prerelease != 'true'$/m);
+});
+
 test("publish waits in the release-publish environment after draft verification", () => {
   const publish = workflow.match(/^  publish:\n([\s\S]*?)(?=^  \S|\z)/m)?.[1] || "";
   assert.match(publish, /^    environment: release-publish$/m);
@@ -141,6 +151,8 @@ const os = require("node:os");
 
 function runDraftStep(state, assetMode = "complete") {
   const directory = testTmpdir(path.join(os.tmpdir(), "seal-release-recovery-"));
+  const githubOutput = path.join(directory, "github-output");
+  fs.writeFileSync(githubOutput, "");
   const dist = path.join(directory, "dist");
   fs.mkdirSync(dist);
   fs.writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
@@ -182,10 +194,10 @@ node() {
 `;
   const result = spawnSync("bash", ["--noprofile", "--norc", "-euo", "pipefail", "-c", mock + body], {
     cwd: directory, encoding: "utf8", timeout: 10_000,
-    env: { PATH: process.env.PATH, RUNNER_TEMP: directory, GITHUB_REF_NAME: "v1.2.3", GITHUB_SHA: "a".repeat(40), TEST_RELEASE_STATE: state },
+    env: { PATH: process.env.PATH, RUNNER_TEMP: directory, GITHUB_OUTPUT: githubOutput, GITHUB_REF_NAME: "v1.2.3", GITHUB_SHA: "a".repeat(40), TEST_RELEASE_STATE: state },
   });
   const calls = fs.readFileSync(path.join(directory, "calls"), "utf8").trim().split("\n");
-  return { ...result, calls };
+  return { ...result, calls, prereleaseOutput: fs.readFileSync(githubOutput, "utf8") };
 }
 
 for (const [name, state, assets, expected, mutation, refusal] of [
@@ -199,6 +211,7 @@ for (const [name, state, assets, expected, mutation, refusal] of [
   test(`draft shell ${name}`, () => {
     const result = runDraftStep(state, assets);
     assert.equal(result.status, expected, result.stderr);
+    if (state === "missing" || state === "true") assert.equal(result.prereleaseOutput, "prerelease=false\n");
     if (refusal) assert.match(result.stderr, new RegExp(refusal));
     const writes = result.calls.filter((call) => !call.startsWith("release view "));
     assert.equal(writes.length, mutation ? 1 : 0, JSON.stringify(writes));
