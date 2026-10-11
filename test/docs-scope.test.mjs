@@ -8,6 +8,7 @@ const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
 ];
+const TRUTH_BOX_PROOF_COUNT_CITATION = "; for the shipped product's strict proved-property count, read the [unreleased v1.0.0-rc.1 candidate notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).";
 function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${PUBLISHED_VERSION}.md`, releaseVersion = PUBLISHED_VERSION) {
   const releaseNotes = name.startsWith("archive/")
     ? `../assurance/RELEASE-NOTES-v${releaseVersion}.md`
@@ -15,7 +16,7 @@ function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOT
   return [
     scope,
     ...COMMON_SCOPE_LINES,
-    `> For the truth about what you installed, read [${releaseNotesLabel}](${releaseNotes}) and the [README](../../README.md).`,
+    `> For the truth about what you installed, read [${releaseNotesLabel}](${releaseNotes}) and the [README](../../README.md)${name === "archive/TRUTH-BOX.md" ? TRUTH_BOX_PROOF_COUNT_CITATION : "."}`,
   ].join("\n");
 }
 const FAMILY_PRODUCT_SCOPE = "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.";
@@ -44,6 +45,7 @@ test("each scoped document carries its exact scope signpost", () => {
     assert.equal(text.startsWith(`${expectedBlock}\n\n`), true, `${name} is missing its scope block at the top`);
     assert.equal(text.includes("The authorization rule is PROVED."), false, `${name} contains cut claim: The authorization rule is PROVED.`);
   }
+  assert.match(readFileSync(resolve(ROOT, "docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md"), "utf8"), /The strict proved-property count for the shipped product is zero\./);
 });
 
 test("v0.4.0 standalone checker notice and both install links remain available", () => {
