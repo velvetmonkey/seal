@@ -49,7 +49,6 @@ private def collectAxiomsIn (env : Environment) (decl : Name) : Array Name :=
   state.axioms.qsort Name.lt
 
 private def kernelBaselineModuleNames : Array Name := #[
-  `Made.Up.Module,
   `Seal.Block,
   `Seal.Channel,
   `Seal.Classify,
@@ -183,7 +182,7 @@ module must receive a baseline assignment, an import that makes its object
 file available, and a measured count update before this gate passes.
 -/
 private def expectedProductionModuleCount : Nat := 51
-private def expectedKernelBaselineModuleCount : Nat := 51
+private def expectedKernelBaselineModuleCount : Nat := 50
 private def expectedUnsafeCompiledCodeRootModuleCount : Nat := 1
 
 private def productionModuleCount : IO Nat := do

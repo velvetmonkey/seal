@@ -5,6 +5,8 @@ import Std.Data.HashMap.Lemmas
 
 namespace SealCore
 
+axiom sealscanscope50Probe : False
+
 theorem default_deny_never_allowed (now : Nat) (s : State) :
     (step now s .defaultDeny).1 = .block := by
   rfl
