@@ -181,14 +181,14 @@ Before the restart:
 PATH="$HOME/.local/bin:$PATH" seal status
 ```
 
-Captured before the restart. Paths under `/home/you` and the project identifier are examples:
+Captured before the restart. Paths under `/home/you`, the project identifier, and the observation time are examples that differ for each run:
 
 ```output
 Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
 Observation project: /home/you/seal-protect-demo
 Observation client: Claude Code static configuration; effective client route UNKNOWN
 Observation config: /home/you/.claude.json
-Observation time: 2026-10-11T18:37:16.926Z
+Observation time: <time of status check>
 MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected
 Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)
 UNKNOWN — user MCP configuration has no inspectable mcpServers object
