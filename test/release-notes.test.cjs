@@ -47,6 +47,7 @@ test("current release notes state the platform, receipt format, and verifier tru
     assert.match(notes, /formatted result is `UNVERIFIED`/);
     assert.doesNotMatch(notes, /\bPROVED\b/, "the final release note must make zero PROVED claims");
   }
+  assert.match(fs.readFileSync(NOTES, "utf8"), /\*\*The strict proved-property count for the shipped product is zero\.\*\*/);
 });
 
 test("rc.3 release-note identity and platform boundary remain immutable", () => {
