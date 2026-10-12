@@ -77,6 +77,28 @@ test("archived action row does not claim maintenance or current CI", () => {
   assert.doesNotMatch(row, /maintained|runs in CI|\*\*Tested\*\*/);
   assert.match(row, /CI no longer runs/);
 });
+
+test("every archived repository Home cell names its archive head and current seal run", () => {
+  // Re-measure the fixed list with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+  const archived = new Map([
+    ["seal-host", "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"],
+    ["seal-live-demo", "0a89876379bc79063fc06afaa5b854fb2738b725"],
+    ["seal-verify-action", "84e91a4bc605aa53bb9aa2e5a25aaa7e499794d5"],
+  ]);
+  const lines = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8").split("\n");
+  const violations = [];
+  for (const [index, line] of lines.entries()) {
+    if (!line.startsWith("| ") || index < 41 || !line.endsWith(" |")) continue;
+    const home = line.slice(line.lastIndexOf(" | ") + 3, -2);
+    for (const [name, sha] of archived) {
+      if (!new RegExp(`\\b${name}\\b`).test(home)) continue;
+      const qualified = home.includes(`Archived repository \`${name}\` at \`${sha}\``)
+        && /seal (?:`[^`]+` )?runs\b/.test(home);
+      if (!qualified) violations.push(`line ${index + 1}: ${name} Home cell is not qualified`);
+    }
+  }
+  assert.deepEqual(violations, []);
+});
 for (const [oldPath, currentPath] of [
   ["CLAIMS-MATRIX.md", "archive/CLAIMS-MATRIX.md"],
   ["EVALUATOR-START.md", "assurance/evaluator-start.md"],
