@@ -71,6 +71,12 @@ Run the harmless approve-once demo and answer its prompt in your terminal:
 seal demo
 ```
 
+For a script or a run without a terminal prompt, use the installer's approve-once form:
+
+```bash
+demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
+```
+
 Keep the demo directory for the printed checker command.
 When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.
 
@@ -112,7 +118,17 @@ not a trusted signer's identity or proof that the recorded effect happened.
 
 ## Protect a real tool set
 
-With Node 22 or newer, install Claude Code and confirm that its command is available:
+Check Node before installing Claude Code:
+
+```bash
+node --version
+```
+
+```output
+v22.23.3
+```
+
+This captured version meets the v22 or newer requirement; if yours is older, upgrade Node before continuing. Install Claude Code and confirm that its command is available:
 
 ```bash
 npm install --prefix "$HOME/.local" @anthropic-ai/claude-code
@@ -159,13 +175,70 @@ Undo:
   To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
 ```
 
-If Claude Code is already running in this project, exit that session first.
-For your first sign-in, run this in the terminal and follow the login prompts:
+Before the restart:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" seal status
+```
+
+Captured before the restart. Paths under `/home/you`, the project identifier, and the observation time are examples that differ for each run:
+
+```output
+Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
+Observation project: /home/you/seal-protect-demo
+Observation client: Claude Code static configuration; effective client route UNKNOWN
+Observation config: /home/you/.claude.json
+Observation time: <time of status check>
+MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected
+Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)
+UNKNOWN — user MCP configuration has no inspectable mcpServers object
+Observed MCP definitions (scoped configuration facts; not a complete active inventory):
+  UNKNOWN — entry "db" has conflicting definitions across local, project; scope shadowing and approval eligibility are unresolved
+  BROKERED — Local MCP entry "db" matches Seal's installed wrapper; this wrapper gates demo.mutate, demo.erase. Client use of this entry is UNKNOWN.
+UNKNOWN — Client route completeness has not been established: Seal cannot confirm this session's effective MCP, shell or network access.
+Boundary: shell and network routes are outside this Seal MCP wrapper; their effective reachability is UNKNOWN.
+Sealed MCP route db: PENDING RESTART (/home/you/.local/share/seal/projects/02a372233b91435a486924d1d5539612/servers/db/state.json)
+
+Gated through this route:
+  demo.mutate
+  demo.erase
+
+Not controlled:
+  Bash and subprocesses outside this MCP route
+  direct resource access outside this MCP route
+  other clients
+  other MCP servers not routed through this Seal wrapper
+  other uncontrolled routes can also exist
+Next:
+  1. Restart Claude Code in this project.
+  2. Run `seal status`.
+  3. Expect ACTIVE while Claude Code runs this project's wrapper; STALE after the session exits.
+Undo:
+  To clear protection for every guarded tool on server db, including guarded tools: demo.mutate, demo.erase, stop Claude Code, then run `seal unprotect db`.
+Receipts: no receipt files observed (receipt directory has no receipt-shaped files)
+Receipt completeness: UNKNOWN (receipt filenames are not signed; deleted receipts can be renumbered)
+Most recent: no receipt yet (receipt directory has no receipt-shaped files; no decision has been recorded)
+```
+
+The `UNKNOWN` lines describe limits of this observation:
+
+- `effective client route UNKNOWN` means static configuration does not show which route this client session actually uses; do not treat it as proof of a live route.
+- `user MCP configuration has no inspectable mcpServers object` means this run found no inspectable user-scope server list; no action is needed for this demo, but user-scope coverage remains unknown.
+- `entry "db" has conflicting definitions` means the local wrapper and project entry differ, so scope shadowing and approval eligibility remain unresolved; do not assume this confirms the selected route.
+- `Client use of this entry is UNKNOWN` means the local wrapper matches the recorded definition, but status cannot see whether the client uses it; confirm the route before relying on it.
+- `Client route completeness has not been established` means status cannot confirm every MCP, shell, or network path; do not read this as complete coverage.
+- `their effective reachability is UNKNOWN` means shell and network routes are outside this wrapper; account for those routes separately if they matter to your project.
+- `Receipt completeness: UNKNOWN` means unsigned filenames cannot prove that no receipts were removed; no receipt exists yet in this pre-restart run, so there is nothing to inspect now.
+
+Receipt directory for this example, beside the printed `State:` file: `/home/you/.local/share/seal/projects/02a372233b91435a486924d1d5539612/servers/db/receipts`. After a call, rerun the status command above. Its `Receipts:` line gives the observed count, and `Most recent:` gives the newest readable receipt by write time; before a call, the captured line says `no receipt yet`.
+
+For first sign-in, run this command in the terminal:
 
 ```bash
 claude auth login
 ```
 
+If Claude Code is already running in this project, exit that session first.
 Start Claude Code from the `seal-protect-demo` project directory (the `cd`
 command above puts you there):
 
@@ -173,18 +246,13 @@ command above puts you there):
 claude
 ```
 
-On the first run, Claude Code may show a theme picker before the session starts.
-
-MCP is the protocol Claude Code uses to connect to tool servers. If Claude Code
-asks you to approve the project's MCP server, accept it. Keep Claude Code running
-and open a second terminal in `seal-protect-demo`, then check the route:
+Keep Claude Code running and open a second terminal in `seal-protect-demo`, then check the route:
 
 ```bash
 PATH="$HOME/.local/bin:$PATH" seal status
 ```
 
-Look for `LEASE ACTIVE` on the sealed `db` route before using its tools. If it still
-says `PENDING RESTART`, follow the [protection state guide](docs/guide/what-is-protected-right-now.md#pending-restart).
+The protection guidance uses `ACTIVE`; the live route line in status uses `LEASE ACTIVE`. If it still says `PENDING RESTART`, follow the [protection state guide](docs/guide/what-is-protected-right-now.md#pending-restart).
 
 Receipts contain the complete parsed arguments for protected tools, so sharing a
 receipt shares those arguments.
