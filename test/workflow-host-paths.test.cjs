@@ -40,3 +40,13 @@ test("both kernel workflows delegate the rebuild recipe to seal-reproduce", () =
     assert.doesNotMatch(workflow, /provision_toolchain|install_pinned_elan|build_runtime_wasm/u);
   }
 });
+
+test("published kernel dispatch has no literal release tag default", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/published-kernel.yml"), "utf8");
+  assert.doesNotMatch(workflow, /^\s*default:\s*v\d+\.\d+\.\d+[^\n]*$/mu);
+});
+
+test("published kernel checkout uses the selected release tag", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/published-kernel.yml"), "utf8");
+  assert.match(workflow, /- uses: actions\/checkout@v4\n\s+with:\n\s+ref: \$\{\{ env\.RELEASE_TAG \}\}/u);
+});
