@@ -6,6 +6,40 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const SEAL = path.join(__dirname, "..", "bin", "seal");
+const ROOT = path.join(__dirname, "..");
+
+function checkStatusExample(file, actualStatus, home) {
+  const source = fs.readFileSync(file, "utf8");
+  const lines = source.split("\n");
+  const command = lines.findIndex((line) => /\bseal status\s*$/.test(line));
+  assert.ok(command >= 0, `${file}: missing seal status command`);
+  let fence = command + 1;
+  while (fence < lines.length && lines[fence] !== "```") fence++;
+  assert.ok(fence < lines.length, `${file}:${command + 1}: unterminated command block`);
+  fence++;
+  while (fence < lines.length && !lines[fence].startsWith("```")) {
+    assert.ok(!/^#{1,6} /.test(lines[fence]), `${file}:${fence + 1}: status output moved beyond its section`);
+    fence++;
+  }
+  assert.equal(lines[fence], "```output", `${file}:${fence + 1}: status command must be followed by its output block`);
+  const start = fence + 1;
+  const end = lines.indexOf("```", start);
+  assert.ok(end > start, `${file}:${start + 1}: missing status output block`);
+  const expectedLabels = actualStatus.match(/^Observation [^:\n]+:/gm);
+  assert.ok(expectedLabels?.length, "real status output has no Observation labels");
+  const observed = lines.slice(start, end).flatMap((line, index) =>
+    line.startsWith("Observation ") ? [{ label: line.match(/^Observation [^:\n]+:/)?.[0], line, number: start + index + 1 }] : []);
+  assert.deepEqual(observed.map(({ label }) => label), expectedLabels,
+    `${file}:${start + 1}: Observation labels differ from real seal status output`);
+  const time = observed.find(({ label }) => label === "Observation time:");
+  assert.equal(time?.line, "Observation time: <time of status check>",
+    `${file}:${time?.number ?? start + 1}: Observation time must use the marked placeholder`);
+  const actualConfig = actualStatus.match(/^Observation config: (.+)$/m)?.[1];
+  assert.ok(actualConfig?.startsWith(home + path.sep), "real status config is outside temporary home");
+  const config = observed.find(({ label }) => label === "Observation config:");
+  assert.equal(config?.line, `Observation config: /home/you/${path.relative(home, actualConfig)}`,
+    `${file}:${config?.number ?? start + 1}: Observation config differs from real default-home status`);
+}
 
 function fakeClaudeBin(root) {
   const bin = path.join(root, "bin");
@@ -87,6 +121,17 @@ rl.on("line", (line) => {
   const status = execFileSync(SEAL, ["status"], { cwd: project, env, encoding: "utf8" });
   assert.match(status, /Sealed MCP route db: PENDING RESTART/);
   assert.match(status, /^  demo\.mutate$/m);
+
+  const defaultEnv = { ...env, CLAUDE_CONFIG_DIR: home };
+  const defaultRun = spawnSync(SEAL, ["status"], { cwd: project, env: defaultEnv, encoding: "utf8" });
+  const defaultStatus = defaultRun.stdout;
+  assert.match(defaultStatus, /^Observation config:/m, defaultRun.stderr);
+  fs.mkdirSync(path.join(home, ".claude"));
+  const withClaudeDir = spawnSync(SEAL, ["status"], { cwd: project, env: defaultEnv, encoding: "utf8" }).stdout;
+  assert.equal(defaultStatus.match(/^Observation config: (.+)$/m)?.[1],
+    withClaudeDir.match(/^Observation config: (.+)$/m)?.[1]);
+  checkStatusExample(process.env.SEAL_STATUS_README || path.join(ROOT, "README.md"), defaultStatus, home);
+  checkStatusExample(process.env.SEAL_STATUS_GUIDE || path.join(ROOT, "docs/guide/what-is-protected-right-now.md"), defaultStatus, home);
 
   const activated = spawnSync(process.execPath, [SEAL, "__proxy", "--protect-state", statePath], {
     cwd: repository,

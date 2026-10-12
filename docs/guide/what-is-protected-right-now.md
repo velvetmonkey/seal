@@ -20,7 +20,7 @@ $ seal status
 Runtime at status check: kernel payload bytes matched runtime-manifest.json for seal-assurance-kit@aa213304018ce72d754c6befcb0b6a77dd3e05e3; per-authorization installed-tree and Node-floor judgments have not yet been observed.
 Observation project: /home/you/seal-protect-demo
 Observation client: Claude Code static configuration; effective client route UNKNOWN
-Observation config: /home/you/.claude/.claude.json
+Observation config: /home/you/.claude.json
 Observation time: <time of status check>
 MCP scope precedence: local > project > user; plugins, connectors and managed/session sources are not inspected
 Scopes inspected: user, local, project (direct files only; this is not a complete active inventory)
