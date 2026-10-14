@@ -273,14 +273,14 @@ test("legacy docs state release-listing facts and check compares claims with tha
       `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
     );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
-    assert.match(readme, new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
+    assert.match(readme, new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
     assert.equal(equalVersion.code, 0, equalVersion.stderr);
-    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the unreleased/);
+    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the `v[^`]+` release candidate, a prerelease/);
     console.log("TAMPER equal-version: divergence block absent");
     const restoredVersion = await run([], env);
     assert.equal(restoredVersion.code, 0, restoredVersion.stderr);
-    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("The current source is the unreleased `v" + VERSION_PATTERN + "` candidate"));
+    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease"));
     console.log("RESTORE divergent versions: divergence block present");
     const install = fs.readFileSync(path.join(docs, "docs", "start", "install.md"), "utf8");
     assert.ok(
@@ -424,7 +424,7 @@ test("publishing a second release updates install prose and removes its candidat
     const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${secondTag}.md`);
     fs.writeFileSync(notesPath, fs.readFileSync(notesPath, "utf8").replace(
       /^# Seal v0\.2\.0-rc\.3 release notes\n/m,
-      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} candidate. The install commands below work after ${secondTag} assets are published.\n`,
+      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} release candidate. The install commands below work after its assets are published.\n`,
     ));
     const readme = fs.readFileSync(readmePath, "utf8").replace(
       /^The command above installs the published `v[^`]+` release under `~\/\.local`\.$/m,
@@ -467,7 +467,7 @@ test("published notes opening and stale candidate region settle in one run", asy
     const original = fs.readFileSync(notesPath, "utf8");
     const planted = original.replace(
       `# Seal ${tag} release notes\n`,
-      `# Seal ${tag} release notes\n\nThese notes describe the ${tag} candidate. The install commands below work after ${tag} assets are published.\n`,
+      `# Seal ${tag} release notes\n\nThese notes describe the ${tag} release candidate. The install commands below work after its assets are published.\n`,
     ) + "\n<!-- generated candidate release notes; do not edit -->\nstale candidate commands\n<!-- end generated candidate release notes -->\n";
     fs.writeFileSync(notesPath, planted);
     const env = {

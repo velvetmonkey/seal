@@ -1,19 +1,37 @@
-DRAFT FOR BEN: the text of this record needs Ben's reading before the tag.
 # Seal v1.0.0-rc.1 release notes
 
-These notes describe the v1.0.0-rc.1 candidate. The install commands below work after v1.0.0-rc.1 assets are published.
+These notes describe the v1.0.0-rc.1 release candidate. The install commands below work after its assets are published.
 
-A release candidate is a prerelease for evaluation before a final release; it is not GitHub's Latest stable release. At candidate preparation, the install commands in the README and install guide fetch the published v0.5.3 release.
+This release candidate is a prerelease for evaluation before a final release. It is not GitHub's Latest stable release. The README and install guide commands fetch the published v0.5.3 release.
 
-## Changes since v0.5.3
+## Changes on main since v0.5.3
 
-- The published v0.5.3 release prose is owned by the release documentation generator. That work landed in commit `1696c40`.
-- The generator now excludes prereleases when choosing the release it calls Latest. A newer prerelease therefore leaves the published v0.5.3 install instructions in place. That work landed in commit `8de34a9`.
-- Those are the two commits in `v0.5.3..origin/main` before this candidate preparation. Neither changes the shipped v0.5.3 artifact.
+- `1696c40` (#451): The v0.5.3 release text now comes from the release documentation generator. No shipped artifact changes.
+- `8de34a9` (#452): Install instructions continue to select the latest stable release when a prerelease exists.
+- `445d93d` (#453): Source version 1.0.0-rc.1 and candidate notes identify this release. Install commands still select v0.5.3.
+- `159d8b3` (#454): The candidate notes state that the shipped product has zero strictly proved properties.
+- `6e835f4` (#455): The release workflow skips its documentation job for a prerelease.
+- `764db16` (#460): The archived truth box links to the candidate notes for the shipped proof count.
+- `5d27327` (#459): The README clarifies the Protect state and the scripted demo.
+- `d73ec84` (#458): The archived claims matrix labels the seal-host proof home as archived.
+- `1b74047` (#461): The published kernel check selects the tag commit when it checks release artifacts.
+- `a8aef7f` (#463): No user-visible change. Tests reject stale dates and labels in status examples.
+- `dfefce3` (#462): The archived claims matrix qualifies claim homes and checks its Home cells.
+- `5005ea0` (#456): No user-visible change. The Lean axiom scan checks all 50 assigned kernel baseline modules.
 
 ## 1.0 closed-list status
 
-The signed 1.0 closed list in the north star still marks the real-client eight-case Claude Code acceptance walk (row 6), real-Mac arm64 Protect walk (row 7), blind walk of the published candidate (row 8), candidate claims batch (row 9), and final v1.0.0 tag and publication (row 10) OPEN. The release documentation identity row (row 5) requires a post-publication documentation path; the current release workflow's documentation job will refuse this prerelease after publish because it expects the just-published tag to be Latest. These items are not claimed complete by this candidate record.
+Ben's eight-case acceptance walk is not done for this release. Ben moved the real-Mac arm64 Protect walk (row 7) to 1.1 on 2026-10-11. The blind walk of the published candidate (row 8), candidate claims batch (row 9), and final v1.0.0 tag and publication (row 10) remain open. The release documentation identity row (row 5) still needs a post-publication path. The release workflow skips the release-docs job for a prerelease. This record does not claim that these rows are complete.
+
+## Known open honesty-map items
+
+- BLOCK 1: `seal-verify-action` is archived, but its README still tells users to add it to CI as a live gate.
+- BLOCK 2: `seal-host` is archived, but its README still calls it a deployed adapter and Seal pages still cite its proof index as reader-facing.
+- BLOCK 5: The root claims-matrix and evaluator-start aliases are absent, while the archived live demo still says its evaluator link resolves.
+- BLOCK 7: `seal-live-demo` is archived, but its README still presents its one-command demonstration as live evidence.
+- BLOCK 8: The Node kernel config key is generated in the worker that supplies the config; replacing this demo-grade self-authorization is a product change for the next release.
+
+These five items are open in this release candidate.
 
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI. See `spine/platform.cjs`, `test/darwin-readiness.test.cjs`, and `test/release-matrix.test.mjs` for the platform boundary.
 

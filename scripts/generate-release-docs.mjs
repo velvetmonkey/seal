@@ -356,7 +356,7 @@ function readmeRegions({ manifest }) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
-    `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the`,
+    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the`,
     `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
@@ -589,7 +589,7 @@ function publishedNotesOpeningChange(manifest) {
   const relative = `docs/assurance/RELEASE-NOTES-${manifest.tag}.md`;
   const target = path.join(ROOT, relative);
   const original = fs.readFileSync(target, "utf8");
-  const candidate = `These notes describe the ${manifest.tag} candidate. The install commands below work after ${manifest.tag} assets are published.`;
+  const candidate = `These notes describe the ${manifest.tag} release candidate. The install commands below work after its assets are published.`;
   const published = `These notes describe the published ${manifest.tag} release. The install commands below use that release's \`SHA256SUMS\` asset.`;
   if (!original.includes(candidate) && !original.includes(published)) {
     if (isLegacyReleaseTag(manifest.tag)) return []; // Dated notes before this template remain immutable.
@@ -805,7 +805,7 @@ function checkReadmePublishedClaims(facts) {
   }
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
-  if (manifest.tag === `v${sourceVersion}` && document.text.includes("The current source is the unreleased")) {
+  if (manifest.tag === `v${sourceVersion}` && document.text.includes("release candidate, a prerelease")) {
     document.failures.push(`source/release divergence claim is present even though source and release both name ${manifest.tag}`);
   }
   return document;
