@@ -410,7 +410,7 @@ test("publishing a second release updates install prose and removes its candidat
     const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${secondTag}.md`);
     fs.writeFileSync(notesPath, fs.readFileSync(notesPath, "utf8").replace(
       /^# Seal v0\.2\.0-rc\.3 release notes\n/m,
-      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} candidate. The install commands below work after ${secondTag} assets are published.\n`,
+      `# Seal ${secondTag} release notes\n\nThese notes describe the ${secondTag} release candidate. The install commands below work after its assets are published.\n`,
     ));
     const readme = fs.readFileSync(readmePath, "utf8").replace(
       /^The command above installs the published `v[^`]+` release under `~\/\.local`\.$/m,
@@ -453,7 +453,7 @@ test("published notes opening and stale candidate region settle in one run", asy
     const original = fs.readFileSync(notesPath, "utf8");
     const planted = original.replace(
       `# Seal ${tag} release notes\n`,
-      `# Seal ${tag} release notes\n\nThese notes describe the ${tag} candidate. The install commands below work after ${tag} assets are published.\n`,
+      `# Seal ${tag} release notes\n\nThese notes describe the ${tag} release candidate. The install commands below work after its assets are published.\n`,
     ) + "\n<!-- generated candidate release notes; do not edit -->\nstale candidate commands\n<!-- end generated candidate release notes -->\n";
     fs.writeFileSync(notesPath, planted);
     const env = {
