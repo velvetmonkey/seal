@@ -356,6 +356,15 @@ function omittedFromDocsIndex(docs) {
 }
 
 test("retargeting the primary release-notes pointer keeps a historical citation of the previous notes", async () => {
+  const assets = releaseAssets("v0.2.0-rc.3");
+  const release = {
+    id: 3,
+    tag_name: "v0.2.0-rc.3",
+    draft: false,
+    published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
   const docs = docsRoot();
   const readmePath = path.join(docs, "docs", "assurance", "README.md");
   const previousNotes = "RELEASE-NOTES-v0.9.0.md";
@@ -372,7 +381,11 @@ test("retargeting the primary release-notes pointer keeps a historical citation 
   assert.match(planted, new RegExp(`^4\\. \\[assurance/${previousNotes.replaceAll(".", "\\.")}\\]\\(${previousNotes.replaceAll(".", "\\.")}\\) — what v0\\.9\\.0 contains and$`, "m"));
   fs.writeFileSync(readmePath, planted);
   assert.ok(omittedFromDocsIndex(docs).includes("assurance/RELEASE-NOTES-v0.9.0.md") === false);
-  const generated = await run([], { SEAL_RELEASE_DOCS_ROOT: docs });
+  const generated = await run([], {
+    SEAL_RELEASE_DOCS_ROOT: docs,
+    SEAL_RELEASES_API_URL: api,
+    SEAL_RELEASE_TAG_COMMIT: COMMIT,
+  });
   assert.equal(generated.code, 0, generated.stderr);
   const rewritten = fs.readFileSync(readmePath, "utf8");
   const primary = rewritten.match(/^4\. \[assurance\/(RELEASE-NOTES-v[^\]]+)\]\((RELEASE-NOTES-v[^)]+)\) — what (v[^\s]+) contains and$/m);
@@ -390,6 +403,7 @@ test("retargeting the primary release-notes pointer keeps a historical citation 
   );
   const currentHits = [...rewritten.matchAll(/^4\. \[assurance\/RELEASE-NOTES-v/gm)];
   assert.equal(currentHits.length, 1, "exactly one notes file is named as the current release");
+  });
 });
 
 test("publishing a second release updates install prose and removes its candidate claim", async () => {
