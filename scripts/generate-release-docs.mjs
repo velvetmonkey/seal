@@ -356,7 +356,7 @@ function readmeRegions({ manifest }) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
-    `> The current source is the unreleased \`v${sourceVersion}\` candidate. The install commands below fetch the`,
+    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the`,
     `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
@@ -805,7 +805,7 @@ function checkReadmePublishedClaims(facts) {
   }
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
-  if (manifest.tag === `v${sourceVersion}` && document.text.includes("The current source is the unreleased")) {
+  if (manifest.tag === `v${sourceVersion}` && document.text.includes("release candidate, a prerelease")) {
     document.failures.push(`source/release divergence claim is present even though source and release both name ${manifest.tag}`);
   }
   return document;
