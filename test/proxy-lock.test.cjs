@@ -363,11 +363,9 @@ test("two-loop activation refusal states the total measured lock wait", async (t
   assert.ok(match, refusal.message);
   const reportedMs = Number(match[1]);
   t.diagnostic(JSON.stringify({ reportedMs, measuredMs, wallMs }));
-  // The linkSync probe follows owner-file write/fsync work that the reported
-  // wait includes. Delta was 2-4ms locally and 183ms in the nested GitHub suite;
-  // 250ms allows IO scheduling headroom while still rejecting a tenfold
-  // misreport of the roughly 3.7s combined wait by several seconds.
-  assert.ok(Math.abs(reportedMs - measuredMs) < 250, `reported ${reportedMs}ms, independently measured ${measuredMs}ms across both loops`);
+  // The product clock starts before lock work in protection.cjs; this linkSync
+  // probe starts after owner-file write/fsync work. Rounding permits 0.5ms.
+  assert.ok(reportedMs >= measuredMs - 0.5, `reported ${reportedMs}ms, independently measured ${measuredMs}ms across both loops`);
   assert.ok(wallMs - reportedMs >= 700, "discovery time is excluded from lock wait");
   assert.equal(refusal.message, `timed out after waiting ${reportedMs}ms to acquire the project lock held by pid ${process.pid}; its Seal operation has not finished (it may be waiting for a slow subprocess); retry after that operation finishes`);
   assert.deepEqual(fs.readFileSync(ctx.states.alpha), before, "refusal writes no route state");
