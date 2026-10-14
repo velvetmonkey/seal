@@ -4,6 +4,17 @@ import Lean.Environment
 import Lean.Util.CollectAxioms
 import Lean.Util.Path
 import Seal
+import Seal.EffectCommitment
+import Seal.EncodingInjective
+import Seal.GoldenPath
+import Seal.GuardTheorems
+import Seal.NumberGuardTheorems
+import Seal.PolicyBundle
+import Seal.PolicyEquiv
+import Seal.PolicyScan
+import Seal.PolicyV2Theorems
+import Seal.Scaffold
+import Seal.SignedPolicy
 import SealCore
 import SealV2.Crypto
 import SealV2.McpVersionGate
@@ -41,25 +52,50 @@ private def kernelBaselineModuleNames : Array Name := #[
   `Seal.Block,
   `Seal.Channel,
   `Seal.Classify,
+  `Seal.EffectCommitment,
+  `Seal.EncodingInjective,
+  `Seal.GoldenPath,
+  `Seal.GuardTheorems,
   `Seal.Hash,
   `Seal.JsonUtil,
   `Seal.Main,
+  `Seal.NumberGuardTheorems,
   `Seal.Policy,
+  `Seal.PolicyBundle,
+  `Seal.PolicyEquiv,
   `Seal.PolicyLegacy,
+  `Seal.PolicyScan,
+  `Seal.PolicyV2Theorems,
   `Seal.PolicyWire,
+  `Seal.Scaffold,
+  `Seal.SignedPolicy,
   `SealCore.Automaton,
   `SealCore.Event,
+  `SealCore.Safety,
   `SealCore.Sha256,
   `SealV2.Canonical,
+  `SealV2.ClassifyTransport,
   `SealV2.Crypto,
   `SealV2.Decide,
+  `SealV2.DecideTheorems,
+  `SealV2.EffectEnvelope,
   `SealV2.EnvelopeCompleteness,
   `SealV2.Escape,
+  `SealV2.LifecycleTheorems,
   `SealV2.McpVersionGate,
+  `SealV2.NonceLedger,
   `SealV2.Parser,
+  `SealV2.ParserTheorems,
+  `SealV2.PrincipalNonInfluence,
+  `SealV2.ResponseNI,
+  `SealV2.ResponseTransport,
   `SealV2.Serialization,
   `SealV2.SerializationContainerLemmas,
   `SealV2.SerializationLemmas,
+  `SealV2.SerializationTheorems,
+  `SealV2.TamperTheorems,
+  `SealV2.Validation,
+  `SealV2.ValidationTheorems,
   `SealCore,
   `Seal,
   `SealV2
@@ -102,8 +138,8 @@ independent and are named separately below.
   measures — `.lean` files under `Seal/`, `SealCore/`, `SealV2/` plus the four
   root files that exist: 20 + 4 + 23 + 4 = 51, measured on disk at `fa499b5`.
   `expectedKernelBaselineModuleCount` is the length of
-  `kernelBaselineModuleNames` above: 22 dotted modules plus the three roots
-  `Seal`, `SealCore`, `SealV2` = 25.
+  `kernelBaselineModuleNames` at that commit: 22 dotted modules plus the three
+  roots `Seal`, `SealCore`, `SealV2` = 25.
 * SHOW: `lake exe module_axiom_check` — exit 0 and `MODULE_DRIFT_GUARD PASS`
   only when both numbers match what is measured. Creating or deleting any
   production `.lean` file moves the first; adding or removing an entry from
@@ -115,14 +151,38 @@ independent and are named separately below.
   human-facing tripwire on the whole tree, not a mirror of the scanned set. It
   goes red on any new production module, and that red is the prompt to decide
   whether the module also needs a baseline assignment above. The two constants
-  are independent, and the gap between them is real: 51 modules are on disk
-  while 25 are named for per-module axiom scanning. A future module that moves
-  only the first number is a legitimate end state ONLY if a warrant here records
+  are independent, and the gap at that count bless was real: 51 modules were on
+  disk while 25 were named for per-module axiom scanning. A future module that
+  moves only the first number is a legitimate end state ONLY if a warrant here records
   why it is out of scan scope. Bumping either number without recording that
   decision reproduces exactly the defect this block documents.
+
+2026-09-25 scan-scope review: the disk count remains 51. The former 25-module
+kernel assignment omitted `SealCore.Safety` and thirteen proof-bearing
+`SealV2` modules. An unlisted `sorry` theorem in Safety passed both axiom gates.
+All fourteen omitted proof-bearing modules are now assigned to the three-name
+kernel baseline; the assignment at that review was 36 dotted modules plus
+three roots = 39, and the on-disk/kernel-assigned gap was 51 versus 39. Ffi
+retains its separate four-name baseline. No allowed axiom set or declaration allowlist
+changes. The module scan itself checks every declaration owned by an assigned
+module, including private and generated declarations, against that baseline.
+
+2026-09-25 Seal scope review: the remaining eleven unassigned production
+modules are all under `Seal/` and contain proof declarations: EffectCommitment
+(18), EncodingInjective (19), GoldenPath (9), GuardTheorems (20),
+NumberGuardTheorems (1), PolicyBundle (7), PolicyEquiv (28), PolicyScan (2),
+PolicyV2Theorems (15), Scaffold (12), and SignedPolicy (3). All eleven are
+ordinary kernel modules and use the existing three-name baseline. The kernel
+assignment therefore grows from 39 to 50; with Ffi on its separate baseline,
+all 51 production modules are assigned. `Seal.PolicyEquiv` and
+`Seal.PolicyV2Theorems` need isolated imports because generated declaration
+names collide with policy dependencies in the shared environment; the
+declaration equality and axiom-footprint checks remain the same. A new Seal
+module must receive a baseline assignment, an import that makes its object
+file available, and a measured count update before this gate passes.
 -/
 private def expectedProductionModuleCount : Nat := 51
-private def expectedKernelBaselineModuleCount : Nat := 25
+private def expectedKernelBaselineModuleCount : Nat := 50
 private def expectedUnsafeCompiledCodeRootModuleCount : Nat := 1
 
 private def productionModuleCount : IO Nat := do
@@ -263,11 +323,15 @@ def scanAll : IO Unit := do
   initSearchPath (← findSysroot)
   let kernelStart ← IO.monoMsNow
   -- The two serialization-lemma modules both define
-  -- `SealV2.skipWs_cons_of_not_ws`, so scan `SerializationLemmas` in an
-  -- isolated environment to keep module provenance unambiguous.
+  -- `SealV2.skipWs_cons_of_not_ws`. Seal.PolicyEquiv also generates six
+  -- constants with names shared by its policy dependencies;
+  -- Seal.PolicyV2Theorems does likewise for `Seal.firstBlocking?`. Scan
+  -- these modules in isolated environments to keep provenance unambiguous.
   let sharedKernelModuleNames :=
     kernelBaselineModuleNames.filter fun moduleName =>
-      moduleName != `SealV2.SerializationLemmas
+      moduleName != `SealV2.SerializationLemmas &&
+      moduleName != `Seal.PolicyEquiv &&
+      moduleName != `Seal.PolicyV2Theorems
   let imports : Array Import :=
     sharedKernelModuleNames.map fun moduleName => { module := moduleName }
   let env ← importModules imports {} (level := .private)
@@ -282,6 +346,18 @@ def scanAll : IO Unit := do
       "KERNEL" kernelBaseline
   kernelDeclarationTotal :=
     kernelDeclarationTotal + serializationResult.declarations
+  let policyEquivEnv ←
+    importModules #[{ module := `Seal.PolicyEquiv }] {} (level := .private)
+  let policyEquivResult ←
+    scanModule policyEquivEnv `Seal.PolicyEquiv "KERNEL" kernelBaseline
+  kernelDeclarationTotal :=
+    kernelDeclarationTotal + policyEquivResult.declarations
+  let policyV2TheoremsEnv ←
+    importModules #[{ module := `Seal.PolicyV2Theorems }] {} (level := .private)
+  let policyV2TheoremsResult ←
+    scanModule policyV2TheoremsEnv `Seal.PolicyV2Theorems "KERNEL" kernelBaseline
+  kernelDeclarationTotal :=
+    kernelDeclarationTotal + policyV2TheoremsResult.declarations
   let kernelElapsedMs := (← IO.monoMsNow) - kernelStart
   IO.println
     s!"BASELINE_COMPLETE\tKERNEL\tMODULES={kernelBaselineModuleNames.size}\tDECLARATIONS={kernelDeclarationTotal}\tWALL_CLOCK_MS={kernelElapsedMs}"
