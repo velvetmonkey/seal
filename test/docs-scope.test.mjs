@@ -8,6 +8,7 @@ const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
 ];
+const TRUTH_BOX_PROOF_COUNT_CITATION = "; for the shipped product's strict proved-property count, read the [unreleased v1.0.0-rc.1 candidate notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).";
 function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${PUBLISHED_VERSION}.md`, releaseVersion = PUBLISHED_VERSION) {
   const releaseNotes = name.startsWith("archive/")
     ? `../assurance/RELEASE-NOTES-v${releaseVersion}.md`
@@ -15,7 +16,7 @@ function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOT
   return [
     scope,
     ...COMMON_SCOPE_LINES,
-    `> For the truth about what you installed, read [${releaseNotesLabel}](${releaseNotes}) and the [README](../../README.md).`,
+    `> For the truth about what you installed, read [${releaseNotesLabel}](${releaseNotes}) and the [README](../../README.md)${name === "archive/TRUTH-BOX.md" ? TRUTH_BOX_PROOF_COUNT_CITATION : "."}`,
   ].join("\n");
 }
 const FAMILY_PRODUCT_SCOPE = "> Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.";
@@ -44,6 +45,7 @@ test("each scoped document carries its exact scope signpost", () => {
     assert.equal(text.startsWith(`${expectedBlock}\n\n`), true, `${name} is missing its scope block at the top`);
     assert.equal(text.includes("The authorization rule is PROVED."), false, `${name} contains cut claim: The authorization rule is PROVED.`);
   }
+  assert.match(readFileSync(resolve(ROOT, "docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md"), "utf8"), /The strict proved-property count for the shipped product is zero\./);
 });
 
 test("v0.4.0 standalone checker notice and both install links remain available", () => {
@@ -74,6 +76,28 @@ test("archived action row does not claim maintenance or current CI", () => {
   assert.ok(row);
   assert.doesNotMatch(row, /maintained|runs in CI|\*\*Tested\*\*/);
   assert.match(row, /CI no longer runs/);
+});
+
+test("every archived repository Home cell names its archive head and current seal run", () => {
+  // Re-measure the fixed list with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+  const archived = new Map([
+    ["seal-host", "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"],
+    ["seal-live-demo", "0a89876379bc79063fc06afaa5b854fb2738b725"],
+    ["seal-verify-action", "84e91a4bc605aa53bb9aa2e5a25aaa7e499794d5"],
+  ]);
+  const lines = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8").split("\n");
+  const violations = [];
+  for (const [index, line] of lines.entries()) {
+    if (!line.startsWith("| ") || index < 41 || !line.endsWith(" |")) continue;
+    const home = line.slice(line.lastIndexOf(" | ") + 3, -2);
+    for (const [name, sha] of archived) {
+      if (!new RegExp(`\\b${name}\\b`).test(home)) continue;
+      const qualified = home.includes(`Archived repository \`${name}\` at \`${sha}\``)
+        && /seal (?:`[^`]+` )?runs\b/.test(home);
+      if (!qualified) violations.push(`line ${index + 1}: ${name} Home cell is not qualified`);
+    }
+  }
+  assert.deepEqual(violations, []);
 });
 for (const [oldPath, currentPath] of [
   ["CLAIMS-MATRIX.md", "archive/CLAIMS-MATRIX.md"],
