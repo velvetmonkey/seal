@@ -49,7 +49,7 @@ fs.writeFileSync(f,JSON.stringify(config));
   return { root, project, home, env };
 }
 function run(ctx, args) {
-  const result = spawnSync(process.execPath, [SEAL, ...protectArgsWithPolicy(args, ctx.root)], { cwd: ctx.project, env: ctx.env, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [SEAL, ...protectArgsWithPolicy(args, ctx.root)], { cwd: ctx.project, env: { ...ctx.env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY }, encoding: "utf8" });
   return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}` };
 }
 

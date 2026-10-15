@@ -109,7 +109,7 @@ rl.on("line", (line) => {
   const protectArgs = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(["protect", "db", "demo.mutate"], root);
   const output = execFileSync(SEAL, protectArgs, {
     cwd: project,
-    env,
+    env: { ...env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
     encoding: "utf8",
   });
 

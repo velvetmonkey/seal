@@ -96,7 +96,7 @@ function runSeal(ctx, args, extraEnv = {}) {
   const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, ctx.root);
   const result = spawnSync(process.execPath, [SEAL, ...prepared], {
     cwd: ctx.project,
-    env: { ...process.env, ...ctx.env, ...extraEnv },
+    env: { ...process.env, ...ctx.env, ...extraEnv, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
     encoding: "utf8",
   });
   return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}`, stdout: result.stdout || "", stderr: result.stderr || "" };

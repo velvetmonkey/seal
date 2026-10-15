@@ -115,6 +115,9 @@ test('guide commands and expected output lines match a selective synthetic walk'
   const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: config, XDG_DATA_HOME: xdg,
     PATH: `${path.join(prefix, 'bin')}${path.delimiter}${process.env.PATH}` };
   const sealEnv = { ...env, PATH: `${fakeClaudeBin(scratch)}${path.delimiter}${env.PATH}` };
+  require('../test-support/kernel-receipt.cjs').protectArgsWithPolicy(['protect', 'db', 'demo.erase'], scratch);
+  sealEnv.SEAL_KERNEL_POLICY_FILE = process.env.SEAL_KERNEL_POLICY_FILE;
+  sealEnv.SEAL_KERNEL_PUBKEY = process.env.SEAL_KERNEL_PUBKEY;
   const client = path.join(scratch, 'synthetic-db-client.cjs');
   adaptedClient(client);
   const bashBlocks = [...page.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((m) => m[1]);

@@ -117,7 +117,7 @@ function run(project, home, args, extraEnv = {}) {
   try {
     return { code: 0, out: execFileSync(SEAL, args, {
       cwd: project,
-      env: { ...process.env, ...extraEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share") },
+      env: { ...process.env, ...extraEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     }) };

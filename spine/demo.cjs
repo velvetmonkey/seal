@@ -167,14 +167,16 @@ async function run(argv, sealBinPath) {
   try {
     createJournal(storePath); // deliberate init: absent-at-gate-time is a refusal
     const payloads = policyPayloads([TOOL]);
+    const configKeys = crypto.generateKeyPairSync("ed25519");
+    const configPublicKey = Buffer.from(configKeys.publicKey.export({ type: "spki", format: "der" })).subarray(-32).toString("hex");
     const signConfig = (payload) => JSON.stringify({
       payload,
-      signature: crypto.sign(null, Buffer.from(payload, "utf8"), signer.privateKey).toString("hex"),
+      signature: crypto.sign(null, Buffer.from(payload, "utf8"), configKeys.privateKey).toString("hex"),
     });
     proxy = createProxy({
       guardTool: TOOL,
       signer,
-      kernelPolicy: { publicKey: signer.publicKeyHex, guard: signConfig(payloads.guard), forward: signConfig(payloads.forward) },
+      kernelPolicy: { publicKey: configPublicKey, guard: signConfig(payloads.guard), forward: signConfig(payloads.forward) },
       storePath,
       receiptsDir,
       childArgv: [process.execPath, sealBinPath, "__demo-server", dataFile],

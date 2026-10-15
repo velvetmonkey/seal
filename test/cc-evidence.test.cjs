@@ -21,6 +21,7 @@ const { createHash } = require("node:crypto");
 const harness = require("../harness/claude-code/cc-harness.cjs");
 
 const ROOT = path.join(__dirname, "..");
+require('../test-support/kernel-receipt.cjs').protectArgsWithPolicy(['protect', 'notes', 'append_note'], testTmpdir('seal-cc-evidence-policy-'));
 const CHECKER = path.join(ROOT, "scripts", "check-cc-evidence.mjs");
 const SYNTHETIC_RUN = path.join(ROOT, "harness", "claude-code", "synthetic-run.cjs");
 const EVIDENCE_ROOT = path.join(ROOT, "evidence", "claude-code");

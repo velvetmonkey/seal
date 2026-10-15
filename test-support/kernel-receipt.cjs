@@ -56,7 +56,7 @@ function testKernelAdapter() {
 }
 
 function protectArgsWithPolicy(args, directory) {
-  if (args[0] !== "protect" || args.includes("--kernel-policy")) return args;
+  if (args[0] !== "protect") return args;
   const positional = [];
   for (let index = 1; index < args.length; index += 1) {
     if (args[index] === "--timeout-ms") { index += 1; continue; }
@@ -70,7 +70,9 @@ function protectArgsWithPolicy(args, directory) {
   fs.mkdirSync(directory, { recursive: true });
   const file = path.join(directory, `kernel-policy-${crypto.randomBytes(8).toString("hex")}.json`);
   fs.writeFileSync(file, JSON.stringify({ guard: policy.guard, forward: policy.forward }), { mode: 0o600 });
-  return ["protect", "--kernel-policy", file, "--kernel-pubkey", policy.publicKey, ...args.slice(1)];
+  process.env.SEAL_KERNEL_POLICY_FILE = file;
+  process.env.SEAL_KERNEL_PUBKEY = policy.publicKey;
+  return args;
 }
 
 async function writeKernelReceipt(_cacheRoot, dataHome) {

@@ -149,7 +149,7 @@ for (const site of ['journal','receipt']) for (const mode of ['short','ENOSPC','
     const {createProxy} = require(path.join(ROOT,'spine/proxy.cjs'));
     const root=testTmpdir('seal-durable-proxy-'); const file=path.join(root,'journal'); createJournal(file);
     const data=path.join(root,'data'); const receipts=path.join(root,'receipts'); const frames=[];
-    const proxy=createProxy({signer:generateSigner(),guardTool:'demo.mutate',storePath:file,receiptsDir:receipts,
+    const proxy=createProxy({signer:generateSigner(),guardTool:'demo.mutate',kernelPolicy:require('../test-support/kernel-receipt.cjs').signedKernelPolicy(['demo.mutate']),storePath:file,receiptsDir:receipts,
       childArgv:[process.execPath,path.join(ROOT,'contract/fixtures/counting-child.cjs'),data],
       onClientLine(line){frames.push(JSON.parse(line));}});
     t.after(()=>proxy.stop());
@@ -256,7 +256,7 @@ function checkpointFixture() {
   const root = testTmpdir('seal-checkpoint-');
   const file = path.join(root, 'journal'); createJournal(file);
   const journal = openJournal(file);
-  const contract = createApprovalContract({ store: journal });
+  const contract = createApprovalContract({ store: journal, kernelPolicy: require('../test-support/kernel-receipt.cjs').signedKernelPolicy(['demo.mutate']) });
   const handles = [];
   const statuses = ['consumed', 'declined', 'cancelled', 'expired', 'restart_invalidated'];
   for (let i = 0; i < 8; i++) {

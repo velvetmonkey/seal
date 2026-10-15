@@ -117,7 +117,7 @@ function capture() {
   try {
     const tool = 'db.execute';
     const args = { database: 'demo', sql: 'drop table users' };
-    const record = createKernelAuthorizationAdapter().authorize({
+    const record = createKernelAuthorizationAdapter({ policy: require('../test-support/kernel-receipt.cjs').signedKernelPolicy([tool]) }).authorize({
       epoch: 1, issuedTool: tool, issuedArgs: args, retryTool: tool,
       retryArgs: args, accepted: true, now: 1000,
     }).receipt_record;

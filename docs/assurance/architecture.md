@@ -42,14 +42,14 @@ stub envelope. Protect stores an operator-signed config and pins its public
 key outside the envelope. The worker passes both to `seal_init`; it does not
 receive a private key. A state without a pin refuses authorization.
 
-Before Protect, run `seal config-template TOOL [TOOL...]` with the same tool
-selections planned for Protect. It prints the exact `guard` and `forward`
-payload strings. Sign each string's UTF-8 bytes with an operator-held Ed25519
+Before Protect, use the shipped `contract/signed-policy.cjs` module's
+`policyPayloads(selections)` with the same tool selections planned for Protect.
+It returns the exact `guard` and `forward` payload strings. Sign each string's UTF-8 bytes with an operator-held Ed25519
 key. Put each payload and its hex signature in an envelope of the form
 `{"payload":"...","signature":"..."}`. Put the two envelope JSON strings in
-one JSON file as `guard` and `forward`. Run
-`seal protect --kernel-policy FILE --kernel-pubkey HEX SERVER TOOL [TOOL...]`,
-where HEX is the raw 32-byte public key in hex. Protect checks both signatures
+one JSON file as `guard` and `forward`. Set `SEAL_KERNEL_POLICY_FILE` to that
+file and `SEAL_KERNEL_PUBKEY` to the raw 32-byte public key in hex, then run
+`seal protect SERVER TOOL [TOOL...]`. Protect checks both signatures
 and the exact tool rules before it records the pin. Changed rules need a new
 signed policy at a new Protect operation. The signing key stays with the
 operator.

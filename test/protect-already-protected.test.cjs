@@ -61,7 +61,7 @@ function run(ctx, args) {
   const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, ctx.project);
   const result = spawnSync(process.execPath, [SEAL, ...prepared], {
     cwd: ctx.project,
-    env: ctx.env,
+    env: { ...ctx.env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
     encoding: "utf8",
   });
   const stdout = result.stdout || "";
