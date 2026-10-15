@@ -53,7 +53,8 @@ function probe(root) {
     db: { command: process.execPath, args: [path.join(root, "test-support", "tool-list-server.cjs"), "ok", "demo.mutate"] },
   } }) + "\n");
   const fake = fakeClaude(work);
-  const result = spawnSync(process.execPath, [path.join(root, "bin", "seal"), "protect", "db", "demo.mutate"], {
+  const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(["protect", "db", "demo.mutate"], work);
+  const result = spawnSync(process.execPath, [path.join(root, "bin", "seal"), ...prepared], {
     cwd: project, encoding: "utf8", timeout: 30000,
     env: { ...process.env, PATH: `${fake}${path.delimiter}${process.env.PATH}`, HOME: home, CLAUDE_CONFIG_DIR: config, XDG_DATA_HOME: xdg },
   });

@@ -24,7 +24,7 @@ test("the graph names an omitted transitive payload", () => {
 test("the graph follows a dynamic file URL import", () => {
   assert.throws(
     () => checkPayloadRequireGraph(PAYLOAD_PATHS.filter((file) => file !== "runtime/kernel/kernel.js")),
-    /REFUSE payload_require_unshipped: runtime\/kernel\/runner\.cjs imports runtime\/kernel\/kernel\.js/,
+    /REFUSE payload_require_unshipped: contract\/pinned-kernel\.cjs imports runtime\/kernel\/kernel\.js/,
   );
 });
 

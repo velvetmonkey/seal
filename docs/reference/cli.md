@@ -94,6 +94,13 @@ array or object. PATTERN is a JSON string containing exactly one `*`. For exampl
 `seal protect db 'query?operation="delete"' 'read?path~"private/*"'`.
 A bare tool selection gates the whole tool; duplicate selections are collapsed.
 
+Protect requires `SEAL_KERNEL_POLICY_FILE` and `SEAL_KERNEL_PUBKEY` in its
+environment. The file contains JSON `guard` and `forward` signed envelopes.
+The key is the operator-held Ed25519 public key, encoded as 64 lowercase hex
+characters. Protect verifies both signatures and the exact selected tools
+before it records the key in protected state. Existing states without this pin
+refuse at proxy startup.
+
 There are no general per-command help aliases or `--flag=value` forms. `demo`
 accepts only `--dir` pairs (the first directory wins). `protect` and `reproduce`
 reject unknown long options. `recover` requires its exact one- or two-argument

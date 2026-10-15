@@ -15,6 +15,7 @@ const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin/seal");
 const SERVER = path.join(ROOT, "test-support/tool-list-server.cjs");
 const { protectedToolNames, protectedToolSelections, readState, statePathFor } = require("../spine/protection.cjs");
+const { protectArgsWithPolicy } = require("../test-support/kernel-receipt.cjs");
 
 function setup(mode = "ok", source) {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-tool-validation-"));
@@ -48,7 +49,7 @@ fs.writeFileSync(f,JSON.stringify(config));
   return { root, project, home, env };
 }
 function run(ctx, args) {
-  const result = spawnSync(process.execPath, [SEAL, ...args], { cwd: ctx.project, env: ctx.env, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [SEAL, ...protectArgsWithPolicy(args, ctx.root)], { cwd: ctx.project, env: { ...ctx.env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY }, encoding: "utf8" });
   return { code: result.status, out: `${result.stdout || ""}${result.stderr || ""}` };
 }
 

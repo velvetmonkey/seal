@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createApprovalContract } = require("../contract/contract.cjs");
+const { createApprovalContract: createProductContract } = require("../contract/contract.cjs");
+const { testKernelAdapter } = require("../test-support/kernel-receipt.cjs");
+function createApprovalContract(options = {}) {
+  return createProductContract({ kernelAdapter: testKernelAdapter(), ...options });
+}
 const { canonicalString } = require("../contract/canonical.cjs");
-const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
 const { generateSigner, sealReceipt, canonical } = require("../spine/receipt-v2.cjs");
 const runner = require("../runtime/kernel/runner.cjs");
 const vectors = require("../test-support/json-argument-vectors.cjs");
@@ -49,7 +52,7 @@ test("real approval and independent signed-receipt replay accept practical JSON 
 });
 
 test("decimal changes and string substitution do not inherit an approval", () => {
-  const adapter = createKernelAuthorizationAdapter();
+  const adapter = testKernelAdapter();
   for (const [issuedArgs, retryArgs] of [
     [{ amount: 12.5 }, { amount: 12.6 }],
     [{ amount: 1.5 }, { amount: "1.5" }],

@@ -201,10 +201,11 @@ test("four beats from the installed artifact: install, demo, check, protect, unp
   fs.writeFileSync(mcpPath, before);
   const beforeHash = crypto.createHash("sha256").update(before).digest("hex");
 
-  assertNoForbiddenTool(process.execPath, [seal, "protect", "db", "demo.mutate"]);
-  const protectedRun = run(process.execPath, [seal, "protect", "db", "demo.mutate"], {
+  const protectArgs = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(["protect", "db", "demo.mutate"], work);
+  assertNoForbiddenTool(process.execPath, [seal, ...protectArgs]);
+  const protectedRun = run(process.execPath, [seal, ...protectArgs], {
     cwd: project,
-    env: runEnv,
+    env: { ...runEnv, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
   });
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.match(protectedRun.stdout, /PENDING RESTART/);

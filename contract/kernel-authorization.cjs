@@ -188,6 +188,7 @@ function createKernelAuthorizationAdapter({
   manifestPath = DEFAULT_MANIFEST,
   workerPath = path.join(__dirname, "kernel-authorization-worker.cjs"),
   workerTimeoutMs = DEFAULT_KERNEL_TIMEOUT_MS,
+  policy,
 } = {}) {
   return {
     authorize(input) {
@@ -206,8 +207,15 @@ function createKernelAuthorizationAdapter({
         );
       }
 
+      if (!/^[0-9a-f]{64}$/.test(policy?.publicKey || "")) {
+        throw new KernelAuthorizationError("kernel_config_pin_absent", "kernel config public-key pin is absent; enroll a signed policy at protect time");
+      }
+      const configEnvelope = Array.isArray(input.forwardMatches) ? policy.forward : policy.guard;
+      if (typeof configEnvelope !== "string") {
+        throw new KernelAuthorizationError("kernel_execution_refused", "kernel signed config envelope is absent");
+      }
       const requestSerializationStarted = process.hrtime.bigint();
-      const serializedRequest = JSON.stringify(input);
+      const serializedRequest = JSON.stringify({ ...input, configEnvelope, configPublicKey: policy.publicKey });
       const requestSerializationFinished = process.hrtime.bigint();
       // This timestamp is deliberately retained although it cannot form a
       // duration with the child's first-instruction timestamp: hrtime clocks

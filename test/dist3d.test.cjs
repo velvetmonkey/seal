@@ -418,7 +418,8 @@ process.exit(2);
     HOME: home,
     XDG_DATA_HOME: path.join(home, ".local", "share"),
   };
-  const protectedRun = runNode([seal, "protect", "db", "demo.mutate"], { cwd: project, env });
+  const protectArgs = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(["protect", "db", "demo.mutate"], built.out);
+  const protectedRun = runNode([seal, ...protectArgs], { cwd: project, env: { ...env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY } });
   assert.equal(protectedRun.code, 0, protectedRun.out);
   assert.match(protectedRun.stdout, /PENDING RESTART/);
   const unprotectedRun = runNode([seal, "unprotect", "db"], { cwd: project, env });

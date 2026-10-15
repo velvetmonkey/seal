@@ -9,6 +9,7 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
+const { signedKernelPolicy } = require("./kernel-receipt.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const MODEL = path.join(ROOT, "test-support", "kernel-authorization-model.lean");
@@ -121,7 +122,7 @@ function interpretedAnswers(t, config, steps, cfg) {
 test("interpreted Lean agrees with shipped WASM through the Node authorization adapter", async (t) => {
   const { cfg, cases, config, steps } = await scenarioData();
   const leanAnswers = interpretedAnswers(t, config, steps, cfg);
-  const adapter = createKernelAuthorizationAdapter();
+  const adapter = createKernelAuthorizationAdapter({ policy: signedKernelPolicy(["demo.mutate"]) });
   for (const [index, input] of cases.entries()) {
     let wasmAnswer;
     try {

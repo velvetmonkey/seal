@@ -24,6 +24,11 @@ aacdd2ef4696c853be3fffab5519e6ee5ff1a351c0da6c982b21650d4d349e05  ./.mcp.json
 
 ## 2. Protect only the erase tool
 
+Before this command, have the operator sign the guard and forward payloads
+for `demo.erase`. Set `SEAL_KERNEL_POLICY_FILE` to the file with those two
+signed envelopes and `SEAL_KERNEL_PUBKEY` to the independent Ed25519 public
+key pin. See [the config signing steps](../assurance/architecture.md).
+
 Stop any Claude Code session in this project, then run:
 
 ```bash

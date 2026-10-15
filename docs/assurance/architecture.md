@@ -24,7 +24,7 @@ The shipped Node CLI keeps continuation state in Node and sends only the
 authorization sub-question through the vendored WASM. A guarded retry follows
 `spine/proxy.cjs` → `contract/contract.cjs` →
 `contract/kernel-authorization.cjs` →
-`runtime/kernel/runner.cjs` → `seal_decide`. The WASM
+`contract/pinned-kernel.cjs` → `seal_init` → `seal_decide`. The WASM
 answer is load-bearing: BLOCK, unreadable output, a hash mismatch, or a
 Node/kernel disagreement all refuse, with no JavaScript authorization fallback.
 
@@ -38,11 +38,21 @@ TESTED (`test/approval-contract.test.cjs` and `test/kernel-bridge.test.cjs`).
 The state machine is TESTED.
 
 The working Node loader does not use `seal-config.js`'s hard-coded `demo-pk`
-stub envelope. It generates an Ed25519 key inside the kernel worker and signs
-the config immediately before `seal_init`. That gets the real kernel onto the
-product path without weakening signature verification, but it is still
-demo-grade, self-authorized configuration signing—not an externally trusted
-production configuration key.
+stub envelope. Protect stores an operator-signed config and pins its public
+key outside the envelope. The worker passes both to `seal_init`; it does not
+receive a private key. A state without a pin refuses authorization.
+
+Before Protect, use the shipped `contract/signed-policy.cjs` module's
+`policyPayloads(selections)` with the same tool selections planned for Protect.
+It returns the exact `guard` and `forward` payload strings. Sign each string's UTF-8 bytes with an operator-held Ed25519
+key. Put each payload and its hex signature in an envelope of the form
+`{"payload":"...","signature":"..."}`. Put the two envelope JSON strings in
+one JSON file as `guard` and `forward`. Set `SEAL_KERNEL_POLICY_FILE` to that
+file and `SEAL_KERNEL_PUBKEY` to the raw 32-byte public key in hex, then run
+`seal protect SERVER TOOL [TOOL...]`. Protect checks both signatures
+and the exact tool rules before it records the pin. Changed rules need a new
+signed policy at a new Protect operation. The signing key stays with the
+operator.
 
 ## Assurance lineage — Seal family architecture
 

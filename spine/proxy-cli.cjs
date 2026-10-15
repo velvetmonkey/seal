@@ -37,6 +37,11 @@ function requireProtectedIdentity(state) {
       typeof state.serverName !== "string" || state.serverName.length === 0) {
     throw new ProtectionError("identity_absent", "protected state must name both projectId and serverName before proxy startup");
   }
+  try {
+    require("../contract/signed-policy.cjs").validatePolicy(state.kernelPolicy, protectedToolSelections(state));
+  } catch (error) {
+    throw new ProtectionError("kernel_config_refused", error.message);
+  }
 }
 
 async function run(argv) {
@@ -133,6 +138,7 @@ async function run(argv) {
         storePath: state.storePath,
         receiptsDir: state.receiptsDir,
         signer,
+        kernelPolicy: state.kernelPolicy,
         childArgv: state.childArgv,
         childEnv: state.childEnv,
         childCwd: state.projectRoot,

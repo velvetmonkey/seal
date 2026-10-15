@@ -6,6 +6,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
+const { protectArgsWithPolicy } = require("../test-support/kernel-receipt.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SCRATCH_ROOT = testTmpdir("seal-reinstall-tests-");
@@ -145,7 +146,8 @@ else if(a[1]==='remove') {delete servers[name];} else process.exit(2);
 fs.writeFileSync(file,JSON.stringify(config,null,2)+'\\n');
 `, { mode: 0o755 });
   const invoke = (argv, options = {}) => {
-    const result = spawnSync(process.execPath, [options.binary || path.join(prefix, 'bin/seal'), ...argv], { cwd: options.project || project, env: { ...env, ...options.env }, input: options.input ?? '', encoding: 'utf8', timeout: 20000 });
+    argv = protectArgsWithPolicy(argv, home);
+    const result = spawnSync(process.execPath, [options.binary || path.join(prefix, 'bin/seal'), ...argv], { cwd: options.project || project, env: { ...env, ...options.env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY }, input: options.input ?? '', encoding: 'utf8', timeout: 20000 });
     return { code: result.status, out: (result.stdout || '') + (result.stderr || '') };
   };
   const installed = install(uninstallArtifact, prefix);
@@ -356,7 +358,7 @@ test('uninstall refuses a route subsequently owned by a different installation',
   assert.equal(box.invoke(['unprotect', 'warehouse']).code, 0);
   const second = path.join(box.root, 'other-prefix');
   assert.equal(install(uninstallArtifact, second).code, 0);
-  const protectedAgain = spawnSync(process.execPath, [path.join(second, 'bin/seal'), 'protect', 'warehouse', 'inspect'], { cwd: box.project, env: box.env, encoding: 'utf8' });
+  const protectedAgain = spawnSync(process.execPath, [path.join(second, 'bin/seal'), ...protectArgsWithPolicy(['protect', 'warehouse', 'inspect'], box.home)], { cwd: box.project, env: { ...box.env, SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY }, encoding: 'utf8' });
   assert.equal(protectedAgain.status, 0, protectedAgain.stderr);
   const config = fs.readFileSync(box.config);
   const state = fs.readFileSync(box.statePath);

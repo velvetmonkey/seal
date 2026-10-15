@@ -151,6 +151,20 @@ installed artifact from bytes that match the trusted distribution pin.
 The runtime manifest is missing, unreadable, malformed, or lacks a valid WASM
 pin. Restore a complete pinned installation; do not invent a replacement hash.
 
+### `kernel_config_refused`
+
+Protect or proxy startup found no operator public-key pin, or the signed policy
+did not match the selected tools and pin. Obtain a signed guard and forward
+policy from the operator. Set `SEAL_KERNEL_POLICY_FILE` and
+`SEAL_KERNEL_PUBKEY` before Protect. An old protected state needs a new Protect
+operation with the signed policy.
+
+### `kernel_config_pin_absent`
+
+The authorization adapter received no valid public-key pin. The call does not
+forward. Protect the route with an operator-signed policy and an independent
+public-key pin, then restart the protected client.
+
 ### `kernel_execution_refused`
 
 The isolated kernel worker could not start, exceeded its 30000ms execution

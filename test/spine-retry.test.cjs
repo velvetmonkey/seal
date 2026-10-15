@@ -17,7 +17,12 @@ const { testTmpdir } = require("../scripts/temp-root.cjs");
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
 const CHECKER = path.join(ROOT, "checker", "seal-receipt-v2.mjs");
-const { createProxy } = require("../spine/proxy.cjs");
+const { createProxy: createProductProxy } = require("../spine/proxy.cjs");
+const { signedKernelPolicy } = require("../test-support/kernel-receipt.cjs");
+function createProxy(options) {
+  const selections = options?.guardSelections || options?.guardTools || (options?.guardTool ? [options.guardTool] : []);
+  return createProductProxy({ ...options, kernelPolicy: options?.kernelPolicy || (selections.length ? signedKernelPolicy(selections) : undefined) });
+}
 const { generateSigner } = require("../spine/receipt-v2.cjs");
 const { createJournal } = require("../spine/store.cjs");
 
@@ -116,7 +121,7 @@ const blockRetry = (() => {
 const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
-  if (blockRetry && request.endsWith("runner.cjs")) ${sleep}
+  if (blockRetry && request.endsWith("pinned-kernel.cjs")) ${sleep}
   return load.apply(this, arguments);
 };`,
     wasm_load: `${gate}
@@ -124,7 +129,7 @@ const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (blockRetry && request.endsWith("runner.cjs")) {
+  if (blockRetry && request.endsWith("pinned-kernel.cjs")) {
     const runnerLoad = value.load;
     value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
   }
@@ -135,7 +140,7 @@ const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (blockRetry && request.endsWith("runner.cjs")) {
+  if (blockRetry && request.endsWith("pinned-kernel.cjs")) {
     const decide = value.decide;
     value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
   }
@@ -381,6 +386,7 @@ function spawnProxy(dir, dataFile, extra = {}) {
     schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
     projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
     projectServerDigest: project.serverDigest, guardTools: ["demo.mutate"],
+    kernelPolicy: signedKernelPolicy(["demo.mutate"]),
     storePath: storePath, receiptsDir: extra.receiptsDir || path.join(dir, "receipts"),
     childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });
@@ -915,7 +921,7 @@ for (const scenario of duplicateAnswerCases) test(`completed answer duplicate pr
   let clock = 1700000000000;
   const makeProxy = proxyWithRetryFault(scenario.fault, () => faultActive);
   const proxy = makeProxy({
-    signer: generateSigner(), guardTool: "write_file", storePath, receiptsDir,
+    signer: generateSigner(), guardTool: "write_file", kernelPolicy: signedKernelPolicy(["write_file"]), storePath, receiptsDir,
     now: () => clock,
     ...(scenario.timeout ? { elicitationTimeoutMs: 100 } : {}),
     ...(scenario.fault?.startsWith("runtime_tree_") ? { runtimeTreeCheck: () => faultActive
@@ -1353,6 +1359,7 @@ test("a receipt-writer ReceiptRefusal still escapes write and does not elicit", 
   const proxy = createProxyInjected({
     signer: generateSigner(),
     guardTool: "demo.mutate",
+    kernelPolicy: signedKernelPolicy(["demo.mutate"]),
     storePath,
     receiptsDir: path.join(dir, "receipts"),
     childArgv: [process.execPath, SEAL, "__demo-server", dataFile],
@@ -1717,6 +1724,7 @@ for (const mode of ["omitted", "explicit empty", "unguarded omitted"]) {
     const frames = [];
     const proxy = observedCreateProxy({
       guardTool: mode === "unguarded omitted" ? "other" : "flush",
+      kernelPolicy: signedKernelPolicy([mode === "unguarded omitted" ? "other" : "flush"]),
       storePath, signer, receiptsDir: path.join(dir, "receipts"),
       childArgv: [process.execPath, "-e", server, callsFile],
       onClientLine: line => frames.push(JSON.parse(line)),
@@ -1822,7 +1830,7 @@ async function harness(t, observeMaps = false, childRequestId = null, capacity =
     require('node:vm').runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
     makeProxy = context.module.exports.createProxy;
   }
-  const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', storePath,
+  const proxy = makeProxy({ signer: generateSigner(), guardTool: 'demo.mutate', kernelPolicy: signedKernelPolicy(['demo.mutate']), storePath,
     receiptsDir: path.join(dir, 'receipts'), receiptCorrelationCapacity: capacity,
     onChildExit(code, signal) { exited({code, signal, sizes: maps.map(m => m.size), timers: timers.size}); },
     childArgv: [process.execPath, '-e', `const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const f=JSON.parse(line);if(f.method==='tools/call'&&f.params&&f.params.name==='test.exit')process.exit(7);fs.appendFileSync(process.argv[1],line+'\\n');if(f.method==='initialize' && process.argv[2])process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:process.argv[2],method:'roots/list'})+'\\n');if(f.method && Object.hasOwn(f,'id'))process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:f.id,result:{}})+'\\n');});`, record, childRequestId || ''],

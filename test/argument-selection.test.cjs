@@ -5,7 +5,13 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { createProxy } = require("../spine/proxy.cjs");
+const { createProxy: createProductProxy } = require("../spine/proxy.cjs");
+const { signedKernelPolicy } = require("../test-support/kernel-receipt.cjs");
+function createProxy(options) {
+  const selections = options?.guardSelections || options?.guardTools || (options?.guardTool ? [options.guardTool] : []);
+  const signable = selections.map((selection) => selection?.name && !normalizeToolSelection(selection).ok ? selection.name : selection);
+  return createProductProxy({ ...options, kernelPolicy: options?.kernelPolicy || (signable.length ? signedKernelPolicy(signable) : undefined) });
+}
 const { generateSigner } = require("../spine/receipt-v2.cjs");
 const { createJournal } = require("../spine/store.cjs");
 const { evaluateSelection, normalizeToolSelection } = require("../spine/tool-selection.cjs");

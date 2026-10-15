@@ -13,6 +13,7 @@ const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
 const ROOT = path.join(__dirname, "..");
+const { signedKernelPolicy } = require("../test-support/kernel-receipt.cjs");
 
 
 function copyRunnableProduct(destination) {
@@ -143,6 +144,7 @@ async function runBrokenProtected(productRoot, dir) {
     schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
     projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
     projectServerDigest: project.serverDigest, guardTools: ["demo.mutate"],
+    kernelPolicy: signedKernelPolicy(["demo.mutate"]),
     storePath: store, receiptsDir: receipts,
     childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });

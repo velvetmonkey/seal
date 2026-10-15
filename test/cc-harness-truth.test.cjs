@@ -7,8 +7,10 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 const { createHash } = require("node:crypto");
+const { protectArgsWithPolicy } = require("../test-support/kernel-receipt.cjs");
 
 const ROOT = path.join(__dirname, "..");
+protectArgsWithPolicy(["protect", "notes", "append_note"], testTmpdir("seal-cc-policy-"));
 const HARNESS = path.join(ROOT, "harness", "claude-code", "cc-harness.cjs");
 const SYNTHETIC_CLIENT = path.join(ROOT, "harness", "claude-code", "synthetic-client.cjs");
 const { parseCast, rawCastOutputText } = require(path.join(ROOT, "harness", "claude-code", "terminal-renderer.cjs"));

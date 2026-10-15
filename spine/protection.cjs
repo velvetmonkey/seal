@@ -1242,6 +1242,7 @@ async function protect({
   serverName,
   guardTools,
   guardTool,
+  kernelPolicy,
   projectRoot = process.cwd(),
   sealBin = process.argv[1],
   env = process.env,
@@ -1295,6 +1296,9 @@ async function protect({
     );
   }
 
+  try { require("../contract/signed-policy.cjs").validatePolicy(kernelPolicy, requestedSelections); }
+  catch (error) { throw new ProtectionError("kernel_config_refused", error.message); }
+
   const lock = acquireProjectLock(root, env, "protect");
   try {
     const latest = readState(statePath);
@@ -1317,6 +1321,7 @@ async function protect({
       projectId: projectId(root),
       serverName,
       guardTools: requestedTools,
+      kernelPolicy,
       guardPredicates: requestedSelections
         .filter((selection) => selection.predicate !== null && !wholeTools.has(selection.name))
         .map((selection) => ({ tool: selection.name, predicate: selection.predicate })),

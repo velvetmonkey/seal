@@ -7,6 +7,7 @@ const { execFileSync, spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
+const { protectArgsWithPolicy } = require("../test-support/kernel-receipt.cjs");
 
 const SEAL = path.join(__dirname, "../bin/seal");
 const { processStartWitness, statePathFor, readState } = require("../spine/protection.cjs");
@@ -112,10 +113,11 @@ function fakeLocalOverridePath(root) {
 }
 
 function run(project, home, args, extraEnv = {}) {
+  args = protectArgsWithPolicy(args, home);
   try {
     return { code: 0, out: execFileSync(SEAL, args, {
       cwd: project,
-      env: { ...process.env, ...extraEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share") },
+      env: { ...process.env, ...extraEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share"), SEAL_KERNEL_POLICY_FILE: process.env.SEAL_KERNEL_POLICY_FILE, SEAL_KERNEL_PUBKEY: process.env.SEAL_KERNEL_PUBKEY },
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     }) };

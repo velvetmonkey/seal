@@ -55,7 +55,7 @@ async function main() {
   const kernelRoot = path.resolve(process.argv[2]);
   const moduleLoadStarted = timestamp();
   emitPhaseStart("child_bootstrap_to_module_load", moduleLoadStarted);
-  const runner = require(path.join(kernelRoot, "runner.cjs"));
+  const runner = require("./pinned-kernel.cjs");
   const cfg = await import(pathToFileURL(path.join(kernelRoot, "seal-config.js")).href);
   const moduleLoadFinished = timestamp();
   emitPhase("child_bootstrap_to_module_load", moduleLoadStarted, moduleLoadFinished);
@@ -77,7 +77,7 @@ async function main() {
   emitPhase("child_request_parse", requestParseStarted, requestParseFinished);
   const wasmLoadStarted = timestamp();
   emitPhaseStart("wasm_load", wasmLoadStarted);
-  await runner.load();
+  await runner.load(kernelRoot);
   const wasmLoadFinished = timestamp();
   emitPhase("wasm_load", wasmLoadStarted, wasmLoadFinished);
 
@@ -88,37 +88,17 @@ async function main() {
   // matching selection would have held for approval.
   const unapprovedForward = Array.isArray(request.forwardMatches);
   if (unapprovedForward && request.accepted !== false) throw new Error("an unapproved forward cannot carry an approval");
-  const tools = unapprovedForward
-    ? [
-      ...request.forwardMatches.map((match) => ({
-        name: request.retryTool,
-        mode: "guarded",
-        match,
-        target: [{ full_arguments: true }],
-      })),
-      { name: request.retryTool, mode: "allow", match: { type: "always" }, target: [] },
-    ]
-    : [{
-      name: request.retryTool,
-      mode: "guarded",
-      match: { type: "always" },
-      target: [{ full_arguments: true }],
-    }];
-  const config = {
-    epoch: request.epoch,
-    safety: {
-      approval: { control_file: "product-adapter", ttl_seconds: 120 },
-      tools,
-    },
-    temporal: { policies: [] },
-  };
+  if (!/^[0-9a-f]{64}$/.test(request.configPublicKey || "")) throw new Error("kernel config public-key pin is absent");
+  if (typeof request.configEnvelope !== "string") throw new Error("kernel config envelope is absent");
+  const envelope = JSON.parse(request.configEnvelope);
+  const config = JSON.parse(envelope.payload);
   const issuedTarget = cfg.guardTarget(request.issuedTool, request.issuedArgs);
   const approvals = request.accepted ? [issuedTarget] : [];
   const grantedCapabilities = approvals.map((target) => ({ target }));
   const kernelInputs = { approvals, votes: "", grants: "", forecasts: "" };
   const decisionStarted = timestamp();
   emitPhaseStart("decision_execution", decisionStarted);
-  const result = await runner.decide(config, {
+  const result = await runner.decide(kernelRoot, request.configEnvelope, request.configPublicKey, config, {
     tool: request.retryTool,
     args: request.retryArgs,
     approvals,

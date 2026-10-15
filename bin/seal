@@ -707,7 +707,11 @@ async function protectCommand(args) {
   }
   const [serverName, ...requestedTools] = positional;
   const guardTools = [...new Set(requestedTools)];
-  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
+  let kernelPolicy;
+  if (process.env.SEAL_KERNEL_POLICY_FILE) {
+    kernelPolicy = { ...JSON.parse(fs.readFileSync(process.env.SEAL_KERNEL_POLICY_FILE, "utf8")), publicKey: process.env.SEAL_KERNEL_PUBKEY };
+  }
+  const result = await protection.protect({ serverName, guardTools, kernelPolicy, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(result.state.guardTools);
