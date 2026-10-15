@@ -61,7 +61,8 @@ process.exit(2);
 }
 
 function run(ctx, args) {
-  const result = spawnSync(process.execPath, [SEAL, ...args], {
+  const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, ctx.project);
+  const result = spawnSync(process.execPath, [SEAL, ...prepared], {
     cwd: ctx.project,
     env: ctx.env,
     encoding: "utf8",

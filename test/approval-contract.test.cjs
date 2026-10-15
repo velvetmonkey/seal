@@ -14,7 +14,11 @@ const { spawn } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
 
-const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
+const { createApprovalContract: createProductContract, REFUSALS } = require("../contract/contract.cjs");
+const { testKernelAdapter } = require("../test-support/kernel-receipt.cjs");
+function createApprovalContract(options = {}) {
+  return createProductContract({ kernelAdapter: testKernelAdapter(), ...options });
+}
 const { renderApprovalMessage, MESSAGE_LINE_CAP, MESSAGE_CHARACTER_CAP, WIDTH_MARGIN, displayWidth, renderName } = require("../contract/renderer.cjs");
 const { canonicalString, sha256Hex } = require("../contract/canonical.cjs");
 const { canonical, generateSigner, sealReceipt } = require("../spine/receipt-v2.cjs");

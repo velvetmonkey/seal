@@ -13,7 +13,12 @@ const SCRATCH = process.env.RUNNER_TEMP
   ? path.join(process.env.RUNNER_TEMP, "receiptkey")
   : testTmpdir("seal-receiptkey-");
 const { createJournal } = require("../spine/store.cjs");
-const { createProxy } = require("../spine/proxy.cjs");
+const { createProxy: createProductProxy } = require("../spine/proxy.cjs");
+const { signedKernelPolicy } = require("../test-support/kernel-receipt.cjs");
+function createProxy(options) {
+  const selections = options?.guardSelections || options?.guardTools || (options?.guardTool ? [options.guardTool] : []);
+  return createProductProxy({ ...options, kernelPolicy: options?.kernelPolicy || (selections.length ? signedKernelPolicy(selections) : undefined) });
+}
 const { loadReceiptSigner, projectId, readProjectServer, receiptKeyPaths, statePathFor } = require("../spine/protection.cjs");
 
 function fixture() {
@@ -41,6 +46,7 @@ function fixture() {
     serverName: "db",
     projectServerDigest: observed.serverDigest,
     guardTool: "demo.mutate",
+    kernelPolicy: signedKernelPolicy(["demo.mutate"]),
     storePath,
     receiptsDir,
     childArgv: observed.childArgv,

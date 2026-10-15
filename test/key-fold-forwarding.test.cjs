@@ -10,6 +10,7 @@ const readline = require("node:readline");
 const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
+const { signedKernelPolicy } = require("../test-support/kernel-receipt.cjs");
 
 const PREDICATE = 'path~"/prod/*"';
 
@@ -70,6 +71,7 @@ function session(t) {
     projectRoot, projectId: protection.projectId(projectRoot), serverName: "files",
     projectServerDigest: project.serverDigest, guardTools: ["write_file"],
     guardPredicates: [{ tool: "write_file", predicate: PREDICATE }],
+    kernelPolicy: signedKernelPolicy([`write_file?${PREDICATE}`]),
     storePath, receiptsDir, childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });
   const proxy = spawn(process.execPath, [installedProxyPath(), "__proxy", "--protect-state", statePath],

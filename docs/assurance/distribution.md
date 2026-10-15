@@ -70,9 +70,9 @@ receipt components (including the receipt-sealing module used by both
 the demo and protected paths), and the approval contract.
 It also includes the pinned vendored kernel and the fail-closed Node adapter
 that invokes it. The state machine is
-TESTED. The adapter uses an in-worker generated Ed25519 key to sign the config
-accepted by `seal_init`; this is demo-grade self-authorization, not a
-production config-signing trust root. Corrupt or unpinned WASM refuses and has
+TESTED. Protect requires an operator-signed config and a separate public-key
+pin; the worker passes both to `seal_init` and holds no config signing key.
+Existing states without the pin refuse authorization. Corrupt or unpinned WASM refuses and has
 no JavaScript authorization fallback. Each kernel worker invocation has a
 30000ms product-enforced deadline and is killed if it exceeds that deadline; the
 guarded call refuses as `kernel_execution_refused` and does not fall back to

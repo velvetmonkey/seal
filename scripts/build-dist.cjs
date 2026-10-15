@@ -48,6 +48,8 @@ const PAYLOAD_PATHS = [
   "contract/contract.cjs",
   "contract/kernel-authorization.cjs",
   "contract/kernel-authorization-worker.cjs",
+  "contract/pinned-kernel.cjs",
+  "contract/signed-policy.cjs",
   "contract/renderer.cjs",
   "runtime/macos-process-start-witness.c",
   "runtime/kernel/kernel.js",

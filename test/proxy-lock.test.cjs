@@ -150,6 +150,7 @@ function pendingServers(names) {
       projectId: projectId(project),
       serverName: name,
       guardTool: "demo.mutate",
+      kernelPolicy: require("../test-support/kernel-receipt.cjs").signedKernelPolicy(["demo.mutate"]),
       projectServerDigest: projectServer.serverDigest,
       projectServer: projectServer.server,
       childArgv: projectServer.childArgv,
@@ -266,7 +267,8 @@ if (process.argv[2] === "--version") { console.log("2.1.278 (Claude Code)"); pro
   fs.chmodSync(path.join(bin, "claude"), 0o755);
   const env = { ...process.env, ...ctx.env, HOME: home, CLAUDE_CONFIG_DIR: home,
     PATH: `${bin}${path.delimiter}${process.env.PATH}`, GIT_CEILING_DIRECTORIES: ctx.root };
-  const protector = spawn(process.execPath, [path.join(__dirname, "../bin/seal"), "protect", "beta", "demo.mutate"],
+  const protectArgs = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(["protect", "beta", "demo.mutate"], ctx.root);
+  const protector = spawn(process.execPath, [path.join(__dirname, "../bin/seal"), ...protectArgs],
     { cwd: ctx.project, env, stdio: ["ignore", "pipe", "pipe"] });
   const protectorExit = waitForExit(protector);
   let protectOutput = "";

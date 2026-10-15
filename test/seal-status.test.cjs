@@ -885,7 +885,7 @@ test("history deletion and renumbering during reads cannot assert completeness",
 test("history finds freshly emitted approval receipts in seconds and milliseconds without changing signed bytes", async () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-history-emitted-"));
   const { createApprovalContract } = require("../contract/contract.cjs");
-  const { createKernelAuthorizationAdapter } = require("../contract/kernel-authorization.cjs");
+  const { testKernelAdapter } = require("../test-support/kernel-receipt.cjs");
   const { generateSigner } = require("../spine/receipt-v2.cjs");
   const { openReceiptEmitter } = require("../spine/receipts.cjs");
   const { query } = require("../spine/receipt-population.cjs");
@@ -893,7 +893,7 @@ test("history finds freshly emitted approval receipts in seconds and millisecond
   const signer = generateSigner();
   const emitter = openReceiptEmitter(root, signer);
   const tool = "demo.mutate", args = { line: "history integration" };
-  const contract = createApprovalContract();
+  const contract = createApprovalContract({ kernelAdapter: testKernelAdapter() });
   const pending = contract.begin({ tool, args });
   const decision = contract.retry({ tool, args, requestState: pending.result.requestState,
     inputResponses: { approval: { action: "accept", content: { approve: true } } } });
@@ -904,7 +904,7 @@ test("history finds freshly emitted approval receipts in seconds and millisecond
   // Real kernel evaluation and the same signing/writing path, with a caller
   // supplying milliseconds. No hand-authored receipt or post-signature edit.
   const emitAt = (now) => {
-    const result = createKernelAuthorizationAdapter().authorize({ epoch: 1,
+    const result = testKernelAdapter().authorize({ epoch: 1,
       issuedTool: tool, issuedArgs: args, retryTool: tool, retryArgs: args,
       accepted: true, now });
     assert.equal(result.verdict, "ALLOW");

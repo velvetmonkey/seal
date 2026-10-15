@@ -11,10 +11,12 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const readline = require("node:readline");
 
 const { createProxy, StoreError } = require("./proxy.cjs");
 const { generateSigner } = require("./receipt-v2.cjs");
+const { policyPayloads } = require("../contract/signed-policy.cjs");
 const { createJournal } = require("./store.cjs");
 const { requireSupportedPlatform } = require("./platform.cjs");
 const { inspectReceiptDirectory } = require("./receipt-population.cjs");
@@ -164,9 +166,15 @@ async function run(argv, sealBinPath) {
   let proxy;
   try {
     createJournal(storePath); // deliberate init: absent-at-gate-time is a refusal
+    const payloads = policyPayloads([TOOL]);
+    const signConfig = (payload) => JSON.stringify({
+      payload,
+      signature: crypto.sign(null, Buffer.from(payload, "utf8"), signer.privateKey).toString("hex"),
+    });
     proxy = createProxy({
       guardTool: TOOL,
       signer,
+      kernelPolicy: { publicKey: signer.publicKeyHex, guard: signConfig(payloads.guard), forward: signConfig(payloads.forward) },
       storePath,
       receiptsDir,
       childArgv: [process.execPath, sealBinPath, "__demo-server", dataFile],

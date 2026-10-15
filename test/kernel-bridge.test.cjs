@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -13,6 +14,8 @@ const {
   createKernelAuthorizationAdapter,
   DEFAULT_KERNEL_ROOT,
 } = require("../contract/kernel-authorization.cjs");
+const { policyPayloads } = require("../contract/signed-policy.cjs");
+const { signedKernelPolicy, testKernelAdapter } = require("../test-support/kernel-receipt.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SEAL = path.join(ROOT, "bin", "seal");
@@ -22,6 +25,48 @@ const TOOL = "demo.mutate";
 const ARGS = { line: "kernel bridge acceptance" };
 const ACCEPT = { approval: { action: "accept", content: { approve: true } } };
 const execFileAsync = promisify(execFile);
+
+function signedTestPolicy(selections = [TOOL]) {
+  const keys = crypto.generateKeyPairSync("ed25519");
+  const publicKey = Buffer.from(keys.publicKey.export({ type: "spki", format: "der" })).subarray(-32).toString("hex");
+  const payloads = policyPayloads(selections);
+  const envelope = (payload) => JSON.stringify({
+    payload, signature: crypto.sign(null, Buffer.from(payload), keys.privateKey).toString("hex"),
+  });
+  return { publicKey, guard: envelope(payloads.guard), forward: envelope(payloads.forward) };
+}
+
+const signedInput = { epoch: 1, issuedTool: TOOL, issuedArgs: ARGS, retryTool: TOOL, retryArgs: ARGS, accepted: true, now: 1000 };
+
+test("valid operator config and independent pin accept through seal_init", () => {
+  assert.equal(createKernelAuthorizationAdapter({ policy: signedTestPolicy() }).authorize(signedInput).verdict, "ALLOW");
+});
+
+test("changed signed config payload refuses", () => {
+  const policy = signedTestPolicy();
+  const changed = JSON.parse(policy.guard);
+  changed.payload = changed.payload.replace('"epoch":1', '"epoch":2');
+  assert.throws(() => createKernelAuthorizationAdapter({ policy: { ...policy, guard: JSON.stringify(changed) } }).authorize(signedInput),
+    /config signature verification failed/);
+});
+
+test("wrong config pin refuses", () => {
+  const policy = signedTestPolicy();
+  assert.throws(() => createKernelAuthorizationAdapter({ policy: { ...policy, publicKey: "00".repeat(32) } }).authorize(signedInput),
+    /config signature verification failed/);
+});
+
+test("absent config pin refuses and names the missing pin", () => {
+  assert.throws(() => createKernelAuthorizationAdapter().authorize(signedInput),
+    /kernel config public-key pin is absent/);
+});
+
+test("product worker path contains no config signing key or signing runner", () => {
+  for (const file of ["contract/kernel-authorization-worker.cjs", "contract/pinned-kernel.cjs"]) {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    assert.doesNotMatch(source, /generateKeyPairSync|crypto\.sign\(|runner\.cjs/, file);
+  }
+});
 
 // Protected Accept requires an installer-produced anchor, even in tests.
 // Build/install a separate payload; never fabricate a source-checkout record.
@@ -95,6 +140,7 @@ function proxyHarness(t, env = {}) {
     schema: "seal.protect/v1", state: protection.STATES.PENDING_RESTART,
     projectRoot, projectId: protection.projectId(projectRoot), serverName: "demo",
     projectServerDigest: project.serverDigest, guardTools: [TOOL],
+    kernelPolicy: signedKernelPolicy([TOOL]),
     storePath: store, receiptsDir: receipts,
     childArgv: project.childArgv, childEnv: project.childEnv, lease: null,
   }), { mode: 0o600 });
@@ -264,10 +310,10 @@ const Module = require("node:module");
 const originalLoad = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = originalLoad.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (request.endsWith("pinned-kernel.cjs")) {
     const decide = value.decide;
     value.decide = async function(...args) {
-      if (args[1]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
+      if (args[4]?.approvals?.length) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30100);
       return decide.apply(this, args);
     };
   }
@@ -286,7 +332,7 @@ Module._load = function(request, parent, isMain) {
 });
 
 test("authorization rows are presented to the real kernel and alterations are denied", () => {
-  const real = createKernelAuthorizationAdapter();
+  const real = testKernelAdapter();
   for (const vector of [
     { overrides: { args: { line: "altered" } }, refusal: REFUSALS.ARGUMENTS_ALTERED },
     { overrides: { tool: "other.tool" }, refusal: REFUSALS.TOOL_ALTERED },
@@ -304,7 +350,7 @@ test("authorization rows are presented to the real kernel and alterations are de
 });
 
 test("kernel timing publishes only same-clock timestamp pairs and names cross-process gaps", () => {
-  const answer = createKernelAuthorizationAdapter().authorize({
+  const answer = testKernelAdapter().authorize({
     epoch: 1,
     issuedTool: TOOL,
     issuedArgs: ARGS,
@@ -383,7 +429,7 @@ test("physical wasm corruption refuses by name with no JavaScript fallback", (t)
 
 test("a hung kernel worker reaches its product deadline and refuses closed", () => {
   const contract = createApprovalContract({
-    kernelAdapter: createKernelAuthorizationAdapter({ workerPath: HANGING_WORKER }),
+    kernelAdapter: createKernelAuthorizationAdapter({ workerPath: HANGING_WORKER, policy: signedKernelPolicy([TOOL]) }),
   });
   const started = Date.now();
   const refused = acceptedRetry(contract, fresh(contract));
@@ -401,7 +447,7 @@ const Module = require("node:module");
 const originalLoad = Module._load;
 Module._load = function(request, parent, isMain) {
   const loaded = originalLoad.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (request.endsWith("pinned-kernel.cjs")) {
     const decide = loaded.decide;
     loaded.decide = async (...args) => {
       await new Promise((resolve) => setTimeout(resolve, 30100));
@@ -418,7 +464,7 @@ Module._load = function(request, parent, isMain) {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     fs.rmSync(path.dirname(control), { recursive: true, force: true });
   });
-  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const contract = createApprovalContract({ kernelAdapter: testKernelAdapter() });
   const refused = acceptedRetry(contract, fresh(contract));
   assert.equal(refused.kind, "refuse");
   assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
@@ -471,7 +517,7 @@ process.stdout.write = function(chunk, ...rest) {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     fs.rmSync(path.dirname(control), { recursive: true, force: true });
   });
-  const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+  const contract = createApprovalContract({ kernelAdapter: testKernelAdapter() });
   const refused = acceptedRetry(contract, fresh(contract));
   assert.equal(refused.refusal, REFUSALS.KERNEL_EXECUTION_REFUSED);
   assert.equal(refused.timing.kernel_timing_active_phase, null);
@@ -493,7 +539,7 @@ function blockingPreload(phase) {
 const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
-  if (request.endsWith("runner.cjs")) ${sleep}
+  if (request.endsWith("pinned-kernel.cjs")) ${sleep}
   return load.apply(this, arguments);
 };`,
     child_request_read: `
@@ -513,7 +559,7 @@ const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (request.endsWith("pinned-kernel.cjs")) {
     const runnerLoad = value.load;
     value.load = async function(...args) { ${sleep} return runnerLoad.apply(this, args); };
   }
@@ -524,7 +570,7 @@ const Module = require("node:module");
 const load = Module._load;
 Module._load = function(request, parent, isMain) {
   const value = load.apply(this, arguments);
-  if (request.endsWith("runner.cjs")) {
+  if (request.endsWith("pinned-kernel.cjs")) {
     const decide = value.decide;
     value.decide = async function(...args) { ${sleep} return decide.apply(this, args); };
   }
@@ -557,8 +603,8 @@ test("each blocked worker phase names itself in the timeout refusal", async (t) 
     fs.writeFileSync(control, blockingPreload(phase));
     const program = `
 const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
-const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
-const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const { testKernelAdapter } = require(${JSON.stringify(path.join(ROOT, "test-support", "kernel-receipt.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: testKernelAdapter() });
 const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
 const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
 process.stdout.write(JSON.stringify(result));`;
@@ -580,8 +626,8 @@ test("an active wasm load publishes the gap from request parse to its start", as
   fs.writeFileSync(control, blockingPreload("wasm_load"));
   const program = `
 const { createApprovalContract } = require(${JSON.stringify(path.join(ROOT, "contract", "contract.cjs"))});
-const { createKernelAuthorizationAdapter } = require(${JSON.stringify(path.join(ROOT, "contract", "kernel-authorization.cjs"))});
-const contract = createApprovalContract({ kernelAdapter: createKernelAuthorizationAdapter() });
+const { testKernelAdapter } = require(${JSON.stringify(path.join(ROOT, "test-support", "kernel-receipt.cjs"))});
+const contract = createApprovalContract({ kernelAdapter: testKernelAdapter() });
 const state = contract.begin({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)} }).result.requestState;
 const result = contract.retry({ tool: ${JSON.stringify(TOOL)}, args: ${JSON.stringify(ARGS)}, requestState: state, inputResponses: ${JSON.stringify(ACCEPT)} });
 process.stdout.write(JSON.stringify(result));`;

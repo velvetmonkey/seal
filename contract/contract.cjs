@@ -49,6 +49,7 @@ const REFUSALS = Object.freeze({
   KERNEL_MANIFEST_REFUSED: "kernel_manifest_refused",
   KERNEL_EXECUTION_REFUSED: "kernel_execution_refused",
   KERNEL_OUTPUT_REFUSED: "kernel_output_refused",
+  KERNEL_CONFIG_PIN_ABSENT: "kernel_config_pin_absent",
   LEASE_GENERATION_MISMATCH: "lease_generation_mismatch",
 });
 
@@ -59,11 +60,13 @@ function createApprovalContract({
   projectId = "default-project",
   serverId = "default-server",
   store,
-  kernelAdapter = createKernelAuthorizationAdapter(),
+  kernelAdapter,
+  kernelPolicy,
   leaseFence,
   runtimeTreeCheck,
   onRuntimeObservation,
 } = {}) {
+  kernelAdapter ||= createKernelAuthorizationAdapter({ policy: kernelPolicy });
   // A fresh random epoch per construction: pendings from any earlier epoch
   // are invalid by definition — a restart forces a fresh call.
   const connectionEpoch = crypto.randomBytes(8).toString("hex");

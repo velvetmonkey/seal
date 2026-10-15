@@ -93,7 +93,8 @@ function setup(prefix) {
   return { root, project, home, dataFile, fakeBin, env, mcp, mcpPath: path.join(project, ".mcp.json") };
 }
 function runSeal(ctx, args, extraEnv = {}) {
-  const result = spawnSync(process.execPath, [SEAL, ...args], {
+  const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, ctx.root);
+  const result = spawnSync(process.execPath, [SEAL, ...prepared], {
     cwd: ctx.project,
     env: { ...process.env, ...ctx.env, ...extraEnv },
     encoding: "utf8",

@@ -21,10 +21,10 @@ equality for those two files, so edit here first, then mirror.
 
 ## Trust boundaries
 
-The Node product's kernel config is signed by an Ed25519 key generated inside
-the same worker that supplies the config. The rejected `demo-pk` stub is not on
-the decision path, but the replacement is still demo-grade self-authorization,
-not an operator-pinned or externally trusted production config key.
+The Node product requires an operator-signed kernel config at protect time.
+The protected state pins its public key outside the signed envelope. Existing
+states without that pin refuse kernel authorization and name the missing pin.
+The rejected `demo-pk` stub is not on the decision path.
 
 These are the four explicit places where Seal's proofs stop. They are strengths because the boundaries are known and each has a named closure path outside the kernel — closed where stated, still open where stated.
 

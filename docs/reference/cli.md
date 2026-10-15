@@ -16,7 +16,8 @@ Paths resolve from the current directory unless stated otherwise. The private
 | `seal seal_block [--pubkey HEX] < receipt.json` | Check stdin receipt bytes and emit a v1 JSON result. | 0 for validation, signature and replay success; 3 for kernel integrity failure; 5 for missing/malformed key; 1 otherwise |
 | `seal reproduce TAG [--source PATH] [--platform linux-x64] [--authority same-authority\|independent] [--authority-name NAME]` | Compare a published artifact's kernel with a rebuild from source; print the comparison JSON. Requires a source checkout. | 0 for matching kernel bytes; 1 for mismatch, refusal or failure |
 | `seal reproduce build-pinned-kernel TAG --output PATH [--source PATH] [--manifest PATH]` | Build the selected kernel and copy it to PATH; print the build result. | 0 on successful build and copy; 1 on refusal or failure |
-| `seal protect [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]` | Install a local Claude Code override for selected calls on the named project stdio MCP server. | 0 on success; 1 on usage error, refusal or failure |
+| `seal config-template TOOL [TOOL...]` | Print exact guard and forward payload strings for external Ed25519 signing. | 0 on success; 1 on invalid selection or failure |
+| `seal protect --kernel-policy FILE --kernel-pubkey HEX [--timeout-ms MILLISECONDS] SERVER TOOL [TOOL...]` | Verify an externally signed policy and install a local Claude Code override for selected calls on the named project stdio MCP server. FILE contains JSON `guard` and `forward` signed envelopes; HEX is the independent 32-byte Ed25519 public-key pin. | 0 on success; 1 on usage error, refusal or failure |
 | `seal unprotect SERVER` | Remove Seal's owned local override without editing the project .mcp.json. | 0 on success; 1 on refusal or failure |
 | `seal recover --archive [SERVER]` | Archive incompatible state and remove the owned local override. Stop Claude Code first. Retain journals, receipts and signing keys. | 0 on success; 1 on usage error, refusal or failure |
 | `seal history DIRECTORY [--limit N] [--since EPOCH_MS] [--until EPOCH_MS] [--tool NAME]` | Count observed receipt files and list recent decision claims; see bounds below. | 0 for a report including UNKNOWN; 1 for invalid arguments or unavailable directory |
@@ -51,6 +52,8 @@ The flag inventory below is the public parser contract. Each flag has one row.
 | `--dir` | demo |
 | `--help` | main |
 | `--json` | verify |
+| `--kernel-policy` | protect |
+| `--kernel-pubkey` | protect |
 | `--limit` | history |
 | `--manifest` | reproduce build-pinned-kernel |
 | `--output` | reproduce build-pinned-kernel |
@@ -72,6 +75,8 @@ The flag inventory below is the public parser contract. Each flag has one row.
 | `demo --dir PATH` | A nonempty path for the embedded harness's scratch files. Created if needed; real receipt-store locations are refused. Without it, a temporary directory is created and retained for receipt inspection. An explicitly supplied directory is also retained. |
 | `verify --pubkey HEX` | Trusted Ed25519 public key, 32 bytes encoded as 64 lowercase hexadecimal characters. May appear before or after PATH. Omission or an invalid key cannot yield exit 0. |
 | `protect --timeout-ms MILLISECONDS` | Decimal integer **1 through 2147483647 inclusive**, default **30000**, applied per discovery phase. No sign, leading zero, decimal point or exponent. May occur among positional arguments; the last occurrence wins. |
+| `protect --kernel-policy FILE` | JSON file with `guard` and `forward` Ed25519 signed envelopes over the exact payload strings printed by `config-template`. |
+| `protect --kernel-pubkey HEX` | Independent public-key pin, 32 bytes encoded as 64 lowercase hexadecimal characters. |
 | `recover --archive` | Required literal switch, first after `recover`; no value. Optional SERVER selects the record to archive. |
 | `reproduce --source PATH` | Nonempty source-checkout path, resolved to an absolute path. Available in both reproduce forms. Source provenance must match the selected release. |
 | `reproduce --platform PLATFORM` | Only `linux-x64` passes validation; this is also the default. Comparison form only. |

@@ -125,6 +125,7 @@ const NO_KERNEL_RECEIPT_REFUSALS = new Set([
   "kernel_integrity_refused",
   "kernel_manifest_refused",
   "kernel_output_refused",
+  "kernel_config_pin_absent",
 ]);
 const TERMINAL_REFUSALS = new Set([
   "already_consumed",
@@ -143,6 +144,7 @@ function createProxy(options) {
     storePath,        // durable approval journal (absent/corrupt is fatal)
     receiptsDir,      // receipt per decision
     signer,           // required receipt-sealing keypair (V11-RECEIPT-01)
+    kernelPolicy,     // operator-signed config and independent public-key pin
     childArgv,        // [command, ...args] for the protected server
     childEnv,         // optional environment overlay from the project server
     childCwd,         // project directory for relative stdio server commands
@@ -179,7 +181,7 @@ function createProxy(options) {
   if (!Array.isArray(childArgv) || childArgv.length === 0) throw new Error("childArgv is required");
 
   const journal = openJournal(storePath); // throws StoreError: absent, unreadable, corrupt
-  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, projectId, serverId: serverName, leaseFence, runtimeTreeCheck, onRuntimeObservation });
+  const contract = createApprovalContract({ store: journal, now, ttlMs, terminalWidth, projectId, serverId: serverName, leaseFence, runtimeTreeCheck, onRuntimeObservation, kernelPolicy });
   const receipts = openReceiptEmitter(receiptsDir, signer);
   const decisionSink = onDecision || (() => {});
   // This identifier exists only to join receipt records from this proxy

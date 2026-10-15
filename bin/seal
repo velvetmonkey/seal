@@ -686,10 +686,18 @@ async function protectCommand(args) {
   requireProtectSupportedPlatform();
   const protection = require(path.join(ROOT, "spine", "protection.cjs"));
   let timeoutMs = protection.DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS;
+  let policyFile;
+  let publicKey;
   const positional = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--timeout-ms") {
+    if (argument === "--kernel-policy" || argument === "--kernel-pubkey") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new protection.ProtectionError("usage", `${argument} requires a value`);
+      if (argument === "--kernel-policy") policyFile = value;
+      else publicKey = value;
+      index += 1;
+    } else if (argument === "--timeout-ms") {
       const value = args[index + 1];
       if (!value || !/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > 2147483647) {
         throw new protection.ProtectionError("usage", "--timeout-ms requires an integer from 1 to 2147483647");
@@ -703,11 +711,13 @@ async function protectCommand(args) {
     }
   }
   if (positional.length < 2) {
-    throw new protection.ProtectionError("usage", "usage: seal protect [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
+    throw new protection.ProtectionError("usage", "usage: seal protect --kernel-policy FILE --kernel-pubkey HEX [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
   }
   const [serverName, ...requestedTools] = positional;
   const guardTools = [...new Set(requestedTools)];
-  const result = await protection.protect({ serverName, guardTools, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
+  let kernelPolicy;
+  if (policyFile) kernelPolicy = { ...JSON.parse(fs.readFileSync(policyFile, "utf8")), publicKey };
+  const result = await protection.protect({ serverName, guardTools, kernelPolicy, projectRoot: process.cwd(), sealBin: protectionSealBin(), env: process.env, timeoutMs });
   console.log(`Project .mcp.json hash before protect: ${result.beforeHash}`);
   for (const line of protection.protectionBoundary(result.state, process.cwd(), result.statePath)) console.log(line);
   const guarded = new Set(result.state.guardTools);
@@ -773,6 +783,13 @@ async function main() {
   if (command === "verify") return verify(process.argv.slice(3));
   if (command === "seal_block") return sealBlock(process.argv.slice(3));
   if (command === "reproduce") return reproduce(process.argv.slice(3));
+  if (command === "config-template") {
+    const selections = process.argv.slice(3);
+    const { policyPayloads } = require(path.join(ROOT, "contract", "signed-policy.cjs"));
+    if (selections.length === 0) throw new Error("usage: seal config-template TOOL[?ARG=SCALAR|?ARG~\"PATTERN\"] [TOOL...]");
+    console.log(JSON.stringify(policyPayloads(selections)));
+    return;
+  }
   if (command === "protect") return protectCommand(process.argv.slice(3));
   if (command === "uninstall") return require(path.join(ROOT, "spine", "uninstall.cjs")).run(process.argv.slice(3), ask);
   if (command === "unprotect") return unprotectCommand(process.argv.slice(3));
@@ -799,8 +816,11 @@ async function main() {
 function printHelp() {
   console.log(`seal — the developer gate
 
-  seal protect [--timeout-ms MILLISECONDS] SERVER
-      TOOL[?ARG=SCALAR|?ARG~"PATTERN"] [TOOL...]
+  seal config-template TOOL[?ARG=SCALAR|?ARG~"PATTERN"] [TOOL...]
+      print exact guard and forward payloads for external Ed25519 signing
+  seal protect --kernel-policy FILE --kernel-pubkey HEX
+      [--timeout-ms MILLISECONDS] SERVER TOOL[?ARG=SCALAR|?ARG~"PATTERN"]
+      [TOOL...]
       install a local Claude Code override for selected calls
       (server discovery timeout: 1..2147483647ms; default 30000ms per phase)
   seal unprotect SERVER

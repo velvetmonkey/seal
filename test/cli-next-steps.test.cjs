@@ -59,7 +59,8 @@ process.exit(2);
 
 function run(project, home, args, extraEnv = {}) {
   try {
-    return { code: 0, out: execFileSync(SEAL, args, {
+    const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, home);
+    return { code: 0, out: execFileSync(SEAL, prepared, {
       cwd: project,
       env: { ...process.env, ...extraEnv, HOME: home, XDG_DATA_HOME: path.join(home, ".local", "share") },
       encoding: "utf8",
@@ -175,7 +176,8 @@ function contractContext() {
     SEAL_ELICITATION_AUTO_RESPONSE: "", CLAUDE_ELICITATION_AUTO_RESPONSE: "" };
   let sequence = 0;
   return { root, project, home, env, run(args, input = "", extraEnv = {}) {
-    const result = require("node:child_process").spawnSync(process.execPath, [SEAL, ...args], {
+    const prepared = require("../test-support/kernel-receipt.cjs").protectArgsWithPolicy(args, root);
+    const result = require("node:child_process").spawnSync(process.execPath, [SEAL, ...prepared], {
       cwd: project, env: { ...env, ...extraEnv }, input, encoding: "utf8", timeout: 30000,
     });
     const record = path.join(root, `${++sequence}.exit`);
@@ -284,6 +286,7 @@ test("CLI reference: each row names an observed offline exit code", () => {
     ["seal seal_block", ["seal_block"]],
     ["seal reproduce TAG", ["reproduce"]],
     ["seal reproduce build-pinned-kernel", ["reproduce", "build-pinned-kernel"]],
+    ["seal config-template", ["config-template"]],
     ["seal protect", ["protect"]],
     ["seal unprotect", ["unprotect"]],
     ["seal recover", ["recover"]],
