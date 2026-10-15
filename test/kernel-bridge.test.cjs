@@ -39,6 +39,7 @@ function signedTestPolicy(selections = [TOOL]) {
 const signedInput = { epoch: 1, issuedTool: TOOL, issuedArgs: ARGS, retryTool: TOOL, retryArgs: ARGS, accepted: true, now: 1000 };
 
 test("valid operator config and independent pin accept through seal_init", () => {
+  assert.deepEqual(Object.keys(policyPayloads([TOOL])), ["guard", "forward"]); // CLAIM-COVERAGE: contract/signed-policy.cjs#two-policies
   assert.equal(createKernelAuthorizationAdapter({ policy: signedTestPolicy() }).authorize(signedInput).verdict, "ALLOW");
 });
 
@@ -47,7 +48,7 @@ test("changed signed config payload refuses", () => {
   const changed = JSON.parse(policy.guard);
   changed.payload = changed.payload.replace('"epoch":1', '"epoch":2');
   assert.throws(() => createKernelAuthorizationAdapter({ policy: { ...policy, guard: JSON.stringify(changed) } }).authorize(signedInput),
-    /config signature verification failed/);
+    /config signature verification failed/); // CLAIM-COVERAGE: contract/signed-policy.cjs#operator-signed-payload
 });
 
 test("wrong config pin refuses", () => {
@@ -62,9 +63,12 @@ test("absent config pin refuses and names the missing pin", () => {
 });
 
 test("product worker path contains no config signing key or signing runner", () => {
-  for (const file of ["contract/kernel-authorization-worker.cjs", "contract/pinned-kernel.cjs"]) {
+  for (const file of ["contract/kernel-authorization-worker.cjs", "contract/pinned-kernel.cjs", "contract/signed-policy.cjs"]) {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8");
     assert.doesNotMatch(source, /generateKeyPairSync|crypto\.sign\(|runner\.cjs/, file);
+    if (file === "contract/signed-policy.cjs") {
+      assert.doesNotMatch(source, /createPrivateKey|readFileSync/, file); // CLAIM-COVERAGE: contract/signed-policy.cjs#no-private-key
+    }
   }
 });
 
