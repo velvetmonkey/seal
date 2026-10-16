@@ -124,6 +124,9 @@ test('guide commands and expected output lines match a selective synthetic walk'
   const outputBlocks = [...page.matchAll(/```output\n([\s\S]*?)\n```/g)].map((m) => m[1]);
   assert.equal(bashBlocks.length, 7, 'guide shell command blocks drifted');
   assert.equal(outputBlocks.length, 13, 'guide expected output blocks drifted');
+  const observedClientLines = outputBlocks[3].split('\n').filter((line) => line.startsWith('Observed client: '));
+  assert.equal(observedClientLines.length, 1, 'guide output block 4 must have one Observed client line');
+  const observedClientLine = observedClientLines[0];
   assert.match(bashBlocks[1], /^seal protect db /);
   assert.match(bashBlocks[2], /^seal status$/);
   assert.match(bashBlocks[3], /^seal status$/);
@@ -143,12 +146,15 @@ test('guide commands and expected output lines match a selective synthetic walk'
   activation.stdout.on('data', (chunk) => { activationOutput += chunk; });
   activation.stderr.on('data', (chunk) => { activationOutput += chunk; });
   let active = '';
-  for (let attempt = 0; attempt < 20; attempt++) {
+  const pollAttempts = 20;
+  let attempts = 0;
+  for (; attempts < pollAttempts; attempts++) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     active = shell(bashBlocks[2]);
-    if (active.includes('LEASE ACTIVE')) break;
+    if (active.includes('LEASE ACTIVE') && active.split('\n').includes(observedClientLine)) break;
   }
-  assert.match(active, /LEASE ACTIVE/, activationOutput);
+  assert.ok(active.includes('LEASE ACTIVE') && active.split('\n').includes(observedClientLine),
+    `${active.includes('LEASE ACTIVE') ? 'Observed client line' : 'LEASE ACTIVE'} missing after ${Math.min(attempts + 1, pollAttempts)} attempts\nLast status:\n${active}\nActivation output:\n${activationOutput}`);
   await new Promise((resolve, reject) => activation.once('exit', (code) => code === 0 ? resolve() : reject(new Error(activationOutput))));
   const clientRun = (scenario, note) => run(process.execPath, [client], { cwd: project,
     env: { ...env, SEAL_CC_SYNTHETIC_CASE: scenario, SEAL_CC_SYNTHETIC_NOTE: note || 'seal-accepted-note' } });
