@@ -79,19 +79,34 @@ test("archived action row does not claim maintenance or current CI", () => {
 });
 
 test("every archived repository Home cell names its archive head and current seal run", () => {
-  // Re-measure the fixed list with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+  // Re-measure archive heads with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+  const roster = new Set(Object.keys(JSON.parse(readFileSync(resolve(ROOT, "scripts/claims-drift-family-hashes.json"), "utf8"))));
+  roster.delete("seal");
+  const extraArchived = new Set(["seal-host"]);
   const archived = new Map([
     ["seal-host", "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"],
     ["seal-live-demo", "0a89876379bc79063fc06afaa5b854fb2738b725"],
     ["seal-verify-action", "84e91a4bc605aa53bb9aa2e5a25aaa7e499794d5"],
   ]);
+  const live = new Set(["seal-check", "seal-demo", "seal-assurance-kit", "mcp-seal-dev"]);
+  const population = new Set([...roster, ...extraArchived]);
   const lines = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8").split("\n");
   const violations = [];
+  for (const name of archived.keys()) {
+    if (!roster.has(name) && !extraArchived.has(name)) violations.push(`${name}: archived name is outside the roster and extra set`);
+  }
+  for (const name of population) {
+    const classifications = Number(archived.has(name)) + Number(live.has(name));
+    if (classifications === 0) violations.push(`${name}: roster name has no classification`);
+    if (classifications > 1) violations.push(`${name}: name is classified twice`);
+  }
   for (const [index, line] of lines.entries()) {
     if (!line.startsWith("| ") || index < 41 || !line.endsWith(" |")) continue;
     const home = line.slice(line.lastIndexOf(" | ") + 3, -2);
-    for (const [name, sha] of archived) {
+    for (const name of population) {
       if (!new RegExp(`\\b${name}\\b`).test(home)) continue;
+      if (!archived.has(name)) continue;
+      const sha = archived.get(name);
       const qualified = home.includes(`Archived repository \`${name}\` at \`${sha}\``)
         && /seal (?:`[^`]+` )?runs\b/.test(home);
       if (!qualified) violations.push(`line ${index + 1}: ${name} Home cell is not qualified`);
