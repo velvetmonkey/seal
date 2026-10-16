@@ -221,6 +221,31 @@ const runtimeFiles = ["contract/contract.cjs", "bin/seal",
   ...fs.readdirSync(path.join(root, "spine")).filter((name) => name.endsWith(".cjs")).map((name) => `spine/${name}`),
   "checker/seal-receipt-v2.mjs", ...["install.cjs", "seal-launch.cjs", "build-dist.cjs", "macos-helper.cjs", "bootstrap-install.cjs"].map((name) => `scripts/${name}`)];
 
+// These assignments take a parameter or a computed value. Their literal callers
+// and fallback keys are covered by the existing source patterns below.
+const variableCodeRoster = Object.freeze({
+  "checker/seal-receipt-v2.mjs:code": "fail parameter; fail calls with literal keys are scanned",
+  "spine/protection.cjs:code": "ProtectionError constructor parameter; new ProtectionError literal calls are scanned",
+  "spine/proxy.cjs:refusal": "ternary has decision.refusal property arm; contract refusal constants are scanned",
+  "spine/receipt-v2.cjs:code": "ReceiptRefusal constructor parameter; new ReceiptRefusal literal calls are scanned",
+  "spine/verify-server.cjs:result": "result.ok property ternary; its literal refusal arm is scanned",
+});
+
+function variableCodeSites(file, source) {
+  const sites = [];
+  for (const match of source.matchAll(/\.code\s*=(?!=)\s*([A-Za-z_$][\w$]*)\b/g)) {
+    const identifier = match[1];
+    const before = source.slice(0, match.index);
+    const declarations = [...before.matchAll(new RegExp(`\\b(?:const|let)\\s+${identifier}\\s*=\\s*([^;\\n]+)`, "g"))];
+    const value = declarations.at(-1)?.[1].trim();
+    const literal = value?.match(/^["']([a-z][a-z0-9_]*)["']$/);
+    const ternary = value?.match(/^.+\?\s*["']([a-z][a-z0-9_]*)["']\s*:\s*["']([a-z][a-z0-9_]*)["']$/);
+    sites.push({ file, identifier, line: before.split("\n").length, offset: match.index,
+      keys: literal ? [literal[1]] : ternary ? [ternary[1], ternary[2]] : [] });
+  }
+  return sites;
+}
+
 function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(file) }))) {
   const found = new Map();
   const add = (key, file, source, offset) => {
@@ -229,6 +254,9 @@ function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(
     if (!found.has(key)) found.set(key, `${file}:${line}`);
   };
   for (const { file, source } of sources) {
+    for (const site of variableCodeSites(file, source)) {
+      for (const key of site.keys) add(key, file, source, site.offset);
+    }
     const patterns = [
       /\b(?:new\s+(?:ProtectionError|ReceiptRefusal)|ownershipRefusal|fail|refuse)\(\s*["']([a-z][a-z0-9_]*)["']/g,
       /\b(?:refusal|code)\s*:\s*["']([a-z][a-z0-9_]*)["']/g,
@@ -313,6 +341,34 @@ test("a renamed literal refusal becomes undocumented", () => {
   const renamed = refusalKeys([{ file, source }]);
   assert.ok(renamed.has("renamed_row4_refusal"));
   assert.ok(!documentedKeys().has("renamed_row4_refusal"));
+});
+
+test("every variable code assignment resolves or is on the roster", () => {
+  const sites = runtimeFiles.flatMap((file) => variableCodeSites(file, read(file)));
+  const unresolved = sites.filter((site) => site.keys.length === 0);
+  const unrostered = unresolved.filter((site) => !Object.hasOwn(variableCodeRoster, `${site.file}:${site.identifier}`));
+  assert.deepEqual(unrostered.map((site) => `${site.file}:${site.line} (${site.identifier})`), [],
+    "variable .code sites without literal keys or roster reasons");
+  const current = new Set(unresolved.map((site) => `${site.file}:${site.identifier}`));
+  const stale = Object.keys(variableCodeRoster).filter((entry) => !current.has(entry));
+  assert.deepEqual(stale, [], "roster entries without unresolved .code sites");
+  assert.ok(Object.values(variableCodeRoster).every((reason) => reason.trim()), "every roster entry needs a reason");
+});
+
+test("a variable-held refusal becomes undocumented", () => {
+  const file = "spine/proxy.cjs";
+  const source = read(file).replace("error.code = refusal;",
+    'const heldKey = "variable_held_probe"; error.code = heldKey; '
+    + 'let heldPair = true ? "variable_held_left" : "variable_held_right"; '
+    + 'error.code = heldPair; error.code = refusal;');
+  assert.ok(source.includes('error.code = heldKey;'), "variable probe missed its source site");
+  const held = refusalKeys([{ file, source }]);
+  assert.ok(held.has("variable_held_probe"));
+  assert.ok(held.has("variable_held_left"));
+  assert.ok(held.has("variable_held_right"));
+  assert.ok(!documentedKeys().has("variable_held_probe"));
+  assert.ok(!documentedKeys().has("variable_held_left"));
+  assert.ok(!documentedKeys().has("variable_held_right"));
 });
 
 test("entrypoint exit codes all have CLI reference entries", () => {
