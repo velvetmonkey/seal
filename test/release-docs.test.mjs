@@ -490,6 +490,34 @@ test("published notes opening and stale candidate region settle in one run", asy
   });
 });
 
+test("published opening and candidate region refuse a same-line overlap", async () => {
+  const tag = "v0.2.0-rc.3";
+  const assets = releaseAssets(tag);
+  const release = {
+    id: 3, tag_name: tag, draft: false, published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const notesPath = path.join(docs, "docs", "assurance", `RELEASE-NOTES-${tag}.md`);
+    const candidate = `These notes describe the ${tag} release candidate. The install commands below work after its assets are published.`;
+    const planted = fs.readFileSync(notesPath, "utf8")
+      + `\n<!-- generated candidate release notes; do not edit -->\n${candidate}\n<!-- end generated candidate release notes -->\n`;
+    fs.writeFileSync(notesPath, planted);
+    const line = planted.slice(0, planted.indexOf(candidate)).split("\n").length;
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docs,
+      SEAL_RELEASES_API_URL: api,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+      SEAL_RELEASE_SOURCE_VERSION: tag.slice(1),
+    };
+    const result = await run([], env);
+    assert.equal(result.code, 1, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, new RegExp(`REFUSE release_docs_notes_line_overlap: docs/assurance/RELEASE-NOTES-${tag.replaceAll(".", "\\.")}\\.md: published opening and candidate region both change line ${line}`));
+    assert.equal(fs.readFileSync(notesPath, "utf8"), planted, "refusal must leave the notes file unchanged");
+  });
+});
+
 // CLAIM-COVERAGE: scripts/check-install-prose.mjs#install-prose-observations
 test("generated install prose is bound to published installer observations", () => {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
