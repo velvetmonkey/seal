@@ -224,26 +224,91 @@ const runtimeFiles = ["contract/contract.cjs", "bin/seal",
 // These assignments take a parameter or a computed value. Their literal callers
 // and fallback keys are covered by the existing source patterns below.
 const variableCodeRoster = Object.freeze({
-  "checker/seal-receipt-v2.mjs:code": "fail parameter; fail calls with literal keys are scanned",
-  "spine/protection.cjs:code": "ProtectionError constructor parameter; new ProtectionError literal calls are scanned",
-  "spine/proxy.cjs:refusal": "ternary has decision.refusal property arm; contract refusal constants are scanned",
-  "spine/receipt-v2.cjs:code": "ReceiptRefusal constructor parameter; new ReceiptRefusal literal calls are scanned",
-  "spine/verify-server.cjs:result": "result.ok property ternary; its literal refusal arm is scanned",
+  "checker/seal-receipt-v2.mjs:fail:code": "fail parameter; fail calls with literal keys are scanned",
+  "spine/protection.cjs:ProtectionError:code": "ProtectionError constructor parameter; new ProtectionError literal calls are scanned",
+  "spine/proxy.cjs:finishGuarded:refusal": "two refusal bindings and a decision.refusal property arm; contract refusal constants are scanned",
+  "spine/receipt-v2.cjs:ReceiptRefusal:code": "ReceiptRefusal constructor parameter; new ReceiptRefusal literal calls are scanned",
+  "spine/verify-server.cjs:verifyReceipt:result": "result.ok property ternary; its literal refusal arm is scanned",
+  "spine/demo-grant.cjs:fail:code": "fail parameter; fail calls with literal keys are scanned",
 });
+
+const identifierPattern = "[A-Za-z_$][\\w$]*";
+const codeProperty = String.raw`(?:\.code|\[\s*["']code["']\s*\])`;
+const assignmentOperator = String.raw`(?:\?\?=|\|\|=|=(?!=|>))`;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function literalArms(value) {
+  const leaves = [];
+  const visit = (expression) => {
+    const text = expression.trim();
+    const literal = text.match(/^["']([a-z][a-z0-9_]*)["']$/);
+    if (literal) { leaves.push(literal[1]); return true; }
+    let depth = 0;
+    let quote = "";
+    let question = -1;
+    let colon = -1;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (quote) { if (char === "\\") i++; else if (char === quote) quote = ""; continue; }
+      if (char === '"' || char === "'") { quote = char; continue; }
+      if (char === "?") { if (text[i + 1] === "?" || text[i - 1] === "?" || text[i + 1] === ".") continue; depth++; if (question < 0) question = i; }
+      if (char === ":" && depth) { depth--; if (depth === 0 && colon < 0) colon = i; }
+    }
+    if (question < 0 || colon < 0) return false;
+    return visit(text.slice(question + 1, colon)) & visit(text.slice(colon + 1)) ? true : false;
+  };
+  return { keys: leaves, complete: visit(value) };
+}
+
+function enclosingName(source, offset) {
+  const before = source.slice(0, offset);
+  const names = [
+    ...before.matchAll(/\bclass\s+([A-Za-z_$][\w$]*)/g),
+    ...before.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g),
+    ...before.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g),
+  ];
+  return names.sort((a, b) => a.index - b.index).at(-1)?.[1] ?? "<top-level>";
+}
+
+function bindingCount(source, identifier) {
+  const name = escapeRegExp(identifier);
+  const declarations = [...source.matchAll(new RegExp(`\\b(?:const|let|var)\\s+${name}(?=\\s*[=,;])`, "g"))].length;
+  const parameters = [...source.matchAll(/\b(?:function\s+[\w$]+|constructor|catch)\s*\(([^)]*)\)|\b(?:const|let|var)\s+[\w$]+\s*=\s*(?:\(([^)]*)\)|([\w$]+))\s*=>/g)]
+    .filter((match) => new RegExp(`(?:^|[,\\s{])${name}(?=\\s*(?:[,}=]|$))`).test(match[1] ?? match[2] ?? match[3])).length;
+  const destructured = [...source.matchAll(/\b(?:const|let|var)\s*[{[]([^}\]]+)[}\]]\s*=/g)]
+    .filter((match) => new RegExp(`(?:^|[,\\s])${name}(?=\\s*(?:[,}:=]|$))`).test(match[1])).length;
+  return declarations + parameters + destructured;
+}
 
 function variableCodeSites(file, source) {
   const sites = [];
-  for (const match of source.matchAll(/\.code\s*=(?!=)\s*([A-Za-z_$][\w$]*)\b/g)) {
-    const identifier = match[1];
-    const before = source.slice(0, match.index);
-    const declarations = [...before.matchAll(new RegExp(`\\b(?:const|let)\\s+${identifier}\\s*=\\s*([^;\\n]+)`, "g"))];
-    const value = declarations.at(-1)?.[1].trim();
-    const literal = value?.match(/^["']([a-z][a-z0-9_]*)["']$/);
-    const ternary = value?.match(/^.+\?\s*["']([a-z][a-z0-9_]*)["']\s*:\s*["']([a-z][a-z0-9_]*)["']$/);
-    sites.push({ file, identifier, line: before.split("\n").length, offset: match.index,
-      keys: literal ? [literal[1]] : ternary ? [ternary[1], ternary[2]] : [] });
+  const matches = [...source.matchAll(new RegExp(`${codeProperty}\\s*${assignmentOperator}\\s*(${identifierPattern})(?![\\w$])`, "g"))]
+    .map((match) => ({ identifier: match[1], offset: match.index }));
+  for (const match of source.matchAll(/Object\.assign\([^;\n]*?\{([^}\n]*)\}/g)) {
+    for (const property of match[1].matchAll(/(?:^|,)\s*code\s*(?::\s*([A-Za-z_$][\w$]*)\b|(?=\s*(?:,|$)))/g)) {
+      matches.push({ identifier: property[1] ?? "code", offset: match.index + match[0].indexOf("{") + 1 + property.index });
+    }
+  }
+  for (const { identifier, offset } of matches.sort((a, b) => a.offset - b.offset)) {
+    const escaped = escapeRegExp(identifier);
+    const values = [...source.matchAll(new RegExp(`\\b(?:const|let|var)\\s+${escaped}\\s*=\\s*([^;]+)`, "g"))].map((match) => match[1]);
+    for (const assignment of source.matchAll(new RegExp(`(?<![\\w$.])${escaped}\\s*${assignmentOperator}\\s*([^;]+)`, "g"))) values.push(assignment[1]);
+    const parsed = values.map(literalArms);
+    const keys = [...new Set(parsed.flatMap((value) => value.keys))];
+    const resolved = bindingCount(source, identifier) === 1 && parsed.length > 0 && parsed.every((value) => value.complete);
+    sites.push({ file, identifier, enclosing: enclosingName(source, offset), line: source.slice(0, offset).split("\n").length, offset,
+      keys, resolved });
   }
   return sites;
+}
+
+function censusUnrostered(sources) {
+  const sites = sources.flatMap(({ file, source }) => variableCodeSites(file, source));
+  const unresolved = sites.filter((site) => !site.resolved);
+  const siteName = (site) => `${site.file}:${site.enclosing}:${site.identifier}`;
+  const counts = new Map();
+  for (const site of unresolved) counts.set(siteName(site), (counts.get(siteName(site)) ?? 0) + 1);
+  return unresolved.filter((site) => !Object.hasOwn(variableCodeRoster, siteName(site)) || counts.get(siteName(site)) !== 1);
 }
 
 function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(file) }))) {
@@ -260,12 +325,12 @@ function refusalKeys(sources = runtimeFiles.map((file) => ({ file, source: read(
     const patterns = [
       /\b(?:new\s+(?:ProtectionError|ReceiptRefusal)|ownershipRefusal|fail|refuse)\(\s*["']([a-z][a-z0-9_]*)["']/g,
       /\b(?:refusal|code)\s*:\s*["']([a-z][a-z0-9_]*)["']/g,
-      /\.code\s*=\s*["']([a-z][a-z0-9_]*)["']/g,
+      new RegExp(`${codeProperty}\\s*${assignmentOperator}\\s*["']([a-z][a-z0-9_]*)["']`, "g"),
       /REFUSE\s+([a-z][a-z0-9_]*):/g,
       /\b(?:readinessFailure|v\.fail|blockForward)\(\s*["']([a-z][a-z0-9_]*)["']/g,
     ];
     for (const pattern of patterns) for (const match of source.matchAll(pattern)) add(match[1], file, source, match.index);
-    for (const assignment of source.matchAll(/\.code\s*=(?!=)\s*([^;\n]*\?[^;\n]+)/g)) {
+    for (const assignment of source.matchAll(new RegExp(`${codeProperty}\\s*${assignmentOperator}\\s*([^;\\n]*\\?[^;\\n]+)`, "g"))) {
       for (const arm of assignment[1].matchAll(/[?:]\s*["']([a-z][a-z0-9_]*)["']/g)) {
         add(arm[1], file, source, assignment.index + arm.index);
       }
@@ -345,14 +410,20 @@ test("a renamed literal refusal becomes undocumented", () => {
 
 test("every variable code assignment resolves or is on the roster", () => {
   const sites = runtimeFiles.flatMap((file) => variableCodeSites(file, read(file)));
-  const unresolved = sites.filter((site) => site.keys.length === 0);
-  const unrostered = unresolved.filter((site) => !Object.hasOwn(variableCodeRoster, `${site.file}:${site.identifier}`));
-  assert.deepEqual(unrostered.map((site) => `${site.file}:${site.line} (${site.identifier})`), [],
+  const unresolved = sites.filter((site) => !site.resolved);
+  const siteName = (site) => `${site.file}:${site.enclosing}:${site.identifier}`;
+  const unrostered = censusUnrostered(runtimeFiles.map((file) => ({ file, source: read(file) })));
+  assert.deepEqual(unrostered.map((site) => `${site.file}:${site.line} (${site.enclosing}:${site.identifier})`), [],
     "variable .code sites without literal keys or roster reasons");
-  const current = new Set(unresolved.map((site) => `${site.file}:${site.identifier}`));
+  const current = new Set(unresolved.map(siteName));
   const stale = Object.keys(variableCodeRoster).filter((entry) => !current.has(entry));
   assert.deepEqual(stale, [], "roster entries without unresolved .code sites");
   assert.ok(Object.values(variableCodeRoster).every((reason) => reason.trim()), "every roster entry needs a reason");
+  assert.ok(sites.find((site) => site.file === "spine/proxy.cjs" && site.identifier === "refusal")?.keys.includes("already_consumed"),
+    "multi-line refusal ternary must retain its literal arm");
+  const callers = new Set(["ProtectionError", "ReceiptRefusal", "ownershipRefusal", "fail", "refuse"]);
+  const parameterSites = unresolved.filter((site) => new RegExp(`(?:constructor|function\\s+${escapeRegExp(site.enclosing)})\\s*\\([^)]*\\b${escapeRegExp(site.identifier)}\\b|\\b${escapeRegExp(site.enclosing)}\\s*=\\s*(?:\\([^)]*\\b${escapeRegExp(site.identifier)}\\b|${escapeRegExp(site.identifier)}\\s*=>)`).test(read(site.file)));
+  assert.deepEqual(parameterSites.filter((site) => !callers.has(site.enclosing)).map(siteName), [], "parameter sites need a scanned literal caller");
 });
 
 test("a variable-held refusal becomes undocumented", () => {
@@ -369,6 +440,57 @@ test("a variable-held refusal becomes undocumented", () => {
   assert.ok(!documentedKeys().has("variable_held_probe"));
   assert.ok(!documentedKeys().has("variable_held_left"));
   assert.ok(!documentedKeys().has("variable_held_right"));
+});
+
+function plantedProxy(replacement) {
+  const file = "spine/proxy.cjs";
+  const source = read(file).replace("error.code = refusal;", `${replacement} error.code = refusal;`);
+  assert.ok(source.includes(replacement), "variable form probe missed its source site");
+  return { file, source };
+}
+
+function assertPlantedKey(replacement, key) {
+  const planted = plantedProxy(replacement);
+  const found = refusalKeys([planted]);
+  assert.ok(found.has(key), `${key} was absent from refusalKeys`);
+  assert.ok(!documentedKeys().has(key), `${key} has an unexpected guide entry`);
+}
+
+test("a reassigned variable refusal becomes undocumented", () => {
+  assertPlantedKey('let heldMut = "cancelled"; heldMut = "variable_held_mut"; error.code = heldMut;', "variable_held_mut");
+});
+
+test("a nested ternary variable refusal becomes undocumented", () => {
+  assertPlantedKey('const heldNest = a ? "variable_held_nest" : b ? "cancelled" : "expired"; error.code = heldNest;', "variable_held_nest");
+});
+
+test("a second code site in a rostered file is not covered by its roster entry", () => {
+  const file = "spine/receipt-v2.cjs";
+  const source = read(file) + '\nclass OtherRefusal extends Error { constructor(code) { super(code); this.code = code; } }\nvoid new OtherRefusal("variable_held_class");\n';
+  const second = censusUnrostered([{ file, source }]).find((site) => site.enclosing === "OtherRefusal" && site.identifier === "code");
+  assert.ok(second, "second class site was not found");
+  assert.ok(!second.resolved, "second class parameter must remain unresolved");
+  assert.ok(!Object.hasOwn(variableCodeRoster, `${second.file}:${second.enclosing}:${second.identifier}`), "first class roster entry covered the second class");
+});
+
+test("an out-of-scope declaration does not resolve a parameter", () => {
+  const planted = plantedProxy('function heldA() { const heldScope = "cancelled"; } function heldB(heldScope) { const error = new Error("x"); error.code = heldScope; } heldB("variable_held_scope");');
+  const site = censusUnrostered([planted]).find((entry) => entry.identifier === "heldScope");
+  assert.ok(site, "parameter site was not found");
+  assert.ok(!site.resolved, "two bindings must not resolve as one");
+  assert.ok(!Object.hasOwn(variableCodeRoster, `${site.file}:${site.enclosing}:${site.identifier}`), "parameter site must require its own roster entry");
+});
+
+test("a nullish code assignment refusal becomes undocumented", () => {
+  assertPlantedKey('const heldNull = "variable_held_nullish"; error.code ??= heldNull;', "variable_held_nullish");
+});
+
+test("a bracket code assignment refusal becomes undocumented", () => {
+  assertPlantedKey('const heldBracket = "variable_held_bracket"; error["code"] = heldBracket;', "variable_held_bracket");
+});
+
+test("an Object.assign code refusal becomes undocumented", () => {
+  assertPlantedKey('const heldAssign = "variable_held_assign"; Object.assign(error, { code: heldAssign });', "variable_held_assign");
 });
 
 test("entrypoint exit codes all have CLI reference entries", () => {
