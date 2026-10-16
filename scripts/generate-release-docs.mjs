@@ -522,6 +522,20 @@ function replaceRegions(relative, replacements) {
   return { relative, target, original, rewritten };
 }
 
+function changedLineNumbers(before, after) {
+  const oldLines = before.split("\n");
+  const newLines = after.split("\n");
+  let first = 0;
+  while (first < oldLines.length && first < newLines.length && oldLines[first] === newLines[first]) first++;
+  let oldEnd = oldLines.length;
+  let newEnd = newLines.length;
+  while (oldEnd > first && newEnd > first && oldLines[oldEnd - 1] === newLines[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+  return new Set(Array.from({ length: Math.max(oldEnd, newEnd) - first }, (_, index) => first + index + 1));
+}
+
 function candidateNotesChange(required = false, previousChange) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
@@ -545,6 +559,14 @@ function candidateNotesChange(required = false, previousChange) {
   const template = fs.readFileSync(new URL("./release-notes-install-template.md", import.meta.url), "utf8");
   const region = `${NOTES_START}\n${template.replaceAll("@VERSION@", sourceVersion).trimEnd()}\n${NOTES_END}`;
   const rewritten = input.slice(0, begin) + region + input.slice(finish + NOTES_END.length);
+  if (previousChange) {
+    const openingLines = changedLineNumbers(previousChange.original, previousChange.rewritten);
+    const candidateLines = changedLineNumbers(input, rewritten);
+    const overlap = [...openingLines].find((line) => candidateLines.has(line));
+    if (overlap !== undefined) {
+      refuse("notes_line_overlap", `${relative}: published opening and candidate region both change line ${overlap}`);
+    }
+  }
   return { relative, target, original, rewritten };
 }
 
