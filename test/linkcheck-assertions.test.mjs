@@ -15,6 +15,7 @@ const REQUIRED_ASSERTIONS = [
   ["independent missing target existence", '"missing target must be absent outside the checker"'],
   ["missing target process failure", '"missing target must make the link checker fail: "'],
   ["specific missing target diagnostic", '"known missing target must have its own BROKEN diagnostic"'],
+  ["Node carrier missing link diagnostic", '"Node carrier missing link must have its own BROKEN diagnostic"'],
   ["family prerequisite finding", 'assert.equal(existsSync(family), false, "partial .family tree is a named prerequisite finding")'], ["absent family root is non-failing unverified", '"absent family root must be counted as unverified without failing"'], ["present family root exposes missing target", '"missing file beneath a present family root must be broken"'], ["family outcome diagnostic distinction", '"family diagnostics must distinguish absent root from missing target"'],
   ["linkcheck process success", "assert.equal(result.status, 0, result.stdout + result.stderr)"],
   ["reported target list", 'assert.ok(targetLine, "link checker must report the targets that actually reached check()")'],
