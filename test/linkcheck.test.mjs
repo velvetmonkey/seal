@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
-import { appendFileSync, copyFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -203,6 +203,32 @@ test("missing local target is independently absent and reported broken", () => {
     assert.equal(result.status, 1, "missing target must make the link checker fail: " + result.stdout + result.stderr);
     assert.match(result.stdout, /^BROKEN  README\.md -> linkguardran-does-not-exist\.md$/mu,
       "known missing target must have its own BROKEN diagnostic");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("required Node download link is checked on its carrier page", () => {
+  const scratch = testTmpdir("seal-linkcheck-node-carrier-");
+  try {
+    const clone = spawnSync("git", ["clone", "--shared", ROOT, scratch], { encoding: "utf8" });
+    assert(clone.status === 0, clone.stdout + clone.stderr);
+    const baseline = spawnSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], {
+      cwd: scratch, encoding: "utf8",
+    });
+    assert(baseline.status === 0, baseline.stdout + baseline.stderr);
+    // Exercise the working checker, including any uncommitted fault injection.
+    copyFileSync(SCRIPT, path.join(scratch, "scripts/linkcheck.mjs"));
+    const carrier = path.join(scratch, "docs/start/install.md");
+    writeFileSync(carrier, readFileSync(carrier, "utf8").replace("https://nodejs.org/en/download", ""));
+    const result = spawnSync(process.execPath, [path.join(scratch, "scripts/linkcheck.mjs")], {
+      cwd: scratch, encoding: "utf8", env: process.env,
+    });
+    assert(result.status === 1, "missing Node download link must make the link checker fail: " + result.stdout + result.stderr);
+    assert(result.stdout.includes("BROKEN  docs/start/install.md -> missing required live link https://nodejs.org/en/download"),
+      "Node carrier missing link must have its own BROKEN diagnostic");
+    assert(/^link-check: .* 2 required live links, .*$/mu.test(result.stdout),
+      "Node carrier failure must report 2 required live links");
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

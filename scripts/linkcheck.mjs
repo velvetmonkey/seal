@@ -216,6 +216,7 @@ async function main() {
 
   const requiredLiveLinks = new Map([
     ["https://velvetmonkey.github.io/seal-check/", ["docs/start/evaluator-walk.md"]],
+    ["https://nodejs.org/en/download", ["docs/start/install.md"]],
   ]);
   let externalChecked = 0;
   for (const [link, carriers] of requiredLiveLinks) {
