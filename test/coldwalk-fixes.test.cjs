@@ -43,6 +43,19 @@ test("the Protect section requires Claude Code and provides its availability che
   assert.ok(protect.includes("seal protect db demo.mutate demo.erase"), "Protect must show the named-set command");
 });
 
+test("the Protect section sets the signed kernel policy before seal protect", () => {
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const protect = readme.slice(readme.indexOf("## Protect a real tool set"), readme.indexOf("## Remove it"));
+  const command = protect.search(/^seal protect db\b/m);
+
+  assert.ok(command >= 0, "Protect section must contain the seal protect db command");
+  const before = protect.slice(0, command);
+  for (const token of ["SEAL_KERNEL_POLICY_FILE", "SEAL_KERNEL_PUBKEY"]) {
+    assert.ok(before.includes(token), `Protect section must set ${token} before seal protect db`);
+  }
+  assert.ok(before.includes("](docs/assurance/architecture.md)"), "Protect section must link docs/assurance/architecture.md before seal protect db");
+});
+
 test("the demo section names the printed directory as the cleanup target", () => {
   const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
   const demo = readme.indexOf("## Try Seal in two minutes");

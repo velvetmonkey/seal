@@ -139,6 +139,11 @@ claude --version
 In a disposable Claude Code project, define a local stdio MCP server with two
 tools whose effects you want Seal to hold for approval:
 
+Before this command, have the operator sign the guard and forward payloads
+for `demo.mutate` and `demo.erase`. Set `SEAL_KERNEL_POLICY_FILE` to the file
+with those two signed envelopes and `SEAL_KERNEL_PUBKEY` to the independent
+Ed25519 public key pin. See [the config signing steps](docs/assurance/architecture.md).
+
 ```bash
 mkdir -p seal-protect-demo
 cd seal-protect-demo
