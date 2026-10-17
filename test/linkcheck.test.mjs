@@ -233,3 +233,83 @@ test("required Node download link is checked on its carrier page", () => {
     rmSync(scratch, { recursive: true, force: true });
   }
 });
+
+function carrierCloneWithFetchStub(scratch) {
+  const clone = spawnSync("git", ["clone", "--shared", ROOT, scratch], { encoding: "utf8" });
+  assert(clone.status === 0, "carrier stub clone must succeed: " + clone.stdout + clone.stderr);
+  const baseline = spawnSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], {
+    cwd: scratch, encoding: "utf8",
+  });
+  assert(baseline.status === 0, "carrier stub origin/main ref must update: " + baseline.stdout + baseline.stderr);
+  copyFileSync(SCRIPT, path.join(scratch, "scripts/linkcheck.mjs"));
+  const log = path.join(scratch, "fetch.log");
+  const preload = path.join(scratch, "fetch-stub.cjs");
+  writeFileSync(preload, `const { appendFileSync } = require("node:fs");
+globalThis.fetch = async (url) => {
+  appendFileSync(process.env.SEAL_LINK_LOG, String(url) + "\\n");
+  const good = url === "https://nodejs.org/en/download" || url === "https://velvetmonkey.github.io/seal-check/";
+  return new Response(null, { status: good ? 200 : 404 });
+};
+`);
+  return { log, preload };
+}
+
+function runCarrierStub(scratch, preload, log) {
+  return spawnSync(process.execPath, ["--require", preload, path.join(scratch, "scripts/linkcheck.mjs")], {
+    cwd: scratch, encoding: "utf8", env: { ...process.env, SEAL_LINK_LOG: log },
+  });
+}
+
+test("prefix-extended Node URL on its carrier page is reported broken", () => {
+  const scratch = testTmpdir("seal-linkcheck-node-prefix-");
+  try {
+    const { log, preload } = carrierCloneWithFetchStub(scratch);
+    const carrier = path.join(scratch, "docs/start/install.md");
+    writeFileSync(carrier, readFileSync(carrier, "utf8").replace(
+      "https://nodejs.org/en/download ", "https://nodejs.org/en/download-gone "));
+    const result = runCarrierStub(scratch, preload, log);
+    assert(result.status === 1, "prefix Node URL must make the checker fail: " + result.stdout + result.stderr);
+    assert(result.stdout.includes("BROKEN  docs/start/install.md -> required live link https://nodejs.org/en/download-gone differs from https://nodejs.org/en/download"),
+      "prefix Node URL must name the carrier mismatch");
+    assert(result.stdout.includes("BROKEN  https://nodejs.org/en/download-gone -> HTTP 404"),
+      "prefix Node URL must show its fetch failure");
+    assert(readFileSync(log, "utf8").split("\n").includes("https://nodejs.org/en/download-gone"),
+      "prefix Node URL must be fetched");
+    assert(!readFileSync(log, "utf8").split("\n").includes("https://nodejs.org/en/download"),
+      "prefix Node URL must not fetch the map URL");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("a second Node URL on its carrier page that differs from the map is reported broken", () => {
+  const scratch = testTmpdir("seal-linkcheck-node-second-");
+  try {
+    const { log, preload } = carrierCloneWithFetchStub(scratch);
+    appendFileSync(path.join(scratch, "docs/start/install.md"), "\nSee also https://nodejs.org/en/download-gone.\n");
+    const result = runCarrierStub(scratch, preload, log);
+    assert(result.status === 1, "second Node URL must make the checker fail: " + result.stdout + result.stderr);
+    assert(result.stdout.includes("BROKEN  docs/start/install.md -> required live link https://nodejs.org/en/download-gone differs from https://nodejs.org/en/download"),
+      "second Node URL must name the carrier mismatch");
+    assert(result.stdout.includes("BROKEN  https://nodejs.org/en/download-gone -> HTTP 404"),
+      "second Node URL must show its fetch failure");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("required live links are fetched as their carrier pages show them", () => {
+  const scratch = testTmpdir("seal-linkcheck-carrier-fetch-");
+  try {
+    const { log, preload } = carrierCloneWithFetchStub(scratch);
+    const result = runCarrierStub(scratch, preload, log);
+    assert(result.status === 0, "unchanged carrier URLs must pass: " + result.stdout + result.stderr);
+    assert(result.stdout.includes("0 broken"), "unchanged carrier URLs must report zero broken");
+    assert(result.stdout.includes("2 required live links"), "unchanged carrier URLs must report two required live links");
+    assert(JSON.stringify([...new Set(readFileSync(log, "utf8").trim().split("\n"))].sort()) ===
+      JSON.stringify(["https://nodejs.org/en/download", "https://velvetmonkey.github.io/seal-check/"]),
+      "unchanged carrier URLs must be the exact fetched set");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
