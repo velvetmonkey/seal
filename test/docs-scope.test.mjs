@@ -78,26 +78,57 @@ test("archived action row does not claim maintenance or current CI", () => {
   assert.match(row, /CI no longer runs/);
 });
 
-test("every archived repository Home cell names its archive head and current seal run", () => {
-  // Re-measure the fixed list with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+function archivedHomeViolations(lines) {
+  // Re-measure archive heads with: gh api repos/velvetmonkey/NAME --jq '.archived, .default_branch' && gh api repos/velvetmonkey/NAME/commits/BRANCH --jq .sha
+  // GitHub read 2026-10-16: seal-demo archived true, head e5388ebe475fcd88e10bec7ce390c7c6aeeeadd9.
+  const roster = new Set(Object.keys(JSON.parse(readFileSync(resolve(ROOT, "scripts/claims-drift-family-hashes.json"), "utf8"))));
+  roster.delete("seal");
+  const extraArchived = new Set(["seal-host"]);
   const archived = new Map([
     ["seal-host", "d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"],
     ["seal-live-demo", "0a89876379bc79063fc06afaa5b854fb2738b725"],
     ["seal-verify-action", "84e91a4bc605aa53bb9aa2e5a25aaa7e499794d5"],
+    ["seal-demo", "e5388ebe475fcd88e10bec7ce390c7c6aeeeadd9"],
   ]);
-  const lines = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8").split("\n");
+  const live = new Set(["seal-check", "seal-assurance-kit", "mcp-seal-dev"]);
+  const population = new Set([...roster, ...extraArchived]);
   const violations = [];
+  for (const name of archived.keys()) {
+    if (!roster.has(name) && !extraArchived.has(name)) violations.push(`${name}: archived name is outside the roster and extra set`);
+  }
+  for (const name of population) {
+    const classifications = Number(archived.has(name)) + Number(live.has(name));
+    if (classifications === 0) violations.push(`${name}: roster name has no classification`);
+    if (classifications > 1) violations.push(`${name}: name is classified twice`);
+  }
   for (const [index, line] of lines.entries()) {
     if (!line.startsWith("| ") || index < 41 || !line.endsWith(" |")) continue;
     const home = line.slice(line.lastIndexOf(" | ") + 3, -2);
-    for (const [name, sha] of archived) {
+    for (const name of population) {
       if (!new RegExp(`\\b${name}\\b`).test(home)) continue;
+      if (!archived.has(name)) continue;
+      const sha = archived.get(name);
       const qualified = home.includes(`Archived repository \`${name}\` at \`${sha}\``)
         && /seal (?:`[^`]+` )?runs\b/.test(home);
       if (!qualified) violations.push(`line ${index + 1}: ${name} Home cell is not qualified`);
     }
   }
+  return violations;
+}
+
+
+test("every archived repository Home cell names its archive head and current seal run", () => {
+  const lines = readFileSync(resolve(ROOT, "docs/archive/CLAIMS-MATRIX.md"), "utf8").split("\n");
+  const violations = archivedHomeViolations(lines);
   assert.deepEqual(violations, []);
+});
+
+test("an unqualified seal-demo Home cell is refused as archived", () => {
+  const prefix = Array(41).fill("");
+  const unqualified = [...prefix, "| Probe | seal-demo |"];
+  assert.deepEqual(archivedHomeViolations(unqualified), ["line 42: seal-demo Home cell is not qualified"]);
+  const qualified = [...prefix, "| Probe | Archived repository `seal-demo` at `e5388ebe475fcd88e10bec7ce390c7c6aeeeadd9`; seal runs |"];
+  assert.deepEqual(archivedHomeViolations(qualified), []);
 });
 for (const [oldPath, currentPath] of [
   ["CLAIMS-MATRIX.md", "archive/CLAIMS-MATRIX.md"],
