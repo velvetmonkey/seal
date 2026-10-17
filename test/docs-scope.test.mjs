@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const PUBLISHED_VERSION = readFileSync(resolve(ROOT, "README.md"), "utf8").match(/^SEAL_VERSION=v([^\s]+)$/m)?.[1]; assert.ok(PUBLISHED_VERSION, "README must declare the published release identity");
 const COMMON_SCOPE_LINES = [
   "> The state machine is TESTED.",
 ];
-const TRUTH_BOX_PROOF_COUNT_CITATION = "; for the shipped product's strict proved-property count, read the [unreleased v1.0.0-rc.1 candidate notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).";
+const TRUTH_BOX_PROOF_COUNT_CITATION = "; for the shipped product's strict proved-property count, read the [v1.0.0-rc.1 prerelease notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).";
 function scopeBlock(scope, name, releaseNotesLabel = `docs/assurance/RELEASE-NOTES-v${PUBLISHED_VERSION}.md`, releaseVersion = PUBLISHED_VERSION) {
   const releaseNotes = name.startsWith("archive/")
     ? `../assurance/RELEASE-NOTES-v${releaseVersion}.md`
@@ -29,6 +29,35 @@ const FAMILY_PRODUCT_FILES = [
   "archive/TRUTH-BOX.md",
   "archive/WHY-DIFFERENT.md",
 ];
+
+test("a published release tag is never called unreleased", () => {
+  // Re-measure published tags with: gh release list -R velvetmonkey/seal
+  const publishedTags = [
+    "v1.0.0-rc.1", "v0.5.3", "v0.5.2", "v0.5.1", "v0.4.0", "v0.3.0",
+    "v0.2.1", "v0.2.0-rc.3", "v0.2.0-rc.2", "v0.2.0-rc.1", "v0.1.1", "v0.1.0",
+  ];
+  const pages = ["README.md"];
+  function addPages(directory) {
+    for (const entry of readdirSync(resolve(ROOT, directory), { withFileTypes: true })) {
+      const name = join(directory, entry.name);
+      if (entry.isDirectory()) addPages(name);
+      else if (entry.isFile() && /\.(?:md|html)$/i.test(entry.name)) pages.push(name);
+    }
+  }
+  addPages("docs");
+  for (const page of pages) {
+    const lines = readFileSync(resolve(ROOT, page), "utf8").split("\n");
+    for (const [index, line] of lines.entries()) {
+      if (!/\bunreleased\b/i.test(line)) continue;
+      for (const tag of publishedTags) {
+        const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        if (new RegExp(`(?<![A-Za-z0-9.-])${escapedTag}(?![A-Za-z0-9.-])`).test(line)) {
+          assert.fail(`${page}:${index + 1}: published tag ${tag} is called unreleased`);
+        }
+      }
+    }
+  }
+});
 
 test("each scoped document carries its exact scope signpost", () => {
   // CLAIM-COVERAGE: docs/archive/AUTHORIZATION-MESH.md#authorization-mesh; CLAIM-COVERAGE: docs/archive/CLAIMS-MATRIX.md#claims-matrix
