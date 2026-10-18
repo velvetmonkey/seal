@@ -33,6 +33,8 @@ Ben's eight-case acceptance walk is not done for this release. Ben moved the rea
 
 These five items are open in this release candidate.
 
+Correction, 2026-10-18: BLOCK 3 was also open in this release candidate and is not in the list above. BLOCK 3: the archived truth box Claim can be read as a proved property of the shipped product, and its install link sends the reader to the v0.5.3 notes, which do not state the zero strict proved-property count.
+
 Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64. The native macOS process-start witness helper is release-produced, not independently reproduced. macOS Protect execution is not exercised in CI. See `spine/platform.cjs`, `test/darwin-readiness.test.cjs`, and `test/release-matrix.test.mjs` for the platform boundary.
 
 Receipts retain one `seal.receipt/v2` envelope. The verifier refuses `authorityRoot` and `occurrenceWitness` inputs. Positive VERIFY is unreachable in this release; its formatted result is `UNVERIFIED`. The checker checks supported structure, a signature against the supplied key, and replay. It does not prove event occurrence or authority.

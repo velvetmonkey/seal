@@ -22,6 +22,8 @@ Seal supports install, demo, receipt checking and Protect on Linux x86-64 and ma
 
 Receipts retain one `seal.receipt/v2` envelope. The verifier refuses `authorityRoot` and `occurrenceWitness` inputs. Positive VERIFY is unreachable in this release; its formatted result is `UNVERIFIED`. The checker checks supported structure, a signature against the supplied key, and replay. It does not prove event occurrence or authority.
 
+Correction, 2026-10-18: the strict proved-property count for the shipped product is zero.
+
 <!-- generated candidate release notes; do not edit -->
 ## Download, verify, and install after publication
 

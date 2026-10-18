@@ -139,3 +139,58 @@ for (const [oldPath, currentPath] of [
   assert.ok(notice.includes(`](${currentPath})`));
   assert.ok(readFileSync(resolve(ROOT, "docs", currentPath), "utf8").length);
 });
+
+const PROOF_SCOPE_LINE = "> **Proof scope:** for the Node CLI shipped by this repository, this Claim is not a proved property. The strict proved-property count for the shipped product is zero.";
+const RC1_BLOCK3_CORRECTION = "Correction, 2026-10-18: BLOCK 3 was also open in this release candidate and is not in the list above. BLOCK 3: the archived truth box Claim can be read as a proved property of the shipped product, and its install link sends the reader to the v0.5.3 notes, which do not state the zero strict proved-property count.";
+const V053_COUNT_CORRECTION = "Correction, 2026-10-18: the strict proved-property count for the shipped product is zero.";
+const GENERATED_MARKER = "<!-- generated candidate release notes; do not edit -->";
+function truthboxBlock(file) {
+  const text = readFileSync(resolve(ROOT, file), "utf8");
+  const start = text.indexOf("<!-- truthbox:begin -->");
+  const end = text.indexOf("<!-- truthbox:end -->", start);
+  assert.ok(start >= 0 && end > start, `${file} is missing the truthbox markers`);
+  return text.slice(start, end);
+}
+
+test("the truth box claim block states the shipped proof scope", () => {
+  for (const file of ["docs/archive/TRUTH-BOX.md", "docs/assurance/index.html"])
+    assert.ok(truthboxBlock(file).includes(PROOF_SCOPE_LINE), `${file} is missing the shipped proof scope line`);
+});
+
+test("the rc.1 notes correction names BLOCK 3", () => {
+  const file = "docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md";
+  const text = readFileSync(resolve(ROOT, file), "utf8");
+  const correction = text.indexOf(RC1_BLOCK3_CORRECTION);
+  assert.ok(correction >= 0, `${file} is missing the BLOCK 3 correction`);
+  assert.ok(correction > text.indexOf("These five items are open in this release candidate."), `${file} puts the BLOCK 3 correction before the five-item list`);
+  assert.ok(correction < text.indexOf(GENERATED_MARKER), `${file} puts the BLOCK 3 correction after generated notes`);
+});
+
+test("the v0.5.3 notes state the zero strict proved-property count", () => {
+  const file = "docs/assurance/RELEASE-NOTES-v0.5.3.md";
+  const text = readFileSync(resolve(ROOT, file), "utf8");
+  const correction = text.indexOf(V053_COUNT_CORRECTION);
+  assert.ok(correction >= 0, `${file} is missing the zero strict proved-property count`);
+  assert.ok(correction < text.indexOf(GENERATED_MARKER), `${file} puts the count after generated notes`);
+});
+
+test("seal side pages name seal-host as archived, not deployed", () => {
+  for (const file of ["docs/assurance/architecture.md", "docs/assurance/current-scope.md"]) {
+    const text = readFileSync(resolve(ROOT, file), "utf8");
+    assert.ok(!text.includes("**enforcement** (deployed)"), `${file} still names enforcement as deployed`);
+    assert.ok(!text.includes("[`seal-host`'s proof reference]"), `${file} still names the old live proof index`);
+    assert.ok(text.includes("archived `seal-host` proof reference"), `${file} is missing the archived proof reference`);
+    assert.ok(text.includes("d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"), `${file} is missing the archive head`);
+  }
+});
+
+test("root aliases resolve to their current pages", () => {
+  for (const [file, target] of [
+    ["EVALUATOR-START.md", "docs/assurance/evaluator-start.md"],
+    ["CLAIMS-MATRIX.md", "docs/archive/CLAIMS-MATRIX.md"],
+  ]) {
+    const text = readFileSync(resolve(ROOT, file), "utf8");
+    assert.ok(text.includes(`](${target})`), `${file} is missing the ${target} link`);
+    assert.ok(readFileSync(resolve(ROOT, target), "utf8").length > 0, `${target} is empty`);
+  }
+});
