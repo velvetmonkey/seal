@@ -56,11 +56,11 @@ operator.
 
 ## Assurance lineage — Seal family architecture
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 This diagram describes the Seal family product, not the Node CLI shipped by this repository.
 
-One diagram, five roles: **seal-host decision core** (proven [seal-host]), **enforcement** (deployed), **receipt**
+One diagram, five roles: **seal-host decision core** (proven [seal-host], archived repository), **enforcement** (family design; its seal-host deployment is archived), **receipt**
 (evidence), **conformance** (historical; archived seal-host finite corpus; no current CI run), **coverage** (audits the policy).
 Solid arrows are the runtime path; dashed arrows are evidence and audit paths.
 
@@ -99,7 +99,7 @@ flowchart LR
 
 ## What each box is (and what it is not)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 - **Decision core** (`seal-host`, the repository holding its Lean source) — the seal-host rulebook. The seal-host kernel has machine-checked [seal-host] Lean 4 theorems: default
   deny, allow **iff** a live approval record matches the exact target, single-use, expiry,
