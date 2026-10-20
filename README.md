@@ -79,6 +79,7 @@ demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n
 
 Keep the demo directory for the printed checker command.
 When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.
+The `--dir` form above prints no `Recover this run directory with:` line. When you are finished with it, remove that directory yourself.
 
 ## What you should see
 
