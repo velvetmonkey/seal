@@ -18,8 +18,10 @@ import SealV2.ValidationTheorems
 import Test.AxiomAllowlist
 
 #print axioms SealCore.default_deny_never_allowed
+#print axioms SealCore.guarded_allow_iff_live
 #print axioms SealCore.no_allow_guarded_without_matching_approval_in_state
 #print axioms SealCore.approval_binds_to_target
+#print axioms SealCore.approval_not_transferable_across_targets
 #print axioms Seal.adding_deny_cannot_allow
 #print axioms Seal.adding_guard_cannot_explicitly_allow
 #print axioms Seal.ambiguous_guard_targets_block
@@ -139,8 +141,10 @@ import Test.AxiomAllowlist
 def main : IO UInt32 :=
   Test.AxiomAllowlist.check `Test.Axioms #[
     `SealCore.default_deny_never_allowed,
+    `SealCore.guarded_allow_iff_live,
     `SealCore.no_allow_guarded_without_matching_approval_in_state,
     `SealCore.approval_binds_to_target,
+    `SealCore.approval_not_transferable_across_targets,
     `Seal.adding_deny_cannot_allow,
     `Seal.adding_guard_cannot_explicitly_allow,
     `Seal.ambiguous_guard_targets_block,
