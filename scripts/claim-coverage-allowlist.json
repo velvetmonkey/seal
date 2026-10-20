@@ -1,6 +1,8 @@
 {
   "version": 1,
   "uncovered": [
+    "seal/CLAIMS-MATRIX.md",
+    "seal/EVALUATOR-START.md",
     "seal/docs/ARCHITECTURE.md",
     "seal/docs/CLAIMS-MATRIX.md",
     "seal/docs/EVALUATOR-START.md",
