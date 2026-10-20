@@ -13,7 +13,6 @@ const MODULE_URL = /^new URL\(\s*((?:"[^"]+")|(?:'[^']+'))\s*,\s*import\.meta\.u
 const NON_REQUIRE_RUNTIME_INPUTS = [
   { source: "contract/kernel-authorization.cjs", loader: "spawnSync", target: "contract/kernel-authorization-worker.cjs" },
   { source: "runtime/kernel/decision-runner.cjs", loader: "readFileSync", target: "runtime/kernel/wasm/seal.js" },
-  { source: "runtime/kernel/runner.cjs", loader: "readFileSync", target: "runtime/kernel/wasm/seal.js" },
 ];
 
 function refuse(code, reason) {

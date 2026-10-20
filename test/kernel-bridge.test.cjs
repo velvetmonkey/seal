@@ -8,6 +8,7 @@ const { spawn, spawnSync, execFile, execFileSync } = require("node:child_process
 const { promisify } = require("node:util");
 const test = require("node:test");
 const { testTmpdir } = require("../scripts/temp-root.cjs");
+const { checkPayloadRequireGraph } = require("../scripts/check-payload-require-graph.cjs");
 
 const { createApprovalContract, REFUSALS } = require("../contract/contract.cjs");
 const {
@@ -68,6 +69,40 @@ test("product worker path contains no config signing key or signing runner", () 
     assert.doesNotMatch(source, /generateKeyPairSync|crypto\.sign\(|runner\.cjs/, file);
     if (file === "contract/signed-policy.cjs") {
       assert.doesNotMatch(source, /createPrivateKey|readFileSync/, file); // CLAIM-COVERAGE: contract/signed-policy.cjs#no-private-key
+    }
+  }
+});
+
+test("the Protect and proxy require graph loads no config signing runner", () => {
+  const { edges } = checkPayloadRequireGraph();
+  const incoming = new Map();
+  for (const edge of edges) {
+    const match = edge.match(/^(.+?) -> (.+?) \((.+)\)$/);
+    assert.ok(match, edge);
+    const [, source, target] = match;
+    if (!incoming.has(source)) incoming.set(source, []);
+    incoming.get(source).push({ target, edge });
+  }
+  const roots = ["spine/protection.cjs", "spine/proxy-cli.cjs", "spine/proxy.cjs",
+    "contract/contract.cjs", "contract/kernel-authorization.cjs"];
+  const reached = new Map(roots.map((file) => [file, `${file} (root)`]));
+  const queue = [...roots];
+  while (queue.length) {
+    const file = queue.shift();
+    for (const { target, edge } of incoming.get(file) || []) {
+      if (!reached.has(target)) {
+        reached.set(target, edge);
+        queue.push(target);
+      }
+    }
+  }
+  if (process.env.SEAL_PRINT_PROTECT_GRAPH === "1") console.log([...reached.keys()].sort().join("\n"));
+  for (const [file, edge] of reached) {
+    assert.ok(!["runtime/kernel/decision-runner.cjs", "runtime/kernel/runner.cjs"].includes(file), `${file} via ${edge}`);
+    assert.ok(!file.startsWith("test-support/"), `${file} via ${edge}`);
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    if (file !== "spine/receipt-v2.cjs") {
+      assert.doesNotMatch(source, /generateKeyPairSync|signedEnvelope/, `${file} via ${edge}`);
     }
   }
 });
