@@ -620,6 +620,25 @@ test("receipt reader reports multiple gaps in pid and sequence order", () => {
   assert.match(result, /Receipt gap: pid 77 missing sequences 2 through 2\nReceipt gap: pid 77 missing sequences 4 through 4/);
 });
 
+test("receipt reader names a duplicate sequence without changing gap count or exit code", () => {
+  const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-duplicate-"));
+  const receipts = path.join(root, "receipts");
+  fs.mkdirSync(receipts);
+  for (const name of [
+    "receipt-1000-77-0001-A.json",
+    "receipt-1000-77-0002-A.json",
+    "receipt-1001-77-0002-B.json",
+    "receipt-1000-77-0003-A.json",
+  ]) fs.writeFileSync(path.join(receipts, name), "{}\n");
+  const result = run(["receipts", receipts], root);
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /Receipt duplicate sequence: pid 77 sequence 2\nReceipt gaps found: 0\n/);
+  fs.unlinkSync(path.join(receipts, "receipt-1001-77-0002-B.json"));
+  const withoutDuplicate = run(["receipts", receipts], root);
+  assert.equal(withoutDuplicate.code, 0, withoutDuplicate.out);
+  assert.doesNotMatch(withoutDuplicate.out, /Receipt duplicate sequence:/);
+});
+
 test("receipt reader rejects unsafe and non-canonical filename numbers visibly", () => {
   const root = testTmpdir(path.join(os.tmpdir(), "seal-receipt-rejected-numbers-"));
   const receipts = path.join(root, "receipts");
