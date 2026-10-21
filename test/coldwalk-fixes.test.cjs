@@ -78,3 +78,40 @@ test("both conventional help flags print the bare-command help and succeed", () 
     assert.equal(result.stdout, bare.stdout, `${flag} must print the standard help`);
   }
 });
+
+test("the assurance index names v1.0.0-rc.1 notes as the prerelease, not v0.4.0 as a candidate", () => {
+  const page = fs.readFileSync(path.join(ROOT, "docs", "assurance", "index.html"), "utf8");
+  assert.ok(page.includes('<a href="RELEASE-NOTES-v1.0.0-rc.1.md">v1.0.0-rc.1 prerelease notes</a>'), "assurance index must name v1.0.0-rc.1 prerelease notes");
+  assert.doesNotMatch(page, /Candidate v0\.4\.0/, "assurance index must not name Candidate v0.4.0");
+});
+
+test("the v0.4.0 checker notice names the published releases that carry the exit fix", () => {
+  const page = fs.readFileSync(path.join(ROOT, "docs", "verify", "README.md"), "utf8");
+  const start = page.indexOf("## v0.4.0 standalone checker exit status");
+  const end = page.indexOf("## One receipt, or a broader review", start);
+  assert.ok(start >= 0 && end > start, "verify README must contain the v0.4.0 checker notice");
+  const section = page.slice(start, end).replace(/\s+/g, " ");
+  const sentence = "The published v0.5.1, v0.5.2 and v0.5.3 releases and the v1.0.0-rc.1 prerelease carry this fix: their standalone checker exits 1 in the deleted-signature and no-key cases.";
+  assert.ok(section.includes(sentence), "v0.4.0 checker notice must name the published v0.5.1, v0.5.2, v0.5.3 and v1.0.0-rc.1 releases with the exit fix");
+});
+
+test("the demo section says the --dir form prints no Recover line", () => {
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const start = readme.indexOf('seal demo --dir "$demo_dir"');
+  const end = readme.indexOf("## What you should see", start);
+  assert.ok(start >= 0 && end > start, "README must contain the --dir demo section");
+  const section = readme.slice(start, end);
+  assert.ok(section.includes("The `--dir` form above prints no `Recover this run directory with:` line."), "--dir demo must state that it prints no Recover this run directory with: line");
+});
+
+test("each Protect guide page sets the signed kernel policy before its first seal protect command", () => {
+  for (const relative of ["docs/guide/choosing-what-to-protect.md", "docs/reference/multi-tool-semantics.md"]) {
+    const page = fs.readFileSync(path.join(ROOT, relative), "utf8");
+    const command = page.search(/\bseal protect [a-z][\w.-]* [a-z][\w.-]*/);
+    assert.ok(command >= 0, `${relative} must contain a seal protect command`);
+    const before = page.slice(0, command);
+    for (const token of ["SEAL_KERNEL_POLICY_FILE", "SEAL_KERNEL_PUBKEY", "](../assurance/architecture.md)"]) {
+      assert.ok(before.includes(token), `${relative} must name ${token} before its first seal protect command`);
+    }
+  }
+});
