@@ -356,7 +356,7 @@ function readmeRegions({ manifest }) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
-    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the`,
+    `> This source tree's \`VERSION\` file reads \`${sourceVersion}\`. The release docs generator does not compare this source with a release tag. The install commands below fetch the`,
     `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
@@ -827,8 +827,10 @@ function checkReadmePublishedClaims(facts) {
   }
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
-  if (manifest.tag === `v${sourceVersion}` && document.text.includes("release candidate, a prerelease")) {
+  if (manifest.tag === `v${sourceVersion}` && document.text.includes("The release docs generator does not compare this source with a release tag")) {
     document.failures.push(`source/release divergence claim is present even though source and release both name ${manifest.tag}`);
+  } else if (manifest.tag !== `v${sourceVersion}` && !document.text.includes(readmeRegions(facts)[0].split("\n")[1])) {
+    document.failures.push(`source/release divergence claim does not match generated VERSION line for ${sourceVersion}`);
   }
   return document;
 }
