@@ -112,6 +112,10 @@ function archivedHomeViolations(lines) {
         && /seal (?:`[^`]+` )?runs\b/.test(home);
       if (!qualified) violations.push(`line ${index + 1}: ${name} Home cell is not qualified`);
     }
+    const familyNames = new Set(home.match(/(?<![\w./-])(?:mcp-seal|seal)-[a-z0-9]+(?:-[a-z0-9]+)*(?![\w./-])/g) ?? []);
+    for (const name of familyNames) {
+      if (!population.has(name)) violations.push(`line ${index + 1}: ${name} Home name is outside the roster and extra set`);
+    }
   }
   return violations;
 }
@@ -129,6 +133,11 @@ test("an unqualified seal-demo Home cell is refused as archived", () => {
   assert.deepEqual(archivedHomeViolations(unqualified), ["line 42: seal-demo Home cell is not qualified"]);
   const qualified = [...prefix, "| Probe | Archived repository `seal-demo` at `e5388ebe475fcd88e10bec7ce390c7c6aeeeadd9`; seal runs |"];
   assert.deepEqual(archivedHomeViolations(qualified), []);
+});
+
+test("a Home name outside the family roster is refused", () => {
+  const lines = [...Array(41).fill(""), "| Probe | mcp-seal-aria |"];
+  assert.deepEqual(archivedHomeViolations(lines), ["line 42: mcp-seal-aria Home name is outside the roster and extra set"]);
 });
 for (const [oldPath, currentPath] of [
   ["CLAIMS-MATRIX.md", "archive/CLAIMS-MATRIX.md"],
