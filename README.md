@@ -31,7 +31,7 @@ including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
 <!-- generated from published release; do not edit -->
-> The current source is the `v1.0.0-rc.1` release candidate, a prerelease. The install commands below fetch the
+> This source tree's `VERSION` file reads `1.0.0-rc.1`. The release docs generator does not compare this source with a release tag. The install commands below fetch the
 > published `v0.5.3`, the live Latest release whose assets the commands below install.
 
 ```bash
