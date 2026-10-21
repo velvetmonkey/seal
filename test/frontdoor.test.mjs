@@ -284,6 +284,40 @@ test("README installer check executes the command without restoring the installe
   assert.match(red.stderr, /must not carry an installed-tree transcript/);
 });
 
+test("README installer check names the v1.0.0 shape and rejects unknown tags", (t) => {
+  const dir = testTmpdir(join(tmpdir(), "seal-frontdoor-installer-v1-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const readmePath = join(dir, "README.md");
+  const artifact = join(dir, "fixture-installer");
+  const tree = readFileSync(resolve(ROOT, "docs/start/install.md"), "utf8").match(/^tree: ([0-9a-f]{64})$/m)[1];
+  const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
+  writeFileSync(readmePath, readme.replace(/^SEAL_VERSION=.*$/m, "SEAL_VERSION=v1.0.0"));
+  const actualLines = [
+    "installed seal 1.0.0 linux-x64",
+    `store: <home>/.local/lib/seal/store/${tree}`,
+    "command: <home>/.local/bin/seal",
+    `tree: ${tree}`,
+    "Next:",
+    "  export PATH=<home>/.local/bin:$PATH",
+    `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`,
+  ];
+  writeFileSync(artifact, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(actualLines)}.join("\\n").replaceAll("<home>", process.env.HOME) + "\\n");\n`, { mode: 0o755 });
+  const env = {
+    ...process.env,
+    SEAL_INSTALL_TRANSCRIPT_README: readmePath,
+    SEAL_INSTALL_TRANSCRIPT_ARTIFACT: artifact,
+  };
+  const named = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(named.status, 1, named.stdout + named.stderr);
+  assert.doesNotMatch(named.stderr, /no named installer success shape/);
+  assert.match(named.stderr, /published install transcript differs from v1\.0\.0 installer/);
+
+  writeFileSync(readmePath, readme.replace(/^SEAL_VERSION=.*$/m, "SEAL_VERSION=v9.9.9"));
+  const unknown = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(unknown.status, 1, unknown.stdout + unknown.stderr);
+  assert.match(unknown.stderr, /no named installer success shape for v9\.9\.9/);
+});
+
 test("scope tokens are not placed inside slash compounds", () => {
   const languageScope = JSON.parse(readFileSync(resolve(ROOT, "scripts", "public-page-language-scope.json"), "utf8"));
   const scopeTokenCompound = /\/\[(?:seal-host|policy-language|budgetcore|v1)\]|\[(?:seal-host|policy-language|budgetcore|v1)\]\//u;
