@@ -44,6 +44,8 @@ and verifier-local replay. It establishes neither operator authority nor event
 occurrence: the successful signed test still prints `VERIFY    UNVERIFIED`,
 with authority `UNPINNED / CALLER-SUPPLIED` and occurrence `NOT ESTABLISHED`.
 
+The published v0.5.1, v0.5.2 and v0.5.3 releases and the v1.0.0-rc.1 prerelease carry this fix: their standalone checker exits 1 in the deleted-signature and no-key cases.
+
 ## One receipt, or a broader review
 
 ![Diagram: one signed receipt splits into two separate paths. The left path, seal-check (browser), reports signature, replay and authority-pin results. The right path, seal-assurance-kit (CLI), reports verify, scan, receipt-diff and adequacy results. A caption below the two boxes reads "same bytes, two separate tools".](../public/images/verify/receipt-two-ways.svg)
