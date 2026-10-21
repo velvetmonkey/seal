@@ -193,7 +193,7 @@ async function main() {
     'utf8').trim();
   const readmeProse = normalize(readmeParts[0].replace(/```[^\n]*\n[\s\S]*?```/g, ''));
   const divergence = sourceVersion === version ? '' : normalize(
-    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the\n` +
+    `> This source tree's \`VERSION\` file reads \`${sourceVersion}\`. The release docs generator does not compare this source with a release tag. The install commands below fetch the\n` +
     `> published \`v${version}\`, the live Latest release whose assets the commands below install.`);
   assert.equal(readmeProse, divergence,
     'new generated README prose needs a claim and observable');

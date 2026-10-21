@@ -273,14 +273,14 @@ test("legacy docs state release-listing facts and check compares claims with tha
       `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
     );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
-    assert.match(readme, new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
+    assert.match(readme, new RegExp("This source tree's `VERSION` file reads `" + VERSION_PATTERN + "`\\. The release docs generator does not compare this source with a release tag\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
     assert.equal(equalVersion.code, 0, equalVersion.stderr);
-    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the `v[^`]+` release candidate, a prerelease/);
+    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /This source tree's `VERSION` file reads `[^`]+`\. The release docs generator does not compare this source with a release tag/);
     console.log("TAMPER equal-version: divergence block absent");
     const restoredVersion = await run([], env);
     assert.equal(restoredVersion.code, 0, restoredVersion.stderr);
-    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease"));
+    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("This source tree's `VERSION` file reads `" + VERSION_PATTERN + "`\\. The release docs generator does not compare this source with a release tag"));
     console.log("RESTORE divergent versions: divergence block present");
     const install = fs.readFileSync(path.join(docs, "docs", "start", "install.md"), "utf8");
     assert.ok(
