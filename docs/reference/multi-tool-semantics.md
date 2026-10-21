@@ -11,6 +11,11 @@ for one tool, several tools, two configured servers, and repeated
 protect invocations; it supersedes that commit’s braced rendering.
 It does not propose implementation work or decide the boxpol question.
 
+These observations predate the signed kernel policy. Protect now also needs
+an operator-signed policy for the selected tools: set `SEAL_KERNEL_POLICY_FILE`
+to the file with the signed guard and forward envelopes and `SEAL_KERNEL_PUBKEY`
+to the independent Ed25519 public key pin. See [the config signing steps](../assurance/architecture.md).
+
 **That 2026-09-08 recheck used SHA-256 `93d1dfa722f05127025f2c087949f9356c6292f737e37e9a8b94948e10242f8b`,
 the published `v0.3.0` artifact, before multi-server protection shipped.**
 Current behavior differs from question 2's answer below: a later release
