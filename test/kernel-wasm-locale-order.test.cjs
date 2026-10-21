@@ -34,6 +34,62 @@ function kernelJob() {
   return nestedBlock(nestedBlock(source.split(/\r?\n/), 0, 'jobs'), 2, 'kernel-reproduce');
 }
 
+test('every kernel rebuild stage keeps file-list collation fixed', () => {
+  const steps = nestedBlock(kernelJob(), 4, 'steps');
+  const starts = [];
+  for (let index = 0; index < steps.length; index += 1) {
+    if (/^ {6}- /u.test(steps[index])) starts.push(index);
+  }
+  const rebuild = starts.map((start, index) => steps.slice(start, starts[index + 1]))
+    .find((step) => step[0] === '      - name: Rebuild the published wasm artifact');
+  assert.ok(rebuild, 'missing Rebuild the published wasm artifact step');
+  const runStart = rebuild.indexOf('        run: |');
+  assert.notEqual(runStart, -1, 'rebuild step needs a run: | block');
+  const stages = rebuild.slice(runStart + 1)
+    .map((line) => line.match(/^\s+bash wasm-spike\/([\w.-]+\.sh)(?:\s|$)/u))
+    .filter(Boolean).map((match) => match[1]);
+  assert.ok(stages.length > 0, 'rebuild run block names no stage script');
+
+  for (const name of stages) {
+    const source = fs.readFileSync(path.join(root, name), 'utf8');
+    const lines = source.split(/\r?\n/u).filter((line) => !/^\s*#/u.test(line));
+    const pin = lines.findIndex((line) => line.trim() === 'export LC_ALL=C');
+    const setup = lines.findIndex((line) => line.includes('source ./emsdk/emsdk_env.sh'));
+    const isCount = (tail) => /\|\s*(?:wc\s+-l\b|grep\s+-[^\s|]*c[^\s|]*)/u.test(tail);
+    const hasList = lines.some((line) => {
+      for (const match of line.matchAll(/\b(?:ls|find)\b/gu)) {
+        if (!isCount(line.slice(match.index).split(')')[0])) return true;
+      }
+      return /[*?]\.[\w]+/u.test(line) && !/^\s*rm\b/u.test(line) && !isCount(line);
+    });
+
+    if (hasList) {
+      const assignments = lines.filter((line) => /\bLC_ALL\s*=/u.test(line));
+      assert.equal(assignments.length, 1, `${name}: file list needs exactly one LC_ALL assignment`);
+      assert.equal(assignments[0].trim(), 'export LC_ALL=C',
+        `${name}: file list needs export LC_ALL=C`);
+      assert.ok(pin >= 0 && setup >= 0 && pin < setup,
+        `${name}: export LC_ALL=C must precede emsdk setup`);
+    }
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (/\bfind\b/u.test(line)) {
+        for (const match of line.matchAll(/\bfind\b/gu)) {
+          const tail = line.slice(match.index).split(')')[0];
+          assert.match(tail, /\|\s*(?:sort\b|wc\s+-l\b|grep\s+-c\b)/u,
+            `${name}: find output must be piped to sort or a count`);
+        }
+      }
+      if (index !== pin && (pin < 0 || index > pin)) {
+        assert.doesNotMatch(line,
+          /\b(?:LC_ALL|LANG|LC_COLLATE|LC_CTYPE)\s*=|\bunset\s+[^#\n]*\b(?:LC_ALL|LANG|LC_COLLATE|LC_CTYPE)\b|\benv\s+-i\b/u,
+          `${name}: locale change after pin or without pin`);
+      }
+    }
+  }
+});
+
 test('kernel reproduce job runs under C and UTF-8 host locales', () => {
   const job = kernelJob();
   const matrix = nestedBlock(nestedBlock(job, 4, 'strategy'), 6, 'matrix');
