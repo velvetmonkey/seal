@@ -4,7 +4,7 @@
 
 # The Authorization Mesh: verified coordination-free single-use
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated here.
 
 Seal is a machine-checked authorization gate for AI agents. This is the **mesh layer**: when you run a fleet of seal gates over shared approvals, four machine-checked theorems establish that a one-shot approval stays single-use across a network partition, and that guarantee applies to the real gate.
 
@@ -25,7 +25,7 @@ All four carry the axiom footprint `{propext, Classical.choice, Quot.sound}`, ze
 
 ## The honest boundaries (this is the whole point)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 - **Single-use is *within the approval's TTL window*, per concurrent replica** — not "single-use for all time." SealV2 approvals expire and the store prunes; receipts count domains, not time. The transferred claim inherits this scope, stated, never rounded up.
 - **Necessity is general; sufficiency is in-model.** The impossibility is proven for the abstract system; the sufficiency pattern is proven in a finite probe model, not yet lifted to the abstract system.
@@ -39,7 +39,7 @@ All four carry the axiom footprint `{propext, Classical.choice, Quot.sound}`, ze
 
 ## Where it lives
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 - Abstract theorems + product doc: [crdt-lean](https://github.com/velvetmonkey/crdt-lean) (`Crdt/AuthorityFrontier.lean`, `docs/AUTHORITY-FRONTIER.md`).
 - Receipt non-interference + the applicability bridge: [seal-host](https://github.com/velvetmonkey/seal-host) (`Host/StatefulNI.lean`, `Host/AuthorityFrontierBridge.lean`).

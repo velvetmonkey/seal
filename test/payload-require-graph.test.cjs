@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
 const test = require("node:test");
@@ -61,4 +62,13 @@ test("the graph checks the runtime file declaration", () => {
     () => checkPayloadRequireGraph(PAYLOAD_PATHS.filter((file) => file !== "runtime/kernel/wasm/seal.js")),
     /REFUSE payload_require_unshipped: runtime\/kernel\/decision-runner\.cjs readFileSync loads runtime\/kernel\/wasm\/seal\.js/,
   );
+});
+
+test("the config signing test runner is not shipped", () => {
+  const files = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).files;
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime-manifest.json"), "utf8"));
+  assert.ok(!PAYLOAD_PATHS.includes("runtime/kernel/runner.cjs"), "PAYLOAD_PATHS ships the config signing runner");
+  assert.ok(!files.includes("runtime/kernel/runner.cjs"), "package files ships the config signing runner");
+  assert.ok(!Object.hasOwn(manifest.files, "kernel/runner.cjs"), "runtime manifest pins the config signing runner");
+  for (const file of PAYLOAD_PATHS) assert.notEqual(path.basename(file), "runner.cjs", file);
 });

@@ -1,6 +1,6 @@
 # Seal Family — Public Surfaces Claim Audit (FINDINGS)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated here.
 
 **Scope**: Top-level README + docs/ openers and matrices for the umbrella `seal/` repo. Representative claims sampled from README truthbox, "Why you can believe it", CLAIMS-MATRIX, LIMITATIONS, AUTHORIZATION-MESH, EVALUATOR-START, WHY-DIFFERENT.
 
@@ -10,7 +10,7 @@
 
 ## Sampled Claims Table
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 | Claim (verbatim or close paraphrase from public surface) | Backed? | File:line / evidence | Action |
 |----------------------------------------------------------|---------|----------------------|--------|

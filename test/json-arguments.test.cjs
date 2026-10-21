@@ -8,7 +8,7 @@ function createApprovalContract(options = {}) {
 }
 const { canonicalString } = require("../contract/canonical.cjs");
 const { generateSigner, sealReceipt, canonical } = require("../spine/receipt-v2.cjs");
-const runner = require("../runtime/kernel/runner.cjs");
+const runner = require("../test-support/kernel-runner.cjs");
 const vectors = require("../test-support/json-argument-vectors.cjs");
 
 const TOOL = "write";

@@ -1,6 +1,6 @@
 # POLICY-LANGUAGE.md — boxpol: the seal policy language and its analyzer
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Status: draft specification v1, 2026-07-26. Written for Ben's evaluation and for a
 competent stranger to implement from. Supersedes nothing; it specifies the design
@@ -27,7 +27,7 @@ this repository contains Lean source.
 
 ## 1. The design bet
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 **Bet.** A policy language whose denotation is a finite union of boxes over a
 typed, finite attribute space, so that every analysis the sign-off ceremony
@@ -253,7 +253,7 @@ is deployed, because the meaning of every claim depends on it.
 
 ### 2.4 Canonical form
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 **Revision after reading the repository** (was: bespoke s-expressions). The
 signed artifact is a **SealV2 canonical JSON document**
@@ -332,7 +332,7 @@ A total order, `deny < approve < allow`. `meet` is minimum:
 
 ### 3.2 Evaluation
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 For request record `r` and policy `P`:
 
@@ -509,7 +509,7 @@ endpoint.
 
 ### 4.3 What has a Lean proof, and what does not
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Lean-backed properties (these are the analyzer's soundness; without them it is decoration):
 
@@ -592,7 +592,7 @@ the format: a bundle over budget does not render as signable.
 
 ### 5.1 Worked example — the Postgres SELECT scenario (V3.3's sink)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Scenario: the analyst agent may SELECT from three production tables during
 Chicago business hours; every query is human-approved; it can never write;
@@ -716,7 +716,7 @@ witness.
 
 ### 5.3 The renderer cannot lie its way into enforcement
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 The rendered page is for the human; the gate is for the machine. Every claim
 line carries a certificate id; the bundle embeds the machine-readable claims;
@@ -832,7 +832,7 @@ anyway.
 
 ## 8. The tripwire
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 The UNKNOWN entries in §5.1 are honest physics: the **world exceeding the
 model** (lens gaps, clock gaps, state-persistence gaps). An UNKNOWN entry
@@ -881,7 +881,7 @@ of both routes are known quantities.
 
 ## 9. What must be built
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Two design rules size everything: **one reader** (policy bytes parsed once,
 in Lean; the signer reads the kernel's reprint) and **generators untrusted,
@@ -923,7 +923,7 @@ side of it.
 
 ## 10. Revisions forced by reading the code (not silently applied)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 1. **Canonical form: s-expressions → SealV2 canonical JSON.** The original
    answer specified a rigid s-expression grammar, reasoning "not JSON — JSON
@@ -1010,7 +1010,7 @@ this is clause (i) of §12.3, and it recurs in all three answers.
 
 ### 12.1 Q1 — refusal vs justified exception is the wrong dichotomy; the selector is machine-enumerability
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 The reviewer asks whether a justified-exception model exists whose discipline
 is enforced mechanically rather than socially. It exists, and seal-host
@@ -1200,7 +1200,7 @@ never wired into the artifact the human signs. Fixed below.
 
 ## 13. Frisk corrections (Monkey, 2026-07-26 02:00, read-only lane `boxpolfrisk`)
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 §2 to §9 were checked claim by claim against the working trees. **33 of 38
 checkable claims resolved TRUE at the named file and line, and none were

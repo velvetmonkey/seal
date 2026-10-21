@@ -108,7 +108,7 @@ for (const [name, parse] of parsers) {
 
 test('strict output: every pinned FFI output form retains its explicit verdict', async () => {
   const { SCENARIOS } = await import('../runtime/kernel/seal-config.js');
-  const runner = createRequire(import.meta.url)('../runtime/kernel/runner.cjs');
+  const runner = createRequire(import.meta.url)('../test-support/kernel-runner.cjs');
   assert.equal(runner.kernelSha(), await runner.pinnedSha(), 'exercise the pinned binary');
   const check = (name, raw, expected) => {
     const producer = producerParseVerdict(raw, 'kernel-output').verdict;
