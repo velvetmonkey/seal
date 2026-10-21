@@ -554,6 +554,23 @@ test("install prose check rejects falsification, deletion and unreviewed additio
   }
 });
 
+test("install prose check rejects a literal checker download in the Linux primary command", () => {
+  const docs = testTmpdir(path.join(os.tmpdir(), 'seal-prose-checker-negative-'));
+  fs.mkdirSync(path.join(docs, 'docs/start'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'README.md'), path.join(docs, 'README.md'));
+  const original = fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8');
+  const artifactCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \\';
+  const checkerCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-v2.mjs" \\';
+  assert.ok(original.includes(artifactCurl), 'Linux primary command must have an artifact curl');
+  fs.writeFileSync(path.join(docs, 'docs/start/install.md'), original.replace(artifactCurl, `${artifactCurl}\n${checkerCurl}`));
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 30000,
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined, SEAL_INSTALL_PROSE_ROOT: docs },
+  });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL install prose: linux-x64 primary path downloads a checker/);
+});
+
 
 // CLAIM-COVERAGE: test/release-docs.test.mjs#outside-claim-controls
 test("outside install claims require review in both documents without taxing non-claims", () => {

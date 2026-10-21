@@ -262,9 +262,11 @@ async function main() {
       assert.equal(fs.existsSync(path.join(box.cwd, 'node-called')), installerEntered, 'unexpected artifact/checker execution');
       assert.deepEqual(fs.readdirSync(box.home), [], 'refusal created install state');
     }
+    for (const [platform, command] of [['linux-x64', fence], ['darwin-arm64', darwinArm64], ['darwin-x64', darwinX64]]) {
+      assert.ok(!command.includes('checker_name') && !command.includes(checkerName), `${platform} primary path downloads a checker`);
+    }
     for (const [platform, command] of [['darwin-arm64', darwinArm64], ['darwin-x64', darwinX64]]) {
       const name = command.match(/artifact_name="([^"]+)"/)[1];
-      assert.ok(!command.includes('checker_name') && !command.includes(`/$${'{'}checker_name}`), `${platform} primary path downloads a checker`);
       const good = sandbox();
       const result = execute('sh', command, good);
       assert.equal(result.status, 1, result.stdout + result.stderr);
