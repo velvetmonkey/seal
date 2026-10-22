@@ -72,3 +72,26 @@ test("the config signing test runner is not shipped", () => {
   assert.ok(!Object.hasOwn(manifest.files, "kernel/runner.cjs"), "runtime manifest pins the config signing runner");
   for (const file of PAYLOAD_PATHS) assert.notEqual(path.basename(file), "runner.cjs", file);
 });
+
+test("the reader returns side-effect imports and re-exports", () => {
+  const { staticImportSpecifiers } = require("../scripts/check-payload-require-graph.cjs");
+  const source = [
+    'import "./side.mjs"',
+    'import { b } from "./b.js";',
+    "export * from './more.mjs';",
+    'export * as ns from "./ns.js";',
+    'export {\n  c,\n} from "./c.js";',
+    'const x = import("./dyn.js");',
+  ].join("\n");
+  assert.deepEqual(staticImportSpecifiers(source).map(({ expression }) => expression), [
+    '"./side.mjs"', '"./b.js"', "'./more.mjs'", '"./ns.js"', '"./c.js"',
+  ]);
+});
+
+test("the reader keeps the import-from forms", () => {
+  const { staticImportSpecifiers } = require("../scripts/check-payload-require-graph.cjs");
+  const source = 'import a from "./a.js";\nimport * as m from \'./m.js\';';
+  assert.deepEqual(staticImportSpecifiers(source).map(({ expression }) => expression), [
+    '"./a.js"', "'./m.js'",
+  ]);
+});
