@@ -756,3 +756,100 @@ test("Latest prerelease after three empty lists refuses absence", async () => {
     assert.deepEqual(reads, { list: 3, latest: 1 });
   });
 });
+
+const assetRetryFixture = releaseAssets("v0.2.0-rc.3");
+
+async function withPlannedAssetServer(plans, callback) {
+  const reads = new Map();
+  const server = http.createServer((request, response) => {
+    if (request.url === "/releases") {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify([{
+        id: 3, tag_name: "v0.2.0-rc.3", draft: false,
+        published_at: "2026-08-26T15:00:43Z",
+        assets: Object.keys(assetRetryFixture.bytes).map((name) => ({
+          name, browser_download_url: `${base}/asset/${encodeURIComponent(name)}`,
+        })),
+      }]));
+      return;
+    }
+    if (request.url === "/latest") {
+      response.statusCode = 404;
+      response.end("absent");
+      return;
+    }
+    if (request.url.startsWith("/asset/")) {
+      const name = decodeURIComponent(request.url.slice("/asset/".length));
+      const count = (reads.get(name) || 0) + 1;
+      reads.set(name, count);
+      const steps = plans[name] || [{ status: 200, bytes: assetRetryFixture.bytes[name] }];
+      const step = steps[Math.min(count - 1, steps.length - 1)];
+      if (step === "reset") return request.socket.destroy();
+      response.statusCode = step.status;
+      response.end(step.bytes || "error");
+      return;
+    }
+    response.statusCode = 404;
+    response.end("absent");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docsRoot(),
+      SEAL_RELEASES_API_URL: `${base}/releases`,
+      SEAL_RELEASES_LATEST_API_URL: `${base}/latest`,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+    };
+    await callback(env, reads);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+test("asset 500 is read again and succeeds", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 500 }, { status: 200, bytes: assetRetryFixture.bytes.SHA256SUMS }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /release_docs_network/);
+    assert.equal(reads.get("SHA256SUMS"), 2);
+    assert.equal(reads.get(assetRetryFixture.artifactName), 1);
+    assert.equal(reads.get(assetRetryFixture.checkerName), 1);
+  });
+});
+
+test("asset 500 stops after three reads with the original refusal", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 500 }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /^REFUSE release_docs_network: HTTP 500 for http:\/\/127\.0\.0\.1:\d+\/asset\/SHA256SUMS$/m);
+    assert.equal(reads.get("SHA256SUMS"), 3);
+  });
+});
+
+test("asset 404 refuses after one read", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 404 }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /^REFUSE release_docs_network: HTTP 404 for http:\/\/127\.0\.0\.1:\d+\/asset\/SHA256SUMS$/m);
+    assert.equal(reads.get("SHA256SUMS"), 1);
+  });
+});
+
+test("changed checker bytes still refuse the checksum", async () => {
+  await withPlannedAssetServer({ [assetRetryFixture.checkerName]: [{ status: 200, bytes: Buffer.from("changed checker bytes\n") }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /REFUSE release_manifest_checksums_mismatch: SHA256SUMS disagrees with published bytes for seal-receipt-check\.mjs/);
+    assert.equal(reads.get(assetRetryFixture.checkerName), 1);
+  });
+});
+
+test("asset network reset is read again and succeeds", async () => {
+  await withPlannedAssetServer({ [assetRetryFixture.artifactName]: ["reset", { status: 200, bytes: assetRetryFixture.bytes[assetRetryFixture.artifactName] }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(reads.get(assetRetryFixture.artifactName), 2);
+  });
+});
