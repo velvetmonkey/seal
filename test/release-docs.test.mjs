@@ -611,3 +611,54 @@ test("outside install claims require review in both documents without taxing non
   const clean = run();
   assert.equal(clean.status, 0, clean.stdout + clean.stderr);
 });
+
+test("release docs check refuses a checker download in an install.md primary command", async () => {
+  const assets = releaseAssets("v0.2.0-rc.3");
+  const release = {
+    id: 3,
+    tag_name: "v0.2.0-rc.3",
+    draft: false,
+    published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docs,
+      SEAL_RELEASES_API_URL: api,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+    };
+    const generated = await run([], env);
+    assert.equal(generated.code, 0, generated.stderr);
+    const installPath = path.join(docs, "docs", "start", "install.md");
+    const install = fs.readFileSync(installPath, "utf8");
+    const clean = await run(["--check"], env);
+    assert.equal(clean.code, 0, clean.stderr);
+    assert.match(clean.stdout, /PASS release docs match latest published release v0\.2\.0-rc\.3/);
+
+    const artifactCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \\';
+    const checkerCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs" \\';
+    assert.ok(install.includes(artifactCurl), "Linux primary command must have an artifact curl");
+    fs.writeFileSync(installPath, install.replace(artifactCurl, `${artifactCurl}\n${checkerCurl}`));
+    const literal = await run(["--check"], env);
+    assert.equal(literal.code, 1, literal.stdout + literal.stderr);
+    assert.match(literal.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    assert.ok(install.includes(artifactCurl), "Linux primary command must have an artifact curl before the second plant");
+    const artifactName = `artifact_name="${assets.artifactName}" \\`;
+    assert.ok(install.includes(artifactName), "Linux primary command must name its artifact");
+    fs.writeFileSync(installPath, install.replace(artifactName, `${artifactName}\n&& checker_name="seal-receipt-check.mjs" \\`));
+    const named = await run(["--check"], env);
+    assert.equal(named.code, 1, named.stdout + named.stderr);
+    assert.match(named.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    fs.writeFileSync(installPath, install.replace(artifactName, `${artifactName}\n&& checker_name="$sums_name" \\`));
+    const variable = await run(["--check"], env);
+    assert.equal(variable.code, 1, variable.stdout + variable.stderr);
+    assert.match(variable.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    fs.writeFileSync(installPath, install);
+    const restored = await run(["--check"], env);
+    assert.equal(restored.code, 0, restored.stdout + restored.stderr);
+  });
+});

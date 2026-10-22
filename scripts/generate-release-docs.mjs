@@ -736,6 +736,17 @@ function values(text, pattern) {
   return [...text.matchAll(pattern)].map((match) => match[1] ?? match[0]);
 }
 
+function checkInstallPrimaryCheckerDownloads(document, manifest) {
+  for (const [, command] of document.text.matchAll(/```bash\n([\s\S]*?)\n```/g)) {
+    const artifact = command.match(/\bartifact_name="([^"]+)"/);
+    if (!artifact) continue;
+    if (command.includes("checker_name") || command.includes(manifest.checker.name)) {
+      const platform = artifact[1].replace(`seal-${manifest.tag}-`, "");
+      document.failures.push(`${platform} primary path downloads a checker`);
+    }
+  }
+}
+
 function checkPublishedClaims(document, facts) {
   const { manifest, manifestPublished } = facts;
   const requireAll = (label, actual, expected, minimum = 1) => {
@@ -805,6 +816,7 @@ function checkPublishedClaims(document, facts) {
   if (!document.text.includes(manifest.checker.name)) document.failures.push(`checker asset ${manifest.checker.name} is absent`);
   if (!document.text.includes(manifest.checksums.name)) document.failures.push(`checksum asset ${manifest.checksums.name} is absent`);
   if (!document.text.includes(platformSentence(manifest.platform))) document.failures.push(`platform ${platformSentence(manifest.platform)} is absent`);
+  if (document.relative === "docs/start/install.md") checkInstallPrimaryCheckerDownloads(document, manifest);
   return document;
 }
 
