@@ -662,3 +662,97 @@ test("release docs check refuses a checker download in an install.md primary com
     assert.equal(restored.code, 0, restored.stdout + restored.stderr);
   });
 });
+
+async function withSequencedReleaseServer(lists, latestStatus, latestBody, callback) {
+  const reads = { list: 0, latest: 0 };
+  const server = http.createServer((request, response) => {
+    if (request.url === "/releases") {
+      const body = lists[Math.min(reads.list++, lists.length - 1)];
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(body));
+      return;
+    }
+    if (request.url === "/latest") {
+      reads.latest++;
+      response.statusCode = latestStatus;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(latestBody));
+      return;
+    }
+    response.statusCode = 404;
+    response.end("absent");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    await callback({
+      SEAL_RELEASES_API_URL: `${base}/releases`,
+      SEAL_RELEASES_LATEST_API_URL: `${base}/latest`,
+    }, reads);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+const retryStableRelease = {
+  id: 53, tag_name: "v0.5.3", draft: false, prerelease: false,
+  published_at: "2026-10-07T08:08:44Z", assets: [],
+};
+const retryManifestAbsent = /REFUSE release_docs_manifest_absent: v0\.5\.3 must publish exactly one release-manifest\.json, found 0/;
+const retryReleaseAbsent = /REFUSE release_docs_release_absent: repository has no published non-prerelease release/;
+
+test("Empty first release list is read again", async () => {
+  await withSequencedReleaseServer([[], [retryStableRelease]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.doesNotMatch(result.stderr, /release_docs_release_absent/);
+    assert.deepEqual(reads, { list: 2, latest: 0 });
+  });
+});
+
+test("Three empty release lists and latest 404 refuse absence", async () => {
+  await withSequencedReleaseServer([[]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryReleaseAbsent);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Latest stable release is selected after three empty lists", async () => {
+  await withSequencedReleaseServer([[]], 200, retryStableRelease, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.doesNotMatch(result.stderr, /release_docs_release_absent/);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Latest server error after three empty lists refuses network", async () => {
+  await withSequencedReleaseServer([[]], 500, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /REFUSE release_docs_network: HTTP 500/);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Full first release list needs no repeat or latest read", async () => {
+  await withSequencedReleaseServer([[retryStableRelease]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.deepEqual(reads, { list: 1, latest: 0 });
+  });
+});
+
+test("Latest prerelease after three empty lists refuses absence", async () => {
+  await withSequencedReleaseServer([[]], 200, { ...retryStableRelease, prerelease: true }, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryReleaseAbsent);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   isLegacyReleaseTag,
   legacyManifestFromObserved,
@@ -20,6 +21,7 @@ const NOTES_START = "<!-- generated candidate release notes; do not edit -->";
 const NOTES_END = "<!-- end generated candidate release notes -->";
 const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
+const LATEST_RELEASE_API = process.env.SEAL_RELEASES_LATEST_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
 const TOKEN = ghToken || undefined;
 const V053_DEMO = `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`;
@@ -94,12 +96,39 @@ async function tagCommit(tag) {
   return object.sha;
 }
 
+async function fetchLatestRelease() {
+  let response;
+  try {
+    response = await fetch(LATEST_RELEASE_API, { headers: headers(), redirect: "follow" });
+  } catch (error) {
+    refuse("network", `cannot fetch ${LATEST_RELEASE_API}: ${error.message}`);
+  }
+  if (response.status === 404) refuse("release_absent", "repository has no published non-prerelease release");
+  if (!response.ok) refuse("network", `HTTP ${response.status} for ${LATEST_RELEASE_API}`);
+  try {
+    return await response.json();
+  } catch (error) {
+    refuse("invalid_json", `${LATEST_RELEASE_API}: ${error.message}`);
+  }
+}
+
 async function latestPublishedRelease() {
-  const releases = await fetchJson(RELEASES_API);
-  if (!Array.isArray(releases)) refuse("release_list", "GitHub releases response is not an array");
-  const published = releases
-    .filter((release) => !release.draft && !release.prerelease && release.published_at)
-    .sort((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at) || Number(right.id) - Number(left.id));
+  let published = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await delay(1000 * attempt);
+    const releases = await fetchJson(RELEASES_API);
+    if (!Array.isArray(releases)) refuse("release_list", "GitHub releases response is not an array");
+    published = releases
+      .filter((release) => !release.draft && !release.prerelease && release.published_at)
+      .sort((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at) || Number(right.id) - Number(left.id));
+    if (published.length) break;
+  }
+  if (!published.length) {
+    const latest = await fetchLatestRelease();
+    if (latest && typeof latest === "object" && !Array.isArray(latest) && !latest.draft && !latest.prerelease && latest.published_at) {
+      published = [latest];
+    }
+  }
   if (!published.length) refuse("release_absent", "repository has no published non-prerelease release");
   if (process.env.SEAL_EXPECTED_RELEASE_TAG && published[0].tag_name !== process.env.SEAL_EXPECTED_RELEASE_TAG) {
     refuse("release_visibility", `latest published release is ${published[0].tag_name}, expected ${process.env.SEAL_EXPECTED_RELEASE_TAG}`);
