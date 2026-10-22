@@ -9,12 +9,18 @@ import { spawnSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const readme = readFileSync(resolve(root, "README.md"), "utf8");
-const result = spawnSync("gh", ["repo", "list", "velvetmonkey", "--limit", "100", "--json", "name,isPrivate,isFork,url"], { encoding: "utf8" });
+const LIMIT = 1000;
+const result = spawnSync("gh", ["repo", "list", "velvetmonkey", "--limit", String(LIMIT + 1), "--json", "name,isPrivate,isFork,url"], { encoding: "utf8" });
 if (result.status !== 0) {
   console.error(`ERROR unable to derive public sibling population: ${result.stderr.trim()}`);
   process.exit(2);
 }
-const repos = JSON.parse(result.stdout).filter((repo) => !repo.isPrivate && !repo.isFork && repo.name !== "seal");
+const population = JSON.parse(result.stdout);
+if (population.length > LIMIT) {
+  console.error(`ERROR public sibling population may be truncated at ${LIMIT} repositories; refusing to treat a partial list as a complete navigation inventory`);
+  process.exit(2);
+}
+const repos = population.filter((repo) => !repo.isPrivate && !repo.isFork && repo.name !== "seal");
 if (repos.length === 0) {
   console.error("ERROR public sibling population is empty; refusing to treat silence as a complete navigation inventory");
   process.exit(1);
