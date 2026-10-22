@@ -75,3 +75,20 @@ test("a command fence with an absolute home path fails before it runs", () => {
     assert.match(result.stderr, diagnostic);
   }
 });
+
+test("an output fence cannot use an earlier command's stdout", () => {
+  const result = run("```bash\nprintf 'alpha\\n'\n```\n```output\nalpha\n```\n```bash\nprintf 'beta\\n'\n```\n```output\nalpha\n```\n");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /output for command at README\.md:7 does not contain expected line from README\.md:10: alpha/);
+});
+
+test("each output fence accepts its own command's stdout", () => {
+  const result = run("```bash\nprintf 'alpha\\n'\n```\n```output\nalpha\n```\n```bash\nprintf 'beta\\n'\n```\n```output\nbeta\n```\n");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /extracted 2 bash commands and 2 output samples/);
+});
+
+test("an output fence accepts stderr", () => {
+  const result = run("```bash\nprintf 'warn\\n' >&2\n```\n```output\nwarn\n```\n");
+  assert.equal(result.status, 0, result.stderr);
+});
