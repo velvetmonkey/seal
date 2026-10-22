@@ -164,6 +164,17 @@ function directGhLines(command) {
   return command.filter(({ text }) => /(^|[;&|($`\s])gh(?=\s)/u.test(text));
 }
 
+function targetLeavesWorkspace(target) {
+  const value = target.trim().replace(/^["']/u, "");
+  if (/^(?:\$GITHUB_WORKSPACE|\$\{GITHUB_WORKSPACE\}|\$\{\{\s*github\.workspace\s*\}\})/u.test(value)) return false;
+  return !value || /^(?:\/|~|\$|\.\.)/u.test(value);
+}
+
+function hasLeavingCd(text) {
+  const cds = /(?:^|;|&&|\|\||\||\()\s*cd(?:\s+("[^"]*"|'[^']*'|\$\{\{[^}]*\}\}|[^\s;&|)]+))?(?=\s|$|[;&|)])/gu;
+  return [...text.matchAll(cds)].some((match) => targetLeavesWorkspace(match[1] || ""));
+}
+
 function parseWorkflow(file, root) {
   const relative = path.relative(root, file);
   const lines = fs.readFileSync(file, "utf8").split(/\r?\n/u);
@@ -179,25 +190,33 @@ function parseWorkflow(file, root) {
       const isCheckout = Boolean(uses && /^['"]?actions\/checkout@/u.test(uses.value));
       const stepEnv = stepField(lines, step, "env");
       const stepHasRepo = stepEnv ? fieldHasEnv(lines, stepEnv, step.end, stepEnv.indent, "GH_REPO") : false;
+      const workingDirectory = stepField(lines, step, "working-directory");
+      let leftWorkspace = Boolean(workingDirectory && targetLeavesWorkspace(workingDirectory.value));
       const run = stepField(lines, step, "run");
       if (run) {
         for (const command of shellCommands(scalarLines(lines, run, step.end))) {
           const ghLines = directGhLines(command);
-          if (ghLines.length === 0) continue;
           const commandText = command.map(({ text }) => text.trim()).join(" ");
           const commandHasRepo = /(^|\s)--repo(?:=|\s)/u.test(commandText);
-          for (const ghLine of ghLines) {
-            calls.push({
-              file: relative,
-              line: ghLine.line,
-              jobId: job.id,
-              jobName,
-              command: ghLine.text.trim(),
-              earlierCheckout,
-              jobHasRepo,
-              stepHasRepo,
-              commandHasRepo,
-            });
+          for (const source of command) {
+            const ghLine = ghLines.find((line) => line === source);
+            const ghToken = /(^|[;&|($`\s])gh(?=\s)/u.exec(source.text);
+            if (ghLine && ghToken && hasLeavingCd(source.text.slice(0, ghToken.index))) leftWorkspace = true;
+            if (ghLine) {
+              calls.push({
+                file: relative,
+                line: ghLine.line,
+                jobId: job.id,
+                jobName,
+                command: ghLine.text.trim(),
+                earlierCheckout,
+                jobHasRepo,
+                stepHasRepo,
+                commandHasRepo,
+                leftWorkspace,
+              });
+            }
+            if (hasLeavingCd(source.text)) leftWorkspace = true;
           }
         }
       }
@@ -210,7 +229,7 @@ function parseWorkflow(file, root) {
 function auditWorkflowGhRepoContext(root = ROOT) {
   const calls = workflowFiles(root).flatMap((file) => parseWorkflow(file, root));
   const findings = calls.filter((call) => !(
-    call.earlierCheckout || call.jobHasRepo || call.stepHasRepo || call.commandHasRepo
+    (call.earlierCheckout && !call.leftWorkspace) || call.jobHasRepo || call.stepHasRepo || call.commandHasRepo
   ));
   return { calls, findings };
 }
