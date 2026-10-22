@@ -50,3 +50,48 @@ test("published kernel checkout uses the selected release tag", () => {
   const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/published-kernel.yml"), "utf8");
   assert.match(workflow, /- uses: actions\/checkout@v4\n\s+with:\n\s+ref: \$\{\{ env\.RELEASE_TAG \}\}/u);
 });
+
+test("workflow host-path guard rejects a scratch executable", (t) => {
+  const command = "/mnt/" + "scratch/lanes/x/bin/leanbuild build";
+  const root = fixture("steps:\n  - run: " + command + "\n");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(findForbiddenHostPaths(root), [".github/workflows/ci.yml:2:- run: " + command]);
+});
+
+test("workflow host-path guard rejects a volume executable", (t) => {
+  const command = "/mnt/" + "HC_Volume_106753061/src/x/bin/seal";
+  const root = fixture("steps:\n  - run: " + command + "\n");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(findForbiddenHostPaths(root), [".github/workflows/ci.yml:2:- run: " + command]);
+});
+
+test("workflow host-path guard rejects a named home executable", (t) => {
+  const command = "~" + "monkey/bin/leanbuild build";
+  const root = fixture("steps:\n  - run: " + command + "\n");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(findForbiddenHostPaths(root), [".github/workflows/ci.yml:2:- run: " + command]);
+});
+
+test("workflow host-path guard reports one finding per line", (t) => {
+  const command = "/home/" + "monkey/bin/leanbuild " + "/mnt/" + "scratch/lanes/x";
+  const root = fixture("steps:\n  - run: " + command + "\n");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(findForbiddenHostPaths(root), [".github/workflows/ci.yml:2:- run: " + command]);
+});
+
+test("workflow host-path guard accepts runner temporary paths", (t) => {
+  const root = fixture("steps:\n  - run: cp out.wasm /mnt/runner-temp/out.wasm\n  - run: ls \"$RUNNER_TEMP\"\n");
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(findForbiddenHostPaths(root), []);
+});
+
+test("workflow host-path guard accepts the real workflows", () => {
+  assert.deepEqual(findForbiddenHostPaths(ROOT), []);
+});
+
+test("workflow host-path guard source does not contain unbroken box paths", () => {
+  const source = fs.readFileSync(path.join(ROOT, "scripts/check-workflow-host-paths.cjs"), "utf8");
+  for (const value of ["/home/" + "monkey", "~" + "monkey", "/mnt/" + "scratch", "/mnt/" + "HC_Volume_"]) {
+    assert.equal(source.includes(value), false, value);
+  }
+});
