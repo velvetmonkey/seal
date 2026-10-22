@@ -125,16 +125,21 @@ function rosettaTranslated() {
 
 async function downloadAndVerify(url, expectedBytes, expectedSha256, destPath, { timeoutMs = 30000 } = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error(`no response within ${timeoutMs}ms`)), timeoutMs);
+  let timer;
+  const armTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new Error(`no data within ${timeoutMs}ms`)), timeoutMs);
+  };
+  armTimer();
   let response;
   try {
     response = await fetch(url, { redirect: "follow", signal: controller.signal });
   } catch (error) {
-    return { ok: false, code: "download_failed", reason: `could not reach ${url}: ${error.message}` };
-  } finally {
     clearTimeout(timer);
+    return { ok: false, code: "download_failed", reason: `could not reach ${url}: ${error.message}` };
   }
   if (!response.ok || !response.body) {
+    clearTimeout(timer);
     return { ok: false, code: "download_failed", reason: `download of ${url} failed: HTTP ${response.status}` };
   }
   const hash = crypto.createHash("sha256");
@@ -142,6 +147,7 @@ async function downloadAndVerify(url, expectedBytes, expectedSha256, destPath, {
   const file = fs.createWriteStream(destPath, { mode: 0o600, flags: "wx" });
   try {
     for await (const chunk of response.body) {
+      armTimer();
       received += chunk.length;
       // Enforced DURING the stream, not only at the end: an artifact whose
       // published length we already know must never be allowed to grow the
@@ -159,6 +165,8 @@ async function downloadAndVerify(url, expectedBytes, expectedSha256, destPath, {
     file.destroy();
     try { fs.unlinkSync(destPath); } catch { /* best-effort; the refusal is what matters */ }
     return { ok: false, code: "download_failed", reason: `download of ${url} was interrupted: ${error.message}` };
+  } finally {
+    clearTimeout(timer);
   }
   // Wait for the underlying file descriptor to actually CLOSE, not just for
   // writes to finish. `end(callback)` fires on Node's 'finish' event, which
@@ -254,7 +262,9 @@ async function main() {
     || `https://github.com/${RELEASE.repository}/releases/download/${RELEASE.tag}`;
   const url = `${baseUrl}/${artifact.name}`;
 
-  const outcome = await downloadAndVerify(url, artifact.bytes, artifact.sha256, artifactPath);
+  const idleTimeout = Number(process.env.SEAL_BOOTSTRAP_IDLE_TIMEOUT_MS); // test-only seam; never advertised to users
+  const timeoutMs = Number.isInteger(idleTimeout) && idleTimeout > 0 ? idleTimeout : 30000;
+  const outcome = await downloadAndVerify(url, artifact.bytes, artifact.sha256, artifactPath, { timeoutMs });
   if (!outcome.ok) {
     refuse(
       outcome.code,
