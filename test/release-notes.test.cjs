@@ -136,9 +136,13 @@ test("the macOS workflow guard checks YAML run values only", () => {
     "run: |\n  seal protect --path target",
     "run: bin/seal protect now",
     "run: |\n  seal \\\n  protect",
+    "      - run: bin/seal protect db x",
+    "      - run: |\n          seal protect db",
+    "steps:\n  - run: echo ok\n  - run: seal protect",
   ]) {
     assert.equal(workflowRunValues(workflow).filter(hasSealProtectInvocation).length, 1, workflow);
   }
+  assert.deepEqual(workflowRunValues("  - run: echo a\n  - name: next\n    run: echo b"), ["echo a", "echo b"]);
   assert.equal(hasSealProtectInvocation("$SEAL protect"), false);
 });
 

@@ -3,8 +3,9 @@
 // wrapped by scripts/generate-bootstrap.mjs). These tests exercise the GENERATED
 // artifact exactly as a stranger would run it: `sh <bootstrap> [--prefix P]`
 // talking to a real HTTP server, never the CommonJS module in-process. The
-// download endpoint is redirected with SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL, the
-// one test-only seam the bootstrap exposes; production users never set it.
+// download endpoint and idle limit use the test-only seams
+// SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL and SEAL_BOOTSTRAP_IDLE_TIMEOUT_MS;
+// production users never set them.
 "use strict";
 
 const assert = require("node:assert/strict");
@@ -117,7 +118,7 @@ async function buildFixture(root, { artifactOnlyWithBuiltName = false } = {}) {
 // A tiny HTTP server standing in for the real release host. `bytesFor` maps
 // a requested asset name to the bytes to serve (or `undefined` for a 404),
 // letting each test simulate one failure shape without touching the network.
-function serveAssets(bytesFor, { truncate = false, delayMs = 0 } = {}) {
+function serveAssets(bytesFor, { truncate = false, delayMs = 0, stallAfter = 0, slowChunks = null } = {}) {
   const requests = [];
   const server = http.createServer((req, res) => {
     const name = decodeURIComponent(req.url.split("/").pop());
@@ -133,6 +134,25 @@ function serveAssets(bytesFor, { truncate = false, delayMs = 0 } = {}) {
       if (truncate) {
         res.write(bytes.subarray(0, Math.floor(bytes.length / 2)));
         res.socket.destroy();
+        return;
+      }
+      if (stallAfter) {
+        res.write(bytes.subarray(0, stallAfter));
+        return;
+      }
+      if (slowChunks) {
+        let part = 0;
+        const timer = setInterval(() => {
+          const start = Math.floor(bytes.length * part / slowChunks.parts);
+          part += 1;
+          const end = Math.floor(bytes.length * part / slowChunks.parts);
+          res.write(bytes.subarray(start, end));
+          if (part === slowChunks.parts) {
+            clearInterval(timer);
+            res.end();
+          }
+        }, slowChunks.delayMs);
+        res.on("close", () => clearInterval(timer));
         return;
       }
       res.end(bytes);
@@ -248,6 +268,57 @@ test("a download that exceeds the published length is aborted mid-stream, not me
     assert.equal(fs.existsSync(path.join(home, ".local")), false);
     // Weak but real timing evidence that the stream was cut, not read to completion first.
     assert.ok(elapsedMs < 15000, `oversized download should abort quickly; took ${elapsedMs}ms`);
+  } finally {
+    await asset.close();
+  }
+});
+
+test("a download that stalls after the headers is refused and cleaned up", async () => {
+  const fixture = await buildFixture(ROOT);
+  const home = path.join(fixture.out, "home-stalled");
+  fs.mkdirSync(home);
+  const bytes = fs.readFileSync(fixture.artifactPath);
+  const asset = await serveAssets((name) => (name === fixture.artifactName ? bytes : undefined), { stallAfter: 1024 });
+  try {
+    const before = snapshotBootstrapTmp();
+    const started = performance.now();
+    const result = await run("sh", [fixture.bootstrapPath], {
+      env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl, SEAL_BOOTSTRAP_IDLE_TIMEOUT_MS: "1000" },
+      timeout: 20000,
+    });
+    const elapsedMs = performance.now() - started;
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /^REFUSE download_failed:/m);
+    assert.equal(fs.existsSync(path.join(home, ".local")), false);
+    assert.deepEqual(snapshotBootstrapTmp(), before);
+    assert.ok(elapsedMs < 10000, `stalled download should abort quickly; took ${elapsedMs}ms`);
+  } finally {
+    asset.server.closeAllConnections();
+    await asset.close();
+  }
+});
+
+test("a slow download with live chunks installs successfully", async () => {
+  const fixture = await buildFixture(ROOT);
+  const home = path.join(fixture.out, "home-slow");
+  fs.mkdirSync(home);
+  const bytes = fs.readFileSync(fixture.artifactPath);
+  const asset = await serveAssets((name) => (name === fixture.artifactName ? bytes : undefined),
+    { slowChunks: { parts: 8, delayMs: 300 } });
+  try {
+    const before = snapshotBootstrapTmp();
+    const result = await run("sh", [fixture.bootstrapPath], {
+      env: { ...process.env, HOME: home, SEAL_BOOTSTRAP_DOWNLOAD_BASE_URL: asset.baseUrl, SEAL_BOOTSTRAP_IDLE_TIMEOUT_MS: "1000" },
+    });
+    assert.equal(result.code, 0, `${result.stdout}${result.stderr}`);
+    assert.deepEqual(asset.requests, [fixture.artifactName]);
+    assert.match(result.stdout, new RegExp(`installed seal ${VERSION} linux-x64`));
+    assert.match(result.stdout, /store: .*\/\.local\/lib\/seal\/store\//);
+    assert.match(result.stdout, /command: .*\/\.local\/bin\/seal/);
+    assert.match(result.stdout, /export PATH=.*\.local\/bin/);
+    assert.match(result.stdout, /seal demo/);
+    assert.ok(fs.existsSync(path.join(home, ".local", "bin", "seal")));
+    assert.deepEqual(snapshotBootstrapTmp(), before);
   } finally {
     await asset.close();
   }
