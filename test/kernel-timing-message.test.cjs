@@ -83,3 +83,30 @@ test("kernel timeout with no child timing reports the evidence limit", () => {
   assert.equal(run.stdout, "PASS kernel_timing_message_contradiction\n");
   assert.equal(run.stderr, "");
 });
+
+for (const [name, milliseconds] of [
+  ["wasm_load", "1351.453258"],
+  ["decision_execution", "2155.086679"],
+]) {
+  test(`kernel timing message control refuses a first-instruction claim with a completed ${name} phase`, () => {
+    const run = check([
+      "seal: kernel worker died before its first instruction.",
+      "seal: kernel timing completed phases:",
+      `seal:   ${name}: ${milliseconds} ms`,
+    ].join("\n"));
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "");
+    assert.equal(run.stderr, "REFUSE kernel_timing_message_contradiction: first-instruction claim accompanies a completed child phase\n");
+  });
+}
+
+test("kernel timing message control passes a first-instruction claim with only a parent phase", () => {
+  const run = check([
+    "seal: kernel worker died before its first instruction.",
+    "seal: kernel timing completed phases:",
+    "seal:   parent_kernel_worker_wait: 5015.472308 ms",
+  ].join("\n"));
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "PASS kernel_timing_message_contradiction\n");
+  assert.equal(run.stderr, "");
+});
