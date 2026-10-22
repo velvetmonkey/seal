@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const STATE = "(?:PENDING RESTART|ACTIVE|STALE|DRIFTED|BROKEN)";
+const STATE = "(?:PENDING RESTART|LEASE ACTIVE|ACTIVE|STALE|DRIFTED|BROKEN)";
 const oldProtectionState = new RegExp(`Protection:\\s+(?:- outside Seal|${STATE})`);
 const sealedRouteState = new RegExp(`Sealed MCP route(?:\\s+[^:]+)?:\\s+(?:- outside Seal|${STATE})`);
 const forbiddenFuturePhrase = ["Effect", "protected"].join(" ");
