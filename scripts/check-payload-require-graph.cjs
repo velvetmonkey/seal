@@ -79,13 +79,17 @@ function callExpressions(text, name) {
 
 function staticImportSpecifiers(text) {
   const imports = [];
-  const pattern = /\bimport\s+(?!\()(?:(?!;)[\s\S])*?\bfrom\s+("[^"]+"|'[^']+')/g;
+  const fromPattern = /\b(?:import\s+(?!\(|["'])(?:(?!;|\bimport\b)[\s\S])*?|export\s+(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s+)\bfrom\s+("[^"]+"|'[^']+')/g;
+  const sideEffectPattern = /\bimport\s+("[^"]+"|'[^']+')/g;
   let match;
-  while ((match = pattern.exec(text)) !== null) {
+  while ((match = fromPattern.exec(text)) !== null) {
     const expression = match[1];
     imports.push({ expression, index: match.index });
   }
-  return imports;
+  while ((match = sideEffectPattern.exec(text)) !== null) {
+    imports.push({ expression: match[1], index: match.index });
+  }
+  return imports.sort((left, right) => left.index - right.index);
 }
 
 function resolveLocalRequire(expression, source, index) {
@@ -174,4 +178,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { NON_REQUIRE_RUNTIME_INPUTS, checkPayloadRequireGraph, resolveLocalImport };
+module.exports = { NON_REQUIRE_RUNTIME_INPUTS, checkPayloadRequireGraph, resolveLocalImport, staticImportSpecifiers };

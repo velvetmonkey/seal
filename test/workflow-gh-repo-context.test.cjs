@@ -163,3 +163,51 @@ test("step repository context does not leak to an earlier step", (t) => {
   assert.equal(audit.calls.length, 2);
   assert.deepEqual(audit.findings.map((call) => call.command), ["gh issue list"]);
 });
+
+test("a same-step cd to runner temp removes checkout context", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - run: cd "$RUNNER_TEMP" && gh release view v1\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings.map((call) => call.command), ['cd "$RUNNER_TEMP" && gh release view v1']);
+});
+
+test("a cd on an earlier line of a run block removes checkout context", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - run: |\n          cd /tmp\n          gh run list\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings.map((call) => call.command), ["gh run list"]);
+});
+
+test("a working-directory outside the workspace removes checkout context", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - working-directory: \${{ runner.temp }}\n        run: gh run list\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings.map((call) => call.command), ["gh run list"]);
+});
+
+test("cd to the workspace or a relative child keeps checkout context", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - run: cd "$GITHUB_WORKSPACE" && gh run list\n      - run: cd docs && gh run list\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 2);
+  assert.deepEqual(audit.findings, []);
+});
+
+test("a cd in an earlier step does not remove checkout context", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - run: cd /tmp\n      - run: gh run list\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings, []);
+});
+
+test("step GH_REPO keeps context after cd", (t) => {
+  const root = fixture(`jobs:\n  release:\n    steps:\n      - uses: actions/checkout@v4\n      - env:\n          GH_REPO: owner/repo\n        run: cd /tmp && gh run list\n`);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const audit = auditWorkflowGhRepoContext(root);
+  assert.equal(audit.calls.length, 1);
+  assert.deepEqual(audit.findings, []);
+});
