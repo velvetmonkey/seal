@@ -68,9 +68,28 @@ async function fetchJson(url) {
   }
 }
 
+async function fetchAssetResponse(url, extraHeaders) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let response;
+    try {
+      response = await fetch(url, { headers: headers(extraHeaders), redirect: "follow" });
+    } catch (error) {
+      if (attempt === 3) refuse("network", `cannot fetch ${url}: ${error.message}`);
+      await delay(1000 * attempt);
+      continue;
+    }
+    if (response.ok) return response;
+    if (response.status < 500 || response.status > 599 || attempt === 3) {
+      refuse("network", `HTTP ${response.status} for ${url}`);
+    }
+    await response.body?.cancel().catch(() => {});
+    await delay(1000 * attempt);
+  }
+}
+
 async function fetchBytes(asset) {
   const url = asset.browser_download_url || asset.url;
-  const response = await fetchResponse(url, asset.browser_download_url ? {} : { accept: "application/octet-stream" });
+  const response = await fetchAssetResponse(url, asset.browser_download_url ? {} : { accept: "application/octet-stream" });
   return Buffer.from(await response.arrayBuffer());
 }
 
