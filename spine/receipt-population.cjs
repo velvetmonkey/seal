@@ -82,7 +82,23 @@ function inspectReceiptDirectory(directory, { maxEntries = Infinity } = {}) {
     if (gapsTruncated) break;
   }
   gaps.sort((a, b) => a.pid - b.pid || a.start - b.start);
-  return { receiptFiles, nonMatchingFiles, rejectedFiles, gaps, gapsTruncated, scannedEntries, truncated };
+  const duplicates = [];
+  let duplicatesTruncated = false;
+  for (const [pid, group] of byPid) {
+    for (let index = 1; index < group.length; index += 1) {
+      const sequence = group[index].sequence;
+      if (sequence !== group[index - 1].sequence ||
+          (index > 1 && sequence === group[index - 2].sequence)) continue;
+      if (duplicates.length >= MAX_GAP_INTERVALS) {
+        duplicatesTruncated = true;
+        break;
+      }
+      duplicates.push({ pid, sequence });
+    }
+    if (duplicatesTruncated) break;
+  }
+  duplicates.sort((a, b) => a.pid - b.pid || a.sequence - b.sequence);
+  return { receiptFiles, nonMatchingFiles, rejectedFiles, gaps, gapsTruncated, duplicates, duplicatesTruncated, scannedEntries, truncated };
 }
 
 function unknownLine() {
@@ -101,6 +117,8 @@ function formatPopulation(directory, population) {
   }
   for (const gap of population.gaps) lines.push(`Receipt gap: pid ${gap.pid} missing sequences ${gap.start} through ${gap.end}`);
   if (population.gapsTruncated) lines.push(`Receipt gaps truncated after ${MAX_GAP_INTERVALS} intervals; additional gaps may exist`);
+  for (const duplicate of population.duplicates) lines.push(`Receipt duplicate sequence: pid ${duplicate.pid} sequence ${duplicate.sequence}`);
+  if (population.duplicatesTruncated) lines.push(`Receipt duplicates truncated after ${MAX_GAP_INTERVALS} pairs; additional duplicates may exist`);
   lines.push(`Receipt gaps found: ${population.gaps.length}`);
   lines.push(unknownLine());
   return lines;
