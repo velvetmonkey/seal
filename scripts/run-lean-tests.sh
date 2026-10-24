@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the shipped kernel checks in declaration order, then the host test driver.
-# Build failures and runtime
-# assertion failures both stop the roster. Run from any working directory.
+# Report build and runtime failures, then run the full roster and host test driver.
+# Run from any working directory.
 set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root/kernel-source"
@@ -109,6 +109,8 @@ esac
 check_roster
 if (($# == 1)); then exit 0; fi
 
+failed_executables=()
+result=0
 for executable in "${tests[@]}"; do
   printf '[kernel-tests] RUN %s\n' "$executable"
   if lake exe "$executable"; then
@@ -116,10 +118,16 @@ for executable in "${tests[@]}"; do
   else
     status=$?
     printf '[kernel-tests] FAIL %s (exit %s)\n' "$executable" "$status" >&2
-    exit "$status"
+    failed_executables+=("$executable")
   fi
 done
-printf '[kernel-tests] all %s executables passed\n' "${#tests[@]}"
+if ((${#failed_executables[@]} == 0)); then
+  printf '[kernel-tests] all %s executables passed\n' "${#tests[@]}"
+else
+  printf '[kernel-tests] %s of %s executables failed: %s\n' \
+    "${#failed_executables[@]}" "${#tests[@]}" "${failed_executables[*]}" >&2
+  result=1
+fi
 
 cd "$repo_root"
 printf '[lean-tests] RUN lake test\n'
@@ -128,5 +136,6 @@ if lake test; then
 else
   status=$?
   printf '[lean-tests] FAIL lake test (exit %s)\n' "$status" >&2
-  exit "$status"
+  result=1
 fi
+exit "$result"
