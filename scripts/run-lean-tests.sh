@@ -97,6 +97,7 @@ check_roster() {
   done
 
   if ((status != 0)); then return "$status"; fi
+  readonly expected_runs="${#tests[@]}"
   printf '[kernel-tests] roster check: %s lean_exe, %s run, %s omit\n' \
     "${#declared[@]}" "${#tests[@]}" "${#omit[@]}"
 }
@@ -109,7 +110,6 @@ esac
 check_roster
 if (($# == 1)); then exit 0; fi
 
-readonly expected_runs="${#tests[@]}"
 runs=0
 failed_executables=()
 result=0
@@ -132,11 +132,11 @@ if ((runs != expected_runs)); then
 fi
 if ((${#failed_executables[@]} == 0)); then
   if ((runs == expected_runs)); then
-  printf '[kernel-tests] all %s executables passed\n' "${#tests[@]}"
+    printf '[kernel-tests] all %s executables passed\n' "$expected_runs"
   fi
 else
   printf '[kernel-tests] %s of %s executables failed: %s\n' \
-    "${#failed_executables[@]}" "${#tests[@]}" "${failed_executables[*]}" >&2
+    "${#failed_executables[@]}" "$expected_runs" "${failed_executables[*]}" >&2
   result=1
 fi
 
