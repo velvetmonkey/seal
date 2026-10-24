@@ -109,20 +109,31 @@ esac
 check_roster
 if (($# == 1)); then exit 0; fi
 
+readonly expected_runs="${#tests[@]}"
+runs=0
 failed_executables=()
 result=0
 for executable in "${tests[@]}"; do
   printf '[kernel-tests] RUN %s\n' "$executable"
   if lake exe "$executable"; then
+    runs=$((runs + 1))
     printf '[kernel-tests] PASS %s\n' "$executable"
   else
     status=$?
+    runs=$((runs + 1))
     printf '[kernel-tests] FAIL %s (exit %s)\n' "$executable" "$status" >&2
     failed_executables+=("$executable")
   fi
 done
+if ((runs != expected_runs)); then
+  printf '[kernel-tests] COUNT MISMATCH: ran %s of %s roster executables; refusing to pass\n' \
+    "$runs" "$expected_runs" >&2
+  result=1
+fi
 if ((${#failed_executables[@]} == 0)); then
+  if ((runs == expected_runs)); then
   printf '[kernel-tests] all %s executables passed\n' "${#tests[@]}"
+  fi
 else
   printf '[kernel-tests] %s of %s executables failed: %s\n' \
     "${#failed_executables[@]}" "${#tests[@]}" "${failed_executables[*]}" >&2
