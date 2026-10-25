@@ -151,10 +151,21 @@ name = "perimeter_probe"
 root = "Test.PerimeterProbe"
 
 # Lake accepts one test driver, while the suite's assertions are spread across
-# ten executables. Building this driver builds every child (including the four
+# eleven executables. Building this driver builds every child (including the five
 # whose assertions run at elaboration time), then Test.LeanTests runs each child
 # and reports every nonzero exit after the full roster has run.
 [[lean_exe]]
 name = "lean_tests"
 root = "Test.LeanTests"
-needs = ["axiom_check", "host_unit_tests", "dx_surface_tests", "classify_encoding_tests", "policy_server_identity_tests", "honesty_matrix", "sha256_selfcheck", "repin_step2_guards", "guard_unify_tests", "perimeter_probe"]
+needs = ["axiom_check", "host_unit_tests", "dx_surface_tests", "classify_encoding_tests", "policy_server_identity_tests", "honesty_matrix", "sha256_selfcheck", "repin_step2_guards", "guard_unify_tests", "perimeter_probe", "a2_divergence_classification"]
+
+# Dependency Test libraries claim every Test.* module. Keep the A2 checks
+# at a root name so the wrapper imports only this library.
+[[lean_lib]]
+name = "A2DivergenceClassification"
+globs = ["A2DivergenceClassification"]
+
+# The wrapper imports the A2 module, so its checks run at build time.
+[[lean_exe]]
+name = "a2_divergence_classification"
+root = "Test.A2DivergenceClassificationMain"
