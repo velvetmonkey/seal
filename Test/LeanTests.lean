@@ -12,7 +12,8 @@ private def testBinaries : Array String := #[
   "sha256_selfcheck",
   "repin_step2_guards",
   "guard_unify_tests",
-  "perimeter_probe"
+  "perimeter_probe",
+  "a2_divergence_classification"
 ]
 
 /-- The number of test binaries this suite must run. A literal, not
@@ -21,7 +22,7 @@ private def testBinaries : Array String := #[
     never fire. The `#guard` keeps the literal and the declared list from
     drifting apart, so adding or removing a test binary fails the build until
     this number is updated to match. -/
-private def expectedTestCount : Nat := 10
+private def expectedTestCount : Nat := 11
 
 #guard testBinaries.size = expectedTestCount
 
