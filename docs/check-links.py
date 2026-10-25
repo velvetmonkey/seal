@@ -197,9 +197,14 @@ def crawl(root, base, fetcher=fetch):
                 problem = f'missing id #{fragment}'
         if problem:
             errors.append(f'{route} -> {raw} [{kind}] {problem}')
+    # Honesty map BLOCK 5 requires these two uppercase routes.
+    CASE_ROUTES = frozenset(urlsplit(base).path + route for route in
+                            ('CLAIMS-MATRIX/', 'EVALUATOR-START/'))
     for url in sorted(probes):
-        if results[url][0] != 404:
-            errors.append(f'CASE-PROBE {url}: expected 404, got {results[url][0]}')
+        expected = 200 if urlsplit(url).path in CASE_ROUTES else 404
+        if results[url][0] != expected:
+            label = 'CASE-ROUTE' if expected == 200 else 'CASE-PROBE'
+            errors.append(f'{label} {url}: expected {expected}, got {results[url][0]}')
     for kind in ('INTERNAL-PAGE', 'INTERNAL-ASSET', 'ANCHOR-SAME-PAGE', 'ANCHOR-CROSS-PAGE', 'EXTERNAL', 'OTHER-SCHEME (unchecked)'):
         print(f'{kind}: {counts[kind]}')
     print(f'ROUTES {len(pages)}, LINKS CHECKED {len(references)}, UNIQUE FETCHES {len(urls)}, CASE PROBES {len(probes)}, BROKEN {len(errors)}')
