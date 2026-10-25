@@ -67,6 +67,8 @@ common code, not independent confirmation. See
 
 For the current product checker and `seal verify`: a receipt with no signature, or no usable key to check it with, prints a REFUSE line and exits 1.
 
+For replay, the current product checker makes its own replay-only checker key in each checker process (`runtime/kernel/decision-runner.cjs`). That key signs only the local kernel config envelope that replay needs. It is not an operator key, and a replay result carries no operator authority.
+
 Previous: [Current guarantees and limits](../assurance/current-scope.md).
 Up: [Documentation map](../README.md).
 Next: [Browser receipt checks](browser.md).
