@@ -117,6 +117,9 @@ checker's verifier-local kernel.
 Because the demo supplies its own signing key, this establishes self-consistency,
 not a trusted signer's identity or proof that the recorded effect happened.
 
+The demo creates its own kernel config key for its demo proxy run.
+That key is for the demo only. It is not an operator-signed config.
+
 ## Protect a real tool set
 
 Check Node before installing Claude Code:
