@@ -103,7 +103,8 @@ function repositoryLinkVerdict(link) {
     '/velvetmonkey/seal.git',
     '/velvetmonkey/seal.git/',
   ]);
-  if (parsed.hostname === 'github.com') {
+  const githubHost = parsed.hostname.replace(/\.$/, '').replace(/^www\./, '');
+  if (githubHost === 'github.com') {
     // An explicit non-default port identifies a different origin; URL parses an explicit default port (for example :443 on https) as the empty port,
     // so only a non-empty port needs to be rejected here.
     if (parsed.port) return 'sibling';

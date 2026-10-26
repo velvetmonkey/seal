@@ -35,4 +35,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const route = path.join(dist, '404');
   fs.mkdirSync(route, { recursive: true });
   fs.copyFileSync(source, path.join(route, 'index.html'));
+  // Serve old uppercase links from honesty map BLOCK 5.
+  for (const [lowercase, uppercase] of [
+    ['claims-matrix', 'CLAIMS-MATRIX'],
+    ['evaluator-start', 'EVALUATOR-START'],
+  ]) {
+    const source = path.join(dist, lowercase, 'index.html');
+    const route = path.join(dist, uppercase);
+    fs.accessSync(source, fs.constants.R_OK);
+    fs.mkdirSync(route, { recursive: true });
+    fs.copyFileSync(source, path.join(route, 'index.html'));
+  }
 }

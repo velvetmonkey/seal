@@ -6,7 +6,7 @@ const fs = require("node:fs");
 
 const report = fs.readFileSync(0, "utf8");
 const firstInstructionClaim = /^seal: kernel worker died before its first instruction\.$/m.test(report);
-const completedChildPhase = /^seal:\s+child_[a-z_]+:\s+[^\n]+\s+ms$/m.test(report);
+const completedChildPhase = /^seal:\s+(?:child_[a-z_]+|wasm_load|decision_execution):\s+[^\n]+\s+ms$/m.test(report);
 
 if (firstInstructionClaim && completedChildPhase) {
   process.stderr.write("REFUSE kernel_timing_message_contradiction: first-instruction claim accompanies a completed child phase\n");

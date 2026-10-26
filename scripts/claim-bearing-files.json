@@ -31,7 +31,7 @@
     "harness/claude-code/cc-harness.cjs": { "allowlistReason": "The candidate describes a synthetic Claude Code fixture and explicitly labels it synthetic; that external-client simulation is not a claim about a shipped Seal command." },
     "runtime/kernel/kernel.js": { "allowlistReason": "This vendored browser adapter documents the upstream seal-check kernel boundary; its provenance and browser execution require the separately hosted runtime." },
     "runtime/kernel/receipt-format.js": { "allowlistReason": "This vendored format module records upstream derivation and compatibility notes, whose upstream source is outside this checkout." },
-    "runtime/kernel/runner.cjs": { "allowlistReason": "This runner comment describes the vendored browser kernel and upstream fixture relationship, both external runtime provenance facts." },
+    "test-support/kernel-runner.cjs": { "allowlistReason": "This runner comment describes the vendored browser kernel and upstream fixture relationship, both external runtime provenance facts." },
     "runtime/kernel/wasm/seal.js": { "allowlistReason": "Generated Emscripten output is tracked as a text byte-carrier for the WebAssembly runtime; its incidental strings are not maintained human-facing statements." },
     "scripts/check-artifact-identity.cjs": { "allowlistReason": "The candidate is an artifact-name validation diagnostic whose behavior is directly defined by this checker; a release artifact is required to exercise it." },
     "scripts/check-cc-evidence.mjs": { "allowlistReason": "This checker reports synthetic Claude Code fixture observations and Seal-proxy diagnostics; those executable test messages are not independent published product claims." },

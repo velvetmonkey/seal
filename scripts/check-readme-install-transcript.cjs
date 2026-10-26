@@ -72,9 +72,9 @@ function printedTranscript(relative) {
 }
 
 function acceptedShape(tag, home) {
-  // The v0.5.2 release prints the original demo hint; v0.5.3 prints a
+  // The v0.5.2 release prints the original demo hint; v0.5.3 and v1.0.0 print a
   // temporary-directory recipe. Each shape requires every stdout line.
-  if (tag !== "v0.5.2" && tag !== "v0.5.3") fail(`no named installer success shape for ${tag}`);
+  if (tag !== "v0.5.2" && tag !== "v0.5.3" && tag !== "v1.0.0") fail(`no named installer success shape for ${tag}`);
   const demo = tag === "v0.5.2" ? "  seal demo" : V053_DEMO;
   const version = tag.slice(1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const root = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -143,7 +143,7 @@ async function main() {
     });
     if (result.status !== 0) fail(`installer exited ${result.status}: ${(result.stderr || "").trim()}`);
     if (result.stderr) fail(`installer wrote unexpected stderr on success: ${JSON.stringify(result.stderr)}`);
-    const shape = tag === "v0.5.2" ? "v0.5.2 installer" : "v0.5.3 installer";
+    const shape = `${tag} installer`;
     if (!acceptedShape(tag, home).test(result.stdout)) fail(`${shape} success output has an unrecognised shape: ${JSON.stringify(result.stdout)}`);
     const expectedPage = result.stdout.replaceAll(home, "/home/you");
     for (const relative of TRANSCRIPT_PAGES) {

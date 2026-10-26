@@ -8,8 +8,9 @@ function workflowRunValues(source) {
   const values = [];
 
   for (let index = 0; index < lines.length; index += 1) {
-    const match = lines[index].match(/^( *)(?:run):[ \t]*(.*)$/u);
+    const match = lines[index].match(/^( *)(?:-[ \t]+)?(?:run):[ \t]*(.*)$/u);
     if (!match) continue;
+    // For a list step, indent is the dash column, not the run key column.
     const indent = match[1].length;
     const value = match[2];
     if (/^[|>][0-9+-]*$/u.test(value)) {

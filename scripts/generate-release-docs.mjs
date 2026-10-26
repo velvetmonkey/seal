@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   isLegacyReleaseTag,
   legacyManifestFromObserved,
@@ -20,6 +21,7 @@ const NOTES_START = "<!-- generated candidate release notes; do not edit -->";
 const NOTES_END = "<!-- end generated candidate release notes -->";
 const REPOSITORY = process.env.SEAL_RELEASE_REPOSITORY || "velvetmonkey/seal";
 const RELEASES_API = process.env.SEAL_RELEASES_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
+const LATEST_RELEASE_API = process.env.SEAL_RELEASES_LATEST_API_URL || `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
 const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || spawnSync("gh", ["auth", "token"], { encoding: "utf8" }).stdout?.trim();
 const TOKEN = ghToken || undefined;
 const V053_DEMO = `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`;
@@ -66,9 +68,28 @@ async function fetchJson(url) {
   }
 }
 
+async function fetchAssetResponse(url, extraHeaders) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let response;
+    try {
+      response = await fetch(url, { headers: headers(extraHeaders), redirect: "follow" });
+    } catch (error) {
+      if (attempt === 3) refuse("network", `cannot fetch ${url}: ${error.message}`);
+      await delay(1000 * attempt);
+      continue;
+    }
+    if (response.ok) return response;
+    if (response.status < 500 || response.status > 599 || attempt === 3) {
+      refuse("network", `HTTP ${response.status} for ${url}`);
+    }
+    await response.body?.cancel().catch(() => {});
+    await delay(1000 * attempt);
+  }
+}
+
 async function fetchBytes(asset) {
   const url = asset.browser_download_url || asset.url;
-  const response = await fetchResponse(url, asset.browser_download_url ? {} : { accept: "application/octet-stream" });
+  const response = await fetchAssetResponse(url, asset.browser_download_url ? {} : { accept: "application/octet-stream" });
   return Buffer.from(await response.arrayBuffer());
 }
 
@@ -94,12 +115,39 @@ async function tagCommit(tag) {
   return object.sha;
 }
 
+async function fetchLatestRelease() {
+  let response;
+  try {
+    response = await fetch(LATEST_RELEASE_API, { headers: headers(), redirect: "follow" });
+  } catch (error) {
+    refuse("network", `cannot fetch ${LATEST_RELEASE_API}: ${error.message}`);
+  }
+  if (response.status === 404) refuse("release_absent", "repository has no published non-prerelease release");
+  if (!response.ok) refuse("network", `HTTP ${response.status} for ${LATEST_RELEASE_API}`);
+  try {
+    return await response.json();
+  } catch (error) {
+    refuse("invalid_json", `${LATEST_RELEASE_API}: ${error.message}`);
+  }
+}
+
 async function latestPublishedRelease() {
-  const releases = await fetchJson(RELEASES_API);
-  if (!Array.isArray(releases)) refuse("release_list", "GitHub releases response is not an array");
-  const published = releases
-    .filter((release) => !release.draft && !release.prerelease && release.published_at)
-    .sort((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at) || Number(right.id) - Number(left.id));
+  let published = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await delay(1000 * attempt);
+    const releases = await fetchJson(RELEASES_API);
+    if (!Array.isArray(releases)) refuse("release_list", "GitHub releases response is not an array");
+    published = releases
+      .filter((release) => !release.draft && !release.prerelease && release.published_at)
+      .sort((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at) || Number(right.id) - Number(left.id));
+    if (published.length) break;
+  }
+  if (!published.length) {
+    const latest = await fetchLatestRelease();
+    if (latest && typeof latest === "object" && !Array.isArray(latest) && !latest.draft && !latest.prerelease && latest.published_at) {
+      published = [latest];
+    }
+  }
   if (!published.length) refuse("release_absent", "repository has no published non-prerelease release");
   if (process.env.SEAL_EXPECTED_RELEASE_TAG && published[0].tag_name !== process.env.SEAL_EXPECTED_RELEASE_TAG) {
     refuse("release_visibility", `latest published release is ${published[0].tag_name}, expected ${process.env.SEAL_EXPECTED_RELEASE_TAG}`);
@@ -356,7 +404,7 @@ function readmeRegions({ manifest }) {
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
   const divergence = manifest.tag === `v${sourceVersion}` ? [] : [
-    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the`,
+    `> This source tree's \`VERSION\` file reads \`${sourceVersion}\`. The release docs generator does not compare this source with a release tag. The install commands below fetch the`,
     `> published \`${manifest.tag}\`, the live Latest release whose assets the commands below install.`,
     "",
   ];
@@ -736,6 +784,17 @@ function values(text, pattern) {
   return [...text.matchAll(pattern)].map((match) => match[1] ?? match[0]);
 }
 
+function checkInstallPrimaryCheckerDownloads(document, manifest) {
+  for (const [, command] of document.text.matchAll(/```bash\n([\s\S]*?)\n```/g)) {
+    const artifact = command.match(/\bartifact_name="([^"]+)"/);
+    if (!artifact) continue;
+    if (command.includes("checker_name") || command.includes(manifest.checker.name)) {
+      const platform = artifact[1].replace(`seal-${manifest.tag}-`, "");
+      document.failures.push(`${platform} primary path downloads a checker`);
+    }
+  }
+}
+
 function checkPublishedClaims(document, facts) {
   const { manifest, manifestPublished } = facts;
   const requireAll = (label, actual, expected, minimum = 1) => {
@@ -805,6 +864,7 @@ function checkPublishedClaims(document, facts) {
   if (!document.text.includes(manifest.checker.name)) document.failures.push(`checker asset ${manifest.checker.name} is absent`);
   if (!document.text.includes(manifest.checksums.name)) document.failures.push(`checksum asset ${manifest.checksums.name} is absent`);
   if (!document.text.includes(platformSentence(manifest.platform))) document.failures.push(`platform ${platformSentence(manifest.platform)} is absent`);
+  if (document.relative === "docs/start/install.md") checkInstallPrimaryCheckerDownloads(document, manifest);
   return document;
 }
 
@@ -827,8 +887,10 @@ function checkReadmePublishedClaims(facts) {
   }
   const sourceVersion = process.env.SEAL_RELEASE_SOURCE_VERSION
     ?? fs.readFileSync(path.resolve(import.meta.dirname, "../VERSION"), "utf8").trim();
-  if (manifest.tag === `v${sourceVersion}` && document.text.includes("release candidate, a prerelease")) {
+  if (manifest.tag === `v${sourceVersion}` && document.text.includes("The release docs generator does not compare this source with a release tag")) {
     document.failures.push(`source/release divergence claim is present even though source and release both name ${manifest.tag}`);
+  } else if (manifest.tag !== `v${sourceVersion}` && !document.text.includes(readmeRegions(facts)[0].split("\n")[1])) {
+    document.failures.push(`source/release divergence claim does not match generated VERSION line for ${sourceVersion}`);
   }
   return document;
 }

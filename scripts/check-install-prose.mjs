@@ -193,7 +193,7 @@ async function main() {
     'utf8').trim();
   const readmeProse = normalize(readmeParts[0].replace(/```[^\n]*\n[\s\S]*?```/g, ''));
   const divergence = sourceVersion === version ? '' : normalize(
-    `> The current source is the \`v${sourceVersion}\` release candidate, a prerelease. The install commands below fetch the\n` +
+    `> This source tree's \`VERSION\` file reads \`${sourceVersion}\`. The release docs generator does not compare this source with a release tag. The install commands below fetch the\n` +
     `> published \`v${version}\`, the live Latest release whose assets the commands below install.`);
   assert.equal(readmeProse, divergence,
     'new generated README prose needs a claim and observable');
@@ -262,9 +262,11 @@ async function main() {
       assert.equal(fs.existsSync(path.join(box.cwd, 'node-called')), installerEntered, 'unexpected artifact/checker execution');
       assert.deepEqual(fs.readdirSync(box.home), [], 'refusal created install state');
     }
+    for (const [platform, command] of [['linux-x64', fence], ['darwin-arm64', darwinArm64], ['darwin-x64', darwinX64]]) {
+      assert.ok(!command.includes('checker_name') && !command.includes(checkerName), `${platform} primary path downloads a checker`);
+    }
     for (const [platform, command] of [['darwin-arm64', darwinArm64], ['darwin-x64', darwinX64]]) {
       const name = command.match(/artifact_name="([^"]+)"/)[1];
-      assert.ok(!command.includes('checker_name') && !command.includes(`/$${'{'}checker_name}`), `${platform} primary path downloads a checker`);
       const good = sandbox();
       const result = execute('sh', command, good);
       assert.equal(result.status, 1, result.stdout + result.stderr);

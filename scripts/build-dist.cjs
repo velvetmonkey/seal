@@ -56,7 +56,6 @@ const PAYLOAD_PATHS = [
   "runtime/kernel/seal-config.js",
   "runtime/kernel/receipt-format.js",
   "runtime/kernel/decision-runner.cjs",
-  "runtime/kernel/runner.cjs",
   "runtime/kernel/wasm/seal.js",
   "runtime/kernel/wasm/seal.wasm",
   "scripts/macos-helper.cjs",

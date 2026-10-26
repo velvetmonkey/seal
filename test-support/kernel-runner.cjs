@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Node runner for the vendored seal kernel (wasm/seal.js + seal.wasm).
+// Test-only Node runner for the vendored seal kernel (wasm/seal.js + seal.wasm).
 // Loads the SAME public wasm the browser seal-check uses, runs one decision,
 // and builds the canonical receipt. Trusts nothing: hashes the binary itself.
 // The load pattern mirrors seal-check/test/receipt-harness.cjs (proven working).
@@ -8,7 +8,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { pathToFileURL } = require("node:url");
 
-const ROOT = path.resolve(__dirname);
+const ROOT = path.resolve(__dirname, "..", "runtime", "kernel");
 const WASM_DIR = path.join(ROOT, "wasm");
 let _M = null, _cfg = null, _K = null;
 const configKeys = crypto.generateKeyPairSync("ed25519");

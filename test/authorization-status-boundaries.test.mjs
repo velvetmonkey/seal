@@ -129,3 +129,48 @@ test("Effect protected is rejected in product files and ignored in archive files
     }
   });
 });
+
+test("a bare LEASE ACTIVE protection state is caught", async () => {
+  await withIsolatedRepository(({ root, authorizationStatusBoundaryFailures }) => {
+    const file = path.join(root, "runtime", "lease-active-tamper.cjs");
+    fs.writeFileSync(file, "console.log('Protection: LEASE ACTIVE')\n");
+    try {
+      const failures = authorizationStatusBoundaryFailures();
+      assert.ok(failures.some((failure) => failure.includes("runtime/lease-active-tamper.cjs") && failure.includes("old unbounded Protection state")), failures.join("\n"));
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+});
+
+test("a LEASE ACTIVE route without its boundary is caught", async () => {
+  await withIsolatedRepository(({ root, authorizationStatusBoundaryFailures }) => {
+    const file = path.join(root, "runtime", "lease-route-tamper.cjs");
+    fs.writeFileSync(file, "console.log('Sealed MCP route db: LEASE ACTIVE')\n");
+    try {
+      const failures = authorizationStatusBoundaryFailures();
+      assert.ok(failures.some((failure) => failure.includes("runtime/lease-route-tamper.cjs") && failure.includes("sealed route state lacks boundary statement")), failures.join("\n"));
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+});
+
+test("a LEASE ACTIVE route with its boundary stays green", async () => {
+  await withIsolatedRepository(({ root, authorizationStatusBoundaryFailures }) => {
+    const file = path.join(root, "runtime", "lease-route-bounded.cjs");
+    fs.writeFileSync(file, [
+      "Sealed MCP route db: LEASE ACTIVE",
+      "Gated through this route:",
+      "  db.query",
+      "Not controlled:",
+      "  other uncontrolled routes can also exist",
+    ].join("\n") + "\n");
+    try {
+      const failures = authorizationStatusBoundaryFailures();
+      assert.ok(!failures.some((failure) => failure.includes("runtime/lease-route-bounded.cjs")), failures.join("\n"));
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+});

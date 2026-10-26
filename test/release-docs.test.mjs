@@ -273,14 +273,14 @@ test("legacy docs state release-listing facts and check compares claims with tha
       `release docs generator emitted a macOS Protect sentence that spine/platform.cjs does not carry, or omitted the live install-guide support sentence\n${claims.stderr}`,
     );
     const readme = fs.readFileSync(path.join(docs, "README.md"), "utf8");
-    assert.match(readme, new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
+    assert.match(readme, new RegExp("This source tree's `VERSION` file reads `" + VERSION_PATTERN + "`\\. The release docs generator does not compare this source with a release tag\\. The install commands below fetch the\\s*> published `v0\\.2\\.0-rc\\.3`, the live Latest release whose assets the commands below install\\."));
     const equalVersion = await run([], { ...env, SEAL_RELEASE_SOURCE_VERSION: "0.2.0-rc.3" });
     assert.equal(equalVersion.code, 0, equalVersion.stderr);
-    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /The current source is the `v[^`]+` release candidate, a prerelease/);
+    assert.doesNotMatch(fs.readFileSync(path.join(docs, "README.md"), "utf8"), /This source tree's `VERSION` file reads `[^`]+`\. The release docs generator does not compare this source with a release tag/);
     console.log("TAMPER equal-version: divergence block absent");
     const restoredVersion = await run([], env);
     assert.equal(restoredVersion.code, 0, restoredVersion.stderr);
-    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("The current source is the `v" + VERSION_PATTERN + "` release candidate, a prerelease"));
+    assert.match(fs.readFileSync(path.join(docs, "README.md"), "utf8"), new RegExp("This source tree's `VERSION` file reads `" + VERSION_PATTERN + "`\\. The release docs generator does not compare this source with a release tag"));
     console.log("RESTORE divergent versions: divergence block present");
     const install = fs.readFileSync(path.join(docs, "docs", "start", "install.md"), "utf8");
     assert.ok(
@@ -554,6 +554,23 @@ test("install prose check rejects falsification, deletion and unreviewed additio
   }
 });
 
+test("install prose check rejects a literal checker download in the Linux primary command", () => {
+  const docs = testTmpdir(path.join(os.tmpdir(), 'seal-prose-checker-negative-'));
+  fs.mkdirSync(path.join(docs, 'docs/start'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'README.md'), path.join(docs, 'README.md'));
+  const original = fs.readFileSync(path.join(ROOT, 'docs/start/install.md'), 'utf8');
+  const artifactCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \\';
+  const checkerCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-v2.mjs" \\';
+  assert.ok(original.includes(artifactCurl), 'Linux primary command must have an artifact curl');
+  fs.writeFileSync(path.join(docs, 'docs/start/install.md'), original.replace(artifactCurl, `${artifactCurl}\n${checkerCurl}`));
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-install-prose.mjs')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 30000,
+    env: { ...process.env, NODE_TEST_CONTEXT: undefined, SEAL_INSTALL_PROSE_ROOT: docs },
+  });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL install prose: linux-x64 primary path downloads a checker/);
+});
+
 
 // CLAIM-COVERAGE: test/release-docs.test.mjs#outside-claim-controls
 test("outside install claims require review in both documents without taxing non-claims", () => {
@@ -593,4 +610,246 @@ test("outside install claims require review in both documents without taxing non
   }
   const clean = run();
   assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+});
+
+test("release docs check refuses a checker download in an install.md primary command", async () => {
+  const assets = releaseAssets("v0.2.0-rc.3");
+  const release = {
+    id: 3,
+    tag_name: "v0.2.0-rc.3",
+    draft: false,
+    published_at: "2026-08-26T15:00:43Z",
+    assets: Object.keys(assets.bytes).map((name) => ({ name })),
+  };
+  await withReleaseServer(release, assets.bytes, async (api) => {
+    const docs = docsRoot();
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docs,
+      SEAL_RELEASES_API_URL: api,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+    };
+    const generated = await run([], env);
+    assert.equal(generated.code, 0, generated.stderr);
+    const installPath = path.join(docs, "docs", "start", "install.md");
+    const install = fs.readFileSync(installPath, "utf8");
+    const clean = await run(["--check"], env);
+    assert.equal(clean.code, 0, clean.stderr);
+    assert.match(clean.stdout, /PASS release docs match latest published release v0\.2\.0-rc\.3/);
+
+    const artifactCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \\';
+    const checkerCurl = '&& curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-receipt-check.mjs" \\';
+    assert.ok(install.includes(artifactCurl), "Linux primary command must have an artifact curl");
+    fs.writeFileSync(installPath, install.replace(artifactCurl, `${artifactCurl}\n${checkerCurl}`));
+    const literal = await run(["--check"], env);
+    assert.equal(literal.code, 1, literal.stdout + literal.stderr);
+    assert.match(literal.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    assert.ok(install.includes(artifactCurl), "Linux primary command must have an artifact curl before the second plant");
+    const artifactName = `artifact_name="${assets.artifactName}" \\`;
+    assert.ok(install.includes(artifactName), "Linux primary command must name its artifact");
+    fs.writeFileSync(installPath, install.replace(artifactName, `${artifactName}\n&& checker_name="seal-receipt-check.mjs" \\`));
+    const named = await run(["--check"], env);
+    assert.equal(named.code, 1, named.stdout + named.stderr);
+    assert.match(named.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    fs.writeFileSync(installPath, install.replace(artifactName, `${artifactName}\n&& checker_name="$sums_name" \\`));
+    const variable = await run(["--check"], env);
+    assert.equal(variable.code, 1, variable.stdout + variable.stderr);
+    assert.match(variable.stderr, /docs\/start\/install\.md: linux-x64 primary path downloads a checker/);
+
+    fs.writeFileSync(installPath, install);
+    const restored = await run(["--check"], env);
+    assert.equal(restored.code, 0, restored.stdout + restored.stderr);
+  });
+});
+
+async function withSequencedReleaseServer(lists, latestStatus, latestBody, callback) {
+  const reads = { list: 0, latest: 0 };
+  const server = http.createServer((request, response) => {
+    if (request.url === "/releases") {
+      const body = lists[Math.min(reads.list++, lists.length - 1)];
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(body));
+      return;
+    }
+    if (request.url === "/latest") {
+      reads.latest++;
+      response.statusCode = latestStatus;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(latestBody));
+      return;
+    }
+    response.statusCode = 404;
+    response.end("absent");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    await callback({
+      SEAL_RELEASES_API_URL: `${base}/releases`,
+      SEAL_RELEASES_LATEST_API_URL: `${base}/latest`,
+    }, reads);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+const retryStableRelease = {
+  id: 53, tag_name: "v0.5.3", draft: false, prerelease: false,
+  published_at: "2026-10-07T08:08:44Z", assets: [],
+};
+const retryManifestAbsent = /REFUSE release_docs_manifest_absent: v0\.5\.3 must publish exactly one release-manifest\.json, found 0/;
+const retryReleaseAbsent = /REFUSE release_docs_release_absent: repository has no published non-prerelease release/;
+
+test("Empty first release list is read again", async () => {
+  await withSequencedReleaseServer([[], [retryStableRelease]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.doesNotMatch(result.stderr, /release_docs_release_absent/);
+    assert.deepEqual(reads, { list: 2, latest: 0 });
+  });
+});
+
+test("Three empty release lists and latest 404 refuse absence", async () => {
+  await withSequencedReleaseServer([[]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryReleaseAbsent);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Latest stable release is selected after three empty lists", async () => {
+  await withSequencedReleaseServer([[]], 200, retryStableRelease, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.doesNotMatch(result.stderr, /release_docs_release_absent/);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Latest server error after three empty lists refuses network", async () => {
+  await withSequencedReleaseServer([[]], 500, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /REFUSE release_docs_network: HTTP 500/);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+test("Full first release list needs no repeat or latest read", async () => {
+  await withSequencedReleaseServer([[retryStableRelease]], 404, {}, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryManifestAbsent);
+    assert.deepEqual(reads, { list: 1, latest: 0 });
+  });
+});
+
+test("Latest prerelease after three empty lists refuses absence", async () => {
+  await withSequencedReleaseServer([[]], 200, { ...retryStableRelease, prerelease: true }, async (env, reads) => {
+    const result = await run(["--check"], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, retryReleaseAbsent);
+    assert.deepEqual(reads, { list: 3, latest: 1 });
+  });
+});
+
+const assetRetryFixture = releaseAssets("v0.2.0-rc.3");
+
+async function withPlannedAssetServer(plans, callback) {
+  const reads = new Map();
+  const server = http.createServer((request, response) => {
+    if (request.url === "/releases") {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify([{
+        id: 3, tag_name: "v0.2.0-rc.3", draft: false,
+        published_at: "2026-08-26T15:00:43Z",
+        assets: Object.keys(assetRetryFixture.bytes).map((name) => ({
+          name, browser_download_url: `${base}/asset/${encodeURIComponent(name)}`,
+        })),
+      }]));
+      return;
+    }
+    if (request.url === "/latest") {
+      response.statusCode = 404;
+      response.end("absent");
+      return;
+    }
+    if (request.url.startsWith("/asset/")) {
+      const name = decodeURIComponent(request.url.slice("/asset/".length));
+      const count = (reads.get(name) || 0) + 1;
+      reads.set(name, count);
+      const steps = plans[name] || [{ status: 200, bytes: assetRetryFixture.bytes[name] }];
+      const step = steps[Math.min(count - 1, steps.length - 1)];
+      if (step === "reset") return request.socket.destroy();
+      response.statusCode = step.status;
+      response.end(step.bytes || "error");
+      return;
+    }
+    response.statusCode = 404;
+    response.end("absent");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const env = {
+      SEAL_RELEASE_DOCS_ROOT: docsRoot(),
+      SEAL_RELEASES_API_URL: `${base}/releases`,
+      SEAL_RELEASES_LATEST_API_URL: `${base}/latest`,
+      SEAL_RELEASE_TAG_COMMIT: COMMIT,
+    };
+    await callback(env, reads);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+test("asset 500 is read again and succeeds", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 500 }, { status: 200, bytes: assetRetryFixture.bytes.SHA256SUMS }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /release_docs_network/);
+    assert.equal(reads.get("SHA256SUMS"), 2);
+    assert.equal(reads.get(assetRetryFixture.artifactName), 1);
+    assert.equal(reads.get(assetRetryFixture.checkerName), 1);
+  });
+});
+
+test("asset 500 stops after three reads with the original refusal", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 500 }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /^REFUSE release_docs_network: HTTP 500 for http:\/\/127\.0\.0\.1:\d+\/asset\/SHA256SUMS$/m);
+    assert.equal(reads.get("SHA256SUMS"), 3);
+  });
+});
+
+test("asset 404 refuses after one read", async () => {
+  await withPlannedAssetServer({ SHA256SUMS: [{ status: 404 }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /^REFUSE release_docs_network: HTTP 404 for http:\/\/127\.0\.0\.1:\d+\/asset\/SHA256SUMS$/m);
+    assert.equal(reads.get("SHA256SUMS"), 1);
+  });
+});
+
+test("changed checker bytes still refuse the checksum", async () => {
+  await withPlannedAssetServer({ [assetRetryFixture.checkerName]: [{ status: 200, bytes: Buffer.from("changed checker bytes\n") }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /REFUSE release_manifest_checksums_mismatch: SHA256SUMS disagrees with published bytes for seal-receipt-check\.mjs/);
+    assert.equal(reads.get(assetRetryFixture.checkerName), 1);
+  });
+});
+
+test("asset network reset is read again and succeeds", async () => {
+  await withPlannedAssetServer({ [assetRetryFixture.artifactName]: ["reset", { status: 200, bytes: assetRetryFixture.bytes[assetRetryFixture.artifactName] }] }, async (env, reads) => {
+    const result = await run([], env);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(reads.get(assetRetryFixture.artifactName), 2);
+  });
 });
