@@ -37,6 +37,29 @@ test("seal demo names the retained scratch directory and its recovery command", 
   }
 });
 
+test("bare seal demo exits 0 when TMPDIR is a symlink to a real folder", () => {
+  const realRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-real-tmp-test-"));
+  const linkParent = testTmpdir(path.join(os.tmpdir(), "seal-demo-link-parent-test-"));
+  const link = path.join(linkParent, "linktmp");
+  fs.symlinkSync(realRoot, link, "dir");
+  const run = spawnSync(process.execPath, [SEAL, "demo"], {
+    env: { ...process.env, TMPDIR: link, TMP: link, TEMP: link },
+    cwd: ROOT,
+    encoding: "utf8",
+    input: "y\n",
+    timeout: 120000,
+  });
+  const output = `${run.stdout}${run.stderr}`;
+  const demoDir = output.match(/^temporary demo directory: (.+) \(remains after the demo for the printed checker command\)$/m)?.[1];
+  try {
+    assert.ok(demoDir, output);
+    assert.equal(run.status, 0, output);
+    assert.doesNotMatch(output, /resolves outside its demo directory/);
+  } finally {
+    if (demoDir) fs.rmSync(demoDir, { recursive: true, force: true });
+  }
+});
+
 test("seal demo --dir never deletes a user-named directory", () => {
   const parent = testTmpdir(path.join(os.tmpdir(), "seal-demo-scratch-test-"));
   const demoDir = path.join(parent, "user-owned");
