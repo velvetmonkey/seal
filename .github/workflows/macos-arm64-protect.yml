@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: Apache-2.0
+name: macOS arm64 Protect (row 7)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/macos-arm64-protect.yml
+  push:
+    paths:
+      - .github/workflows/macos-arm64-protect.yml
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to test
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  protect-published-asset:
+    name: Published darwin-arm64 Protect path
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse a host that is not arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          test "$(node -p 'process.platform + "-" + process.arch')" = darwin-arm64
+      - name: Select release and record the runner
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG_INPUT"
+          if test -z "$tag"; then
+            tag="$(gh api repos/${{ github.repository }}/releases --jq '[.[]|select(.draft==false)]|sort_by(.published_at)|last|.tag_name')"
+          fi
+          test -n "$tag"
+          test "$tag" != null
+          case "$tag" in *[!a-zA-Z0-9._-]*) exit 1 ;; esac
+          printf 'SEAL_RELEASE_TAG=%s\n' "$tag" >> "$GITHUB_ENV"
+          printf 'row7 release-tag %s\n' "$tag"
+          printf 'row7 model %s\n' "$(sysctl -n hw.model)"
+          sysctl -n machdep.cpu.brand_string
+          printf 'row7 macos %s %s\n' "$(sw_vers -productVersion)" "$(sw_vers -buildVersion)"
+          uname -a
+      - name: Install Claude Code command
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @anthropic-ai/claude-code
+          printf 'row7 claude-code %s\n' "$(claude --version)"
+      - name: Download, verify, and install published asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          asset="seal-${SEAL_RELEASE_TAG}-darwin-arm64"
+          url="https://github.com/velvetmonkey/seal/releases/download/${SEAL_RELEASE_TAG}"
+          curl -fsSLO "$url/SHA256SUMS"
+          curl -fsSLO "$url/$asset"
+          line="$(awk -v name="$asset" '$3 == name { count++; digest=$1; bytes=$2 } END { if (count == 1) print digest, bytes }' SHA256SUMS)"
+          test -n "$line"
+          read -r digest bytes <<< "$line"
+          [[ "$digest" =~ ^[[:xdigit:]]{64}$ ]]
+          [[ "$bytes" =~ ^[0-9]+$ ]]
+          actual_digest="$(shasum -a 256 "$asset")"
+          test "${actual_digest%% *}" = "$digest"
+          actual_bytes="$(wc -c < "$asset")"
+          test "$actual_bytes" -eq "$bytes"
+          printf 'row7 asset-sha256 %s\n' "$digest"
+          printf 'row7 asset-bytes %s\n' "$bytes"
+          chmod +x "$asset"
+          "./$asset" --sha256 "$digest" --bytes "$bytes" --prefix "$RUNNER_TEMP/prefix"
+      - name: Drive Protect through the installed launcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/operator-home"
+          mkdir -p "$HOME" "$RUNNER_TEMP/project"
+          cd "$RUNNER_TEMP/project"
+          printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"],"env":{"SEAL_CC_FIXTURE_LOG":"%s/fixture.jsonl","SEAL_CC_FIXTURE_EFFECT":"%s/effect.txt"}}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TEMP" > .mcp.json
+          cp .mcp.json "$RUNNER_TEMP/mcp-before.json"
+          "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note
+          cmp .mcp.json "$RUNNER_TEMP/mcp-before.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { spawn } = require('node:child_process');
+          const readline = require('node:readline');
+          const assert = require('node:assert/strict');
+          const entry = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.claude.json')))
+            .projects[process.cwd()].mcpServers.notes;
+          assert.ok(fs.existsSync(entry.command), 'local launcher is absent');
+          const child = spawn(entry.command, entry.args || [], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...(entry.env || {}) } });
+          const frames = [];
+          const lines = readline.createInterface({ input: child.stdout, terminal: false });
+          lines.on('line', line => { const frame = JSON.parse(line); frames.push(frame); console.log('row7 frame ' + JSON.stringify(frame)); });
+          const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+          async function answer(id) {
+            for (let i = 0; i < 200; i++) {
+              const frame = frames.find(value => value.id === id && !value.method);
+              if (frame) return frame;
+              if (child.exitCode !== null) throw new Error('launcher exited before frame ' + id);
+              await delay(100);
+            }
+            throw new Error('launcher did not answer frame ' + id);
+          }
+          function send(id, method, params) {
+            child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+          }
+          async function main() {
+            send(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'row7-stdio', version: '1' } });
+            assert.equal((await answer(1)).result.protocolVersion, '2025-06-18');
+            send(2, 'tools/call', { name: 'append_note', arguments: { note: 'row7-no-approval' } });
+            const refusal = await answer(2);
+            assert.equal(refusal.result.isError, true);
+            assert.match(refusal.result.content[0].text, /client_elicitation_unsupported/);
+            assert.match(refusal.result.content[0].text, /cannot present an approval/);
+            child.stdin.end();
+            const exit = await new Promise(resolve => child.once('close', resolve));
+            assert.equal(exit, 0);
+            const records = fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'fixture.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+            assert.ok(records.some(value => value.kind === 'frame' && value.raw.includes('initialize')));
+            const calls = records.filter(value => value.kind === 'child-call');
+            assert.equal(calls.length, 0);
+            assert.equal(fs.existsSync(path.join(process.env.RUNNER_TEMP, 'effect.txt')), false);
+            console.log('row7 protect client_elicitation_unsupported child-calls=0');
+          }
+          main().catch(error => { console.error(error); child.stdin.end(); process.exitCode = 1; });
+          NODE
+          "$RUNNER_TEMP/prefix/bin/seal" unprotect notes
+          cmp .mcp.json "$RUNNER_TEMP/mcp-before.json"
+          node -e 'const fs=require("node:fs"); const path=require("node:path"); const doc=JSON.parse(fs.readFileSync(path.join(process.env.HOME,".claude.json"))); if (doc.projects?.[process.cwd()]?.mcpServers?.notes) process.exit(1)'
+      - name: Record the limits of this run
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'row7 gap hosted-virtual-machine-not-real-mac'
+          echo 'row7 gap no-claude-code-session-or-dialog'
+          echo 'row7 gap no-human-approval-keypress'
+          echo 'row7 gap no-browser-download-gatekeeper-quarantine'
+          echo 'row7 gap no-claude-code-desktop'
+          echo 'row7 gap macos-version-set-by-runner-image'
