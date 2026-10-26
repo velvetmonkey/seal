@@ -31,7 +31,7 @@ including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
 <!-- generated from published release; do not edit -->
-> The current source is the `v1.0.0-rc.1` release candidate, a prerelease. The install commands below fetch the
+> This source tree's `VERSION` file reads `1.0.0-rc.1`. The release docs generator does not compare this source with a release tag. The install commands below fetch the
 > published `v0.5.3`, the live Latest release whose assets the commands below install.
 
 ```bash
@@ -79,6 +79,7 @@ demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n
 
 Keep the demo directory for the printed checker command.
 When you are finished, use the printed `Recover this run directory with:` command to remove the temporary demo directory.
+The `--dir` form above prints no `Recover this run directory with:` line. When you are finished with it, remove that directory yourself.
 
 ## What you should see
 
@@ -138,6 +139,11 @@ claude --version
 
 In a disposable Claude Code project, define a local stdio MCP server with two
 tools whose effects you want Seal to hold for approval:
+
+Before this command, have the operator sign the guard and forward payloads
+for `demo.mutate` and `demo.erase`. Set `SEAL_KERNEL_POLICY_FILE` to the file
+with those two signed envelopes and `SEAL_KERNEL_PUBKEY` to the independent
+Ed25519 public key pin. See [the config signing steps](docs/assurance/architecture.md).
 
 ```bash
 mkdir -p seal-protect-demo

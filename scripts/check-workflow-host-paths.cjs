@@ -4,7 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const FORBIDDEN = "/home/" + "monkey";
+const FORBIDDEN = [
+  "/home/" + "monkey",
+  "~" + "monkey",
+  "/mnt/" + "scratch",
+  "/mnt/" + "HC_Volume_",
+];
 
 function filesBelow(directory) {
   const found = [];
@@ -23,7 +28,7 @@ function findForbiddenHostPaths(root = ROOT) {
   for (const file of filesBelow(github)) {
     const text = fs.readFileSync(file, "utf8");
     for (const [index, line] of text.split(/\r?\n/u).entries()) {
-      if (line.includes(FORBIDDEN)) {
+      if (FORBIDDEN.some((value) => line.includes(value))) {
         findings.push(`${path.relative(root, file)}:${index + 1}:${line.trim()}`);
       }
     }

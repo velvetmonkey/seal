@@ -239,6 +239,40 @@ test("launch truth gate compares the complete self-repository path", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("launch truth gate reads www and trailing-dot GitHub hosts", () => {
+  const dir = testTmpdir(join(tmpdir(), "seal-launch-truth-host-"));
+  const required = [
+    "README.md",
+    ".github/workflows/ci.yml",
+    "docs/assurance/evaluator-start.md",
+    "docs/archive/WHY-DIFFERENT.md",
+    "docs/assurance/index.html",
+  ];
+  const paths = required.map((name) => join(dir, name));
+  for (const file of paths) {
+    const relative = file.slice(dir.length + 1);
+    const parent = file.slice(0, file.lastIndexOf("/"));
+    if (parent !== dir) mkdirSync(parent, { recursive: true });
+    writeFileSync(file, readFileSync(resolve(ROOT, relative)));
+  }
+  const run = (link) => {
+    writeFileSync(paths[0], `${readFileSync(resolve(ROOT, "README.md"))}\n${link}\n`);
+    return spawnSync(process.execPath, [TRUTH_GATE, ...paths], { encoding: "utf8" });
+  };
+  for (const link of [
+    "https://www.github.com/velvetmonkey/seal-sapphire-reef",
+    "https://github.com./velvetmonkey/seal-sapphire-reef",
+    "https://WWW.GitHub.com/velvetmonkey/seal-sapphire-reef",
+    "https://www.github.com:444/velvetmonkey/seal",
+  ]) assert.notEqual(run(link).status, 0, link);
+  for (const link of [
+    "https://www.github.com/velvetmonkey/seal",
+    "https://github.com./velvetmonkey/seal.git",
+    "https://gist.github.com/velvetmonkey/notes",
+  ]) assert.equal(run(link).status, 0, link);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("README installer check executes the command without restoring the installed-tree transcript", (t) => {
   const dir = testTmpdir(join(tmpdir(), "seal-frontdoor-installer-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -282,6 +316,40 @@ test("README installer check executes the command without restoring the installe
   const red = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
   assert.equal(red.status, 1, red.stdout + red.stderr);
   assert.match(red.stderr, /must not carry an installed-tree transcript/);
+});
+
+test("README installer check names the v1.0.0 shape and rejects unknown tags", (t) => {
+  const dir = testTmpdir(join(tmpdir(), "seal-frontdoor-installer-v1-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const readmePath = join(dir, "README.md");
+  const artifact = join(dir, "fixture-installer");
+  const tree = readFileSync(resolve(ROOT, "docs/start/install.md"), "utf8").match(/^tree: ([0-9a-f]{64})$/m)[1];
+  const readme = readFileSync(resolve(ROOT, "README.md"), "utf8");
+  writeFileSync(readmePath, readme.replace(/^SEAL_VERSION=.*$/m, "SEAL_VERSION=v1.0.0"));
+  const actualLines = [
+    "installed seal 1.0.0 linux-x64",
+    `store: <home>/.local/lib/seal/store/${tree}`,
+    "command: <home>/.local/bin/seal",
+    `tree: ${tree}`,
+    "Next:",
+    "  export PATH=<home>/.local/bin:$PATH",
+    `  demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\\n' "$demo_dir"`,
+  ];
+  writeFileSync(artifact, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(actualLines)}.join("\\n").replaceAll("<home>", process.env.HOME) + "\\n");\n`, { mode: 0o755 });
+  const env = {
+    ...process.env,
+    SEAL_INSTALL_TRANSCRIPT_README: readmePath,
+    SEAL_INSTALL_TRANSCRIPT_ARTIFACT: artifact,
+  };
+  const named = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(named.status, 1, named.stdout + named.stderr);
+  assert.doesNotMatch(named.stderr, /no named installer success shape/);
+  assert.match(named.stderr, /published install transcript differs from v1\.0\.0 installer/);
+
+  writeFileSync(readmePath, readme.replace(/^SEAL_VERSION=.*$/m, "SEAL_VERSION=v9.9.9"));
+  const unknown = spawnSync(process.execPath, [resolve(ROOT, "scripts/check-readme-install-transcript.cjs")], { cwd: ROOT, env, encoding: "utf8" });
+  assert.equal(unknown.status, 1, unknown.stdout + unknown.stderr);
+  assert.match(unknown.stderr, /no named installer success shape for v9\.9\.9/);
 });
 
 test("scope tokens are not placed inside slash compounds", () => {

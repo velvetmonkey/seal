@@ -1,6 +1,6 @@
 # Seal: Evaluator Truth Surface
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated here.
 
 Regenerated: 2026-08-09. This file separates proof-backed, tested, reproduced,
 shipped, and open facts. It is still hand-generated from the two `CLAIMS.md`
@@ -40,7 +40,7 @@ kernels, or repeated independent runs. `CANDIDATE` is not `SHIPPED`.
 
 ## 2. Historical artifact identity: 2026-07-31 candidate and shipped fleet
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 The rows in this section retain the measured 2026-07-31 record. They are not
 current fleet status; the dated correction above and the regenerated stop-ship
@@ -84,7 +84,7 @@ The limits are part of the result:
 
 ## 3. Proof, test, deployment, and residual truth surface
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 | Name | Current result | Backing | Limit |
 |---|---|---|---|
@@ -104,7 +104,7 @@ The limits are part of the result:
 
 ## 4. Live verifier profiles
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 The prose roster has one confirmed stale path: it places the host declaration
 in `rust/src/decision_receipt.rs`, while the live declaration is in
@@ -127,7 +127,7 @@ binding and an independent signer pin for its top result. `P-SELFAUDIT` says
 
 ## 5. Current theorem inventories and the module inventory gate
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Counting theorem names in the current curated proof-reference tables gives:
 

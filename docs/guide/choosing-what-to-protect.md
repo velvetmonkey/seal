@@ -134,6 +134,11 @@ that every route to the capability is controlled.
 
 ## What `seal protect` does
 
+Before you run it, have the operator sign the guard and forward payloads
+for `demo.mutate` and `demo.erase`. Set `SEAL_KERNEL_POLICY_FILE` to the file
+with those two signed envelopes and `SEAL_KERNEL_PUBKEY` to the independent
+Ed25519 public key pin. See [the config signing steps](../assurance/architecture.md).
+
 Run it in the project directory, naming the server and the complete tool set.
 For the `demo` server declared above, `demo.mutate` appends to the demo data
 file and `demo.erase` empties it. Both warrant the gate, so name the complete

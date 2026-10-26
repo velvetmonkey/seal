@@ -57,6 +57,15 @@ function normalize(text, home) {
     .replaceAll("/tmp/", "<TMP>/");
 }
 
+function commandStdout(stdout, index) {
+  const lines = stdout.split("\n");
+  const marker = new RegExp(`^CONTAINERWALK_COMMAND ${index + 1} README\\.md:\\d+$`);
+  const start = lines.findIndex((line) => marker.test(line));
+  if (start === -1) return "";
+  const next = lines.findIndex((line, position) => position > start && line.startsWith("CONTAINERWALK_COMMAND "));
+  return lines.slice(start + 1, next === -1 ? undefined : next).join("\n");
+}
+
 function forbiddenHomePath(body) {
   const patterns = [
     { name: "/home/ absolute path", regex: /\/home\/(?!you(?:\/|$))[^/\s`"'<>]+(?:\/|(?=$|[\s`"'<>;&|()]))/ },
@@ -181,10 +190,10 @@ try {
     const shown = command ? command.body.replace(/\n/g, "\\n") : marker;
     fail(`command ${JSON.stringify(shown)} exit ${status}; first error: ${firstLine(result.stderr || result.stdout)}`);
   }
-  for (const fence of commands) {
+  for (const [index, fence] of commands.entries()) {
     const outputFence = expected.get(fence.line);
     if (!outputFence) continue;
-    const actual = normalize(output, home);
+    const actual = normalize(commandStdout(result.stdout || "", index) + (result.stderr || ""), home);
     const wanted = normalize(outputFence.body, home);
     for (const line of wanted.split("\n").map((item) => item.trimEnd()).filter(Boolean)) {
       if (!actual.includes(line)) {

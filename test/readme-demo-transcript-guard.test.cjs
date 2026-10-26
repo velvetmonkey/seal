@@ -79,3 +79,67 @@ test("a deleted terminal capture is detected", (t) => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /PROOF_FENCE_ABSENT/);
 });
+
+test("after approval count must be exactly one", (t) => {
+  const space = fixture();
+  const changedReadme = join(space.root, "README.md");
+  const originalReadme = readFileSync(README, "utf8");
+  const editedReadme = originalReadme.replace("child calls observed: 1 (", "child calls observed: 10 (");
+  const editedTranscript = space.transcript.replace("child calls observed: 1 (", "child calls observed: 10 (");
+  assert.notEqual(editedReadme, originalReadme);
+  assert.notEqual(editedTranscript, space.transcript);
+  writeFileSync(changedReadme, editedReadme);
+  writeFileSync(space.transcriptPath, editedTranscript);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(space.transcriptPath, changedReadme, space.checkerPath);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_DEMO_EVIDENCE: after approval: 1 call/);
+});
+
+test("after replay count must be exactly one", (t) => {
+  const space = fixture();
+  const changedReadme = join(space.root, "README.md");
+  const originalReadme = readFileSync(README, "utf8");
+  const editedReadme = originalReadme.replace("observed: still 1 (", "observed: still 12 (");
+  const editedTranscript = space.transcript.replace("observed: still 1 (", "observed: still 12 (");
+  assert.notEqual(editedReadme, originalReadme);
+  assert.notEqual(editedTranscript, space.transcript);
+  writeFileSync(changedReadme, editedReadme);
+  writeFileSync(space.transcriptPath, editedTranscript);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(space.transcriptPath, changedReadme, space.checkerPath);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_DEMO_EVIDENCE: after replay: 1 call - refused/);
+});
+
+test("outside Seal decisions count must be exactly zero", (t) => {
+  const space = fixture();
+  const changedReadme = join(space.root, "README.md");
+  const originalReadme = readFileSync(README, "utf8");
+  const editedReadme = originalReadme.replace("New Seal decisions: 0\n", "New Seal decisions: 05\n");
+  const editedTranscript = space.transcript.replace("New Seal decisions: 0\n", "New Seal decisions: 05\n");
+  assert.notEqual(editedReadme, originalReadme);
+  assert.notEqual(editedTranscript, space.transcript);
+  writeFileSync(changedReadme, editedReadme);
+  writeFileSync(space.transcriptPath, editedTranscript);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(space.transcriptPath, changedReadme, space.checkerPath);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_DEMO_EVIDENCE: outside Seal: effect succeeded, 0 Seal decisions/);
+});
+
+test("before approval count must be exactly zero", (t) => {
+  const space = fixture();
+  const changedReadme = join(space.root, "README.md");
+  const originalReadme = readFileSync(README, "utf8");
+  const editedReadme = originalReadme.replace("child calls observed: 0 (", "child calls observed: 00 (");
+  const editedTranscript = space.transcript.replace("child calls observed: 0 (", "child calls observed: 00 (");
+  assert.notEqual(editedReadme, originalReadme);
+  assert.notEqual(editedTranscript, space.transcript);
+  writeFileSync(changedReadme, editedReadme);
+  writeFileSync(space.transcriptPath, editedTranscript);
+  t.after(() => rmSync(space.root, { recursive: true, force: true }));
+  const result = run(space.transcriptPath, changedReadme, space.checkerPath);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /MISSING_DEMO_EVIDENCE: before approval: 0 calls/);
+});

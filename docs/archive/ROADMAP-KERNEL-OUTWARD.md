@@ -1,6 +1,6 @@
 # Roadmap, kernel outward: north star graft
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated here.
 
 Set 2026-07-25; grafted 2026-07-27 after Ben asked for the north star and the
 working roadmap to become one ordered plan.
@@ -511,7 +511,7 @@ the correspondence checks, pins and release gate version together.
 
 ### Phase D — own the demo surface; ordered placement is a fork for Ben
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 This phase owns the measured demo surface without placing it relative to Phases
 2–4. Ben must choose that placement; these rows do not choose what to build
@@ -705,7 +705,7 @@ DISPLAY VERIFICATION OPEN.**
 
 ### Phase M — MCP revision 2026-07-28 conformance
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Ben ruled this into seal v1 on 2026-07-28. This is a lettered, cross-cutting
 phase, recorded after the existing lettered Phase D; that placement adds no

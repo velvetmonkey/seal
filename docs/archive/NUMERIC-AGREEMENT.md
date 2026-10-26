@@ -1,6 +1,6 @@
 # Numeric agreement: remediation spec for the V3.1 parser disagreement
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated here.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated here.
 
 Status: **ACCEPTED**. Ben ruled Option B on 2026-07-26 19:46. Written earlier the
 same day after `v31run` measured the first cross-parser disagreement on an
@@ -15,7 +15,7 @@ signed shape and is off the clock.
 
 ## 1. The defect, stated exactly
 
-**Lean proof source:** [`seal-host`'s proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) is the reader-facing index for the Lean proof properties stated in this section.
+**Lean proof source:** the [archived `seal-host` proof reference](https://github.com/velvetmonkey/seal-host/blob/main/docs/PROOF-REFERENCE.md) at `d1af738b1f17966a18d7f86c51392b5cd3b8b0a1` is the reader-facing index for the Lean proof properties stated in this section.
 
 Vector `i_number_neg_int_huge_exp.json`, one wire line, one approval:
 
