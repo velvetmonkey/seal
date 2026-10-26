@@ -220,23 +220,43 @@ async function main() {
   ]);
   let externalChecked = 0;
   for (const [link, carriers] of requiredLiveLinks) {
+    const shownLinks = new Set();
     for (const carrier of carriers) {
-      if (!readFileSync(resolve(ROOT, carrier), "utf8").includes(link)) {
+      const source = readFileSync(resolve(ROOT, carrier), "utf8");
+      const tokens = [];
+      let offset = 0;
+      while ((offset = source.indexOf(link, offset)) !== -1) {
+        const start = offset;
+        offset += link.length;
+        while (offset < source.length && !/[\s<>()\[\]"'`]/u.test(source[offset])) offset++;
+        const token = source.slice(start, offset).replace(/[.,;:!?]+$/u, "");
+        tokens.push(token);
+        shownLinks.add(token);
+      }
+      if (tokens.length === 0) {
         console.log(`BROKEN  ${carrier} -> missing required live link ${link}`);
         actual.bad++;
+      } else {
+        for (const token of tokens) {
+          if (token === link) continue;
+          console.log(`BROKEN  ${carrier} -> required live link ${token} differs from ${link}`);
+          actual.bad++;
+        }
       }
     }
-    try {
-      const response = await fetch(link, { redirect: "follow", signal: AbortSignal.timeout(10000) });
-      externalChecked++;
-      if (!response.ok) {
-        console.log(`BROKEN  ${link} -> HTTP ${response.status}`);
+    externalChecked++;
+    for (const url of shownLinks.size ? shownLinks : [link]) {
+      try {
+        const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(10000) });
+        if (!response.ok) {
+          console.log(`BROKEN  ${url} -> HTTP ${response.status}`);
+          actual.bad++;
+        }
+        await response.body?.cancel();
+      } catch (error) {
+        console.log(`BROKEN  ${url} -> ${error.message}`);
         actual.bad++;
       }
-      await response.body?.cancel();
-    } catch (error) {
-      console.log(`BROKEN  ${link} -> ${error.message}`);
-      actual.bad++;
     }
   }
 
