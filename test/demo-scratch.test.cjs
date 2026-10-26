@@ -60,6 +60,45 @@ test("bare seal demo exits 0 when TMPDIR is a symlink to a real folder", () => {
   }
 });
 
+test("demo refuses a canonical data file outside its canonical directory", () => {
+  const demoRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-escape-root-"));
+  const outsideRoot = testTmpdir(path.join(os.tmpdir(), "seal-demo-escape-outside-"));
+  const outsideFile = path.join(outsideRoot, "data.txt");
+  const hook = path.join(demoRoot, "redirect-realpath.cjs");
+  fs.writeFileSync(outsideFile, "outside data\n");
+  fs.writeFileSync(hook, [
+    'const fs = require("node:fs");',
+    'const path = require("node:path");',
+    'const original = fs.realpathSync;',
+    'fs.realpathSync = function (file, ...args) {',
+    '  if (process.argv[2] === "demo" && String(file).endsWith(`${path.sep}child${path.sep}data.txt`)) {',
+    '    return original.call(this, process.env.SEAL_CONTROL_OUTSIDE, ...args);',
+    '  }',
+    '  return original.call(this, file, ...args);',
+    '};',
+  ].join("\n"));
+  const run = spawnSync(process.execPath, [SEAL, "demo"], {
+    env: {
+      ...process.env, TMPDIR: demoRoot, TMP: demoRoot, TEMP: demoRoot,
+      NODE_OPTIONS: `--require=${hook}`, SEAL_CONTROL_OUTSIDE: outsideFile,
+    },
+    cwd: ROOT,
+    encoding: "utf8",
+    input: "y\n",
+    timeout: 120000,
+  });
+  const output = `${run.stdout}${run.stderr}`;
+  const demoDir = output.match(/^temporary demo directory: (.+) \(remains after the demo for the printed checker command\)$/m)?.[1];
+  try {
+    assert.ok(demoDir, output);
+    assert.equal(run.status, 1, output);
+    assert.match(output, new RegExp(`seal: the demo data file resolves outside its demo directory: ${escapeRegExp(outsideFile)}`));
+    assert.equal(fs.readFileSync(outsideFile, "utf8"), "outside data\n");
+  } finally {
+    if (demoDir) fs.rmSync(demoDir, { recursive: true, force: true });
+  }
+});
+
 test("seal demo --dir never deletes a user-named directory", () => {
   const parent = testTmpdir(path.join(os.tmpdir(), "seal-demo-scratch-test-"));
   const demoDir = path.join(parent, "user-owned");
