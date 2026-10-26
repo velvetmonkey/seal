@@ -74,7 +74,7 @@ jobs:
           [[ "$digest" =~ ^[[:xdigit:]]{64}$ ]]
           [[ "$bytes" =~ ^[0-9]+$ ]]
           actual_digest="$(shasum -a 256 "$asset")"
-          test "${actual_digest%% *}" = "$digest"
+          test "${actual_digest%% *}" = "${digest}0"
           actual_bytes="$(wc -c < "$asset")"
           test "$actual_bytes" -eq "$bytes"
           printf 'row7 asset-sha256 %s\n' "$digest"
