@@ -136,7 +136,7 @@ async function run(argv, sealBinPath) {
       dir = fs.mkdtempSync(path.join(dir, "seal-demo-"));
     }
   } else {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-"));
+    dir = canonicalPath(fs.mkdtempSync(path.join(os.tmpdir(), "seal-demo-")));
     demoCreatedDirectory = true;
   }
   const signer = generateSigner();
