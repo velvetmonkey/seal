@@ -313,3 +313,28 @@ test("required live links are fetched as their carrier pages show them", () => {
     rmSync(scratch, { recursive: true, force: true });
   }
 });
+
+const renderedCarrierCases = [
+  ["C1 comment split", (text) => text.replace("https://nodejs.org/en/download ", "https://nodejs.org/en/download<!-- -->-gone "), "required live link https://nodejs.org/en/download-gone differs"],
+  ["C2 decimal entity", (text) => text + "\nSee also https&#58;//nodejs.org/en/download-gone.\n", "required live link https://nodejs.org/en/download-gone differs"],
+  ["C3 hex entity", (text) => text + "\nSee also https&#x3a;//nodejs.org/en/download-gone.\n", "required live link https://nodejs.org/en/download-gone differs"],
+  ["C4 named entity", (text) => text + "\nSee also https&colon;//nodejs.org/en/download-gone.\n", "required live link https://nodejs.org/en/download-gone differs"],
+  ["C5 unclosed comment", (text) => text.replace("https://nodejs.org/en/download ", "https://nodejs.org/en/dowload ") + "\n<!-- https://nodejs.org/en/download\n", "missing required live link https://nodejs.org/en/download"],
+  ["C6 hidden exact token", (text) => text.replace("https://nodejs.org/en/download ", "https://nodejs.org/en/dowload ") + "\n<!-- https://nodejs.org/en/download -->\n", "missing required live link https://nodejs.org/en/download"],
+];
+
+for (const [name, plant, diagnostic] of renderedCarrierCases) {
+  test(`${name} is red on the rendered carrier`, () => {
+    const scratch = testTmpdir("seal-linkcheck-rendered-carrier-");
+    try {
+      const { log, preload } = carrierCloneWithFetchStub(scratch);
+      const carrier = path.join(scratch, "docs/start/install.md");
+      writeFileSync(carrier, plant(readFileSync(carrier, "utf8")));
+      const result = runCarrierStub(scratch, preload, log);
+      assert(result.status === 1, `${name} must fail: ${result.stdout}${result.stderr}`);
+      assert(result.stdout.includes(diagnostic), `${name} must report ${diagnostic}: ${result.stdout}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+}
