@@ -47,7 +47,7 @@ function unsupportedPlatformText() {
   return [
     "UNSUPPORTED PLATFORM",
     "",
-    "Seal v1.0.0-rc.1.",
+    "Seal v1.0.0.",
     "Seal supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64/arm64.",
     "",
     "No files were changed.",

@@ -30,6 +30,7 @@ test("the current VERSION has a release note with the same identity", () => {
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.2.md#release-notes-v052
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v0.5.3.md#release-notes-v053
 // CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v1.0.0-rc.1.md#release-notes-v10rc1
+// CLAIM-COVERAGE: docs/assurance/RELEASE-NOTES-v1.0.0.md#release-notes-v100
 test("current release notes state the platform, receipt format, and verifier trust ceiling", () => {
   for (const record of new Set([NOTES, path.join(ROOT, "docs/assurance/RELEASE-NOTES-v0.3.0.md")])) {
     const notes = fs.readFileSync(record, "utf8");
@@ -37,7 +38,12 @@ test("current release notes state the platform, receipt format, and verifier tru
     assert.match(notes, /supports install, demo, receipt checking and Protect on Linux x86-64 and macOS x64\/arm64\./);
     const helperProvenance = "native macOS process-start witness helper is release-produced, not independ" + "ently reproduced.";
     assert.ok(notes.includes(helperProvenance));
-    assert.match(notes, /macOS Protect execution is not exercised in CI\./);
+    if (record === NOTES) {
+      assert.match(notes, /The main macOS source test workflow does not exercise Protect\./);
+      assert.match(notes, /The separate hosted macOS arm64 workflow exercises Protect from a published asset\./);
+    } else {
+      assert.match(notes, /macOS Protect execution is not exercised in CI\./);
+    }
     for (const citation of ["spine/platform.cjs", "test/darwin-readiness.test.cjs", "test/release-matrix.test.mjs"]) {
       assert.match(notes, new RegExp(citation.replaceAll(".", "\\.")), `release notes cite ${citation}`);
     }
