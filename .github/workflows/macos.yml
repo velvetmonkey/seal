@@ -184,6 +184,20 @@ jobs:
           cat "$RUNNER_TEMP/macos-demo.log"
           echo "macos-demo-exit $demo_status"
           test "$demo_status" -eq 0
+      - name: Run bare seal demo under the runner TMPDIR and record its exit
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/macos-prefix"
+          echo "TMPDIR ${TMPDIR:-<unset>}"
+          echo "real TMPDIR $(cd "${TMPDIR:-/tmp}" && pwd -P)"
+          set +e
+          "$prefix/bin/seal" demo < "$RUNNER_TEMP/demo-input" > "$RUNNER_TEMP/macos-bare-demo.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/macos-bare-demo.log"
+          echo "macos-bare-demo-exit $status"
+          test "$status" -eq 0
       - name: Check a receipt produced by that demo
         shell: bash
         run: |
