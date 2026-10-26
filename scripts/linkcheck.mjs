@@ -223,13 +223,24 @@ async function main() {
     const shownLinks = new Set();
     for (const carrier of carriers) {
       const source = readFileSync(resolve(ROOT, carrier), "utf8");
+      const visible = source
+        .replace(/<!--[\s\S]*?-->/gu, "")
+        .replace(/<!--[\s\S]*$/u, "")
+        .replace(/&(?:#(?:[0-9]+|[xX][0-9A-Fa-f]+)|colon|sol|period|hyphen|amp);/gu, (reference) => {
+          const named = { "&colon;": ":", "&sol;": "/", "&period;": ".", "&hyphen;": "-", "&amp;": "&" };
+          if (reference in named) return named[reference];
+          const value = reference[2].toLowerCase() === "x"
+            ? Number.parseInt(reference.slice(3, -1), 16)
+            : Number.parseInt(reference.slice(2, -1), 10);
+          return String.fromCodePoint(value > 0 && value <= 0x10ffff ? value : 0xfffd);
+        });
       const tokens = [];
       let offset = 0;
-      while ((offset = source.indexOf(link, offset)) !== -1) {
+      while ((offset = visible.indexOf(link, offset)) !== -1) {
         const start = offset;
         offset += link.length;
-        while (offset < source.length && !/[\s<>()\[\]"'`]/u.test(source[offset])) offset++;
-        const token = source.slice(start, offset).replace(/[.,;:!?]+$/u, "");
+        while (offset < visible.length && !/[\s<>()\[\]"'`]/u.test(visible[offset])) offset++;
+        const token = visible.slice(start, offset).replace(/[.,;:!?]+$/u, "");
         tokens.push(token);
         shownLinks.add(token);
       }
