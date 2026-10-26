@@ -51,7 +51,7 @@ test("a published release tag is never called unreleased", () => {
       if (!/\bunreleased\b/i.test(line)) continue;
       for (const tag of publishedTags) {
         const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        if (new RegExp(`(?<![A-Za-z0-9.-])${escapedTag}(?![A-Za-z0-9.-])`).test(line)) {
+        if (new RegExp(`(?<![A-Za-z0-9.-])${escapedTag}(?![A-Za-z0-9-])(?!\\.[A-Za-z0-9])`).test(line)) {
           assert.fail(`${page}:${index + 1}: published tag ${tag} is called unreleased`);
         }
       }
