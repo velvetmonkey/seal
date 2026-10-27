@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -54,6 +54,32 @@ test("the Protect section sets the signed kernel policy before seal protect", ()
     assert.ok(before.includes(token), `Protect section must set ${token} before seal protect db`);
   }
   assert.ok(before.includes("](docs/assurance/architecture.md)"), "Protect section must link docs/assurance/architecture.md before seal protect db");
+});
+
+test("README names the installed release for each SEAL_ variable that release does not read", () => {
+  const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const generated = readme.match(/<!-- generated from published release; do not edit -->([\s\S]*?)<!-- end generated release docs -->/);
+  assert.ok(generated, "README must have one generated install block");
+  const release = generated[1].match(/^SEAL_VERSION=(v[^\s]+)$/m)?.[1];
+  assert.ok(release, "generated install block must name SEAL_VERSION");
+  const tag = spawnSync("git", ["rev-parse", "--verify", `refs/tags/${release}^{commit}`], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(tag.status, 0, `release tag ${release} is absent; run git fetch --tags from origin`);
+
+  const prose = readme.replace(generated[0], "\n".repeat(generated[0].split("\n").length - 1));
+  for (const paragraph of prose.matchAll(/(?:^|\n\n)([^\n][\s\S]*?)(?=\n\n|$)/g)) {
+    const body = paragraph[1];
+    const names = [...new Set(body.match(/\bSEAL_[A-Z0-9_]+\b/g) || [])];
+    if (!names.length) continue;
+    const line = prose.slice(0, paragraph.index + (paragraph[0].startsWith("\n\n") ? 2 : 0)).split("\n").length;
+    const claims = body.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.includes(release) && /does not read/i.test(sentence));
+    for (const name of names) {
+      const found = spawnSync("git", ["grep", "-l", "-F", name, release, "--", "."], { cwd: ROOT, encoding: "utf8" });
+      assert.ok(found.status === 0 || found.status === 1, `git grep failed for ${name} at ${release}: ${found.stderr}`);
+      const readByRelease = found.stdout.split("\n").some((entry) => entry && !/\.md$/i.test(entry.slice(entry.indexOf(":") + 1)));
+      const saysNotRead = claims.some((sentence) => sentence.includes(name));
+      assert.equal(saysNotRead, !readByRelease, `README.md:${line}: ${name} must ${readByRelease ? "not claim" : "say"} that installed ${release} does not read it`);
+    }
+  }
 });
 
 test("the demo section names the printed directory as the cleanup target", () => {
