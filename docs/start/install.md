@@ -1,6 +1,6 @@
 <!-- generated from published release; do not edit -->
-# Install Seal v0.5.3
-The [v0.5.3 release](https://github.com/velvetmonkey/seal/releases/tag/v0.5.3) publishes `seal-v0.5.3-darwin-arm64`, `seal-v0.5.3-darwin-x64`, `seal-v0.5.3-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`bcf6a81d51601b02c0512fda3660f35b2171b0a4`](https://github.com/velvetmonkey/seal/commit/bcf6a81d51601b02c0512fda3660f35b2171b0a4). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
+# Install Seal v1.0.0
+The [v1.0.0 release](https://github.com/velvetmonkey/seal/releases/tag/v1.0.0) publishes `seal-v1.0.0-darwin-arm64`, `seal-v1.0.0-darwin-x64`, `seal-v1.0.0-linux-x64`, `seal-receipt-v2.mjs`, and `SHA256SUMS`; its tag resolves to commit [`7e2bf90f7749474c3ef3ba4e4a64cd7e8a8865c1`](https://github.com/velvetmonkey/seal/commit/7e2bf90f7749474c3ef3ba4e4a64cd7e8a8865c1). Its `release-manifest.json` uses schema `seal.release/v2`. This checkout supports Protect on Linux x86-64 and macOS x64/arm64.
 The native macOS process-start witness helper is release-produced, not independently reproduced. Windows and Linux ARM are unsupported. Seal itself requires Node 20 or newer.
 The installer refuses before changing anything on an unsupported or mismatched platform.
 
@@ -26,12 +26,12 @@ Protect needs Claude Code, which needs Node 22 or newer. If you want Protect and
 <!-- generated from published release; do not edit -->
 ### Linux x86-64
 ```bash
-SEAL_VERSION=v0.5.3
-artifact_name="seal-v0.5.3-linux-x64" \
-&& artifact_sha256="cc0835c7d7f8c90b7b6858ea80a9f447a1be25d84cb5f496a33ef61985f2868e" \
-&& artifact_bytes=6418125 \
+SEAL_VERSION=v1.0.0
+artifact_name="seal-v1.0.0-linux-x64" \
+&& artifact_sha256="7e657ff81f07226d32e0917c59e66f36b88b6098ab873a56d0c3dda99ef37f01" \
+&& artifact_bytes=6421190 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -49,12 +49,12 @@ artifact_name="seal-v0.5.3-linux-x64" \
 
 ### macOS Apple silicon
 ```bash
-SEAL_VERSION=v0.5.3
-artifact_name="seal-v0.5.3-darwin-arm64" \
-&& artifact_sha256="ed290029caa6d153c735c9e212e7dd59f9cd453aaba89a9a4d2681bc7f4b0631" \
-&& artifact_bytes=6451940 \
+SEAL_VERSION=v1.0.0
+artifact_name="seal-v1.0.0-darwin-arm64" \
+&& artifact_sha256="86dd48beefd38b80e0fa5ec3fe211bbc49203759380778f5ebed9f63c3bcbf43" \
+&& artifact_bytes=6455005 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -72,12 +72,12 @@ artifact_name="seal-v0.5.3-darwin-arm64" \
 
 ### macOS Intel
 ```bash
-SEAL_VERSION=v0.5.3
-artifact_name="seal-v0.5.3-darwin-x64" \
-&& artifact_sha256="6591a3f418b964d9eb7771e329ce097500ee9e4c1633f20a17b3e738cceb5666" \
-&& artifact_bytes=6426927 \
+SEAL_VERSION=v1.0.0
+artifact_name="seal-v1.0.0-darwin-x64" \
+&& artifact_sha256="8d73bb0f331a19b181cb6f8f56542de6cd55c01d3de579d76b5e6abce3d7b336" \
+&& artifact_bytes=6429992 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -92,16 +92,16 @@ artifact_name="seal-v0.5.3-darwin-x64" \
 && ./"$artifact_name" --sha256 "$artifact_sha256" --bytes "$artifact_bytes" --prefix ~/.local \
 && export PATH="$HOME/.local/bin:$PATH"
 ```
-Success prints `installed seal 0.5.3 linux-x64` and the store, command,
+Success prints `installed seal 1.0.0 linux-x64` and the store, command,
 and tree lines. Path prefixes on `store:` and `command:` differ per machine.
-The tree hash of the published v0.5.3 asset is pinned here:
+The tree hash of the published v1.0.0 asset is pinned here:
 
 **Seal installed-tree pin role:** `published-asset`
 ```output
-installed seal 0.5.3 linux-x64
-store: /home/you/.local/lib/seal/store/6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
+installed seal 1.0.0 linux-x64
+store: /home/you/.local/lib/seal/store/f4f6a3977b7437c33c868cd9d26ee9853a85fe58fc3df0aa182daf0314c45d9a
 command: /home/you/.local/bin/seal
-tree: 6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
+tree: f4f6a3977b7437c33c868cd9d26ee9853a85fe58fc3df0aa182daf0314c45d9a
 Next:
   export PATH=/home/you/.local/bin:$PATH
   demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
@@ -117,12 +117,12 @@ Further distribution detail, including what each payload contains, is in
 ### Optional checker asset download
 The installed tree includes a working checker; this command downloads the published checker file for inspection.
 ```bash
-SEAL_VERSION=v0.5.3
+SEAL_VERSION=v1.0.0
 checker_name="seal-receipt-v2.mjs" \
 && checker_sha256="12e7080ebb293486576bacbd45de177762ea1fafe9d02cd6f78f46cba9adc7d9" \
 && checker_bytes=11935 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$checker_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \

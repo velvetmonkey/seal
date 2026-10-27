@@ -31,16 +31,13 @@ including its backslashes and `&&` operators; a failed comparison skips both
 `chmod` and execution:
 
 <!-- generated from published release; do not edit -->
-> This source tree's `VERSION` file reads `1.0.0`. The release docs generator does not compare this source with a release tag. The install commands below fetch the
-> published `v0.5.3`, the live Latest release whose assets the commands below install.
-
 ```bash
-SEAL_VERSION=v0.5.3
-artifact_name="seal-v0.5.3-linux-x64" \
-&& artifact_sha256="cc0835c7d7f8c90b7b6858ea80a9f447a1be25d84cb5f496a33ef61985f2868e" \
-&& artifact_bytes=6418125 \
+SEAL_VERSION=v1.0.0
+artifact_name="seal-v1.0.0-linux-x64" \
+&& artifact_sha256="7e657ff81f07226d32e0917c59e66f36b88b6098ab873a56d0c3dda99ef37f01" \
+&& artifact_bytes=6421190 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/SHA256SUMS" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/seal-$SEAL_VERSION-linux-x64" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -60,7 +57,7 @@ artifact_name="seal-v0.5.3-linux-x64" \
 ```
 <!-- end generated release docs -->
 
-The command above installs the published `v0.5.3` release under `~/.local`.
+The command above installs the published `v1.0.0` release under `~/.local`.
 The demo is a separate step.
 
 Add the PATH export to `~/.bashrc`, `~/.zshrc`, or `~/.profile` so a new terminal finds `seal`.
