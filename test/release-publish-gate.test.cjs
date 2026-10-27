@@ -71,16 +71,18 @@ function undeterminedError(reason, statusCode) {
   return error;
 }
 
-function getEnvironment(repo, environment) {
+function getEnvironment(repo, environment, token) {
   const apiPath = `/repos/${repo}/environments/${encodeURIComponent(environment)}`;
+  const headers = {
+    "User-Agent": "velvetmonkey-seal-release-publish-gate",
+    "X-Requested-With": `${process.pid}-${process.hrtime.bigint()}-${crypto.randomUUID()}`,
+  };
+  if (typeof token === "string" && token.length > 0) headers.Authorization = `Bearer ${token}`;
   return new Promise((resolve, reject) => {
     const request = https.get({
       hostname: "api.github.com",
       path: apiPath,
-      headers: {
-        "User-Agent": "velvetmonkey-seal-release-publish-gate",
-        "X-Requested-With": `${process.pid}-${process.hrtime.bigint()}-${crypto.randomUUID()}`,
-      },
+      headers,
     }, (response) => {
       let payload = "";
       response.setEncoding("utf8");
@@ -119,10 +121,11 @@ function getEnvironment(repo, environment) {
 test("live release-publish environment requires a named reviewer and forbids admin bypass", async (t) => {
   const repo = process.env.GITHUB_REPOSITORY || "velvetmonkey/seal";
   const environment = process.env.SEAL_RELEASE_PUBLISH_ENV_NAME || "release-publish";
-  console.log(`EXECUTE live release-publish environment check for ${repo}/${environment} with cache-bypassing unauthenticated Node https GET`);
+  const token = process.env.SEAL_RELEASE_PUBLISH_READ_TOKEN;
+  console.log(`EXECUTE live release-publish environment check for ${repo}/${environment} with cache-bypassing ${token ? "authenticated" : "unauthenticated"} Node https GET`);
   let body;
   try {
-    body = await getEnvironment(repo, environment);
+    body = await getEnvironment(repo, environment, token);
   } catch (error) {
     if (error.statusCode === 404 && repo !== "velvetmonkey/seal") {
       t.skip(`SKIP ${repo} has no ${environment} environment`);
@@ -223,3 +226,53 @@ for (const [name, state, assets, expected, mutation, refusal] of [
     if (state === "missing") assert.match(writes[0], /--draft --verify-tag/);
   });
 }
+
+function mockEnvironmentResponse(t, statusCode, body, captured) {
+  const { EventEmitter } = require("node:events");
+  t.mock.method(https, "get", (options, callback) => {
+    captured.push(options);
+    const response = new EventEmitter();
+    response.statusCode = statusCode;
+    response.statusMessage = statusCode === 200 ? "OK" : "Forbidden";
+    response.setEncoding = () => {};
+    process.nextTick(() => {
+      callback(response);
+      response.emit("data", body);
+      response.emit("end");
+    });
+    const request = new EventEmitter();
+    request.setTimeout = () => {};
+    request.destroy = () => {};
+    return request;
+  });
+}
+
+test("release-publish environment read sends a non-empty token", async (t) => {
+  const captured = [];
+  const body = { protection_rules: [] };
+  mockEnvironmentResponse(t, 200, JSON.stringify(body), captured);
+  assert.deepEqual(await getEnvironment("velvetmonkey/seal", "release-publish", "test-token-7"), body);
+  assert.equal(captured[0].headers.Authorization, "Bearer test-token-7");
+  assert.equal(captured[0].headers["User-Agent"], "velvetmonkey-seal-release-publish-gate");
+  assert.match(captured[0].headers["X-Requested-With"], /^\d+-\d+-[0-9a-f-]+$/);
+});
+
+test("release-publish environment read omits absent and empty tokens", async (t) => {
+  const captured = [];
+  mockEnvironmentResponse(t, 200, '{"protection_rules":[]}', captured);
+  await getEnvironment("velvetmonkey/seal", "release-publish", undefined);
+  await getEnvironment("velvetmonkey/seal", "release-publish", "");
+  assert.equal(captured.length, 2);
+  for (const options of captured) assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
+});
+
+test("release-publish environment error does not leak the token", async (t) => {
+  const captured = [];
+  mockEnvironmentResponse(t, 403, '{"message":"API rate limit exceeded for 192.0.2.1."}', captured);
+  await assert.rejects(getEnvironment("velvetmonkey/seal", "release-publish", "test-token-7"), (error) => {
+    assert.equal(error.undetermined, true);
+    assert.equal(error.statusCode, 403);
+    assert.equal(error.message.includes("test-token-7"), false);
+    return true;
+  });
+});
