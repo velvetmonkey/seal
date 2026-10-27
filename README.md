@@ -147,6 +147,9 @@ Before this command, have the operator sign the guard and forward payloads
 for `demo.mutate` and `demo.erase`. Set `SEAL_KERNEL_POLICY_FILE` to the file
 with those two signed envelopes and `SEAL_KERNEL_PUBKEY` to the independent
 Ed25519 public key pin. See [the config signing steps](docs/assurance/architecture.md).
+The installed `v0.5.3` release does not read `SEAL_KERNEL_POLICY_FILE` or
+`SEAL_KERNEL_PUBKEY`; this signing step applies to builds from main source and
+to the next release that ships it.
 
 ```bash
 mkdir -p seal-protect-demo
