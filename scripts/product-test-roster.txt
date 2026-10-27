@@ -88,6 +88,7 @@ test/release-docs.test.mjs
 test/release-matrix.test.mjs
 test/release-note-citation-paths.test.cjs
 test/release-notes.test.cjs
+test/published-receipt-checker-pin.test.cjs
 test/release-publish-gate.test.cjs
 test/seal-flow-diagram.test.mjs
 test/seal-reproduce.test.cjs
