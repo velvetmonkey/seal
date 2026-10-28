@@ -7,3 +7,5 @@ docs/dist/
 docs/node_modules/
 docs/.astro/
 docs/src/content/docs/
+.lake/
+/kernel-source/c/build/
