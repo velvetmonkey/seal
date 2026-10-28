@@ -30,12 +30,7 @@ const FAMILY_PRODUCT_FILES = [
   "archive/WHY-DIFFERENT.md",
 ];
 
-test("a published release tag is never called unreleased", () => {
-  // Re-measure published tags with: gh release list -R velvetmonkey/seal
-  const publishedTags = [
-    "v1.0.0-rc.1", "v0.5.3", "v0.5.2", "v0.5.1", "v0.4.0", "v0.3.0",
-    "v0.2.1", "v0.2.0-rc.3", "v0.2.0-rc.2", "v0.2.0-rc.1", "v0.1.1", "v0.1.0",
-  ];
+function publishedPages() {
   const pages = ["README.md"];
   function addPages(directory) {
     for (const entry of readdirSync(resolve(ROOT, directory), { withFileTypes: true })) {
@@ -45,7 +40,16 @@ test("a published release tag is never called unreleased", () => {
     }
   }
   addPages("docs");
-  for (const page of pages) {
+  return pages;
+}
+
+test("a published release tag is never called unreleased", () => {
+  // Re-measure published tags with: gh release list -R velvetmonkey/seal
+  const publishedTags = [
+    "v1.0.0-rc.1", "v0.5.3", "v0.5.2", "v0.5.1", "v0.4.0", "v0.3.0",
+    "v0.2.1", "v0.2.0-rc.3", "v0.2.0-rc.2", "v0.2.0-rc.1", "v0.1.1", "v0.1.0",
+  ];
+  for (const page of publishedPages()) {
     const lines = readFileSync(resolve(ROOT, page), "utf8").split("\n");
     for (const [index, line] of lines.entries()) {
       if (!/\bunreleased\b/i.test(line)) continue;
@@ -224,10 +228,21 @@ test("seal side pages name seal-host as archived, not deployed", () => {
   for (const file of ["docs/assurance/architecture.md", "docs/assurance/current-scope.md"]) {
     const text = readFileSync(resolve(ROOT, file), "utf8");
     assert.ok(!text.includes("**enforcement** (deployed)"), `${file} still names enforcement as deployed`);
-    assert.ok(!text.includes("[`seal-host`'s proof reference]"), `${file} still names the old live proof index`);
     assert.ok(text.includes("archived `seal-host` proof reference"), `${file} is missing the archived proof reference`);
     assert.ok(text.includes("d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"), `${file} is missing the archive head`);
   }
+  let guardedLines = 0;
+  for (const file of publishedPages()) {
+    const lines = readFileSync(resolve(ROOT, file), "utf8").split("\n");
+    for (const [index, line] of lines.entries()) {
+      assert.ok(!line.includes("[`seal-host`'s proof reference]"), `${file}:${index + 1}: old live proof index`);
+      if (!line.startsWith("**Lean proof source:**") || !line.includes("seal-host/blob/main/docs/PROOF-REFERENCE.md")) continue;
+      guardedLines++;
+      assert.ok(line.includes("archived `seal-host` proof reference"), `${file}:${index + 1}: missing archived proof reference`);
+      assert.ok(line.includes("d1af738b1f17966a18d7f86c51392b5cd3b8b0a1"), `${file}:${index + 1}: missing archive head`);
+    }
+  }
+  assert.ok(guardedLines >= 41, `only ${guardedLines} linked Lean proof-source lines; expected at least 41`);
 });
 
 test("root aliases resolve to their current pages", () => {
