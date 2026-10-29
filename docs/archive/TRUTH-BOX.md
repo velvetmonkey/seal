@@ -1,6 +1,6 @@
 > Scope: This document describes the Seal family product, not the Node CLI shipped by this repository.
 > The state machine is TESTED.
-> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v0.5.3.md](../assurance/RELEASE-NOTES-v0.5.3.md) and the [README](../../README.md); for the shipped product's strict proved-property count, read the [v1.0.0-rc.1 prerelease notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).
+> For the truth about what you installed, read [docs/assurance/RELEASE-NOTES-v1.0.0.md](../assurance/RELEASE-NOTES-v1.0.0.md) and the [README](../../README.md); for the shipped product's strict proved-property count, read the [v1.0.0-rc.1 prerelease notes](../assurance/RELEASE-NOTES-v1.0.0-rc.1.md).
 
 # Truth box (canonical)
 

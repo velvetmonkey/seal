@@ -48,12 +48,12 @@ Copy the whole POSIX command, including the backslashes and `&&` operators.
 For other supported platforms, see the [install guide](../start/install.md):
 
 ```bash
-SEAL_VERSION=v0.5.3
-artifact_name="seal-v0.5.3-linux-x64" \
-&& artifact_sha256="cc0835c7d7f8c90b7b6858ea80a9f447a1be25d84cb5f496a33ef61985f2868e" \
-&& artifact_bytes=6418125 \
+SEAL_VERSION=v1.0.0
+artifact_name="seal-v1.0.0-linux-x64" \
+&& artifact_sha256="7e657ff81f07226d32e0917c59e66f36b88b6098ab873a56d0c3dda99ef37f01" \
+&& artifact_bytes=6421190 \
 && sums_name="SHA256SUMS" \
-&& sums_sha256="1617beb751f1a1569ab5fa338ed82abb9b8aee65370b409b14be7fe926c4c479" \
+&& sums_sha256="80a62e156246c5bdc257d1776a18cd2603880a6d4b00944af6413bfb646bea8c" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$sums_name" \
 && curl -fsSLO "https://github.com/velvetmonkey/seal/releases/download/$SEAL_VERSION/$artifact_name" \
 && if command -v shasum >/dev/null 2>&1; then sums_actual="$(shasum -a 256 "$sums_name")"; else sums_actual="$(sha256sum "$sums_name")"; fi \
@@ -70,10 +70,10 @@ artifact_name="seal-v0.5.3-linux-x64" \
 
 **Seal installed-tree pin role:** `published-asset`
 ```output
-installed seal 0.5.3 linux-x64
-store: /home/you/.local/lib/seal/store/6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
+installed seal 1.0.0 linux-x64
+store: /home/you/.local/lib/seal/store/f4f6a3977b7437c33c868cd9d26ee9853a85fe58fc3df0aa182daf0314c45d9a
 command: /home/you/.local/bin/seal
-tree: 6da03dc7d8f4d40a30033623a2e27fb7608d3fe17ce7ab420e8b940f3e8ff2ba
+tree: f4f6a3977b7437c33c868cd9d26ee9853a85fe58fc3df0aa182daf0314c45d9a
 Next:
   export PATH=/home/you/.local/bin:$PATH
   demo_dir="$(mktemp -d)" && demo_dir="$(cd "$demo_dir" && pwd -P)" && printf 'y\n' | seal demo --dir "$demo_dir" && printf 'Demo directory: %s\n' "$demo_dir"
