@@ -90,6 +90,36 @@ jobs:
           cd "$RUNNER_TEMP/project"
           printf '{"mcpServers":{"notes":{"type":"stdio","command":"%s","args":["%s/harness/claude-code/fixture-server.cjs"],"env":{"SEAL_CC_FIXTURE_LOG":"%s/fixture.jsonl","SEAL_CC_FIXTURE_EFFECT":"%s/effect.txt"}}}}\n' "$(command -v node)" "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TEMP" > .mcp.json
           cp .mcp.json "$RUNNER_TEMP/mcp-before.json"
+          unset SEAL_KERNEL_POLICY_FILE SEAL_KERNEL_PUBKEY
+          set +e
+          "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note > "$RUNNER_TEMP/no-policy.stdout" 2> "$RUNNER_TEMP/no-policy.stderr"
+          no_policy_exit=$?
+          set -e
+          printf '%s\n' "$no_policy_exit" > "$RUNNER_TEMP/no-policy.exit"
+          cat "$RUNNER_TEMP/no-policy.stderr"
+          test "$no_policy_exit" -ne 0
+          grep -qF 'kernel_config_refused: kernel config public-key pin is absent' "$RUNNER_TEMP/no-policy.stderr"
+          printf 'row7 no-policy refused\n'
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const assert = require('node:assert/strict');
+          const store = path.join(process.env.RUNNER_TEMP, 'prefix/lib/seal/store');
+          const trees = fs.readdirSync(store);
+          assert.equal(trees.length, 1, 'installed store must have one tree');
+          const modulePath = path.join(store, trees[0], 'contract/signed-policy.cjs');
+          assert.ok(fs.statSync(modulePath).isFile(), 'installed signed-policy module is absent');
+          const { policyPayloads } = require(modulePath);
+          const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+          const payloads = policyPayloads(['append_note']);
+          const envelope = payload => JSON.stringify({ payload, signature: crypto.sign(null, Buffer.from(payload, 'utf8'), privateKey).toString('hex') });
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'kernel-policy.json'), JSON.stringify({ guard: envelope(payloads.guard), forward: envelope(payloads.forward) }), { mode: 0o600 });
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'kernel-pubkey'), Buffer.from(publicKey.export({ type: 'spki', format: 'der' })).subarray(-32).toString('hex'), { mode: 0o600 });
+          NODE
+          export SEAL_KERNEL_POLICY_FILE="$RUNNER_TEMP/kernel-policy.json"
+          export SEAL_KERNEL_PUBKEY="$(cat "$RUNNER_TEMP/kernel-pubkey")"
+          printf 'row7 policy throwaway-key\n'
           "$RUNNER_TEMP/prefix/bin/seal" protect notes append_note
           cmp .mcp.json "$RUNNER_TEMP/mcp-before.json"
           node <<'NODE'
