@@ -1,6 +1,6 @@
 # Seal v1.0.0 release notes
 
-These notes describe the v1.0.0 release candidate. The install commands below work after its assets are published.
+These notes describe the published v1.0.0 release. The install commands below use that release's `SHA256SUMS` asset.
 
 This candidate follows the published v1.0.0-rc.1 prerelease. Until v1.0.0 is published, the README and install guide fetch the latest published stable release, v0.5.3.
 
